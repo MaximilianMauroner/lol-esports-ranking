@@ -119,26 +119,21 @@ export function createStaticRankingData({
   const globalRanking = buildRankingModel(matches, teams)
   const globalPlayers = buildPlayerModel(matches, rosters)
 
-  for (const season of seasons) {
-    for (const event of events) {
-      for (const region of regions) {
-        const filter = { season, event, region }
-        const filteredMatches = filterMatches(matches, teams, filter)
-        const filteredTeamNames = teamNamesForFilter(filteredMatches, teams, filter)
-        snapshots[snapshotKey(filter)] = {
-          filter,
-          modelVersion: transparentGprModelMetadata.version,
-          modelConfigHash: transparentGprModelMetadata.configHash,
-          matchCount: filteredMatches.length,
-          sourceBreakdown: sourceBreakdown(filteredMatches),
-          standings: globalRanking.standings.filter((standing) => filteredTeamNames.has(standing.team)),
-          leagues: globalRanking.leagues.filter((league) => region === 'All' || league.region === region),
-          players: globalPlayers.filter((player) => filteredTeamNames.has(player.team)),
-          events: filterEventSummaries(globalRanking.events, filteredMatches),
-          seasons: filterSeasonSummaries(globalRanking.seasons, filteredMatches),
-          regions: Array.from(new Set(globalRanking.regions.filter((candidate) => region === 'All' || candidate === region))).sort(),
-        }
-      }
+  for (const filter of buildSnapshotFilters(matches, teams)) {
+    const filteredMatches = filterMatches(matches, teams, filter)
+    const filteredTeamNames = teamNamesForFilter(filteredMatches, teams, filter)
+    snapshots[snapshotKey(filter)] = {
+      filter,
+      modelVersion: transparentGprModelMetadata.version,
+      modelConfigHash: transparentGprModelMetadata.configHash,
+      matchCount: filteredMatches.length,
+      sourceBreakdown: sourceBreakdown(filteredMatches),
+      standings: filteredStandings(globalRanking.standings, filteredMatches, filteredTeamNames, filter),
+      leagues: globalRanking.leagues.filter((league) => filter.region === 'All' || league.region === filter.region),
+      players: globalPlayers.filter((player) => filteredTeamNames.has(player.team)),
+      events: filterEventSummaries(globalRanking.events, filteredMatches),
+      seasons: filterSeasonSummaries(globalRanking.seasons, filteredMatches),
+      regions: Array.from(new Set(globalRanking.regions.filter((candidate) => filter.region === 'All' || candidate === filter.region))).sort(),
     }
   }
 
@@ -242,6 +237,84 @@ function filterMatches(matches: MatchRecord[], teams: Record<string, TeamProfile
       filter.region === 'All' || match.region === filter.region || teams[match.teamA]?.region === filter.region || teams[match.teamB]?.region === filter.region
     return seasonMatches && eventMatches && regionMatches
   })
+}
+
+function buildSnapshotFilters(matches: MatchRecord[], teams: Record<string, TeamProfile>) {
+  const filters = new Map<string, SnapshotFilter>()
+  const addFilter = (filter: SnapshotFilter) => filters.set(snapshotKey(filter), filter)
+  addFilter({ season: 'All', event: 'All', region: 'All' })
+
+  for (const match of matches) {
+    const season = String(match.season)
+    const matchRegions = regionsForMatch(match, teams)
+    addFilter({ season, event: 'All', region: 'All' })
+    addFilter({ season: 'All', event: match.event, region: 'All' })
+    addFilter({ season, event: match.event, region: 'All' })
+
+    for (const region of matchRegions) {
+      addFilter({ season: 'All', event: 'All', region })
+      addFilter({ season, event: 'All', region })
+      addFilter({ season: 'All', event: match.event, region })
+      addFilter({ season, event: match.event, region })
+    }
+  }
+
+  return Array.from(filters.values()).sort((left, right) => {
+    if (snapshotKey(left) === snapshotKey({ season: 'All', event: 'All', region: 'All' })) return -1
+    if (snapshotKey(right) === snapshotKey({ season: 'All', event: 'All', region: 'All' })) return 1
+    return snapshotKey(left).localeCompare(snapshotKey(right))
+  })
+}
+
+function regionsForMatch(match: MatchRecord, teams: Record<string, TeamProfile>) {
+  const regions = [
+    match.region,
+    match.teamARegion,
+    match.teamBRegion,
+    teams[match.teamA]?.region,
+    teams[match.teamB]?.region,
+  ].filter((region): region is Region => Boolean(region))
+  return Array.from(new Set(regions))
+}
+
+function filteredStandings(
+  standings: TeamStanding[],
+  matches: MatchRecord[],
+  teamNames: Set<string>,
+  filter: SnapshotFilter,
+) {
+  if (isDefaultFilter(filter)) {
+    return standings.filter((standing) => teamNames.has(standing.team))
+  }
+
+  const historyKeys = historyKeysForMatches(matches)
+  return standings
+    .filter((standing) => teamNames.has(standing.team))
+    .map((standing) => {
+      const history = standing.history.filter((point) => historyKeys.has(historyKey(standing.team, point.date, point.event, point.opponent)))
+      return {
+        ...standing,
+        history,
+        recentEvents: Array.from(new Set(history.slice(-4).map((point) => point.event))).reverse(),
+      }
+    })
+}
+
+function historyKeysForMatches(matches: MatchRecord[]) {
+  const keys = new Set<string>()
+  for (const match of matches) {
+    keys.add(historyKey(match.teamA, match.date, match.event, match.teamB))
+    keys.add(historyKey(match.teamB, match.date, match.event, match.teamA))
+  }
+  return keys
+}
+
+function historyKey(team: string, date: string, event: string, opponent: string) {
+  return `${team}\u0000${date}\u0000${event}\u0000${opponent}`
+}
+
+function isDefaultFilter(filter: SnapshotFilter) {
+  return filter.season === 'All' && filter.event === 'All' && filter.region === 'All'
 }
 
 function teamNamesForFilter(matches: MatchRecord[], teams: Record<string, TeamProfile>, filter: SnapshotFilter) {
