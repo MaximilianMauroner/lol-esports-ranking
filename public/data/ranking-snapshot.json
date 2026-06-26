@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-26T15:39:59.535Z",
+  "source": "no public match data available",
+  "sources": [
+    {
+      "name": "Seeded sample match records",
+      "kind": "seed",
+      "description": "Checked-in sample matches used until scheduled public-data import is connected.",
+      "status": "reference-only",
+      "retrievedAt": "2026-06-26T15:39:59.535Z",
+      "rowCount": 0
+    },
+    {
+      "name": "Leaguepedia Cargo API",
+      "kind": "match-data",
+      "url": "https://lol.fandom.com/wiki/Help:Leaguepedia_API",
+      "description": "Planned canonical source for broad historical events, teams, players, rosters, and match metadata.",
+      "status": "planned"
+    },
+    {
+      "name": "Oracle's Elixir CSVs",
+      "kind": "game-stats",
+      "url": "https://oracleselixir.com/tools/downloads",
+      "description": "Primary planned source for game-level and player-level stats from yearly CSV snapshots.",
+      "status": "planned"
+    },
+    {
+      "name": "Riot LoL Esports GPR page",
+      "kind": "official-reference",
+      "url": "https://lolesports.com/en-US/gpr/2026/current",
+      "description": "Official comparison snapshot only; the transparent model does not clone Riot's private formula.",
+      "status": "reference-only"
+    }
+  ],
+  "model": {
+    "name": "Transparent GPR",
+    "version": "transparent-gpr-v0.4.0",
+    "configHash": "fnv1a-55019adb",
+    "parameters": {
+      "initialTeamRating": 1500,
+      "initialLeagueRating": 1500,
+      "teamEloWeight": 0.8,
+      "leagueEloWeight": 0.2,
+      "initialPlayerRating": 100,
+      "recencyFloor": 0.62,
+      "recencyRange": 0.38,
+      "recencyDecayDays": 180,
+      "normalPatchTeamRetention": 0.985,
+      "splitBreakTeamRetention": 0.92,
+      "seasonStartTeamRetention": 0.8,
+      "splitBreakLeagueRetention": 0.97,
+      "seasonStartLeagueRetention": 0.94,
+      "sideAdjustmentShrinkageGames": 24,
+      "minimumUncertainty": 30,
+      "maximumUncertainty": 140,
+      "executionCap": 0.25,
+      "executionWeights": {
+        "kills": 0.14,
+        "gold": 0.72,
+        "objectives": 0.14
+      },
+      "baseRoleShares": {
+        "Top": 0.18,
+        "Jungle": 0.22,
+        "Mid": 0.22,
+        "Bot": 0.2,
+        "Support": 0.18
+      },
+      "playerImpactWeights": {
+        "objectiveImpactZ": 0.12,
+        "awardResidualZ": 0.06,
+        "recentFormZ": 0.04
+      },
+      "playerImpactMultiplierBounds": {
+        "min": 0.7,
+        "max": 1.45
+      },
+      "eventKFactors": {
+        "worlds-playoffs": 34,
+        "worlds-main": 24,
+        "msi-bracket": 34,
+        "msi-play-in": 24,
+        "major-playoffs": 22,
+        "regional-regular": 14,
+        "minor-international": 20,
+        "qualifier": 12
+      },
+      "leagueKFactors": {
+        "worlds-playoffs": 10,
+        "worlds-main": 8,
+        "msi-bracket": 10,
+        "msi-play-in": 8,
+        "major-playoffs": 0,
+        "regional-regular": 0,
+        "minor-international": 6,
+        "qualifier": 0
+      }
+    }
+  },
+  "coverage": {
+    "matchCount": 0,
+    "sourceProviders": [],
+    "seededSample": false
+  },
+  "playerData": {
+    "status": "no-data",
+    "description": "No player timelines are available because no match rows were loaded."
+  },
+  "dataMode": "no-data",
+  "filterOptions": {
+    "seasons": [
+      "All"
+    ],
+    "events": [
+      "All"
+    ],
+    "regions": [
+      "All"
+    ]
+  },
+  "defaultFilter": {
+    "season": "All",
+    "event": "All",
+    "region": "All"
+  },
+  "defaultSnapshotKey": "All__All__All",
+  "snapshots": {
+    "All__All__All": {
+      "filter": {
+        "season": "All",
+        "event": "All",
+        "region": "All"
+      },
+      "modelVersion": "transparent-gpr-v0.4.0",
+      "modelConfigHash": "fnv1a-55019adb",
+      "matchCount": 0,
+      "sourceBreakdown": [],
+      "standings": [],
+      "leagues": [],
+      "players": [],
+      "events": [],
+      "seasons": [],
+      "regions": []
+    }
+  },
+  "teams": {}
+}
