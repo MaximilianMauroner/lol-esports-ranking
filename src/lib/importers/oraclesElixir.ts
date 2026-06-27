@@ -1,5 +1,5 @@
-import type { MatchRecord, Region, TeamProfile } from '../../types'
-import { regionForLeague, teamIdentityFor } from '../../data/teamIdentity'
+import type { MatchRecord, MatchRosterSnapshot, Region, Role, RosterCompleteness, RosterPlayerAppearance, TeamProfile } from '../../types'
+import { canonicalTeamNameFor, regionForLeague, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 
 type CsvRecord = Record<string, string>
 
@@ -73,8 +73,8 @@ function normalizeGame(
   const red = sides.find((row) => value(row, 'side').toLowerCase() === 'red') ?? sides[1]
   if (!blue || !red) return null
 
-  const blueTeam = value(blue, 'teamname')
-  const redTeam = value(red, 'teamname')
+  const blueTeam = canonicalTeamNameFor(value(blue, 'teamname'))
+  const redTeam = canonicalTeamNameFor(value(red, 'teamname'))
   if (!blueTeam || !redTeam) return null
 
   const blueResult = numberValue(blue, 'result')
@@ -92,6 +92,7 @@ function normalizeGame(
   const redIdentity = teamIdentityFor(redTeam)
   const homeLeague = competitionOnlyLeague(league) ? undefined : league
   const homeRegion = homeLeague ? leagueToRegion(homeLeague) : undefined
+  const date = normalizeDate(value(first, 'date'))
 
   return {
     id: `oe-${gameId}`,
@@ -100,7 +101,7 @@ function normalizeGame(
     sourceUrl: options.sourceUrl || value(first, 'url'),
     sourceFileName: options.sourceFileName,
     dataCompleteness: value(first, 'datacompleteness') || undefined,
-    date: normalizeDate(value(first, 'date')),
+    date,
     season: year || new Date().getUTCFullYear(),
     event: event || league,
     phase: playoffs ? 'Playoffs' : 'Regular season',
@@ -112,6 +113,8 @@ function normalizeGame(
     teamBRegion: redIdentity?.region ?? homeRegion,
     teamASide: 'blue',
     teamBSide: 'red',
+    teamARoster: rosterForSide(rows, 'blue', date),
+    teamBRoster: rosterForSide(rows, 'red', date),
     patch,
     bestOf: bestOfForGame(first, playoffs),
     tier: inferTier(league, event, playoffs),
@@ -130,6 +133,106 @@ function normalizeGame(
     teamBBarons: numberValue(red, 'barons'),
     gameLengthSeconds: gameLengthSeconds(value(first, 'gamelength')),
   }
+}
+
+function rosterForSide(rows: CsvRecord[], side: string, observedAt: string): MatchRosterSnapshot | undefined {
+  const sideRows = rows.filter((row) => value(row, 'side').toLowerCase() === side.toLowerCase() && value(row, 'position').toLowerCase() !== 'team')
+  const players: RosterPlayerAppearance[] = []
+  const seenRoles = new Set<Role>()
+
+  for (const row of sideRows) {
+    const role = roleForOraclePosition(value(row, 'position'))
+    const name = value(row, 'playername')
+    const id = value(row, 'playerid') || unresolvedPlayerIdFor(row)
+    if (!role || !id || seenRoles.has(role)) continue
+    players.push({
+      id,
+      name: name || id,
+      role,
+      stats: playerStatsFor(row, side),
+    })
+    seenRoles.add(role)
+  }
+
+  if (players.length === 0) return undefined
+
+  return {
+    sourceProvider: 'oracles-elixir',
+    teamId: value(sideRows[0] ?? {}, 'teamid') || undefined,
+    observedAt,
+    completeness: rosterCompleteness(players),
+    players: players.sort((left, right) => roleOrder(left.role) - roleOrder(right.role)),
+  }
+}
+
+function playerStatsFor(row: CsvRecord, side: string) {
+  return {
+    side: side.toLowerCase() === 'blue' ? 'blue' as const : 'red' as const,
+    champion: value(row, 'champion') || undefined,
+    won: numberValue(row, 'result') === 1,
+    kills: numberValue(row, 'kills'),
+    deaths: numberValue(row, 'deaths'),
+    assists: numberValue(row, 'assists'),
+    totalGold: optionalNumberValue(row, 'totalgold'),
+    earnedGold: optionalNumberValue(row, 'earnedgold'),
+    damageShare: optionalNumberValue(row, 'damageshare'),
+    earnedGoldShare: optionalNumberValue(row, 'earnedgoldshare'),
+    visionScore: optionalNumberValue(row, 'visionscore'),
+    vspm: optionalNumberValue(row, 'vspm'),
+    gpr: optionalNumberValue(row, 'gpr'),
+  }
+}
+
+function unresolvedPlayerIdFor(row: CsvRecord) {
+  const name = value(row, 'playername')
+  if (!name) return ''
+  const team = value(row, 'teamid') || canonicalTeamNameFor(value(row, 'teamname')) || value(row, 'teamname') || 'unknown-team'
+  return `oe:player:unresolved:${stableHash(`${normalizeIdentityPart(name)}\u0000${normalizeIdentityPart(team)}`)}`
+}
+
+function normalizeIdentityPart(valueToNormalize: string) {
+  return valueToNormalize.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function stableHash(input: string) {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function roleForOraclePosition(position: string): Role | undefined {
+  switch (position.trim().toLowerCase()) {
+    case 'top':
+      return 'Top'
+    case 'jng':
+    case 'jun':
+    case 'jungle':
+      return 'Jungle'
+    case 'mid':
+      return 'Mid'
+    case 'bot':
+    case 'adc':
+      return 'Bot'
+    case 'sup':
+    case 'support':
+      return 'Support'
+    default:
+      return undefined
+  }
+}
+
+function rosterCompleteness(players: RosterPlayerAppearance[]): RosterCompleteness {
+  const roles = new Set(players.map((player) => player.role))
+  return players.length === 5 && ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].every((role) => roles.has(role as Role))
+    ? 'complete-five-role'
+    : 'partial'
+}
+
+function roleOrder(role: Role) {
+  return ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].indexOf(role)
 }
 
 function upsertTeam(teams: Record<string, TeamProfile>, teamName: string, league: string, region: Region) {
@@ -241,6 +344,13 @@ function numberValue(row: CsvRecord, key: string) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function optionalNumberValue(row: CsvRecord, key: string) {
+  const raw = value(row, key)
+  if (raw === '') return undefined
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 function sum(rows: CsvRecord[], key: string) {
   return rows.reduce((total, row) => total + numberValue(row, key), 0)
 }
@@ -262,16 +372,44 @@ function leagueToRegion(league: string): Region {
 
 function competitionOnlyLeague(league: string) {
   const normalized = league.toUpperCase()
-  return normalized.includes('MSI') || normalized.includes('WORLD') || normalized === 'WLD' || normalized === 'WLDs'.toUpperCase()
+  return normalized.includes('MSI')
+    || normalized.includes('WORLD')
+    || normalized.includes('ESPORTS WORLD CUP')
+    || normalized.includes('ASIA MASTER')
+    || normalized.includes('ASIA MASTERS')
+    || normalized.includes('EMEA MASTERS')
+    || normalized === 'WLD'
+    || normalized === 'WLDS'
+    || normalized === 'EWC'
+    || normalized === 'FST'
+    || normalized === 'ASI'
+    || normalized === 'AC'
+    || normalized === 'DCUP'
+    || normalized === 'KESPA'
+    || normalized === 'EM'
+    || normalized === 'LTA'
 }
 
 function inferTier(league: string, event: string, playoffs: boolean): MatchRecord['tier'] {
   const text = `${league} ${event}`.toLowerCase()
+  if (text.includes('academic esports world tournament') || text.includes('university esports')) return 'qualifier'
+  if (text.includes('online qualifier') || text.includes('online qualifiers')) return 'qualifier'
+  if (/\bdcup\b/.test(text) || text.includes('demacia cup')) return playoffs ? 'major-playoffs' : 'regional-regular'
+  if (text.includes('first stand') || /\bfst\b/.test(text)) return 'msi-bracket'
+  if (text.includes('emea masters')
+    || /\bem\b/.test(text)
+    || text.includes('minor')
+    || /\bewc\b/.test(text)
+    || text.includes('esports world cup')
+    || text.includes('asia master')
+    || /\basi\b/.test(text)
+    || /\bac\b/.test(text)
+    || text.includes('kespa')) return 'minor-international'
+  if (/\bwlds?\b/.test(text)) return playoffs ? 'worlds-playoffs' : 'worlds-main'
   if (text.includes('world') && playoffs) return 'worlds-playoffs'
   if (text.includes('world')) return 'worlds-main'
   if (text.includes('msi') && playoffs) return 'msi-bracket'
   if (text.includes('msi')) return 'msi-play-in'
-  if (text.includes('emea masters') || text.includes('minor')) return 'minor-international'
   if (playoffs) return 'major-playoffs'
   return 'regional-regular'
 }
@@ -283,12 +421,7 @@ function bestOfForGame(row: CsvRecord, playoffs: boolean) {
 }
 
 function makeTeamCode(teamName: string) {
-  return teamName
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 4)
-    .toUpperCase()
+  return teamCodeFor(teamName)
 }
 
 function gameLengthSeconds(raw: string) {

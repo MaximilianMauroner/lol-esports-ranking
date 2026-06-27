@@ -2,10 +2,10 @@
 
 ## Ranking Target
 
-The ranking target is predictive current strength:
+The ranking target is predictive current strength. Standings are side-neutral team strength; source-row walk-forward predictions use known side context when the source supplies it.
 
 ```text
-Who is most likely to beat whom on the current patch, with current rosters, on neutral conditions?
+Who is most likely to beat whom on the current patch, with current rosters, under neutral side context?
 ```
 
 This is not a trophy table, fame score, or retrospective achievement list. Every public ranking claim should identify the data source, model version, model config hash, coverage window, and whether the input includes seeded/demo data.
@@ -16,20 +16,39 @@ The mature score should be built as:
 
 ```text
 GlobalPower =
-Team result strength
-+ League / region strength
-+ Roster / player strength
-+ Recent form
-+ In-game execution
+LeagueAnchor
++ TeamStableOffset
++ RosterPriorOffset
++ Momentum
 + Context adjustments
 +/- Uncertainty
 ```
 
 Current implementation status:
 
-- `transparent-gpr-v0.4.0` has the team-result Elo spine, event K values, best-of damping, recency decay, cross-league league strength, side adjustment support, patch/split/season retention, uncertainty bands, source provenance, and a dynamic player-share scaffold.
-- Player/roster outputs are still demo-grade until sourced player-game stats, roster timelines, substitutions, and award data are imported.
-- Execution features are imported or typed, but team Elo remains result-only until a backtest proves that execution residuals improve forward prediction.
+- `transparent-gpr-v0.25.0` has the team-result Elo spine, seasonal league anchors, stable team offsets, roster/player priors, capped fast-decaying momentum, event K values, best-of damping, online recency decay, opponent-strength-adjusted cross-league league strength, international placement residuals, prior-only side-aware published walk-forward predictions, patch/split/season retention, uncertainty bands, canonical source-identity/stat-line dedupe, source provenance, date-batched walk-forward prediction, sourced Oracle game-roster basis, value-weighted roster-continuity carryover, role-conditioned sourced player ratings, gated player-adjusted predictions, shadow execution-residual validation, compact segmented validation metrics, schema `12` public component and update-ledger fields, compact player-source observation traces, regional alias cleanup for EMEA/LATAM/APAC secondary leagues, data-quality audit counts, flagship-region strength rows, explicit global-cup/event taxonomy with First Stand/FST treated as an MSI-level bracket signal and duplicate EWC online qualifiers retaining Leaguepedia qualifier metadata, source-observed team-profile derivation, lower-tier ecosystem eligibility gates, and public component explanations.
+- Player ratings are sourced post-game outputs from Oracle player rows. A prior-only player-rating adjustment is now enabled for published predictions after clearing the walk-forward gate; team-only baseline probabilities remain available in metrics for auditability.
+- Award/POG residuals are source-blocked in the current local pipeline: Oracle CSVs and Leaguepedia ScoreboardGames do not provide dated human MVP/POG/All-Pro signals, so `AwardResidualZ` remains unapplied rather than inferred from visible stats.
+- Execution residuals are modeled only in a parallel shadow ledger until a walk-forward gate proves they improve forward prediction. Post-game kills, gold, and objectives update that shadow ledger after the date's predictions are emitted; they do not leak into their own pre-game prediction.
+
+## Seasonal Anchoring and Rebuild Priors
+
+At every season boundary, create league-level anchors from prior international evidence, regressed toward league priors/global mean by the league carryover policy. Initialize each team from its league anchor plus a value-weighted stable team offset, roster/player prior, momentum reset, context adjustment, and uncertainty band. A rebuilt team inherits its league baseline, not its org's full historical team rating. Returning-player continuity, player ratings, coach/org priors when sourced, patch retention, and uncertainty determine how much of the old team offset survives.
+
+Momentum is reset or heavily decayed at season start and then rebuilt through the split as a capped, fast-decaying form layer. International games update both team offsets and league ratings when leagues differ. Completed international tournaments add a residual league-strength update based on actual stage advancement versus pre-event expectation, so regions with multiple deep runs receive meaningful credit without double-counting same-region finals.
+
+Acceptance checks:
+
+1. Full roster rebuild starts closer to the league anchor than a stable roster with the same prior results.
+2. Stable rosters retain more old team offset than rebuilt rosters.
+3. Domestic same-league games move team offsets but not league strength.
+4. Cross-league international games move both team offset and league strength.
+5. Two same-region Worlds finalists can increase their league through placement residual.
+6. The same-region final game itself does not directly move league game Elo.
+7. New or rebuilt teams carry higher uncertainty and therefore larger early K multipliers.
+8. Momentum moves fast, decays, and is capped.
+9. Public snapshots expose component totals and latest update ledger fields.
+10. Walk-forward validation must justify each published predictive layer.
 
 ## Pre-1.0 Change Policy
 
@@ -99,6 +118,8 @@ HumanSignal
 
 That asks whether voters rated a player above what ordinary visible stats and team success already explain.
 
+Current status: no configured local source provides dated human MVP/POG/POTM/All-Pro records. These fields must stay absent and `AwardResidualZ` must remain `0` for sourced public data until a provenanced award importer is added. Do not synthesize human signals from Oracle GPR, KDA, damage, or team success.
+
 ## Roster Moves
 
 Roster continuity should be value-weighted:
@@ -114,6 +135,32 @@ returning_players / 5
 ```
 
 If a high-impact support accounts for 24% of team value, losing that support should hurt more than losing a 16% weak-side top. Roster changes should also widen uncertainty until new evidence arrives.
+
+Current `transparent-gpr-v0.25.0` standings expose whether each team has a complete latest Oracle game roster (`sourced`), partial roster evidence (`assumed-continuous`), or no roster evidence (`unknown`). The model compares the current complete lineup against the prior complete lineup using role-value weights; lower continuity regresses only the stable team offset toward the league anchor and raises uncertainty before prediction. A rebuilt team therefore keeps the league baseline but does not inherit the old org roster's full peak rating. Player standings are rated from sourced Oracle player-game stats after each game. Prior player ratings, momentum, and known side context also produce pre-game adjustments for published walk-forward predictions; the metrics retain neutral team-only and player-adjusted deltas for auditability.
+
+Migration impact from `v0.11.0` to `v0.12.0`: league Elo and region summaries now use the participating teams' pregame power when scoring international cross-league games. A league receives more credit for a win against a high-rated representative and less credit for an expected win against a lower-rated representative. Public snapshot schema `5` adds `expectedWins`, `winsOverExpected`, `opponentAdjustedWinRate`, and `averageOpponentRating` to league rows.
+
+Migration impact from `v0.15.0` to `v0.16.0`: public snapshot schema `6` adds walk-forward baseline comparisons for coin-flip, pre-game win-rate, and team-only predictors. The published GPR metrics can now be audited against a no-skill baseline and a domestic-record-style baseline using only pre-game state.
+
+Migration impact from `v0.16.0` to `v0.17.0`: public snapshot schema `7` extends each walk-forward baseline comparison with segment-level accuracy, Brier, log-loss, and published-vs-baseline deltas. This makes international, cross-region, side-known, patch-transition, roster-change, Bo1, and Bo3/Bo5 contexts auditable instead of relying only on aggregate validation metrics.
+
+Migration impact after `v0.17.0`: public snapshot schema `8` adds compact latest-observation provenance to sourced-player proof rows and the player directory: source game id, source URL when present, source file, latest observed date, and latest observed event. Ratings are unchanged, but player/team/role mapping claims are easier to audit against Oracle rows.
+
+Migration impact from `v0.17.0` to `v0.18.0`: source pipeline `canonical-identity-stat-dedupe-v4` maps additional EMEA and LATAM secondary-league abbreviations to their competitive regions, including EBL, HLL, LPLOL, LES, LIT, RL, NEXO, CCWS, HC, IC, LRN, LRS, and LTS. Public snapshot schema `9` adds `dataQuality` counts for source providers, data completeness, missing patch/side/source ids, roster coverage, and unresolved identity summaries.
+
+Migration impact from `v0.18.0` to `v0.19.0`: source pipeline `canonical-identity-stat-dedupe-v5` treats FST, EWC, Asia Masters, KeSPA, and Demacia Cup style events as competition-only international events when deriving home leagues and event K. Public snapshot schema `10` changes `snapshot.regions` from region-name strings to full flagship-region strength rows, with `teamCount`/`leagueCount` for the scored flagship layer and `ecosystemTeamCount`/`ecosystemLeagueCount` for the broader mapped ecosystem.
+
+Migration impact from `v0.19.0` to `v0.20.0`: source pipeline `canonical-identity-stat-dedupe-v6` derives team profiles from all match-side home-league observations instead of depending on source-file overwrite order, keeps known/manual identities authoritative, and treats EMEA Masters/`EM` as a competition-only ecosystem event for home-league derivation. Event taxonomy now recognizes `WLD`/`WLDs` as Worlds-tier, classifies EWC online qualifiers and academic/university world events as `qualifier`, and treats Demacia Cup/`DCup` as an LPL regional cup rather than an international league-strength event. ERLs, NACL, EMEA Masters, and similar lower-tier ecosystem leagues are now `emerging`; they remain visible in ecosystem views but stay `unanchored-league` on the eligible global board even when they have many cross-ecosystem matches. Schema remains `10`.
+
+Migration impact from `v0.20.0` to `v0.21.0`: published walk-forward match probabilities now apply the existing prior-only blue/red side adjustment when the source row has known side assignments. Same-day prediction batching is unchanged, so side results from games on the predicted date cannot affect each other. Neutral team-only, player-adjusted, execution-baseline, and execution-adjusted variants remain available as comparison baselines. Source pipeline `canonical-identity-stat-dedupe-v7` also derives team profiles from the latest explicit non-competition home-league observation, ignores later `Unknown` placeholders and generic `LTA` championship rows for home-league derivation, uses the same derived profile path in scheduled recalculation, preserves Leaguepedia `LFL2` separately from `LFL`, maps `LFL2`, `PRMP`, `NL`, and `CT` as LEC ecosystem leagues, and flags unknown league tiers in the data-quality audit. Public snapshot schema `11` renames the walk-forward target from `neutral-game` to `published-game` and full prediction rows expose `teamASide`, `teamBSide`, `teamASideAdjustment`, and `teamBSideAdjustment`.
+
+Migration impact from `v0.21.0` to `v0.22.0`: source pipeline `canonical-identity-stat-dedupe-v8` treats First Stand/FST as an MSI-level international bracket event instead of a minor international cup. This gives recent First Stand cross-region games the same team and league-strength K as MSI bracket games while keeping FST as a competition-only league for home-league derivation. Public snapshot schema remains `11`.
+
+Migration impact from `v0.22.0` to `v0.23.0`: team power now uses `team rating + (league rating - 1500) * league weight` instead of a convex team/league blend. This preserves same-league team-rating gaps while still applying regional strength as an auditable offset. Public snapshot schema and source pipeline stay unchanged.
+
+Migration impact from `v0.23.0` to `v0.24.0`: source pipeline `canonical-identity-stat-dedupe-v9` keeps Oracle as the stat/roster source for duplicate games but enriches retained Oracle rows with Leaguepedia qualifier event metadata when Leaguepedia identifies the duplicate as an online qualifier. This prevents EWC online qualifiers from being scored as minor international league-strength events. Public snapshot schema remains `11`.
+
+Migration impact from `v0.24.0` to `v0.25.0`: team power is now a seasonal hierarchy: `LeagueAnchor + TeamStableOffset + RosterPriorOffset + Momentum + ContextAdjustment`, with uncertainty published beside the score. Team result updates move the stable offset; roster rebuilds scale the old offset and widen uncertainty; momentum is a capped fast-decaying form layer; international cross-league games still update league strength; completed international events add a capped placement residual from actual stage points versus pre-event expected stage points. Same-region international games, including same-region Worlds finals, do not directly update league game Elo; those leagues receive credit through the prior cross-region path and placement residual. Public snapshot schema `12` adds `ratingComponents` and `ratingUpdate` to standing and full history rows.
 
 ## Validation Order
 

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-26T16:02:04.810Z",
+  "start": "2025-01-01",
+  "end": "2026-06-26",
+  "files": {
+    "leaguepediaJson": [
+      "data/raw/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json"
+    ],
+    "oracleCsv": [
+      "data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
+      "data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
+    ]
+  },
+  "sources": {
+    "oracle": {
+      "role": "primary",
+      "status": "downloaded",
+      "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH",
+      "apiUrl": "https://oe.datalisk.io/matchData",
+      "discoveredCount": 13,
+      "downloadedCount": 2,
+      "failedCount": 0,
+      "failures": []
+    },
+    "leaguepedia": {
+      "role": "backup-gap-fill",
+      "status": "downloaded",
+      "downloadedCount": 1,
+      "method": "Special:CargoExport fallback because api.php cargoquery was rate-limited"
+    }
+  },
+  "warnings": [
+    "Leaguepedia was downloaded via Special:CargoExport instead of api.php cargoquery because api.php was rate-limited.",
+    "Oracle 2026 currently covers matches through 2026-06-21 in the downloaded CSV; Leaguepedia gap-fill covers public ScoreboardGames rows through 2026-06-23 for the requested window."
+  ]
+}

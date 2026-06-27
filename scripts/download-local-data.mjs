@@ -8,16 +8,12 @@ const defaultOracleDriveFolderUrl = `https://drive.google.com/drive/folders/${de
 const args = parseArgs(process.argv.slice(2))
 const start = args.start ?? '2011-01-01'
 const end = args.end ?? new Date().toISOString().slice(0, 10)
-const year = args.year ?? new Date().getUTCFullYear().toString()
-const milestone = args.milestone ?? 'current'
 const outDir = resolve(args.outDir ?? 'data/raw')
 const manifestPath = resolve(args.manifest ?? `${outDir}/manifest.json`)
 const leaguepediaPath = resolve(args.leaguepediaOutput ?? `${outDir}/leaguepedia/scoreboard-games-${start}_to_${end}.json`)
-const riotGprPath = resolve(args.riotGprOutput ?? `${outDir}/riot-gpr/riot-gpr-${year}-${milestone}.json`)
 const skipOracle = isFalse(args.oracle) || args.skipOracle === true
 const skipOracleDrive = isFalse(args.oracleDrive) || args.skipOracleDrive === true
 const skipLeaguepedia = isFalse(args.leaguepedia) || args.skipLeaguepedia === true
-const skipRiotGpr = isFalse(args.riotGpr) || args.skipRiotGpr === true
 const oracleRequired = args.oracleRequired === true || args.oracleRequired === 'true'
 const oracleDriveFolderUrl = args.oracleDriveFolderUrl ?? defaultOracleDriveFolderUrl
 const oracleDriveFolderId = args.oracleDriveFolderId ?? folderIdFromUrl(oracleDriveFolderUrl) ?? defaultOracleDriveFolderId
@@ -79,18 +75,8 @@ if (!skipLeaguepedia) {
   warnings.push('Leaguepedia backup download skipped by --leaguepedia false or --skip-leaguepedia.')
 }
 
-if (!skipRiotGpr) {
-  await run('node', [
-    'scripts/fetch-riot-gpr-snapshot.mjs',
-    '--year',
-    year,
-    '--milestone',
-    milestone,
-    '--output',
-    riotGprPath,
-  ])
-} else {
-  warnings.push('Riot GPR reference download skipped by --riot-gpr false or --skip-riot-gpr.')
+if (args.riotGpr !== undefined || args.skipRiotGpr === true || args.riotGprOutput !== undefined) {
+  warnings.push('Riot GPR is not part of the local data-source manifest. Use npm run fetch:riot-gpr explicitly for manual benchmark snapshots.')
 }
 
 if (oracleCsvPaths.length === 0) {
@@ -105,7 +91,6 @@ const manifest = {
   files: {
     leaguepediaJson: leaguepediaJsonPaths,
     oracleCsv: oracleCsvPaths,
-    riotGprJson: skipRiotGpr ? [] : [riotGprPath],
   },
   sources: {
     oracle: {
@@ -121,10 +106,6 @@ const manifest = {
       role: 'backup-gap-fill',
       status: skipLeaguepedia ? 'skipped' : 'downloaded',
       downloadedCount: leaguepediaJsonPaths.length,
-    },
-    riotGpr: {
-      role: 'benchmark-reference',
-      status: skipRiotGpr ? 'skipped' : 'downloaded',
     },
   },
   warnings,

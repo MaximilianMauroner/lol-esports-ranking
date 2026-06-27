@@ -15,6 +15,10 @@ dist-ssr
 # Generated data caches
 data/*.json
 data/*.csv
+data/raw/**
+!data/raw/
+!data/raw/manifest.json
+data/derived/**
 !data/README.md
 
 # Editor directories and files

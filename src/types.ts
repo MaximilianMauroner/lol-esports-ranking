@@ -13,6 +13,35 @@ export type EventTier =
 export type Role = 'Top' | 'Jungle' | 'Mid' | 'Bot' | 'Support'
 export type Side = 'blue' | 'red'
 
+export type LeagueTierName = 'tier-one' | 'tier-two' | 'tier-three' | 'emerging' | 'unknown'
+export type RosterBasis = 'sourced' | 'assumed-continuous' | 'unknown'
+export type RosterCompleteness = 'complete-five-role' | 'partial'
+export type EligibilityReason = 'low-current-volume' | 'stale' | 'high-uncertainty' | 'unanchored-league'
+export type WalkForwardSegmentKey =
+  | 'bo1'
+  | 'bo3-bo5'
+  | 'international'
+  | 'cross-region'
+  | 'side-known'
+  | 'patch-transition'
+  | 'roster-change'
+
+export type PregamePredictionVariantKey =
+  | 'published'
+  | 'team-only'
+  | 'player-adjusted'
+  | 'execution-baseline'
+  | 'execution-adjusted'
+
+export type PregamePredictionVariant = {
+  teamAGameWinProbability: number
+  teamBGameWinProbability: number
+  teamASeriesWinProbability: number
+  teamBSeriesWinProbability: number
+  teamARating?: number
+  teamBRating?: number
+}
+
 export type PlayerImpactSignals = {
   objectiveImpactZ?: number
   awardResidualZ?: number
@@ -28,6 +57,8 @@ export type SourceTrace = {
   url?: string
   fileName?: string
   completeness?: string
+  date?: string
+  event?: string
 }
 
 export type TeamProfile = {
@@ -45,9 +76,40 @@ export type PlayerProfile = {
   impactSignals?: PlayerImpactSignals
 }
 
+export type PlayerGameStats = {
+  side: Side
+  champion?: string
+  won: boolean
+  kills: number
+  deaths: number
+  assists: number
+  totalGold?: number
+  earnedGold?: number
+  damageShare?: number
+  earnedGoldShare?: number
+  visionScore?: number
+  vspm?: number
+  gpr?: number
+}
+
+export type RosterPlayerAppearance = {
+  id: string
+  name: string
+  role: Role
+  stats?: PlayerGameStats
+}
+
+export type MatchRosterSnapshot = {
+  sourceProvider: 'oracles-elixir'
+  teamId?: string
+  observedAt: string
+  completeness: RosterCompleteness
+  players: RosterPlayerAppearance[]
+}
+
 export type MatchRecord = {
   id: string
-  sourceProvider?: 'oracles-elixir' | 'leaguepedia-cargo' | 'riot-gpr' | 'seed'
+  sourceProvider?: 'oracles-elixir' | 'leaguepedia-cargo' | 'seed'
   sourceGameId?: string
   sourceMatchId?: string
   sourceUrl?: string
@@ -65,6 +127,8 @@ export type MatchRecord = {
   teamBRegion?: Region
   teamASide?: Side
   teamBSide?: Side
+  teamARoster?: MatchRosterSnapshot
+  teamBRoster?: MatchRosterSnapshot
   patch: string
   bestOf: number
   tier: EventTier
@@ -92,11 +156,33 @@ export type TeamHistoryPoint = {
   baseRating: number
   leagueAdjustment: number
   sideAdjustment: number
+  ratingComponents: RatingComponents
+  ratingUpdate: RatingUpdateLedger
   rank: number
   delta: number
   tier: EventTier
   result: 'W' | 'L'
   source: SourceTrace
+}
+
+export type RatingComponents = {
+  leagueAnchor: number
+  teamStableOffset: number
+  rosterPriorOffset: number
+  momentum: number
+  contextAdjustment: number
+  uncertainty: number
+}
+
+export type RatingUpdateLedger = {
+  teamStableDelta: number
+  leagueGameDelta: number
+  leaguePlacementDelta: number
+  momentumDelta: number
+  rosterPriorDelta: number
+  uncertaintyDelta: number
+  sideAdjustment: number
+  patchAdjustment: number
 }
 
 export type FactorBreakdown = {
@@ -110,15 +196,95 @@ export type FactorBreakdown = {
 export type LeagueStrength = {
   league: string
   region: Region
+  tier: LeagueTierName
+  priorScore: number
+  rawScore: number
+  connectivity: number
   score: number
   adjustment: number
   delta: number
   wins: number
   losses: number
+  expectedWins?: number
+  winsOverExpected?: number
+  opponentAdjustedWinRate?: number
+  averageOpponentRating?: number
   internationalMatches: number
   form: string[]
   lastEvent?: string
   lastUpdated?: string
+}
+
+export type PregamePrediction = {
+  id: string
+  date: string
+  event: string
+  patch: string
+  bestOf: number
+  teamA: string
+  teamB: string
+  teamASide?: Side
+  teamBSide?: Side
+  actualWinner: string
+  predictedWinner: string
+  teamAGameWinProbability: number
+  teamBGameWinProbability: number
+  teamASeriesWinProbability: number
+  teamBSeriesWinProbability: number
+  teamAGameWinProbabilityTeamOnly?: number
+  teamBGameWinProbabilityTeamOnly?: number
+  teamASeriesWinProbabilityTeamOnly?: number
+  teamBSeriesWinProbabilityTeamOnly?: number
+  teamAGameWinProbabilityExecutionBaseline?: number
+  teamBGameWinProbabilityExecutionBaseline?: number
+  teamASeriesWinProbabilityExecutionBaseline?: number
+  teamBSeriesWinProbabilityExecutionBaseline?: number
+  uncertaintyPenalty: number
+  teamARating: number
+  teamBRating: number
+  teamAUncertainty: number
+  teamBUncertainty: number
+  teamAPregameWins?: number
+  teamAPregameLosses?: number
+  teamBPregameWins?: number
+  teamBPregameLosses?: number
+  teamARosterContinuity?: number
+  teamBRosterContinuity?: number
+  teamAPlayerRatingAdjustment?: number
+  teamBPlayerRatingAdjustment?: number
+  teamASideAdjustment?: number
+  teamBSideAdjustment?: number
+  teamAPlayerRatingCoverage?: number
+  teamBPlayerRatingCoverage?: number
+  teamAGameWinProbabilityPlayerAdjusted?: number
+  teamBGameWinProbabilityPlayerAdjusted?: number
+  teamASeriesWinProbabilityPlayerAdjusted?: number
+  teamBSeriesWinProbabilityPlayerAdjusted?: number
+  playerRatingPredictionWeight?: number
+  teamAExecutionResidualAdjustment?: number
+  teamBExecutionResidualAdjustment?: number
+  teamAGameWinProbabilityExecutionAdjusted?: number
+  teamBGameWinProbabilityExecutionAdjusted?: number
+  teamASeriesWinProbabilityExecutionAdjusted?: number
+  teamBSeriesWinProbabilityExecutionAdjusted?: number
+  executionResidualPredictionWeight?: number
+  variants: Record<PregamePredictionVariantKey, PregamePredictionVariant>
+  segments: WalkForwardSegmentKey[]
+  trainingMatchCount: number
+  dataCutoff?: string
+  modelVersion: string
+  modelConfigHash: string
+  source: SourceTrace
+}
+
+export type TeamEligibility = {
+  eligible: boolean
+  reasons: EligibilityReason[]
+  currentWindowGames: number
+  minCurrentWindowGames: number
+  windowDays: number
+  daysSinceLastMatch?: number
+  lastPlayed?: string
 }
 
 export type TeamStanding = {
@@ -126,10 +292,14 @@ export type TeamStanding = {
   code: string
   region: Region
   league: string
+  rosterBasis: RosterBasis
+  rosterContinuity?: number
   baseRating: number
   leagueScore: number
   leagueAdjustment: number
   leagueDelta: number
+  ratingComponents: RatingComponents
+  ratingUpdate: RatingUpdateLedger
   rating: number
   previousRating: number
   delta: number
@@ -142,6 +312,7 @@ export type TeamStanding = {
   uncertainty: number
   form: string[]
   strongestFactor: keyof FactorBreakdown
+  eligibility: TeamEligibility
   factors: FactorBreakdown
   history: TeamHistoryPoint[]
   recentEvents: string[]
@@ -152,6 +323,8 @@ export type PlayerStanding = {
   name: string
   team: string
   role: Role
+  games: number
+  ratingBasis?: 'sourced-player-stats' | 'seeded-demo-rosters'
   rating: number
   delta: number
   rank: number
@@ -172,6 +345,7 @@ export type PlayerStanding = {
     rating: number
     delta: number
   }[]
+  source?: SourceTrace
 }
 
 export type EventSummary = {

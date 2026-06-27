@@ -24,14 +24,14 @@ npm run build
 
 ## Styling
 
-The UI uses Tailwind CSS through the Vite plugin. Theme tokens live in `src/index.css`, and component styles are composed with Tailwind utilities in `src/App.css`.
+The UI uses plain React components with product styles in `src/index.css`. Theme tokens, layout rules, table styling, loading states, and responsive behavior live there.
 
 ## Static Data Strategy
 
 The frontend loads static JSON from:
 
 ```text
-/data/ranking-snapshot.json
+/data/ranking-summary.json
 ```
 
 Set `VITE_RANKING_DATA_URL` when you want the browser to load a hosted JSON object instead, such as a Vercel Blob URL written by the scheduled job.
@@ -42,13 +42,7 @@ Static data is generated explicitly:
 npm run data:build
 ```
 
-With no source arguments, this writes a valid `no-data` snapshot instead of falling back to seeded samples. The app does not recalculate rankings in React render. It selects precomputed snapshots from the generated JSON by season, event, and region. Filters narrow the presented rows while preserving one model version's global rating scale.
-
-For a local demo with checked-in seeded samples:
-
-```bash
-npm run data:build -- --seeded-sample
-```
+With no source arguments, this writes a valid `no-data` summary instead of falling back to seeded samples. The app does not recalculate rankings in React render. It loads a compact default board first, then lazy-loads compact per-filter shards from `public/data/snapshots/`. Filters narrow the presented rows while preserving one model version's global rating scale.
 
 To keep downloading separate from ranking calculation, use:
 
@@ -57,7 +51,7 @@ npm run data:download
 npm run data:crunch
 ```
 
-`data:download` stores raw files under `data/raw/` and writes `data/raw/manifest.json`. By default it downloads Oracle's Elixir CSVs, Leaguepedia ScoreboardGames from 2011-01-01 through today, and the current Riot GPR reference snapshot. `data:crunch` reads only the local manifest and raw files, then writes `public/data/ranking-snapshot.json`.
+`data:download` stores raw files under `data/raw/` and writes `data/raw/manifest.json`. By default it downloads Oracle's Elixir CSVs and Leaguepedia ScoreboardGames from 2011-01-01 through today. `data:crunch` reads the local manifest and raw files, writes the full calculation artifact to `data/derived/ranking-snapshot.full.json`, and writes browser-safe artifacts to `public/data/ranking-summary.json` plus `public/data/snapshots/*.json`. Riot GPR snapshots are not part of the local data-source manifest.
 
 `data:download` treats Oracle's Elixir as the primary game-level source and Leaguepedia as the backup/gap-fill source. It discovers the public Oracle CSV files from the Oracle Google Drive folder, downloads the CSVs that overlap the requested date range, then downloads Leaguepedia Cargo data for the same range. If Google Drive returns a quota/HTML page instead of a CSV for a file, that file is skipped with a manifest warning instead of being recorded as usable data.
 
@@ -98,7 +92,7 @@ To combine both community sources for the algorithm:
 npm run data:build -- --oracle-csv data/2026_LoL_esports_match_data_from_OraclesElixir.csv --leaguepedia-json data/leaguepedia-2026.json
 ```
 
-Oracle's Elixir has precedence for duplicate games because it carries richer game-stat fields. Leaguepedia Cargo fills gaps and supplies broad match/event coverage. Seeded data is explicitly marked as `sourceProvider: "seed"` and should be used only for local demo snapshots.
+Oracle's Elixir has precedence for duplicate games because it carries richer game-stat fields. Leaguepedia Cargo fills gaps and supplies broad match/event coverage. Overlapping scored rows are merged only when canonical team/winner identity plus source IDs or team stat lines identify the same game; broad date/team/winner matching is reserved for result-only gap-fill rows so separate same-winner games in a series are preserved. Sponsor-era aliases such as DRX/Kiwoom DRX, OKSavingsBank BRION/HANJIN BRION, and DN Freecs/DN SOOPers are normalized before dedupe. Seeded data is explicitly marked as `sourceProvider: "seed"` and should be used only for local demo snapshots.
 
 ## Source Strategy
 
@@ -106,7 +100,7 @@ The intended pipeline has three layers:
 
 - Oracle's Elixir CSVs: primary game-level match data source for scheduled snapshots and model inputs.
 - Leaguepedia Cargo API: broad historical events, teams, players, rosters, and match metadata for enrichment and gap filling.
-- Riot GPR snapshots: official GPR comparison data extracted from the public LoL Esports GPR page.
+- Riot GPR snapshots: optional manual benchmark exports extracted from the public LoL Esports GPR page. They are not used as local model inputs and are not written into `data/raw/manifest.json`.
 
 Fetch examples:
 
@@ -137,32 +131,37 @@ The cron endpoint recalculates the same static snapshot shape from public-source
 Recommended Vercel environment variables:
 
 - `CRON_SECRET`: required bearer token for `/api/recalculate-rankings`.
-- `BLOB_READ_WRITE_TOKEN`: enables the cron function to publish `rankings/latest.json`.
+- `BLOB_READ_WRITE_TOKEN`: enables the cron function to publish `rankings/latest-summary.json`, compact filter shards, and the full audit artifact.
 - `ORACLES_ELIXIR_CSV_URL`: optional direct CSV URL for scheduled Oracle's Elixir import.
 - `LEAGUEPEDIA_MATCHES_JSON_URL`: optional JSON URL produced by `npm run fetch:leaguepedia`, used as match/event gap-fill for scheduled snapshots.
 - `VITE_RANKING_DATA_URL`: public Blob URL the browser should load in production.
-- `ALLOW_SEEDED_SNAPSHOT`: optional local/demo escape hatch. When set to `true`, the endpoint may calculate seeded output for inspection, but seeded output is never published to Blob.
 
-Deployed static files are immutable at runtime, so the scheduled function publishes to Blob rather than trying to modify `public/data/ranking-snapshot.json` inside a deployment. If no public source produces rows, the cron publishes a `no-data` snapshot instead of seeded sample data.
+Deployed static files are immutable at runtime, so the scheduled function publishes to Blob rather than trying to modify files inside a deployment. The browser-facing Blob payload is the summary contract, not the full calculation artifact. If no public source produces rows, the cron returns a `no-data` result instead of publishing seeded sample data.
 
 ## Model
 
 The transparent local model is Elo-like and intentionally explainable:
 
+- Seasonal hierarchy: published power is `LeagueAnchor + TeamStableOffset + RosterPriorOffset + Momentum + ContextAdjustment`, with uncertainty shown beside the score.
 - Tournament context: EventK values put Worlds/MSI knockouts above international early stages, regional playoffs, and regular season.
 - Recency: newer matches carry more weight.
-- Result-only team Elo: game wins/losses update team strength; kills, gold, game time, and objectives are not team-rating multipliers.
+- Result-first team Elo: game wins/losses update stable team offset. Kills, gold, and objectives are tracked in a separate shadow execution-residual ledger and are not allowed to affect their own pre-game prediction.
 - Opponent strength: beating stronger teams moves rating more through the Elo expectation.
-- League strength: international cross-league results update league Elo, and team power is an 80/20 blend of team Elo and league Elo.
+- League strength: international cross-league results update league Elo against the participating teams' pregame power, so beating a higher-rated representative carries more signal than beating a lower-rated one. Completed international tournaments also add a capped placement residual from actual stage advancement versus pre-event expectation. Same-region international games do not directly move league game Elo, so same-region finals are credited through the path and placement residual rather than double-counting the final itself.
 - Series damping: each game uses `EventK / sqrt(bestOf)`, so a Bo5 carries more signal than a Bo1 without counting five times as much.
 - Uncertainty: standings expose a rating band so low-connectivity or low-volume teams are not ranked with false precision.
-- Dynamic player shares: player timelines start from role priors, then apply impact multipliers for objective impact, award residual, recent form, availability, and role certainty. Current outputs remain demo-grade until sourced player-game stats and award data are imported.
+- Eligibility: ranked rows carry current-volume, staleness, uncertainty, and league-anchor gates. First-division minor regions can become eligible with current international signal; ERLs, NACL, EMEA Masters, academy, national, and unknown-league rows remain visible as provisional ecosystem teams rather than being promoted as official top-board claims.
+- Roster continuity: Oracle player rows are attached as observed game rosters. Complete lineup changes regress stable team offset toward the league anchor and widen uncertainty using role-value weights rather than raw returning-player counts.
+- Momentum: recent overperformance is a capped, fast-decaying overlay; it affects current prediction without becoming permanent stable strength.
+- Dynamic player shares: player timelines start from role priors, then apply impact multipliers for objective impact, award residual, recent form, availability, and role certainty. Public-data outputs include post-game sourced player ratings from Oracle player rows. Published walk-forward probabilities use prior-only player-rating and side-context adjustments after same-day prediction batches are frozen; metrics keep neutral team-only and player-adjusted deltas for auditability.
+- Award residuals: current local sources do not contain dated MVP/POG/POTM/All-Pro records, so award residuals stay unapplied instead of being inferred from visible stats.
+- Baseline comparisons: schema `12` walk-forward metrics compare the side-aware published model with coin-flip, pre-game win-rate, and neutral team-only baselines, including segment rows for contexts such as international, cross-region, side-known, patch-transition, and roster-change games. Region rows publish flagship-region strength separately from broad ecosystem team counts, so lower-tier ERL/academy/cup volume does not dilute the main LEC/LCK/LPL regional signal. The v0.25 model publishes rating components and update ledger fields, and source pipeline `canonical-identity-stat-dedupe-v9` distinguishes Worlds, First Stand/FST MSI-level bracket games, EWC-style events, EWC qualifiers, Demacia Cup, EMEA Masters, generic LTA championship rows, and academic/world-name events, derives current team profiles from latest explicit home-league observations, and maps lower-division codes such as LFL2, PRMP, NL, and CT as LEC ecosystem leagues instead of relying on broad substring matches. The public artifact can show where GPR is adding predictive signal beyond a domestic record table and where calibration still lags.
 
 Pre-1.0 breaking changes are encouraged when they improve accuracy, fairness, provenance, model clarity, or long-term maintainability. Breaking model/schema changes should bump the relevant version, regenerate affected snapshots, and document migration impact.
 
 Riot's official model should be used as a benchmark layer, not as a formula clone.
 
-Every generated snapshot includes `model.version`, `model.configHash`, active model parameters, source provider breakdowns, match coverage dates, and whether seeded sample data is present. Ranking claims should always be cited with the data source and model version that produced them.
+Every generated snapshot includes `model.version`, `model.configHash`, active model parameters, source provider breakdowns, match coverage dates, source/data quality counts, and whether seeded sample data is present. Schema version `12` standing rows include rating components and latest rating-update ledger fields; league rows include expected wins, wins over expected, opponent-adjusted win rate, and average international opponent rating; region rows include flagship team/league counts and separate ecosystem counts. Walk-forward metrics also include aggregate and segment-level baseline comparisons against coin-flip, pre-game win-rate, and neutral team-only predictors, while full prediction rows expose the prior-only blue/red side adjustment used by the published probability. Compact sourced-player outputs carry latest Oracle observation provenance so player/team/role claims can be traced back to the source game, file, date, and event. Ranking claims should always be cited with the data source and model version that produced them.
 
 See `MODEL_ROADMAP.md` for the predictive target, dynamic player-importance formula, roster-continuity model, and anti-leakage rules.
 
@@ -170,15 +169,17 @@ See `MODEL_ROADMAP.md` for the predictive target, dynamic player-importance form
 
 - `src/App.tsx`: main ranking workbench UI.
 - `MODEL_ROADMAP.md`: predictive ranking target, model layering, player-share formula, validation order, and anti-leakage rules.
-- `src/lib/model.ts`: transparent team and player rating calculations.
-- `src/lib/snapshot.ts`: static snapshot builder and filter-key logic.
+- `src/lib/model.ts`: transparent team and league rating calculations.
+- `src/lib/playerModel.ts`: seeded player-share model plus sourced Oracle player-game rating updates.
+- `src/lib/rosters.ts`: latest observed game-roster provenance and standings roster-basis derivation.
+- `src/lib/rankingExplanations.ts`: static UI copy for public model-component explanations.
+- `src/lib/snapshot.ts`: full snapshot builder, compact browser-summary builder, and filter-key logic.
 - `src/data/teamIdentity.ts`: known team home league/region identities used when match rows lack explicit identity metadata.
 - `src/lib/importers/oraclesElixir.ts`: Oracle's Elixir CSV parser and normalizer.
-- `src/data/sampleData.ts`: seeded sample matches and rosters.
 - `src/data/rankingConfig.ts`: event-tier K values and factor labels.
-- `scripts/build-static-snapshot.ts`: writes `public/data/ranking-snapshot.json`.
+- `scripts/build-static-snapshot.ts`: writes the full derived artifact plus compact browser summary/shards.
 - `scripts/fetch-leaguepedia.mjs`: Leaguepedia Cargo match fetcher.
-- `scripts/fetch-riot-gpr-snapshot.mjs`: Riot GPR page snapshot extractor.
+- `scripts/fetch-riot-gpr-snapshot.mjs`: manual Riot GPR benchmark extractor. Its output must stay outside the local model input manifest.
 - `api/recalculate-rankings.ts`: Vercel cron endpoint for scheduled recalculation.
 - `tests/`: provenance, importer, merge, and cron safety tests.
 - `vercel.json`: cron schedule.

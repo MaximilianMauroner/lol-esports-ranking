@@ -47,6 +47,8 @@ test('local data download manifest records Oracle primary and Leaguepedia backup
     assert.equal(manifest.sources.leaguepedia.status, 'skipped')
     assert.equal(manifest.files.oracleCsv.length, 1)
     assert.deepEqual(manifest.files.leaguepediaJson, [])
+    assert.equal('riotGprJson' in manifest.files, false)
+    assert.equal('riotGpr' in manifest.sources, false)
     assert.match(await readFile(manifest.files.oracleCsv[0], 'utf8'), /oe-test/)
   } finally {
     await new Promise<void>((resolve, reject) => {

@@ -9,12 +9,11 @@ test('cron auth requires the configured bearer secret', () => {
   assert.equal(isAuthorizedCronRequest('Bearer secret', 'secret'), true)
 })
 
-test('cron reports no-data snapshots unless seeded fallback is explicitly allowed', async () => {
+test('cron reports no-data snapshots instead of falling back to seeded rows', async () => {
   const previousEnv = { ...process.env }
   process.env.CRON_SECRET = 'secret'
   delete process.env.ORACLES_ELIXIR_CSV_URL
   delete process.env.LEAGUEPEDIA_MATCHES_JSON_URL
-  delete process.env.ALLOW_SEEDED_SNAPSHOT
   delete process.env.BLOB_READ_WRITE_TOKEN
 
   try {
@@ -30,12 +29,11 @@ test('cron reports no-data snapshots unless seeded fallback is explicitly allowe
     assert.match(String(noPublicRows.body.warning), /not published/)
 
     process.env.ALLOW_SEEDED_SNAPSHOT = 'true'
-    const allowedDemo = await callHandler({ authorization: 'Bearer secret' })
-    assert.equal(allowedDemo.statusCode, 200)
-    assert.equal(allowedDemo.body.ok, true)
-    assert.equal(allowedDemo.body.dataMode, 'seeded-sample')
-    assert.match(String(allowedDemo.body.warning), /never published/)
-    assert.match(String(allowedDemo.body.modelVersion), /^transparent-gpr-v/)
+    const ignoredDemoFlag = await callHandler({ authorization: 'Bearer secret' })
+    assert.equal(ignoredDemoFlag.statusCode, 200)
+    assert.equal(ignoredDemoFlag.body.ok, true)
+    assert.equal(ignoredDemoFlag.body.dataMode, 'no-data')
+    assert.equal(ignoredDemoFlag.body.source, 'no public match data available')
   } finally {
     process.env = previousEnv
   }

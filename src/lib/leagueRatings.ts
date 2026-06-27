@@ -1,0 +1,115 @@
+import { eventTierConfig } from '../data/rankingConfig'
+import { leaguePriorFor } from '../data/leagueTiers'
+import type { MatchRecord } from '../types'
+import { normalizedBestOf } from './matchFormat'
+import { expectedScore, isInternationalMatch } from './ratingCalculations'
+
+export function ensureLeague(
+  league: string,
+  leagueScores: Map<string, number>,
+  previousLeagueScores: Map<string, number>,
+  leagueWins: Map<string, number>,
+  leagueLosses: Map<string, number>,
+  leagueExpectedWins: Map<string, number>,
+  leagueOpponentRatingSums: Map<string, number>,
+  leagueForms: Map<string, string[]>,
+  leagueMatchCounts: Map<string, number>,
+) {
+  if (leagueScores.has(league)) return
+  const prior = leaguePriorFor(league)
+  leagueScores.set(league, prior)
+  previousLeagueScores.set(league, prior)
+  leagueWins.set(league, 0)
+  leagueLosses.set(league, 0)
+  leagueExpectedWins.set(league, 0)
+  leagueOpponentRatingSums.set(league, 0)
+  leagueForms.set(league, [])
+  leagueMatchCounts.set(league, 0)
+}
+
+export function updateLeagueStrengthForMatch({
+  match,
+  leagueA,
+  leagueB,
+  leagueScoreA,
+  leagueScoreB,
+  leagueExpectedRatingA,
+  leagueExpectedRatingB,
+  aWon,
+  recency,
+  leagueScores,
+  previousLeagueScores,
+  leagueWins,
+  leagueLosses,
+  leagueExpectedWins,
+  leagueOpponentRatingSums,
+  leagueForms,
+  leagueMatchCounts,
+  leagueLastEvents,
+  leagueLastUpdated,
+}: {
+  match: MatchRecord
+  leagueA: string
+  leagueB: string
+  leagueScoreA: number
+  leagueScoreB: number
+  leagueExpectedRatingA: number
+  leagueExpectedRatingB: number
+  aWon: boolean
+  recency: number
+  leagueScores: Map<string, number>
+  previousLeagueScores: Map<string, number>
+  leagueWins: Map<string, number>
+  leagueLosses: Map<string, number>
+  leagueExpectedWins: Map<string, number>
+  leagueOpponentRatingSums: Map<string, number>
+  leagueForms: Map<string, string[]>
+  leagueMatchCounts: Map<string, number>
+  leagueLastEvents: Map<string, string>
+  leagueLastUpdated: Map<string, string>
+}) {
+  const leagueKFactor = eventTierConfig[match.tier].leagueKFactor
+  if (leagueA === leagueB || leagueA === 'Unknown' || leagueB === 'Unknown' || leagueKFactor === 0 || !isInternationalMatch(match)) {
+    return { deltaA: 0, deltaB: 0 }
+  }
+
+  const expectedLeagueA = expectedScore(leagueExpectedRatingA, leagueExpectedRatingB)
+  const expectedLeagueB = 1 - expectedLeagueA
+  const k = leagueKFactor / Math.sqrt(normalizedBestOf(match.bestOf))
+  const deltaA = Math.round(k * recency * ((aWon ? 1 : 0) - expectedLeagueA))
+  const deltaB = Math.round(k * recency * ((aWon ? 0 : 1) - expectedLeagueB))
+
+  previousLeagueScores.set(leagueA, leagueScoreA)
+  previousLeagueScores.set(leagueB, leagueScoreB)
+  leagueScores.set(leagueA, leagueScoreA + deltaA)
+  leagueScores.set(leagueB, leagueScoreB + deltaB)
+  updateLeagueRecord(leagueA, aWon, expectedLeagueA, leagueExpectedRatingB, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
+  updateLeagueRecord(leagueB, !aWon, expectedLeagueB, leagueExpectedRatingA, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
+
+  return { deltaA, deltaB }
+}
+
+function updateLeagueRecord(
+  league: string,
+  won: boolean,
+  expectedWin: number,
+  opponentRating: number,
+  match: MatchRecord,
+  leagueWins: Map<string, number>,
+  leagueLosses: Map<string, number>,
+  leagueExpectedWins: Map<string, number>,
+  leagueOpponentRatingSums: Map<string, number>,
+  leagueForms: Map<string, string[]>,
+  leagueMatchCounts: Map<string, number>,
+  leagueLastEvents: Map<string, string>,
+  leagueLastUpdated: Map<string, string>,
+) {
+  if (won) leagueWins.set(league, (leagueWins.get(league) ?? 0) + 1)
+  else leagueLosses.set(league, (leagueLosses.get(league) ?? 0) + 1)
+  leagueExpectedWins.set(league, (leagueExpectedWins.get(league) ?? 0) + expectedWin)
+  leagueOpponentRatingSums.set(league, (leagueOpponentRatingSums.get(league) ?? 0) + opponentRating)
+  leagueForms.set(league, [...(leagueForms.get(league) ?? []), won ? 'W' : 'L'].slice(-6))
+  leagueMatchCounts.set(league, (leagueMatchCounts.get(league) ?? 0) + 1)
+  leagueLastEvents.set(league, match.event)
+  leagueLastUpdated.set(league, match.date)
+}

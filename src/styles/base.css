@@ -1,0 +1,145 @@
+/* ============================================================
+   LoL Esports Power Index, official-style dark product surface.
+   Charcoal panels, cyan selection accents, restrained league red.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: oklch(0.125 0.004 250);
+  --surface: oklch(0.173 0.005 250);
+  --surface-2: oklch(0.205 0.005 250);
+  --surface-3: oklch(0.245 0.006 250);
+  --rail: oklch(0.145 0.004 250);
+  --line: oklch(0.29 0.006 250);
+  --line-strong: oklch(0.405 0.008 250);
+
+  --text: oklch(0.91 0.006 250);
+  --text-strong: oklch(0.97 0.004 250);
+  --muted: oklch(0.69 0.006 250);
+  --faint: oklch(0.52 0.006 250);
+
+  --accent: oklch(0.79 0.155 205);
+  --accent-strong: oklch(0.86 0.145 200);
+  --accent-soft: oklch(0.79 0.155 205 / 0.13);
+  --accent-line: oklch(0.79 0.155 205 / 0.52);
+  --on-accent: oklch(0.14 0.03 220);
+  --league-red: oklch(0.64 0.23 27);
+  --rank-gold: oklch(0.84 0.1 86);
+
+  /* Sequential strength-heat ramp (cold -> hot) */
+  --heat-1: oklch(0.62 0.07 248);
+  --heat-2: oklch(0.66 0.09 215);
+  --heat-3: oklch(0.71 0.1 168);
+  --heat-4: oklch(0.79 0.13 122);
+  --heat-5: oklch(0.83 0.15 78);
+  --heat-6: oklch(0.74 0.18 46);
+  --heat-ink: oklch(0.2 0.03 60);
+
+  /* Result + status */
+  --win: oklch(0.74 0.14 152);
+  --win-soft: oklch(0.74 0.14 152 / 0.16);
+  --loss: oklch(0.66 0.17 26);
+  --loss-soft: oklch(0.66 0.17 26 / 0.16);
+  --up: oklch(0.78 0.14 150);
+  --down: oklch(0.7 0.16 28);
+  --warn: oklch(0.8 0.13 80);
+  --warn-soft: oklch(0.8 0.13 80 / 0.14);
+
+  /* Categorical series palette for multi-line charts */
+  --series-1: oklch(0.76 0.16 56);
+  --series-2: oklch(0.7 0.13 235);
+  --series-3: oklch(0.75 0.14 152);
+  --series-4: oklch(0.72 0.15 312);
+  --series-5: oklch(0.83 0.14 90);
+  --series-6: oklch(0.72 0.12 195);
+
+  --focus: oklch(0.82 0.13 70);
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.38);
+  --shadow-2: 0 10px 28px oklch(0 0 0 / 0.38), 0 1px 2px oklch(0 0 0 / 0.46);
+  --shadow-pop: 0 24px 64px oklch(0 0 0 / 0.55);
+
+  --r-sm: 4px;
+  --r: 8px;
+  --r-lg: 8px;
+
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+
+  --rail-w: 232px;
+  --tray-h: 60px;
+
+  font-family: var(--sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    linear-gradient(180deg, oklch(0.16 0.03 220 / 0.34), transparent 220px),
+    radial-gradient(900px 380px at 72% -10%, oklch(0.79 0.155 205 / 0.1), transparent 58%),
+    radial-gradient(600px 300px at 2% 0%, oklch(0.64 0.23 27 / 0.07), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent-strong);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

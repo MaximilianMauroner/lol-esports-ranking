@@ -1,5 +1,5 @@
 import type { MatchRecord, Region, TeamProfile } from '../../types'
-import { regionForLeague, teamIdentityFor } from '../../data/teamIdentity'
+import { canonicalTeamNameFor, cleanDisplayName, regionForLeague, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 
 export type LeaguepediaSnapshot = {
   source?: string
@@ -87,9 +87,9 @@ export function importLeaguepediaSnapshot(
 
 function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sourceFileName?: string }): MatchRecord | null {
   const sourceGameId = text(game.id)
-  const teamA = text(game.teamA)
-  const teamB = text(game.teamB)
-  const winner = text(game.winner)
+  const teamA = canonicalTeamNameFor(text(game.teamA))
+  const teamB = canonicalTeamNameFor(text(game.teamB))
+  const winner = canonicalTeamNameFor(text(game.winner))
   const event = text(game.event) || 'Leaguepedia event'
   const date = normalizeDate(text(game.date) || text(game.datetimeUtc))
   if (!sourceGameId || !teamA || !teamB || !winner || !date) return null
@@ -160,7 +160,7 @@ function hasScoreboardStats(game: LeaguepediaGame) {
 }
 
 function text(value: unknown) {
-  return typeof value === 'string' ? value.trim() : ''
+  return typeof value === 'string' ? cleanDisplayName(value) : ''
 }
 
 function numberOrZero(value: unknown) {
@@ -183,14 +183,62 @@ function yearFromDate(date: string) {
 }
 
 function inferLeague(event: string) {
-  const textValue = event.toLowerCase()
-  if (textValue.includes('world championship') || textValue.includes('worlds')) return 'Worlds'
-  if (textValue.includes('mid-season invitational') || textValue.includes('msi')) return 'MSI'
-  if (textValue.includes('emea masters')) return 'EMEA Masters'
-  const leagueCodes = ['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL', 'VCS', 'PCS', 'LLA', 'TCL', 'LJL', 'LCO', 'NLC', 'LFL', 'PRM', 'LVP SL']
-  const normalized = event.toUpperCase()
-  return leagueCodes.find((leagueCode) => normalized.includes(leagueCode)) ?? 'Unknown'
+  return leagueInferenceRules.find((rule) => rule.patterns.some((pattern) => pattern.test(event)))?.league ?? 'Unknown'
 }
+
+const leagueInferenceRules: { league: string; patterns: RegExp[] }[] = [
+  { league: 'Worlds', patterns: [/\bworld championship\b/i, /\bworlds\b/i, /\bwlds?\b/i] },
+  { league: 'MSI', patterns: [/\bmid-season invitational\b/i, /\bmsi\b/i] },
+  { league: 'FST', patterns: [/\bfirst\s+stand\b/i, /\bfst\s+\d{4}\b/i] },
+  { league: 'EWC', patterns: [/\besports\s+world\s+cup\b/i, /\bewc\s+\d{4}\b/i] },
+  { league: 'Asia Master', patterns: [/\basia\s+masters?\b/i] },
+  { league: 'KeSPA', patterns: [/\bkespa\b/i] },
+  { league: 'DCup', patterns: [/\bdcup\b/i, /\bdemacia cup\b/i] },
+  { league: 'EMEA Masters', patterns: [/\bemea masters\b/i, /\bem\s+\d{4}\b/i] },
+  { league: 'LCK Academy', patterns: [/\blck\s+academy\b/i, /\blas\s+\d{4}\b/i] },
+  { league: 'LCK CL', patterns: [/\blck\s*cl\b/i, /\blckc\b/i, /\blck\s+challengers?\b/i] },
+  { league: 'LTA N', patterns: [/\blta\s+n(?:orth)?\b/i] },
+  { league: 'LTA S', patterns: [/\blta\s+s(?:outh)?\b/i] },
+  { league: 'NACL', patterns: [/\bnacl\b/i, /\bnorth american challengers league\b/i] },
+  { league: 'LVP SL', patterns: [/\blvp\s+sl\b/i, /\bsuperliga(?:\s+domino's)?\b/i] },
+  { league: 'PRM', patterns: [/\bprime league\b/i, /\bprm\b/i] },
+  { league: 'LES', patterns: [/\bles\b/i, /\besports\s+series\s+madrid\b/i] },
+  { league: 'LIT', patterns: [/\blit\b/i] },
+  { league: 'EBL', patterns: [/\bebl\b/i, /\bbalkan\b/i] },
+  { league: 'HLL', patterns: [/\bhll\b/i, /\bhellenic\s+legends\b/i] },
+  { league: 'HC', patterns: [/\bhc\b/i, /\bhellenic\s+challengers?\s+cup\b/i] },
+  { league: 'LPLOL', patterns: [/\blplol\b/i] },
+  { league: 'RL', patterns: [/\brl\b/i, /\brift\s+legends\b/i] },
+  { league: 'NEXO', patterns: [/\bnexo\b/i, /\bnexus\s+tour\b/i] },
+  { league: 'NL', patterns: [/\bnexus\s+league\b/i, /\bnl\s+\d{4}\b/i] },
+  { league: 'CCWS', patterns: [/\bccws\b/i, /\bcomedy\s+central\s+winter\s+snowdown\b/i] },
+  { league: 'CT', patterns: [/\bcircuito\s+tormenta\b/i, /\bct\s+\d{4}\b/i] },
+  { league: 'IC', patterns: [/\bic\s+\d{4}\b/i, /\biberian\s+cup\b/i] },
+  { league: 'HW', patterns: [/\bhitpoint\s+winter\b/i, /\bhw\s+\d{4}\b/i] },
+  { league: 'HM', patterns: [/\bhitpoint\b/i, /\bhm\s+\d{4}\b/i] },
+  { league: 'AL', patterns: [/\barabian league\b/i, /\bal\s+\d{4}\b/i] },
+  { league: 'ROL', patterns: [/\broad of legends\b/i, /\brol\s+\d{4}\b/i] },
+  { league: 'CD', patterns: [/\bcircuito desafiante\b/i, /\bcd\s+\d{4}\b/i] },
+  { league: 'LRN', patterns: [/\blrn\b/i, /\bliga\s+regional\s+norte\b/i] },
+  { league: 'LRS', patterns: [/\blrs\b/i, /\bliga\s+regional\s+sur\b/i] },
+  { league: 'LTS', patterns: [/\blts\b/i] },
+  { league: 'LCK', patterns: [/\blck\b/i] },
+  { league: 'LPL', patterns: [/\blpl\b/i] },
+  { league: 'LEC', patterns: [/\blec\b/i] },
+  { league: 'LCS', patterns: [/\blcs\b/i] },
+  { league: 'LTA', patterns: [/\blta\b/i] },
+  { league: 'LCP', patterns: [/\blcp\b/i] },
+  { league: 'CBLOL', patterns: [/\bcblol\b/i] },
+  { league: 'VCS', patterns: [/\bvcs\b/i] },
+  { league: 'PCS', patterns: [/\bpcs\b/i] },
+  { league: 'LLA', patterns: [/\blla\b/i] },
+  { league: 'TCL', patterns: [/\btcl\b/i] },
+  { league: 'LJL', patterns: [/\bljl\b/i] },
+  { league: 'LCO', patterns: [/\blco\b/i] },
+  { league: 'NLC', patterns: [/\bnlc\b/i] },
+  { league: 'LFL2', patterns: [/\blfl2\b/i, /\blfl\s+division\s*2\b/i] },
+  { league: 'LFL', patterns: [/\blfl\b/i] },
+]
 
 function teamHomeLeague(game: LeaguepediaGame, side: 'A' | 'B', teamName: string, competitionLeague: string) {
   const explicit =
@@ -200,7 +248,7 @@ function teamHomeLeague(game: LeaguepediaGame, side: 'A' | 'B', teamName: string
   if (explicit) return explicit
   const identity = teamIdentityFor(teamName)
   if (identity) return identity.league
-  return isInternationalCompetition(competitionLeague) ? 'Unknown' : competitionLeague
+  return isCompetitionOnlyHomeLeague(competitionLeague) ? 'Unknown' : competitionLeague
 }
 
 function teamRegion(game: LeaguepediaGame, side: 'A' | 'B', teamName: string, homeLeague: string): Region {
@@ -211,8 +259,8 @@ function teamRegion(game: LeaguepediaGame, side: 'A' | 'B', teamName: string, ho
   return leagueToRegion(homeLeague)
 }
 
-function isInternationalCompetition(league: string) {
-  return ['Worlds', 'MSI'].includes(league)
+function isCompetitionOnlyHomeLeague(league: string) {
+  return ['Worlds', 'MSI', 'FST', 'EWC', 'ASI', 'AC', 'Asia Master', 'KeSPA', 'DCup', 'EMEA Masters', 'LTA'].includes(league)
 }
 
 function isRegion(value: string): value is Region {
@@ -234,11 +282,21 @@ function leagueToRegion(league: string): Region {
 function inferTier(league: string, event: string, phase: string): MatchRecord['tier'] {
   const textValue = `${league} ${event}`.toLowerCase()
   const playoffs = phase === 'Playoffs'
+  if (textValue.includes('academic esports world tournament') || textValue.includes('university esports')) return 'qualifier'
+  if (textValue.includes('online qualifier') || textValue.includes('online qualifiers')) return 'qualifier'
+  if (textValue.includes('dcup') || textValue.includes('demacia cup')) return playoffs ? 'major-playoffs' : 'regional-regular'
+  if (textValue.includes('first stand') || /\bfst\b/.test(textValue)) return 'msi-bracket'
+  if (textValue.includes('emea masters')
+    || textValue.includes('minor')
+    || /\bewc\b/.test(textValue)
+    || textValue.includes('esports world cup')
+    || textValue.includes('asia master')
+    || textValue.includes('kespa')) return 'minor-international'
+  if (/\bwlds?\b/.test(textValue)) return playoffs ? 'worlds-playoffs' : 'worlds-main'
   if (textValue.includes('world') && playoffs) return 'worlds-playoffs'
   if (textValue.includes('world')) return 'worlds-main'
   if (textValue.includes('msi') && playoffs) return 'msi-bracket'
   if (textValue.includes('msi')) return 'msi-play-in'
-  if (textValue.includes('emea masters') || textValue.includes('minor')) return 'minor-international'
   if (playoffs) return 'major-playoffs'
   return 'regional-regular'
 }
@@ -250,10 +308,5 @@ function bestOfForGame(game: LeaguepediaGame, phase: string) {
 }
 
 function makeTeamCode(teamName: string) {
-  return teamName
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 4)
-    .toUpperCase()
+  return teamCodeFor(teamName)
 }

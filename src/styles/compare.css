@@ -1,0 +1,341 @@
+/* ---------------- Compare tray + drawer ---------------- */
+
+.tray {
+  position: fixed;
+  left: var(--rail-w);
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  min-height: var(--tray-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px clamp(18px, 3vw, 36px);
+  background: oklch(0.18 0.005 250 / 0.94);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--line-strong);
+  transform: translateY(110%);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tray.is-shown {
+  transform: translateY(0);
+}
+
+.tray__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.tray__chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  padding: 2px 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px 5px 11px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  font-size: 0.8rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.chip b {
+  font-weight: 600;
+}
+
+.chip button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chip button:hover {
+  color: var(--loss);
+}
+
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: 1fr min(980px, 94vw);
+  pointer-events: none;
+}
+
+.drawer__scrim {
+  background: oklch(0 0 0 / 0);
+  transition: background 0.28s ease;
+}
+
+.drawer__panel {
+  background: var(--surface);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+
+.drawer.is-open {
+  pointer-events: auto;
+}
+
+.drawer.is-open .drawer__scrim {
+  background: oklch(0 0 0 / 0.5);
+}
+
+.drawer.is-open .drawer__panel {
+  transform: translateX(0);
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.drawer__head h2 {
+  font-size: 1.1rem;
+  font-weight: 660;
+  color: var(--text-strong);
+  margin-right: auto;
+}
+
+.drawer__body {
+  overflow: auto;
+  padding: 0;
+  min-width: 0;
+}
+
+.drawer__table {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  border-bottom: 1px solid var(--line);
+}
+
+.drawer__after {
+  display: grid;
+  gap: 16px;
+  padding: 18px 22px 24px;
+}
+
+.compare-chart {
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: oklch(0.145 0.004 250);
+}
+
+.compare-chart__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 16px 18px 0;
+}
+
+.compare-chart__head h3 {
+  margin-top: 2px;
+  font-size: 1rem;
+  font-weight: 660;
+  color: var(--text-strong);
+}
+
+.compare-chart__head .eyebrow {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.compare-chart__meta {
+  font-size: 0.76rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-chart .chart {
+  padding-inline: 14px;
+}
+
+.compare-chart .chart svg {
+  height: 300px;
+}
+
+.compare-chart__empty {
+  padding: 22px 18px;
+}
+
+.compare-profile {
+  min-height: 0;
+}
+
+.profile-chart {
+  display: grid;
+  gap: 15px;
+  padding: 15px 18px 18px;
+}
+
+.profile-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 150px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.profile-row__label {
+  min-width: 0;
+  padding-top: 3px;
+}
+
+.profile-row__label span {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  font-weight: 620;
+}
+
+.profile-bars {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.profile-bar {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.8fr) minmax(100px, 2fr) minmax(54px, auto);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.profile-bar__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-bar__name i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.profile-bar__track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.profile-bar__fill {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 999px;
+}
+
+.profile-bar strong {
+  justify-self: end;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-bar.is-best .profile-bar__name,
+.profile-bar.is-best strong {
+  color: var(--text-strong);
+}
+
+.cmp {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+}
+
+.cmp th,
+.cmp td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.cmp thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  z-index: 1;
+}
+
+.cmp thead th .ent b {
+  font-size: 0.98rem;
+}
+
+.cmp th[scope="row"] {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface);
+  position: sticky;
+  left: 0;
+}
+
+.cmp td {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.cmp td.best {
+  color: var(--text-strong);
+  font-weight: 680;
+}
+
+.cmp td.best::after {
+  content: "▲";
+  font-size: 0.58rem;
+  color: var(--accent-strong);
+  margin-left: 6px;
+  vertical-align: middle;
+}

@@ -1,9 +1,10 @@
 import { put } from '@vercel/blob'
-import { rosters, sampleMatches, teams } from '../src/data/sampleData'
+import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
 import { importLeaguepediaSnapshot, type LeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
-import { createStaticRankingData } from '../src/lib/snapshot'
+import { createStaticRankingData, createStaticRankingSummaryData } from '../src/lib/snapshot'
+import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 import type { MatchRecord } from '../src/types'
 
 type JsonResponse = {
@@ -46,18 +47,16 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     oracleMatches: oracleImport?.matches ?? [],
     leaguepediaMatches: leaguepediaImport?.matches ?? [],
   })
-  const allowSeededSnapshot = process.env.ALLOW_SEEDED_SNAPSHOT === 'true'
 
-  const matches = importedMatches.length ? importedMatches : allowSeededSnapshot ? sampleMatches : []
-  const importedTeams = { ...(leaguepediaImport?.teams ?? {}), ...(oracleImport?.teams ?? {}) }
-  const mergedTeams = importedMatches.length ? { ...importedTeams, ...teams } : allowSeededSnapshot ? teams : {}
-  const mergedRosters = matches.length ? rosters : {}
-  const dataMode = importedMatches.length ? 'scheduled-public-data' : allowSeededSnapshot ? 'seeded-sample' : 'no-data'
+  const matches = importedMatches
+  const importedTeams = mergeTeamProfiles([leaguepediaImport?.teams ?? {}, oracleImport?.teams ?? {}])
+  const mergedTeams = importedMatches.length ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities } : {}
+  const dataMode = importedMatches.length ? 'scheduled-public-data' : 'no-data'
   const snapshot = createStaticRankingData({
     matches,
     teams: mergedTeams,
-    rosters: mergedRosters,
-    source: importedMatches.length ? describeCommunitySource(Boolean(oracleImport), Boolean(leaguepediaImport)) : allowSeededSnapshot ? 'Vercel scheduled recalculation using seed fallback' : 'no public match data available',
+    rosters: {},
+    source: importedMatches.length ? describeCommunitySource(Boolean(oracleImport), Boolean(leaguepediaImport)) : 'no public match data available',
     dataMode,
     externalSources: [
       ...(oracleImport
@@ -82,10 +81,10 @@ export default async function handler(request: JsonRequest, response: JsonRespon
               kind: 'match-data' as const,
               url: leaguepediaJsonUrl,
               retrievedAt: leaguepediaImport.source.retrievedAt,
-              coverageStart: leaguepediaImport.source.start ?? dateRange(leaguepediaImport.matches).start,
-              coverageEnd: leaguepediaImport.source.end ?? dateRange(leaguepediaImport.matches).end,
+              coverageStart: dateRange(leaguepediaImport.matches).start,
+              coverageEnd: dateRange(leaguepediaImport.matches).end,
               rowCount: leaguepediaImport.matches.length,
-              description: `${leaguepediaImport.matches.length} normalized games imported during scheduled recalculation. ${leaguepediaImport.source.attribution}`,
+              description: `${leaguepediaImport.matches.length} normalized games imported during scheduled recalculation for requested range ${leaguepediaImport.source.start ?? 'unknown'} to ${leaguepediaImport.source.end ?? 'unknown'}. ${leaguepediaImport.source.attribution}`,
               status: 'active' as const,
             },
           ]
@@ -94,20 +93,6 @@ export default async function handler(request: JsonRequest, response: JsonRespon
   })
 
   response.setHeader('Cache-Control', 'no-store')
-
-  if (allowSeededSnapshot && !importedMatches.length) {
-    response.status(200).json({
-      ok: true,
-      generatedAt: snapshot.generatedAt,
-      snapshotCount: Object.keys(snapshot.snapshots).length,
-      dataMode: snapshot.dataMode,
-      source: snapshot.source,
-      modelVersion: snapshot.model.version,
-      modelConfigHash: snapshot.model.configHash,
-      warning: 'Seeded demo fallback was explicitly allowed, but seeded snapshots are never published to Blob.',
-    })
-    return
-  }
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     response.status(200).json({
@@ -123,11 +108,29 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     return
   }
 
-  const blob = await put('rankings/latest.json', JSON.stringify(snapshot), {
-    access: 'public',
-    allowOverwrite: true,
-    contentType: 'application/json',
+  const summary = createStaticRankingSummaryData(snapshot, {
+    fullSnapshotUrl: 'rankings/latest-full.json',
+    snapshotUrlForKey: (key) => `rankings/snapshots/${key}.json`,
   })
+  const [summaryBlob, fullBlob] = await Promise.all([
+    put('rankings/latest-summary.json', JSON.stringify(summary.manifest), {
+      access: 'public',
+      allowOverwrite: true,
+      contentType: 'application/json',
+    }),
+    put('rankings/latest-full.json', JSON.stringify(snapshot), {
+      access: 'public',
+      allowOverwrite: true,
+      contentType: 'application/json',
+    }),
+  ])
+  await Promise.all(Object.entries(summary.snapshots).map(([key, compactSnapshot]) =>
+    put(`rankings/snapshots/${key}.json`, JSON.stringify(compactSnapshot), {
+      access: 'public',
+      allowOverwrite: true,
+      contentType: 'application/json',
+    }),
+  ))
 
   response.status(200).json({
     ok: true,
@@ -137,7 +140,8 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     source: snapshot.source,
     modelVersion: snapshot.model.version,
     modelConfigHash: snapshot.model.configHash,
-    blobUrl: blob.url,
+    blobUrl: summaryBlob.url,
+    fullBlobUrl: fullBlob.url,
   })
 }
 
