@@ -2,6 +2,21 @@
 
 - Use subagents whenever it makes sense and can speed up work.
 - Use Asana for task management.
+- Use the existing Asana project `LoL Esports Ranking` (`1216072655616005`) for task management. Put tasks in the workflow section that matches their current state:
+  - `Inbox / Idea Captured`: raw ideas, untriaged requests, or tasks missing enough context to classify.
+  - `Spec / Clarification`: work that needs product, model, or data-source clarification before slicing.
+  - `Ready for Slicing`: clarified work that still needs decomposition into implementation-sized tasks.
+  - `Ready for Agent`: implementation-ready work with clear acceptance criteria and no known blocker.
+  - `In Progress`: actively being implemented by an agent or human.
+  - `Agent Self-Review`: implementation is done and the agent is checking tests, diffs, provenance, and docs before handoff.
+  - `Human Review`: ready for the user or another human to inspect.
+  - `Changes Requested`: reviewed work that needs follow-up changes.
+  - `Ready to Merge`: approved and waiting for merge/release.
+  - `Merged / Closed`: merged, shipped, duplicate, or otherwise intentionally closed; leave an Asana comment explaining closure when closing non-obvious work.
+  - `Blocked on Human`: needs a human/owner decision, credential, review, or external account action before progress can continue.
+  - `Blocked on Dependency`: blocked by another task, upstream data/provider issue, CI/deploy dependency, or unavailable external system; link dependencies in Asana when possible.
+- Do not create new tasks in legacy/default sections such as `Untitled section` or `Done`; rename or move them into the workflow above.
+- Keep Asana task comments/status current during longer repo runs and at closeout, especially when moving tasks between sections.
 - Keep ranking claims tied to the data source and model version that produced them.
 - Do not present seeded or sample data as official LoL Esports data.
 - The goal is for the score to be as accurate as possible, so if you have a better way to do something, please suggest it.

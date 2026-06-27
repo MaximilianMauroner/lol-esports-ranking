@@ -1,14 +1,16 @@
 # Brand Assets
 
-The shipped app mark is the provided cyan trophy logo in a dark rounded square.
+The shipped app mark is the generated Stencil Power Mark from the 2026-06-28 creative pass.
 
 ## Selected Assets
 
-- `public/logo.svg`: vector app header mark.
-- `public/logo.png`: cropped raster source from the provided logo image.
-- `public/favicon.svg`: favicon-sized vector mark.
-- `public/apple-touch-icon.png`: touch icon generated from the shipped trophy mark.
-- `public/icons.svg`: product icon sprite for model/source/uncertainty/league-strength concepts.
+- `public/logo.svg`: app header mark wrapper for the generated raster icon.
+- `public/logo.png`: 512px generated raster source for the app mark.
+- `public/favicon.png`: 64px generated favicon used by `index.html`.
+- `public/favicon.ico`: multi-size generated favicon fallback.
+- `public/favicon.svg`: SVG compatibility wrapper for the generated favicon.
+- `public/apple-touch-icon.png`: 180px touch icon generated from the selected mark.
+- `public/icons.svg`: product icon sprite for model/source/uncertainty/league-strength concepts, with `logo-mark` matching the stencil-power direction.
 
 ## League Marks
 
@@ -16,8 +18,8 @@ The shipped app mark is the provided cyan trophy logo in a dark rounded square.
 
 ## Previous Concept Ranking
 
-The previous generated concept exploration is preserved in `docs/brand-candidates/`, but those images are no longer the active app logo.
+Generated concept exploration is preserved in `docs/brand-candidates/`. The 2026-06-28 creative pass selected `stencil-power-mark.png` as the active app icon after the user narrowed the set to A and C, then chose A.
 
-1. Calibrated Rift Compass: strongest generated candidate before the supplied trophy mark replaced it.
-2. League Strength Matrix: useful secondary icon language for league-strength and networked evidence, but too detailed for small favicon use.
-3. Transparent GPR Lab: credible analytics mark, but less esports-specific and more generic as the primary app logo.
+1. Stencil Power Mark: selected active mark; strongest small-size silhouette from the creative pass.
+2. Rating Flame: strongest alternate for energy and motion, but thinner at favicon sizes.
+3. Rating Grid: previous selected mark from the 2026-06-27 second-pass review.

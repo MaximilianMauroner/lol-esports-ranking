@@ -279,7 +279,13 @@ function App() {
     <div className="app">
       <nav className="rail" aria-label="Primary">
         <button type="button" className="rail__brand" onClick={goHome} aria-label="Go to Teams home">
-          <img className="rail__logo" src="/brand-logo.svg" alt="Power Index LoL Esports" />
+          <span className="rail__mark">
+            <img src="/logo.svg" alt="" aria-hidden="true" />
+          </span>
+          <div>
+            <b>Power Index</b>
+            <span>LoL Esports</span>
+          </div>
         </button>
         <div className="rail__label">Compare</div>
         <div className="rail__nav">
