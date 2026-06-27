@@ -4,7 +4,7 @@ A better Global Power Rankings prototype for LoL esports. The app starts as a ra
 
 ## Status
 
-This is a scaffold that shows no ranking data until public match rows are imported. It is not an official Riot ranking and should not be presented as current truth until the ingest scripts are run and the model output is reviewed.
+The app serves the latest committed browser-safe snapshot from `public/data/`. It is not an official Riot ranking, and each public ranking claim should stay tied to the committed data source manifest, model version, config hash, and coverage window that produced it.
 
 ## Run
 
@@ -20,6 +20,7 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
+npm run release:check
 ```
 
 ## Styling
@@ -34,9 +35,9 @@ The frontend loads static JSON from:
 /data/ranking-summary.json
 ```
 
-Set `VITE_RANKING_DATA_URL` when you want the browser to load a hosted JSON object instead, such as a Vercel Blob URL written by the scheduled job.
+By default, Vercel, Cloudflare Pages, and other static hosts serve the committed files in `public/data/`. Set `VITE_RANKING_DATA_URL` only when you intentionally want the browser to load an externally hosted manifest, such as a Vercel Blob URL written by the optional scheduled job.
 
-Static data is generated explicitly:
+Static data can be generated without source inputs for a no-data smoke fixture:
 
 ```bash
 npm run data:build
@@ -44,14 +45,20 @@ npm run data:build
 
 With no source arguments, this writes a valid `no-data` summary instead of falling back to seeded samples. The app does not recalculate rankings in React render. It loads a compact default board first, then lazy-loads compact per-filter shards from `public/data/snapshots/`. Filters narrow the presented rows while preserving one model version's global rating scale.
 
-To keep downloading separate from ranking calculation, use:
+The normal local refresh workflow is:
 
 ```bash
 npm run data:download
 npm run data:crunch
+npm run release:check
+git add data/raw/manifest.json public/data/ranking-summary.json public/data/players.json public/data/team-history.json public/data/snapshots
+git commit -m "Refresh LoL esports ranking data"
+git push
 ```
 
-`data:download` stores raw files under `data/raw/` and writes `data/raw/manifest.json`. By default it downloads Oracle's Elixir CSVs and Leaguepedia ScoreboardGames from 2011-01-01 through today. `data:crunch` reads the local manifest and raw files, writes the full calculation artifact to `data/derived/ranking-snapshot.full.json`, and writes browser-safe artifacts to `public/data/ranking-summary.json` plus `public/data/snapshots/*.json`. Riot GPR snapshots are not part of the local data-source manifest.
+`data:download` stores raw provider files under `data/raw/` and writes `data/raw/manifest.json`. Raw provider downloads are local inputs and are ignored by Git; the manifest is committed for provenance. By default the downloader fetches Oracle's Elixir CSVs and Leaguepedia ScoreboardGames from 2011-01-01 through today. `data:crunch` reads the local manifest and raw files, writes the full local calculation artifact to `data/derived/ranking-snapshot.full.json`, and writes the deployable client payload to `public/data/ranking-summary.json`, `public/data/players.json`, `public/data/team-history.json`, and `public/data/snapshots/*.json`.
+
+Commit the generated `public/data` payload after review so the deployed client can load it as static JSON. Do not commit raw provider downloads or `data/derived/ranking-snapshot.full.json`. The full public snapshot files `public/data/ranking-snapshot.json` and `public/data/*.full.json` are intentionally blocked because they can exceed GitHub file limits; the compact manifest and shards are the browser contract. Riot GPR snapshots are not part of the local data-source manifest.
 
 `data:download` treats Oracle's Elixir as the primary game-level source and Leaguepedia as the backup/gap-fill source. It discovers the public Oracle CSV files from the Oracle Google Drive folder, downloads the CSVs that overlap the requested date range, then downloads Leaguepedia Cargo data for the same range. If Google Drive returns a quota/HTML page instead of a CSV for a file, that file is skipped with a manifest warning instead of being recorded as usable data.
 
@@ -74,7 +81,7 @@ npm run data:download -- --leaguepedia false
 To build from Oracle's Elixir CSVs:
 
 ```bash
-npm run data:build:oracle -- data/2026_LoL_esports_match_data_from_OraclesElixir.csv
+npm run data:build:oracle -- data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv
 ```
 
 Oracle rows are normalized into match records using `gameid`, side, team, result, kills, gold, objectives, game length, league, year, split, playoffs, patch, and data-completeness fields when present.
@@ -82,14 +89,14 @@ Oracle rows are normalized into match records using `gameid`, side, team, result
 To build from a fetched Leaguepedia Cargo snapshot:
 
 ```bash
-npm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/leaguepedia-2026.json
-npm run data:build:leaguepedia -- data/leaguepedia-2026.json
+npm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
+npm run data:build:leaguepedia -- data/raw/leaguepedia/leaguepedia-2026.json
 ```
 
 To combine both community sources for the algorithm:
 
 ```bash
-npm run data:build -- --oracle-csv data/2026_LoL_esports_match_data_from_OraclesElixir.csv --leaguepedia-json data/leaguepedia-2026.json
+npm run data:build -- --oracle-csv data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv --leaguepedia-json data/raw/leaguepedia/leaguepedia-2026.json
 ```
 
 Oracle's Elixir has precedence for duplicate games because it carries richer game-stat fields. Leaguepedia Cargo fills gaps and supplies broad match/event coverage. Overlapping scored rows are merged only when canonical team/winner identity plus source IDs or team stat lines identify the same game; broad date/team/winner matching is reserved for result-only gap-fill rows so separate same-winner games in a series are preserved. Sponsor-era aliases such as DRX/Kiwoom DRX, OKSavingsBank BRION/HANJIN BRION, and DN Freecs/DN SOOPers are normalized before dedupe. Seeded data is explicitly marked as `sourceProvider: "seed"` and should be used only for local demo snapshots.
@@ -105,15 +112,15 @@ The intended pipeline has three layers:
 Fetch examples:
 
 ```bash
-npm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/leaguepedia-2026.json
-npm run fetch:riot-gpr -- --year 2026 --milestone current --output data/riot-gpr-2026-current.json
+npm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
+npm run fetch:riot-gpr -- --year 2026 --milestone current --output data/raw/riot-gpr/riot-gpr-2026-current.json
 ```
 
 Leaguepedia rate-limits aggressively. The fetcher uses pagination and a delay, but repeated ad hoc queries can still be throttled.
 
-## Vercel Scheduled Recalculation
+## Optional Vercel Blob Recalculation
 
-`vercel.json` configures a cron job:
+The primary publish path is local refresh, commit `public/data`, push, and deploy the static app. The Vercel cron path is optional and only needed when you want a deployed function to publish an external Blob-backed manifest instead of using the committed static files. `vercel.json` configures a cron job:
 
 ```json
 {
@@ -126,7 +133,7 @@ Leaguepedia rate-limits aggressively. The fetcher uses pagination and a delay, b
 }
 ```
 
-The cron endpoint recalculates the same static snapshot shape from public-source inputs. With `BLOB_READ_WRITE_TOKEN` configured, it writes the latest browser manifest to Vercel Blob at `rankings/latest-summary.json`, plus compact filter shards, player ratings, rating history, and the full audit artifact. The default schedule is daily for Hobby-plan compatibility; use a more frequent expression on a plan that supports it.
+The cron endpoint recalculates the same snapshot shape from URL-provided public-source inputs. With `BLOB_READ_WRITE_TOKEN` configured, it writes the latest browser manifest to Vercel Blob at `rankings/latest-summary.json`, plus compact filter shards, player ratings, rating history, and the full audit artifact. The default schedule is daily for Hobby-plan compatibility; use a more frequent expression on a plan that supports it.
 
 Recommended Vercel environment variables:
 
@@ -136,7 +143,7 @@ Recommended Vercel environment variables:
 - `LEAGUEPEDIA_MATCHES_JSON_URL`: optional JSON URL produced by `npm run fetch:leaguepedia`, used as match/event gap-fill for scheduled snapshots.
 - `VITE_RANKING_DATA_URL`: public Blob URL the browser should load in production.
 
-Deployed static files are immutable at runtime, so the scheduled function publishes to Blob rather than trying to modify files inside a deployment. The browser-facing Blob payload is the summary contract, not the full calculation artifact; it includes the public URLs for its shard, player-rating, and team-history companions. If no public source produces rows, the cron returns a `no-data` result instead of publishing seeded sample data.
+Deployed static files are immutable at runtime, so the scheduled function publishes to Blob rather than trying to modify files inside a deployment. If you use this mode, set `VITE_RANKING_DATA_URL` to the public Blob summary URL. The browser-facing Blob payload is the summary contract, not the full calculation artifact; it includes the public URLs for its shard, player-rating, and team-history companions. If no public source produces rows, the cron returns a `no-data` result instead of publishing seeded sample data.
 
 ## Model
 

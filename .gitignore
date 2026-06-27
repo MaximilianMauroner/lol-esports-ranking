@@ -12,7 +12,8 @@ dist
 dist-ssr
 *.local
 
-# Generated data caches
+# Local data inputs/caches. Fetch/update into data/raw locally, but do not
+# commit provider downloads; commit only the manifest that documents inputs.
 data/*.json
 data/*.csv
 data/raw/**
@@ -27,11 +28,23 @@ data/**/*.sqlite
 data/**/*.db
 !data/README.md
 
-# Full ranking snapshots are generated artifacts and can exceed GitHub limits.
-# Keep compact public summaries/shards tracked, but never re-add the old monolith.
+# Commit the generated client payload from data:crunch:
+# public/data/ranking-summary.json
+# public/data/players.json
+# public/data/team-history.json
+# public/data/snapshots/*.json
+!public/data/
+!public/data/ranking-summary.json
+!public/data/players.json
+!public/data/team-history.json
+!public/data/snapshots/
+!public/data/snapshots/*.json
+
+# Do not ship/re-add full public snapshots; they can exceed GitHub limits.
 public/data/ranking-snapshot.json
 public/data/ranking-snapshot.full.json
 public/data/*.full.json
+public/data/**/*.tmp
 
 # Editor directories and files
 .vscode/*
