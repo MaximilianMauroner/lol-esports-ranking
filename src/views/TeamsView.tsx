@@ -7,7 +7,8 @@ import { estimatePublicMatchup } from '../lib/publicMatchup'
 import { rankingTargetExplanations } from '../lib/rankingExplanations'
 import { extent, formatDate, formatDateRange, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
-import { DataState, FormDots, HeatChip, PickButton, Segmented, SortHeader } from '../components/ui'
+import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
+import { DataState, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
 import { LineChart, type ChartSeries } from '../components/LineChart'
 
 type SortKey = 'rank' | 'rating' | 'wins'
@@ -28,7 +29,7 @@ const TEAM_ROW_LIMIT = 60
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
 const LEAGUE_LOGOS: Record<string, string> = {
-  LPL: '/league-logos/lpl.svg',
+  LPL: '/league-icons/lpl.png',
 }
 
 export function TeamsView({
@@ -189,7 +190,7 @@ export function TeamsView({
                   <select value={region} onChange={(event) => setRegion(event.target.value)}>
                     {regionOptions.map((option) => (
                       <option key={option} value={option}>
-                        {option}
+                        {formatCompetitionRegionLabel(option)}
                       </option>
                     ))}
                   </select>
@@ -374,7 +375,7 @@ function teamSubtitle(team: RankingSummaryStanding) {
   const reasons = team.eligibility?.eligible === false
     ? team.eligibility.reasons.join(', ')
     : undefined
-  return [team.league ?? team.region, reasons].filter(Boolean).join(' · ')
+  return [formatCompetitionLeagueLabel(team.league ?? team.region), reasons].filter(Boolean).join(' · ')
 }
 
 function rankAxisForSeries(series: ChartSeries[]) {
@@ -442,7 +443,7 @@ function RegionalStrengthPanel({ regions }: { regions: RegionStrength[] }) {
         <div className="region-strength-grid">
           {ranked.map((region) => (
             <div className="region-strength-cell" key={region.region}>
-              <LeagueSigil league={String(region.region)} fallbackLabel={String(region.region).slice(0, 1)} small />
+              <RegionBadge region={region.region} size="sm" />
               <span className="region-strength-name">{region.region}</span>
               <strong>{formatRating(region.score)}</strong>
             </div>

@@ -378,6 +378,14 @@ export type PlayerStanding = {
   history: {
     date: string
     event: string
+    opponent?: string
+    opponentTeamCode?: string
+    playerTeam?: string
+    playerTeamCode?: string
+    result?: 'W' | 'L'
+    teamKills?: number
+    opponentKills?: number
+    source?: SourceTrace
     rating: number
     delta: number
   }[]

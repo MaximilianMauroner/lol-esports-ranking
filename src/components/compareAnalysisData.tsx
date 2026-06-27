@@ -13,7 +13,7 @@ import {
 } from '../lib/display'
 import type { RegionStrength } from '../lib/regionStrength'
 import type { CompareColumn, CompareRow } from './CompareDrawer'
-import { ConfBar, FormDots } from './ui'
+import { ConfBar, FormDots, RegionBadge } from './ui'
 
 export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
   { key: 'score', label: 'Power score', cell: (r) => formatRating(r.score), score: (r) => r.score, better: 'high' },
@@ -131,7 +131,12 @@ export function regionKey(region: RegionStrength) {
 }
 
 export function regionCompareColumns(regions: RegionStrength[]): CompareColumn[] {
-  return regions.map((region) => ({ id: regionKey(region), name: region.region, sub: `#${region.rank} · ${region.flagshipLeague ?? 'Multiple leagues'}` }))
+  return regions.map((region) => ({
+    id: regionKey(region),
+    name: region.region,
+    sub: `#${region.rank} · ${region.flagshipLeague ?? 'Multiple leagues'}`,
+    badge: <RegionBadge region={region.region} size="sm" />,
+  }))
 }
 
 export function teamCompareColumns(teams: RankingSummaryStanding[]): CompareColumn[] {

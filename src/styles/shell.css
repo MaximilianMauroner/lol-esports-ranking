@@ -23,41 +23,27 @@
 .rail__brand {
   display: flex;
   align-items: center;
-  gap: 11px;
   padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
   flex: 0 0 auto;
-  min-width: 188px;
+  font: inherit;
+  min-width: 184px;
+  text-align: left;
+  transition: background 0.16s ease;
 }
 
-.rail__mark {
-  display: grid;
-  place-items: center;
-  width: 37px;
-  height: 37px;
-  border-radius: 7px;
-  flex-shrink: 0;
-  overflow: hidden;
+.rail__brand:hover {
+  background: color-mix(in oklab, var(--surface-2) 46%, transparent);
 }
 
-.rail__mark img {
+.rail__logo {
   display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.rail__brand b {
-  display: block;
-  font-size: 0.94rem;
-  letter-spacing: -0.01em;
-  color: var(--text-strong);
-}
-
-.rail__brand div > span {
-  display: block;
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.13em;
-  color: var(--faint);
+  width: 184px;
+  height: 46px;
 }
 
 .rail__nav {

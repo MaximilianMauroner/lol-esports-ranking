@@ -53,6 +53,26 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
               date: '2026-06-26',
               event: 'LCK 2026 Rounds 1-2',
             },
+            history: [{
+              date: '2026-06-26',
+              event: 'LCK 2026 Rounds 1-2',
+              opponent: 'T1',
+              opponentTeamCode: 'T1',
+              playerTeam: 'Gen.G',
+              playerTeamCode: 'GEN',
+              result: 'W',
+              teamKills: 16,
+              opponentKills: 8,
+              rating: 200,
+              delta: 1,
+              source: {
+                provider: 'oracles-elixir',
+                gameId: 'oe-player-proof',
+                fileName: 'oracle-fixture.csv',
+                date: '2026-06-26',
+                event: 'LCK 2026 Rounds 1-2',
+              },
+            }],
             appearance: {
               primaryTeam: 'Gen.G',
               primaryTeamGames: 100,
@@ -98,6 +118,21 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   assert.equal(chovy.sourceFileName, 'oracle-fixture.csv')
   assert.equal(chovy.latestObservedAt, '2026-06-26')
   assert.equal(chovy.latestObservedEvent, 'LCK 2026 Rounds 1-2')
+  assert.deepEqual(chovy.recentMatches, [{
+    date: '2026-06-26',
+    event: 'LCK 2026 Rounds 1-2',
+    opponent: 'T1',
+    opponentTeamCode: 'T1',
+    playerTeam: 'Gen.G',
+    playerTeamCode: 'GEN',
+    result: 'W',
+    teamKills: 16,
+    opponentKills: 8,
+    sourceProvider: 'oracles-elixir',
+    sourceFileName: 'oracle-fixture.csv',
+    sourceGameId: 'oe-player-proof',
+    sourceUrl: undefined,
+  }])
   assert.equal(chovy.appearance?.latestTeamGames, 100)
   assert.equal(chovy.appearance?.roleGames, 100)
   assert.deepEqual(chovy.appearance?.teamHistory, [{
@@ -288,8 +323,36 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
     code: 'ALP',
     region: 'LCK',
     history: [
-      { date: '2026-01-01', rating: 1500, rank: 2 },
-      { date: '2026-01-02', rating: 1510, rank: 1 },
+      {
+        date: '2026-01-01',
+        event: 'LCK Cup',
+        opponent: 'Beta',
+        rating: 1500,
+        baseRating: 1500,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: {},
+        rank: 2,
+        delta: 0,
+        tier: 'regional-regular',
+        result: 'W',
+        source: { provider: 'oracles-elixir', gameId: 'g1', fileName: 'fixture.csv' },
+      },
+      {
+        date: '2026-01-02',
+        event: 'LCK Cup',
+        opponent: 'Gamma',
+        rating: 1510,
+        baseRating: 1510,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: {},
+        rank: 1,
+        delta: 10,
+        tier: 'regional-regular',
+        result: 'W',
+        source: { provider: 'oracles-elixir', gameId: 'g2', fileName: 'fixture.csv' },
+      },
     ],
   } as TeamStanding
   const omittedStanding = {
@@ -321,6 +384,10 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
   assert.equal(history.omissionPolicy.omittedSeriesCount, 1)
   assert.match(history.omissionPolicy.reason, /fewer than two/)
   assert.ok(history.series[teamStandingKey(includedStanding)])
+  assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.event, 'LCK Cup')
+  assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.opponent, 'Gamma')
+  assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.delta, 10)
+  assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.sourceProvider, 'oracles-elixir')
   assert.equal(history.series[teamStandingKey(omittedStanding)], undefined)
 })
 
@@ -395,6 +462,38 @@ test('region filters list teams from that region instead of their opponents', ()
   assert.equal(teamsInLecShard.has('Fnatic'), true)
   assert.equal(teamsInLecShard.has('Gen.G'), false)
   assert.equal(lecSnapshot.standings.every((standing) => standing.region === 'LEC'), true)
+})
+
+test('region filters fold APAC feeder regions under current LCP scope', () => {
+  const apacTeams: Record<string, TeamProfile> = {
+    'CTBC Flying Oyster': { name: 'CTBC Flying Oyster', code: 'CFO', region: 'LCP', league: 'LCP' },
+    'PSG Talon': { name: 'PSG Talon', code: 'PSG', region: 'PCS', league: 'PCS' },
+    'GAM Esports': { name: 'GAM Esports', code: 'GAM', region: 'VCS', league: 'VCS' },
+  }
+  const matches: MatchRecord[] = [
+    apacRegionMatch('apac-lcp-pcs', 'LCP', 'LCP', 'PCS', 'CTBC Flying Oyster', 'PSG Talon', 'CTBC Flying Oyster'),
+    apacRegionMatch('apac-vcs-pcs', 'VCS', 'VCS', 'PCS', 'GAM Esports', 'PSG Talon', 'GAM Esports'),
+  ]
+
+  const data = createStaticRankingData({
+    matches,
+    teams: apacTeams,
+    rosters: {},
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+  const lcpSnapshot = data.snapshots[snapshotKey({ season: 'All', event: 'All', region: 'LCP' })]
+
+  assert.equal(data.filterOptions.regions.includes('PCS'), false)
+  assert.equal(data.filterOptions.regions.includes('VCS'), false)
+  assert.equal(data.filterOptions.regions.includes('LCP'), true)
+  assert.equal(data.snapshots[snapshotKey({ season: 'All', event: 'All', region: 'PCS' })], undefined)
+  assert.ok(lcpSnapshot)
+  assert.deepEqual(
+    new Set(lcpSnapshot.standings.map((standing) => standing.team)),
+    new Set(['CTBC Flying Oyster', 'PSG Talon', 'GAM Esports']),
+  )
+  assert.equal(lcpSnapshot.regions.some((region) => region.region === 'PCS' || region.region === 'VCS'), false)
+  assert.equal(lcpSnapshot.regions.some((region) => region.region === 'LCP'), true)
 })
 
 test('region filters use dated side regions instead of current global team identity', () => {
@@ -852,6 +951,42 @@ function movedRegionMatch({
     teamBKills: winner === opponent ? 18 : 10,
     teamAGold: winner === 'Moved' ? 65000 : 56000,
     teamBGold: winner === opponent ? 65000 : 56000,
+  }
+}
+
+function apacRegionMatch(
+  id: string,
+  eventRegion: MatchRecord['region'],
+  leagueA: Region,
+  leagueB: Region,
+  teamA: string,
+  teamB: string,
+  winner: string,
+): MatchRecord {
+  return {
+    id,
+    sourceProvider: 'seed',
+    dataCompleteness: 'complete',
+    date: '2026-01-01',
+    season: 2026,
+    event: `${eventRegion} 2026 Spring`,
+    phase: 'Regular season',
+    region: eventRegion,
+    league: eventRegion,
+    teamAHomeLeague: leagueA,
+    teamBHomeLeague: leagueB,
+    teamARegion: leagueA,
+    teamBRegion: leagueB,
+    patch: '26.1',
+    bestOf: 1,
+    tier: 'regional-regular',
+    teamA,
+    teamB,
+    winner,
+    teamAKills: winner === teamA ? 18 : 10,
+    teamBKills: winner === teamB ? 18 : 10,
+    teamAGold: winner === teamA ? 65000 : 56000,
+    teamBGold: winner === teamB ? 65000 : 56000,
   }
 }
 

@@ -42,6 +42,7 @@ import {
 import { RegionsView } from './views/RegionsView'
 import { TeamsView } from './views/TeamsView'
 import { PlayersView } from './views/PlayersView'
+import { RegionBadge } from './components/ui'
 
 type Mode = 'regions' | 'teams' | 'players'
 
@@ -135,11 +136,11 @@ function App() {
   }, [data])
 
   useEffect(() => {
-    if (window.location.hash.slice(1) !== mode) {
-      window.history.replaceState(null, '', `#${mode}`)
-    }
+    replaceHashForMode(mode)
     function onHashChange() {
-      setMode(readModeFromHash())
+      const nextMode = readModeFromHash()
+      setMode(nextMode)
+      replaceHashForMode(nextMode)
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
@@ -269,19 +270,17 @@ function App() {
   const yearTabs = orderedSeasonYears(readyData)
   const seasonTabs = [...yearTabs.slice(0, 4), 'All']
   const activeSeason = effectiveScope.startsWith('season:') ? effectiveScope.slice(7) : effectiveScope === 'all' ? 'All' : undefined
+  const goHome = () => {
+    setMode('teams')
+    replaceHashForMode('teams')
+  }
 
   return (
     <div className="app">
       <nav className="rail" aria-label="Primary">
-        <div className="rail__brand">
-          <span className="rail__mark">
-            <img src="/logo.svg" alt="" aria-hidden="true" />
-          </span>
-          <div>
-            <b>Power Index</b>
-            <span>LoL Esports</span>
-          </div>
-        </div>
+        <button type="button" className="rail__brand" onClick={goHome} aria-label="Go to Teams home">
+          <img className="rail__logo" src="/brand-logo.svg" alt="Power Index LoL Esports" />
+        </button>
         <div className="rail__label">Compare</div>
         <div className="rail__nav">
           {MODES.map((entry) => {
@@ -406,6 +405,7 @@ function App() {
           {mode === 'regions'
             ? regionPicks.map((region) => (
                 <span className="chip" key={regionKey(region)}>
+                  <RegionBadge region={region.region} size="sm" />
                   <b>{region.region}</b>
                   <button type="button" onClick={() => toggleRegion(region)} aria-label={`Remove ${region.region}`}>
                     ✕
@@ -486,7 +486,12 @@ function App() {
 
 function readModeFromHash(): Mode {
   const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
-  return hash === 'teams' || hash === 'players' || hash === 'regions' ? hash : 'regions'
+  return hash === 'teams' || hash === 'players' || hash === 'regions' ? hash : 'teams'
+}
+
+function replaceHashForMode(mode: Mode) {
+  if (typeof window === 'undefined' || window.location.hash.slice(1) === mode) return
+  window.history.replaceState(null, '', `#${mode}`)
 }
 
 function currentYearScope() {

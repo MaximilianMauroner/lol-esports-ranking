@@ -132,6 +132,21 @@ export type CompactPlayer = {
   games: number
   delta: number
   form: string[]
+  recentMatches?: {
+    date: string
+    event: string
+    opponent: string
+    opponentTeamCode?: string
+    playerTeam?: string
+    playerTeamCode?: string
+    result: 'W' | 'L'
+    teamKills?: number
+    opponentKills?: number
+    sourceProvider?: string
+    sourceFileName?: string
+    sourceGameId?: string
+    sourceUrl?: string
+  }[]
   impactMultiplier: number
   availability: number
   roleCertainty: number
@@ -159,7 +174,20 @@ export type PublicPlayerDirectory = {
   scopedPlayers?: Record<string, CompactPlayer[]>
 }
 
-export type PublicTeamHistoryPoint = [string, number, number]
+export type PublicTeamHistoryPointContext = {
+  event?: string
+  opponent?: string
+  delta?: number
+  tier?: string
+  result?: 'W' | 'L'
+  sourceProvider?: string
+  sourceGameId?: string
+  sourceMatchId?: string
+  sourceFileName?: string
+  sourceUrl?: string
+}
+
+export type PublicTeamHistoryPoint = [string, number, number, PublicTeamHistoryPointContext?]
 
 export type PublicTeamHistorySeries = {
   team: string

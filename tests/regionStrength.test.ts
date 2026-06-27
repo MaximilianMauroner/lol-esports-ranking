@@ -78,6 +78,35 @@ test('deriveRegionStrength uses flagship leagues instead of diluting majors with
   assert.deepEqual(lec.topTeams.map((entry) => entry.team), ['G2 Esports'])
 })
 
+test('deriveRegionStrength folds APAC domestic feeders under LCP for current top-tier region power', () => {
+  const rows = deriveRegionStrength(
+    [
+      league({ league: 'LCP', region: 'LCP', tier: 'tier-two', score: 1430, wins: 5, losses: 5, internationalMatches: 10, connectivity: 0.7 }),
+      league({ league: 'PCS', region: 'PCS', tier: 'tier-three', score: 1370, wins: 12, losses: 8, internationalMatches: 20, connectivity: 0.5 }),
+      league({ league: 'VCS', region: 'VCS', tier: 'tier-three', score: 1360, wins: 7, losses: 13, internationalMatches: 20, connectivity: 0.4 }),
+      league({ league: 'LCK', region: 'LCK', tier: 'tier-one', score: 1500, wins: 5, losses: 5, internationalMatches: 10, connectivity: 0.8 }),
+    ],
+    [
+      { ...team('CTBC Flying Oyster', 'LCP', 1500, 1), league: 'LCP' },
+      { ...team('PSG Talon', 'PCS', 1420, 2), league: 'PCS' },
+      { ...team('GAM Esports', 'VCS', 1410, 3), league: 'VCS' },
+      team('Gen.G', 'LCK', 1560, 4),
+    ],
+  )
+
+  assert.equal(rows.some((row) => row.region === 'PCS' || row.region === 'VCS'), false)
+
+  const lcp = rows.find((row) => row.region === 'LCP')
+  assert.ok(lcp)
+  assert.equal(lcp.score, 1430)
+  assert.equal(lcp.flagshipLeague, 'LCP')
+  assert.equal(lcp.teamCount, 1)
+  assert.equal(lcp.ecosystemTeamCount, 3)
+  assert.equal(lcp.leagueCount, 1)
+  assert.equal(lcp.ecosystemLeagueCount, 3)
+  assert.deepEqual(lcp.topTeams.map((entry) => entry.team), ['CTBC Flying Oyster'])
+})
+
 test('deriveRegionStrength exposes opponent-adjusted international resume', () => {
   const rows = deriveRegionStrength(
     [

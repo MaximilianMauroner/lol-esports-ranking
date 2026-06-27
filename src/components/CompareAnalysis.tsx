@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties } from 'react'
 import type {
   PublicTeamHistoryDirectory as TeamHistoryDirectory,
+  PublicTeamHistoryPoint,
   PublicTeamStanding as RankingSummaryStanding,
 } from '../lib/publicArtifacts/schema'
 import { formatDate, formatRating, teamKey } from '../lib/display'
@@ -15,7 +16,23 @@ import {
 import { LineChart, type ChartSeries } from './LineChart'
 
 const REGION_TREND_TEAM_LIMIT = 5
+const REGION_TREND_EVENT_LIMIT = 8
 const COMPARE_SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)']
+
+type RegionTrendEvent = {
+  id: string
+  region: string
+  regionColor: string
+  date: string
+  team: string
+  opponent?: string
+  event?: string
+  tier?: string
+  result?: 'W' | 'L'
+  delta?: number
+  rating: number
+  source?: string
+}
 
 export function RegionCompareAnalysis({
   regions,
@@ -153,22 +170,38 @@ function RegionTrendChart({
   standings: RankingSummaryStanding[]
   history?: TeamHistoryDirectory
 }) {
-  const series = useMemo<ChartSeries[]>(() => {
+  const trend = useMemo(() => {
     if (!history) return []
     return regions
-      .map((region, index): ChartSeries | null => {
+      .map((region, index): { series: ChartSeries; events: RegionTrendEvent[] } | null => {
+        const color = COMPARE_SERIES_COLORS[index % COMPARE_SERIES_COLORS.length]
         const teams = selectRegionTrendTeams(region, standings, history)
         const points = aggregateRegionTrend(teams, history)
         if (points.length < 2) return null
         return {
-          id: regionKey(region),
-          label: region.region,
-          color: COMPARE_SERIES_COLORS[index % COMPARE_SERIES_COLORS.length],
-          points,
+          series: {
+            id: regionKey(region),
+            label: region.region,
+            color,
+            points,
+          },
+          events: collectRegionTrendEvents(region, teams, history, color),
         }
       })
-      .filter((entry): entry is ChartSeries => entry !== null)
+      .filter((entry): entry is { series: ChartSeries; events: RegionTrendEvent[] } => entry !== null)
   }, [history, regions, standings])
+  const series = useMemo(() => trend.map((entry) => entry.series), [trend])
+  const events = useMemo(
+    () =>
+      trend
+        .flatMap((entry) => entry.events)
+        .sort((left, right) => {
+          const byMagnitude = Math.abs(right.delta ?? 0) - Math.abs(left.delta ?? 0)
+          return byMagnitude !== 0 ? byMagnitude : right.date.localeCompare(left.date)
+        })
+        .slice(0, REGION_TREND_EVENT_LIMIT),
+    [trend],
+  )
 
   return (
     <section className="compare-chart" aria-label="Compared region strength trend">
@@ -186,11 +219,58 @@ function RegionTrendChart({
       {!history ? (
         <p className="muted compare-chart__empty">Loading team history…</p>
       ) : series.length > 0 ? (
-        <LineChart series={series} height={300} yLabel="Avg team power" yFormat={formatRating} />
+        <>
+          <LineChart series={series} height={300} yLabel="Avg team power" yFormat={formatRating} />
+          <RegionTrendEvents events={events} />
+        </>
       ) : (
         <p className="muted compare-chart__empty">Not enough tracked team history to plot the selected regions yet.</p>
       )}
     </section>
+  )
+}
+
+function RegionTrendEvents({ events }: { events: RegionTrendEvent[] }) {
+  if (events.length === 0) {
+    return (
+      <p className="muted region-events__empty">
+        Movement drivers are unavailable for this artifact. Regenerate team history to include event-level point metadata.
+      </p>
+    )
+  }
+
+  return (
+    <div className="region-events" aria-label="Largest derived region trend movement drivers">
+      <div className="region-events__head">
+        <span>Largest derived moves</span>
+        <small>Team-history points behind the regional average</small>
+      </div>
+      <div className="region-events__list">
+        {events.map((event) => (
+          <article className="region-event" key={event.id}>
+            <div className="region-event__top">
+              <span className="region-event__region">
+                <i style={{ background: event.regionColor }} />
+                {event.region}
+              </span>
+              <time dateTime={event.date}>{formatDate(event.date)}</time>
+              <strong className={`region-event__delta ${deltaClass(event.delta)}`}>{formatSignedRating(event.delta)}</strong>
+            </div>
+            <div className="region-event__main">
+              <b>{event.team}</b>
+              {event.opponent ? <span>vs {event.opponent}</span> : null}
+              {event.result ? <em>{event.result}</em> : null}
+            </div>
+            <div className="region-event__meta">
+              <span>{event.event ?? 'Unknown event'}</span>
+              {event.tier ? <span>{formatTierLabel(event.tier)}</span> : null}
+              <span>{formatRating(event.rating)}</span>
+              {event.source ? <span>{event.source}</span> : null}
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -243,6 +323,43 @@ function aggregateRegionTrend(teams: RankingSummaryStanding[], history: TeamHist
   return points
 }
 
+function collectRegionTrendEvents(
+  region: RegionStrength,
+  teams: RankingSummaryStanding[],
+  history: TeamHistoryDirectory,
+  regionColor: string,
+) {
+  const events: RegionTrendEvent[] = []
+
+  for (const team of teams) {
+    const teamSeries = history.series[teamKey(team)]
+    if (!teamSeries) continue
+    const latestByDay = new Map<string, PublicTeamHistoryPoint>()
+    for (const point of teamSeries.points) latestByDay.set(point[0], point)
+    for (const point of latestByDay.values()) {
+      const context = point[3]
+      const delta = context?.delta
+      if (typeof delta !== 'number' || !Number.isFinite(delta) || Math.abs(delta) < 0.5) continue
+      events.push({
+        id: `${region.region}-${teamKey(team)}-${point[0]}-${context?.event ?? 'event'}-${context?.opponent ?? 'opponent'}`,
+        region: region.region,
+        regionColor,
+        date: point[0],
+        team: team.code ?? team.team,
+        opponent: context?.opponent,
+        event: context?.event,
+        tier: context?.tier,
+        result: context?.result,
+        delta,
+        rating: point[1],
+        source: formatSource(context),
+      })
+    }
+  }
+
+  return events
+}
+
 function TeamCompareChart({
   teams,
   history,
@@ -293,4 +410,30 @@ function TeamCompareChart({
       )}
     </section>
   )
+}
+
+function formatSignedRating(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  const formatted = formatRating(Math.abs(value))
+  return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : '0'
+}
+
+function deltaClass(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) < 0.05) return 'flat'
+  return value > 0 ? 'up' : 'down'
+}
+
+function formatTierLabel(value: string) {
+  return value
+    .split('-')
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ')
+}
+
+function formatSource(context?: PublicTeamHistoryPoint[3]) {
+  if (!context?.sourceProvider) return undefined
+  if (context.sourceGameId) return `${context.sourceProvider} · ${context.sourceGameId}`
+  if (context.sourceMatchId) return `${context.sourceProvider} · ${context.sourceMatchId}`
+  if (context.sourceFileName) return `${context.sourceProvider} · ${context.sourceFileName}`
+  return context.sourceProvider
 }

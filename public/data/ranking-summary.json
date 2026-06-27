@@ -1,12 +1,12 @@
 {
   "schemaVersion": 14,
-  "generatedAt": "2026-06-27T19:45:02.299Z",
+  "generatedAt": "2026-06-27T21:28:25.602Z",
   "source": "Oracle's Elixir primary with Leaguepedia Cargo gap-fill",
   "sources": [
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-06-27T19:45:00.129Z",
+      "retrievedAt": "2026-06-27T21:28:23.583Z",
       "coverageStart": "2025-01-11",
       "coverageEnd": "2025-12-29",
       "rowCount": 10038,
@@ -16,7 +16,7 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-06-27T19:45:01.706Z",
+      "retrievedAt": "2026-06-27T21:28:25.008Z",
       "coverageStart": "2026-01-08",
       "coverageEnd": "2026-06-21",
       "rowCount": 5936,
@@ -50,8 +50,8 @@
   ],
   "model": {
     "name": "Transparent GPR",
-    "version": "transparent-gpr-v0.34.0",
-    "configHash": "fnv1a-96c32134",
+    "version": "transparent-gpr-v0.35.0",
+    "configHash": "fnv1a-d7518b64",
     "parameters": {
       "initialTeamRating": 1500,
       "initialLeagueRating": 1500,
@@ -372,6 +372,27 @@
           "unknown": 1250
         }
       },
+      "regionTaxonomy": {
+        "source": "Riot LoL Esports top-level region menu and LCP format update",
+        "sourceObservedAt": "2026-06-27",
+        "currentTopTierRegions": [
+          "LCS",
+          "CBLOL",
+          "LEC",
+          "LCK",
+          "LPL",
+          "LCP"
+        ],
+        "apacDomesticFeederLeagues": [
+          "PCS",
+          "VCS",
+          "LJL",
+          "LCO",
+          "LTS"
+        ],
+        "apacFlagshipRegion": "LCP",
+        "policy": "PCS, VCS, and LJL remain domestic feeder ecosystems and are folded under LCP for current top-tier region strength."
+      },
       "walkForwardSegments": [
         "bo1",
         "bo3-bo5",
@@ -481,8 +502,8 @@
     },
     "ratingProof": {
       "sourceProvider": "oracles-elixir",
-      "modelVersion": "transparent-gpr-v0.34.0",
-      "modelConfigHash": "fnv1a-96c32134",
+      "modelVersion": "transparent-gpr-v0.35.0",
+      "modelConfigHash": "fnv1a-d7518b64",
       "ratedPlayerCount": 3679,
       "ratedTeamCount": 562,
       "sampleSize": 159740,
@@ -947,8 +968,8 @@
   "walkForward": {
     "metrics": {
       "target": "published-game",
-      "modelVersion": "transparent-gpr-v0.34.0",
-      "modelConfigHash": "fnv1a-96c32134",
+      "modelVersion": "transparent-gpr-v0.35.0",
+      "modelConfigHash": "fnv1a-d7518b64",
       "predictionCount": 22377,
       "accuracy": 0.6124,
       "brierScore": 0.2333,
@@ -1791,15 +1812,12 @@
     ],
     "regions": [
       "All",
-      "CBLOL",
-      "International",
-      "LCK",
-      "LCP",
       "LCS",
+      "CBLOL",
       "LEC",
+      "LCK",
       "LPL",
-      "PCS",
-      "VCS"
+      "LCP"
     ]
   },
   "defaultFilter": {
@@ -2313,7 +2331,7 @@
         "region": "CBLOL"
       },
       "url": "/data/snapshots/All__All__CBLOL.json",
-      "matchCount": 1633,
+      "matchCount": 1660,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
@@ -2324,32 +2342,7 @@
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 1404,
-          "completeness": [
-            "complete"
-          ]
-        }
-      ]
-    },
-    "All__All__International": {
-      "filter": {
-        "season": "All",
-        "event": "All",
-        "region": "International"
-      },
-      "url": "/data/snapshots/All__All__International.json",
-      "matchCount": 2272,
-      "sourceBreakdown": [
-        {
-          "provider": "leaguepedia-cargo",
-          "matchCount": 2147,
-          "completeness": [
-            "scoreboard-game-stats"
-          ]
-        },
-        {
-          "provider": "oracles-elixir",
-          "matchCount": 125,
+          "matchCount": 1431,
           "completeness": [
             "complete"
           ]
@@ -2363,7 +2356,7 @@
         "region": "LCK"
       },
       "url": "/data/snapshots/All__All__LCK.json",
-      "matchCount": 3628,
+      "matchCount": 3637,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
@@ -2374,7 +2367,7 @@
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 2905,
+          "matchCount": 2914,
           "completeness": [
             "complete"
           ]
@@ -2388,18 +2381,18 @@
         "region": "LCP"
       },
       "url": "/data/snapshots/All__All__LCP.json",
-      "matchCount": 1784,
+      "matchCount": 2708,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
-          "matchCount": 458,
+          "matchCount": 699,
           "completeness": [
             "scoreboard-game-stats"
           ]
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 1326,
+          "matchCount": 2009,
           "completeness": [
             "complete"
           ]
@@ -2413,7 +2406,7 @@
         "region": "LCS"
       },
       "url": "/data/snapshots/All__All__LCS.json",
-      "matchCount": 1058,
+      "matchCount": 1075,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
@@ -2424,7 +2417,7 @@
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 953,
+          "matchCount": 970,
           "completeness": [
             "complete"
           ]
@@ -2438,18 +2431,18 @@
         "region": "LEC"
       },
       "url": "/data/snapshots/All__All__LEC.json",
-      "matchCount": 9980,
+      "matchCount": 10095,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
-          "matchCount": 2534,
+          "matchCount": 2610,
           "completeness": [
             "scoreboard-game-stats"
           ]
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 7446,
+          "matchCount": 7485,
           "completeness": [
             "complete"
           ]
@@ -2463,71 +2456,21 @@
         "region": "LPL"
       },
       "url": "/data/snapshots/All__All__LPL.json",
-      "matchCount": 1459,
+      "matchCount": 1505,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
-          "matchCount": 13,
+          "matchCount": 15,
           "completeness": [
             "scoreboard-game-stats"
           ]
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 1446,
+          "matchCount": 1490,
           "completeness": [
             "complete",
             "partial"
-          ]
-        }
-      ]
-    },
-    "All__All__PCS": {
-      "filter": {
-        "season": "All",
-        "event": "All",
-        "region": "PCS"
-      },
-      "url": "/data/snapshots/All__All__PCS.json",
-      "matchCount": 509,
-      "sourceBreakdown": [
-        {
-          "provider": "leaguepedia-cargo",
-          "matchCount": 129,
-          "completeness": [
-            "scoreboard-game-stats"
-          ]
-        },
-        {
-          "provider": "oracles-elixir",
-          "matchCount": 380,
-          "completeness": [
-            "complete"
-          ]
-        }
-      ]
-    },
-    "All__All__VCS": {
-      "filter": {
-        "season": "All",
-        "event": "All",
-        "region": "VCS"
-      },
-      "url": "/data/snapshots/All__All__VCS.json",
-      "matchCount": 434,
-      "sourceBreakdown": [
-        {
-          "provider": "leaguepedia-cargo",
-          "matchCount": 114,
-          "completeness": [
-            "scoreboard-game-stats"
-          ]
-        },
-        {
-          "provider": "oracles-elixir",
-          "matchCount": 320,
-          "completeness": [
-            "complete"
           ]
         }
       ]
@@ -10612,8 +10555,8 @@
         "event": "All",
         "region": "All"
       },
-      "modelVersion": "transparent-gpr-v0.34.0",
-      "modelConfigHash": "fnv1a-96c32134",
+      "modelVersion": "transparent-gpr-v0.35.0",
+      "modelConfigHash": "fnv1a-d7518b64",
       "matchCount": 22377,
       "sourceBreakdown": [
         {
@@ -11818,9 +11761,9 @@
           "score": 1419.4,
           "topTeamRating": 1531,
           "teamCount": 39,
-          "ecosystemTeamCount": 87,
+          "ecosystemTeamCount": 139,
           "leagueCount": 1,
-          "ecosystemLeagueCount": 3,
+          "ecosystemLeagueCount": 5,
           "connectivity": 0.911,
           "internationalWins": 30,
           "internationalLosses": 52,
@@ -11913,110 +11856,6 @@
               "code": "ISUR",
               "rating": 1385,
               "rank": 158
-            }
-          ]
-        },
-        {
-          "region": "PCS",
-          "rank": 7,
-          "score": 1374.6,
-          "topTeamRating": 1419,
-          "teamCount": 22,
-          "ecosystemTeamCount": 22,
-          "leagueCount": 1,
-          "ecosystemLeagueCount": 1,
-          "connectivity": 0.579,
-          "internationalWins": 6,
-          "internationalLosses": 5,
-          "internationalWinRate": 0.5454545454545454,
-          "expectedWins": 5.68,
-          "winsOverExpected": 0.32,
-          "opponentAdjustedWinRate": 0.529,
-          "averageOpponentRating": 1409.5,
-          "flagshipLeague": "PCS",
-          "tier": "tier-three",
-          "topTeams": [
-            {
-              "team": "SillySilly Gaming",
-              "code": "SG",
-              "rating": 1419,
-              "rank": 122
-            },
-            {
-              "team": "Frank Esports",
-              "code": "FE",
-              "rating": 1416,
-              "rank": 45
-            },
-            {
-              "team": "CTBC Flying Oyster Academy",
-              "code": "CFOA",
-              "rating": 1405,
-              "rank": 138
-            },
-            {
-              "team": "Shadow Keepers Esports",
-              "code": "SKE",
-              "rating": 1395,
-              "rank": 149
-            },
-            {
-              "team": "wangting",
-              "code": "WANG",
-              "rating": 1388,
-              "rank": 50
-            }
-          ]
-        },
-        {
-          "region": "VCS",
-          "rank": 8,
-          "score": 1361.5,
-          "topTeamRating": 1408,
-          "teamCount": 30,
-          "ecosystemTeamCount": 30,
-          "leagueCount": 1,
-          "ecosystemLeagueCount": 1,
-          "connectivity": 0.855,
-          "internationalWins": 15,
-          "internationalLosses": 32,
-          "internationalWinRate": 0.3191489361702128,
-          "expectedWins": 19.61,
-          "winsOverExpected": -4.61,
-          "opponentAdjustedWinRate": 0.402,
-          "averageOpponentRating": 1466.3,
-          "flagshipLeague": "VCS",
-          "tier": "tier-three",
-          "topTeams": [
-            {
-              "team": "Saigon Warriors",
-              "code": "SW",
-              "rating": 1408,
-              "rank": 46
-            },
-            {
-              "team": "GAM Esports",
-              "code": "GAM",
-              "rating": 1403,
-              "rank": 47
-            },
-            {
-              "team": "Team Flash",
-              "code": "TF",
-              "rating": 1383,
-              "rank": 161
-            },
-            {
-              "team": "Saigon Dino",
-              "code": "SD",
-              "rating": 1379,
-              "rank": 52
-            },
-            {
-              "team": "ZEN Esports",
-              "code": "ZE",
-              "rating": 1369,
-              "rank": 194
             }
           ]
         }

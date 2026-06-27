@@ -6,6 +6,7 @@ export type CompareColumn = {
   id: string
   name: string
   sub?: string
+  badge?: ReactNode
 }
 
 export type CompareRow<E> = {
@@ -84,7 +85,10 @@ export function CompareDrawer<E>({
                       {columns.map((column) => (
                         <th key={column.id} scope="col">
                           <div className="ent">
-                            <b>{column.name}</b>
+                            <span className="ent__identity">
+                              {column.badge}
+                              <b>{column.name}</b>
+                            </span>
                             {column.sub ? <small>{column.sub}</small> : null}
                           </div>
                           <button

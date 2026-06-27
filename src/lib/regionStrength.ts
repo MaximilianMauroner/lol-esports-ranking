@@ -1,5 +1,6 @@
 import type { LeagueStrength, LeagueTierName, Region } from '../types'
 import type { PublicTeamStanding } from './publicArtifacts/schema'
+import { currentTopTierRegionForLeague } from '../data/regionTaxonomy'
 
 export type RegionStrength = {
   region: Region | string
@@ -57,8 +58,8 @@ export function deriveRegionStrength(
   standings: RegionStanding[],
   { includeInternational = false }: { includeInternational?: boolean } = {},
 ): RegionStrength[] {
-  const leaguesByRegion = groupBy(leagues, (league) => league.region)
-  const teamsByRegion = groupBy(standings, (team) => team.region)
+  const leaguesByRegion = groupBy(leagues, (league) => currentTopTierRegionForLeague(league.league, league.region))
+  const teamsByRegion = groupBy(standings, (team) => currentTopTierRegionForLeague(team.league, team.region))
   const regionNames = new Set<string>([...leaguesByRegion.keys(), ...teamsByRegion.keys()])
 
   const rows: RegionStrength[] = []

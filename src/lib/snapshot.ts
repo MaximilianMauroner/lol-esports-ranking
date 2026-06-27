@@ -13,6 +13,7 @@ import type {
   TeamStanding,
 } from '../types'
 import { leagueTierFor } from '../data/leagueTiers'
+import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../data/regionTaxonomy'
 import { regionForLeague } from '../data/teamIdentity'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
 import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
@@ -131,7 +132,7 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
   const scopedSeries = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([, snapshot]) => isSeasonHistoryScope(snapshot.filter))
-      .map(([key, snapshot]) => [key, buildTeamHistorySeries(snapshot.standings, minimumPointsPerSeries).series]),
+      .map(([key, snapshot]) => [key, buildTeamHistorySeries(snapshot.standings, minimumPointsPerSeries, { includeContext: false }).series]),
   )
 
   return {
@@ -151,7 +152,7 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
   }
 }
 
-function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSeries: number) {
+function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSeries: number, { includeContext = true }: { includeContext?: boolean } = {}) {
   const series: Record<string, TeamHistorySeries> = {}
   let omittedSeriesCount = 0
   let pointCount = 0
@@ -159,7 +160,27 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
   for (const standing of standings) {
     const points = (standing.history ?? [])
       .filter((point) => Boolean(point.date) && Number.isFinite(point.rating))
-      .map((point): TeamHistoryPointCompact => [point.date, Math.round(point.rating), point.rank])
+      .map((point): TeamHistoryPointCompact => {
+        const base: TeamHistoryPointCompact = [point.date, Math.round(point.rating), point.rank]
+        if (!includeContext) return base
+        return [
+          point.date,
+          Math.round(point.rating),
+          point.rank,
+          {
+            event: point.event,
+            opponent: point.opponent,
+            delta: typeof point.delta === 'number' && Number.isFinite(point.delta) ? Number(point.delta.toFixed(1)) : undefined,
+            tier: point.tier,
+            result: point.result,
+            sourceProvider: point.source?.provider,
+            sourceGameId: point.source?.gameId,
+            sourceMatchId: point.source?.matchId,
+            sourceFileName: point.source?.fileName,
+            sourceUrl: point.source?.url,
+          },
+        ]
+      })
       .sort((left, right) => left[0].localeCompare(right[0]))
     if (points.length < minimumPointsPerSeries) {
       omittedSeriesCount += 1
@@ -352,7 +373,12 @@ export function createStaticRankingData({
   const hasLeaguepediaSource = matches.some((match) => match.sourceProvider === 'leaguepedia-cargo')
   const seasons = ['All', ...Array.from(new Set(matches.map(matchSeasonKey))).sort().reverse()]
   const events = ['All', ...Array.from(new Set(matches.map((match) => match.event))).sort()]
-  const regions = ['All', ...Array.from(new Set(Object.values(teams).map((team) => team.region))).sort()] as Array<Region | 'All'>
+  const observedCurrentRegions = new Set(
+    Object.values(teams)
+      .map((team) => currentTopTierRegionForLeague(team.league, team.region))
+      .filter(isCurrentTopTierRegion),
+  )
+  const regions = ['All', ...currentTopTierRegions.filter((region) => observedCurrentRegions.has(region))] as Array<Region | 'All'>
   const snapshots: Record<string, ComputedRankingSnapshot> = {}
   const globalRanking = buildRankingModel(matches, teams)
   const globalRankingScope: RankingScope = { ranking: globalRanking, teams }
@@ -389,7 +415,7 @@ export function createStaticRankingData({
     const filteredMatches = filterMatches(matches, teams, filter)
     const snapshotScope = rankingScopeForFilter(filter)
     const filteredTeamNames = teamNamesForFilter(filteredMatches, snapshotScope.teams, filter)
-    const snapshotLeagues = snapshotScope.ranking.leagues.filter((league) => filter.region === 'All' || league.region === filter.region)
+    const snapshotLeagues = snapshotScope.ranking.leagues.filter((league) => filter.region === 'All' || currentTopTierRegionForLeague(league.league, league.region) === filter.region)
     const snapshotStandings = filteredStandings(snapshotScope.ranking.standings, filteredMatches, filteredTeamNames, filter, snapshotScope.teams)
     snapshots[snapshotKey(filter)] = {
       artifactKind: 'full-ranking-snapshot',
@@ -551,6 +577,7 @@ function compactPlayersForSnapshot(
         games: player.games,
         delta: player.delta,
         form: player.form,
+        recentMatches: compactPlayerRecentMatches(player),
         impactMultiplier: player.impactMultiplier,
         availability: player.availability,
         roleCertainty: player.roleCertainty,
@@ -565,6 +592,30 @@ function compactPlayersForSnapshot(
         appearance: player.appearance,
       }
     })
+}
+
+function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['recentMatches'] {
+  const recent = player.history
+    .filter((entry) => entry.result && entry.opponent)
+    .slice(-5)
+
+  if (recent.length === 0) return undefined
+
+  return recent.map((entry) => ({
+    date: entry.date,
+    event: entry.event,
+    opponent: entry.opponent ?? 'Unknown opponent',
+    opponentTeamCode: entry.opponentTeamCode,
+    playerTeam: entry.playerTeam,
+    playerTeamCode: entry.playerTeamCode,
+    result: entry.result ?? 'L',
+    teamKills: entry.teamKills,
+    opponentKills: entry.opponentKills,
+    sourceProvider: entry.source?.provider,
+    sourceFileName: entry.source?.fileName,
+    sourceGameId: entry.source?.gameId,
+    sourceUrl: entry.source?.url,
+  }))
 }
 
 function creditedTeamForPlayer(player: PlayerStanding, filter: SnapshotFilter | undefined) {
@@ -799,16 +850,7 @@ function filterMatches(matches: MatchRecord[], teams: Record<string, TeamProfile
 }
 
 function matchBelongsToRegion(match: MatchRecord, teams: Record<string, TeamProfile>, region: Region) {
-  const observedRegions = [
-    observedSideRegionForMatch(match, 'A'),
-    observedSideRegionForMatch(match, 'B'),
-  ].filter((value): value is Region => Boolean(value))
-
-  if (observedRegions.length > 0) {
-    return observedRegions.includes(region)
-  }
-
-  return teams[match.teamA]?.region === region || teams[match.teamB]?.region === region
+  return regionsForMatch(match, teams).includes(region)
 }
 
 function matchesThroughSeason(matches: MatchRecord[], season: string) {
@@ -848,12 +890,10 @@ function matchSeasonKey(match: MatchRecord) {
 
 function regionsForMatch(match: MatchRecord, teams: Record<string, TeamProfile>) {
   const regions = [
-    match.region,
-    match.teamARegion,
-    match.teamBRegion,
-    teams[match.teamA]?.region,
-    teams[match.teamB]?.region,
-  ].filter((region): region is Region => Boolean(region))
+    currentTopTierRegionForLeague(match.league, match.region),
+    sideCurrentTopTierRegionForMatch(match, 'A', teams),
+    sideCurrentTopTierRegionForMatch(match, 'B', teams),
+  ].filter((region): region is Region => Boolean(region) && isCurrentTopTierRegion(region))
   return Array.from(new Set(regions))
 }
 
@@ -1047,10 +1087,15 @@ function teamNamesForRegionFilter(matches: MatchRecord[], teams: Record<string, 
 }
 
 function sideBelongsToRegion(match: MatchRecord, side: 'A' | 'B', teams: Record<string, TeamProfile>, region: Region) {
+  return sideCurrentTopTierRegionForMatch(match, side, teams) === region
+}
+
+function sideCurrentTopTierRegionForMatch(match: MatchRecord, side: 'A' | 'B', teams: Record<string, TeamProfile>) {
   const observedRegion = observedSideRegionForMatch(match, side)
-  if (observedRegion) return observedRegion === region
+  const homeLeague = side === 'A' ? match.teamAHomeLeague : match.teamBHomeLeague
+  if (observedRegion || homeLeague) return currentTopTierRegionForLeague(homeLeague, observedRegion)
   const team = side === 'A' ? match.teamA : match.teamB
-  return teams[team]?.region === region
+  return currentTopTierRegionForLeague(teams[team]?.league, teams[team]?.region)
 }
 
 function observedSideRegionForMatch(match: MatchRecord, side: 'A' | 'B'): Region | undefined {

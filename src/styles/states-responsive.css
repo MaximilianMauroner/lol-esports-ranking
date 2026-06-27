@@ -132,7 +132,6 @@
   .rail__brand {
     min-width: auto;
   }
-  .rail__brand div > span,
   .rail__mode small {
     display: none;
   }
@@ -148,6 +147,10 @@
   .rail__brand {
     min-height: 36px;
     margin-right: auto;
+  }
+  .rail__logo {
+    width: 156px;
+    height: 39px;
   }
   .rail__foot {
     display: none;
@@ -298,6 +301,20 @@
   .gpr-toolbar .toolbar .field {
     flex: 1 1 160px;
   }
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    justify-content: stretch;
+  }
+  .pager__buttons {
+    justify-content: end;
+  }
+  .player-match {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+  }
+  .player-match__source {
+    grid-column: 2 / -1;
+  }
   .panel__head .spacer {
     margin-left: 0;
   }
@@ -316,6 +333,16 @@
   .profile-row {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+  .region-events {
+    padding: 12px 14px 14px;
+  }
+  .region-events__head {
+    display: grid;
+    gap: 3px;
+  }
+  .region-events__list {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -470,6 +497,16 @@
   }
   .compare-chart .chart svg {
     height: 230px;
+  }
+  .region-events {
+    padding: 12px 14px 14px;
+  }
+  .region-events__head {
+    display: grid;
+    gap: 3px;
+  }
+  .region-events__list {
+    grid-template-columns: 1fr;
   }
   .profile-chart {
     padding: 12px 14px 14px;

@@ -391,7 +391,7 @@ function applySourcedPlayerUpdates(
   latestRosterByTeam?: Map<string, PlayerProfile[]>,
 ) {
   for (const match of matches) {
-    for (const { side, team, roster, opponentRoster, opponentSide } of teamRosterEntries(match)) {
+    for (const { side, team, opponent, roster, opponentRoster, opponentSide } of teamRosterEntries(match)) {
       if (!roster || !opponentRoster || !isCompleteSourcedMatchup(roster, opponentRoster)) continue
       latestRosterByTeam?.set(team, roster.players.map((player) => profileForAppearance(player, team)))
       const league = leagueForSide(match, side, context)
@@ -402,12 +402,12 @@ function applySourcedPlayerUpdates(
         if (!player.stats) continue
         const profile = profileForAppearance(player, team)
         ensureSourcedPlayer(profile, state, leagueBaseline)
-        const opponent = opponentRoster.players.find((candidate) => candidate.role === player.role)
-        if (!opponent?.stats) continue
+        const opponentPlayer = opponentRoster.players.find((candidate) => candidate.role === player.role)
+        if (!opponentPlayer?.stats) continue
         const rating = preUpdateRatings.get(player.id) ?? leagueBaseline
-        const opponentRating = preUpdateRatings.get(opponent.id) ?? opponentLeagueBaseline
+        const opponentRating = preUpdateRatings.get(opponentPlayer.id) ?? opponentLeagueBaseline
         const expected = expectedPlayerScore(rating, opponentRating)
-        const performance = playerPerformance(player, opponent)
+        const performance = playerPerformance(player, opponentPlayer)
         const eventWeight = eventTierConfig[match.tier].weight
         const delta = Number((sourcedPlayerKFactor * eventWeight * (performance - expected)).toFixed(1))
         const currentRating = state.ratings.get(player.id) ?? rating
@@ -423,6 +423,12 @@ function applySourcedPlayerUpdates(
           {
             date: match.date,
             event: match.event,
+            opponent,
+            playerTeam: team,
+            result: player.stats.won ? 'W' : 'L',
+            teamKills: side === 'A' ? match.teamAKills : match.teamBKills,
+            opponentKills: side === 'A' ? match.teamBKills : match.teamAKills,
+            source: sourceTraceFor(match),
             rating: nextPublishedRating,
             delta: Number((nextPublishedRating - currentPublishedRating).toFixed(1)),
           },
@@ -511,8 +517,8 @@ function appearanceFlagsFor(
 
 function teamRosterEntries(match: MatchRecord) {
   return [
-    { side: 'A', opponentSide: 'B', team: match.teamA, roster: match.teamARoster, opponentRoster: match.teamBRoster },
-    { side: 'B', opponentSide: 'A', team: match.teamB, roster: match.teamBRoster, opponentRoster: match.teamARoster },
+    { side: 'A', opponentSide: 'B', team: match.teamA, opponent: match.teamB, roster: match.teamARoster, opponentRoster: match.teamBRoster },
+    { side: 'B', opponentSide: 'A', team: match.teamB, opponent: match.teamA, roster: match.teamBRoster, opponentRoster: match.teamARoster },
   ] as const
 }
 

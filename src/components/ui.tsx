@@ -14,6 +14,115 @@ export function HeatBar({ value, min, max }: { value: number; min: number; max: 
   )
 }
 
+const REGION_BADGE_KEYS = new Set(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL', 'PCS', 'VCS'])
+const REGION_BADGE_LOGOS: Partial<Record<string, string>> = {
+  LCK: '/league-icons/lck.png',
+  LPL: '/league-icons/lpl.png',
+  LEC: '/league-icons/lec.png',
+  LCS: '/league-icons/lcs.png',
+  LCP: '/league-icons/lcp.png',
+  CBLOL: '/league-icons/cblol.png',
+}
+
+export function RegionBadge({ region, size = 'md' }: { region: string; size?: 'sm' | 'md' }) {
+  const code = region.toUpperCase()
+  const key = REGION_BADGE_KEYS.has(code) ? code : 'DEFAULT'
+  const displayCode = key === 'DEFAULT' ? code.slice(0, 3) : code
+  const logoSrc = REGION_BADGE_LOGOS[key]
+
+  return (
+    <span
+      className={`region-badge region-badge--${key.toLowerCase()} region-badge--${size}${logoSrc ? ' has-logo' : ''}`}
+      data-code-length={displayCode.length}
+      role="img"
+      aria-label={`${code} region badge`}
+    >
+      {logoSrc ? (
+        <img className="region-badge__logo" src={logoSrc} alt="" aria-hidden="true" />
+      ) : (
+        <>
+          <svg viewBox="0 0 48 40" aria-hidden="true" focusable="false">
+            <BadgeMotif region={key} />
+          </svg>
+          <span className="region-badge__code">{displayCode}</span>
+        </>
+      )}
+    </span>
+  )
+}
+
+function BadgeMotif({ region }: { region: string }) {
+  switch (region) {
+    case 'LCK':
+      return (
+        <>
+          <path className="region-badge__mark" d="M13 29 L23 11 L24 29" />
+          <path className="region-badge__mark is-soft" d="M24 23 L35 12" />
+          <path className="region-badge__cut" d="M30 27 L38 20" />
+        </>
+      )
+    case 'LPL':
+      return (
+        <>
+          <path className="region-badge__mark" d="M12 28 L20 12 H29 L21 28 H34" />
+          <path className="region-badge__cut" d="M32 12 L37 12" />
+        </>
+      )
+    case 'LEC':
+      return (
+        <>
+          <path className="region-badge__mark" d="M34 13 A14 14 0 1 0 34 27" />
+          <path className="region-badge__cut" d="M18 20 H35" />
+          <circle className="region-badge__dot" cx="36" cy="20" r="2.2" />
+        </>
+      )
+    case 'LCS':
+      return (
+        <>
+          <path className="region-badge__mark" d="M14 12 V28 H34" />
+          <path className="region-badge__cut" d="M18 13 H34 M18 20 H31 M18 27 H34" />
+        </>
+      )
+    case 'LCP':
+      return (
+        <>
+          <path className="region-badge__mark" d="M14 29 V12 H25 C32 12 35 16 35 20 C35 24 32 28 25 28 H14" />
+          <path className="region-badge__cut" d="M24 16 V32" />
+        </>
+      )
+    case 'CBLOL':
+      return (
+        <>
+          <path className="region-badge__mark" d="M33 13 C29 10 20 10 16 15 C11 21 15 30 24 30 C29 30 33 28 36 24" />
+          <path className="region-badge__cut" d="M17 20 H35" />
+          <circle className="region-badge__dot" cx="14" cy="25" r="2" />
+        </>
+      )
+    case 'PCS':
+      return (
+        <>
+          <path className="region-badge__mark" d="M14 28 V12 H27 C33 12 36 15 36 20 C36 25 33 28 27 28 H14" />
+          <path className="region-badge__cut" d="M18 20 H38" />
+        </>
+      )
+    case 'VCS':
+      return (
+        <>
+          <path className="region-badge__mark" d="M12 12 L23 29 L36 12" />
+          <path className="region-badge__cut" d="M18 12 L24 22 L31 12" />
+          <circle className="region-badge__dot" cx="24" cy="30" r="2" />
+        </>
+      )
+    default:
+      return (
+        <>
+          <path className="region-badge__mark" d="M14 29 V11 H34 V29 Z" />
+          <path className="region-badge__cut" d="M14 20 H34" />
+        </>
+      )
+  }
+}
+
 export function FormDots({ form }: { form?: string[] }) {
   const recent = (form ?? []).slice(-5)
   if (recent.length === 0) return <span className="muted">—</span>

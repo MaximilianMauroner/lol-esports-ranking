@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent a
 import { Globe2, Swords, Trophy, X } from 'lucide-react'
 import type { RegionStrength } from '../lib/regionStrength'
 import { extent, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord } from '../lib/display'
-import { DataState, HeatBar, HeatChip, PickButton } from '../components/ui'
+import { DataState, HeatBar, HeatChip, PickButton, RegionBadge } from '../components/ui'
 
 export function RegionsView({
   regions,
@@ -84,10 +84,13 @@ export function RegionsView({
           >
             <div className="region-rank">{region.rank}</div>
             <div className="region-id">
-              <b>{region.region}</b>
-              <small>
-                {region.flagshipLeague ?? 'Multiple leagues'} · {region.teamCount} flagship teams
-              </small>
+              <RegionBadge region={region.region} />
+              <span>
+                <b>{region.region}</b>
+                <small>
+                  {region.flagshipLeague ?? 'Multiple leagues'} · {region.teamCount} flagship teams
+                </small>
+              </span>
             </div>
             <div className="region-score">
               <HeatChip value={region.score} min={min} max={max} label={formatRating(region.score)} />

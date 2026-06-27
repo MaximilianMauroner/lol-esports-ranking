@@ -1,5 +1,6 @@
 import { eventTierConfig } from '../data/rankingConfig'
 import { leagueTierModelParameters } from '../data/leagueTiers'
+import { currentRegionTaxonomyModelParameters } from '../data/regionTaxonomy'
 import type { FactorBreakdown } from '../types'
 import { defaultEligibilityConfig } from './eligibility'
 import { executionResidualModelParameters } from './executionResidual'
@@ -72,7 +73,7 @@ export const playerRatingPredictionPolicy = {
 } as const satisfies PredictionFeaturePolicy
 export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingPredictionPolicy)
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)
-export const transparentGprModelVersion = 'transparent-gpr-v0.34.0'
+export const transparentGprModelVersion = 'transparent-gpr-v0.35.0'
 export const transparentGprModelParameters = {
   initialTeamRating,
   initialLeagueRating,
@@ -130,6 +131,7 @@ export const transparentGprModelParameters = {
   playerModel: playerModelParameters,
   eligibility: defaultEligibilityConfig,
   leagueTiers: leagueTierModelParameters,
+  regionTaxonomy: currentRegionTaxonomyModelParameters,
   walkForwardSegments: walkForwardSegmentKeys,
   eventKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.kFactor])),
   leagueKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.leagueKFactor])),

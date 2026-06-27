@@ -164,10 +164,9 @@ tr.gpr-row:focus-visible {
   min-width: 0;
 }
 
-.region-strength-cell .league-sigil.small {
-  width: 22px;
-  height: 18px;
-  font-size: 0.66rem;
+.region-strength-cell .region-badge {
+  width: 26px;
+  height: 22px;
 }
 
 .region-strength-name {
@@ -541,6 +540,127 @@ tr.gpr-row:focus-visible {
   width: 32px;
   height: 24px;
 }
+
+.region-badge {
+  --badge-hue: 205;
+  --badge-accent: oklch(0.76 0.12 var(--badge-hue));
+  --badge-ink: oklch(0.92 0.045 var(--badge-hue));
+  --badge-surface: oklch(0.76 0.12 var(--badge-hue) / 0.13);
+  --badge-line: oklch(0.76 0.12 var(--badge-hue) / 0.44);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 36px;
+  border: 1px solid var(--badge-line);
+  border-radius: 7px;
+  background:
+    linear-gradient(145deg, var(--badge-surface), oklch(0.15 0.01 var(--badge-hue) / 0.78)),
+    var(--surface-2);
+  box-shadow: inset 0 1px 0 oklch(0.95 0.01 var(--badge-hue) / 0.12), 0 1px 0 oklch(0 0 0 / 0.28);
+  color: var(--badge-ink);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.region-badge::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid oklch(0.96 0.02 var(--badge-hue) / 0.08);
+  border-radius: 4px;
+  z-index: -1;
+}
+
+.region-badge svg {
+  position: absolute;
+  inset: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  opacity: 0.54;
+}
+
+.region-badge__logo {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.54));
+}
+
+.region-badge--sm .region-badge__logo {
+  width: 82%;
+  height: 82%;
+}
+
+.region-badge__mark,
+.region-badge__cut {
+  fill: none;
+  stroke: var(--badge-accent);
+  stroke-linecap: square;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.region-badge__mark.is-soft,
+.region-badge__cut {
+  stroke-width: 2.6;
+  opacity: 0.72;
+}
+
+.region-badge__dot {
+  fill: var(--badge-accent);
+  opacity: 0.84;
+}
+
+.region-badge__code {
+  position: relative;
+  z-index: 1;
+  margin-top: 1px;
+  color: var(--badge-ink);
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow: 0 1px 2px oklch(0 0 0 / 0.55);
+}
+
+.region-badge[data-code-length="5"] .region-badge__code {
+  font-size: 0.5rem;
+}
+
+.region-badge--sm {
+  width: 28px;
+  height: 24px;
+  border-radius: 5px;
+}
+
+.region-badge--sm::after {
+  inset: 4px;
+  border-radius: 3px;
+}
+
+.region-badge--sm .region-badge__code {
+  font-size: 0.48rem;
+}
+
+.region-badge--sm[data-code-length="5"] .region-badge__code {
+  font-size: 0.36rem;
+}
+
+.region-badge--lck { --badge-hue: 215; }
+.region-badge--lpl { --badge-hue: 28; }
+.region-badge--lec { --badge-hue: 286; }
+.region-badge--lcs { --badge-hue: 198; }
+.region-badge--lcp { --badge-hue: 154; }
+.region-badge--cblol { --badge-hue: 82; }
+.region-badge--pcs { --badge-hue: 244; }
+.region-badge--vcs { --badge-hue: 18; }
+.region-badge--default { --badge-hue: 205; }
 
 .team-dossier__rank {
   display: flex;
@@ -1343,7 +1463,7 @@ tr.gpr-row:focus-visible {
   font-size: 1.02rem;
   font-weight: 660;
   color: var(--text-strong);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .region-id small {
@@ -1351,6 +1471,17 @@ tr.gpr-row:focus-visible {
   font-size: 0.74rem;
   color: var(--muted);
   margin-top: 1px;
+}
+
+.region-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.region-id > span {
+  min-width: 0;
 }
 
 .region-score {

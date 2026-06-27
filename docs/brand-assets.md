@@ -12,7 +12,7 @@ The shipped app mark is the provided cyan trophy logo in a dark rounded square.
 
 ## League Marks
 
-- `public/league-logos/lpl.svg`: LPL league logo used only as a presentation badge for exact `LPL` league labels.
+- `public/league-icons/`: local 96px league logo assets used by region badges and exact league presentation badges.
 
 ## Previous Concept Ranking
 
