@@ -3,7 +3,8 @@ import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
 import { importLeaguepediaSnapshot, type LeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
-import { createStaticRankingData, createStaticRankingSummaryData } from '../src/lib/snapshot'
+import { createPlayerDirectory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory } from '../src/lib/snapshot'
+import { snapshotShardFileName } from '../src/lib/publicArtifacts/schema'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 import type { MatchRecord } from '../src/types'
 
@@ -108,29 +109,50 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     return
   }
 
-  const summary = createStaticRankingSummaryData(snapshot, {
-    fullSnapshotUrl: 'rankings/latest-full.json',
-    snapshotUrlForKey: (key) => `rankings/snapshots/${key}.json`,
-  })
-  const [summaryBlob, fullBlob] = await Promise.all([
-    put('rankings/latest-summary.json', JSON.stringify(summary.manifest), {
-      access: 'public',
-      allowOverwrite: true,
-      contentType: 'application/json',
-    }),
+  const initialSummary = createStaticRankingSummaryData(snapshot)
+  const playerDirectory = createPlayerDirectory(snapshot)
+  const teamHistory = createTeamHistory(snapshot)
+  const [fullBlob, playerDirectoryBlob, teamHistoryBlob, shardBlobEntries] = await Promise.all([
     put('rankings/latest-full.json', JSON.stringify(snapshot), {
       access: 'public',
       allowOverwrite: true,
       contentType: 'application/json',
     }),
-  ])
-  await Promise.all(Object.entries(summary.snapshots).map(([key, compactSnapshot]) =>
-    put(`rankings/snapshots/${key}.json`, JSON.stringify(compactSnapshot), {
+    put('rankings/players.json', JSON.stringify(playerDirectory), {
       access: 'public',
       allowOverwrite: true,
       contentType: 'application/json',
     }),
-  ))
+    put('rankings/team-history.json', JSON.stringify(teamHistory), {
+      access: 'public',
+      allowOverwrite: true,
+      contentType: 'application/json',
+    }),
+    Promise.all(Object.entries(initialSummary.snapshots).map(async ([key, compactSnapshot]) => {
+      const blob = await put(`rankings/snapshots/${snapshotShardFileName(key)}`, JSON.stringify(compactSnapshot), {
+        access: 'public',
+        allowOverwrite: true,
+        contentType: 'application/json',
+      })
+      return [key, blob.url] as const
+    })),
+  ])
+  const shardUrls = new Map(shardBlobEntries)
+  const summary = createStaticRankingSummaryData(snapshot, {
+    fullSnapshotUrl: fullBlob.url,
+    playerDirectoryUrl: playerDirectoryBlob.url,
+    teamHistoryUrl: teamHistoryBlob.url,
+    snapshotUrlForKey: (key) => {
+      const url = shardUrls.get(key)
+      if (!url) throw new Error(`Missing uploaded shard URL for ${key}`)
+      return url
+    },
+  })
+  const summaryBlob = await put('rankings/latest-summary.json', JSON.stringify(summary.manifest), {
+    access: 'public',
+    allowOverwrite: true,
+    contentType: 'application/json',
+  })
 
   response.status(200).json({
     ok: true,
@@ -142,6 +164,8 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     modelConfigHash: snapshot.model.configHash,
     blobUrl: summaryBlob.url,
     fullBlobUrl: fullBlob.url,
+    playerDirectoryBlobUrl: playerDirectoryBlob.url,
+    teamHistoryBlobUrl: teamHistoryBlob.url,
   })
 }
 

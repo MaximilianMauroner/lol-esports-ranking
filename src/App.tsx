@@ -79,6 +79,7 @@ function App() {
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [playerPicks, setPlayerPicks] = useState<CompactPlayer[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const data = loadState.status === 'ready' ? loadState.data : undefined
 
   useEffect(() => {
     const controller = new AbortController()
@@ -98,10 +99,12 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!data) return
     const controller = new AbortController()
+    const url = resolveArtifactUrl(data.playerDirectoryUrl ?? PLAYERS_URL, DATA_URL)
     async function load() {
       try {
-        const response = await fetch(PLAYERS_URL, { signal: controller.signal, headers: { Accept: 'application/json' } })
+        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
         if (!response.ok) return
         setPlayers(parsePublicPlayerDirectory(await response.json()))
       } catch (error) {
@@ -111,13 +114,15 @@ function App() {
     }
     void load()
     return () => controller.abort()
-  }, [])
+  }, [data])
 
   useEffect(() => {
+    if (!data) return
     const controller = new AbortController()
+    const url = resolveArtifactUrl(data.teamHistoryUrl ?? TEAM_HISTORY_URL, DATA_URL)
     async function load() {
       try {
-        const response = await fetch(TEAM_HISTORY_URL, { signal: controller.signal, headers: { Accept: 'application/json' } })
+        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
         if (!response.ok) return
         setTeamHistory(parsePublicTeamHistory(await response.json()))
       } catch (error) {
@@ -127,7 +132,7 @@ function App() {
     }
     void load()
     return () => controller.abort()
-  }, [])
+  }, [data])
 
   useEffect(() => {
     if (window.location.hash.slice(1) !== mode) {
@@ -140,7 +145,6 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [mode])
 
-  const data = loadState.status === 'ready' ? loadState.data : undefined
   const effectiveScope = useMemo(() => (data ? normalizeScopeForData(scope, data) : scope), [data, scope])
   const filter = useMemo(() => scopeToFilter(effectiveScope), [effectiveScope])
   const snapshotState = useMemo(() => resolvePublicSnapshotState(data, filter, snapshotCache), [data, filter, snapshotCache])
@@ -160,12 +164,12 @@ function App() {
       }))
       return
     }
-    const url = expected.url
+    const url = resolveArtifactUrl(expected.url, DATA_URL)
     const controller = new AbortController()
     setSnapshotCache((current) => ({ ...current, [key]: { status: 'loading' } }))
     async function load() {
       try {
-        const response = await fetch(url!, { signal: controller.signal, headers: { Accept: 'application/json' } })
+        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
         if (!response.ok) throw new Error(`Filter snapshot failed with ${response.status}`)
         const next = parsePublicRankingShard(await response.json())
         validatePublicSnapshotShard(key, expected, next, manifest)
@@ -526,6 +530,14 @@ function scopeLabel(scope: string) {
   if (scope.startsWith('season:')) return `Season ${scope.slice(7)}`
   if (scope.startsWith('event:')) return scope.slice(6)
   return 'All seasons & events'
+}
+
+function resolveArtifactUrl(url: string, baseUrl: string) {
+  if (/^[a-z][a-z\d+.-]*:/i.test(url) || url.startsWith('/')) return url
+  const resolvedBase = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
+    ? baseUrl
+    : new URL(baseUrl, window.location.origin).toString()
+  return new URL(url, resolvedBase).toString()
 }
 
 function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string }) {

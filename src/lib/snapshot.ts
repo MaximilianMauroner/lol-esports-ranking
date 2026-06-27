@@ -15,7 +15,7 @@ import { leagueTierFor } from '../data/leagueTiers'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
 import { buildPlayerModel, buildRankingModel, transparentGprModelMetadata } from './model'
 import { summarizePredictions, type WalkForwardMetrics } from './predictionModel'
-import { compactStanding as compactPublicStanding, snapshotKey } from './publicArtifacts/schema'
+import { compactStanding as compactPublicStanding, snapshotKey, snapshotShardUrlPathForKey } from './publicArtifacts/schema'
 import type {
   CompactPlayer,
   CompactPlayerRating,
@@ -226,9 +226,13 @@ export function createStaticRankingSummaryData(
   data: StaticRankingData,
   {
     fullSnapshotUrl,
-    snapshotUrlForKey = (key: string) => `/data/snapshots/${key}.json`,
+    playerDirectoryUrl,
+    teamHistoryUrl,
+    snapshotUrlForKey = snapshotShardUrlPathForKey,
   }: {
     fullSnapshotUrl?: string
+    playerDirectoryUrl?: string
+    teamHistoryUrl?: string
     snapshotUrlForKey?: (key: string) => string
   } = {},
 ): {
@@ -262,6 +266,8 @@ export function createStaticRankingSummaryData(
       artifactKind: 'public-ranking-manifest',
       summaryMode: 'browser-summary',
       ...(fullSnapshotUrl ? { fullSnapshotUrl } : {}),
+      ...(playerDirectoryUrl ? { playerDirectoryUrl } : {}),
+      ...(teamHistoryUrl ? { teamHistoryUrl } : {}),
       teamCount: Object.keys(data.teams).length,
       snapshotIndex,
       snapshots: manifestSnapshots,

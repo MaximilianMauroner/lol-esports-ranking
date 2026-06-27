@@ -189,6 +189,8 @@ export type PublicRankingManifest = {
   defaultSnapshotKey: string
   summaryMode: 'browser-summary'
   fullSnapshotUrl?: string
+  playerDirectoryUrl?: string
+  teamHistoryUrl?: string
   teamCount: number
   snapshotIndex: Record<string, PublicSnapshotIndexEntry>
   snapshots: Record<string, PublicRankingShard>
@@ -196,6 +198,15 @@ export type PublicRankingManifest = {
 
 export function snapshotKey(filter: SnapshotFilter) {
   return [filter.season, filter.event, filter.region].map(encodeURIComponent).join('__')
+}
+
+export function snapshotShardFileName(key: string) {
+  return `${key}.json`
+}
+
+export function snapshotShardUrlPathForKey(key: string, basePath = '/data/snapshots') {
+  const normalizedBase = basePath.replace(/\/$/, '')
+  return `${normalizedBase}/${encodeURIComponent(snapshotShardFileName(key))}`
 }
 
 export function compactStanding(standing: PublicTeamStanding & { history?: unknown }): PublicTeamStanding {

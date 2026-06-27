@@ -1,12 +1,12 @@
 {
   "schemaVersion": 12,
-  "generatedAt": "2026-06-27T12:37:08.563Z",
+  "generatedAt": "2026-06-27T12:44:30.985Z",
   "source": "Oracle's Elixir primary with Leaguepedia Cargo gap-fill",
   "sources": [
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-06-27T12:37:06.203Z",
+      "retrievedAt": "2026-06-27T12:44:28.762Z",
       "coverageStart": "2025-01-11",
       "coverageEnd": "2025-12-29",
       "rowCount": 10038,
@@ -16,7 +16,7 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-06-27T12:37:07.909Z",
+      "retrievedAt": "2026-06-27T12:44:30.294Z",
       "coverageStart": "2026-01-08",
       "coverageEnd": "2026-06-21",
       "rowCount": 5936,
@@ -1489,6 +1489,8 @@
   "defaultSnapshotKey": "All__All__All",
   "artifactKind": "public-ranking-manifest",
   "summaryMode": "browser-summary",
+  "playerDirectoryUrl": "/data/players.json",
+  "teamHistoryUrl": "/data/team-history.json",
   "teamCount": 1084,
   "snapshotIndex": {
     "All__All__All": {
@@ -1575,7 +1577,7 @@
         "event": "Áhugamannadeildin 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__%C3%81hugamannadeildin%202025__All.json",
+      "url": "/data/snapshots/All__%25C3%2581hugamannadeildin%25202025__All.json",
       "matchCount": 24,
       "sourceBreakdown": [
         {
@@ -1593,7 +1595,7 @@
         "event": "2025 Asia Masters/Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2025%20Asia%20Masters%2FFinals__All.json",
+      "url": "/data/snapshots/All__2025%2520Asia%2520Masters%252FFinals__All.json",
       "matchCount": 38,
       "sourceBreakdown": [
         {
@@ -1611,7 +1613,7 @@
         "event": "2025 Asia Masters/Points/Tiebreaker Matches",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2025%20Asia%20Masters%2FPoints%2FTiebreaker%20Matches__All.json",
+      "url": "/data/snapshots/All__2025%2520Asia%2520Masters%252FPoints%252FTiebreaker%2520Matches__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -1629,7 +1631,7 @@
         "event": "2025 Asia Masters/Swiss 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2025%20Asia%20Masters%2FSwiss%202__All.json",
+      "url": "/data/snapshots/All__2025%2520Asia%2520Masters%252FSwiss%25202__All.json",
       "matchCount": 32,
       "sourceBreakdown": [
         {
@@ -1647,7 +1649,7 @@
         "event": "2025 Esports Championships Asia",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2025%20Esports%20Championships%20Asia__All.json",
+      "url": "/data/snapshots/All__2025%2520Esports%2520Championships%2520Asia__All.json",
       "matchCount": 13,
       "sourceBreakdown": [
         {
@@ -1665,7 +1667,7 @@
         "event": "2025 KeG Championship",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2025%20KeG%20Championship__All.json",
+      "url": "/data/snapshots/All__2025%2520KeG%2520Championship__All.json",
       "matchCount": 36,
       "sourceBreakdown": [
         {
@@ -1683,7 +1685,7 @@
         "event": "2025 Mid-Season Invitational",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2025%20Mid-Season%20Invitational__All.json",
+      "url": "/data/snapshots/All__2025%2520Mid-Season%2520Invitational__All.json",
       "matchCount": 36,
       "sourceBreakdown": [
         {
@@ -1701,7 +1703,7 @@
         "event": "2026 Academic Esports World Tournament Sydney",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2026%20Academic%20Esports%20World%20Tournament%20Sydney__All.json",
+      "url": "/data/snapshots/All__2026%2520Academic%2520Esports%2520World%2520Tournament%2520Sydney__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -1719,7 +1721,7 @@
         "event": "2026 Americas Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2026%20Americas%20Cup__All.json",
+      "url": "/data/snapshots/All__2026%2520Americas%2520Cup__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -1737,7 +1739,7 @@
         "event": "2026 Asia Masters",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2026%20Asia%20Masters__All.json",
+      "url": "/data/snapshots/All__2026%2520Asia%2520Masters__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -1755,7 +1757,7 @@
         "event": "2026 Asian Games/Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__2026%20Asian%20Games%2FQualifier__All.json",
+      "url": "/data/snapshots/All__2026%2520Asian%2520Games%252FQualifier__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -1773,7 +1775,7 @@
         "event": "4 Nations/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__4%20Nations%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__4%2520Nations%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 29,
       "sourceBreakdown": [
         {
@@ -1791,7 +1793,7 @@
         "event": "4 Nations/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__4%20Nations%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__4%2520Nations%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -1809,7 +1811,7 @@
         "event": "4 Nations/2025 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__4%20Nations%2F2025%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__4%2520Nations%252F2025%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 22,
       "sourceBreakdown": [
         {
@@ -1827,7 +1829,7 @@
         "event": "A1 eSports Legends Cup/2025 Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__A1%20eSports%20Legends%20Cup%2F2025%20Season__All.json",
+      "url": "/data/snapshots/All__A1%2520eSports%2520Legends%2520Cup%252F2025%2520Season__All.json",
       "matchCount": 32,
       "sourceBreakdown": [
         {
@@ -1845,7 +1847,7 @@
         "event": "AC 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AC%202026__All.json",
+      "url": "/data/snapshots/All__AC%25202026__All.json",
       "matchCount": 19,
       "sourceBreakdown": [
         {
@@ -1863,7 +1865,7 @@
         "event": "AL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__AL%25202025%2520Spring__All.json",
       "matchCount": 87,
       "sourceBreakdown": [
         {
@@ -1881,7 +1883,7 @@
         "event": "AL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__AL%25202025%2520Summer__All.json",
       "matchCount": 100,
       "sourceBreakdown": [
         {
@@ -1899,7 +1901,7 @@
         "event": "AL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__AL%25202025%2520Winter__All.json",
       "matchCount": 93,
       "sourceBreakdown": [
         {
@@ -1917,7 +1919,7 @@
         "event": "AL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AL%202026__All.json",
+      "url": "/data/snapshots/All__AL%25202026__All.json",
       "matchCount": 13,
       "sourceBreakdown": [
         {
@@ -1935,7 +1937,7 @@
         "event": "AL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__AL%25202026%2520Spring__All.json",
       "matchCount": 122,
       "sourceBreakdown": [
         {
@@ -1953,7 +1955,7 @@
         "event": "AL 2026 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AL%202026%20Summer__All.json",
+      "url": "/data/snapshots/All__AL%25202026%2520Summer__All.json",
       "matchCount": 16,
       "sourceBreakdown": [
         {
@@ -1971,7 +1973,7 @@
         "event": "AL 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__AL%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__AL%25202026%2520Winter__All.json",
       "matchCount": 114,
       "sourceBreakdown": [
         {
@@ -2216,7 +2218,7 @@
         "event": "Arabian League 2nd Division/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Arabian%20League%202nd%20Division%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Arabian%2520League%25202nd%2520Division%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 16,
       "sourceBreakdown": [
         {
@@ -2234,7 +2236,7 @@
         "event": "Arabian League 2nd Division/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Arabian%20League%202nd%20Division%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Arabian%2520League%25202nd%2520Division%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 62,
       "sourceBreakdown": [
         {
@@ -2252,7 +2254,7 @@
         "event": "Arabian League/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Arabian%20League%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Arabian%2520League%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -2270,7 +2272,7 @@
         "event": "Arabian League/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Arabian%20League%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Arabian%2520League%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -2288,7 +2290,7 @@
         "event": "Arabian League/2025 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Arabian%20League%2F2025%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Arabian%2520League%252F2025%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -2306,7 +2308,7 @@
         "event": "ASI 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ASI%202025__All.json",
+      "url": "/data/snapshots/All__ASI%25202025__All.json",
       "matchCount": 42,
       "sourceBreakdown": [
         {
@@ -2324,7 +2326,7 @@
         "event": "Asia Master 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Asia%20Master%202025__All.json",
+      "url": "/data/snapshots/All__Asia%2520Master%25202025__All.json",
       "matchCount": 177,
       "sourceBreakdown": [
         {
@@ -2342,7 +2344,7 @@
         "event": "Asia Master 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Asia%20Master%202026__All.json",
+      "url": "/data/snapshots/All__Asia%2520Master%25202026__All.json",
       "matchCount": 63,
       "sourceBreakdown": [
         {
@@ -2360,7 +2362,7 @@
         "event": "BaseStack Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__BaseStack%20Cup__All.json",
+      "url": "/data/snapshots/All__BaseStack%2520Cup__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -2378,7 +2380,7 @@
         "event": "Benelux Ascend Series/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Benelux%20Ascend%20Series%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Benelux%2520Ascend%2520Series%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 32,
       "sourceBreakdown": [
         {
@@ -2396,7 +2398,7 @@
         "event": "Benelux Ascend Series/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Benelux%20Ascend%20Series%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Benelux%2520Ascend%2520Series%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 28,
       "sourceBreakdown": [
         {
@@ -2414,7 +2416,7 @@
         "event": "Benelux Ascend Series/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Benelux%20Ascend%20Series%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Benelux%2520Ascend%2520Series%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -2432,7 +2434,7 @@
         "event": "Benelux Ascend Series/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Benelux%20Ascend%20Series%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Benelux%2520Ascend%2520Series%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 28,
       "sourceBreakdown": [
         {
@@ -2450,7 +2452,7 @@
         "event": "Benelux Ascend Series/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Benelux%20Ascend%20Series%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Benelux%2520Ascend%2520Series%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 26,
       "sourceBreakdown": [
         {
@@ -2468,7 +2470,7 @@
         "event": "Benelux Ascend Series/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Benelux%20Ascend%20Series%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Benelux%2520Ascend%2520Series%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 47,
       "sourceBreakdown": [
         {
@@ -2486,7 +2488,7 @@
         "event": "Benelux Ascend Series/2026 Season/Winter Split Final",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Benelux%20Ascend%20Series%2F2026%20Season%2FWinter%20Split%20Final__All.json",
+      "url": "/data/snapshots/All__Benelux%2520Ascend%2520Series%252F2026%2520Season%252FWinter%2520Split%2520Final__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -2504,7 +2506,7 @@
         "event": "Blooming Talents League/2025 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Blooming%20Talents%20League%2F2025%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Blooming%2520Talents%2520League%252F2025%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 46,
       "sourceBreakdown": [
         {
@@ -2522,7 +2524,7 @@
         "event": "Breeze of Glory",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Breeze%20of%20Glory__All.json",
+      "url": "/data/snapshots/All__Breeze%2520of%2520Glory__All.json",
       "matchCount": 66,
       "sourceBreakdown": [
         {
@@ -2540,7 +2542,7 @@
         "event": "Bulgarian Challengers League/2025 Season/Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Bulgarian%20Challengers%20League%2F2025%20Season%2FWinter__All.json",
+      "url": "/data/snapshots/All__Bulgarian%2520Challengers%2520League%252F2025%2520Season%252FWinter__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -2558,7 +2560,7 @@
         "event": "CBLOL 2026 Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CBLOL%202026%20Cup__All.json",
+      "url": "/data/snapshots/All__CBLOL%25202026%2520Cup__All.json",
       "matchCount": 68,
       "sourceBreakdown": [
         {
@@ -2576,7 +2578,7 @@
         "event": "CBLOL 2026 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CBLOL%202026%20Split%201__All.json",
+      "url": "/data/snapshots/All__CBLOL%25202026%2520Split%25201__All.json",
       "matchCount": 105,
       "sourceBreakdown": [
         {
@@ -2594,7 +2596,7 @@
         "event": "CBLOL/2026 Season/Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CBLOL%2F2026%20Season%2FCup__All.json",
+      "url": "/data/snapshots/All__CBLOL%252F2026%2520Season%252FCup__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -2612,7 +2614,7 @@
         "event": "CBLOL/2026 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CBLOL%2F2026%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__CBLOL%252F2026%2520Season%252FSplit%25201__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -2630,7 +2632,7 @@
         "event": "CBLOL/2026 Season/Split 1 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CBLOL%2F2026%20Season%2FSplit%201%20Playoffs__All.json",
+      "url": "/data/snapshots/All__CBLOL%252F2026%2520Season%252FSplit%25201%2520Playoffs__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -2648,7 +2650,7 @@
         "event": "CCWS 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CCWS%202026__All.json",
+      "url": "/data/snapshots/All__CCWS%25202026__All.json",
       "matchCount": 40,
       "sourceBreakdown": [
         {
@@ -2666,7 +2668,7 @@
         "event": "CD 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CD%202025__All.json",
+      "url": "/data/snapshots/All__CD%25202025__All.json",
       "matchCount": 54,
       "sourceBreakdown": [
         {
@@ -2684,7 +2686,7 @@
         "event": "CD 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CD%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__CD%25202025%2520Split%25201__All.json",
       "matchCount": 132,
       "sourceBreakdown": [
         {
@@ -2702,7 +2704,7 @@
         "event": "CD 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CD%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__CD%25202025%2520Split%25202__All.json",
       "matchCount": 94,
       "sourceBreakdown": [
         {
@@ -2720,7 +2722,7 @@
         "event": "CD 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CD%202026__All.json",
+      "url": "/data/snapshots/All__CD%25202026__All.json",
       "matchCount": 91,
       "sourceBreakdown": [
         {
@@ -2738,7 +2740,7 @@
         "event": "CD 2026 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CD%202026%20Split%201__All.json",
+      "url": "/data/snapshots/All__CD%25202026%2520Split%25201__All.json",
       "matchCount": 94,
       "sourceBreakdown": [
         {
@@ -2756,7 +2758,7 @@
         "event": "CineLeague 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CineLeague%202025__All.json",
+      "url": "/data/snapshots/All__CineLeague%25202025__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -2774,7 +2776,7 @@
         "event": "Circuito Desafiante/2025 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2025%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2025%2520Season%252FSplit%25201__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -2792,7 +2794,7 @@
         "event": "Circuito Desafiante/2025 Season/Split 1 Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2025%20Season%2FSplit%201%20Qualifier__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2025%2520Season%252FSplit%25201%2520Qualifier__All.json",
       "matchCount": 21,
       "sourceBreakdown": [
         {
@@ -2810,7 +2812,7 @@
         "event": "Circuito Desafiante/2025 Season/Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2025%20Season%2FSplit%202__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2025%2520Season%252FSplit%25202__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -2828,7 +2830,7 @@
         "event": "Circuito Desafiante/2025 Season/Split 2 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2025%20Season%2FSplit%202%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2025%2520Season%252FSplit%25202%2520Playoffs__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -2846,7 +2848,7 @@
         "event": "Circuito Desafiante/2025 Season/Split 2 Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2025%20Season%2FSplit%202%20Promotion__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2025%2520Season%252FSplit%25202%2520Promotion__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -2864,7 +2866,7 @@
         "event": "Circuito Desafiante/2026 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2026%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2026%2520Season%252FSplit%25201__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -2882,7 +2884,7 @@
         "event": "Circuito Desafiante/2026 Season/Split 1 Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2026%20Season%2FSplit%201%20Promotion__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2026%2520Season%252FSplit%25201%2520Promotion__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -2900,7 +2902,7 @@
         "event": "Circuito Desafiante/2026 Season/Split 1 Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2026%20Season%2FSplit%201%20Qualifier__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2026%2520Season%252FSplit%25201%2520Qualifier__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -2918,7 +2920,7 @@
         "event": "Circuito Desafiante/2026 Season/Split 2 Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2026%20Season%2FSplit%202%20Promotion__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2026%2520Season%252FSplit%25202%2520Promotion__All.json",
       "matchCount": 19,
       "sourceBreakdown": [
         {
@@ -2936,7 +2938,7 @@
         "event": "Circuito Desafiante/2026 Season/Split 2 Promotion/Open Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Circuito%20Desafiante%2F2026%20Season%2FSplit%202%20Promotion%2FOpen%20Qualifier__All.json",
+      "url": "/data/snapshots/All__Circuito%2520Desafiante%252F2026%2520Season%252FSplit%25202%2520Promotion%252FOpen%2520Qualifier__All.json",
       "matchCount": 23,
       "sourceBreakdown": [
         {
@@ -2954,7 +2956,7 @@
         "event": "Coca-Cola STAGE:0 eSPORTS High-School Championship 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Coca-Cola%20STAGE%3A0%20eSPORTS%20High-School%20Championship%202025__All.json",
+      "url": "/data/snapshots/All__Coca-Cola%2520STAGE%253A0%2520eSPORTS%2520High-School%2520Championship%25202025__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -2972,7 +2974,7 @@
         "event": "Comedy Central Winter Snowdown",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Comedy%20Central%20Winter%20Snowdown__All.json",
+      "url": "/data/snapshots/All__Comedy%2520Central%2520Winter%2520Snowdown__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -2990,7 +2992,7 @@
         "event": "Comic Con Baltics 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Comic%20Con%20Baltics%202026__All.json",
+      "url": "/data/snapshots/All__Comic%2520Con%2520Baltics%25202026__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -3008,7 +3010,7 @@
         "event": "Copa Aliança 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Copa%20Alian%C3%A7a%202025__All.json",
+      "url": "/data/snapshots/All__Copa%2520Alian%25C3%25A7a%25202025__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -3026,7 +3028,7 @@
         "event": "CT 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__CT%202025__All.json",
+      "url": "/data/snapshots/All__CT%25202025__All.json",
       "matchCount": 50,
       "sourceBreakdown": [
         {
@@ -3044,7 +3046,7 @@
         "event": "DCup 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__DCup%202025__All.json",
+      "url": "/data/snapshots/All__DCup%25202025__All.json",
       "matchCount": 75,
       "sourceBreakdown": [
         {
@@ -3062,7 +3064,7 @@
         "event": "Demacia Cup 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Demacia%20Cup%202025__All.json",
+      "url": "/data/snapshots/All__Demacia%2520Cup%25202025__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -3080,7 +3082,7 @@
         "event": "EBL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EBL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__EBL%25202025%2520Spring__All.json",
       "matchCount": 67,
       "sourceBreakdown": [
         {
@@ -3098,7 +3100,7 @@
         "event": "EBL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EBL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__EBL%25202025%2520Summer__All.json",
       "matchCount": 80,
       "sourceBreakdown": [
         {
@@ -3116,7 +3118,7 @@
         "event": "EBL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EBL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__EBL%25202025%2520Winter__All.json",
       "matchCount": 39,
       "sourceBreakdown": [
         {
@@ -3134,7 +3136,7 @@
         "event": "EBL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EBL%202026__All.json",
+      "url": "/data/snapshots/All__EBL%25202026__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -3152,7 +3154,7 @@
         "event": "EBL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EBL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__EBL%25202026%2520Spring__All.json",
       "matchCount": 66,
       "sourceBreakdown": [
         {
@@ -3170,7 +3172,7 @@
         "event": "EBL 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EBL%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__EBL%25202026%2520Winter__All.json",
       "matchCount": 66,
       "sourceBreakdown": [
         {
@@ -3188,7 +3190,7 @@
         "event": "EM 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EM%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__EM%25202025%2520Spring__All.json",
       "matchCount": 149,
       "sourceBreakdown": [
         {
@@ -3206,7 +3208,7 @@
         "event": "EM 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EM%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__EM%25202025%2520Summer__All.json",
       "matchCount": 216,
       "sourceBreakdown": [
         {
@@ -3224,7 +3226,7 @@
         "event": "EM 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EM%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__EM%25202025%2520Winter__All.json",
       "matchCount": 74,
       "sourceBreakdown": [
         {
@@ -3242,7 +3244,7 @@
         "event": "EM 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EM%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__EM%25202026%2520Spring__All.json",
       "matchCount": 110,
       "sourceBreakdown": [
         {
@@ -3260,7 +3262,7 @@
         "event": "EM 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EM%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__EM%25202026%2520Winter__All.json",
       "matchCount": 174,
       "sourceBreakdown": [
         {
@@ -3278,7 +3280,7 @@
         "event": "EMEA Masters/2025 Season/Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EMEA%20Masters%2F2025%20Season%2FSpring__All.json",
+      "url": "/data/snapshots/All__EMEA%2520Masters%252F2025%2520Season%252FSpring__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -3296,7 +3298,7 @@
         "event": "EMEA Masters/2025 Season/Summer LCQ",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EMEA%20Masters%2F2025%20Season%2FSummer%20LCQ__All.json",
+      "url": "/data/snapshots/All__EMEA%2520Masters%252F2025%2520Season%252FSummer%2520LCQ__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -3314,7 +3316,7 @@
         "event": "EMEA Masters/2025 Season/Summer Main Event",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EMEA%20Masters%2F2025%20Season%2FSummer%20Main%20Event__All.json",
+      "url": "/data/snapshots/All__EMEA%2520Masters%252F2025%2520Season%252FSummer%2520Main%2520Event__All.json",
       "matchCount": 45,
       "sourceBreakdown": [
         {
@@ -3332,7 +3334,7 @@
         "event": "EMEA Masters/2026 Season/Spring Main Event",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EMEA%20Masters%2F2026%20Season%2FSpring%20Main%20Event__All.json",
+      "url": "/data/snapshots/All__EMEA%2520Masters%252F2026%2520Season%252FSpring%2520Main%2520Event__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -3350,7 +3352,7 @@
         "event": "Equal Esports Cup 2025/Group Stage",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Equal%20Esports%20Cup%202025%2FGroup%20Stage__All.json",
+      "url": "/data/snapshots/All__Equal%2520Esports%2520Cup%25202025%252FGroup%2520Stage__All.json",
       "matchCount": 53,
       "sourceBreakdown": [
         {
@@ -3368,7 +3370,7 @@
         "event": "Equal Esports Cup 2025/Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Equal%20Esports%20Cup%202025%2FPlayoffs__All.json",
+      "url": "/data/snapshots/All__Equal%2520Esports%2520Cup%25202025%252FPlayoffs__All.json",
       "matchCount": 23,
       "sourceBreakdown": [
         {
@@ -3386,7 +3388,7 @@
         "event": "Esports Nations Cup 2026/Online Qualifiers/Asia",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Nations%20Cup%202026%2FOnline%20Qualifiers%2FAsia__All.json",
+      "url": "/data/snapshots/All__Esports%2520Nations%2520Cup%25202026%252FOnline%2520Qualifiers%252FAsia__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -3404,7 +3406,7 @@
         "event": "Esports Nations Cup 2026/Online Qualifiers/Europe East",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Nations%20Cup%202026%2FOnline%20Qualifiers%2FEurope%20East__All.json",
+      "url": "/data/snapshots/All__Esports%2520Nations%2520Cup%25202026%252FOnline%2520Qualifiers%252FEurope%2520East__All.json",
       "matchCount": 33,
       "sourceBreakdown": [
         {
@@ -3422,7 +3424,7 @@
         "event": "Esports Nations Cup 2026/Online Qualifiers/Europe West",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Nations%20Cup%202026%2FOnline%20Qualifiers%2FEurope%20West__All.json",
+      "url": "/data/snapshots/All__Esports%2520Nations%2520Cup%25202026%252FOnline%2520Qualifiers%252FEurope%2520West__All.json",
       "matchCount": 27,
       "sourceBreakdown": [
         {
@@ -3440,7 +3442,7 @@
         "event": "Esports Nations Cup 2026/Online Qualifiers/Middle East & Africa",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Nations%20Cup%202026%2FOnline%20Qualifiers%2FMiddle%20East%20%26%20Africa__All.json",
+      "url": "/data/snapshots/All__Esports%2520Nations%2520Cup%25202026%252FOnline%2520Qualifiers%252FMiddle%2520East%2520%2526%2520Africa__All.json",
       "matchCount": 58,
       "sourceBreakdown": [
         {
@@ -3458,7 +3460,7 @@
         "event": "Esports Nations Cup 2026/Online Qualifiers/North America",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Nations%20Cup%202026%2FOnline%20Qualifiers%2FNorth%20America__All.json",
+      "url": "/data/snapshots/All__Esports%2520Nations%2520Cup%25202026%252FOnline%2520Qualifiers%252FNorth%2520America__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -3476,7 +3478,7 @@
         "event": "Esports Nations Cup 2026/Online Qualifiers/SEA & OCE",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Nations%20Cup%202026%2FOnline%20Qualifiers%2FSEA%20%26%20OCE__All.json",
+      "url": "/data/snapshots/All__Esports%2520Nations%2520Cup%25202026%252FOnline%2520Qualifiers%252FSEA%2520%2526%2520OCE__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -3494,7 +3496,7 @@
         "event": "Esports Nations Cup 2026/Online Qualifiers/South America",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Nations%20Cup%202026%2FOnline%20Qualifiers%2FSouth%20America__All.json",
+      "url": "/data/snapshots/All__Esports%2520Nations%2520Cup%25202026%252FOnline%2520Qualifiers%252FSouth%2520America__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -3512,7 +3514,7 @@
         "event": "Esports Series Madrid 2025/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Series%20Madrid%202025%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Esports%2520Series%2520Madrid%25202025%252FSplit%25201__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -3530,7 +3532,7 @@
         "event": "Esports Series Madrid 2025/Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Series%20Madrid%202025%2FSplit%202__All.json",
+      "url": "/data/snapshots/All__Esports%2520Series%2520Madrid%25202025%252FSplit%25202__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -3548,7 +3550,7 @@
         "event": "Esports Series Madrid 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Series%20Madrid%202026__All.json",
+      "url": "/data/snapshots/All__Esports%2520Series%2520Madrid%25202026__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -3566,7 +3568,7 @@
         "event": "Esports Series Madrid 2026/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Series%20Madrid%202026%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Esports%2520Series%2520Madrid%25202026%252FSplit%25201__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -3584,7 +3586,7 @@
         "event": "Esports Series Madrid 24-25 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20Series%20Madrid%2024-25%202__All.json",
+      "url": "/data/snapshots/All__Esports%2520Series%2520Madrid%252024-25%25202__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -3602,7 +3604,7 @@
         "event": "Esports World Cup 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20World%20Cup%202025__All.json",
+      "url": "/data/snapshots/All__Esports%2520World%2520Cup%25202025__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -3620,7 +3622,7 @@
         "event": "Esports World Cup 2026/Online Qualifiers/Asia-Pacific",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20World%20Cup%202026%2FOnline%20Qualifiers%2FAsia-Pacific__All.json",
+      "url": "/data/snapshots/All__Esports%2520World%2520Cup%25202026%252FOnline%2520Qualifiers%252FAsia-Pacific__All.json",
       "matchCount": 35,
       "sourceBreakdown": [
         {
@@ -3638,7 +3640,7 @@
         "event": "Esports World Cup 2026/Online Qualifiers/EMEA",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20World%20Cup%202026%2FOnline%20Qualifiers%2FEMEA__All.json",
+      "url": "/data/snapshots/All__Esports%2520World%2520Cup%25202026%252FOnline%2520Qualifiers%252FEMEA__All.json",
       "matchCount": 49,
       "sourceBreakdown": [
         {
@@ -3656,7 +3658,7 @@
         "event": "Esports World Cup 2026/Online Qualifiers/Korea",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20World%20Cup%202026%2FOnline%20Qualifiers%2FKorea__All.json",
+      "url": "/data/snapshots/All__Esports%2520World%2520Cup%25202026%252FOnline%2520Qualifiers%252FKorea__All.json",
       "matchCount": 34,
       "sourceBreakdown": [
         {
@@ -3674,7 +3676,7 @@
         "event": "Esports World Cup 2026/Online Qualifiers/North America",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20World%20Cup%202026%2FOnline%20Qualifiers%2FNorth%20America__All.json",
+      "url": "/data/snapshots/All__Esports%2520World%2520Cup%25202026%252FOnline%2520Qualifiers%252FNorth%2520America__All.json",
       "matchCount": 33,
       "sourceBreakdown": [
         {
@@ -3692,7 +3694,7 @@
         "event": "Esports World Cup 2026/Online Qualifiers/South America",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Esports%20World%20Cup%202026%2FOnline%20Qualifiers%2FSouth%20America__All.json",
+      "url": "/data/snapshots/All__Esports%2520World%2520Cup%25202026%252FOnline%2520Qualifiers%252FSouth%2520America__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -3710,7 +3712,7 @@
         "event": "EWC 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__EWC%202025__All.json",
+      "url": "/data/snapshots/All__EWC%25202025__All.json",
       "matchCount": 33,
       "sourceBreakdown": [
         {
@@ -3728,7 +3730,7 @@
         "event": "Extregames 24-25",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Extregames%2024-25__All.json",
+      "url": "/data/snapshots/All__Extregames%252024-25__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -3746,7 +3748,7 @@
         "event": "Finnish Pro League/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Finnish%20Pro%20League%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Finnish%2520Pro%2520League%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -3764,7 +3766,7 @@
         "event": "FST 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__FST%202025__All.json",
+      "url": "/data/snapshots/All__FST%25202025__All.json",
       "matchCount": 35,
       "sourceBreakdown": [
         {
@@ -3782,7 +3784,7 @@
         "event": "FST 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__FST%202026__All.json",
+      "url": "/data/snapshots/All__FST%25202026__All.json",
       "matchCount": 45,
       "sourceBreakdown": [
         {
@@ -3800,7 +3802,7 @@
         "event": "GAMEON Revival 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__GAMEON%20Revival%202025__All.json",
+      "url": "/data/snapshots/All__GAMEON%2520Revival%25202025__All.json",
       "matchCount": 42,
       "sourceBreakdown": [
         {
@@ -3818,7 +3820,7 @@
         "event": "GG VASARA",
         "region": "All"
       },
-      "url": "/data/snapshots/All__GG%20VASARA__All.json",
+      "url": "/data/snapshots/All__GG%2520VASARA__All.json",
       "matchCount": 6,
       "sourceBreakdown": [
         {
@@ -3836,7 +3838,7 @@
         "event": "Granada Gaming 24-25",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Granada%20Gaming%2024-25__All.json",
+      "url": "/data/snapshots/All__Granada%2520Gaming%252024-25__All.json",
       "matchCount": 19,
       "sourceBreakdown": [
         {
@@ -3854,7 +3856,7 @@
         "event": "Gyeonggi International Esports Festival 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Gyeonggi%20International%20Esports%20Festival%202025__All.json",
+      "url": "/data/snapshots/All__Gyeonggi%2520International%2520Esports%2520Festival%25202025__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -3872,7 +3874,7 @@
         "event": "HC 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HC%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__HC%25202025%2520Spring__All.json",
       "matchCount": 101,
       "sourceBreakdown": [
         {
@@ -3890,7 +3892,7 @@
         "event": "HC 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HC%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__HC%25202025%2520Summer__All.json",
       "matchCount": 99,
       "sourceBreakdown": [
         {
@@ -3908,7 +3910,7 @@
         "event": "HC 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HC%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__HC%25202026%2520Spring__All.json",
       "matchCount": 99,
       "sourceBreakdown": [
         {
@@ -3926,7 +3928,7 @@
         "event": "Hellenic Challengers Cup/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 49,
       "sourceBreakdown": [
         {
@@ -3944,7 +3946,7 @@
         "event": "Hellenic Challengers Cup/2025 Season/Summer Super Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2025%20Season%2FSummer%20Super%20Cup__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2025%2520Season%252FSummer%2520Super%2520Cup__All.json",
       "matchCount": 36,
       "sourceBreakdown": [
         {
@@ -3962,7 +3964,7 @@
         "event": "Hellenic Challengers Cup/2025 Season/Winter Split/Tournament 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2025%20Season%2FWinter%20Split%2FTournament%201__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2025%2520Season%252FWinter%2520Split%252FTournament%25201__All.json",
       "matchCount": 13,
       "sourceBreakdown": [
         {
@@ -3980,7 +3982,7 @@
         "event": "Hellenic Challengers Cup/2025 Season/Winter Split/Tournament 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2025%20Season%2FWinter%20Split%2FTournament%202__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2025%2520Season%252FWinter%2520Split%252FTournament%25202__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -3998,7 +4000,7 @@
         "event": "Hellenic Challengers Cup/2025 Season/Winter Split/Tournament 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2025%20Season%2FWinter%20Split%2FTournament%203__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2025%2520Season%252FWinter%2520Split%252FTournament%25203__All.json",
       "matchCount": 16,
       "sourceBreakdown": [
         {
@@ -4016,7 +4018,7 @@
         "event": "Hellenic Challengers Cup/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -4034,7 +4036,7 @@
         "event": "Hellenic Challengers Cup/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 58,
       "sourceBreakdown": [
         {
@@ -4052,7 +4054,7 @@
         "event": "Hellenic Challengers Cup/2026 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2026%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2026%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -4070,7 +4072,7 @@
         "event": "Hellenic Challengers Cup/2026 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Challengers%20Cup%2F2026%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Challengers%2520Cup%252F2026%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 89,
       "sourceBreakdown": [
         {
@@ -4088,7 +4090,7 @@
         "event": "Hellenic Legends League/2025 Season/Season Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2025%20Season%2FSeason%20Finals__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2025%2520Season%252FSeason%2520Finals__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -4106,7 +4108,7 @@
         "event": "Hellenic Legends League/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -4124,7 +4126,7 @@
         "event": "Hellenic Legends League/2025 Season/Summer Super Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2025%20Season%2FSummer%20Super%20Cup__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2025%2520Season%252FSummer%2520Super%2520Cup__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -4142,7 +4144,7 @@
         "event": "Hellenic Legends League/2025 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2025%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2025%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -4160,7 +4162,7 @@
         "event": "Hellenic Legends League/2025 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2025%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2025%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -4178,7 +4180,7 @@
         "event": "Hellenic Legends League/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -4196,7 +4198,7 @@
         "event": "Hellenic Legends League/2026 Season/Summer Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2026%20Season%2FSummer%20Promotion__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2026%2520Season%252FSummer%2520Promotion__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -4214,7 +4216,7 @@
         "event": "Hellenic Legends League/2026 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hellenic%20Legends%20League%2F2026%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Hellenic%2520Legends%2520League%252F2026%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -4232,7 +4234,7 @@
         "event": "Hitpoint 3rd Division/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hitpoint%203rd%20Division%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Hitpoint%25203rd%2520Division%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 34,
       "sourceBreakdown": [
         {
@@ -4250,7 +4252,7 @@
         "event": "Hitpoint 3rd Division/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hitpoint%203rd%20Division%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Hitpoint%25203rd%2520Division%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 54,
       "sourceBreakdown": [
         {
@@ -4268,7 +4270,7 @@
         "event": "Hitpoint 3rd Division/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hitpoint%203rd%20Division%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Hitpoint%25203rd%2520Division%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 31,
       "sourceBreakdown": [
         {
@@ -4286,7 +4288,7 @@
         "event": "Hitpoint 3rd Division/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hitpoint%203rd%20Division%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Hitpoint%25203rd%2520Division%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 57,
       "sourceBreakdown": [
         {
@@ -4304,7 +4306,7 @@
         "event": "Hitpoint Masters/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hitpoint%20Masters%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Hitpoint%2520Masters%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -4322,7 +4324,7 @@
         "event": "Hitpoint Masters/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hitpoint%20Masters%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Hitpoint%2520Masters%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 16,
       "sourceBreakdown": [
         {
@@ -4340,7 +4342,7 @@
         "event": "Hitpoint Winter/2025 Season/Main Event",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Hitpoint%20Winter%2F2025%20Season%2FMain%20Event__All.json",
+      "url": "/data/snapshots/All__Hitpoint%2520Winter%252F2025%2520Season%252FMain%2520Event__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -4358,7 +4360,7 @@
         "event": "HLL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HLL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__HLL%25202025%2520Spring__All.json",
       "matchCount": 81,
       "sourceBreakdown": [
         {
@@ -4376,7 +4378,7 @@
         "event": "HLL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HLL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__HLL%25202025%2520Summer__All.json",
       "matchCount": 56,
       "sourceBreakdown": [
         {
@@ -4394,7 +4396,7 @@
         "event": "HLL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HLL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__HLL%25202025%2520Winter__All.json",
       "matchCount": 76,
       "sourceBreakdown": [
         {
@@ -4412,7 +4414,7 @@
         "event": "HLL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HLL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__HLL%25202026%2520Spring__All.json",
       "matchCount": 82,
       "sourceBreakdown": [
         {
@@ -4430,7 +4432,7 @@
         "event": "HLL 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HLL%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__HLL%25202026%2520Winter__All.json",
       "matchCount": 79,
       "sourceBreakdown": [
         {
@@ -4448,7 +4450,7 @@
         "event": "HM 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HM%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__HM%25202025%2520Spring__All.json",
       "matchCount": 100,
       "sourceBreakdown": [
         {
@@ -4466,7 +4468,7 @@
         "event": "HM 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HM%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__HM%25202025%2520Summer__All.json",
       "matchCount": 90,
       "sourceBreakdown": [
         {
@@ -4484,7 +4486,7 @@
         "event": "HM 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HM%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__HM%25202026%2520Spring__All.json",
       "matchCount": 88,
       "sourceBreakdown": [
         {
@@ -4502,7 +4504,7 @@
         "event": "HRingurinn 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HRingurinn%202025__All.json",
+      "url": "/data/snapshots/All__HRingurinn%25202025__All.json",
       "matchCount": 29,
       "sourceBreakdown": [
         {
@@ -4520,7 +4522,7 @@
         "event": "HW 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HW%202025__All.json",
+      "url": "/data/snapshots/All__HW%25202025__All.json",
       "matchCount": 114,
       "sourceBreakdown": [
         {
@@ -4538,7 +4540,7 @@
         "event": "HW 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__HW%202026__All.json",
+      "url": "/data/snapshots/All__HW%25202026__All.json",
       "matchCount": 103,
       "sourceBreakdown": [
         {
@@ -4556,7 +4558,7 @@
         "event": "Iberian Cup 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Iberian%20Cup%202025__All.json",
+      "url": "/data/snapshots/All__Iberian%2520Cup%25202025__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -4574,7 +4576,7 @@
         "event": "IC 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__IC%202025__All.json",
+      "url": "/data/snapshots/All__IC%25202025__All.json",
       "matchCount": 28,
       "sourceBreakdown": [
         {
@@ -4592,7 +4594,7 @@
         "event": "Icelandic Esports League/2025 Season/Autumn Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Icelandic%20Esports%20League%2F2025%20Season%2FAutumn%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Icelandic%2520Esports%2520League%252F2025%2520Season%252FAutumn%2520Playoffs__All.json",
       "matchCount": 20,
       "sourceBreakdown": [
         {
@@ -4610,7 +4612,7 @@
         "event": "Icelandic Esports League/2025 Season/Autumn Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Icelandic%20Esports%20League%2F2025%20Season%2FAutumn%20Split__All.json",
+      "url": "/data/snapshots/All__Icelandic%2520Esports%2520League%252F2025%2520Season%252FAutumn%2520Split__All.json",
       "matchCount": 89,
       "sourceBreakdown": [
         {
@@ -4628,7 +4630,7 @@
         "event": "Icelandic Esports League/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Icelandic%20Esports%20League%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Icelandic%2520Esports%2520League%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -4646,7 +4648,7 @@
         "event": "Icelandic Esports League/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Icelandic%20Esports%20League%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Icelandic%2520Esports%2520League%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 55,
       "sourceBreakdown": [
         {
@@ -4664,7 +4666,7 @@
         "event": "IDL Kings Lendas",
         "region": "All"
       },
-      "url": "/data/snapshots/All__IDL%20Kings%20Lendas__All.json",
+      "url": "/data/snapshots/All__IDL%2520Kings%2520Lendas__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -4682,7 +4684,7 @@
         "event": "IDL Kings Lendas Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__IDL%20Kings%20Lendas%20Cup__All.json",
+      "url": "/data/snapshots/All__IDL%2520Kings%2520Lendas%2520Cup__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -4700,7 +4702,7 @@
         "event": "IDL Kings Lendas Season 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__IDL%20Kings%20Lendas%20Season%202__All.json",
+      "url": "/data/snapshots/All__IDL%2520Kings%2520Lendas%2520Season%25202__All.json",
       "matchCount": 24,
       "sourceBreakdown": [
         {
@@ -4718,7 +4720,7 @@
         "event": "IDL Kings Lendas Season 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__IDL%20Kings%20Lendas%20Season%203__All.json",
+      "url": "/data/snapshots/All__IDL%2520Kings%2520Lendas%2520Season%25203__All.json",
       "matchCount": 133,
       "sourceBreakdown": [
         {
@@ -4736,7 +4738,7 @@
         "event": "IDL Kings Lendas Season 4",
         "region": "All"
       },
-      "url": "/data/snapshots/All__IDL%20Kings%20Lendas%20Season%204__All.json",
+      "url": "/data/snapshots/All__IDL%2520Kings%2520Lendas%2520Season%25204__All.json",
       "matchCount": 19,
       "sourceBreakdown": [
         {
@@ -4754,7 +4756,7 @@
         "event": "Infinity Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Infinity%20Winter__All.json",
+      "url": "/data/snapshots/All__Infinity%2520Winter__All.json",
       "matchCount": 66,
       "sourceBreakdown": [
         {
@@ -4772,7 +4774,7 @@
         "event": "KeSPA 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__KeSPA%202026__All.json",
+      "url": "/data/snapshots/All__KeSPA%25202026__All.json",
       "matchCount": 56,
       "sourceBreakdown": [
         {
@@ -4790,7 +4792,7 @@
         "event": "Komplettligaen/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Komplettligaen%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Komplettligaen%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -4808,7 +4810,7 @@
         "event": "LAS 2025 Champ 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LAS%202025%20Champ%201__All.json",
+      "url": "/data/snapshots/All__LAS%25202025%2520Champ%25201__All.json",
       "matchCount": 280,
       "sourceBreakdown": [
         {
@@ -4826,7 +4828,7 @@
         "event": "LAS 2025 Champ 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LAS%202025%20Champ%202__All.json",
+      "url": "/data/snapshots/All__LAS%25202025%2520Champ%25202__All.json",
       "matchCount": 207,
       "sourceBreakdown": [
         {
@@ -4844,7 +4846,7 @@
         "event": "LAS 2026 Champ 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LAS%202026%20Champ%201__All.json",
+      "url": "/data/snapshots/All__LAS%25202026%2520Champ%25201__All.json",
       "matchCount": 229,
       "sourceBreakdown": [
         {
@@ -4862,7 +4864,7 @@
         "event": "LCK 2025 Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%202025%20Cup__All.json",
+      "url": "/data/snapshots/All__LCK%25202025%2520Cup__All.json",
       "matchCount": 109,
       "sourceBreakdown": [
         {
@@ -4880,7 +4882,7 @@
         "event": "LCK 2025 Rounds 1-2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%202025%20Rounds%201-2__All.json",
+      "url": "/data/snapshots/All__LCK%25202025%2520Rounds%25201-2__All.json",
       "matchCount": 240,
       "sourceBreakdown": [
         {
@@ -4898,7 +4900,7 @@
         "event": "LCK 2025 Rounds 3-5",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%202025%20Rounds%203-5__All.json",
+      "url": "/data/snapshots/All__LCK%25202025%2520Rounds%25203-5__All.json",
       "matchCount": 206,
       "sourceBreakdown": [
         {
@@ -4916,7 +4918,7 @@
         "event": "LCK 2026 Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%202026%20Cup__All.json",
+      "url": "/data/snapshots/All__LCK%25202026%2520Cup__All.json",
       "matchCount": 125,
       "sourceBreakdown": [
         {
@@ -4934,7 +4936,7 @@
         "event": "LCK 2026 Rounds 1-2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%202026%20Rounds%201-2__All.json",
+      "url": "/data/snapshots/All__LCK%25202026%2520Rounds%25201-2__All.json",
       "matchCount": 224,
       "sourceBreakdown": [
         {
@@ -4952,7 +4954,7 @@
         "event": "LCK Academy Series/2025 Season/1st Championship",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20Academy%20Series%2F2025%20Season%2F1st%20Championship__All.json",
+      "url": "/data/snapshots/All__LCK%2520Academy%2520Series%252F2025%2520Season%252F1st%2520Championship__All.json",
       "matchCount": 112,
       "sourceBreakdown": [
         {
@@ -4970,7 +4972,7 @@
         "event": "LCK Academy Series/2025 Season/1st Championship Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20Academy%20Series%2F2025%20Season%2F1st%20Championship%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LCK%2520Academy%2520Series%252F2025%2520Season%252F1st%2520Championship%2520Playoffs__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -4988,7 +4990,7 @@
         "event": "LCK Academy Series/2025 Season/2nd Championship",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20Academy%20Series%2F2025%20Season%2F2nd%20Championship__All.json",
+      "url": "/data/snapshots/All__LCK%2520Academy%2520Series%252F2025%2520Season%252F2nd%2520Championship__All.json",
       "matchCount": 124,
       "sourceBreakdown": [
         {
@@ -5006,7 +5008,7 @@
         "event": "LCK Academy Series/2025 Season/2nd Championship Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20Academy%20Series%2F2025%20Season%2F2nd%20Championship%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LCK%2520Academy%2520Series%252F2025%2520Season%252F2nd%2520Championship%2520Playoffs__All.json",
       "matchCount": 28,
       "sourceBreakdown": [
         {
@@ -5024,7 +5026,7 @@
         "event": "LCK Academy Series/2026 Season/1st Championship",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20Academy%20Series%2F2026%20Season%2F1st%20Championship__All.json",
+      "url": "/data/snapshots/All__LCK%2520Academy%2520Series%252F2026%2520Season%252F1st%2520Championship__All.json",
       "matchCount": 50,
       "sourceBreakdown": [
         {
@@ -5042,7 +5044,7 @@
         "event": "LCK Academy Series/2026 Season/1st Championship Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20Academy%20Series%2F2026%20Season%2F1st%20Championship%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LCK%2520Academy%2520Series%252F2026%2520Season%252F1st%2520Championship%2520Playoffs__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -5060,7 +5062,7 @@
         "event": "LCK CL/2025 Season/Kickoff",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20CL%2F2025%20Season%2FKickoff__All.json",
+      "url": "/data/snapshots/All__LCK%2520CL%252F2025%2520Season%252FKickoff__All.json",
       "matchCount": 58,
       "sourceBreakdown": [
         {
@@ -5078,7 +5080,7 @@
         "event": "LCK CL/2025 Season/Rounds 1-2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20CL%2F2025%20Season%2FRounds%201-2__All.json",
+      "url": "/data/snapshots/All__LCK%2520CL%252F2025%2520Season%252FRounds%25201-2__All.json",
       "matchCount": 117,
       "sourceBreakdown": [
         {
@@ -5096,7 +5098,7 @@
         "event": "LCK CL/2025 Season/Rounds 3-5",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20CL%2F2025%20Season%2FRounds%203-5__All.json",
+      "url": "/data/snapshots/All__LCK%2520CL%252F2025%2520Season%252FRounds%25203-5__All.json",
       "matchCount": 79,
       "sourceBreakdown": [
         {
@@ -5114,7 +5116,7 @@
         "event": "LCK CL/2025 Season/Season Play-In",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20CL%2F2025%20Season%2FSeason%20Play-In__All.json",
+      "url": "/data/snapshots/All__LCK%2520CL%252F2025%2520Season%252FSeason%2520Play-In__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -5132,7 +5134,7 @@
         "event": "LCK CL/2025 Season/Season Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20CL%2F2025%20Season%2FSeason%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LCK%2520CL%252F2025%2520Season%252FSeason%2520Playoffs__All.json",
       "matchCount": 25,
       "sourceBreakdown": [
         {
@@ -5150,7 +5152,7 @@
         "event": "LCK CL/2026 Season/Kickoff",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%20CL%2F2026%20Season%2FKickoff__All.json",
+      "url": "/data/snapshots/All__LCK%2520CL%252F2026%2520Season%252FKickoff__All.json",
       "matchCount": 48,
       "sourceBreakdown": [
         {
@@ -5168,7 +5170,7 @@
         "event": "LCK/2026 Season/Cup",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCK%2F2026%20Season%2FCup__All.json",
+      "url": "/data/snapshots/All__LCK%252F2026%2520Season%252FCup__All.json",
       "matchCount": 19,
       "sourceBreakdown": [
         {
@@ -5186,7 +5188,7 @@
         "event": "LCKC 2025 Kickoff",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCKC%202025%20Kickoff__All.json",
+      "url": "/data/snapshots/All__LCKC%25202025%2520Kickoff__All.json",
       "matchCount": 107,
       "sourceBreakdown": [
         {
@@ -5204,7 +5206,7 @@
         "event": "LCKC 2025 Rounds 1-2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCKC%202025%20Rounds%201-2__All.json",
+      "url": "/data/snapshots/All__LCKC%25202025%2520Rounds%25201-2__All.json",
       "matchCount": 224,
       "sourceBreakdown": [
         {
@@ -5222,7 +5224,7 @@
         "event": "LCKC 2025 Rounds 3-5",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCKC%202025%20Rounds%203-5__All.json",
+      "url": "/data/snapshots/All__LCKC%25202025%2520Rounds%25203-5__All.json",
       "matchCount": 211,
       "sourceBreakdown": [
         {
@@ -5240,7 +5242,7 @@
         "event": "LCKC 2026 Kickoff",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCKC%202026%20Kickoff__All.json",
+      "url": "/data/snapshots/All__LCKC%25202026%2520Kickoff__All.json",
       "matchCount": 117,
       "sourceBreakdown": [
         {
@@ -5258,7 +5260,7 @@
         "event": "LCKC 2026 Rounds 1-2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCKC%202026%20Rounds%201-2__All.json",
+      "url": "/data/snapshots/All__LCKC%25202026%2520Rounds%25201-2__All.json",
       "matchCount": 221,
       "sourceBreakdown": [
         {
@@ -5276,7 +5278,7 @@
         "event": "LCP 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__LCP%25202025%2520Split%25201__All.json",
       "matchCount": 89,
       "sourceBreakdown": [
         {
@@ -5294,7 +5296,7 @@
         "event": "LCP 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__LCP%25202025%2520Split%25202__All.json",
       "matchCount": 96,
       "sourceBreakdown": [
         {
@@ -5312,7 +5314,7 @@
         "event": "LCP 2025 Split 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%202025%20Split%203__All.json",
+      "url": "/data/snapshots/All__LCP%25202025%2520Split%25203__All.json",
       "matchCount": 88,
       "sourceBreakdown": [
         {
@@ -5330,7 +5332,7 @@
         "event": "LCP 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%202026__All.json",
+      "url": "/data/snapshots/All__LCP%25202026__All.json",
       "matchCount": 18,
       "sourceBreakdown": [
         {
@@ -5348,7 +5350,7 @@
         "event": "LCP 2026 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%202026%20Split%201__All.json",
+      "url": "/data/snapshots/All__LCP%25202026%2520Split%25201__All.json",
       "matchCount": 102,
       "sourceBreakdown": [
         {
@@ -5366,7 +5368,7 @@
         "event": "LCP 2026 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%202026%20Split%202__All.json",
+      "url": "/data/snapshots/All__LCP%25202026%2520Split%25202__All.json",
       "matchCount": 101,
       "sourceBreakdown": [
         {
@@ -5384,7 +5386,7 @@
         "event": "LCP OPQ/2025 Season/Main Event",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%20OPQ%2F2025%20Season%2FMain%20Event__All.json",
+      "url": "/data/snapshots/All__LCP%2520OPQ%252F2025%2520Season%252FMain%2520Event__All.json",
       "matchCount": 87,
       "sourceBreakdown": [
         {
@@ -5402,7 +5404,7 @@
         "event": "LCP Wildcard/2025 Season/Group Stage",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%20Wildcard%2F2025%20Season%2FGroup%20Stage__All.json",
+      "url": "/data/snapshots/All__LCP%2520Wildcard%252F2025%2520Season%252FGroup%2520Stage__All.json",
       "matchCount": 20,
       "sourceBreakdown": [
         {
@@ -5420,7 +5422,7 @@
         "event": "LCP Wildcard/2025 Season/Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%20Wildcard%2F2025%20Season%2FPlayoffs__All.json",
+      "url": "/data/snapshots/All__LCP%2520Wildcard%252F2025%2520Season%252FPlayoffs__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -5438,7 +5440,7 @@
         "event": "LCP/2025 Season/Mid Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%2F2025%20Season%2FMid%20Season__All.json",
+      "url": "/data/snapshots/All__LCP%252F2025%2520Season%252FMid%2520Season__All.json",
       "matchCount": 18,
       "sourceBreakdown": [
         {
@@ -5456,7 +5458,7 @@
         "event": "LCP/2025 Season/Mid Season Qualifying Series",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%2F2025%20Season%2FMid%20Season%20Qualifying%20Series__All.json",
+      "url": "/data/snapshots/All__LCP%252F2025%2520Season%252FMid%2520Season%2520Qualifying%2520Series__All.json",
       "matchCount": 13,
       "sourceBreakdown": [
         {
@@ -5474,7 +5476,7 @@
         "event": "LCP/2025 Season/Season Kickoff",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%2F2025%20Season%2FSeason%20Kickoff__All.json",
+      "url": "/data/snapshots/All__LCP%252F2025%2520Season%252FSeason%2520Kickoff__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -5492,7 +5494,7 @@
         "event": "LCP/2025 Season/Season Kickoff Qualifying Series",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%2F2025%20Season%2FSeason%20Kickoff%20Qualifying%20Series__All.json",
+      "url": "/data/snapshots/All__LCP%252F2025%2520Season%252FSeason%2520Kickoff%2520Qualifying%2520Series__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -5510,7 +5512,7 @@
         "event": "LCP/2026 Season/Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCP%2F2026%20Season%2FPromotion__All.json",
+      "url": "/data/snapshots/All__LCP%252F2026%2520Season%252FPromotion__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -5528,7 +5530,7 @@
         "event": "LCS 2026 Lock-In",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCS%202026%20Lock-In__All.json",
+      "url": "/data/snapshots/All__LCS%25202026%2520Lock-In__All.json",
       "matchCount": 59,
       "sourceBreakdown": [
         {
@@ -5546,7 +5548,7 @@
         "event": "LCS 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCS%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__LCS%25202026%2520Spring__All.json",
       "matchCount": 98,
       "sourceBreakdown": [
         {
@@ -5564,7 +5566,7 @@
         "event": "LCS/2026 Season/Lock-In",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCS%2F2026%20Season%2FLock-In__All.json",
+      "url": "/data/snapshots/All__LCS%252F2026%2520Season%252FLock-In__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -5582,7 +5584,7 @@
         "event": "LCS/2026 Season/Spring Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LCS%2F2026%20Season%2FSpring%20Season__All.json",
+      "url": "/data/snapshots/All__LCS%252F2026%2520Season%252FSpring%2520Season__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -5600,7 +5602,7 @@
         "event": "League Championship Denmark/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__League%20Championship%20Denmark%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__League%2520Championship%2520Denmark%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -5618,7 +5620,7 @@
         "event": "League Championship Denmark/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__League%20Championship%20Denmark%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__League%2520Championship%2520Denmark%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -5636,7 +5638,7 @@
         "event": "LEC 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LEC%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__LEC%25202025%2520Spring__All.json",
       "matchCount": 139,
       "sourceBreakdown": [
         {
@@ -5654,7 +5656,7 @@
         "event": "LEC 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LEC%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__LEC%25202025%2520Summer__All.json",
       "matchCount": 83,
       "sourceBreakdown": [
         {
@@ -5672,7 +5674,7 @@
         "event": "LEC 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LEC%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__LEC%25202025%2520Winter__All.json",
       "matchCount": 84,
       "sourceBreakdown": [
         {
@@ -5690,7 +5692,7 @@
         "event": "LEC 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LEC%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__LEC%25202026%2520Spring__All.json",
       "matchCount": 141,
       "sourceBreakdown": [
         {
@@ -5708,7 +5710,7 @@
         "event": "LEC 2026 Versus",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LEC%202026%20Versus__All.json",
+      "url": "/data/snapshots/All__LEC%25202026%2520Versus__All.json",
       "matchCount": 105,
       "sourceBreakdown": [
         {
@@ -5726,7 +5728,7 @@
         "event": "LEC Fan Clash",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LEC%20Fan%20Clash__All.json",
+      "url": "/data/snapshots/All__LEC%2520Fan%2520Clash__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -5744,7 +5746,7 @@
         "event": "LEC/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LEC%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LEC%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -5762,7 +5764,7 @@
         "event": "LES 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LES%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__LES%25202026%2520Spring__All.json",
       "matchCount": 79,
       "sourceBreakdown": [
         {
@@ -5780,7 +5782,7 @@
         "event": "LES 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LES%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__LES%25202026%2520Winter__All.json",
       "matchCount": 25,
       "sourceBreakdown": [
         {
@@ -5798,7 +5800,7 @@
         "event": "LFL 2025 Flash In",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL%202025%20Flash%20In__All.json",
+      "url": "/data/snapshots/All__LFL%25202025%2520Flash%2520In__All.json",
       "matchCount": 63,
       "sourceBreakdown": [
         {
@@ -5816,7 +5818,7 @@
         "event": "LFL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__LFL%25202025%2520Spring__All.json",
       "matchCount": 106,
       "sourceBreakdown": [
         {
@@ -5834,7 +5836,7 @@
         "event": "LFL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__LFL%25202025%2520Summer__All.json",
       "matchCount": 137,
       "sourceBreakdown": [
         {
@@ -5852,7 +5854,7 @@
         "event": "LFL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL%202026__All.json",
+      "url": "/data/snapshots/All__LFL%25202026__All.json",
       "matchCount": 191,
       "sourceBreakdown": [
         {
@@ -5870,7 +5872,7 @@
         "event": "LFL2 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL2%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__LFL2%25202025%2520Spring__All.json",
       "matchCount": 73,
       "sourceBreakdown": [
         {
@@ -5888,7 +5890,7 @@
         "event": "LFL2 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL2%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__LFL2%25202025%2520Summer__All.json",
       "matchCount": 69,
       "sourceBreakdown": [
         {
@@ -5906,7 +5908,7 @@
         "event": "LFL2 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL2%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__LFL2%25202025%2520Winter__All.json",
       "matchCount": 76,
       "sourceBreakdown": [
         {
@@ -5924,7 +5926,7 @@
         "event": "LFL2 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LFL2%202026__All.json",
+      "url": "/data/snapshots/All__LFL2%25202026__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -5942,7 +5944,7 @@
         "event": "Liga Regional Norte/2025 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Norte%2F2025%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Norte%252F2025%2520Season%252FSplit%25201__All.json",
       "matchCount": 40,
       "sourceBreakdown": [
         {
@@ -5960,7 +5962,7 @@
         "event": "Liga Regional Norte/2025 Season/Split 1 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Norte%2F2025%20Season%2FSplit%201%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Norte%252F2025%2520Season%252FSplit%25201%2520Playoffs__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -5978,7 +5980,7 @@
         "event": "Liga Regional Norte/2025 Season/Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Norte%2F2025%20Season%2FSplit%202__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Norte%252F2025%2520Season%252FSplit%25202__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -5996,7 +5998,7 @@
         "event": "Liga Regional Norte/2025 Season/Split 2 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Norte%2F2025%20Season%2FSplit%202%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Norte%252F2025%2520Season%252FSplit%25202%2520Playoffs__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -6014,7 +6016,7 @@
         "event": "Liga Regional Norte/2025 Season/Split 2 Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Norte%2F2025%20Season%2FSplit%202%20Promotion__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Norte%252F2025%2520Season%252FSplit%25202%2520Promotion__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -6032,7 +6034,7 @@
         "event": "Liga Regional Norte/2026 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Norte%2F2026%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Norte%252F2026%2520Season%252FSplit%25201__All.json",
       "matchCount": 26,
       "sourceBreakdown": [
         {
@@ -6050,7 +6052,7 @@
         "event": "Liga Regional Norte/2026 Season/Split 1 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Norte%2F2026%20Season%2FSplit%201%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Norte%252F2026%2520Season%252FSplit%25201%2520Playoffs__All.json",
       "matchCount": 18,
       "sourceBreakdown": [
         {
@@ -6068,7 +6070,7 @@
         "event": "Liga Regional Sur/2025 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Sur%2F2025%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Sur%252F2025%2520Season%252FSplit%25201__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -6086,7 +6088,7 @@
         "event": "Liga Regional Sur/2025 Season/Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Sur%2F2025%20Season%2FSplit%202__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Sur%252F2025%2520Season%252FSplit%25202__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -6104,7 +6106,7 @@
         "event": "Liga Regional Sur/2025 Season/Split 2 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Sur%2F2025%20Season%2FSplit%202%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Sur%252F2025%2520Season%252FSplit%25202%2520Playoffs__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -6122,7 +6124,7 @@
         "event": "Liga Regional Sur/2026 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Sur%2F2026%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Sur%252F2026%2520Season%252FSplit%25201__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -6140,7 +6142,7 @@
         "event": "Liga Regional Sur/2026 Season/Split 1 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Regional%20Sur%2F2026%20Season%2FSplit%201%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Liga%2520Regional%2520Sur%252F2026%2520Season%252FSplit%25201%2520Playoffs__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -6158,7 +6160,7 @@
         "event": "Liga Valkyria/Choque de Regiones 2025/Closing Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Valkyria%2FChoque%20de%20Regiones%202025%2FClosing%20Season__All.json",
+      "url": "/data/snapshots/All__Liga%2520Valkyria%252FChoque%2520de%2520Regiones%25202025%252FClosing%2520Season__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -6176,7 +6178,7 @@
         "event": "Liga Valkyria/Choque de Regiones 2025/Opening Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Liga%20Valkyria%2FChoque%20de%20Regiones%202025%2FOpening%20Season__All.json",
+      "url": "/data/snapshots/All__Liga%2520Valkyria%252FChoque%2520de%2520Regiones%25202025%252FOpening%2520Season__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -6194,7 +6196,7 @@
         "event": "LIT 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LIT%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__LIT%25202025%2520Spring__All.json",
       "matchCount": 50,
       "sourceBreakdown": [
         {
@@ -6212,7 +6214,7 @@
         "event": "LIT 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LIT%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__LIT%25202025%2520Summer__All.json",
       "matchCount": 51,
       "sourceBreakdown": [
         {
@@ -6230,7 +6232,7 @@
         "event": "LIT 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LIT%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__LIT%25202025%2520Winter__All.json",
       "matchCount": 38,
       "sourceBreakdown": [
         {
@@ -6248,7 +6250,7 @@
         "event": "LIT 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LIT%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__LIT%25202026%2520Spring__All.json",
       "matchCount": 94,
       "sourceBreakdown": [
         {
@@ -6266,7 +6268,7 @@
         "event": "LIT 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LIT%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__LIT%25202026%2520Winter__All.json",
       "matchCount": 96,
       "sourceBreakdown": [
         {
@@ -6284,7 +6286,7 @@
         "event": "LIT/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LIT%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LIT%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -6302,7 +6304,7 @@
         "event": "LIT/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LIT%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__LIT%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -6320,7 +6322,7 @@
         "event": "LJL 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%202025__All.json",
+      "url": "/data/snapshots/All__LJL%25202025__All.json",
       "matchCount": 212,
       "sourceBreakdown": [
         {
@@ -6338,7 +6340,7 @@
         "event": "LJL 2025 Forge",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%202025%20Forge__All.json",
+      "url": "/data/snapshots/All__LJL%25202025%2520Forge__All.json",
       "matchCount": 48,
       "sourceBreakdown": [
         {
@@ -6356,7 +6358,7 @@
         "event": "LJL 2025 Ignite",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%202025%20Ignite__All.json",
+      "url": "/data/snapshots/All__LJL%25202025%2520Ignite__All.json",
       "matchCount": 47,
       "sourceBreakdown": [
         {
@@ -6374,7 +6376,7 @@
         "event": "LJL 2025 Storm",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%202025%20Storm__All.json",
+      "url": "/data/snapshots/All__LJL%25202025%2520Storm__All.json",
       "matchCount": 67,
       "sourceBreakdown": [
         {
@@ -6392,7 +6394,7 @@
         "event": "LJL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%202026__All.json",
+      "url": "/data/snapshots/All__LJL%25202026__All.json",
       "matchCount": 184,
       "sourceBreakdown": [
         {
@@ -6410,7 +6412,7 @@
         "event": "LJL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__LJL%25202026%2520Spring__All.json",
       "matchCount": 78,
       "sourceBreakdown": [
         {
@@ -6428,7 +6430,7 @@
         "event": "LJL 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__LJL%25202026%2520Winter__All.json",
       "matchCount": 64,
       "sourceBreakdown": [
         {
@@ -6446,7 +6448,7 @@
         "event": "LJL/2025 Season/Forge",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2025%20Season%2FForge__All.json",
+      "url": "/data/snapshots/All__LJL%252F2025%2520Season%252FForge__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -6464,7 +6466,7 @@
         "event": "LJL/2025 Season/Forge Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2025%20Season%2FForge%20Qualifier__All.json",
+      "url": "/data/snapshots/All__LJL%252F2025%2520Season%252FForge%2520Qualifier__All.json",
       "matchCount": 6,
       "sourceBreakdown": [
         {
@@ -6482,7 +6484,7 @@
         "event": "LJL/2025 Season/Ignite",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2025%20Season%2FIgnite__All.json",
+      "url": "/data/snapshots/All__LJL%252F2025%2520Season%252FIgnite__All.json",
       "matchCount": 6,
       "sourceBreakdown": [
         {
@@ -6500,7 +6502,7 @@
         "event": "LJL/2025 Season/Ignite Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2025%20Season%2FIgnite%20Qualifier__All.json",
+      "url": "/data/snapshots/All__LJL%252F2025%2520Season%252FIgnite%2520Qualifier__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -6518,7 +6520,7 @@
         "event": "LJL/2025 Season/Storm",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2025%20Season%2FStorm__All.json",
+      "url": "/data/snapshots/All__LJL%252F2025%2520Season%252FStorm__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -6536,7 +6538,7 @@
         "event": "LJL/2025 Season/Storm Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2025%20Season%2FStorm%20Qualifier__All.json",
+      "url": "/data/snapshots/All__LJL%252F2025%2520Season%252FStorm%2520Qualifier__All.json",
       "matchCount": 19,
       "sourceBreakdown": [
         {
@@ -6554,7 +6556,7 @@
         "event": "LJL/2026 Season/Winter Series",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2026%20Season%2FWinter%20Series__All.json",
+      "url": "/data/snapshots/All__LJL%252F2026%2520Season%252FWinter%2520Series__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -6572,7 +6574,7 @@
         "event": "LJL/2026 Season/Winter Series Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LJL%2F2026%20Season%2FWinter%20Series%20Qualifier__All.json",
+      "url": "/data/snapshots/All__LJL%252F2026%2520Season%252FWinter%2520Series%2520Qualifier__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -6590,7 +6592,7 @@
         "event": "LOL DK Ligaen/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LOL%20DK%20Ligaen%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LOL%2520DK%2520Ligaen%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -6608,7 +6610,7 @@
         "event": "LoL Game Changers/2025 Season/Group Stage",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LoL%20Game%20Changers%2F2025%20Season%2FGroup%20Stage__All.json",
+      "url": "/data/snapshots/All__LoL%2520Game%2520Changers%252F2025%2520Season%252FGroup%2520Stage__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -6626,7 +6628,7 @@
         "event": "LoL Game Changers/2025 Season/Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LoL%20Game%20Changers%2F2025%20Season%2FPlayoffs__All.json",
+      "url": "/data/snapshots/All__LoL%2520Game%2520Changers%252F2025%2520Season%252FPlayoffs__All.json",
       "matchCount": 25,
       "sourceBreakdown": [
         {
@@ -6644,7 +6646,7 @@
         "event": "LPL 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPL%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__LPL%25202025%2520Split%25201__All.json",
       "matchCount": 130,
       "sourceBreakdown": [
         {
@@ -6662,7 +6664,7 @@
         "event": "LPL 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPL%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__LPL%25202025%2520Split%25202__All.json",
       "matchCount": 330,
       "sourceBreakdown": [
         {
@@ -6680,7 +6682,7 @@
         "event": "LPL 2025 Split 2 Placements",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPL%202025%20Split%202%20Placements__All.json",
+      "url": "/data/snapshots/All__LPL%25202025%2520Split%25202%2520Placements__All.json",
       "matchCount": 60,
       "sourceBreakdown": [
         {
@@ -6698,7 +6700,7 @@
         "event": "LPL 2025 Split 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPL%202025%20Split%203__All.json",
+      "url": "/data/snapshots/All__LPL%25202025%2520Split%25203__All.json",
       "matchCount": 285,
       "sourceBreakdown": [
         {
@@ -6716,7 +6718,7 @@
         "event": "LPL 2026 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPL%202026%20Split%201__All.json",
+      "url": "/data/snapshots/All__LPL%25202026%2520Split%25201__All.json",
       "matchCount": 214,
       "sourceBreakdown": [
         {
@@ -6734,7 +6736,7 @@
         "event": "LPL 2026 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPL%202026%20Split%202__All.json",
+      "url": "/data/snapshots/All__LPL%25202026%2520Split%25202__All.json",
       "matchCount": 239,
       "sourceBreakdown": [
         {
@@ -6752,7 +6754,7 @@
         "event": "LPLOL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__LPLOL%25202025%2520Spring__All.json",
       "matchCount": 44,
       "sourceBreakdown": [
         {
@@ -6770,7 +6772,7 @@
         "event": "LPLOL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__LPLOL%25202025%2520Summer__All.json",
       "matchCount": 74,
       "sourceBreakdown": [
         {
@@ -6788,7 +6790,7 @@
         "event": "LPLOL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__LPLOL%25202025%2520Winter__All.json",
       "matchCount": 40,
       "sourceBreakdown": [
         {
@@ -6806,7 +6808,7 @@
         "event": "LPLOL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__LPLOL%25202026%2520Spring__All.json",
       "matchCount": 42,
       "sourceBreakdown": [
         {
@@ -6824,7 +6826,7 @@
         "event": "LPLOL 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__LPLOL%25202026%2520Winter__All.json",
       "matchCount": 39,
       "sourceBreakdown": [
         {
@@ -6842,7 +6844,7 @@
         "event": "LPLOL/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LPLOL%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -6860,7 +6862,7 @@
         "event": "LPLOL/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__LPLOL%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -6878,7 +6880,7 @@
         "event": "LPLOL/2025 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%2F2025%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__LPLOL%252F2025%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -6896,7 +6898,7 @@
         "event": "LPLOL/2026 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LPLOL%2F2026%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__LPLOL%252F2026%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -6914,7 +6916,7 @@
         "event": "LRN 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LRN%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__LRN%25202025%2520Split%25201__All.json",
       "matchCount": 85,
       "sourceBreakdown": [
         {
@@ -6932,7 +6934,7 @@
         "event": "LRN 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LRN%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__LRN%25202025%2520Split%25202__All.json",
       "matchCount": 66,
       "sourceBreakdown": [
         {
@@ -6950,7 +6952,7 @@
         "event": "LRN 2026 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LRN%202026%20Split%201__All.json",
+      "url": "/data/snapshots/All__LRN%25202026%2520Split%25201__All.json",
       "matchCount": 89,
       "sourceBreakdown": [
         {
@@ -6968,7 +6970,7 @@
         "event": "LRS 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LRS%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__LRS%25202025%2520Split%25201__All.json",
       "matchCount": 71,
       "sourceBreakdown": [
         {
@@ -6986,7 +6988,7 @@
         "event": "LRS 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LRS%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__LRS%25202025%2520Split%25202__All.json",
       "matchCount": 65,
       "sourceBreakdown": [
         {
@@ -7004,7 +7006,7 @@
         "event": "LRS 2026 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LRS%202026%20Split%201__All.json",
+      "url": "/data/snapshots/All__LRS%25202026%2520Split%25201__All.json",
       "matchCount": 91,
       "sourceBreakdown": [
         {
@@ -7022,7 +7024,7 @@
         "event": "LTA 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%202025__All.json",
+      "url": "/data/snapshots/All__LTA%25202025__All.json",
       "matchCount": 40,
       "sourceBreakdown": [
         {
@@ -7040,7 +7042,7 @@
         "event": "LTA N 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20N%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__LTA%2520N%25202025%2520Split%25201__All.json",
       "matchCount": 26,
       "sourceBreakdown": [
         {
@@ -7058,7 +7060,7 @@
         "event": "LTA N 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20N%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__LTA%2520N%25202025%2520Split%25202__All.json",
       "matchCount": 95,
       "sourceBreakdown": [
         {
@@ -7076,7 +7078,7 @@
         "event": "LTA N 2025 Split 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20N%202025%20Split%203__All.json",
+      "url": "/data/snapshots/All__LTA%2520N%25202025%2520Split%25203__All.json",
       "matchCount": 68,
       "sourceBreakdown": [
         {
@@ -7094,7 +7096,7 @@
         "event": "LTA N 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20N%202026__All.json",
+      "url": "/data/snapshots/All__LTA%2520N%25202026__All.json",
       "matchCount": 25,
       "sourceBreakdown": [
         {
@@ -7112,7 +7114,7 @@
         "event": "LTA North/2025 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20North%2F2025%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__LTA%2520North%252F2025%2520Season%252FSplit%25201__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -7130,7 +7132,7 @@
         "event": "LTA North/2025 Season/Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20North%2F2025%20Season%2FSplit%202__All.json",
+      "url": "/data/snapshots/All__LTA%2520North%252F2025%2520Season%252FSplit%25202__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -7148,7 +7150,7 @@
         "event": "LTA North/2026 Season/Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20North%2F2026%20Season%2FPromotion__All.json",
+      "url": "/data/snapshots/All__LTA%2520North%252F2026%2520Season%252FPromotion__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -7166,7 +7168,7 @@
         "event": "LTA S 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20S%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__LTA%2520S%25202025%2520Split%25201__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -7184,7 +7186,7 @@
         "event": "LTA S 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20S%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__LTA%2520S%25202025%2520Split%25202__All.json",
       "matchCount": 97,
       "sourceBreakdown": [
         {
@@ -7202,7 +7204,7 @@
         "event": "LTA S 2025 Split 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20S%202025%20Split%203__All.json",
+      "url": "/data/snapshots/All__LTA%2520S%25202025%2520Split%25203__All.json",
       "matchCount": 67,
       "sourceBreakdown": [
         {
@@ -7220,7 +7222,7 @@
         "event": "LTA S 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%20S%202026__All.json",
+      "url": "/data/snapshots/All__LTA%2520S%25202026__All.json",
       "matchCount": 28,
       "sourceBreakdown": [
         {
@@ -7238,7 +7240,7 @@
         "event": "LTA/2025 Season/Split 1 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTA%2F2025%20Season%2FSplit%201%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LTA%252F2025%2520Season%252FSplit%25201%2520Playoffs__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -7256,7 +7258,7 @@
         "event": "LTS/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTS%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LTS%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 20,
       "sourceBreakdown": [
         {
@@ -7274,7 +7276,7 @@
         "event": "LTS/2025 Season/Spring Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTS%2F2025%20Season%2FSpring%20Season__All.json",
+      "url": "/data/snapshots/All__LTS%252F2025%2520Season%252FSpring%2520Season__All.json",
       "matchCount": 54,
       "sourceBreakdown": [
         {
@@ -7292,7 +7294,7 @@
         "event": "LTS/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTS%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__LTS%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 22,
       "sourceBreakdown": [
         {
@@ -7310,7 +7312,7 @@
         "event": "LTS/2025 Season/Summer Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTS%2F2025%20Season%2FSummer%20Promotion__All.json",
+      "url": "/data/snapshots/All__LTS%252F2025%2520Season%252FSummer%2520Promotion__All.json",
       "matchCount": 21,
       "sourceBreakdown": [
         {
@@ -7328,7 +7330,7 @@
         "event": "LTS/2025 Season/Summer Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LTS%2F2025%20Season%2FSummer%20Season__All.json",
+      "url": "/data/snapshots/All__LTS%252F2025%2520Season%252FSummer%2520Season__All.json",
       "matchCount": 55,
       "sourceBreakdown": [
         {
@@ -7346,7 +7348,7 @@
         "event": "LVP SL 2025 Final Four",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LVP%20SL%202025%20Final%20Four__All.json",
+      "url": "/data/snapshots/All__LVP%2520SL%25202025%2520Final%2520Four__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -7364,7 +7366,7 @@
         "event": "LVP SL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LVP%20SL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__LVP%2520SL%25202025%2520Spring__All.json",
       "matchCount": 84,
       "sourceBreakdown": [
         {
@@ -7382,7 +7384,7 @@
         "event": "LVP SL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LVP%20SL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__LVP%2520SL%25202025%2520Summer__All.json",
       "matchCount": 77,
       "sourceBreakdown": [
         {
@@ -7400,7 +7402,7 @@
         "event": "LVP SL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LVP%20SL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__LVP%2520SL%25202025%2520Winter__All.json",
       "matchCount": 81,
       "sourceBreakdown": [
         {
@@ -7418,7 +7420,7 @@
         "event": "LVP SL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__LVP%20SL%202026__All.json",
+      "url": "/data/snapshots/All__LVP%2520SL%25202026__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -7436,7 +7438,7 @@
         "event": "MAGAMERS 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__MAGAMERS%202026__All.json",
+      "url": "/data/snapshots/All__MAGAMERS%25202026__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -7454,7 +7456,7 @@
         "event": "MSI 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__MSI%202025__All.json",
+      "url": "/data/snapshots/All__MSI%25202025__All.json",
       "matchCount": 80,
       "sourceBreakdown": [
         {
@@ -7472,7 +7474,7 @@
         "event": "NACL 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NACL%202025__All.json",
+      "url": "/data/snapshots/All__NACL%25202025__All.json",
       "matchCount": 21,
       "sourceBreakdown": [
         {
@@ -7490,7 +7492,7 @@
         "event": "NACL 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NACL%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__NACL%25202025%2520Split%25201__All.json",
       "matchCount": 142,
       "sourceBreakdown": [
         {
@@ -7508,7 +7510,7 @@
         "event": "NACL 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NACL%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__NACL%25202025%2520Split%25202__All.json",
       "matchCount": 87,
       "sourceBreakdown": [
         {
@@ -7526,7 +7528,7 @@
         "event": "NACL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NACL%202026__All.json",
+      "url": "/data/snapshots/All__NACL%25202026__All.json",
       "matchCount": 52,
       "sourceBreakdown": [
         {
@@ -7544,7 +7546,7 @@
         "event": "NACL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NACL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__NACL%25202026%2520Spring__All.json",
       "matchCount": 140,
       "sourceBreakdown": [
         {
@@ -7562,7 +7564,7 @@
         "event": "NEXO 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NEXO%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__NEXO%25202025%2520Split%25202__All.json",
       "matchCount": 89,
       "sourceBreakdown": [
         {
@@ -7580,7 +7582,7 @@
         "event": "NEXO 2025 Split 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NEXO%202025%20Split%203__All.json",
+      "url": "/data/snapshots/All__NEXO%25202025%2520Split%25203__All.json",
       "matchCount": 65,
       "sourceBreakdown": [
         {
@@ -7598,7 +7600,7 @@
         "event": "Nexus League/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20League%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Nexus%2520League%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -7616,7 +7618,7 @@
         "event": "Nexus Tour 2025/Etape 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202025%2FEtape%202__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202025%252FEtape%25202__All.json",
       "matchCount": 43,
       "sourceBreakdown": [
         {
@@ -7634,7 +7636,7 @@
         "event": "Nexus Tour 2025/Etape 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202025%2FEtape%203__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202025%252FEtape%25203__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -7652,7 +7654,7 @@
         "event": "Nexus Tour 2025/Etape 4",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202025%2FEtape%204__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202025%252FEtape%25204__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -7670,7 +7672,7 @@
         "event": "Nexus Tour 2025/Etape 5",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202025%2FEtape%205__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202025%252FEtape%25205__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -7688,7 +7690,7 @@
         "event": "Nexus Tour 2025/Etape 6",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202025%2FEtape%206__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202025%252FEtape%25206__All.json",
       "matchCount": 16,
       "sourceBreakdown": [
         {
@@ -7706,7 +7708,7 @@
         "event": "Nexus Tour 2025/Gamers Assembly 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202025%2FGamers%20Assembly%202025__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202025%252FGamers%2520Assembly%25202025__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -7724,7 +7726,7 @@
         "event": "Nexus Tour 2025/Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202025%2FPlayoffs__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202025%252FPlayoffs__All.json",
       "matchCount": 36,
       "sourceBreakdown": [
         {
@@ -7742,7 +7744,7 @@
         "event": "Nexus Tour 2026/Etape 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nexus%20Tour%202026%2FEtape%202__All.json",
+      "url": "/data/snapshots/All__Nexus%2520Tour%25202026%252FEtape%25202__All.json",
       "matchCount": 43,
       "sourceBreakdown": [
         {
@@ -7760,7 +7762,7 @@
         "event": "NL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NL%202026__All.json",
+      "url": "/data/snapshots/All__NL%25202026__All.json",
       "matchCount": 71,
       "sourceBreakdown": [
         {
@@ -7778,7 +7780,7 @@
         "event": "NLC 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%202025__All.json",
+      "url": "/data/snapshots/All__NLC%25202025__All.json",
       "matchCount": 39,
       "sourceBreakdown": [
         {
@@ -7796,7 +7798,7 @@
         "event": "NLC 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__NLC%25202025%2520Spring__All.json",
       "matchCount": 71,
       "sourceBreakdown": [
         {
@@ -7814,7 +7816,7 @@
         "event": "NLC 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__NLC%25202025%2520Summer__All.json",
       "matchCount": 65,
       "sourceBreakdown": [
         {
@@ -7832,7 +7834,7 @@
         "event": "NLC 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__NLC%25202025%2520Winter__All.json",
       "matchCount": 74,
       "sourceBreakdown": [
         {
@@ -7850,7 +7852,7 @@
         "event": "NLC 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__NLC%25202026%2520Spring__All.json",
       "matchCount": 47,
       "sourceBreakdown": [
         {
@@ -7868,7 +7870,7 @@
         "event": "NLC 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__NLC%25202026%2520Winter__All.json",
       "matchCount": 55,
       "sourceBreakdown": [
         {
@@ -7886,7 +7888,7 @@
         "event": "NLC/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__NLC%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -7904,7 +7906,7 @@
         "event": "NLC/2025 Season/Spring Seeding",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%2F2025%20Season%2FSpring%20Seeding__All.json",
+      "url": "/data/snapshots/All__NLC%252F2025%2520Season%252FSpring%2520Seeding__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -7922,7 +7924,7 @@
         "event": "NLC/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__NLC%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -7940,7 +7942,7 @@
         "event": "NLC/2025 Season/Summer Seeding",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%2F2025%20Season%2FSummer%20Seeding__All.json",
+      "url": "/data/snapshots/All__NLC%252F2025%2520Season%252FSummer%2520Seeding__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -7958,7 +7960,7 @@
         "event": "NLC/2025 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%2F2025%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__NLC%252F2025%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 21,
       "sourceBreakdown": [
         {
@@ -7976,7 +7978,7 @@
         "event": "NLC/2025 Season/Winter Seeding",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NLC%2F2025%20Season%2FWinter%20Seeding__All.json",
+      "url": "/data/snapshots/All__NLC%252F2025%2520Season%252FWinter%2520Seeding__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -7994,7 +7996,7 @@
         "event": "NNO Cup/Season 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__NNO%20Cup%2FSeason%203__All.json",
+      "url": "/data/snapshots/All__NNO%2520Cup%252FSeason%25203__All.json",
       "matchCount": 32,
       "sourceBreakdown": [
         {
@@ -8012,7 +8014,7 @@
         "event": "North American Challengers League/2025 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2025%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2025%2520Season%252FSplit%25201__All.json",
       "matchCount": 23,
       "sourceBreakdown": [
         {
@@ -8030,7 +8032,7 @@
         "event": "North American Challengers League/2025 Season/Split 1 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2025%20Season%2FSplit%201%20Playoffs__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2025%2520Season%252FSplit%25201%2520Playoffs__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -8048,7 +8050,7 @@
         "event": "North American Challengers League/2025 Season/Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2025%20Season%2FSplit%202__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2025%2520Season%252FSplit%25202__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -8066,7 +8068,7 @@
         "event": "North American Challengers League/2025 Season/Split 2 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2025%20Season%2FSplit%202%20Playoffs__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2025%2520Season%252FSplit%25202%2520Playoffs__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -8084,7 +8086,7 @@
         "event": "North American Challengers League/2025 Season/Split 2 Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2025%20Season%2FSplit%202%20Promotion__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2025%2520Season%252FSplit%25202%2520Promotion__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -8102,7 +8104,7 @@
         "event": "North American Challengers League/2026 Season/Split 1 Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2026%20Season%2FSplit%201%20Promotion__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2026%2520Season%252FSplit%25201%2520Promotion__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -8120,7 +8122,7 @@
         "event": "North American Challengers League/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -8138,7 +8140,7 @@
         "event": "North American Challengers League/2026 Season/Spring Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2026%20Season%2FSpring%20Season__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2026%2520Season%252FSpring%2520Season__All.json",
       "matchCount": 6,
       "sourceBreakdown": [
         {
@@ -8156,7 +8158,7 @@
         "event": "North American Challengers League/2026 Season/Summer Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__North%20American%20Challengers%20League%2F2026%20Season%2FSummer%20Promotion__All.json",
+      "url": "/data/snapshots/All__North%2520American%2520Challengers%2520League%252F2026%2520Season%252FSummer%2520Promotion__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -8174,7 +8176,7 @@
         "event": "Nova Series/2025 Season/Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Nova%20Series%2F2025%20Season%2FPlayoffs__All.json",
+      "url": "/data/snapshots/All__Nova%2520Series%252F2025%2520Season%252FPlayoffs__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -8192,7 +8194,7 @@
         "event": "Odyssey Cup 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Odyssey%20Cup%202025__All.json",
+      "url": "/data/snapshots/All__Odyssey%2520Cup%25202025__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -8210,7 +8212,7 @@
         "event": "PCS 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%202025__All.json",
+      "url": "/data/snapshots/All__PCS%25202025__All.json",
       "matchCount": 20,
       "sourceBreakdown": [
         {
@@ -8228,7 +8230,7 @@
         "event": "PCS 2025 Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%202025%20Split%201__All.json",
+      "url": "/data/snapshots/All__PCS%25202025%2520Split%25201__All.json",
       "matchCount": 79,
       "sourceBreakdown": [
         {
@@ -8246,7 +8248,7 @@
         "event": "PCS 2025 Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%202025%20Split%202__All.json",
+      "url": "/data/snapshots/All__PCS%25202025%2520Split%25202__All.json",
       "matchCount": 147,
       "sourceBreakdown": [
         {
@@ -8264,7 +8266,7 @@
         "event": "PCS 2025 Split 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%202025%20Split%203__All.json",
+      "url": "/data/snapshots/All__PCS%25202025%2520Split%25203__All.json",
       "matchCount": 56,
       "sourceBreakdown": [
         {
@@ -8282,7 +8284,7 @@
         "event": "PCS 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__PCS%25202026%2520Spring__All.json",
       "matchCount": 48,
       "sourceBreakdown": [
         {
@@ -8300,7 +8302,7 @@
         "event": "PCS/2025 Season/Split 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%2F2025%20Season%2FSplit%201__All.json",
+      "url": "/data/snapshots/All__PCS%252F2025%2520Season%252FSplit%25201__All.json",
       "matchCount": 28,
       "sourceBreakdown": [
         {
@@ -8318,7 +8320,7 @@
         "event": "PCS/2025 Season/Split 1 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%2F2025%20Season%2FSplit%201%20Playoffs__All.json",
+      "url": "/data/snapshots/All__PCS%252F2025%2520Season%252FSplit%25201%2520Playoffs__All.json",
       "matchCount": 13,
       "sourceBreakdown": [
         {
@@ -8336,7 +8338,7 @@
         "event": "PCS/2025 Season/Split 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%2F2025%20Season%2FSplit%202__All.json",
+      "url": "/data/snapshots/All__PCS%252F2025%2520Season%252FSplit%25202__All.json",
       "matchCount": 63,
       "sourceBreakdown": [
         {
@@ -8354,7 +8356,7 @@
         "event": "PCS/2025 Season/Split 2 Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%2F2025%20Season%2FSplit%202%20Playoffs__All.json",
+      "url": "/data/snapshots/All__PCS%252F2025%2520Season%252FSplit%25202%2520Playoffs__All.json",
       "matchCount": 10,
       "sourceBreakdown": [
         {
@@ -8372,7 +8374,7 @@
         "event": "PCS/2025 Season/Split 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PCS%2F2025%20Season%2FSplit%203__All.json",
+      "url": "/data/snapshots/All__PCS%252F2025%2520Season%252FSplit%25203__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -8390,7 +8392,7 @@
         "event": "Play Córdoba Generation Cup 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Play%20C%C3%B3rdoba%20Generation%20Cup%202026__All.json",
+      "url": "/data/snapshots/All__Play%2520C%25C3%25B3rdoba%2520Generation%2520Cup%25202026__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -8408,7 +8410,7 @@
         "event": "Play Marbella Generation Cup 24-25",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Play%20Marbella%20Generation%20Cup%2024-25__All.json",
+      "url": "/data/snapshots/All__Play%2520Marbella%2520Generation%2520Cup%252024-25__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -8426,7 +8428,7 @@
         "event": "Prime League 1st Division/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%201st%20Division%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25201st%2520Division%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -8444,7 +8446,7 @@
         "event": "Prime League 1st Division/2026 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%201st%20Division%2F2026%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25201st%2520Division%252F2026%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 6,
       "sourceBreakdown": [
         {
@@ -8462,7 +8464,7 @@
         "event": "Prime League 2nd Division/2025 Season/Season Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2025%20Season%2FSeason%20Finals__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2025%2520Season%252FSeason%2520Finals__All.json",
       "matchCount": 53,
       "sourceBreakdown": [
         {
@@ -8480,7 +8482,7 @@
         "event": "Prime League 2nd Division/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 97,
       "sourceBreakdown": [
         {
@@ -8498,7 +8500,7 @@
         "event": "Prime League 2nd Division/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 78,
       "sourceBreakdown": [
         {
@@ -8516,7 +8518,7 @@
         "event": "Prime League 2nd Division/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 109,
       "sourceBreakdown": [
         {
@@ -8534,7 +8536,7 @@
         "event": "Prime League 2nd Division/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 53,
       "sourceBreakdown": [
         {
@@ -8552,7 +8554,7 @@
         "event": "Prime League 2nd Division/2026 Season/Fall Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FFall%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FFall%2520Playoffs__All.json",
       "matchCount": 64,
       "sourceBreakdown": [
         {
@@ -8570,7 +8572,7 @@
         "event": "Prime League 2nd Division/2026 Season/Fall Relegation",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FFall%20Relegation__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FFall%2520Relegation__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -8588,7 +8590,7 @@
         "event": "Prime League 2nd Division/2026 Season/Fall Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FFall%20Split__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FFall%2520Split__All.json",
       "matchCount": 134,
       "sourceBreakdown": [
         {
@@ -8606,7 +8608,7 @@
         "event": "Prime League 2nd Division/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 47,
       "sourceBreakdown": [
         {
@@ -8624,7 +8626,7 @@
         "event": "Prime League 2nd Division/2026 Season/Spring Relegation",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FSpring%20Relegation__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FSpring%2520Relegation__All.json",
       "matchCount": 21,
       "sourceBreakdown": [
         {
@@ -8642,7 +8644,7 @@
         "event": "Prime League 2nd Division/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 124,
       "sourceBreakdown": [
         {
@@ -8660,7 +8662,7 @@
         "event": "Prime League 2nd Division/2026 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 50,
       "sourceBreakdown": [
         {
@@ -8678,7 +8680,7 @@
         "event": "Prime League 2nd Division/2026 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20League%202nd%20Division%2F2026%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Prime%2520League%25202nd%2520Division%252F2026%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 123,
       "sourceBreakdown": [
         {
@@ -8696,7 +8698,7 @@
         "event": "Prime Pokal 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Prime%20Pokal%202025__All.json",
+      "url": "/data/snapshots/All__Prime%2520Pokal%25202025__All.json",
       "matchCount": 2,
       "sourceBreakdown": [
         {
@@ -8714,7 +8716,7 @@
         "event": "PRM 2025 Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRM%202025%20Finals__All.json",
+      "url": "/data/snapshots/All__PRM%25202025%2520Finals__All.json",
       "matchCount": 32,
       "sourceBreakdown": [
         {
@@ -8732,7 +8734,7 @@
         "event": "PRM 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRM%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__PRM%25202025%2520Spring__All.json",
       "matchCount": 134,
       "sourceBreakdown": [
         {
@@ -8750,7 +8752,7 @@
         "event": "PRM 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRM%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__PRM%25202025%2520Summer__All.json",
       "matchCount": 55,
       "sourceBreakdown": [
         {
@@ -8768,7 +8770,7 @@
         "event": "PRM 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRM%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__PRM%25202025%2520Winter__All.json",
       "matchCount": 68,
       "sourceBreakdown": [
         {
@@ -8786,7 +8788,7 @@
         "event": "PRM 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRM%202026__All.json",
+      "url": "/data/snapshots/All__PRM%25202026__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -8804,7 +8806,7 @@
         "event": "PRM 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRM%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__PRM%25202026%2520Spring__All.json",
       "matchCount": 114,
       "sourceBreakdown": [
         {
@@ -8822,7 +8824,7 @@
         "event": "PRM 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRM%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__PRM%25202026%2520Winter__All.json",
       "matchCount": 51,
       "sourceBreakdown": [
         {
@@ -8840,7 +8842,7 @@
         "event": "PRMP 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__PRMP%202025__All.json",
+      "url": "/data/snapshots/All__PRMP%25202025__All.json",
       "matchCount": 73,
       "sourceBreakdown": [
         {
@@ -8858,7 +8860,7 @@
         "event": "Red Bull Team 5",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Red%20Bull%20Team%205__All.json",
+      "url": "/data/snapshots/All__Red%2520Bull%2520Team%25205__All.json",
       "matchCount": 29,
       "sourceBreakdown": [
         {
@@ -8876,7 +8878,7 @@
         "event": "Rift Legends/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 20,
       "sourceBreakdown": [
         {
@@ -8894,7 +8896,7 @@
         "event": "Rift Legends/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 52,
       "sourceBreakdown": [
         {
@@ -8912,7 +8914,7 @@
         "event": "Rift Legends/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -8930,7 +8932,7 @@
         "event": "Rift Legends/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -8948,7 +8950,7 @@
         "event": "Rift Legends/2025 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2025%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2025%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -8966,7 +8968,7 @@
         "event": "Rift Legends/2025 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2025%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2025%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 50,
       "sourceBreakdown": [
         {
@@ -8984,7 +8986,7 @@
         "event": "Rift Legends/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -9002,7 +9004,7 @@
         "event": "Rift Legends/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 31,
       "sourceBreakdown": [
         {
@@ -9020,7 +9022,7 @@
         "event": "Rift Legends/2026 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Rift%20Legends%2F2026%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Rift%2520Legends%252F2026%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 38,
       "sourceBreakdown": [
         {
@@ -9038,7 +9040,7 @@
         "event": "RIFT SUMMIT 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__RIFT%20SUMMIT%202025__All.json",
+      "url": "/data/snapshots/All__RIFT%2520SUMMIT%25202025__All.json",
       "matchCount": 33,
       "sourceBreakdown": [
         {
@@ -9056,7 +9058,7 @@
         "event": "RIVALS LEAGUE/2026 Season/Season 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__RIVALS%20LEAGUE%2F2026%20Season%2FSeason%201__All.json",
+      "url": "/data/snapshots/All__RIVALS%2520LEAGUE%252F2026%2520Season%252FSeason%25201__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -9074,7 +9076,7 @@
         "event": "RL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__RL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__RL%25202025%2520Spring__All.json",
       "matchCount": 84,
       "sourceBreakdown": [
         {
@@ -9092,7 +9094,7 @@
         "event": "RL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__RL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__RL%25202025%2520Summer__All.json",
       "matchCount": 73,
       "sourceBreakdown": [
         {
@@ -9110,7 +9112,7 @@
         "event": "RL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__RL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__RL%25202025%2520Winter__All.json",
       "matchCount": 82,
       "sourceBreakdown": [
         {
@@ -9128,7 +9130,7 @@
         "event": "RL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__RL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__RL%25202026%2520Spring__All.json",
       "matchCount": 81,
       "sourceBreakdown": [
         {
@@ -9146,7 +9148,7 @@
         "event": "RL 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__RL%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__RL%25202026%2520Winter__All.json",
       "matchCount": 51,
       "sourceBreakdown": [
         {
@@ -9164,7 +9166,7 @@
         "event": "Road Of Legends/2026 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20Of%20Legends%2F2026%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Road%2520Of%2520Legends%252F2026%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -9182,7 +9184,7 @@
         "event": "Road Of Legends/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20Of%20Legends%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Road%2520Of%2520Legends%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 15,
       "sourceBreakdown": [
         {
@@ -9200,7 +9202,7 @@
         "event": "Road Of Legends/2026 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20Of%20Legends%2F2026%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Road%2520Of%2520Legends%252F2026%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -9218,7 +9220,7 @@
         "event": "Road Of Legends/2026 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20Of%20Legends%2F2026%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Road%2520Of%2520Legends%252F2026%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 14,
       "sourceBreakdown": [
         {
@@ -9236,7 +9238,7 @@
         "event": "Road to Arabian League/2025 Season/EUW/Season 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20to%20Arabian%20League%2F2025%20Season%2FEUW%2FSeason%201__All.json",
+      "url": "/data/snapshots/All__Road%2520to%2520Arabian%2520League%252F2025%2520Season%252FEUW%252FSeason%25201__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -9254,7 +9256,7 @@
         "event": "Road to Arabian League/2025 Season/MENA/Season 1",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20to%20Arabian%20League%2F2025%20Season%2FMENA%2FSeason%201__All.json",
+      "url": "/data/snapshots/All__Road%2520to%2520Arabian%2520League%252F2025%2520Season%252FMENA%252FSeason%25201__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -9272,7 +9274,7 @@
         "event": "Road to VCS/2025 Spring/Campus",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20to%20VCS%2F2025%20Spring%2FCampus__All.json",
+      "url": "/data/snapshots/All__Road%2520to%2520VCS%252F2025%2520Spring%252FCampus__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -9290,7 +9292,7 @@
         "event": "Road to VCS/2025 Summer/Offline Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20to%20VCS%2F2025%20Summer%2FOffline%20Finals__All.json",
+      "url": "/data/snapshots/All__Road%2520to%2520VCS%252F2025%2520Summer%252FOffline%2520Finals__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -9308,7 +9310,7 @@
         "event": "Road to VCS/2025 Summer/Online Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Road%20to%20VCS%2F2025%20Summer%2FOnline%20Finals__All.json",
+      "url": "/data/snapshots/All__Road%2520to%2520VCS%252F2025%2520Summer%252FOnline%2520Finals__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -9326,7 +9328,7 @@
         "event": "ROL 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ROL%202025__All.json",
+      "url": "/data/snapshots/All__ROL%25202025__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -9344,7 +9346,7 @@
         "event": "ROL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ROL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__ROL%25202025%2520Spring__All.json",
       "matchCount": 82,
       "sourceBreakdown": [
         {
@@ -9362,7 +9364,7 @@
         "event": "ROL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ROL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__ROL%25202025%2520Summer__All.json",
       "matchCount": 80,
       "sourceBreakdown": [
         {
@@ -9380,7 +9382,7 @@
         "event": "ROL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ROL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__ROL%25202025%2520Winter__All.json",
       "matchCount": 38,
       "sourceBreakdown": [
         {
@@ -9398,7 +9400,7 @@
         "event": "ROL 2026",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ROL%202026__All.json",
+      "url": "/data/snapshots/All__ROL%25202026__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -9416,7 +9418,7 @@
         "event": "ROL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ROL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__ROL%25202026%2520Spring__All.json",
       "matchCount": 91,
       "sourceBreakdown": [
         {
@@ -9434,7 +9436,7 @@
         "event": "ROL 2026 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__ROL%202026%20Winter__All.json",
+      "url": "/data/snapshots/All__ROL%25202026%2520Winter__All.json",
       "matchCount": 69,
       "sourceBreakdown": [
         {
@@ -9452,7 +9454,7 @@
         "event": "Spring Dawn Tournament",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Spring%20Dawn%20Tournament__All.json",
+      "url": "/data/snapshots/All__Spring%2520Dawn%2520Tournament__All.json",
       "matchCount": 37,
       "sourceBreakdown": [
         {
@@ -9470,7 +9472,7 @@
         "event": "Střet vyvolávačů 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__St%C5%99et%20vyvol%C3%A1va%C4%8D%C5%AF%202025__All.json",
+      "url": "/data/snapshots/All__St%25C5%2599et%2520vyvol%25C3%25A1va%25C4%258D%25C5%25AF%25202025__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -9488,7 +9490,7 @@
         "event": "Streamers Clash/Season 2",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Streamers%20Clash%2FSeason%202__All.json",
+      "url": "/data/snapshots/All__Streamers%2520Clash%252FSeason%25202__All.json",
       "matchCount": 37,
       "sourceBreakdown": [
         {
@@ -9506,7 +9508,7 @@
         "event": "Streamers Clash/Season 3",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Streamers%20Clash%2FSeason%203__All.json",
+      "url": "/data/snapshots/All__Streamers%2520Clash%252FSeason%25203__All.json",
       "matchCount": 67,
       "sourceBreakdown": [
         {
@@ -9524,7 +9526,7 @@
         "event": "Streamers Clash/Season 4",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Streamers%20Clash%2FSeason%204__All.json",
+      "url": "/data/snapshots/All__Streamers%2520Clash%252FSeason%25204__All.json",
       "matchCount": 49,
       "sourceBreakdown": [
         {
@@ -9542,7 +9544,7 @@
         "event": "Superliga Domino's/2025 Season/Final Four",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FFinal%20Four__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FFinal%2520Four__All.json",
       "matchCount": 12,
       "sourceBreakdown": [
         {
@@ -9560,7 +9562,7 @@
         "event": "Superliga Domino's/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -9578,7 +9580,7 @@
         "event": "Superliga Domino's/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -9596,7 +9598,7 @@
         "event": "Superliga Domino's/2025 Season/Spring Swiss",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FSpring%20Swiss__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FSpring%2520Swiss__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -9614,7 +9616,7 @@
         "event": "Superliga Domino's/2025 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 6,
       "sourceBreakdown": [
         {
@@ -9632,7 +9634,7 @@
         "event": "Superliga Domino's/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -9650,7 +9652,7 @@
         "event": "Superliga Domino's/2025 Season/Summer Swiss",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FSummer%20Swiss__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FSummer%2520Swiss__All.json",
       "matchCount": 6,
       "sourceBreakdown": [
         {
@@ -9668,7 +9670,7 @@
         "event": "Superliga Domino's/2025 Season/Winter Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FWinter%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FWinter%2520Playoffs__All.json",
       "matchCount": 13,
       "sourceBreakdown": [
         {
@@ -9686,7 +9688,7 @@
         "event": "Superliga Domino's/2025 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -9704,7 +9706,7 @@
         "event": "Superliga Domino's/2025 Season/Winter Swiss",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Superliga%20Domino's%2F2025%20Season%2FWinter%20Swiss__All.json",
+      "url": "/data/snapshots/All__Superliga%2520Domino's%252F2025%2520Season%252FWinter%2520Swiss__All.json",
       "matchCount": 9,
       "sourceBreakdown": [
         {
@@ -9722,7 +9724,7 @@
         "event": "Svenska Onlineligan/2025 Season/Autumn Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Svenska%20Onlineligan%2F2025%20Season%2FAutumn%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Svenska%2520Onlineligan%252F2025%2520Season%252FAutumn%2520Playoffs__All.json",
       "matchCount": 11,
       "sourceBreakdown": [
         {
@@ -9740,7 +9742,7 @@
         "event": "Svenska Onlineligan/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Svenska%20Onlineligan%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__Svenska%2520Onlineligan%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 17,
       "sourceBreakdown": [
         {
@@ -9758,7 +9760,7 @@
         "event": "TCL 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TCL%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__TCL%25202025%2520Spring__All.json",
       "matchCount": 81,
       "sourceBreakdown": [
         {
@@ -9776,7 +9778,7 @@
         "event": "TCL 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TCL%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__TCL%25202025%2520Summer__All.json",
       "matchCount": 81,
       "sourceBreakdown": [
         {
@@ -9794,7 +9796,7 @@
         "event": "TCL 2025 Winter",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TCL%202025%20Winter__All.json",
+      "url": "/data/snapshots/All__TCL%25202025%2520Winter__All.json",
       "matchCount": 78,
       "sourceBreakdown": [
         {
@@ -9812,7 +9814,7 @@
         "event": "TCL 2026 Kickoff",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TCL%202026%20Kickoff__All.json",
+      "url": "/data/snapshots/All__TCL%25202026%2520Kickoff__All.json",
       "matchCount": 57,
       "sourceBreakdown": [
         {
@@ -9830,7 +9832,7 @@
         "event": "TCL 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TCL%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__TCL%25202026%2520Spring__All.json",
       "matchCount": 86,
       "sourceBreakdown": [
         {
@@ -9848,7 +9850,7 @@
         "event": "TCL/2026 Season/Kickoff",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TCL%2F2026%20Season%2FKickoff__All.json",
+      "url": "/data/snapshots/All__TCL%252F2026%2520Season%252FKickoff__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -9866,7 +9868,7 @@
         "event": "TCL/2026 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TCL%2F2026%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__TCL%252F2026%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 16,
       "sourceBreakdown": [
         {
@@ -9884,7 +9886,7 @@
         "event": "TEC/Season 4",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TEC%2FSeason%204__All.json",
+      "url": "/data/snapshots/All__TEC%252FSeason%25204__All.json",
       "matchCount": 66,
       "sourceBreakdown": [
         {
@@ -9902,7 +9904,7 @@
         "event": "Toledo Matsuri 24-25",
         "region": "All"
       },
-      "url": "/data/snapshots/All__Toledo%20Matsuri%2024-25__All.json",
+      "url": "/data/snapshots/All__Toledo%2520Matsuri%252024-25__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -9920,7 +9922,7 @@
         "event": "TransIP Road Of Legends/2025 Season/Season Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TransIP%20Road%20Of%20Legends%2F2025%20Season%2FSeason%20Finals__All.json",
+      "url": "/data/snapshots/All__TransIP%2520Road%2520Of%2520Legends%252F2025%2520Season%252FSeason%2520Finals__All.json",
       "matchCount": 7,
       "sourceBreakdown": [
         {
@@ -9938,7 +9940,7 @@
         "event": "TransIP Road Of Legends/2025 Season/Spring Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TransIP%20Road%20Of%20Legends%2F2025%20Season%2FSpring%20Playoffs__All.json",
+      "url": "/data/snapshots/All__TransIP%2520Road%2520Of%2520Legends%252F2025%2520Season%252FSpring%2520Playoffs__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -9956,7 +9958,7 @@
         "event": "TransIP Road Of Legends/2025 Season/Spring Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TransIP%20Road%20Of%20Legends%2F2025%20Season%2FSpring%20Split__All.json",
+      "url": "/data/snapshots/All__TransIP%2520Road%2520Of%2520Legends%252F2025%2520Season%252FSpring%2520Split__All.json",
       "matchCount": 35,
       "sourceBreakdown": [
         {
@@ -9974,7 +9976,7 @@
         "event": "TransIP Road Of Legends/2025 Season/Summer Promotion",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TransIP%20Road%20Of%20Legends%2F2025%20Season%2FSummer%20Promotion__All.json",
+      "url": "/data/snapshots/All__TransIP%2520Road%2520Of%2520Legends%252F2025%2520Season%252FSummer%2520Promotion__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -9992,7 +9994,7 @@
         "event": "TransIP Road Of Legends/2025 Season/Summer Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TransIP%20Road%20Of%20Legends%2F2025%20Season%2FSummer%20Split__All.json",
+      "url": "/data/snapshots/All__TransIP%2520Road%2520Of%2520Legends%252F2025%2520Season%252FSummer%2520Split__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -10010,7 +10012,7 @@
         "event": "TransIP Road Of Legends/2025 Season/Winter Split",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TransIP%20Road%20Of%20Legends%2F2025%20Season%2FWinter%20Split__All.json",
+      "url": "/data/snapshots/All__TransIP%2520Road%2520Of%2520Legends%252F2025%2520Season%252FWinter%2520Split__All.json",
       "matchCount": 8,
       "sourceBreakdown": [
         {
@@ -10028,7 +10030,7 @@
         "event": "TRIFORC3 TOURNAMENT 24-25",
         "region": "All"
       },
-      "url": "/data/snapshots/All__TRIFORC3%20TOURNAMENT%2024-25__All.json",
+      "url": "/data/snapshots/All__TRIFORC3%2520TOURNAMENT%252024-25__All.json",
       "matchCount": 3,
       "sourceBreakdown": [
         {
@@ -10046,7 +10048,7 @@
         "event": "University Esports Masters 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__University%20Esports%20Masters%202025__All.json",
+      "url": "/data/snapshots/All__University%2520Esports%2520Masters%25202025__All.json",
       "matchCount": 78,
       "sourceBreakdown": [
         {
@@ -10064,7 +10066,7 @@
         "event": "VCS 2025 Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%202025%20Finals__All.json",
+      "url": "/data/snapshots/All__VCS%25202025%2520Finals__All.json",
       "matchCount": 5,
       "sourceBreakdown": [
         {
@@ -10082,7 +10084,7 @@
         "event": "VCS 2025 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%202025%20Spring__All.json",
+      "url": "/data/snapshots/All__VCS%25202025%2520Spring__All.json",
       "matchCount": 55,
       "sourceBreakdown": [
         {
@@ -10100,7 +10102,7 @@
         "event": "VCS 2025 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%202025%20Summer__All.json",
+      "url": "/data/snapshots/All__VCS%25202025%2520Summer__All.json",
       "matchCount": 81,
       "sourceBreakdown": [
         {
@@ -10118,7 +10120,7 @@
         "event": "VCS 2026 Spring",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%202026%20Spring__All.json",
+      "url": "/data/snapshots/All__VCS%25202026%2520Spring__All.json",
       "matchCount": 55,
       "sourceBreakdown": [
         {
@@ -10136,7 +10138,7 @@
         "event": "VCS 2026 Summer",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%202026%20Summer__All.json",
+      "url": "/data/snapshots/All__VCS%25202026%2520Summer__All.json",
       "matchCount": 58,
       "sourceBreakdown": [
         {
@@ -10154,7 +10156,7 @@
         "event": "VCS/2025 Season/Finals",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%2F2025%20Season%2FFinals__All.json",
+      "url": "/data/snapshots/All__VCS%252F2025%2520Season%252FFinals__All.json",
       "matchCount": 4,
       "sourceBreakdown": [
         {
@@ -10172,7 +10174,7 @@
         "event": "VCS/2025 Season/Spring Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%2F2025%20Season%2FSpring%20Season__All.json",
+      "url": "/data/snapshots/All__VCS%252F2025%2520Season%252FSpring%2520Season__All.json",
       "matchCount": 38,
       "sourceBreakdown": [
         {
@@ -10190,7 +10192,7 @@
         "event": "VCS/2025 Season/Summer Qualifier",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%2F2025%20Season%2FSummer%20Qualifier__All.json",
+      "url": "/data/snapshots/All__VCS%252F2025%2520Season%252FSummer%2520Qualifier__All.json",
       "matchCount": 18,
       "sourceBreakdown": [
         {
@@ -10208,7 +10210,7 @@
         "event": "VCS/2025 Season/Summer Season",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%2F2025%20Season%2FSummer%20Season__All.json",
+      "url": "/data/snapshots/All__VCS%252F2025%2520Season%252FSummer%2520Season__All.json",
       "matchCount": 30,
       "sourceBreakdown": [
         {
@@ -10226,7 +10228,7 @@
         "event": "VCS/2026 Season/Summer Playoffs",
         "region": "All"
       },
-      "url": "/data/snapshots/All__VCS%2F2026%20Season%2FSummer%20Playoffs__All.json",
+      "url": "/data/snapshots/All__VCS%252F2026%2520Season%252FSummer%2520Playoffs__All.json",
       "matchCount": 1,
       "sourceBreakdown": [
         {
@@ -10244,7 +10246,7 @@
         "event": "WLDs 2025",
         "region": "All"
       },
-      "url": "/data/snapshots/All__WLDs%202025__All.json",
+      "url": "/data/snapshots/All__WLDs%25202025__All.json",
       "matchCount": 96,
       "sourceBreakdown": [
         {

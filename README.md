@@ -126,17 +126,17 @@ Leaguepedia rate-limits aggressively. The fetcher uses pagination and a delay, b
 }
 ```
 
-The cron endpoint recalculates the same static snapshot shape from public-source inputs. With `BLOB_READ_WRITE_TOKEN` configured, it writes the latest public-data JSON to Vercel Blob at `rankings/latest.json`. The default schedule is daily for Hobby-plan compatibility; use a more frequent expression on a plan that supports it.
+The cron endpoint recalculates the same static snapshot shape from public-source inputs. With `BLOB_READ_WRITE_TOKEN` configured, it writes the latest browser manifest to Vercel Blob at `rankings/latest-summary.json`, plus compact filter shards, player ratings, rating history, and the full audit artifact. The default schedule is daily for Hobby-plan compatibility; use a more frequent expression on a plan that supports it.
 
 Recommended Vercel environment variables:
 
 - `CRON_SECRET`: required bearer token for `/api/recalculate-rankings`.
-- `BLOB_READ_WRITE_TOKEN`: enables the cron function to publish `rankings/latest-summary.json`, compact filter shards, and the full audit artifact.
+- `BLOB_READ_WRITE_TOKEN`: enables the cron function to publish `rankings/latest-summary.json`, compact filter shards, player ratings, rating history, and the full audit artifact.
 - `ORACLES_ELIXIR_CSV_URL`: optional direct CSV URL for scheduled Oracle's Elixir import.
 - `LEAGUEPEDIA_MATCHES_JSON_URL`: optional JSON URL produced by `npm run fetch:leaguepedia`, used as match/event gap-fill for scheduled snapshots.
 - `VITE_RANKING_DATA_URL`: public Blob URL the browser should load in production.
 
-Deployed static files are immutable at runtime, so the scheduled function publishes to Blob rather than trying to modify files inside a deployment. The browser-facing Blob payload is the summary contract, not the full calculation artifact. If no public source produces rows, the cron returns a `no-data` result instead of publishing seeded sample data.
+Deployed static files are immutable at runtime, so the scheduled function publishes to Blob rather than trying to modify files inside a deployment. The browser-facing Blob payload is the summary contract, not the full calculation artifact; it includes the public URLs for its shard, player-rating, and team-history companions. If no public source produces rows, the cron returns a `no-data` result instead of publishing seeded sample data.
 
 ## Model
 

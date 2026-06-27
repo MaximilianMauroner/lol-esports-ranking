@@ -9,6 +9,7 @@ import {
   parsePublicRankingShard,
   parsePublicTeamHistory,
   snapshotKey,
+  snapshotShardUrlPathForKey,
   type SnapshotFilter,
   type SnapshotSourceBreakdown,
 } from '../src/lib/publicArtifacts/schema.ts'
@@ -90,7 +91,7 @@ test('public summary snapshot index is consistent with generated shards', async 
 
   for (const [key, entry] of Object.entries(snapshotIndex)) {
     assert.equal(key, snapshotKeyFromFilter(entry.filter), `snapshot index key does not match its filter: ${key}`)
-    assert.equal(entry.url, `/data/snapshots/${key}.json`, `snapshot index URL does not match its key: ${key}`)
+    assert.equal(entry.url, snapshotShardUrlPathForKey(key), `snapshot index URL does not match its key: ${key}`)
     assert.equal(urls.has(entry.url), false, `duplicate snapshot index URL: ${entry.url}`)
     urls.add(entry.url)
 
@@ -127,6 +128,8 @@ test('generated public artifacts share one model and generated-at provenance spi
   assert.ok(summary.generatedAt)
   assert.ok(summary.model?.version)
   assert.ok(summary.model?.configHash)
+  assert.equal(summary.playerDirectoryUrl, '/data/players.json')
+  assert.equal(summary.teamHistoryUrl, '/data/team-history.json')
   assert.equal(summary.walkForward?.metrics?.modelVersion, summary.model.version)
   assert.equal(summary.walkForward?.metrics?.modelConfigHash, summary.model.configHash)
   assert.equal(proof?.modelVersion, summary.model.version)
@@ -231,7 +234,7 @@ function snapshotKeyFromFilter(filter: SnapshotFilter) {
 
 function publicPathForDataUrl(url: string) {
   assert.equal(url.startsWith('/data/'), true, `snapshot URL must be rooted under /data: ${url}`)
-  return join('public', url.slice(1))
+  return join('public', ...url.slice(1).split('/').map((part) => decodeURIComponent(part)))
 }
 
 function sumSourceBreakdown(sourceBreakdown: SnapshotSourceBreakdown[] = []) {

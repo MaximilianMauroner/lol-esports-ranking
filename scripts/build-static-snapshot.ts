@@ -10,6 +10,8 @@ import {
   parsePublicRankingManifest,
   parsePublicRankingShard,
   parsePublicTeamHistory,
+  snapshotShardFileName,
+  snapshotShardUrlPathForKey,
 } from '../src/lib/publicArtifacts/schema'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 
@@ -82,7 +84,9 @@ await writeFile(output, `${JSON.stringify(snapshot, null, 2)}\n`)
 const summaryOutput = resolve(publicDataDir, 'ranking-summary.json')
 const snapshotDir = resolve(publicDataDir, 'snapshots')
 const summary = createStaticRankingSummaryData(snapshot, {
-  snapshotUrlForKey: (key) => `/data/snapshots/${key}.json`,
+  playerDirectoryUrl: '/data/players.json',
+  teamHistoryUrl: '/data/team-history.json',
+  snapshotUrlForKey: snapshotShardUrlPathForKey,
 })
 const summarySnapshots = Object.entries(summary.snapshots)
 const playerDirectory = createPlayerDirectory(snapshot)
@@ -101,7 +105,7 @@ const publicWrites = [
     validate: (value: unknown) => parsePublicTeamHistory(value),
   },
   ...summarySnapshots.map(([key, compactSnapshot]) => ({
-    path: resolve(snapshotDir, `${key}.json`),
+    path: resolve(snapshotDir, snapshotShardFileName(key)),
     contents: `${JSON.stringify(compactSnapshot)}\n`,
     validate: (value: unknown) => parsePublicRankingShard(value),
   })),
@@ -127,7 +131,7 @@ await mkdir(snapshotDir, { recursive: true })
 for (const write of publicWrites) {
   await atomicWriteFile(write.path, write.contents)
 }
-await removeStaleShardFiles(snapshotDir, new Set(summarySnapshots.map(([key]) => `${key}.json`)))
+await removeStaleShardFiles(snapshotDir, new Set(summarySnapshots.map(([key]) => snapshotShardFileName(key))))
 
 const publicDataBytes = await directorySize(publicDataDir)
 

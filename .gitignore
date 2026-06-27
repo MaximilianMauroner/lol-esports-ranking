@@ -19,7 +19,19 @@ data/raw/**
 !data/raw/
 !data/raw/manifest.json
 data/derived/**
+data/**/*.csv
+data/**/*.jsonl
+data/**/*.ndjson
+data/**/*.parquet
+data/**/*.sqlite
+data/**/*.db
 !data/README.md
+
+# Full ranking snapshots are generated artifacts and can exceed GitHub limits.
+# Keep compact public summaries/shards tracked, but never re-add the old monolith.
+public/data/ranking-snapshot.json
+public/data/ranking-snapshot.full.json
+public/data/*.full.json
 
 # Editor directories and files
 .vscode/*

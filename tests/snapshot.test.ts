@@ -210,6 +210,8 @@ test('scheduled public summaries omit standing histories and seed-source rows', 
   const { manifest } = createStaticRankingSummaryData(data)
   const publicArtifactManifest = createStaticRankingSummaryData(data, {
     fullSnapshotUrl: '/data/ranking-snapshot.full.json',
+    playerDirectoryUrl: '/data/players.json',
+    teamHistoryUrl: '/data/team-history.json',
   }).manifest
   const defaultSnapshot = manifest.snapshots[manifest.defaultSnapshotKey]
   const firstStanding = defaultSnapshot?.standings[0]
@@ -218,6 +220,8 @@ test('scheduled public summaries omit standing histories and seed-source rows', 
   assert.equal(manifest.artifactKind, 'public-ranking-manifest')
   assert.equal(Object.prototype.hasOwnProperty.call(manifest, 'fullSnapshotUrl'), false)
   assert.equal(publicArtifactManifest.fullSnapshotUrl, '/data/ranking-snapshot.full.json')
+  assert.equal(publicArtifactManifest.playerDirectoryUrl, '/data/players.json')
+  assert.equal(publicArtifactManifest.teamHistoryUrl, '/data/team-history.json')
   assert.ok(defaultSnapshot)
   assert.equal(defaultSnapshot.artifactKind, 'public-snapshot-shard')
   assert.ok(firstStanding)
