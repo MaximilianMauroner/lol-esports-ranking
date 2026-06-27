@@ -16,7 +16,7 @@ export type Side = 'blue' | 'red'
 export type LeagueTierName = 'tier-one' | 'tier-two' | 'tier-three' | 'emerging' | 'unknown'
 export type RosterBasis = 'sourced' | 'assumed-continuous' | 'unknown'
 export type RosterCompleteness = 'complete-five-role' | 'partial'
-export type EligibilityReason = 'low-current-volume' | 'stale' | 'high-uncertainty' | 'unanchored-league'
+export type EligibilityReason = 'low-total-volume' | 'low-current-volume' | 'stale' | 'high-uncertainty' | 'unanchored-league'
 export type WalkForwardSegmentKey =
   | 'bo1'
   | 'bo3-bo5'
@@ -48,6 +48,40 @@ export type PlayerImpactSignals = {
   recentFormZ?: number
   availability?: number
   roleCertainty?: number
+}
+
+export type PlayerAppearanceFlag =
+  | 'multi-team-career'
+  | 'thin-latest-team-sample'
+  | 'multi-role-career'
+  | 'thin-role-sample'
+  | 'unresolved-player-id'
+
+export type PlayerTeamAppearance = {
+  team: string
+  games: number
+  latestObservedAt?: string
+  latestObservedEvent?: string
+}
+
+export type PlayerRoleAppearance = {
+  role: Role
+  games: number
+}
+
+export type PlayerAppearanceSummary = {
+  primaryTeam: string
+  primaryTeamGames: number
+  primaryTeamShare: number
+  latestTeamGames: number
+  latestTeamShare: number
+  roleGames: number
+  roleShare: number
+  teamsPlayed: number
+  rolesPlayed: number
+  teamHistory: PlayerTeamAppearance[]
+  roleHistory: PlayerRoleAppearance[]
+  flags: PlayerAppearanceFlag[]
 }
 
 export type SourceTrace = {
@@ -280,6 +314,8 @@ export type PregamePrediction = {
 export type TeamEligibility = {
   eligible: boolean
   reasons: EligibilityReason[]
+  totalGames: number
+  minTotalGames: number
   currentWindowGames: number
   minCurrentWindowGames: number
   windowDays: number
@@ -346,6 +382,7 @@ export type PlayerStanding = {
     delta: number
   }[]
   source?: SourceTrace
+  appearance?: PlayerAppearanceSummary
 }
 
 export type EventSummary = {

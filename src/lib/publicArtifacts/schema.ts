@@ -1,6 +1,7 @@
 import type {
   FactorBreakdown,
   LeagueStrength,
+  PlayerAppearanceSummary,
   PlayerStanding,
   RatingComponents,
   RatingUpdateLedger,
@@ -8,6 +9,7 @@ import type {
   Role,
   RosterBasis,
   TeamEligibility,
+  TeamHistoryPoint,
 } from '../../types'
 import type { RegionStrength } from '../regionStrength'
 import type {
@@ -22,6 +24,15 @@ import type {
 import type { WalkForwardMetrics } from '../predictionModel'
 
 export type { SnapshotFilter, SnapshotSourceBreakdown } from '../snapshot'
+
+export type PublicRecentMatch = {
+  date: string
+  event: string
+  opponent: string
+  result: 'W' | 'L'
+  rating: number
+  delta: number
+}
 
 export type PublicTeamStanding = {
   team: string
@@ -51,6 +62,12 @@ export type PublicTeamStanding = {
   eligibility: TeamEligibility
   factors: FactorBreakdown
   recentEvents: string[]
+  recentMatches: PublicRecentMatch[]
+}
+
+type PublicTeamStandingInput = Omit<PublicTeamStanding, 'recentMatches'> & {
+  history?: TeamHistoryPoint[]
+  recentMatches?: PublicRecentMatch[]
 }
 
 export type PublicRankingShard = {
@@ -87,6 +104,7 @@ export type CompactPlayerRating = {
   sourceUrl?: string
   latestObservedAt?: string
   latestObservedEvent?: string
+  appearance?: PlayerAppearanceSummary
 }
 
 export type PlayerRatingProof = {
@@ -104,6 +122,8 @@ export type CompactPlayer = {
   name: string
   team: string
   teamCode?: string
+  teamGames?: number
+  teamShare?: number
   region?: Region
   league?: string
   role: Role
@@ -123,6 +143,7 @@ export type CompactPlayer = {
   sourceUrl?: string
   latestObservedAt?: string
   latestObservedEvent?: string
+  appearance?: PlayerAppearanceSummary
 }
 
 export type PublicPlayerDirectory = {
@@ -135,6 +156,7 @@ export type PublicPlayerDirectory = {
   ratedTeamCount: number
   roles: Role[]
   players: CompactPlayer[]
+  scopedPlayers?: Record<string, CompactPlayer[]>
 }
 
 export type PublicTeamHistoryPoint = [string, number, number]
@@ -159,11 +181,12 @@ export type PublicTeamHistoryDirectory = {
   teamCount: number
   pointCount: number
   series: Record<string, PublicTeamHistorySeries>
+  scopedSeries?: Record<string, Record<string, PublicTeamHistorySeries>>
 }
 
 export type PublicRankingManifest = {
   artifactKind: 'public-ranking-manifest'
-  schemaVersion: 12
+  schemaVersion: 14
   generatedAt: string
   source: string
   sources: DataSourceInfo[]
@@ -209,7 +232,7 @@ export function snapshotShardUrlPathForKey(key: string, basePath = '/data/snapsh
   return `${normalizedBase}/${encodeURIComponent(snapshotShardFileName(key))}`
 }
 
-export function compactStanding(standing: PublicTeamStanding & { history?: unknown }): PublicTeamStanding {
+export function compactStanding(standing: PublicTeamStandingInput): PublicTeamStanding {
   return {
     team: standing.team,
     code: standing.code,
@@ -238,13 +261,28 @@ export function compactStanding(standing: PublicTeamStanding & { history?: unkno
     eligibility: standing.eligibility,
     factors: standing.factors,
     recentEvents: standing.recentEvents,
+    recentMatches: standing.history ? compactRecentMatches(standing.history) : (standing.recentMatches ?? []),
   }
+}
+
+function compactRecentMatches(history: TeamHistoryPoint[] = []): PublicRecentMatch[] {
+  return history
+    .filter((point) => Boolean(point.date) && Boolean(point.event) && Boolean(point.opponent))
+    .slice(-5)
+    .map((point) => ({
+      date: point.date,
+      event: point.event,
+      opponent: point.opponent,
+      result: point.result,
+      rating: Math.round(point.rating),
+      delta: Math.round(point.delta),
+    }))
 }
 
 export function parsePublicRankingManifest(value: unknown): PublicRankingManifest {
   assertObject(value, 'ranking manifest')
   assertEqual(value.artifactKind, 'public-ranking-manifest', 'ranking manifest artifactKind')
-  assertEqual(value.schemaVersion, 12, 'ranking manifest schemaVersion')
+  assertEqual(value.schemaVersion, 14, 'ranking manifest schemaVersion')
   assertEqual(value.summaryMode, 'browser-summary', 'ranking manifest summaryMode')
   assertString(value.generatedAt, 'ranking manifest generatedAt')
   assertString(value.defaultSnapshotKey, 'ranking manifest defaultSnapshotKey')
@@ -275,6 +313,7 @@ export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirector
   assertString(value.modelVersion, 'player directory modelVersion')
   assertString(value.modelConfigHash, 'player directory modelConfigHash')
   assertArray(value.players, 'player directory players')
+  if ('scopedPlayers' in value) assertObject(value.scopedPlayers, 'player directory scopedPlayers')
   return value as PublicPlayerDirectory
 }
 

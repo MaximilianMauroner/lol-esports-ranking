@@ -1,24 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LoL Esports GPR Workbench">
-  <defs>
-    <linearGradient id="bg" x1="8" x2="56" y1="8" y2="56" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#172226"/>
-      <stop offset="1" stop-color="#0b1114"/>
-    </linearGradient>
-    <linearGradient id="lane" x1="14" x2="48" y1="50" y2="16" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#234f54"/>
-      <stop offset="1" stop-color="#66b8b8"/>
-    </linearGradient>
-    <linearGradient id="arrow" x1="35" x2="56" y1="28" y2="8" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#c68122"/>
-      <stop offset="1" stop-color="#f3c35c"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <path fill="none" stroke="#4b5f63" stroke-dasharray="18 8" stroke-linecap="round" stroke-width="3.5" d="M52.5 32A20.5 20.5 0 1 1 32 11.5"/>
-  <path fill="none" stroke="#dde5df" stroke-linecap="round" stroke-width="2.2" d="M32 9v8m0 30v8M9 32h8m30 0h8"/>
-  <path fill="url(#lane)" d="m11 51 17-17-6-1 21-18 4 4-18 21 1 6-10 10z"/>
-  <path fill="#f4f1e9" d="m17 55 20-20-6-1 19-16 3 3-16 19 1 6-11 11z"/>
-  <path fill="#0b1114" d="m24 52 10-10-1-5 5 1 10-10 4 4-12 13 1 7-7-1-7 7z" opacity=".7"/>
-  <path fill="url(#arrow)" d="m35 29 18-19-5 17z"/>
-  <path fill="none" stroke="#d79a2b" stroke-linecap="round" stroke-width="3" d="M19 20h.1m25 25h.1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LoL Esports Power Index">
+  <rect x="4" y="4" width="56" height="56" rx="7" fill="#0b1114" stroke="#344049" stroke-width="2"/>
+  <g transform="translate(14 14) scale(1.5)">
+    <path fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+    <path fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+    <path fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 22h16"/>
+    <path fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+    <path fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+    <path fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+  </g>
 </svg>

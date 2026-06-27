@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BarChart3, Globe2, RefreshCw, Trophy, UserRound, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, BarChart3, Globe2, RefreshCw, UserRound, Users } from 'lucide-react'
 import type {
   CompactPlayer,
   PublicPlayerDirectory as PlayerDirectory,
@@ -73,8 +73,8 @@ function App() {
   const [teamHistory, setTeamHistory] = useState<TeamHistoryDirectory | undefined>()
   const [mode, setMode] = useState<Mode>(readModeFromHash)
   const [scope, setScope] = useState(currentYearScope)
-  const [search, setSearch] = useState('')
   const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
+  const snapshotCacheRef = useRef(snapshotCache)
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [playerPicks, setPlayerPicks] = useState<CompactPlayer[]>([])
@@ -149,13 +149,21 @@ function App() {
   const filter = useMemo(() => scopeToFilter(effectiveScope), [effectiveScope])
   const snapshotState = useMemo(() => resolvePublicSnapshotState(data, filter, snapshotCache), [data, filter, snapshotCache])
   const snapshot = snapshotState.status === 'ready' ? snapshotState.snapshot : undefined
+  const activeTeamHistory = useMemo(() => teamHistoryForScope(teamHistory, filter), [teamHistory, filter])
+
+  useEffect(() => {
+    snapshotCacheRef.current = snapshotCache
+  }, [snapshotCache])
 
   useEffect(() => {
     if (!data) return
     const manifest = data
     const key = publicSnapshotKey(filter)
-    if (manifest.snapshots?.[key] || key === manifest.defaultSnapshotKey) return
-    if (snapshotCache[key]?.status === 'ready' || snapshotCache[key]?.status === 'loading') return
+    const cacheEntry = snapshotCacheRef.current[key]
+    if (cacheEntry?.status === 'ready' || cacheEntry?.status === 'loading') return
+    const embeddedSnapshot = manifest.snapshots?.[key]
+    const embeddedHasRecentMatches = embeddedSnapshot?.standings.some((standing) => standing.recentMatches.length > 0) ?? false
+    if (embeddedSnapshot && embeddedHasRecentMatches) return
     const expected = manifest.snapshotIndex?.[key]
     if (!expected) {
       setSnapshotCache((current) => ({
@@ -184,13 +192,30 @@ function App() {
     }
     void load()
     return () => controller.abort()
-  }, [data, effectiveScope, filter, snapshotCache])
+  }, [data, effectiveScope, filter])
 
   const standings = useMemo(() => snapshot?.standings ?? [], [snapshot])
   const regions = useMemo(() => snapshot?.regions ?? [], [snapshot])
 
   const regionPickIds = useMemo(() => new Set(regionPicks.map(regionKey)), [regionPicks])
   const playerPickIds = useMemo(() => new Set(playerPicks.map((player) => player.id)), [playerPicks])
+  const activePlayers = useMemo(() => playersForScope(players, filter), [players, filter])
+  const activePlayerRoles = useMemo(
+    () => players?.roles.filter((role) => activePlayers.some((player) => player.role === role)) ?? [],
+    [activePlayers, players],
+  )
+
+  useEffect(() => {
+    setRegionPicks((current) => reconcilePicks(current, regions, regionKey))
+  }, [regions])
+
+  useEffect(() => {
+    setTeamPicks((current) => reconcilePicks(current, standings, teamKey))
+  }, [standings])
+
+  useEffect(() => {
+    setPlayerPicks((current) => reconcilePicks(current, activePlayers, (player) => player.id))
+  }, [activePlayers])
 
   function toggleRegion(region: RegionStrength) {
     const key = regionKey(region)
@@ -236,7 +261,6 @@ function App() {
   const seeded = readyData.dataMode === 'seeded-sample' || readyData.coverage?.seededSample === true
   const status = seeded ? 'sample' : readyData.dataMode === 'no-data' ? 'empty' : 'public'
   const matchCount = snapshot?.matchCount ?? readyData.coverage?.matchCount
-  const showSearch = mode !== 'regions'
   const trayPicks = mode === 'regions' ? regionPicks.length : mode === 'teams' ? teamPicks.length : mode === 'players' ? playerPicks.length : 0
   const trayLabel = mode === 'regions' ? 'Region compare' : mode === 'teams' ? 'Team compare' : 'Player compare'
   const teamColumns = teamCompareColumns(teamPicks)
@@ -251,7 +275,7 @@ function App() {
       <nav className="rail" aria-label="Primary">
         <div className="rail__brand">
           <span className="rail__mark">
-            <Trophy size={18} aria-hidden="true" />
+            <img src="/logo.svg" alt="" aria-hidden="true" />
           </span>
           <div>
             <b>Power Index</b>
@@ -267,10 +291,7 @@ function App() {
                 key={entry.id}
                 type="button"
                 className={`rail__mode${mode === entry.id ? ' is-active' : ''}`}
-                onClick={() => {
-                  setMode(entry.id)
-                  setSearch('')
-                }}
+                onClick={() => setMode(entry.id)}
                 aria-current={mode === entry.id ? 'page' : undefined}
               >
                 <Icon size={18} aria-hidden="true" />
@@ -308,40 +329,6 @@ function App() {
             <h1>{MODE_TITLES[mode].title}</h1>
             <p>{scopeLabel(effectiveScope)} · {provenance.source}</p>
           </div>
-          <div className="filters">
-            {showSearch ? (
-              <label className="search">
-                <BarChart3 size={16} aria-hidden="true" />
-                <span className="sr-only">Search</span>
-                <input
-                  type="search"
-                  value={search}
-                  placeholder={mode === 'teams' ? 'Search team, code, region' : 'Search player, team, region'}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </label>
-            ) : null}
-            <label className="field">
-              <span>Scope</span>
-              <select value={effectiveScope} onChange={(event) => setScope(event.target.value)}>
-                <option value="all">All matches</option>
-                <optgroup label="Season">
-                  {(readyData.filterOptions?.seasons ?? []).filter((value) => value !== 'All').map((value) => (
-                    <option key={`season:${value}`} value={`season:${value}`}>
-                      {value}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Event">
-                  {(readyData.filterOptions?.events ?? []).filter((value) => value !== 'All').map((value) => (
-                    <option key={`event:${value}`} value={`event:${value}`}>
-                      {value}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            </label>
-          </div>
         </header>
 
         <div className="season-tabs" role="group" aria-label="Year-over-year data split">
@@ -377,9 +364,10 @@ function App() {
                 standings={standings}
                 regions={regions}
                 model={readyData.model}
-                search={search}
+                players={activePlayers}
+                search=""
                 pickedTeams={teamPicks}
-                history={teamHistory?.series}
+                history={activeTeamHistory?.series}
                 updatedAt={formatDate(readyData.generatedAt)}
                 dataSummary={{
                   source: readyData.source,
@@ -396,9 +384,9 @@ function App() {
             ) : null}
             {mode === 'players' ? (
               <PlayersView
-                players={players?.players ?? []}
-                roles={players?.roles ?? []}
-                search={search}
+                players={activePlayers}
+                roles={activePlayerRoles}
+                search=""
                 pickedIds={playerPickIds}
                 onToggle={togglePlayer}
               />
@@ -468,7 +456,7 @@ function App() {
         entities={regionPicks}
         columns={regionColumns}
         rows={REGION_COMPARE_ROWS}
-        after={<RegionCompareAnalysis regions={regionPicks} columns={regionColumns} standings={standings} history={teamHistory} />}
+        after={<RegionCompareAnalysis regions={regionPicks} columns={regionColumns} standings={standings} history={activeTeamHistory} />}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
       />
@@ -478,7 +466,7 @@ function App() {
         entities={teamPicks}
         columns={teamColumns}
         rows={TEAM_COMPARE_ROWS}
-        after={<TeamCompareAnalysis teams={teamPicks} columns={teamColumns} history={teamHistory} />}
+        after={<TeamCompareAnalysis teams={teamPicks} columns={teamColumns} history={activeTeamHistory} />}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
       />
@@ -527,7 +515,7 @@ function scopeToFilter(scope: string): SnapshotFilter {
 }
 
 function scopeLabel(scope: string) {
-  if (scope.startsWith('season:')) return `Season ${scope.slice(7)}`
+  if (scope.startsWith('season:')) return `${scope.slice(7)} source season`
   if (scope.startsWith('event:')) return scope.slice(6)
   return 'All seasons & events'
 }
@@ -538,6 +526,43 @@ function resolveArtifactUrl(url: string, baseUrl: string) {
     ? baseUrl
     : new URL(baseUrl, window.location.origin).toString()
   return new URL(url, resolvedBase).toString()
+}
+
+function teamHistoryForScope(history: TeamHistoryDirectory | undefined, filter: SnapshotFilter) {
+  if (!history) return undefined
+  const scopedSeries = history.scopedSeries?.[publicSnapshotKey(filter)]
+  if (!scopedSeries && filter.season === 'All' && filter.event === 'All' && filter.region === 'All') return history
+  if (!scopedSeries) {
+    return {
+      ...history,
+      teamCount: 0,
+      pointCount: 0,
+      series: {},
+    }
+  }
+  return {
+    ...history,
+    teamCount: Object.keys(scopedSeries).length,
+    pointCount: Object.values(scopedSeries).reduce((total, series) => total + series.points.length, 0),
+    series: scopedSeries,
+  }
+}
+
+function playersForScope(directory: PlayerDirectory | undefined, filter: SnapshotFilter) {
+  if (!directory) return []
+  if (filter.season === 'All' && filter.event === 'All' && filter.region === 'All') return directory.players
+  if (filter.season !== 'All' && filter.event === 'All' && filter.region === 'All') return directory.scopedPlayers?.[publicSnapshotKey(filter)] ?? []
+  return []
+}
+
+function reconcilePicks<T>(current: T[], available: T[], keyFor: (item: T) => string) {
+  if (current.length === 0) return current
+  const availableByKey = new Map(available.map((item) => [keyFor(item), item]))
+  const next = current
+    .map((item) => availableByKey.get(keyFor(item)))
+    .filter((item): item is T => Boolean(item))
+  if (next.length === current.length && next.every((item, index) => item === current[index])) return current
+  return next
 }
 
 function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string }) {

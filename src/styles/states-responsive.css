@@ -94,6 +94,9 @@
 /* ---------------- Responsive ---------------- */
 
 @media (max-width: 1180px) {
+  .rail__foot div {
+    display: none;
+  }
   .gpr-layout {
     grid-template-columns: 1fr;
   }
@@ -104,6 +107,16 @@
   .team-dossier__grid {
     grid-template-columns: 1fr;
   }
+  .team-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .team-detail-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .team-detail-hero__facts {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
   .region-row {
     grid-template-columns: 44px minmax(120px, 1.3fr) minmax(120px, 1fr) minmax(150px, 1.4fr) auto;
   }
@@ -112,48 +125,45 @@
   }
 }
 
-@media (max-width: 900px) {
-  :root {
-    --rail-w: 0px;
-  }
-  .app {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 1040px) {
   .rail {
-    position: fixed;
-    bottom: 0;
-    top: auto;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 10px;
-    border-right: 0;
-    border-top: 1px solid var(--line-strong);
+    gap: 14px;
   }
-  .rail__brand,
-  .rail__label,
-  .rail__foot,
+  .rail__brand {
+    min-width: auto;
+  }
+  .rail__brand div > span,
   .rail__mode small {
     display: none;
   }
+}
+
+@media (max-width: 900px) {
+  .rail {
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px 12px;
+    padding: 8px 12px 10px;
+  }
+  .rail__brand {
+    min-height: 36px;
+    margin-right: auto;
+  }
+  .rail__foot {
+    display: none;
+  }
   .rail__nav {
-    flex-direction: row;
-    flex: 1;
-    min-width: 0;
-    justify-content: space-around;
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
   }
   .rail__mode {
-    flex-direction: column;
-    gap: 3px;
-    flex: 1;
+    min-height: 40px;
     min-width: 0;
     justify-content: center;
     text-align: center;
-    padding: 7px 4px;
+    padding: 7px 6px;
   }
   .rail__mode b {
     max-width: 100%;
@@ -162,17 +172,7 @@
     white-space: nowrap;
   }
   .main {
-    padding-bottom: calc(var(--tray-h) + 76px);
-  }
-  .topbar {
-    align-items: stretch;
-  }
-  .filters {
-    width: 100%;
-  }
-  .search,
-  .filters .field {
-    flex: 1 1 180px;
+    padding-bottom: calc(var(--tray-h) + 24px);
   }
   .field select {
     width: 100%;
@@ -180,7 +180,7 @@
   }
   .tray {
     left: 0;
-    bottom: 60px;
+    bottom: 0;
   }
   .region-row {
     grid-template-columns: 40px minmax(0, 1fr) auto;
@@ -199,6 +199,26 @@
   }
   .team-dossier__identity h2 {
     font-size: 1.35rem;
+  }
+  .modal {
+    align-items: stretch;
+    padding: 12px;
+  }
+  .modal__panel {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+  }
+  .modal__body {
+    padding: 14px;
+  }
+  .team-detail-hero {
+    padding: 16px;
+  }
+  .trend-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trend-card__plot .chart svg {
+    min-height: 250px;
   }
   .team-dossier__grid {
     gap: 14px;
@@ -247,6 +267,21 @@
   .drawer {
     grid-template-columns: 0 1fr;
   }
+  .region-detail__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .region-detail__stat:nth-child(3n) {
+    border-right: 1px solid var(--line);
+  }
+  .region-detail__stat:nth-last-child(-n + 3) {
+    border-bottom: 1px solid var(--line);
+  }
+  .region-detail__stat:nth-child(even) {
+    border-right: 0;
+  }
+  .region-detail__stat:nth-last-child(-n + 1) {
+    border-bottom: 0;
+  }
   .gpr-sidebar {
     grid-template-columns: 1fr;
   }
@@ -266,6 +301,18 @@
   .panel__head .spacer {
     margin-left: 0;
   }
+  .matchup__stage {
+    grid-template-columns: 1fr;
+  }
+  .matchup__versus {
+    min-height: 34px;
+  }
+  .matchup-team.is-away {
+    text-align: left;
+  }
+  .matchup-team.is-away .matchup-team__identity {
+    flex-direction: row;
+  }
   .profile-row {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -276,12 +323,7 @@
   .topbar__title {
     flex-basis: 100%;
   }
-  .filters {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-  .search,
-  .filters .field {
+  .search {
     width: 100%;
     min-width: 0;
   }
@@ -294,11 +336,134 @@
     grid-template-columns: 1fr;
     width: 100%;
   }
+  .trajectory-panel__controls {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+  .trajectory-panel__controls .count {
+    text-align: left;
+  }
+  .matchup__picks {
+    grid-template-columns: 1fr;
+  }
+  .matchup__swap {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+  .matchup-team {
+    grid-template-columns: 1fr;
+  }
+  .matchup-team__probability {
+    justify-self: start;
+  }
+  .matchup-team__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .matchup__facts {
+    grid-template-columns: 1fr;
+  }
+  .modal {
+    padding: 8px;
+  }
+  .modal__panel {
+    max-height: calc(100vh - 16px);
+  }
+  .modal__head {
+    padding: 14px;
+  }
+  .modal__head h2 {
+    font-size: 1.08rem;
+  }
+  .team-detail-hero {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .team-detail-hero .team-dossier__league {
+    justify-self: start;
+  }
+  .team-detail-hero__rank {
+    font-size: 2rem;
+  }
+  .team-detail-hero__score strong {
+    font-size: 1.32rem;
+  }
+  .team-detail-hero__facts {
+    grid-template-columns: 1fr;
+  }
+  .recent-matches__head {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+  .recent-matches__head .formdots {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: -6px;
+    padding-bottom: 12px;
+  }
+  .recent-match-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .recent-match-row__rating {
+    grid-column: 2;
+    justify-self: start;
+    display: flex;
+    gap: 8px;
+    text-align: left;
+  }
+  .trend-card__head {
+    align-items: flex-start;
+    padding: 18px 18px 14px;
+  }
+  .trend-summary {
+    grid-template-columns: 1fr;
+  }
+  .trend-summary span {
+    padding: 12px 16px;
+  }
+  .trend-card__plot {
+    padding: 14px;
+  }
+  .trend-card__plot .chart {
+    padding: 14px 10px 10px;
+  }
+  .trend-card__plot .chart svg {
+    min-height: 220px;
+  }
   .gpr-toolbar .count {
     justify-self: start;
   }
   .drawer__after {
     padding: 14px;
+  }
+  .region-detail__body {
+    padding: 14px;
+  }
+  .region-detail__hero {
+    display: grid;
+    align-items: start;
+  }
+  .region-detail__hero h3,
+  .region-detail__hero > strong {
+    font-size: 1.65rem;
+  }
+  .region-detail__hero > strong {
+    justify-items: start;
+  }
+  .region-detail__stats {
+    grid-template-columns: 1fr;
+  }
+  .region-detail__stat,
+  .region-detail__stat:nth-child(3n),
+  .region-detail__stat:nth-child(even) {
+    border-right: 0;
+  }
+  .region-detail__stat:nth-last-child(-n + 3) {
+    border-bottom: 1px solid var(--line);
+  }
+  .region-detail__stat:last-child {
+    border-bottom: 0;
+  }
+  .region-detail__team {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
   }
   .compare-chart {
     min-height: 0;

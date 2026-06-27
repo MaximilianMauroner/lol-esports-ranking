@@ -94,7 +94,7 @@ export function buildRankingModel(
   predictions: PregamePrediction[]
 } {
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date))
-  const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sortedMatches)
+  const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sortedMatches, { teams })
   const teamRosterBasis = rosterBasisByTeam(sortedMatches)
   const ratings = new Map<string, number>()
   const executionRatings = new Map<string, number>()
@@ -568,6 +568,7 @@ export function buildRankingModel(
           uncertainty: Math.round(uncertainties.get(team) ?? maximumUncertainty),
           leagueTier: leagueTier.tier,
           leagueInternationalMatches: leagueMatchCounts.get(profile.league) ?? 0,
+          isDevelopmentalTeam: isDevelopmentalTeamName(team),
         }),
         factors,
         history,
@@ -772,6 +773,10 @@ function confidenceFor(history: TeamHistoryPoint[], rating: number, spread: numb
   const recent = history.slice(-5).length / 5
   const separation = clamp(spread / Math.max(Math.abs(rating - 1500), 80), 0, 1)
   return Math.round((0.45 * volume + 0.35 * recent + 0.2 * separation) * 100)
+}
+
+export function isDevelopmentalTeamName(team: string) {
+  return /\b(?:academy|challengers?|youth)\b/i.test(team)
 }
 
 function standingsSpread(ratings: Map<string, number>) {

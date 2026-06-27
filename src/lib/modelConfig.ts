@@ -28,7 +28,8 @@ export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'state-gap-regression'
 export const ratingUpdateRecencyWeight = 1
 export const leagueExpectedScoreSource = 'pregame-team-power-with-side-context'
-export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-v9'
+export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-v10'
+export const snapshotSeasonScopePolicy = 'source-season-ranking-profile-with-prior-baseline'
 export const validationBaselinePolicy = ['coin-flip', 'pregame-win-rate', 'team-only'] as const
 export const rosterBasisSource = 'latest-observed-oracle-game-roster'
 export const rosterContinuityFloor = 0.55
@@ -71,7 +72,7 @@ export const playerRatingPredictionPolicy = {
 } as const satisfies PredictionFeaturePolicy
 export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingPredictionPolicy)
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)
-export const transparentGprModelVersion = 'transparent-gpr-v0.25.0'
+export const transparentGprModelVersion = 'transparent-gpr-v0.34.0'
 export const transparentGprModelParameters = {
   initialTeamRating,
   initialLeagueRating,
@@ -94,6 +95,7 @@ export const transparentGprModelParameters = {
   ratingUpdateRecencyWeight,
   leagueExpectedScoreSource,
   sourcePipelineVersion,
+  snapshotSeasonScopePolicy,
   validationBaselinePolicy,
   rosterBasisSource,
   rosterContinuityFloor,

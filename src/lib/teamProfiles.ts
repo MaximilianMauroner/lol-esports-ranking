@@ -15,11 +15,11 @@ export function mergeTeamProfiles(profileSources: Record<string, TeamProfile>[])
     for (const [rawTeamName, profile] of Object.entries(source)) {
       const teamName = canonicalTeamNameFor(rawTeamName)
       const identity = teamIdentityFor(teamName)
-      if (identity) {
+      if (identity && !isUsefulProfile(profile)) {
         merged[teamName] = identity
         continue
       }
-      merged[teamName] = preferProfile(merged[teamName], { ...profile, name: teamName })
+      merged[teamName] = preferProfile(merged[teamName], { ...profile, name: teamName, code: identity?.code ?? profile.code })
     }
   }
   return merged
@@ -39,20 +39,20 @@ export function deriveTeamProfilesFromMatches(
 
   const profiles: Record<string, TeamProfile> = {}
   for (const teamName of teamNames) {
-    const identity = teamIdentityFor(teamName)
-    if (identity) {
-      profiles[teamName] = identity
-      continue
-    }
-
     const observed = bestObservedLeague(observations.get(teamName))
     if (observed) {
       profiles[teamName] = {
         name: teamName,
-        code: fallbackProfiles[teamName]?.code ?? teamCodeFor(teamName),
+        code: teamIdentityFor(teamName)?.code ?? fallbackProfiles[teamName]?.code ?? teamCodeFor(teamName),
         region: observed.region,
         league: observed.league,
       }
+      continue
+    }
+
+    const identity = teamIdentityFor(teamName)
+    if (identity) {
+      profiles[teamName] = identity
       continue
     }
 
@@ -111,6 +111,10 @@ function preferProfile(current: TeamProfile | undefined, candidate: TeamProfile)
   return profileScore(candidate) > profileScore(current) ? candidate : current
 }
 
+function isUsefulProfile(profile: TeamProfile) {
+  return profile.league !== 'Unknown' && profile.region !== 'International' && !isCompetitionOnlyLeague(profile.league)
+}
+
 function profileScore(profile: TeamProfile) {
   if (profile.league === 'Unknown' || profile.region === 'International' || isCompetitionOnlyLeague(profile.league)) return 0
   return leagueProfileScore(profile.league)
@@ -125,7 +129,7 @@ function leagueProfileScore(league: string) {
   return 1
 }
 
-function isCompetitionOnlyLeague(league: string) {
+export function isCompetitionOnlyLeague(league: string) {
   const normalized = league.trim().toUpperCase()
   return normalized === 'MSI'
     || normalized === 'WORLDS'
@@ -149,6 +153,6 @@ function isCompetitionOnlyLeague(league: string) {
     || normalized.includes('ASIA MASTERS')
 }
 
-function isUnknownLeague(league: string) {
+export function isUnknownLeague(league: string) {
   return league.trim().toUpperCase() === 'UNKNOWN'
 }

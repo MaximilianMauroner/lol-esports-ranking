@@ -79,6 +79,13 @@ export const PLAYER_COMPARE_ROWS: CompareRow<CompactPlayer>[] = [
   { key: 'role', label: 'Role', cell: (p) => p.role },
   { key: 'team', label: 'Team', cell: (p) => `${p.team}${p.region ? ` (${p.region})` : ''}` },
   { key: 'games', label: 'Games', cell: (p) => formatNumber(p.games), score: (p) => p.games, better: 'high' },
+  {
+    key: 'teamGames',
+    label: 'Shown-team games',
+    cell: (p) => formatAppearanceGames(p),
+    score: (p) => p.teamGames ?? p.appearance?.latestTeamGames ?? p.games,
+    better: 'high',
+  },
   { key: 'impact', label: 'Impact multiplier', cell: (p) => `×${formatDecimal(p.impactMultiplier)}`, score: (p) => p.impactMultiplier, better: 'high' },
   { key: 'availability', label: 'Availability', cell: (p) => formatRatio(p.availability), score: (p) => p.availability, better: 'high' },
   { key: 'certainty', label: 'Role certainty', cell: (p) => formatRatio(p.roleCertainty), score: (p) => p.roleCertainty, better: 'high' },
@@ -113,6 +120,7 @@ export const TEAM_PROFILE_METRICS: CompareProfileMetric<RankingSummaryStanding>[
 export const PLAYER_PROFILE_METRICS: CompareProfileMetric<CompactPlayer>[] = [
   { key: 'rating', label: 'Rating', value: (p) => p.rating, format: formatRating },
   { key: 'games', label: 'Games', value: (p) => p.games, format: formatNumber },
+  { key: 'teamGames', label: 'Shown-team games', value: (p) => p.teamGames ?? p.appearance?.latestTeamGames, format: formatNumber },
   { key: 'impact', label: 'Impact', value: (p) => p.impactMultiplier, format: (value) => `×${formatDecimal(value)}` },
   { key: 'availability', label: 'Availability', value: (p) => p.availability, format: formatRatio },
   { key: 'certainty', label: 'Role certainty', value: (p) => p.roleCertainty, format: formatRatio },
@@ -144,6 +152,12 @@ function formatSignedDecimal(value?: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
   if (Math.abs(value) < 0.05) return '0'
   return value > 0 ? `+${formatDecimal(value)}` : formatDecimal(value)
+}
+
+function formatAppearanceGames(player: CompactPlayer) {
+  const teamGames = player.teamGames ?? player.appearance?.latestTeamGames
+  if (typeof teamGames !== 'number') return formatNumber(player.games)
+  return `${formatNumber(teamGames)} / ${formatNumber(player.games)}`
 }
 
 function formatTier(value?: string) {

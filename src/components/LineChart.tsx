@@ -21,13 +21,21 @@ export function LineChart({
   height = 300,
   yLabel = 'Rating',
   yFormat = (value: number) => String(Math.round(value)),
+  yTickFormat,
   yDomain,
+  yTicks: providedYTicks,
+  yReverse = false,
+  curve = 'linear',
 }: {
   series: ChartSeries[]
   height?: number
   yLabel?: string
   yFormat?: (value: number) => string
+  yTickFormat?: (value: number) => string
   yDomain?: { min: number; max: number }
+  yTicks?: number[]
+  yReverse?: boolean
+  curve?: 'linear' | 'step'
 }) {
   const gradientId = useId()
   const svgRef = useRef<SVGSVGElement>(null)
@@ -43,10 +51,15 @@ export function LineChart({
   const plotW = W - PAD.left - PAD.right
   const plotH = height - PAD.top - PAD.bottom
   const xOf = (t: number) => PAD.left + ((t - minT) / (maxT - minT || 1)) * plotW
-  const yOf = (y: number) => PAD.top + (1 - (y - minY) / (maxY - minY || 1)) * plotH
+  const yOf = (y: number) => {
+    const ratio = (y - minY) / (maxY - minY || 1)
+    return PAD.top + (yReverse ? ratio : 1 - ratio) * plotH
+  }
 
-  const yTicks = niceTicks(minY, maxY, 4)
+  const yTicks = providedYTicks ?? niceTicks(minY, maxY, 4)
+  const formatYTick = yTickFormat ?? yFormat
   const xTicks = timeTicks(minT, maxT, 5)
+  const pathFor = curve === 'step' ? stepPath : linePath
 
   function onMove(event: React.PointerEvent<SVGSVGElement>) {
     const svg = svgRef.current
@@ -89,7 +102,7 @@ export function LineChart({
           <g key={`y-${tick}`}>
             <line className="chart__grid" x1={PAD.left} x2={W - PAD.right} y1={yOf(tick)} y2={yOf(tick)} />
             <text className="chart__axis" x={PAD.left - 8} y={yOf(tick)} textAnchor="end" dominantBaseline="middle">
-              {yFormat(tick)}
+              {formatYTick(tick)}
             </text>
           </g>
         ))}
@@ -102,14 +115,14 @@ export function LineChart({
 
         {series.length === 1 ? (
           <path
-            d={`${linePath(series[0].points, xOf, yOf)} L ${xOf(series[0].points.at(-1)!.t)} ${yOf(minY)} L ${xOf(series[0].points[0].t)} ${yOf(minY)} Z`}
+            d={`${pathFor(series[0].points, xOf, yOf)} L ${xOf(series[0].points.at(-1)!.t)} ${yOf(yReverse ? maxY : minY)} L ${xOf(series[0].points[0].t)} ${yOf(yReverse ? maxY : minY)} Z`}
             fill={`url(#${gradientId})`}
             stroke="none"
           />
         ) : null}
 
         {series.map((s) => (
-          <path key={s.id} className="chart__line" d={linePath(s.points, xOf, yOf)} stroke={s.color} fill="none" />
+          <path key={s.id} className="chart__line" d={pathFor(s.points, xOf, yOf)} stroke={s.color} fill="none" />
         ))}
 
         {series.length <= 2 ? series.flatMap((s) => (
@@ -158,7 +171,7 @@ export function LineChart({
           <b>{fullDate.format(new Date(hover.t))}</b>
           {readout
             .slice()
-            .sort((a, b) => b.point.y - a.point.y)
+            .sort((a, b) => yReverse ? a.point.y - b.point.y : b.point.y - a.point.y)
             .map((entry) => (
               <span key={entry.series.id}>
                 <i style={{ background: entry.series.color }} />
@@ -195,6 +208,19 @@ function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: numb
 
 function linePath(points: { t: number; y: number }[], xOf: (t: number) => number, yOf: (y: number) => number) {
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xOf(point.t).toFixed(1)} ${yOf(point.y).toFixed(1)}`).join(' ')
+}
+
+function stepPath(points: { t: number; y: number }[], xOf: (t: number) => number, yOf: (y: number) => number) {
+  if (points.length === 0) return ''
+  const [first, ...rest] = points
+  const commands = [`M ${xOf(first.t).toFixed(1)} ${yOf(first.y).toFixed(1)}`]
+  let previous = first
+  for (const point of rest) {
+    commands.push(`L ${xOf(point.t).toFixed(1)} ${yOf(previous.y).toFixed(1)}`)
+    commands.push(`L ${xOf(point.t).toFixed(1)} ${yOf(point.y).toFixed(1)}`)
+    previous = point
+  }
+  return commands.join(' ')
 }
 
 function nearestPoint(points: { t: number; y: number }[], t: number) {

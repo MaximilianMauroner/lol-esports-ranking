@@ -21,6 +21,7 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
   T1: { name: 'T1', code: 'T1', region: 'LCK', league: 'LCK' },
   'Team Liquid': { name: 'Team Liquid', code: 'TL', region: 'LCS', league: 'LCS' },
   'Team Secret': { name: 'Team Secret', code: 'TS', region: 'LCP', league: 'LCP' },
+  'Team Secret Whales': { name: 'Team Secret Whales', code: 'TSW', region: 'LCP', league: 'LCP' },
   'Top Esports': { name: 'Top Esports', code: 'TES', region: 'LPL', league: 'LPL' },
   'Weibo Gaming': { name: 'Weibo Gaming', code: 'WBG', region: 'LPL', league: 'LPL' },
 }
@@ -40,7 +41,6 @@ const exactTeamAliases: Record<string, string> = {
   'OKSavingsBank BRION': 'HANJIN BRION',
   'Rogue (European Team)': 'Rogue',
   'Team Secret (Vietnamese Team)': 'Team Secret',
-  'Team Secret Whales': 'Team Secret',
   'ZEN Esports (Vietnamese Team)': 'ZEN Esports',
 }
 

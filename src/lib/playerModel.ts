@@ -1,14 +1,43 @@
 import { eventTierConfig } from '../data/rankingConfig'
-import type { MatchRecord, PlayerProfile, PlayerStanding, Role, RosterPlayerAppearance, SourceTrace } from '../types'
+import { cappedLeagueRatingForTier, leaguePriorFor, leagueTierFor } from '../data/leagueTiers'
+import type {
+  LeagueStrength,
+  LeagueTierName,
+  MatchRecord,
+  PlayerAppearanceFlag,
+  PlayerAppearanceSummary,
+  PlayerProfile,
+  PlayerStanding,
+  Role,
+  RosterPlayerAppearance,
+  SourceTrace,
+  TeamProfile,
+} from '../types'
 import { executionIndexFromStats } from './executionResidual'
+import { homeLeagueForMatch } from './matchContext'
 
 const initialPlayerRating = 100
 const sourcedPlayerKFactor = 8
 const playerRatingScale = 80
+const playerLeagueAnchorRating = 1500
+const playerLeagueBaselineCoefficient = 0.2
+const playerLeagueBaselineBounds = {
+  min: 50,
+  max: 110,
+} as const
+const playerLeagueSignalMultiplierByTier: Record<LeagueTierName, number> = {
+  'tier-one': 1,
+  'tier-two': 0.9,
+  'tier-three': 0.65,
+  emerging: 0.35,
+  unknown: 0.25,
+} as const
 const playerPregameEdgeCoefficient = 2.5
 const playerPregameEdgeCap = 40
 const playerPregameMinCoverage = 0.6
 const playerPregameMinGames = 1
+const minimumRankedSourcedPlayerGames = 20
+const thinAppearanceSampleGames = 5
 export const baseRoleShares: Record<Role, number> = {
   Top: 0.18,
   Jungle: 0.22,
@@ -44,10 +73,15 @@ export const playerModelParameters = {
   initialPlayerRating,
   sourcedPlayerKFactor,
   playerRatingScale,
+  playerLeagueAnchorRating,
+  playerLeagueBaselineCoefficient,
+  playerLeagueBaselineBounds,
+  playerLeagueSignalMultiplierByTier,
   playerPregameEdgeCoefficient,
   playerPregameEdgeCap,
   playerPregameMinCoverage,
   playerPregameMinGames,
+  minimumRankedSourcedPlayerGames,
   baseRoleShares,
   playerImpactWeights,
   playerImpactMultiplierBounds,
@@ -62,12 +96,18 @@ export type PregamePlayerRatingEdge = {
   teamBCoverage: number
 }
 
+type PlayerRatingContext = {
+  teams?: Record<string, TeamProfile>
+  leagueStrengths?: LeagueStrength[]
+}
+
 export function buildPlayerModel(
   matches: MatchRecord[],
   rosters: Record<string, PlayerProfile[]>,
+  context: PlayerRatingContext = {},
 ): PlayerStanding[] {
   if (hasObservedPlayerStats(matches)) {
-    return buildSourcedPlayerModel(matches)
+    return buildSourcedPlayerModel(matches, context)
   }
 
   return buildStaticRosterPlayerModel(matches, rosters)
@@ -168,18 +208,19 @@ function buildStaticRosterPlayerModel(
     .map((player, index) => ({ ...player, rank: index + 1 }))
 }
 
-function buildSourcedPlayerModel(matches: MatchRecord[]): PlayerStanding[] {
+function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingContext): PlayerStanding[] {
   const state = createSourcedPlayerState(true)
   const histories = state.histories ?? new Map<string, PlayerStanding['history']>()
   const finalShares = new Map<string, PlayerShare>()
   const latestRosterByTeam = new Map<string, PlayerProfile[]>()
+  const leagueRatings = leagueRatingsFor(context.leagueStrengths)
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
 
   for (const dateMatches of matchesByDate(sortedMatches)) {
     for (const match of dateMatches) {
-      registerSourcedRosters(match, state, latestRosterByTeam)
+      registerSourcedRosters(match, state, context, leagueRatings)
     }
-    applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings))
+    applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings), context, leagueRatings, latestRosterByTeam)
   }
 
   for (const roster of latestRosterByTeam.values()) {
@@ -195,6 +236,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[]): PlayerStanding[] {
       if (!profile) return null
       const history = histories.get(id) ?? []
       const playerShare = finalShares.get(id) ?? fallbackPlayerShare(profile)
+      const league = leagueForProfile(profile, context)
       return {
         id,
         name: profile.name,
@@ -202,7 +244,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[]): PlayerStanding[] {
         role: profile.role,
         games: history.length,
         ratingBasis: 'sourced-player-stats' as const,
-        rating: Number(rating.toFixed(1)),
+        rating: publishedPlayerRating(rating, league, leagueRatings),
         delta: Number((history.at(-1)?.delta ?? 0).toFixed(1)),
         rank: 0,
         baseShare: roundShare(playerShare.baseShare),
@@ -218,6 +260,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[]): PlayerStanding[] {
         form: state.forms.get(id) ?? [],
         history,
         source: state.sources?.get(id),
+        appearance: appearanceSummaryFor(id, profile, state),
       }
     })
     .filter((player): player is PlayerStanding => player !== null)
@@ -226,9 +269,13 @@ function buildSourcedPlayerModel(matches: MatchRecord[]): PlayerStanding[] {
     .map((player, index) => ({ ...player, rank: index + 1 }))
 }
 
-export function buildPregamePlayerRatingEdges(matches: MatchRecord[]): Map<string, PregamePlayerRatingEdge> {
+export function buildPregamePlayerRatingEdges(
+  matches: MatchRecord[],
+  context: PlayerRatingContext = {},
+): Map<string, PregamePlayerRatingEdge> {
   const state = createSourcedPlayerState(false)
   const edges = new Map<string, PregamePlayerRatingEdge>()
+  const leagueRatings = leagueRatingsFor(context.leagueStrengths)
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
 
   for (const dateMatches of matchesByDate(sortedMatches)) {
@@ -236,8 +283,20 @@ export function buildPregamePlayerRatingEdges(matches: MatchRecord[]): Map<strin
     const dateStartGames = new Map(state.games)
 
     for (const match of dateMatches) {
-      const teamAEdge = playerEdgeForRoster(match.teamARoster, dateStartRatings, dateStartGames)
-      const teamBEdge = playerEdgeForRoster(match.teamBRoster, dateStartRatings, dateStartGames)
+      const teamAEdge = playerEdgeForRoster(
+        match.teamARoster,
+        dateStartRatings,
+        dateStartGames,
+        leagueForSide(match, 'A', context),
+        leagueRatings,
+      )
+      const teamBEdge = playerEdgeForRoster(
+        match.teamBRoster,
+        dateStartRatings,
+        dateStartGames,
+        leagueForSide(match, 'B', context),
+        leagueRatings,
+      )
       edges.set(match.id, {
         teamAAdjustment: teamAEdge.adjustment,
         teamBAdjustment: teamBEdge.adjustment,
@@ -247,9 +306,9 @@ export function buildPregamePlayerRatingEdges(matches: MatchRecord[]): Map<strin
     }
 
     for (const match of dateMatches) {
-      registerSourcedRosters(match, state)
+      registerSourcedRosters(match, state, context, leagueRatings)
     }
-    applySourcedPlayerUpdates(dateMatches, state, dateStartRatings)
+    applySourcedPlayerUpdates(dateMatches, state, dateStartRatings, context, leagueRatings)
   }
 
   return edges
@@ -277,6 +336,12 @@ type SourcedPlayerState = {
   forms: Map<string, string[]>
   histories?: Map<string, PlayerStanding['history']>
   sources?: Map<string, SourceTrace>
+  appearances?: Map<string, PlayerAppearanceAccumulator>
+}
+
+type PlayerAppearanceAccumulator = {
+  teamGames: Map<string, { team: string; games: number; latestObservedAt?: string; latestObservedEvent?: string }>
+  roleGames: Map<Role, number>
 }
 
 function createSourcedPlayerState(includeAuditFields: boolean): SourcedPlayerState {
@@ -287,6 +352,7 @@ function createSourcedPlayerState(includeAuditFields: boolean): SourcedPlayerSta
     forms: new Map(),
     histories: includeAuditFields ? new Map() : undefined,
     sources: includeAuditFields ? new Map() : undefined,
+    appearances: includeAuditFields ? new Map() : undefined,
   }
 }
 
@@ -303,15 +369,15 @@ function matchesByDate(matches: MatchRecord[]) {
 function registerSourcedRosters(
   match: MatchRecord,
   state: SourcedPlayerState,
-  latestRosterByTeam?: Map<string, PlayerProfile[]>,
+  context: PlayerRatingContext,
+  leagueRatings: Map<string, number>,
 ) {
-  for (const { team, roster } of teamRosterEntries(match)) {
+  for (const { side, team, roster } of teamRosterEntries(match)) {
     if (!roster) continue
     const rosterProfiles = roster.players.map((player) => profileForAppearance(player, team))
-    if (roster.completeness === 'complete-five-role') latestRosterByTeam?.set(team, rosterProfiles)
+    const leagueBaseline = playerBaselineForLeague(leagueForSide(match, side, context), leagueRatings)
     for (const profile of rosterProfiles) {
-      ensureSourcedPlayer(profile, state)
-      state.profiles.set(profile.id, profile)
+      ensureSourcedPlayer(profile, state, leagueBaseline)
     }
   }
 }
@@ -320,49 +386,159 @@ function applySourcedPlayerUpdates(
   matches: MatchRecord[],
   state: SourcedPlayerState,
   preUpdateRatings: Map<string, number>,
+  context: PlayerRatingContext,
+  leagueRatings: Map<string, number>,
+  latestRosterByTeam?: Map<string, PlayerProfile[]>,
 ) {
   for (const match of matches) {
-    for (const { team, roster, opponentRoster } of teamRosterEntries(match)) {
-      if (!roster) continue
+    for (const { side, team, roster, opponentRoster, opponentSide } of teamRosterEntries(match)) {
+      if (!roster || !opponentRoster || !isCompleteSourcedMatchup(roster, opponentRoster)) continue
+      latestRosterByTeam?.set(team, roster.players.map((player) => profileForAppearance(player, team)))
+      const league = leagueForSide(match, side, context)
+      const opponentLeague = leagueForSide(match, opponentSide, context)
+      const leagueBaseline = playerBaselineForLeague(league, leagueRatings)
+      const opponentLeagueBaseline = playerBaselineForLeague(opponentLeague, leagueRatings)
       for (const player of roster.players) {
         if (!player.stats) continue
         const profile = profileForAppearance(player, team)
-        ensureSourcedPlayer(profile, state)
-        const opponent = opponentRoster?.players.find((candidate) => candidate.role === player.role)
-        const rating = preUpdateRatings.get(player.id) ?? initialPlayerRating
-        const opponentRating = opponent ? preUpdateRatings.get(opponent.id) ?? initialPlayerRating : initialPlayerRating
+        ensureSourcedPlayer(profile, state, leagueBaseline)
+        const opponent = opponentRoster.players.find((candidate) => candidate.role === player.role)
+        if (!opponent?.stats) continue
+        const rating = preUpdateRatings.get(player.id) ?? leagueBaseline
+        const opponentRating = preUpdateRatings.get(opponent.id) ?? opponentLeagueBaseline
         const expected = expectedPlayerScore(rating, opponentRating)
-        const performance = playerPerformance(player)
+        const performance = playerPerformance(player, opponent)
         const eventWeight = eventTierConfig[match.tier].weight
         const delta = Number((sourcedPlayerKFactor * eventWeight * (performance - expected)).toFixed(1))
-        const nextRating = Number(((state.ratings.get(player.id) ?? rating) + delta).toFixed(1))
+        const currentRating = state.ratings.get(player.id) ?? rating
+        const nextRating = Number((currentRating + delta).toFixed(1))
+        const currentPublishedRating = publishedPlayerRating(currentRating, league, leagueRatings)
+        const nextPublishedRating = publishedPlayerRating(nextRating, league, leagueRatings)
         state.ratings.set(player.id, nextRating)
+        state.profiles.set(player.id, profile)
         state.games.set(player.id, (state.games.get(player.id) ?? 0) + 1)
         state.forms.set(player.id, [...(state.forms.get(player.id) ?? []), player.stats.won ? 'W' : 'L'].slice(-5))
         state.histories?.set(player.id, [
           ...(state.histories.get(player.id) ?? []),
-          { date: match.date, event: match.event, rating: nextRating, delta },
+          {
+            date: match.date,
+            event: match.event,
+            rating: nextPublishedRating,
+            delta: Number((nextPublishedRating - currentPublishedRating).toFixed(1)),
+          },
         ])
         state.sources?.set(player.id, sourceTraceFor(match))
+        recordRatedAppearance(player.id, profile, match, state)
       }
     }
   }
 }
 
+function recordRatedAppearance(
+  playerId: string,
+  profile: PlayerProfile,
+  match: MatchRecord,
+  state: SourcedPlayerState,
+) {
+  if (!state.appearances) return
+  const current = state.appearances.get(playerId) ?? {
+    teamGames: new Map(),
+    roleGames: new Map(),
+  }
+  const teamRecord = current.teamGames.get(profile.team) ?? { team: profile.team, games: 0 }
+  current.teamGames.set(profile.team, {
+    ...teamRecord,
+    games: teamRecord.games + 1,
+    latestObservedAt: match.date,
+    latestObservedEvent: match.event,
+  })
+  current.roleGames.set(profile.role, (current.roleGames.get(profile.role) ?? 0) + 1)
+  state.appearances.set(playerId, current)
+}
+
+function appearanceSummaryFor(
+  playerId: string,
+  profile: PlayerProfile,
+  state: SourcedPlayerState,
+): PlayerAppearanceSummary | undefined {
+  const appearance = state.appearances?.get(playerId)
+  if (!appearance) return undefined
+  const teamHistory = Array.from(appearance.teamGames.values())
+    .sort((left, right) =>
+      right.games - left.games
+      || (right.latestObservedAt ?? '').localeCompare(left.latestObservedAt ?? '')
+      || left.team.localeCompare(right.team),
+    )
+  const roleHistory = Array.from(appearance.roleGames.entries())
+    .map(([role, games]) => ({ role, games }))
+    .sort((left, right) => right.games - left.games || roleOrder(left.role) - roleOrder(right.role))
+  const games = state.games.get(playerId) ?? teamHistory.reduce((total, team) => total + team.games, 0)
+  const primaryTeam = teamHistory[0]
+  const latestTeamGames = appearance.teamGames.get(profile.team)?.games ?? 0
+  const roleGames = appearance.roleGames.get(profile.role) ?? 0
+
+  return {
+    primaryTeam: primaryTeam?.team ?? profile.team,
+    primaryTeamGames: primaryTeam?.games ?? latestTeamGames,
+    primaryTeamShare: roundShare(games > 0 ? (primaryTeam?.games ?? latestTeamGames) / games : 0),
+    latestTeamGames,
+    latestTeamShare: roundShare(games > 0 ? latestTeamGames / games : 0),
+    roleGames,
+    roleShare: roundShare(games > 0 ? roleGames / games : 0),
+    teamsPlayed: teamHistory.length,
+    rolesPlayed: roleHistory.length,
+    teamHistory,
+    roleHistory,
+    flags: appearanceFlagsFor(playerId, latestTeamGames, roleGames, teamHistory.length, roleHistory.length),
+  }
+}
+
+function appearanceFlagsFor(
+  playerId: string,
+  latestTeamGames: number,
+  roleGames: number,
+  teamsPlayed: number,
+  rolesPlayed: number,
+) {
+  const flags: PlayerAppearanceFlag[] = []
+  if (teamsPlayed > 1) flags.push('multi-team-career')
+  if (latestTeamGames > 0 && latestTeamGames < thinAppearanceSampleGames) flags.push('thin-latest-team-sample')
+  if (rolesPlayed > 1) flags.push('multi-role-career')
+  if (roleGames > 0 && roleGames < thinAppearanceSampleGames) flags.push('thin-role-sample')
+  if (playerId.startsWith('oe:player:unresolved:')) flags.push('unresolved-player-id')
+  return flags
+}
+
 function teamRosterEntries(match: MatchRecord) {
   return [
-    { team: match.teamA, roster: match.teamARoster, opponentRoster: match.teamBRoster },
-    { team: match.teamB, roster: match.teamBRoster, opponentRoster: match.teamARoster },
+    { side: 'A', opponentSide: 'B', team: match.teamA, roster: match.teamARoster, opponentRoster: match.teamBRoster },
+    { side: 'B', opponentSide: 'A', team: match.teamB, roster: match.teamBRoster, opponentRoster: match.teamARoster },
   ] as const
+}
+
+function isCompleteSourcedMatchup(
+  roster: MatchRecord['teamARoster'],
+  opponentRoster: MatchRecord['teamARoster'],
+) {
+  if (roster?.completeness !== 'complete-five-role' || opponentRoster?.completeness !== 'complete-five-role') {
+    return false
+  }
+  return roster.players.every((player) =>
+    player.stats && opponentRoster.players.some((opponent) => opponent.role === player.role && opponent.stats),
+  )
 }
 
 function playerEdgeForRoster(
   roster: MatchRecord['teamARoster'],
   ratings: Map<string, number>,
   games: Map<string, number>,
+  league: string,
+  leagueRatings: Map<string, number>,
 ) {
   if (!roster || roster.completeness !== 'complete-five-role') return { adjustment: 0, coverage: 0 }
 
+  const leagueBaseline = playerBaselineForLeague(league, leagueRatings)
+  const leagueSignalMultiplier = playerSignalMultiplierForLeague(league)
   let coverage = 0
   let weightedRatingEdge = 0
 
@@ -370,7 +546,7 @@ function playerEdgeForRoster(
     if ((games.get(player.id) ?? 0) < playerPregameMinGames) continue
     const roleShare = baseRoleShares[player.role]
     coverage += roleShare
-    weightedRatingEdge += roleShare * ((ratings.get(player.id) ?? initialPlayerRating) - initialPlayerRating)
+    weightedRatingEdge += roleShare * ((ratings.get(player.id) ?? leagueBaseline) - leagueBaseline) * leagueSignalMultiplier
   }
 
   if (coverage < playerPregameMinCoverage) {
@@ -393,9 +569,10 @@ function playerEdgeForRoster(
 function ensureSourcedPlayer(
   profile: PlayerProfile,
   state: SourcedPlayerState,
+  initialRating: number = initialPlayerRating,
 ) {
   if (state.ratings.has(profile.id)) return
-  state.ratings.set(profile.id, initialPlayerRating)
+  state.ratings.set(profile.id, initialRating)
   state.games.set(profile.id, 0)
   state.profiles.set(profile.id, profile)
   state.forms.set(profile.id, [])
@@ -406,7 +583,11 @@ function expectedPlayerScore(rating: number, opponentRating: number) {
   return 1 / (1 + 10 ** ((opponentRating - rating) / playerRatingScale))
 }
 
-function playerPerformance(player: RosterPlayerAppearance) {
+function playerPerformance(player: RosterPlayerAppearance, opponent: RosterPlayerAppearance) {
+  return clamp(0.5 + (rawPlayerPerformance(player) - rawPlayerPerformance(opponent)) / 2, 0, 1)
+}
+
+function rawPlayerPerformance(player: RosterPlayerAppearance) {
   const stats = player.stats
   if (!stats) return 0.5
   const baseline = roleStatBaselines[player.role]
@@ -421,6 +602,36 @@ function playerPerformance(player: RosterPlayerAppearance) {
     0,
     1,
   )
+}
+
+function leagueRatingsFor(leagueStrengths: LeagueStrength[] | undefined) {
+  return new Map((leagueStrengths ?? []).map((league) => [league.league, league.score]))
+}
+
+function leagueForSide(match: MatchRecord, side: 'A' | 'B', context: PlayerRatingContext) {
+  return homeLeagueForMatch(match, side, context.teams ?? {})
+}
+
+function leagueForProfile(profile: PlayerProfile, context: PlayerRatingContext) {
+  return context.teams?.[profile.team]?.league ?? 'Unknown'
+}
+
+function playerBaselineForLeague(league: string, leagueRatings: Map<string, number>) {
+  const leagueRating = cappedLeagueRatingForTier(league, leagueRatings.get(league) ?? leaguePriorFor(league))
+  return Number(clamp(
+    initialPlayerRating + (leagueRating - playerLeagueAnchorRating) * playerLeagueBaselineCoefficient,
+    playerLeagueBaselineBounds.min,
+    playerLeagueBaselineBounds.max,
+  ).toFixed(1))
+}
+
+function publishedPlayerRating(rawRating: number, league: string, leagueRatings: Map<string, number>) {
+  const baseline = playerBaselineForLeague(league, leagueRatings)
+  return Number((baseline + (rawRating - baseline) * playerSignalMultiplierForLeague(league)).toFixed(1))
+}
+
+function playerSignalMultiplierForLeague(league: string) {
+  return playerLeagueSignalMultiplierByTier[leagueTierFor(league).tier]
 }
 
 function statScore(value: number | undefined, baseline: number, spread: number) {
@@ -528,6 +739,10 @@ function teamObjectiveCount(match: MatchRecord, team: 'A' | 'B') {
 
 function roundShare(value: number) {
   return Number(value.toFixed(3))
+}
+
+function roleOrder(role: Role) {
+  return ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].indexOf(role)
 }
 
 function clamp(value: number, min: number, max: number) {

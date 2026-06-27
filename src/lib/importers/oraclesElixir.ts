@@ -92,6 +92,10 @@ function normalizeGame(
   const redIdentity = teamIdentityFor(redTeam)
   const homeLeague = competitionOnlyLeague(league) ? undefined : league
   const homeRegion = homeLeague ? leagueToRegion(homeLeague) : undefined
+  const blueHomeLeague = importedSideHomeLeague(league, homeLeague, blueIdentity)
+  const redHomeLeague = importedSideHomeLeague(league, homeLeague, redIdentity)
+  const blueRegion = importedSideRegion(league, homeRegion, blueHomeLeague, blueIdentity)
+  const redRegion = importedSideRegion(league, homeRegion, redHomeLeague, redIdentity)
   const date = normalizeDate(value(first, 'date'))
 
   return {
@@ -107,10 +111,10 @@ function normalizeGame(
     phase: playoffs ? 'Playoffs' : 'Regular season',
     region: leagueToRegion(league),
     league,
-    teamAHomeLeague: blueIdentity?.league ?? homeLeague,
-    teamBHomeLeague: redIdentity?.league ?? homeLeague,
-    teamARegion: blueIdentity?.region ?? homeRegion,
-    teamBRegion: redIdentity?.region ?? homeRegion,
+    teamAHomeLeague: blueHomeLeague,
+    teamBHomeLeague: redHomeLeague,
+    teamARegion: blueRegion,
+    teamBRegion: redRegion,
     teamASide: 'blue',
     teamBSide: 'red',
     teamARoster: rosterForSide(rows, 'blue', date),
@@ -237,25 +241,43 @@ function roleOrder(role: Role) {
 
 function upsertTeam(teams: Record<string, TeamProfile>, teamName: string, league: string, region: Region) {
   const identity = teamIdentityFor(teamName)
-  if (identity) {
-    teams[teamName] = identity
-    return
+  const hasSourcedLeague = league !== 'Unknown'
+  const candidate = {
+    name: teamName,
+    code: identity?.code ?? makeTeamCode(teamName),
+    region,
+    league,
   }
 
   const current = teams[teamName]
   if (!current) {
-    teams[teamName] = {
-      name: teamName,
-      code: makeTeamCode(teamName),
-      region,
-      league,
-    }
+    teams[teamName] = candidate
     return
   }
 
-  if (current.league === 'Unknown' && league !== 'Unknown') {
-    teams[teamName] = { ...current, league, region }
+  if ((current.league === 'Unknown' || teamIdentityFor(teamName)?.league === current.league) && hasSourcedLeague) {
+    teams[teamName] = candidate
   }
+}
+
+function importedSideHomeLeague(competitionLeague: string, homeLeague: string | undefined, identity: TeamProfile | undefined) {
+  if (homeLeague) return homeLeague
+  return shouldUseIdentityForCompetitionFallback(competitionLeague) ? identity?.league : undefined
+}
+
+function importedSideRegion(
+  competitionLeague: string,
+  homeRegion: Region | undefined,
+  homeLeague: string | undefined,
+  identity: TeamProfile | undefined,
+): Region | undefined {
+  if (homeRegion) return homeRegion
+  if (homeLeague && homeLeague !== 'Unknown') return leagueToRegion(homeLeague)
+  return shouldUseIdentityForCompetitionFallback(competitionLeague) ? identity?.region : undefined
+}
+
+function shouldUseIdentityForCompetitionFallback(league: string) {
+  return competitionOnlyLeague(league) && league.trim().toUpperCase() !== 'LTA'
 }
 
 function aggregateTeamRows(rows: CsvRecord[]) {

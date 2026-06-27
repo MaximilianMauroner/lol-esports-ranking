@@ -36,15 +36,26 @@ export function CompareDrawer<E>({
   onRemove: (id: string) => void
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) return
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    if (activeElement && !activeElement.closest('.drawer')) previousFocusRef.current = activeElement
     closeRef.current?.focus()
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      const previousFocus = previousFocusRef.current
+      window.setTimeout(() => {
+        if (document.querySelector('.drawer.is-open')) return
+        if (previousFocus?.isConnected) previousFocus.focus()
+        previousFocusRef.current = null
+      }, 0)
+    }
   }, [open, onClose])
 
   if (!open) return null

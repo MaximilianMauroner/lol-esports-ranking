@@ -1,18 +1,23 @@
 # Brand Assets
 
-The final app mark is a simplified vector version of the highest-ranked generated concept, `Calibrated Rift Compass`.
+The shipped app mark is the provided cyan trophy logo in a dark rounded square.
 
 ## Selected Assets
 
-- `public/logo.svg`: app header mark.
+- `public/logo.svg`: vector app header mark.
+- `public/logo.png`: cropped raster source from the provided logo image.
 - `public/favicon.svg`: favicon-sized vector mark.
-- `public/apple-touch-icon.png`: touch icon generated from the selected image concept.
+- `public/apple-touch-icon.png`: touch icon generated from the shipped trophy mark.
 - `public/icons.svg`: product icon sprite for model/source/uncertainty/league-strength concepts.
 
-## Concept Ranking
+## League Marks
 
-1. Calibrated Rift Compass: best overall fit. Strong favicon silhouette, esports/ranking specificity, model credibility, and legal safety without Riot, team, champion, or exact map art.
+- `public/league-logos/lpl.svg`: LPL league logo used only as a presentation badge for exact `LPL` league labels.
+
+## Previous Concept Ranking
+
+The previous generated concept exploration is preserved in `docs/brand-candidates/`, but those images are no longer the active app logo.
+
+1. Calibrated Rift Compass: strongest generated candidate before the supplied trophy mark replaced it.
 2. League Strength Matrix: useful secondary icon language for league-strength and networked evidence, but too detailed for small favicon use.
 3. Transparent GPR Lab: credible analytics mark, but less esports-specific and more generic as the primary app logo.
-
-The shipped vectors are custom simplified derivatives of the generated concepts so they remain legible in dense dashboard chrome and do not present generated concept art as official LoL Esports artwork.

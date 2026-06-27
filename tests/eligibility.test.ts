@@ -13,14 +13,16 @@ test('eligibility reports explicit current-window and staleness reasons', () => 
   })
 
   assert.equal(eligibility.eligible, false)
-  assert.deepEqual(eligibility.reasons, ['low-current-volume', 'stale', 'high-uncertainty', 'unanchored-league'])
+  assert.deepEqual(eligibility.reasons, ['low-total-volume', 'low-current-volume', 'stale', 'high-uncertainty', 'unanchored-league'])
+  assert.equal(eligibility.totalGames, 1)
+  assert.equal(eligibility.minTotalGames, 30)
   assert.equal(eligibility.currentWindowGames, 0)
   assert.equal(eligibility.daysSinceLastMatch, 176)
 })
 
 test('anchored major teams with enough current matches become eligible', () => {
   const eligibility = evaluateTeamEligibility({
-    history: Array.from({ length: 6 }, (_, index) => historyPoint(`2026-06-${String(index + 1).padStart(2, '0')}`)),
+    history: Array.from({ length: 30 }, (_, index) => historyPoint(`2026-06-${String((index % 26) + 1).padStart(2, '0')}`)),
     lastDate: '2026-06-26',
     uncertainty: 80,
     leagueTier: 'tier-one',
@@ -31,9 +33,23 @@ test('anchored major teams with enough current matches become eligible', () => {
   assert.deepEqual(eligibility.reasons, [])
 })
 
+test('anchored major teams with only a short qualifier run stay in audit rows', () => {
+  const eligibility = evaluateTeamEligibility({
+    history: Array.from({ length: 11 }, (_, index) => historyPoint(`2026-06-${String(index + 1).padStart(2, '0')}`)),
+    lastDate: '2026-06-26',
+    uncertainty: 80,
+    leagueTier: 'tier-two',
+    leagueInternationalMatches: 0,
+  })
+
+  assert.equal(eligibility.eligible, false)
+  assert.deepEqual(eligibility.reasons, ['low-total-volume'])
+  assert.equal(eligibility.totalGames, 11)
+})
+
 test('tier-three regional teams can become eligible with international signal', () => {
   const eligibility = evaluateTeamEligibility({
-    history: Array.from({ length: 6 }, (_, index) => historyPoint(`2026-06-${String(index + 1).padStart(2, '0')}`)),
+    history: Array.from({ length: 30 }, (_, index) => historyPoint(`2026-06-${String((index % 26) + 1).padStart(2, '0')}`)),
     lastDate: '2026-06-26',
     uncertainty: 80,
     leagueTier: 'tier-three',
@@ -44,9 +60,23 @@ test('tier-three regional teams can become eligible with international signal', 
   assert.deepEqual(eligibility.reasons, [])
 })
 
+test('developmental teams remain unanchored even when their parent league is certified', () => {
+  const eligibility = evaluateTeamEligibility({
+    history: Array.from({ length: 30 }, (_, index) => historyPoint(`2026-06-${String((index % 26) + 1).padStart(2, '0')}`)),
+    lastDate: '2026-06-26',
+    uncertainty: 80,
+    leagueTier: 'tier-three',
+    leagueInternationalMatches: 6,
+    isDevelopmentalTeam: true,
+  })
+
+  assert.equal(eligibility.eligible, false)
+  assert.deepEqual(eligibility.reasons, ['unanchored-league'])
+})
+
 test('emerging leagues remain unanchored even with cross-ecosystem matches', () => {
   const eligibility = evaluateTeamEligibility({
-    history: Array.from({ length: 6 }, (_, index) => historyPoint(`2026-06-${String(index + 1).padStart(2, '0')}`)),
+    history: Array.from({ length: 30 }, (_, index) => historyPoint(`2026-06-${String((index % 26) + 1).padStart(2, '0')}`)),
     lastDate: '2026-06-26',
     uncertainty: 80,
     leagueTier: 'emerging',

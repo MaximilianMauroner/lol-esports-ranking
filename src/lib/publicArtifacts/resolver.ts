@@ -17,10 +17,12 @@ export function resolvePublicSnapshotState(
   if (!data) return { status: 'loading' }
 
   const key = snapshotKey(filter)
+  const cached = cache[key]
+  if (cached?.status === 'ready') return cached
+
   const embedded = data.snapshots[key]
   if (embedded) return { status: 'ready', snapshot: embedded }
 
-  const cached = cache[key]
   if (cached) return cached
 
   if (key === data.defaultSnapshotKey) {

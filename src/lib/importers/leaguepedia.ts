@@ -99,8 +99,8 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
   const season = yearFromDate(date)
   const teamAHomeLeague = teamHomeLeague(game, 'A', teamA, league)
   const teamBHomeLeague = teamHomeLeague(game, 'B', teamB, league)
-  const teamARegion = teamRegion(game, 'A', teamA, teamAHomeLeague)
-  const teamBRegion = teamRegion(game, 'B', teamB, teamBHomeLeague)
+  const teamARegion = teamRegion(game, 'A', teamAHomeLeague)
+  const teamBRegion = teamRegion(game, 'B', teamBHomeLeague)
 
   return {
     id: `leaguepedia-${sourceGameId}`,
@@ -134,24 +134,21 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
 
 function upsertTeam(teams: Record<string, TeamProfile>, teamName: string, league: string, region: Region) {
   const identity = teamIdentityFor(teamName)
-  if (identity) {
-    teams[teamName] = identity
-    return
+  const candidate = {
+    name: teamName,
+    code: identity?.code ?? makeTeamCode(teamName),
+    region,
+    league,
   }
 
   const current = teams[teamName]
   if (!current) {
-    teams[teamName] = {
-      name: teamName,
-      code: makeTeamCode(teamName),
-      region,
-      league,
-    }
+    teams[teamName] = candidate
     return
   }
 
   if (current.league === 'Unknown' && league !== 'Unknown') {
-    teams[teamName] = { ...current, league, region }
+    teams[teamName] = candidate
   }
 }
 
@@ -246,21 +243,26 @@ function teamHomeLeague(game: LeaguepediaGame, side: 'A' | 'B', teamName: string
       ? text(game.teamAHomeLeague) || text(game.teamALeague)
       : text(game.teamBHomeLeague) || text(game.teamBLeague)
   if (explicit) return explicit
+  if (!isCompetitionOnlyHomeLeague(competitionLeague)) return competitionLeague
+  if (!shouldUseIdentityForCompetitionFallback(competitionLeague)) return 'Unknown'
   const identity = teamIdentityFor(teamName)
   if (identity) return identity.league
-  return isCompetitionOnlyHomeLeague(competitionLeague) ? 'Unknown' : competitionLeague
+  return 'Unknown'
 }
 
-function teamRegion(game: LeaguepediaGame, side: 'A' | 'B', teamName: string, homeLeague: string): Region {
+function teamRegion(game: LeaguepediaGame, side: 'A' | 'B', homeLeague: string): Region {
   const explicit = side === 'A' ? text(game.teamARegion) : text(game.teamBRegion)
   if (isRegion(explicit)) return explicit
-  const identity = teamIdentityFor(teamName)
-  if (identity) return identity.region
-  return leagueToRegion(homeLeague)
+  if (homeLeague && homeLeague !== 'Unknown' && !isCompetitionOnlyHomeLeague(homeLeague)) return leagueToRegion(homeLeague)
+  return 'International'
 }
 
 function isCompetitionOnlyHomeLeague(league: string) {
   return ['Worlds', 'MSI', 'FST', 'EWC', 'ASI', 'AC', 'Asia Master', 'KeSPA', 'DCup', 'EMEA Masters', 'LTA'].includes(league)
+}
+
+function shouldUseIdentityForCompetitionFallback(league: string) {
+  return isCompetitionOnlyHomeLeague(league) && league !== 'LTA'
 }
 
 function isRegion(value: string): value is Region {

@@ -61,9 +61,19 @@ test('deriveTeamProfilesFromMatches ignores generic LTA rows after subleague obs
   assert.equal(profiles['100 Thieves'].region, 'LCS')
 })
 
-test('deriveTeamProfilesFromMatches keeps known identities authoritative', () => {
+test('deriveTeamProfilesFromMatches uses sourced domestic home league before static known identities', () => {
   const profiles = deriveTeamProfilesFromMatches([
     match({ id: 'bad-source', teamA: 'T1', teamAHomeLeague: 'LFL', teamARegion: 'LEC' }),
+  ])
+
+  assert.equal(profiles.T1.league, 'LFL')
+  assert.equal(profiles.T1.region, 'LEC')
+  assert.equal(profiles.T1.code, 'T1')
+})
+
+test('deriveTeamProfilesFromMatches uses known identities when source has only competition rows', () => {
+  const profiles = deriveTeamProfilesFromMatches([
+    match({ id: 'worlds-row', teamA: 'T1', teamAHomeLeague: 'Unknown', teamARegion: 'International', league: 'WLDs' }),
   ])
 
   assert.equal(profiles.T1.league, 'LCK')

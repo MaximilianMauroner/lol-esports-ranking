@@ -37,6 +37,8 @@ export type RegionTopTeam = {
   rank?: number
 }
 
+type RegionStanding = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league' | 'rating' | 'rank'>
+
 const TIER_RANK: Record<LeagueTierName, number> = {
   'tier-one': 0,
   'tier-two': 1,
@@ -52,7 +54,7 @@ const TIER_RANK: Record<LeagueTierName, number> = {
  */
 export function deriveRegionStrength(
   leagues: LeagueStrength[],
-  standings: PublicTeamStanding[],
+  standings: RegionStanding[],
   { includeInternational = false }: { includeInternational?: boolean } = {},
 ): RegionStrength[] {
   const leaguesByRegion = groupBy(leagues, (league) => league.region)
@@ -146,7 +148,7 @@ function weightedLeagueScore(leagues: LeagueStrength[]) {
   return weightTotal > 0 ? weightedTotal / weightTotal : mean(leagues, (league) => league.score)
 }
 
-function ratingOf(team: PublicTeamStanding) {
+function ratingOf(team: RegionStanding) {
   return typeof team.rating === 'number' && Number.isFinite(team.rating) ? team.rating : 0
 }
 

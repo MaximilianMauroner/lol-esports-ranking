@@ -195,12 +195,23 @@ export function SortHeader({
   align?: 'right' | 'center'
 }) {
   const active = sortKey === columnKey
+  function activateSort() {
+    onSort(columnKey)
+  }
+
   return (
     <th
       scope="col"
       className={`sortable${active ? ' is-sorted' : ''}${align ? ` ${align}` : ''}`}
       aria-sort={active ? (descending ? 'descending' : 'ascending') : 'none'}
-      onClick={() => onSort(columnKey)}
+      tabIndex={0}
+      onClick={activateSort}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          activateSort()
+        }
+      }}
     >
       {label}
       {active ? (descending ? ' ↓' : ' ↑') : ''}

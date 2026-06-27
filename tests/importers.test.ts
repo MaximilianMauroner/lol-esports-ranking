@@ -46,6 +46,43 @@ test('Leaguepedia international rows use known team home leagues when explicit f
   assert.notEqual(lpl.delta, 0)
 })
 
+test('Leaguepedia domestic rows keep sourced league over static known identity', () => {
+  const result = importLeaguepediaSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-06-26T00:00:00.000Z',
+    matches: [
+      {
+        id: 'lp-known-domestic',
+        date: '2026-01-15',
+        event: 'LFL 2026 Spring',
+        teamA: 'G2 Esports',
+        teamB: 'Solary',
+        winner: 'G2 Esports',
+      },
+    ],
+  })
+  const match = result.matches[0]
+
+  assert.equal(match.teamAHomeLeague, 'LFL')
+  assert.equal(match.teamARegion, 'LEC')
+  assert.equal(result.teams['G2 Esports'].league, 'LFL')
+  assert.equal(result.teams['G2 Esports'].region, 'LEC')
+})
+
+test('Oracle domestic rows keep sourced league over static known identity', () => {
+  const result = importOraclesElixirCsv([
+    'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
+    'oe-known-domestic,2026-01-15,2026,LFL,Spring,0,26.1,team,Blue,G2 Esports,1,20,65000',
+    'oe-known-domestic,2026-01-15,2026,LFL,Spring,0,26.1,team,Red,Solary,0,12,59000',
+  ].join('\n'))
+  const match = result.matches[0]
+
+  assert.equal(match.teamAHomeLeague, 'LFL')
+  assert.equal(match.teamARegion, 'LEC')
+  assert.equal(result.teams['G2 Esports'].league, 'LFL')
+  assert.equal(result.teams['G2 Esports'].region, 'LEC')
+})
+
 test('Leaguepedia import decodes HTML entities before storing text fields', () => {
   const result = importLeaguepediaSnapshot({
     source: 'fixture',
@@ -316,7 +353,7 @@ test('team identity cleanup maps exact source display aliases only', () => {
   assert.equal(canonicalTeamNameFor('Ninjas in Pyjamas.CN'), 'Ninjas in Pyjamas')
   assert.equal(canonicalTeamNameFor('Rogue (European Team)'), 'Rogue')
   assert.equal(canonicalTeamNameFor('Team Secret (Vietnamese Team)'), 'Team Secret')
-  assert.equal(canonicalTeamNameFor('Team Secret Whales'), 'Team Secret')
+  assert.equal(canonicalTeamNameFor('Team Secret Whales'), 'Team Secret Whales')
   assert.equal(canonicalTeamNameFor('ZEN Esports (Vietnamese Team)'), 'ZEN Esports')
   assert.equal(canonicalTeamNameFor('9Gaming Esports'), '9Gaming')
   assert.equal(canonicalTeamNameFor('OKSavingsBank BRION'), 'HANJIN BRION')
@@ -589,6 +626,29 @@ test('Oracle import treats generic LTA as a competition layer instead of team ho
   assert.equal(match?.league, 'LTA')
   assert.equal(match?.teamAHomeLeague, undefined)
   assert.equal(match?.teamBHomeLeague, undefined)
+  assert.equal(result.teams['100 Thieves'].league, 'Unknown')
+})
+
+test('Leaguepedia import treats generic LTA as a competition layer instead of current identity', () => {
+  const result = importLeaguepediaSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-06-26T00:00:00.000Z',
+    matches: [
+      {
+        id: 'lp-lta-1',
+        date: '2025-09-27',
+        event: 'LTA 2025 Championship',
+        teamA: '100 Thieves',
+        teamB: 'Shopify Rebellion',
+        winner: '100 Thieves',
+      },
+    ],
+  })
+  const match = result.matches[0]
+
+  assert.equal(match?.league, 'LTA')
+  assert.equal(match?.teamAHomeLeague, 'Unknown')
+  assert.equal(match?.teamARegion, 'International')
   assert.equal(result.teams['100 Thieves'].league, 'Unknown')
 })
 

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { effectiveLeagueRating, leagueEffectiveRatingCapsByTier } from '../src/data/leagueTiers.ts'
 import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
-import type { MatchRecord, PlayerProfile, Role, Side, TeamProfile } from '../src/types.ts'
+import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/types.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },
@@ -64,6 +65,12 @@ test('league Elo only updates from international cross-league games with smaller
   assert.notEqual(leagueFor(internationalCrossLeague, 'LCK').score, 1500)
   assert.notEqual(leagueFor(internationalCrossLeague, 'LPL').score, 1500)
   assert.ok(Math.abs(leagueFor(internationalCrossLeague, 'LCK').score - 1500) < Math.abs(standingFor(internationalCrossLeague, 'Alpha').baseRating - 1500))
+})
+
+test('emerging league effective ratings cannot publish above tier-three baseline', () => {
+  assert.equal(effectiveLeagueRating('LFL', 1450, 200), leagueEffectiveRatingCapsByTier.emerging)
+  assert.equal(effectiveLeagueRating('Unknown', 1400, 200), leagueEffectiveRatingCapsByTier.unknown)
+  assert.ok(effectiveLeagueRating('LCK', 1600, 200) > 1500)
 })
 
 test('league adjustment preserves same-league base-rating gaps before momentum', () => {
@@ -243,16 +250,16 @@ test('same-region Worlds final skips league game delta while placement residual 
 
 test('disconnected unknown-league teams stay provisional instead of topping the eligible board', () => {
   const model = buildRankingModel([
-    ...Array.from({ length: 8 }, (_, index) => matchFixture({
+    ...Array.from({ length: 30 }, (_, index) => matchFixture({
       id: `major-${index}`,
       date: `2026-03-${String(index + 1).padStart(2, '0')}`,
       teamA: 'Alpha',
       teamB: 'Beta',
       winner: index % 2 === 0 ? 'Alpha' : 'Beta',
     })),
-    ...Array.from({ length: 10 }, (_, index) => matchFixture({
+    ...Array.from({ length: 30 }, (_, index) => matchFixture({
       id: `isolated-${index}`,
-      date: `2026-03-${String(index + 11).padStart(2, '0')}`,
+      date: `2026-04-${String(index + 1).padStart(2, '0')}`,
       event: 'Isolated Cup',
       region: 'International',
       league: 'Unknown',
@@ -386,6 +393,187 @@ test('sourced Oracle player stats produce player ratings without checked-in rost
   assert.ok(alphaBot.playerShare > 0)
 })
 
+test('sourced player ratings do not inject role-specific mass on balanced schedules', () => {
+  const matches = Array.from({ length: 90 }, (_, index) => {
+    const alphaWon = index % 2 === 0
+    return matchFixture({
+      id: `balanced-player-${index}`,
+      date: dateInJanuary(index + 1),
+      winner: alphaWon ? 'Alpha' : 'Beta',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', alphaWon),
+      teamBRoster: sourcedRosterFixture('beta', 'red', !alphaWon),
+    })
+  })
+  const players = buildPlayerModel(matches, {}, { teams })
+  const alphaRoleRatings = (['Top', 'Jungle', 'Mid', 'Bot', 'Support'] as const)
+    .map((role) => playerFor(players, `alpha-${role}`).rating)
+  const ratingSpread = Math.max(...alphaRoleRatings) - Math.min(...alphaRoleRatings)
+
+  assert.ok(ratingSpread < 4)
+})
+
+test('sourced player ratings use league baselines for global comparability', () => {
+  const extendedTeams: Record<string, TeamProfile> = {
+    ...teams,
+    MinorA: { name: 'MinorA', code: 'MIA', region: 'LCS', league: 'NACL' },
+    MinorB: { name: 'MinorB', code: 'MIB', region: 'LCS', league: 'NACL' },
+  }
+  const players = buildPlayerModel([
+    matchFixture({
+      id: 'lck-player-baseline',
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Alpha',
+      teamARoster: sourcedRosterFixture('lck-alpha', 'blue', true),
+      teamBRoster: sourcedRosterFixture('lck-beta', 'red', false),
+    }),
+    matchFixture({
+      id: 'nacl-player-baseline',
+      teamA: 'MinorA',
+      teamB: 'MinorB',
+      winner: 'MinorA',
+      league: 'NACL',
+      event: 'NACL 2026 Spring',
+      region: 'LCS',
+      teamAHomeLeague: 'NACL',
+      teamBHomeLeague: 'NACL',
+      teamARegion: 'LCS',
+      teamBRegion: 'LCS',
+      teamARoster: sourcedRosterFixture('nacl-alpha', 'blue', true),
+      teamBRoster: sourcedRosterFixture('nacl-beta', 'red', false),
+    }),
+  ], {}, {
+    teams: extendedTeams,
+    leagueStrengths: [
+      leagueStrengthFixture('LCK', 'LCK', 'tier-one', 1515),
+      leagueStrengthFixture('NACL', 'LCS', 'emerging', 1300),
+    ],
+  })
+
+  assert.ok(playerFor(players, 'lck-alpha-Top').rating > playerFor(players, 'nacl-alpha-Top').rating + 35)
+})
+
+test('sourced player ratings shrink emerging-league domestic edges on the global board', () => {
+  const extendedTeams: Record<string, TeamProfile> = {
+    ...teams,
+    LflA: { name: 'LflA', code: 'LFA', region: 'LEC', league: 'LFL' },
+    LflB: { name: 'LflB', code: 'LFB', region: 'LEC', league: 'LFL' },
+  }
+  const players = buildPlayerModel([
+    matchFixture({
+      id: 'lck-reference-win',
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Alpha',
+      teamARoster: sourcedRosterFixture('lck-alpha', 'blue', true),
+      teamBRoster: sourcedRosterFixture('lck-beta', 'red', false),
+    }),
+    ...Array.from({ length: 60 }, (_, index) => matchFixture({
+      id: `lfl-domestic-win-${index}`,
+      date: dateInJanuary(index + 2),
+      event: 'LFL 2026 Spring',
+      league: 'LFL',
+      region: 'LEC',
+      teamAHomeLeague: 'LFL',
+      teamBHomeLeague: 'LFL',
+      teamARegion: 'LEC',
+      teamBRegion: 'LEC',
+      teamA: 'LflA',
+      teamB: 'LflB',
+      winner: 'LflA',
+      teamARoster: sourcedRosterFixture('lfl-alpha', 'blue', true),
+      teamBRoster: sourcedRosterFixture('lfl-beta', 'red', false),
+    })),
+  ], {}, {
+    teams: extendedTeams,
+    leagueStrengths: [
+      leagueStrengthFixture('LCK', 'LCK', 'tier-one', 1515),
+      leagueStrengthFixture('LFL', 'LEC', 'emerging', 1413),
+    ],
+  })
+
+  assert.ok(playerFor(players, 'lck-alpha-Jungle').rating > playerFor(players, 'lfl-alpha-Jungle').rating)
+  assert.ok(playerFor(players, 'lfl-alpha-Jungle').rating < 95)
+})
+
+test('sourced player ratings ignore incomplete role matchups', () => {
+  const partialRoster = sourcedRosterFixture('alpha', 'blue', true)
+  partialRoster.completeness = 'partial'
+  partialRoster.players = partialRoster.players.slice(0, 1)
+  const players = buildPlayerModel([
+    matchFixture({
+      id: 'partial-player-stats',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'partial-player-stats',
+      teamARoster: partialRoster,
+      teamBRoster: sourcedRosterFixture('beta', 'red', false),
+    }),
+  ], {})
+
+  assert.equal(players.length, 0)
+})
+
+test('sourced player appearance audit separates career games from latest rated team', () => {
+  const alphaRoster = sourcedRosterFixture('alpha', 'blue', true)
+  const gammaRoster = sourcedRosterFixture('gamma', 'blue', true)
+  const deltaPartialRoster = sourcedRosterFixture('delta', 'blue', true)
+  useSharedBotId(alphaRoster, 'shared-bot')
+  useSharedBotId(gammaRoster, 'shared-bot')
+  useSharedBotId(deltaPartialRoster, 'shared-bot')
+  deltaPartialRoster.completeness = 'partial'
+  deltaPartialRoster.players = deltaPartialRoster.players.filter((player) => player.role === 'Bot')
+
+  const players = buildPlayerModel([
+    matchFixture({
+      id: 'shared-bot-alpha',
+      date: '2026-01-01',
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Alpha',
+      teamARoster: alphaRoster,
+      teamBRoster: sourcedRosterFixture('beta', 'red', false),
+    }),
+    matchFixture({
+      id: 'shared-bot-gamma',
+      date: '2026-01-02',
+      teamA: 'Gamma',
+      teamB: 'Beta',
+      winner: 'Gamma',
+      teamARoster: gammaRoster,
+      teamBRoster: sourcedRosterFixture('beta-later', 'red', false),
+    }),
+    matchFixture({
+      id: 'shared-bot-partial-latest-row',
+      date: '2026-01-03',
+      teamA: 'Delta',
+      teamB: 'Beta',
+      winner: 'Delta',
+      teamARoster: deltaPartialRoster,
+      teamBRoster: sourcedRosterFixture('beta-partial-opponent', 'red', false),
+    }),
+  ], {})
+  const sharedBot = playerFor(players, 'shared-bot')
+
+  assert.equal(sharedBot.name, 'Shared Bot')
+  assert.equal(sharedBot.team, 'Gamma')
+  assert.equal(sharedBot.role, 'Bot')
+  assert.equal(sharedBot.games, 2)
+  assert.equal(sharedBot.source?.date, '2026-01-02')
+  assert.equal(sharedBot.appearance?.latestTeamGames, 1)
+  assert.equal(sharedBot.appearance?.latestTeamShare, 0.5)
+  assert.equal(sharedBot.appearance?.roleGames, 2)
+  assert.equal(sharedBot.appearance?.roleShare, 1)
+  assert.equal(sharedBot.appearance?.teamsPlayed, 2)
+  assert.equal(sharedBot.appearance?.rolesPlayed, 1)
+  assert.deepEqual(sharedBot.appearance?.teamHistory.map((entry) => [entry.team, entry.games]), [
+    ['Gamma', 1],
+    ['Alpha', 1],
+  ])
+  assert.deepEqual(sharedBot.appearance?.roleHistory, [{ role: 'Bot', games: 2 }])
+  assert.equal(sharedBot.appearance?.flags.includes('multi-team-career'), true)
+  assert.equal(sharedBot.appearance?.flags.includes('thin-latest-team-sample'), true)
+})
+
 function standingFor(model: ReturnType<typeof buildRankingModel>, team: string) {
   const standing = model.standings.find((candidate) => candidate.team === team)
   assert.ok(standing)
@@ -457,10 +645,43 @@ function sourcedRosterFixture(
   }
 }
 
+function useSharedBotId(roster: NonNullable<MatchRecord['teamARoster']>, id: string) {
+  roster.players = roster.players.map((player) =>
+    player.role === 'Bot' ? { ...player, id, name: 'Shared Bot' } : player,
+  )
+}
+
 function playerFor(players: ReturnType<typeof buildPlayerModel>, playerId: string) {
   const player = players.find((candidate) => candidate.id === playerId)
   assert.ok(player)
   return player
+}
+
+function leagueStrengthFixture(
+  league: string,
+  region: Region,
+  tier: LeagueStrength['tier'],
+  score: number,
+): LeagueStrength {
+  return {
+    league,
+    region,
+    tier,
+    priorScore: score,
+    rawScore: score,
+    connectivity: 1,
+    score,
+    adjustment: Math.round(score - 1500),
+    delta: 0,
+    wins: 0,
+    losses: 0,
+    internationalMatches: 0,
+    form: [],
+  }
+}
+
+function dateInJanuary(dayOffset: number) {
+  return new Date(Date.UTC(2026, 0, dayOffset)).toISOString().slice(0, 10)
 }
 
 function lplSetupMatches(prefix: string, winner: 'Gamma' | 'Delta') {

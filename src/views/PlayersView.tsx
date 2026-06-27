@@ -60,8 +60,8 @@ export function PlayersView({
   return (
     <div className="view">
       <p className="view__intro">
-        Role-conditioned player ratings from observed game stats, ranked across every region. Filter by role or region,
-        then add players to compare their rating, workload, and impact drivers side by side.
+        Role-conditioned player ratings from observed game stats, ranked across every region. Team labels are backed by
+        observed appearance history and show how much of the player sample was actually played for the displayed team.
       </p>
 
       <section className="panel">
@@ -127,7 +127,7 @@ export function PlayersView({
                     <td>
                       <div className="ent">
                         <b>{player.teamCode ?? player.team}</b>
-                        <small>{player.region ?? '—'}</small>
+                        <small title={appearanceTitle(player)}>{teamAppearanceLabel(player)}</small>
                       </div>
                     </td>
                     <td className="right">
@@ -150,6 +150,31 @@ export function PlayersView({
       </section>
     </div>
   )
+}
+
+function teamAppearanceLabel(player: CompactPlayer) {
+  const appearance = player.appearance
+  if (!appearance) return player.region ?? '—'
+  const teamGames = player.teamGames ?? appearance.latestTeamGames
+  const teamSample = teamGames === player.games
+    ? `all ${formatNumber(player.games)} games`
+    : `${formatNumber(teamGames)} of ${formatNumber(player.games)} games`
+  const flags = appearance.flags.includes('multi-team-career')
+    ? 'multi-team'
+    : appearance.flags.includes('thin-latest-team-sample')
+      ? 'thin team sample'
+      : undefined
+  return [player.region ?? '—', teamSample, flags].filter(Boolean).join(' · ')
+}
+
+function appearanceTitle(player: CompactPlayer) {
+  const appearance = player.appearance
+  if (!appearance) return player.team
+  const teams = appearance.teamHistory
+    .slice(0, 4)
+    .map((entry) => `${entry.team}: ${formatNumber(entry.games)} games`)
+    .join(', ')
+  return teams || player.team
 }
 
 function sortPlayers(rows: CompactPlayer[], key: SortKey) {

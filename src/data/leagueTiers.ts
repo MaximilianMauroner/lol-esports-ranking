@@ -112,11 +112,17 @@ const emergingLeaguePatterns = emergingLeaguePatternRules.map((rule) => new RegE
 
 export const leagueConnectivityShrinkageMatches = 8
 
+export const leagueEffectiveRatingCapsByTier: Partial<Record<LeagueTierName, number>> = {
+  emerging: leagueTierDefinitions['tier-three'].priorRating,
+  unknown: leagueTierDefinitions.unknown.priorRating,
+}
+
 export const leagueTierModelParameters = {
   leagueTierDefinitions,
   exactLeagueTiers,
   emergingLeaguePatternRules,
   leagueConnectivityShrinkageMatches,
+  leagueEffectiveRatingCapsByTier,
 } as const
 
 export function leagueTierFor(league: string): LeagueTierDefinition {
@@ -139,7 +145,12 @@ export function leagueConnectivity(internationalMatches: number) {
 export function effectiveLeagueRating(league: string, rawRating: number, internationalMatches: number) {
   const prior = leaguePriorFor(league)
   const connectivity = leagueConnectivity(internationalMatches)
-  return prior + connectivity * (rawRating - prior)
+  return cappedLeagueRatingForTier(league, prior + connectivity * (rawRating - prior))
+}
+
+export function cappedLeagueRatingForTier(league: string, rating: number) {
+  const cap = leagueEffectiveRatingCapsByTier[leagueTierFor(league).tier]
+  return cap === undefined ? rating : Math.min(rating, cap)
 }
 
 function normalizeLeagueName(league: string) {

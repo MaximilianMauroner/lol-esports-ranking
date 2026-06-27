@@ -13,6 +13,7 @@ import {
   type SnapshotFilter,
   type SnapshotSourceBreakdown,
 } from '../src/lib/publicArtifacts/schema.ts'
+import { leagueEffectiveRatingCapsByTier } from '../src/data/leagueTiers.ts'
 
 test('browser data artifact stays compact and does not ship the full snapshot', async () => {
   assert.equal(existsSync('public/data/ranking-snapshot.json'), false)
@@ -22,10 +23,12 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/players.json'))
   const defaultSnapshot = summary.defaultSnapshotKey ? summary.snapshots?.[summary.defaultSnapshotKey] : undefined
+  const defaultShardEntry = summary.snapshotIndex[summary.defaultSnapshotKey]
+  const defaultShard = defaultShardEntry ? parsePublicRankingShard(await readJson(publicPathForDataUrl(defaultShardEntry.url))) : undefined
   const proofPlayers = summary.playerData?.ratingProof?.topPlayers ?? []
 
   assert.equal(summary.artifactKind, 'public-ranking-manifest')
-  assert.equal(summary.schemaVersion, 12)
+  assert.equal(summary.schemaVersion, 14)
   assert.equal(summary.summaryMode, 'browser-summary')
   assert.ok(defaultSnapshot)
   assert.equal(defaultSnapshot.artifactKind, 'public-snapshot-shard')
@@ -36,6 +39,9 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(Object.prototype.hasOwnProperty.call(defaultSnapshot, 'events'), false)
   assert.equal(Object.prototype.hasOwnProperty.call(defaultSnapshot, 'seasons'), false)
   assert.equal(defaultSnapshot.standings?.some((standing) => 'history' in standing), false)
+  assert.equal(defaultSnapshot.standings?.every((standing) => Array.isArray(standing.recentMatches)), true)
+  assert.equal(defaultSnapshot.standings?.some((standing) => standing.recentMatches?.length > 0), false)
+  assert.equal(defaultShard?.standings?.some((standing) => standing.recentMatches?.some((match) => Boolean(match.opponent))), true)
   assert.equal(defaultSnapshot.standings?.some((standing) => 'explanation' in standing || 'explanations' in standing), false)
   assert.equal(defaultSnapshot.standings?.every((standing) => typeof standingComponent(standing, 'leagueAnchor') === 'number'), true)
   assert.equal(defaultSnapshot.standings?.every((standing) => typeof standingComponent(standing, 'teamStableOffset') === 'number'), true)
@@ -53,10 +59,17 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(playerDirectory.players?.every((player) => Boolean(player.sourceGameId)), true)
   assert.equal(playerDirectory.players?.every((player) => Boolean(player.sourceFileName)), true)
   assert.equal(playerDirectory.players?.every((player) => Boolean(player.latestObservedAt)), true)
+  assert.equal(playerDirectory.players?.every((player) => typeof player.appearance?.latestTeamGames === 'number'), true)
+  assert.equal(playerDirectory.players?.every((player) => typeof player.appearance?.primaryTeamGames === 'number'), true)
+  assert.equal(playerDirectory.players?.every((player) => typeof player.teamGames === 'number'), true)
+  assert.equal(playerDirectory.players?.every((player) => typeof player.appearance?.roleGames === 'number'), true)
+  assert.equal(playerDirectory.players?.every((player) => Array.isArray(player.appearance?.teamHistory)), true)
+  assert.equal(playerDirectory.players?.every((player) => Array.isArray(player.appearance?.flags)), true)
   assert.equal(proofPlayers.every((player) => player.sourceProvider === 'oracles-elixir'), true)
   assert.equal(proofPlayers.every((player) => Boolean(player.sourceGameId)), true)
   assert.equal(proofPlayers.every((player) => Boolean(player.sourceFileName)), true)
   assert.equal(proofPlayers.every((player) => Boolean(player.latestObservedAt)), true)
+  assert.equal(proofPlayers.every((player) => typeof player.appearance?.latestTeamGames === 'number'), true)
   assert.equal(playerDirectory.players?.some((player) => Number(player.impactDrivers?.awardResidualZ ?? 0) !== 0), false)
 })
 
@@ -197,6 +210,101 @@ test('generated public source coverage reconciles with default and shard snapsho
     const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
     assert.equal(sumSourceBreakdown(shard.sourceBreakdown), shard.matchCount, `shard sourceBreakdown does not sum to matchCount: ${entry.url}`)
   }
+})
+
+test('generated 2026 scope exposes source-season records and scoped history', async () => {
+  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const teamHistory = parsePublicTeamHistory(await readJson('public/data/team-history.json'))
+  const entry = summary.snapshotIndex?.['2026__All__All']
+
+  assert.ok(entry)
+  assert.deepEqual(entry.filter, { season: '2026', event: 'All', region: 'All' })
+
+  const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
+  const displayedTeamRecordSides = shard.standings.reduce((total, standing) => total + standing.wins + standing.losses, 0)
+  const scopedSeries = teamHistory.scopedSeries?.['2026__All__All']
+  const scopedDates = Object.values(scopedSeries ?? {}).flatMap((series) => series.points.map((point) => point[0]))
+
+  assert.equal(displayedTeamRecordSides, shard.matchCount * 2)
+  assert.ok(scopedSeries)
+  assert.ok(scopedDates.length > 0)
+  assert.equal(scopedDates.some((date) => date.startsWith('2025-')), true)
+  assert.equal(scopedDates.every((date) => date.startsWith('2025-') || date.startsWith('2026-')), true)
+})
+
+test('generated 2025 scope does not inherit current-tier eligibility for historical ERL teams', async () => {
+  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const entry = summary.snapshotIndex?.['2025__All__All']
+
+  assert.ok(entry)
+
+  const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
+  const losRatones = shard.standings.find((standing) => standing.team === 'Los Ratones')
+
+  assert.ok(losRatones)
+  assert.equal(losRatones.league, 'NLC')
+  assert.ok((losRatones.ratingComponents?.leagueAnchor ?? 0) < 1350)
+  assert.equal(losRatones.eligibility?.eligible, false)
+  assert.equal(losRatones.eligibility?.reasons?.includes('unanchored-league'), true)
+})
+
+test('generated emerging leagues stay capped below first-division minor anchors', async () => {
+  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const entry = summary.snapshotIndex?.['2026__All__All']
+
+  assert.ok(entry)
+
+  const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
+  const lfl = shard.leagues.find((league) => league.league === 'LFL')
+
+  assert.ok(lfl)
+  assert.equal(lfl.tier, 'emerging')
+  assert.ok(lfl.score <= (leagueEffectiveRatingCapsByTier.emerging ?? 1375))
+})
+
+test('generated ranked player directory excludes unanchored-league teams', async () => {
+  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/players.json'))
+  const entry = summary.snapshotIndex?.['2026__All__All']
+
+  assert.ok(entry)
+
+  const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
+  const unanchoredTeams = new Set(
+    shard.standings
+      .filter((standing) => standing.eligibility?.reasons?.includes('unanchored-league'))
+      .map((standing) => standing.team),
+  )
+  const scopedPlayers = playerDirectory.scopedPlayers?.['2026__All__All'] ?? []
+
+  assert.equal(scopedPlayers.some((player) => unanchoredTeams.has(player.team)), false)
+})
+
+test('generated ranked player directory requires displayed-team and role samples', async () => {
+  const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/players.json'))
+  const allRows = [
+    ...(playerDirectory.players ?? []),
+    ...Object.values(playerDirectory.scopedPlayers ?? {}).flat(),
+  ]
+
+  assert.ok(allRows.length > 0)
+  assert.equal(
+    allRows.every((player) => (player.teamGames ?? 0) >= 20),
+    true,
+    'public player rows must have at least 20 games for the displayed team',
+  )
+  assert.equal(
+    allRows.every((player) => (player.appearance?.roleGames ?? 0) >= 20),
+    true,
+    'public player rows must have at least 20 games for the displayed role',
+  )
+  assert.equal(
+    (playerDirectory.scopedPlayers?.['2025__All__All'] ?? []).some((player) =>
+      player.name === 'Viper' && player.team === 'Bilibili Gaming' && (player.teamGames ?? 0) < 20,
+    ),
+    false,
+    '2025 Viper-style transfer rows must not be credited to a thin latest-team sample',
+  )
 })
 
 const htmlEntityPattern = /&(?:[a-zA-Z][a-zA-Z0-9]+|#\d+|#x[0-9a-fA-F]+);/

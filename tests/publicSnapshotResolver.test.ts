@@ -65,7 +65,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
   const defaultShard = shard({ filter: { season: 'All', event: 'All', region: 'All' }, matchCount: 10 })
   return {
     artifactKind: 'public-ranking-manifest',
-    schemaVersion: 12,
+    schemaVersion: 14,
     generatedAt: '2026-06-27T00:00:00.000Z',
     source: 'test',
     sources: [],
