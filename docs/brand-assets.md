@@ -16,10 +16,6 @@ The shipped app mark is the generated Stencil Power Mark from the 2026-06-28 cre
 
 - `public/league-icons/`: local 96px league logo assets used by region badges and exact league presentation badges.
 
-## Previous Concept Ranking
+## Candidate Archive
 
-Generated concept exploration is preserved in `docs/brand-candidates/`. The 2026-06-28 creative pass selected `stencil-power-mark.png` as the active app icon after the user narrowed the set to A and C, then chose A.
-
-1. Stencil Power Mark: selected active mark; strongest small-size silhouette from the creative pass.
-2. Rating Flame: strongest alternate for energy and motion, but thinner at favicon sizes.
-3. Rating Grid: previous selected mark from the 2026-06-27 second-pass review.
+The generated candidate archive was removed after the 2026-06-28 Stencil Power Mark was selected. The shipped files in `public/` are the canonical checked-in brand assets.
