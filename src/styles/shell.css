@@ -253,6 +253,12 @@
   border-color: var(--accent-line);
 }
 
+.field--inline {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+}
+
 .search {
   display: flex;
   align-items: center;

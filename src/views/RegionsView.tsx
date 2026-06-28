@@ -3,6 +3,7 @@ import { Globe2, Swords, Trophy, X } from 'lucide-react'
 import type { RegionStrength } from '../lib/regionStrength'
 import { extent, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord } from '../lib/display'
 import { DataState, HeatBar, HeatChip, PickButton, RegionBadge } from '../components/ui'
+import { Button } from '../components/ui/button'
 
 export function RegionsView({
   regions,
@@ -157,10 +158,10 @@ function RegionDetailDrawer({ region, onClose }: { region: RegionStrength | null
       <div className="drawer__panel">
         <div className="drawer__head">
           <h2>{region.region} region detail</h2>
-          <button ref={closeRef} type="button" className="btn btn--ghost" onClick={onClose}>
+          <Button ref={closeRef} type="button" variant="ghost" className="border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]" onClick={onClose}>
             <X size={16} aria-hidden="true" />
             Close
-          </button>
+          </Button>
         </div>
         <div className="drawer__body region-detail__body">
           <section className="region-detail__hero" aria-label={`${region.region} summary`}>

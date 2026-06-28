@@ -4,7 +4,9 @@ import type { CompactPlayer } from '../lib/snapshot'
 import type { Role } from '../types'
 import { formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { extent, formatDate, formatDecimal, formatNumber, formatRating } from '../lib/display'
-import { ConfBar, DataState, Delta, FormDots, HeatChip, PickButton, Segmented, SortHeader } from '../components/ui'
+import { ConfBar, CountBadge, DataState, Delta, Field, FormDots, HeatChip, PickButton, Segmented, SortHeader } from '../components/ui'
+import { Button } from '../components/ui/button'
+import { Card } from '../components/ui/card'
 
 type SortKey = 'rank' | 'rating' | 'games'
 type RoleFilter = Role | 'All'
@@ -102,7 +104,7 @@ export function PlayersView({
         observed appearance history and show how much of the player sample was actually played for the displayed team.
       </p>
 
-      <section className="panel">
+      <Card className="panel">
         <div className="panel__head">
           <div>
             <p className="eyebrow">Player ratings</p>
@@ -110,19 +112,16 @@ export function PlayersView({
           </div>
           <div className="toolbar spacer">
             <Segmented value={role} options={roleOptions} onChange={updateRole} />
-            <label className="field" style={{ gridAutoFlow: 'column', alignItems: 'center', gap: 8 }}>
-              <span>Region</span>
-              <select value={region} onChange={(event) => updateRegion(event.target.value)}>
-                {regionOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {formatCompetitionRegionLabel(option)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="count">
+            <Field
+              label="Region"
+              value={region}
+              options={regionOptions.map((option) => ({ value: option, label: formatCompetitionRegionLabel(option) }))}
+              onChange={updateRegion}
+              className="field--inline"
+            />
+            <CountBadge>
               {sorted.length === 0 ? 0 : pageStart + 1}-{pageStart + visible.length} of {filtered.length}
-            </span>
+            </CountBadge>
           </div>
         </div>
 
@@ -175,15 +174,16 @@ export function PlayersView({
                       </td>
                       <td className="right num">{formatNumber(player.games)}</td>
                       <td>
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
                           className="form-trigger"
                           aria-expanded={expandedPlayerId === player.id}
                           onClick={() => toggleRecentMatches(player.id)}
                           title={`Show recent matches for ${player.name}`}
                         >
                           <FormDots form={player.form} />
-                        </button>
+                        </Button>
                       </td>
                       <td>
                         <ConfBar value={Math.round((player.availability ?? 0) * 100)} />
@@ -206,37 +206,33 @@ export function PlayersView({
         {sorted.length > 0 ? (
           <div className="pager" aria-label="Player table pagination">
             <div className="pager__size">
-              <label className="field">
-                <span>Rows</span>
-                <select value={pageSize} onChange={(event) => updatePageSize(Number(event.target.value))}>
-                  {PLAYER_PAGE_SIZES.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Field
+                label="Rows"
+                value={String(pageSize)}
+                options={PLAYER_PAGE_SIZES.map((option) => String(option))}
+                onChange={(value) => updatePageSize(Number(value))}
+              />
             </div>
-            <span className="count">
+            <CountBadge>
               Page {currentPage} of {totalPages}
-            </span>
+            </CountBadge>
             <div className="pager__buttons">
-              <button type="button" className="iconbtn" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First page">
+              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First page">
                 <ChevronsLeft size={16} aria-hidden="true" />
-              </button>
-              <button type="button" className="iconbtn" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
+              </Button>
+              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
                 <ChevronLeft size={16} aria-hidden="true" />
-              </button>
-              <button type="button" className="iconbtn" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
+              </Button>
+              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
                 <ChevronRight size={16} aria-hidden="true" />
-              </button>
-              <button type="button" className="iconbtn" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">
+              </Button>
+              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">
                 <ChevronsRight size={16} aria-hidden="true" />
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
-      </section>
+      </Card>
     </div>
   )
 }
@@ -256,7 +252,7 @@ function PlayerRecentMatches({ player }: { player: CompactPlayer }) {
     <div className="player-match-detail">
       <div className="player-match-detail__head">
         <b>{player.name} recent matches</b>
-        <span className="count">Source-backed from {player.sourceProvider ?? 'the player artifact'}</span>
+        <CountBadge>Source-backed from {player.sourceProvider ?? 'the player artifact'}</CountBadge>
       </div>
       <div className="player-match-list">
         {matches.slice().reverse().map((match, index) => (

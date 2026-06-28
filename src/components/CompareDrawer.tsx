@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
+import { Button } from './ui/button'
 
 export type CompareColumn = {
   id: string
@@ -67,10 +68,10 @@ export function CompareDrawer<E>({
       <div className="drawer__panel">
         <div className="drawer__head">
           <h2>{title}</h2>
-          <button ref={closeRef} type="button" className="btn btn--ghost" onClick={onClose}>
+          <Button ref={closeRef} type="button" variant="ghost" className="border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]" onClick={onClose}>
             <X size={16} aria-hidden="true" />
             Close
-          </button>
+          </Button>
         </div>
         <div className="drawer__body">
           {entities.length === 0 ? (
@@ -91,14 +92,16 @@ export function CompareDrawer<E>({
                             </span>
                             {column.sub ? <small>{column.sub}</small> : null}
                           </div>
-                          <button
+                          <Button
                             type="button"
-                            className="btn btn--ghost"
+                            variant="ghost"
+                            size="sm"
+                            className="border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
                             style={{ padding: '2px 6px', marginTop: 4 }}
                             onClick={() => onRemove(column.id)}
                           >
                             <X size={12} aria-hidden="true" /> Remove
-                          </button>
+                          </Button>
                         </th>
                       ))}
                     </tr>
