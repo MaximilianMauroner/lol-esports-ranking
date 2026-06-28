@@ -83,8 +83,9 @@ export function RegionsView({
               key={region.region}
               className={`region-row${pickedIds.has(region.region) ? ' is-picked' : ''}`}
             >
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 className="region-row__open"
                 aria-label={`Open ${region.region} region detail`}
                 onClick={() => setSelectedRegionId(region.region)}
@@ -121,7 +122,7 @@ export function RegionsView({
                     </span>
                   ))}
                 </span>
-              </button>
+              </Button>
               <div className="region-pick">
                 <PickButton picked={pickedIds.has(region.region)} onToggle={() => onToggle(region)} label={region.region} />
               </div>
@@ -280,10 +281,15 @@ function DetailStat({ label, value, description }: { label: string; value: strin
     <div className="region-detail__stat">
       <Tooltip>
         <TooltipTrigger asChild>
-          <button type="button" className="region-detail__stat-label" aria-label={`${label}: ${description}`}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="region-detail__stat-label"
+            aria-label={`${label}: ${description}`}
+          >
             <span>{label}</span>
             <Info size={13} aria-hidden="true" />
-          </button>
+          </Button>
         </TooltipTrigger>
         <TooltipContent>{description}</TooltipContent>
       </Tooltip>

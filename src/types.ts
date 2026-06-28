@@ -134,6 +134,8 @@ export type PlayerDiagnosticAverage = {
 }
 
 export type PlayerDiagnostics = {
+  sourceProvider: 'oracles-elixir'
+  scope: 'rated-complete-role-matchups'
   sampleGames: number
   wins: number
   losses: number
@@ -145,6 +147,35 @@ export type PlayerDiagnostics = {
   kda: PlayerDiagnosticAverage
   visionScore: PlayerDiagnosticAverage
   vspm: PlayerDiagnosticAverage
+}
+
+export type PlayerIndividualResidual = {
+  sourceProvider: 'oracles-elixir'
+  metricVersion: 'individual-residual-v0'
+  scope: 'shadow-rated-complete-role-matchups'
+  score: number
+  rank?: number
+  rolePowerRank?: number
+  rankDelta?: number
+  confidence: number
+  sampleGames: number
+  adjustedSameRoleDiff: PlayerDiagnosticAverage
+  expectedNoWinStatScore: PlayerDiagnosticAverage
+  opponentStrengthProxy: PlayerDiagnosticAverage
+  controls: {
+    role: Role
+    primaryLeague: string
+    leagueGames: number
+    sideGames: Partial<Record<Side, number>>
+    patchCount: number
+    eventTierCounts: Partial<Record<EventTier, number>>
+  }
+  explanation: {
+    noWinStatScore: PlayerDiagnosticAverage
+    sameRoleMatchupDiff: PlayerDiagnosticAverage
+    rolePowerRating: number
+    teamWinRate: number | null
+  }
 }
 
 export type RosterPlayerAppearance = {
@@ -414,6 +445,7 @@ export type PlayerStanding = {
   source?: SourceTrace
   appearance?: PlayerAppearanceSummary
   diagnostics?: PlayerDiagnostics
+  individualResidual?: PlayerIndividualResidual
 }
 
 export type EventSummary = {

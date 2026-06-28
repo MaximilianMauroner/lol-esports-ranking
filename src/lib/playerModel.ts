@@ -8,10 +8,12 @@ import type {
   PlayerAppearanceSummary,
   PlayerDiagnostics,
   PlayerGameStats,
+  PlayerIndividualResidual,
   PlayerProfile,
   PlayerStanding,
   Role,
   RosterPlayerAppearance,
+  Side,
   SourceTrace,
   TeamProfile,
 } from '../types'
@@ -63,6 +65,10 @@ const sourcedPerformanceWeights = {
   kda: 0.14,
   vision: 0.1,
 } as const
+const individualResidualMetricVersion = 'individual-residual-v0'
+const individualResidualStrengthProxyWeight = 0.28
+const individualResidualScoreScale = 100
+const individualResidualMinimumRankedGames = minimumRankedSourcedPlayerGames
 const roleStatBaselines: Record<Role, { damageShare: number; earnedGoldShare: number; kda: number; vspm: number }> = {
   Top: { damageShare: 0.23, earnedGoldShare: 0.21, kda: 3, vspm: 0.9 },
   Jungle: { damageShare: 0.16, earnedGoldShare: 0.18, kda: 3.4, vspm: 1.2 },
@@ -88,6 +94,10 @@ export const playerModelParameters = {
   playerImpactWeights,
   playerImpactMultiplierBounds,
   sourcedPerformanceWeights,
+  individualResidualMetricVersion,
+  individualResidualStrengthProxyWeight,
+  individualResidualScoreScale,
+  individualResidualMinimumRankedGames,
   roleStatBaselines,
 } as const
 
@@ -217,12 +227,13 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
   const latestRosterByTeam = new Map<string, PlayerProfile[]>()
   const leagueRatings = leagueRatingsFor(context.leagueStrengths)
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+  const residualControlModel = buildIndividualResidualControlModel(sortedMatches, context, leagueRatings)
 
   for (const dateMatches of matchesByDate(sortedMatches)) {
     for (const match of dateMatches) {
       registerSourcedRosters(match, state, context, leagueRatings)
     }
-    applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings), context, leagueRatings, latestRosterByTeam)
+    applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings), context, leagueRatings, latestRosterByTeam, residualControlModel)
   }
 
   for (const roster of latestRosterByTeam.values()) {
@@ -232,13 +243,14 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
     }
   }
 
-  return Array.from(state.ratings.entries())
+  const players = Array.from(state.ratings.entries())
     .map(([id, rating]): PlayerStanding | null => {
       const profile = state.profiles.get(id)
       if (!profile) return null
       const history = histories.get(id) ?? []
       const playerShare = finalShares.get(id) ?? fallbackPlayerShare(profile)
       const league = leagueForProfile(profile, context)
+      const rolePowerRating = publishedPlayerRating(rating, league, leagueRatings)
       return {
         id,
         name: profile.name,
@@ -246,7 +258,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
         role: profile.role,
         games: history.length,
         ratingBasis: 'sourced-player-stats' as const,
-        rating: publishedPlayerRating(rating, league, leagueRatings),
+        rating: rolePowerRating,
         delta: Number((history.at(-1)?.delta ?? 0).toFixed(1)),
         rank: 0,
         baseShare: roundShare(playerShare.baseShare),
@@ -263,12 +275,49 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
         history,
         source: state.sources?.get(id),
         appearance: appearanceSummaryFor(id, profile, state),
+        diagnostics: diagnosticsSummaryFor(id, state),
+        individualResidual: individualResidualSummaryFor(id, profile, rolePowerRating, state),
       }
     })
     .filter((player): player is PlayerStanding => player !== null)
     .filter((player) => player.games > 0)
+
+  return assignPlayerRanks(players)
+}
+
+function assignPlayerRanks(players: PlayerStanding[]) {
+  const rolePowerSorted = players.toSorted((a, b) => b.rating - a.rating)
+  const rolePowerRanks = new Map(rolePowerSorted.map((player, index) => [player.id, index + 1]))
+  const residualSorted = players
+    .filter((player) =>
+      player.individualResidual
+      && player.individualResidual.sampleGames >= individualResidualMinimumRankedGames,
+    )
+    .toSorted((left, right) =>
+      (right.individualResidual?.score ?? -Infinity) - (left.individualResidual?.score ?? -Infinity)
+      || right.games - left.games
+      || left.name.localeCompare(right.name),
+    )
+  const residualRanks = new Map(residualSorted.map((player, index) => [player.id, index + 1]))
+
+  return rolePowerSorted
     .sort((a, b) => b.rating - a.rating)
-    .map((player, index) => ({ ...player, rank: index + 1 }))
+    .map((player, index) => {
+      const rolePowerRank = rolePowerRanks.get(player.id) ?? index + 1
+      const residualRank = residualRanks.get(player.id)
+      return {
+        ...player,
+        rank: index + 1,
+        individualResidual: player.individualResidual
+          ? {
+              ...player.individualResidual,
+              rank: residualRank,
+              rolePowerRank,
+              rankDelta: residualRank ? rolePowerRank - residualRank : undefined,
+            }
+          : undefined,
+      }
+    })
 }
 
 export function buildPregamePlayerRatingEdges(
@@ -339,11 +388,56 @@ type SourcedPlayerState = {
   histories?: Map<string, PlayerStanding['history']>
   sources?: Map<string, SourceTrace>
   appearances?: Map<string, PlayerAppearanceAccumulator>
+  diagnostics?: Map<string, PlayerDiagnosticsAccumulator>
+  individualResiduals?: Map<string, PlayerIndividualResidualAccumulator>
 }
 
 type PlayerAppearanceAccumulator = {
   teamGames: Map<string, { team: string; games: number; latestObservedAt?: string; latestObservedEvent?: string }>
   roleGames: Map<Role, number>
+}
+
+type DiagnosticAverageAccumulator = {
+  total: number
+  games: number
+  missing: number
+}
+
+type PlayerDiagnosticsAccumulator = {
+  sampleGames: number
+  wins: number
+  losses: number
+  noWinStatScore: DiagnosticAverageAccumulator
+  sameRoleMatchupDiff: DiagnosticAverageAccumulator
+  damageShare: DiagnosticAverageAccumulator
+  earnedGoldShare: DiagnosticAverageAccumulator
+  kda: DiagnosticAverageAccumulator
+  visionScore: DiagnosticAverageAccumulator
+  vspm: DiagnosticAverageAccumulator
+}
+
+type IndividualResidualControlModel = {
+  global: DiagnosticAverageAccumulator
+  role: Map<Role, DiagnosticAverageAccumulator>
+  roleLeague: Map<string, DiagnosticAverageAccumulator>
+  roleSide: Map<string, DiagnosticAverageAccumulator>
+  rolePatch: Map<string, DiagnosticAverageAccumulator>
+  roleTier: Map<string, DiagnosticAverageAccumulator>
+}
+
+type PlayerIndividualResidualAccumulator = {
+  sampleGames: number
+  adjustedSameRoleDiff: DiagnosticAverageAccumulator
+  expectedNoWinStatScore: DiagnosticAverageAccumulator
+  opponentStrengthProxy: DiagnosticAverageAccumulator
+  noWinStatScore: DiagnosticAverageAccumulator
+  sameRoleMatchupDiff: DiagnosticAverageAccumulator
+  wins: number
+  losses: number
+  leagueGames: Map<string, number>
+  sideGames: Map<Side, number>
+  patchGames: Map<string, number>
+  eventTierGames: Map<MatchRecord['tier'], number>
 }
 
 function createSourcedPlayerState(includeAuditFields: boolean): SourcedPlayerState {
@@ -355,6 +449,8 @@ function createSourcedPlayerState(includeAuditFields: boolean): SourcedPlayerSta
     histories: includeAuditFields ? new Map() : undefined,
     sources: includeAuditFields ? new Map() : undefined,
     appearances: includeAuditFields ? new Map() : undefined,
+    diagnostics: includeAuditFields ? new Map() : undefined,
+    individualResiduals: includeAuditFields ? new Map() : undefined,
   }
 }
 
@@ -391,6 +487,7 @@ function applySourcedPlayerUpdates(
   context: PlayerRatingContext,
   leagueRatings: Map<string, number>,
   latestRosterByTeam?: Map<string, PlayerProfile[]>,
+  residualControlModel?: IndividualResidualControlModel,
 ) {
   for (const match of matches) {
     for (const { side, team, opponent, roster, opponentRoster, opponentSide } of teamRosterEntries(match)) {
@@ -437,6 +534,20 @@ function applySourcedPlayerUpdates(
           },
         ])
         state.sources?.set(player.id, sourceTraceFor(match))
+        recordPlayerDiagnostics(player.id, player, opponentPlayer, state)
+        recordIndividualResidual(
+          player.id,
+          profile,
+          player,
+          opponentPlayer,
+          match,
+          league,
+          opponentLeague,
+          preUpdateRatings,
+          leagueRatings,
+          state,
+          residualControlModel,
+        )
         recordRatedAppearance(player.id, profile, match, state)
       }
     }
@@ -516,6 +627,305 @@ function appearanceFlagsFor(
   if (roleGames > 0 && roleGames < thinAppearanceSampleGames) flags.push('thin-role-sample')
   if (playerId.startsWith('oe:player:unresolved:')) flags.push('unresolved-player-id')
   return flags
+}
+
+function recordPlayerDiagnostics(
+  playerId: string,
+  player: RosterPlayerAppearance,
+  opponent: RosterPlayerAppearance,
+  state: SourcedPlayerState,
+) {
+  if (!state.diagnostics) return
+  const stats = player.stats
+  const current = state.diagnostics.get(playerId) ?? createPlayerDiagnosticsAccumulator()
+  current.sampleGames += 1
+  if (stats?.won) current.wins += 1
+  else current.losses += 1
+
+  recordDiagnosticValue(current.damageShare, stats?.damageShare)
+  recordDiagnosticValue(current.earnedGoldShare, stats?.earnedGoldShare)
+  recordDiagnosticValue(current.kda, stats ? kdaFor(stats) : undefined)
+  recordDiagnosticValue(current.visionScore, stats?.visionScore)
+  recordDiagnosticValue(current.vspm, stats?.vspm)
+
+  const noWinScore = noWinStatScoreFor(player)
+  const opponentNoWinScore = noWinStatScoreFor(opponent)
+  recordDiagnosticValue(current.noWinStatScore, noWinScore)
+  recordDiagnosticValue(
+    current.sameRoleMatchupDiff,
+    noWinScore === undefined || opponentNoWinScore === undefined ? undefined : noWinScore - opponentNoWinScore,
+  )
+
+  state.diagnostics.set(playerId, current)
+}
+
+function createPlayerDiagnosticsAccumulator(): PlayerDiagnosticsAccumulator {
+  return {
+    sampleGames: 0,
+    wins: 0,
+    losses: 0,
+    noWinStatScore: createDiagnosticAverageAccumulator(),
+    sameRoleMatchupDiff: createDiagnosticAverageAccumulator(),
+    damageShare: createDiagnosticAverageAccumulator(),
+    earnedGoldShare: createDiagnosticAverageAccumulator(),
+    kda: createDiagnosticAverageAccumulator(),
+    visionScore: createDiagnosticAverageAccumulator(),
+    vspm: createDiagnosticAverageAccumulator(),
+  }
+}
+
+function createDiagnosticAverageAccumulator(): DiagnosticAverageAccumulator {
+  return { total: 0, games: 0, missing: 0 }
+}
+
+function recordDiagnosticValue(accumulator: DiagnosticAverageAccumulator, value: number | undefined) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    accumulator.total += value
+    accumulator.games += 1
+    return
+  }
+  accumulator.missing += 1
+}
+
+function diagnosticsSummaryFor(playerId: string, state: SourcedPlayerState): PlayerDiagnostics | undefined {
+  const diagnostics = state.diagnostics?.get(playerId)
+  if (!diagnostics || diagnostics.sampleGames === 0) return undefined
+  return {
+    sourceProvider: 'oracles-elixir',
+    scope: 'rated-complete-role-matchups',
+    sampleGames: diagnostics.sampleGames,
+    wins: diagnostics.wins,
+    losses: diagnostics.losses,
+    winRate: diagnostics.sampleGames > 0 ? roundDiagnostic(diagnostics.wins / diagnostics.sampleGames, 3) : null,
+    noWinStatScore: diagnosticAverage(diagnostics.noWinStatScore, diagnostics.sampleGames, 3),
+    sameRoleMatchupDiff: diagnosticAverage(diagnostics.sameRoleMatchupDiff, diagnostics.sampleGames, 3),
+    damageShare: diagnosticAverage(diagnostics.damageShare, diagnostics.sampleGames, 3),
+    earnedGoldShare: diagnosticAverage(diagnostics.earnedGoldShare, diagnostics.sampleGames, 3),
+    kda: diagnosticAverage(diagnostics.kda, diagnostics.sampleGames, 2),
+    visionScore: diagnosticAverage(diagnostics.visionScore, diagnostics.sampleGames, 1),
+    vspm: diagnosticAverage(diagnostics.vspm, diagnostics.sampleGames, 2),
+  }
+}
+
+function diagnosticAverage(
+  accumulator: DiagnosticAverageAccumulator,
+  sampleGames: number,
+  decimals: number,
+): PlayerDiagnostics['damageShare'] {
+  return {
+    value: accumulator.games > 0 ? roundDiagnostic(accumulator.total / accumulator.games, decimals) : null,
+    games: accumulator.games,
+    missing: Math.max(accumulator.missing, sampleGames - accumulator.games),
+  }
+}
+
+function buildIndividualResidualControlModel(
+  matches: MatchRecord[],
+  context: PlayerRatingContext,
+  leagueRatings: Map<string, number>,
+): IndividualResidualControlModel {
+  const model: IndividualResidualControlModel = {
+    global: createDiagnosticAverageAccumulator(),
+    role: new Map(),
+    roleLeague: new Map(),
+    roleSide: new Map(),
+    rolePatch: new Map(),
+    roleTier: new Map(),
+  }
+
+  for (const match of matches) {
+    for (const { side, roster, opponentRoster } of teamRosterEntries(match)) {
+      if (!roster || !opponentRoster || !isCompleteSourcedMatchup(roster, opponentRoster)) continue
+      const league = leagueForSide(match, side, context)
+      for (const player of roster.players) {
+        const noWinScore = noWinStatScoreFor(player)
+        if (noWinScore === undefined) continue
+        recordDiagnosticValue(model.global, noWinScore)
+        recordDiagnosticValue(controlBucket(model.role, player.role), noWinScore)
+        recordDiagnosticValue(controlBucket(model.roleLeague, residualControlKey(player.role, league)), noWinScore)
+        recordDiagnosticValue(controlBucket(model.roleSide, residualControlKey(player.role, player.stats?.side ?? 'unknown')), noWinScore)
+        recordDiagnosticValue(controlBucket(model.rolePatch, residualControlKey(player.role, patchBucket(match.patch))), noWinScore)
+        recordDiagnosticValue(controlBucket(model.roleTier, residualControlKey(player.role, match.tier)), noWinScore)
+      }
+    }
+  }
+
+  if (model.global.games === 0) {
+    recordDiagnosticValue(model.global, 0.5)
+  }
+
+  // Touch league ratings here so the model signature makes the league-strength dependency explicit.
+  void leagueRatings
+
+  return model
+}
+
+function controlBucket<K>(map: Map<K, DiagnosticAverageAccumulator>, key: K) {
+  const current = map.get(key) ?? createDiagnosticAverageAccumulator()
+  map.set(key, current)
+  return current
+}
+
+function residualControlBaseline(
+  model: IndividualResidualControlModel,
+  role: Role,
+  league: string,
+  side: Side | undefined,
+  patch: string,
+  tier: MatchRecord['tier'],
+) {
+  const fallback = diagnosticMean(model.role.get(role)) ?? diagnosticMean(model.global) ?? 0.5
+  const components = [
+    { value: fallback, weight: 0.35 },
+    { value: diagnosticMean(model.roleLeague.get(residualControlKey(role, league))) ?? fallback, weight: 0.25 },
+    { value: diagnosticMean(model.roleSide.get(residualControlKey(role, side ?? 'unknown'))) ?? fallback, weight: 0.1 },
+    { value: diagnosticMean(model.rolePatch.get(residualControlKey(role, patchBucket(patch)))) ?? fallback, weight: 0.15 },
+    { value: diagnosticMean(model.roleTier.get(residualControlKey(role, tier))) ?? fallback, weight: 0.15 },
+  ]
+  const totalWeight = components.reduce((total, component) => total + component.weight, 0)
+  return components.reduce((total, component) => total + component.value * component.weight, 0) / totalWeight
+}
+
+function diagnosticMean(accumulator: DiagnosticAverageAccumulator | undefined) {
+  if (!accumulator || accumulator.games === 0) return undefined
+  return accumulator.total / accumulator.games
+}
+
+function residualControlKey(...parts: Array<string | number>) {
+  return parts.join('\u0000')
+}
+
+function patchBucket(patch: string) {
+  const [major, minor] = patch.split('.')
+  if (!major) return 'unknown'
+  return minor ? `${major}.${minor}` : major
+}
+
+function recordIndividualResidual(
+  playerId: string,
+  profile: PlayerProfile,
+  player: RosterPlayerAppearance,
+  opponent: RosterPlayerAppearance,
+  match: MatchRecord,
+  league: string,
+  opponentLeague: string,
+  preUpdateRatings: Map<string, number>,
+  leagueRatings: Map<string, number>,
+  state: SourcedPlayerState,
+  controlModel: IndividualResidualControlModel | undefined,
+) {
+  if (!state.individualResiduals || !controlModel) return
+  const noWinScore = noWinStatScoreFor(player)
+  const opponentNoWinScore = noWinStatScoreFor(opponent)
+  if (noWinScore === undefined || opponentNoWinScore === undefined) return
+
+  const playerBaseline = playerBaselineForLeague(league, leagueRatings)
+  const opponentBaseline = playerBaselineForLeague(opponentLeague, leagueRatings)
+  const rating = preUpdateRatings.get(player.id) ?? playerBaseline
+  const opponentRating = preUpdateRatings.get(opponent.id) ?? opponentBaseline
+  const expected = residualControlBaseline(controlModel, player.role, league, player.stats?.side, match.patch, match.tier)
+  const opponentExpected = residualControlBaseline(controlModel, opponent.role, opponentLeague, opponent.stats?.side, match.patch, match.tier)
+  const sameRoleDiff = noWinScore - opponentNoWinScore
+  const strengthProxy = (expectedPlayerScore(rating, opponentRating) - 0.5) * individualResidualStrengthProxyWeight
+  const adjustedSameRoleDiff = sameRoleDiff - ((expected - opponentExpected) + strengthProxy)
+  const current = state.individualResiduals.get(playerId) ?? createPlayerIndividualResidualAccumulator()
+
+  current.sampleGames += 1
+  if (player.stats?.won) current.wins += 1
+  else current.losses += 1
+  recordDiagnosticValue(current.adjustedSameRoleDiff, adjustedSameRoleDiff)
+  recordDiagnosticValue(current.expectedNoWinStatScore, expected)
+  recordDiagnosticValue(current.opponentStrengthProxy, strengthProxy)
+  recordDiagnosticValue(current.noWinStatScore, noWinScore)
+  recordDiagnosticValue(current.sameRoleMatchupDiff, sameRoleDiff)
+  current.leagueGames.set(league, (current.leagueGames.get(league) ?? 0) + 1)
+  if (player.stats?.side) current.sideGames.set(player.stats.side, (current.sideGames.get(player.stats.side) ?? 0) + 1)
+  current.patchGames.set(patchBucket(match.patch), (current.patchGames.get(patchBucket(match.patch)) ?? 0) + 1)
+  current.eventTierGames.set(match.tier, (current.eventTierGames.get(match.tier) ?? 0) + 1)
+  state.individualResiduals.set(playerId, current)
+
+  void profile
+}
+
+function createPlayerIndividualResidualAccumulator(): PlayerIndividualResidualAccumulator {
+  return {
+    sampleGames: 0,
+    wins: 0,
+    losses: 0,
+    adjustedSameRoleDiff: createDiagnosticAverageAccumulator(),
+    expectedNoWinStatScore: createDiagnosticAverageAccumulator(),
+    opponentStrengthProxy: createDiagnosticAverageAccumulator(),
+    noWinStatScore: createDiagnosticAverageAccumulator(),
+    sameRoleMatchupDiff: createDiagnosticAverageAccumulator(),
+    leagueGames: new Map(),
+    sideGames: new Map(),
+    patchGames: new Map(),
+    eventTierGames: new Map(),
+  }
+}
+
+function individualResidualSummaryFor(
+  playerId: string,
+  profile: PlayerProfile,
+  rolePowerRating: number,
+  state: SourcedPlayerState,
+): PlayerIndividualResidual | undefined {
+  const residual = state.individualResiduals?.get(playerId)
+  if (!residual || residual.sampleGames === 0) return undefined
+  const adjusted = diagnosticAverage(residual.adjustedSameRoleDiff, residual.sampleGames, 3)
+  const adjustedValue = adjusted.value ?? 0
+  const confidence = roundDiagnostic(100 * Math.min(1, residual.sampleGames / 60) * (adjusted.games / residual.sampleGames), 1)
+  return {
+    sourceProvider: 'oracles-elixir',
+    metricVersion: individualResidualMetricVersion,
+    scope: 'shadow-rated-complete-role-matchups',
+    score: Number(clamp(100 + adjustedValue * individualResidualScoreScale, 40, 160).toFixed(1)),
+    confidence,
+    sampleGames: residual.sampleGames,
+    adjustedSameRoleDiff: adjusted,
+    expectedNoWinStatScore: diagnosticAverage(residual.expectedNoWinStatScore, residual.sampleGames, 3),
+    opponentStrengthProxy: diagnosticAverage(residual.opponentStrengthProxy, residual.sampleGames, 3),
+    controls: {
+      role: profile.role,
+      primaryLeague: primaryMapKey(residual.leagueGames) ?? 'Unknown',
+      leagueGames: Math.max(...residual.leagueGames.values(), 0),
+      sideGames: Object.fromEntries(residual.sideGames.entries()),
+      patchCount: residual.patchGames.size,
+      eventTierCounts: Object.fromEntries(residual.eventTierGames.entries()),
+    },
+    explanation: {
+      noWinStatScore: diagnosticAverage(residual.noWinStatScore, residual.sampleGames, 3),
+      sameRoleMatchupDiff: diagnosticAverage(residual.sameRoleMatchupDiff, residual.sampleGames, 3),
+      rolePowerRating,
+      teamWinRate: residual.sampleGames > 0 ? roundDiagnostic(residual.wins / residual.sampleGames, 3) : null,
+    },
+  }
+}
+
+function primaryMapKey<K>(map: Map<K, number>) {
+  return Array.from(map.entries())
+    .toSorted((left, right) => right[1] - left[1])
+    .at(0)?.[0]
+}
+
+function noWinStatScoreFor(player: RosterPlayerAppearance) {
+  const stats = player.stats
+  if (!stats) return undefined
+  const baseline = roleStatBaselines[player.role]
+  const parts = [
+    diagnosticScorePart(sourcedPerformanceWeights.damageShare, stats.damageShare, baseline.damageShare, 0.12),
+    diagnosticScorePart(sourcedPerformanceWeights.earnedGoldShare, stats.earnedGoldShare, baseline.earnedGoldShare, 0.1),
+    { weight: sourcedPerformanceWeights.kda, score: statScore(kdaFor(stats), baseline.kda, 4) },
+    diagnosticScorePart(sourcedPerformanceWeights.vision, stats.vspm, baseline.vspm, 1.8),
+  ].filter((part): part is { weight: number; score: number } => Boolean(part))
+  const totalWeight = parts.reduce((total, part) => total + part.weight, 0)
+  if (totalWeight <= 0) return undefined
+  return parts.reduce((total, part) => total + part.weight * part.score, 0) / totalWeight
+}
+
+function diagnosticScorePart(weight: number, value: number | undefined, baseline: number, spread: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return { weight, score: statScore(value, baseline, spread) }
 }
 
 function teamRosterEntries(match: MatchRecord) {
@@ -600,17 +1010,24 @@ function rawPlayerPerformance(player: RosterPlayerAppearance) {
   const stats = player.stats
   if (!stats) return 0.5
   const baseline = roleStatBaselines[player.role]
-  const kda = (stats.kills + stats.assists) / Math.max(1, stats.deaths)
 
   return clamp(
     sourcedPerformanceWeights.win * (stats.won ? 1 : 0)
       + sourcedPerformanceWeights.damageShare * statScore(stats.damageShare, baseline.damageShare, 0.12)
       + sourcedPerformanceWeights.earnedGoldShare * statScore(stats.earnedGoldShare, baseline.earnedGoldShare, 0.1)
-      + sourcedPerformanceWeights.kda * statScore(kda, baseline.kda, 4)
+      + sourcedPerformanceWeights.kda * statScore(kdaFor(stats), baseline.kda, 4)
       + sourcedPerformanceWeights.vision * statScore(stats.vspm, baseline.vspm, 1.8),
     0,
     1,
   )
+}
+
+function kdaFor(stats: PlayerGameStats) {
+  return (stats.kills + stats.assists) / Math.max(1, stats.deaths)
+}
+
+function roundDiagnostic(value: number, decimals: number) {
+  return Number(value.toFixed(decimals))
 }
 
 function leagueRatingsFor(leagueStrengths: LeagueStrength[] | undefined) {

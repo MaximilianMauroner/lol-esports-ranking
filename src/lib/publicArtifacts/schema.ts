@@ -2,6 +2,8 @@ import type {
   FactorBreakdown,
   LeagueStrength,
   PlayerAppearanceSummary,
+  PlayerDiagnostics,
+  PlayerIndividualResidual,
   PlayerStanding,
   RatingComponents,
   RatingUpdateLedger,
@@ -131,6 +133,34 @@ export type PlayerMetricInfo = {
   independentSkillClaim: false
 }
 
+export type PlayerComparisonMetricInfo = {
+  id: 'individual-residual'
+  label: string
+  shortLabel: string
+  description: string
+  metricVersion: 'individual-residual-v0'
+  teamResultSignal: 'reduced'
+  independentSkillClaim: false
+}
+
+export type SameTeamTopFiveClusteringDiagnostic = {
+  status: 'diagnostic-not-failure'
+  topN: 5
+  scope: string
+  teams: Array<{
+    team: string
+    teamCode?: string
+    count: number
+    roles: Role[]
+    players: string[]
+  }>
+}
+
+export type PlayerDirectoryDiagnostics = {
+  sameTeamTopFiveClustering: SameTeamTopFiveClusteringDiagnostic
+  scopedSameTeamTopFiveClustering?: Record<string, SameTeamTopFiveClusteringDiagnostic>
+}
+
 export type CompactPlayer = {
   id: string
   name: string
@@ -171,6 +201,8 @@ export type CompactPlayer = {
   availability: number
   roleCertainty: number
   impactDrivers: PlayerStanding['impactDrivers']
+  diagnostics?: PlayerDiagnostics
+  individualResidual?: PlayerIndividualResidual
   ratingBasis?: PlayerStanding['ratingBasis']
   sourceProvider?: string
   sourceFileName?: string
@@ -188,6 +220,8 @@ export type PublicPlayerDirectory = {
   modelConfigHash: string
   sourceProvider: string
   metric: PlayerMetricInfo
+  comparisonMetrics?: PlayerComparisonMetricInfo[]
+  diagnostics?: PlayerDirectoryDiagnostics
   ratedPlayerCount: number
   ratedTeamCount: number
   roles: Role[]
@@ -442,6 +476,8 @@ export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirector
   assertString(value.modelVersion, 'player directory modelVersion')
   assertString(value.modelConfigHash, 'player directory modelConfigHash')
   assertObject(value.metric, 'player directory metric')
+  if ('comparisonMetrics' in value) assertArray(value.comparisonMetrics, 'player directory comparisonMetrics')
+  if ('diagnostics' in value) assertObject(value.diagnostics, 'player directory diagnostics')
   assertArray(value.players, 'player directory players')
   if ('scopedPlayers' in value) assertObject(value.scopedPlayers, 'player directory scopedPlayers')
   return value as PublicPlayerDirectory

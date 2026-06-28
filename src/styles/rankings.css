@@ -21,6 +21,8 @@
 }
 
 .gpr-toolbar {
+  --gpr-control-h: 44px;
+
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -54,6 +56,55 @@
   color: var(--faint);
   font-size: 0.76rem;
   line-height: 1.45;
+}
+
+.gpr-toolbar .toolbar {
+  align-items: center;
+}
+
+.gpr-toolbar .toolbar label:has([data-slot="input"]),
+.gpr-toolbar .toolbar [data-slot="toggle-group"],
+.gpr-toolbar .toolbar label:has([data-slot="select"]),
+.gpr-toolbar .toolbar .select-shell,
+.gpr-toolbar .toolbar [data-slot="select"],
+.gpr-toolbar .toolbar [data-slot="badge"] {
+  min-height: var(--gpr-control-h);
+}
+
+.gpr-toolbar .toolbar label:has([data-slot="input"]) {
+  height: var(--gpr-control-h);
+  padding-block: 0;
+}
+
+.gpr-toolbar .toolbar [data-slot="input"] {
+  height: calc(var(--gpr-control-h) - 2px);
+  min-height: 0;
+}
+
+.gpr-toolbar .toolbar [data-slot="toggle-group"] {
+  flex-wrap: nowrap;
+  height: var(--gpr-control-h);
+}
+
+.gpr-toolbar .toolbar label:has([data-slot="select"]) {
+  grid-template-columns: auto minmax(120px, 1fr);
+  align-items: center;
+  height: var(--gpr-control-h);
+}
+
+.gpr-toolbar .toolbar label:has([data-slot="select"]) > span {
+  white-space: nowrap;
+}
+
+.gpr-toolbar .toolbar .select-shell,
+.gpr-toolbar .toolbar [data-slot="select"] {
+  height: var(--gpr-control-h);
+}
+
+.gpr-toolbar .toolbar [data-slot="badge"] {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 12px;
 }
 
 /* GPR table refinements */
@@ -151,14 +202,24 @@ tr.gpr-row:focus-visible {
 }
 
 .team-cell__button {
+  justify-content: flex-start;
   width: 100%;
+  height: auto;
   min-height: 36px;
+  padding: 0;
   border: 0;
+  border-radius: var(--r-sm);
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
+}
+
+.team-cell__button:hover {
+  background: transparent;
+  color: inherit;
 }
 
 .team-cell__button:focus-visible {
@@ -1635,14 +1696,22 @@ tr.gpr-row:focus-visible {
   display: grid;
   grid-template-columns: 52px minmax(150px, 1.25fr) minmax(150px, 1fr) minmax(150px, 0.95fr) minmax(160px, 1.4fr);
   align-items: center;
+  justify-content: stretch;
+  justify-items: stretch;
   gap: 18px;
+  width: 100%;
+  height: auto;
   min-width: 0;
+  min-height: 0;
   padding: 16px 0 16px 18px;
   border: 0;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
+  font-weight: inherit;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
 }
 

@@ -24,6 +24,10 @@ function sourcedPlayer(overrides: Partial<PlayerStanding> & Pick<PlayerStanding,
   }
 }
 
+function diagnosticMetric(value: number | null, games = value === null ? 0 : 100, missing = value === null ? 100 : 0) {
+  return { value, games, missing }
+}
+
 test('createPlayerDirectory flattens sourced players and joins region/league from standings', () => {
   const standing = {
     team: 'Gen.G',
@@ -93,6 +97,49 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
               roleHistory: [{ role: 'Mid', games: 100 }],
               flags: [],
             },
+            diagnostics: {
+              sourceProvider: 'oracles-elixir',
+              scope: 'rated-complete-role-matchups',
+              sampleGames: 100,
+              wins: 68,
+              losses: 32,
+              winRate: 0.68,
+              noWinStatScore: diagnosticMetric(0.61),
+              sameRoleMatchupDiff: diagnosticMetric(0.08),
+              damageShare: diagnosticMetric(0.27),
+              earnedGoldShare: diagnosticMetric(0.22),
+              kda: diagnosticMetric(4.2),
+              visionScore: diagnosticMetric(null),
+              vspm: diagnosticMetric(1.05),
+            },
+            individualResidual: {
+              sourceProvider: 'oracles-elixir',
+              metricVersion: 'individual-residual-v0',
+              scope: 'shadow-rated-complete-role-matchups',
+              score: 113.4,
+              rank: 4,
+              rolePowerRank: 1,
+              rankDelta: -3,
+              confidence: 96.5,
+              sampleGames: 100,
+              adjustedSameRoleDiff: diagnosticMetric(0.134),
+              expectedNoWinStatScore: diagnosticMetric(0.59),
+              opponentStrengthProxy: diagnosticMetric(0.025),
+              controls: {
+                role: 'Mid',
+                primaryLeague: 'LCK',
+                leagueGames: 100,
+                sideGames: { blue: 52, red: 48 },
+                patchCount: 5,
+                eventTierCounts: { 'regional-regular': 100 },
+              },
+              explanation: {
+                noWinStatScore: diagnosticMetric(0.61),
+                sameRoleMatchupDiff: diagnosticMetric(0.08),
+                rolePowerRating: 200,
+                teamWinRate: 0.68,
+              },
+            },
           }),
           sourcedPlayer({ id: 'p2', name: 'Demo', team: 'Gen.G', role: 'Top', rank: 2, ratingBasis: 'seeded-demo-rosters' }),
           sourcedPlayer({ id: 'p3', name: 'Zero', team: 'Gen.G', role: 'Jungle', rank: 3, games: 0 }),
@@ -107,6 +154,11 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   assert.equal(directory.metric.id, 'role-power')
   assert.equal(directory.metric.teamResultSignal, 'included')
   assert.equal(directory.metric.independentSkillClaim, false)
+  assert.equal(directory.comparisonMetrics?.[0]?.id, 'individual-residual')
+  assert.equal(directory.comparisonMetrics?.[0]?.teamResultSignal, 'reduced')
+  assert.equal(directory.comparisonMetrics?.[0]?.independentSkillClaim, false)
+  assert.equal(directory.diagnostics?.sameTeamTopFiveClustering.status, 'diagnostic-not-failure')
+  assert.deepEqual(directory.diagnostics?.sameTeamTopFiveClustering.teams, [])
   assert.equal(directory.ratedPlayerCount, 1)
   assert.equal(directory.ratedTeamCount, 1)
   assert.deepEqual(directory.roles, ['Mid'])
@@ -122,6 +174,18 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   assert.equal(chovy.sourceFileName, 'oracle-fixture.csv')
   assert.equal(chovy.latestObservedAt, '2026-06-26')
   assert.equal(chovy.latestObservedEvent, 'LCK 2026 Rounds 1-2')
+  assert.equal(chovy.diagnostics?.sourceProvider, 'oracles-elixir')
+  assert.equal(chovy.diagnostics?.sampleGames, 100)
+  assert.equal(chovy.diagnostics?.winRate, 0.68)
+  assert.deepEqual(chovy.diagnostics?.visionScore, { value: null, games: 0, missing: 100 })
+  assert.equal(chovy.individualResidual?.sourceProvider, 'oracles-elixir')
+  assert.equal(chovy.individualResidual?.metricVersion, 'individual-residual-v0')
+  assert.equal(chovy.individualResidual?.score, 113.4)
+  assert.equal(chovy.individualResidual?.rank, 1)
+  assert.equal(chovy.individualResidual?.rolePowerRank, 1)
+  assert.equal(chovy.individualResidual?.rankDelta, 0)
+  assert.equal(chovy.individualResidual?.confidence, 96.5)
+  assert.equal(chovy.individualResidual?.controls.primaryLeague, 'LCK')
   assert.deepEqual(chovy.recentMatches, [{
     date: '2026-06-26',
     event: 'LCK 2026 Rounds 1-2',
@@ -984,6 +1048,60 @@ test('createTeamHistory publishes match-level history points for multi-game seri
   assert.deepEqual(seriesPoint[3]?.sourceGameIds, ['hle-gen-game-1', 'hle-gen-game-2', 'hle-gen-game-3'])
 })
 
+test('createTeamHistory final point matches published standing rating', () => {
+  const standing = {
+    team: 'Bilibili Gaming',
+    code: 'BLG',
+    region: 'LPL',
+    league: 'LPL',
+    rating: 1699,
+    rank: 1,
+    history: [
+      {
+        date: '2026-06-13',
+        event: 'LPL 2026 Split 2',
+        opponent: 'Team WE',
+        rating: 1685,
+        rank: 1,
+        delta: -13,
+        tier: 'major-playoffs',
+        result: 'W',
+        source: { provider: 'oracles-elixir', gameId: 'blg-we-game-5', fileName: 'fixture.csv', bestOf: 5 },
+      },
+      {
+        date: '2026-06-14',
+        event: 'LPL 2026 Split 2',
+        opponent: 'Top Esports',
+        rating: 1704,
+        rank: 1,
+        delta: 21,
+        tier: 'major-playoffs',
+        result: 'W',
+        source: { provider: 'oracles-elixir', gameId: 'blg-tes-game-3', fileName: 'fixture.csv', bestOf: 5 },
+      },
+    ],
+  } as TeamStanding
+  const data = {
+    generatedAt: '2026-06-28T00:00:00.000Z',
+    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'key',
+    teams: {},
+    snapshots: {
+      key: {
+        standings: [standing],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const history = createTeamHistory(data)
+  const latest = history.series[teamStandingKey(standing)].points.at(-1)
+
+  assert.equal(latest?.[1], 1699)
+  assert.equal(latest?.[2], 1)
+  assert.equal(latest?.[3]?.opponent, 'Top Esports')
+  assert.equal(latest?.[3]?.result, 'W')
+})
+
 test('createTeamHistory skips unresolved tied match groups', () => {
   const historyPoint = (
     date: string,
@@ -1311,6 +1429,8 @@ test('season filters publish season-end standings instead of current global stan
     '2026-01-29',
     '2026-02-05',
   ])
+  assert.equal(scoped2026[teamStandingKey(season2026Beta)]?.points.at(-1)?.[3]?.opponent, 'Alpha')
+  assert.equal(scoped2026[teamStandingKey(season2026Beta)]?.points.at(-1)?.[3]?.result, 'W')
 })
 
 test('season scoped standings use league observed inside that season', () => {

@@ -4,6 +4,7 @@ import { DataState } from './ui'
 import { Button } from './ui/button'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from './ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 
 export type CompareColumn = {
   id: string
@@ -65,12 +66,12 @@ export function CompareDrawer<E>({
           ) : (
             <>
               <div className="drawer__table tablewrap">
-                <table className="cmp" data-compare-count={columns.length}>
-                  <thead>
-                    <tr>
-                      <th scope="col" aria-label="Metric" />
+                <Table className="cmp" data-compare-count={columns.length}>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead aria-label="Metric" />
                       {columns.map((column) => (
-                        <th key={column.id} scope="col">
+                        <TableHead key={column.id}>
                           <div className="ent">
                             <span className="ent__identity">
                               {column.badge}
@@ -93,31 +94,31 @@ export function CompareDrawer<E>({
                             </TooltipTrigger>
                             <TooltipContent>Remove {column.name}</TooltipContent>
                           </Tooltip>
-                        </th>
+                        </TableHead>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {rows.map((row) => {
                       const best = bestIds(entities, columns, row)
                       return (
-                        <tr key={row.key}>
-                          <th scope="row">{row.label}</th>
+                        <TableRow key={row.key}>
+                          <TableHead>{row.label}</TableHead>
                           {entities.map((entity, index) => (
-                            <td key={columns[index].id} className={best.has(columns[index].id) ? 'best' : ''}>
+                            <TableCell key={columns[index].id} className={best.has(columns[index].id) ? 'best' : ''}>
                               {row.cell(entity)}
                               {best.has(columns[index].id) ? (
                                 <span className="cmp__best" aria-label={`Best ${row.label.toLowerCase()} value`}>
                                   Best
                                 </span>
                               ) : null}
-                            </td>
+                            </TableCell>
                           ))}
-                        </tr>
+                        </TableRow>
                       )
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
               {after ? <div className="drawer__after">{after}</div> : null}
             </>

@@ -6,7 +6,6 @@ import { Select } from './ui/select'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { fillClass, formatSigned, heatClass, movementClass, pctWithin } from '../lib/display'
 
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
@@ -293,25 +292,25 @@ export function Segmented<T extends string>({
   className?: string
 }) {
   return (
-    <ToggleGroup
-      type="single"
-      value={value}
+    <div
+      role="group"
       aria-label={ariaLabel}
-      onValueChange={(nextValue) => {
-        if (nextValue) onChange(nextValue as T)
-      }}
       className={cn('inline-flex max-w-full flex-wrap gap-1 rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface-2)] p-1 max-sm:w-full max-sm:border-0 max-sm:bg-transparent max-sm:p-0', className)}
     >
       {options.map((option) => (
-        <ToggleGroupItem
+        <Button
+          type="button"
           key={option.value}
-          value={option.value}
+          variant="ghost"
+          size="sm"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
           className={cn('rounded-[7px] text-[var(--muted)] hover:text-[var(--text)]', value === option.value && 'bg-[var(--surface-3)] text-[var(--text-strong)]')}
         >
           {option.label}
-        </ToggleGroupItem>
+        </Button>
       ))}
-    </ToggleGroup>
+    </div>
   )
 }
 
@@ -361,10 +360,16 @@ export function SortHeader({
       className={`sortable${active ? ' is-sorted' : ''}${align ? ` ${align}` : ''}${className ? ` ${className}` : ''}`}
       aria-sort={active ? (descending ? 'descending' : 'ascending') : 'none'}
     >
-      <button type="button" className="sort-button" onClick={activateSort}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="sort-button"
+        onClick={activateSort}
+      >
         <span>{label}</span>
         {active ? <span aria-hidden="true">{descending ? '↓' : '↑'}</span> : null}
-      </button>
+      </Button>
     </th>
   )
 }

@@ -77,7 +77,31 @@ table.ranking-table {
 }
 
 table.ranking-table.player-grid {
-  min-width: 880px;
+  min-width: 980px;
+}
+
+table.ranking-table.player-grid .player-col-residual {
+  width: 112px;
+}
+
+.residual-chip {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  min-width: 0;
+}
+
+.residual-chip b {
+  color: var(--text-strong);
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.residual-chip small {
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 1024px) {
@@ -113,6 +137,10 @@ table.ranking-table.player-grid {
 
   table.ranking-table.player-grid .player-col-rating {
     width: 96px;
+  }
+
+  table.ranking-table.player-grid .player-col-residual {
+    width: 92px;
   }
 
   table.ranking-table.player-grid .player-col-form {
@@ -416,6 +444,70 @@ table.ranking-table tbody tr.is-picked {
   display: grid;
 }
 
+.player-diagnostics {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.player-diagnostics__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.player-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.player-diagnostic {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: color-mix(in oklch, var(--surface-2) 42%, transparent);
+}
+
+.player-diagnostic span,
+.player-diagnostic small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-diagnostic span {
+  color: var(--faint);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.player-diagnostic b {
+  color: var(--text-strong);
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-diagnostic small,
+.player-match-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.player-match-empty {
+  margin: 0;
+  padding: 12px;
+}
+
 .player-match {
   display: grid;
   grid-template-columns: 28px minmax(180px, 1.05fr) minmax(54px, auto) minmax(160px, 0.8fr);
@@ -639,8 +731,10 @@ table.ranking-table tbody tr.is-picked {
 }
 
 .pager {
+  --pager-control-h: 36px;
+
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-end;
   gap: 12px;
   padding: 14px 0 0;
@@ -648,7 +742,26 @@ table.ranking-table tbody tr.is-picked {
 
 .pager__buttons {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
+}
+
+.pager__size .select-shell,
+.pager__size [data-slot="select"] {
+  height: var(--pager-control-h);
+  min-height: var(--pager-control-h);
+}
+
+.pager [data-slot="badge"] {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--pager-control-h);
+  padding-inline: 12px;
+}
+
+.pager__buttons [data-slot="button"] {
+  width: var(--pager-control-h);
+  height: var(--pager-control-h);
 }
 
 @media (max-width: 640px) {
@@ -691,6 +804,7 @@ table.ranking-table tbody tr.is-picked {
 
   table.ranking-table.player-grid .player-col-role,
   table.ranking-table.player-grid .player-col-team,
+  table.ranking-table.player-grid .player-col-residual,
   table.ranking-table.player-grid .player-col-games,
   table.ranking-table.player-grid .player-col-form,
   table.ranking-table.player-grid .player-col-availability {
@@ -784,6 +898,10 @@ table.ranking-table tbody tr.is-picked {
     justify-self: start;
   }
 
+  .player-diagnostic-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .player-match {
     grid-template-columns: 24px minmax(0, 1fr) auto;
     align-items: center;
@@ -832,6 +950,10 @@ table.ranking-table tbody tr.is-picked {
     padding-inline: 4px;
     font-size: 0.58rem;
     letter-spacing: 0.02em;
+  }
+
+  .player-diagnostic-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1026,7 +1148,7 @@ table.ranking-table tbody tr.is-picked {
 
 .matchup__facts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1px;
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -1054,6 +1176,16 @@ table.ranking-table tbody tr.is-picked {
   color: var(--text-strong);
   font-size: 0.86rem;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchup__facts em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

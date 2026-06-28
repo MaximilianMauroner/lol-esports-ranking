@@ -3,13 +3,14 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Info, UserRound
 import type { CompactPlayer, PlayerMetricInfo } from '../lib/publicArtifacts/schema'
 import type { Role } from '../types'
 import { formatCompetitionRegionLabel } from '../data/regionTaxonomy'
-import { extent, formatDate, formatDecimal, formatNumber, formatRating } from '../lib/display'
+import { extent, formatDate, formatDecimal, formatMultiplier, formatNumber, formatPercentValue, formatRating, formatRatio } from '../lib/display'
 import { ConfBar, CountBadge, DataState, Delta, Field, FormDots, HeatChip, PickButton, SearchInput, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 
-type SortKey = 'rank' | 'rating' | 'games'
+type SortKey = 'rank' | 'rating' | 'individualResidual' | 'games'
 type RoleFilter = Role | 'All'
 
 const PLAYER_PAGE_SIZES = [25, 50, 80, 120] as const
@@ -147,32 +148,33 @@ export function PlayersView({
           </DataState>
         ) : (
           <div className="tablewrap">
-            <table className="ranking-table player-grid">
-              <thead>
-                <tr>
-                  <th scope="col" className="center" aria-label="Add to comparison" />
+            <Table className="ranking-table player-grid">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="center" aria-label="Add to comparison" />
                   <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
-                  <th scope="col" className="player-col-player">Player</th>
-                  <th scope="col" className="player-col-role">Role</th>
-                  <th scope="col" className="player-col-team">Team</th>
+                  <TableHead className="player-col-player">Player</TableHead>
+                  <TableHead className="player-col-role">Role</TableHead>
+                  <TableHead className="player-col-team">Team</TableHead>
                   <SortHeader label="Rating" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" className="player-col-rating" />
+                  <SortHeader label="Residual" columnKey="individualResidual" sortKey={sortKey} descending onSort={onSort} align="right" className="player-col-residual" />
                   <SortHeader label="Games" columnKey="games" sortKey={sortKey} descending onSort={onSort} align="right" className="player-col-games" />
-                  <th scope="col" className="player-col-form">Form</th>
-                  <th scope="col" className="player-col-availability">Availability</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="player-col-form">Form</TableHead>
+                  <TableHead className="player-col-availability">Availability</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {visible.map((player) => {
                   const isExpanded = expandedPlayerId === player.id
-                  const recentMatchesLabel = `${isExpanded ? 'Hide' : 'Show'} recent matches for ${player.name}`
+                  const recentMatchesLabel = `${isExpanded ? 'Hide' : 'Show'} diagnostics and recent matches for ${player.name}`
                   return (
                     <Fragment key={player.id}>
-                    <tr className={pickedIds.has(player.id) ? 'is-picked' : ''}>
-                      <td className="center">
+                    <TableRow className={pickedIds.has(player.id) ? 'is-picked' : ''}>
+                      <TableCell className="center">
                         <PickButton picked={pickedIds.has(player.id)} onToggle={() => onToggle(player)} label={player.name} />
-                      </td>
-                      <td className={`rank-cell${player.rank <= 3 ? ' podium' : ''}`}>{player.rank}</td>
-                      <td className="player-col-player">
+                      </TableCell>
+                      <TableCell className={`rank-cell${player.rank <= 3 ? ' podium' : ''}`}>{player.rank}</TableCell>
+                      <TableCell className="player-col-player">
                         <div className="ent">
                           <b>{player.name}</b>
                           <small>
@@ -191,11 +193,11 @@ export function PlayersView({
                             <FormDots form={player.form} />
                           </Button>
                         </div>
-                      </td>
-                      <td className="player-col-role">
+                      </TableCell>
+                      <TableCell className="player-col-role">
                         <span className="role-pill">{player.role}</span>
-                      </td>
-                      <td className="player-col-team">
+                      </TableCell>
+                      <TableCell className="player-col-team">
                         <div className="ent">
                           <b>{player.teamCode ?? player.team}</b>
                           <small className="player-team-meta" title={appearanceTitle(player)} aria-label={teamAppearanceLabel(player)}>
@@ -203,13 +205,16 @@ export function PlayersView({
                             <span className="player-team-meta__short" aria-hidden="true">{player.region ?? '—'}</span>
                           </small>
                         </div>
-                      </td>
-                      <td className="right player-col-rating">
+                      </TableCell>
+                      <TableCell className="right player-col-rating">
                         <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />{' '}
                         <Delta value={player.delta} />
-                      </td>
-                      <td className="right num player-col-games">{formatNumber(player.games)}</td>
-                      <td className="player-col-form">
+                      </TableCell>
+                      <TableCell className="right player-col-residual">
+                        <ResidualChip player={player} />
+                      </TableCell>
+                      <TableCell className="right num player-col-games">{formatNumber(player.games)}</TableCell>
+                      <TableCell className="player-col-form">
                         <Button
                           type="button"
                           variant="ghost"
@@ -221,23 +226,23 @@ export function PlayersView({
                         >
                           <FormDots form={player.form} />
                         </Button>
-                      </td>
-                      <td className="player-col-availability">
+                      </TableCell>
+                      <TableCell className="player-col-availability">
                         <ConfBar value={Math.round((player.availability ?? 0) * 100)} />
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                     {isExpanded ? (
-                      <tr className="player-match-row">
-                        <td colSpan={9}>
+                      <TableRow className="player-match-row">
+                        <TableCell colSpan={10}>
                           <PlayerRecentMatches player={player} />
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ) : null}
                     </Fragment>
                   )
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
 
@@ -276,14 +281,19 @@ export function PlayersView({
 }
 
 function ImpactMultiplier({ value }: { value: number }) {
-  const label = `impact ×${formatDecimal(value)}`
+  const label = `impact ×${formatMultiplier(value)}`
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className="impact-note" aria-label={`${label}. Explain impact multiplier`}>
+        <Button
+          type="button"
+          variant="ghost"
+          className="impact-note"
+          aria-label={`${label}. Explain impact multiplier`}
+        >
           <span>{label}</span>
           <Info size={12} aria-hidden="true" />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top" align="start" className="impact-tooltip">
         <b>Impact multiplier</b>
@@ -296,13 +306,25 @@ function ImpactMultiplier({ value }: { value: number }) {
   )
 }
 
+function ResidualChip({ player }: { player: CompactPlayer }) {
+  const residual = player.individualResidual
+  if (!residual) return <span className="muted">—</span>
+  const rankLabel = residual.rank ? `#${residual.rank}` : 'unranked'
+  return (
+    <span className="residual-chip" title={`Individual Residual ${formatRating(residual.score)} · ${rankLabel}`}>
+      <b>{formatRating(residual.score)}</b>
+      <small>{rankLabel}</small>
+    </span>
+  )
+}
+
 function PlayerRecentMatches({ player }: { player: CompactPlayer }) {
   const matches = player.recentMatches ?? []
 
-  if (matches.length === 0) {
+  if (!player.diagnostics && !player.individualResidual && matches.length === 0) {
     return (
       <div className="player-match-detail">
-        <p className="muted">This player artifact only has the W/L form letters. Recent match opponents are not available in this generated payload.</p>
+        <p className="muted">This player artifact only has the W/L form letters. Diagnostics and recent match opponents are not available in this generated payload.</p>
       </div>
     )
   }
@@ -311,23 +333,96 @@ function PlayerRecentMatches({ player }: { player: CompactPlayer }) {
     <div className="player-match-detail">
       <div className="player-match-detail__head">
         <div className="player-match-detail__title">
-          <b>{player.name} recent matches</b>
-          <small>Source rows used for the player rating proof</small>
+          <b>{player.name} diagnostics and recent matches</b>
+          <small>Oracle row diagnostics for context; rating remains the published Role Power metric.</small>
         </div>
         <CountBadge>{formatPlayerSourceBadge(player)}</CountBadge>
       </div>
-      <div className="player-match-list" aria-label={`${player.name} recent match source proof`}>
-        {matches.slice().reverse().map((match, index) => (
-          <div className="player-match" key={`${match.date}-${match.sourceMatchId ?? match.sourceGameId ?? match.event}-${index}`}>
-            <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`} aria-label={match.result === 'W' ? 'Win' : 'Loss'}>{match.result}</span>
-            <div className="player-match__main">
-              <b>{formatMatchTitle(match, player)}</b>
-              <small>{formatMatchMeta(match)}</small>
+      {player.diagnostics || player.individualResidual ? <PlayerDiagnosticsPanel player={player} /> : null}
+      {matches.length > 0 ? (
+        <div className="player-match-list" aria-label={`${player.name} recent match source proof`}>
+          {matches.slice().reverse().map((match, index) => (
+            <div className="player-match" key={`${match.date}-${match.sourceMatchId ?? match.sourceGameId ?? match.event}-${index}`}>
+              <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`} aria-label={match.result === 'W' ? 'Win' : 'Loss'}>{match.result}</span>
+              <div className="player-match__main">
+                <b>{formatMatchTitle(match, player)}</b>
+                <small>{formatMatchMeta(match)}</small>
+              </div>
+              <span className="player-match__score">{formatMatchScore(match)}</span>
+              <small className="player-match__source" title={formatMatchSource(match, true)}>
+                {formatMatchSource(match)}
+              </small>
             </div>
-            <span className="player-match__score">{formatMatchScore(match)}</span>
-            <small className="player-match__source" title={formatMatchSource(match, true)}>
-              {formatMatchSource(match)}
-            </small>
+          ))}
+        </div>
+      ) : (
+        <p className="player-match-empty">Recent match opponents are not available in this generated payload.</p>
+      )}
+    </div>
+  )
+}
+
+type CompactRecentPlayerMatch = NonNullable<CompactPlayer['recentMatches']>[number]
+type CompactPlayerDiagnostics = NonNullable<CompactPlayer['diagnostics']>
+type CompactPlayerDiagnosticMetric = CompactPlayerDiagnostics['damageShare']
+type CompactPlayerIndividualResidual = NonNullable<CompactPlayer['individualResidual']>
+
+function PlayerDiagnosticsPanel({ player }: { player: CompactPlayer }) {
+  const diagnostics = player.diagnostics
+  const residual = player.individualResidual
+  if (!diagnostics && !residual) return null
+  const residualItems = residual ? [
+    { label: 'Individual Residual', value: formatRating(residual.score), note: formatResidualRankNote(residual) },
+    { label: 'Adjusted diff', value: formatMetricSignedRatio(residual.adjustedSameRoleDiff), note: metricCoverageLabel(residual.adjustedSameRoleDiff) },
+    { label: 'Expected no-win', value: formatMetricRatio(residual.expectedNoWinStatScore), note: formatResidualControlNote(residual) },
+    { label: 'Strength proxy', value: formatMetricSignedRatio(residual.opponentStrengthProxy), note: 'pre-game rating edge' },
+  ] : []
+  const diagnosticItems = diagnostics ? [
+    { label: 'Win rate', value: diagnostics.winRate === null ? '—' : formatRatio(diagnostics.winRate), note: `${formatNumber(diagnostics.wins)}-${formatNumber(diagnostics.losses)}` },
+    { label: 'No-win stat', value: formatMetricRatio(diagnostics.noWinStatScore), note: metricCoverageLabel(diagnostics.noWinStatScore) },
+    { label: 'Same-role diff', value: formatMetricSignedRatio(diagnostics.sameRoleMatchupDiff), note: metricCoverageLabel(diagnostics.sameRoleMatchupDiff) },
+    { label: 'Damage share', value: formatMetricRatio(diagnostics.damageShare), note: metricCoverageLabel(diagnostics.damageShare) },
+    { label: 'Gold share', value: formatMetricRatio(diagnostics.earnedGoldShare), note: metricCoverageLabel(diagnostics.earnedGoldShare) },
+    { label: 'KDA', value: formatMetricDecimal(diagnostics.kda), note: metricCoverageLabel(diagnostics.kda) },
+    { label: 'Vision score', value: formatMetricDecimal(diagnostics.visionScore), note: metricCoverageLabel(diagnostics.visionScore) },
+    { label: 'VSPM', value: formatMetricDecimal(diagnostics.vspm), note: metricCoverageLabel(diagnostics.vspm) },
+  ] : []
+  const items = [
+    ...residualItems,
+    ...diagnosticItems,
+  ]
+  const sourceSampleGames = diagnostics?.sampleGames ?? residual?.sampleGames ?? 0
+
+  return (
+    <div className="player-diagnostics" aria-label={`${player.name} Oracle row diagnostics`}>
+      <div className="player-diagnostics__head">
+        <span>{formatNumber(sourceSampleGames)} rated complete-role matchups</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              className="impact-note"
+              aria-label="Explain Oracle row diagnostics"
+            >
+              <Info size={12} aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="start" className="impact-tooltip">
+            <b>Player diagnostics</b>
+            <span>
+              Individual Residual is a shadow comparison that reduces shared team-result and context effects. Oracle row
+              diagnostics explain source stat context and missing coverage; Role Power remains the published rank.
+            </span>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      <div className="player-diagnostic-grid">
+        {items.map((item) => (
+          <div className="player-diagnostic" key={item.label}>
+            <span>{item.label}</span>
+            <b>{item.value}</b>
+            <small>{item.note}</small>
           </div>
         ))}
       </div>
@@ -335,7 +430,47 @@ function PlayerRecentMatches({ player }: { player: CompactPlayer }) {
   )
 }
 
-type CompactRecentPlayerMatch = NonNullable<CompactPlayer['recentMatches']>[number]
+function metricCoverageLabel(metric: CompactPlayerDiagnosticMetric) {
+  if (metric.missing > 0) return `${formatNumber(metric.games)} games · ${formatNumber(metric.missing)} missing`
+  return `${formatNumber(metric.games)} games`
+}
+
+function formatMetricRatio(metric: CompactPlayerDiagnosticMetric) {
+  return metric.value === null ? '—' : formatRatio(metric.value)
+}
+
+function formatMetricSignedRatio(metric: CompactPlayerDiagnosticMetric) {
+  if (metric.value === null) return '—'
+  if (metric.value === 0) return '0 pts'
+  const value = Math.round(metric.value * 1000) / 10
+  return `${value > 0 ? '+' : ''}${formatDecimal(value)} pts`
+}
+
+function formatMetricDecimal(metric: CompactPlayerDiagnosticMetric) {
+  return metric.value === null ? '—' : formatDecimal(metric.value)
+}
+
+function formatResidualRankNote(residual: CompactPlayerIndividualResidual) {
+  const parts = [
+    residual.rank ? `#${residual.rank}` : 'unranked',
+    typeof residual.rankDelta === 'number' ? formatResidualRankDelta(residual.rankDelta) : undefined,
+    `${formatPercentValue(residual.confidence)} conf`,
+  ]
+  return parts.filter(Boolean).join(' · ')
+}
+
+function formatResidualRankDelta(delta: number) {
+  if (delta === 0) return 'even vs Role Power'
+  return delta > 0 ? `+${formatNumber(delta)} ranks vs Role Power` : `${formatNumber(delta)} ranks vs Role Power`
+}
+
+function formatResidualControlNote(residual: CompactPlayerIndividualResidual) {
+  return [
+    residual.controls.primaryLeague,
+    `${formatNumber(residual.controls.leagueGames)} league games`,
+    `${formatNumber(residual.controls.patchCount)} patches`,
+  ].join(' · ')
+}
 
 function formatPlayerSourceBadge(player: CompactPlayer) {
   return player.sourceProvider ? `${player.sourceProvider} source` : 'player artifact source'
@@ -408,6 +543,11 @@ function sortPlayers(rows: CompactPlayer[], key: SortKey) {
   switch (key) {
     case 'rating':
       return copy.sort((a, b) => b.rating - a.rating)
+    case 'individualResidual':
+      return copy.sort((a, b) =>
+        (b.individualResidual?.score ?? -Infinity) - (a.individualResidual?.score ?? -Infinity)
+        || a.rank - b.rank,
+      )
     case 'games':
       return copy.sort((a, b) => b.games - a.games)
     default:

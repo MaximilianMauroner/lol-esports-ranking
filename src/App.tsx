@@ -289,24 +289,25 @@ function App() {
   return (
     <div className="app">
       <a className="skip-link" href="#main-content">Skip to content</a>
-      <nav className="rail" aria-label="Primary">
-        <button type="button" className="rail__brand" onClick={goHome} aria-label="Go to Teams home">
-          <span className="rail__mark">
-            <img src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
-          </span>
-          <div>
-            <b>Power Index</b>
-            <span>LoL Esports</span>
-          </div>
-        </button>
+        <nav className="rail" aria-label="Primary">
+          <Button type="button" variant="ghost" className="rail__brand" onClick={goHome} aria-label="Go to Teams home">
+            <span className="rail__mark">
+              <img src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
+            </span>
+            <div>
+              <b>Power Index</b>
+              <span>LoL Esports</span>
+            </div>
+          </Button>
         <div className="rail__label">Compare</div>
         <div className="rail__nav">
           {MODES.map((entry) => {
             const Icon = entry.icon
             return (
-              <button
+              <Button
                 key={entry.id}
                 type="button"
+                variant="ghost"
                 className={`rail__mode${mode === entry.id ? ' is-active' : ''}`}
                 onClick={() => setMode(entry.id)}
                 aria-current={mode === entry.id ? 'page' : undefined}
@@ -316,7 +317,7 @@ function App() {
                   <b>{entry.label}</b>
                   <small>{entry.tagline}</small>
                 </span>
-              </button>
+              </Button>
             )
           })}
         </div>
@@ -429,9 +430,9 @@ function App() {
                   <span className="chip" key={regionKey(region)}>
                     <RegionBadge region={region.region} size="sm" />
                     <b>{region.region}</b>
-                    <button type="button" onClick={() => toggleRegion(region)} aria-label={`Remove ${region.region}`}>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => toggleRegion(region)} aria-label={`Remove ${region.region}`}>
                       ✕
-                    </button>
+                    </Button>
                   </span>
                 ))
               : null}
@@ -439,9 +440,9 @@ function App() {
               ? teamPicks.map((team) => (
                   <span className="chip" key={teamKey(team)}>
                     <b>{team.code ?? team.team}</b>
-                    <button type="button" onClick={() => toggleTeam(team)} aria-label={`Remove ${team.team}`}>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => toggleTeam(team)} aria-label={`Remove ${team.team}`}>
                       ✕
-                    </button>
+                    </Button>
                   </span>
                 ))
               : null}
@@ -449,9 +450,9 @@ function App() {
               ? playerPicks.map((player) => (
                   <span className="chip" key={player.id}>
                     <b>{player.name}</b>
-                    <button type="button" onClick={() => togglePlayer(player)} aria-label={`Remove ${player.name}`}>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => togglePlayer(player)} aria-label={`Remove ${player.name}`}>
                       ✕
-                    </button>
+                    </Button>
                   </span>
                 ))
               : null}

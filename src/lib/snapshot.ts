@@ -26,9 +26,11 @@ import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
 import type {
   CompactPlayer,
   CompactPlayerRating,
+  PlayerComparisonMetricInfo,
   PlayerMetricInfo,
   PlayerRatingProof,
   PublicPlayerDirectory,
+  SameTeamTopFiveClusteringDiagnostic,
   PublicRankingManifest,
   PublicRankingShard,
   PublicTeamHistoryDirectory,
@@ -48,6 +50,16 @@ export const rolePowerPlayerMetric: PlayerMetricInfo = {
   description: 'Role-conditioned player rating from sourced game stats.',
   interpretation: 'This metric includes team-result signal and should not be read as independent best-in-role proof.',
   teamResultSignal: 'included',
+  independentSkillClaim: false,
+}
+
+export const individualResidualComparisonMetric: PlayerComparisonMetricInfo = {
+  id: 'individual-residual',
+  label: 'Individual Residual',
+  shortLabel: 'Residual',
+  description: 'Shadow player stat-residual score after reducing shared team-result and contextual bucket effects.',
+  metricVersion: 'individual-residual-v0',
+  teamResultSignal: 'reduced',
   independentSkillClaim: false,
 }
 
@@ -144,7 +156,7 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
   const scopedSeries = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([, snapshot]) => isSeasonHistoryScope(snapshot.filter))
-      .map(([key, snapshot]) => [key, buildTeamHistorySeries(snapshot.standings, minimumPointsPerSeries, { includeContext: false }).series]),
+      .map(([key, snapshot]) => [key, buildTeamHistorySeries(snapshot.standings, minimumPointsPerSeries).series]),
   )
 
   return {
@@ -171,10 +183,13 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
 
   for (const standing of standings) {
     const validHistory = (standing.history ?? []).filter((point) => Boolean(point.date) && Number.isFinite(point.rating))
-    const points = groupTeamHistoryPointsIntoMatches(validHistory)
-      .filter(isResolvedTeamHistoryMatchGroup)
-      .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext))
-      .sort((left, right) => left[0].localeCompare(right[0]))
+    const points = alignFinalTeamHistoryPoint(
+      standing,
+      groupTeamHistoryPointsIntoMatches(validHistory)
+        .filter(isResolvedTeamHistoryMatchGroup)
+        .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext))
+        .sort((left, right) => left[0].localeCompare(right[0])),
+    )
     if (points.length < minimumPointsPerSeries) {
       omittedSeriesCount += 1
       continue
@@ -189,6 +204,22 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
   }
 
   return { series, omittedSeriesCount, pointCount }
+}
+
+function alignFinalTeamHistoryPoint(standing: TeamStanding, points: TeamHistoryPointCompact[]) {
+  const finalRating = Math.round(standing.rating)
+  const finalRank = standing.rank
+  if (points.length === 0 || !Number.isFinite(finalRating) || !Number.isFinite(finalRank)) return points
+
+  const latest = points.at(-1)!
+  if (latest[1] === finalRating && latest[2] === finalRank) return points
+  const aligned: TeamHistoryPointCompact = latest[3]
+    ? [latest[0], finalRating, finalRank, latest[3]]
+    : [latest[0], finalRating, finalRank]
+  return [
+    ...points.slice(0, -1),
+    aligned,
+  ]
 }
 
 type TeamHistoryPublicMatchGroup = {
@@ -580,11 +611,14 @@ const ROLE_ORDER: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory {
   const defaultSnapshot = data.snapshots[data.defaultSnapshotKey]
   const players = compactPlayersForSnapshot(defaultSnapshot, data.teams)
-  const scopedPlayers = Object.fromEntries(
+  const scopedPlayers: Record<string, CompactPlayer[]> = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([key, snapshot]) => key !== data.defaultSnapshotKey && isSeasonHistoryScope(snapshot.filter))
       .map(([key, snapshot]) => [key, compactPlayersForSnapshot(snapshot, data.teams)])
       .filter(([, rows]) => rows.length > 0),
+  )
+  const scopedSameTeamTopFiveClustering: Record<string, SameTeamTopFiveClusteringDiagnostic> = Object.fromEntries(
+    Object.entries(scopedPlayers).map(([key, rows]) => [key, sameTeamTopFiveClustering(rows, key)]),
   )
 
   return {
@@ -594,6 +628,11 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
     modelConfigHash: data.model.configHash,
     sourceProvider: 'oracles-elixir',
     metric: rolePowerPlayerMetric,
+    comparisonMetrics: [individualResidualComparisonMetric],
+    diagnostics: {
+      sameTeamTopFiveClustering: sameTeamTopFiveClustering(players, data.defaultSnapshotKey),
+      ...(Object.keys(scopedSameTeamTopFiveClustering).length > 0 ? { scopedSameTeamTopFiveClustering } : {}),
+    },
     ratedPlayerCount: players.length,
     ratedTeamCount: new Set(players.map((player) => player.team)).size,
     roles: ROLE_ORDER.filter((role) => players.some((player) => player.role === role)),
@@ -623,7 +662,7 @@ function compactPlayersForSnapshot(
     }
   }
 
-  return sourced
+  const players = sourced
     .filter((player) => {
       const creditedTeam = creditedTeamForPlayer(player, snapshot?.filter)
       const meta = teamMeta.get(creditedTeam.team)
@@ -654,6 +693,8 @@ function compactPlayersForSnapshot(
         availability: player.availability,
         roleCertainty: player.roleCertainty,
         impactDrivers: player.impactDrivers,
+        diagnostics: player.diagnostics,
+        individualResidual: player.individualResidual,
         ratingBasis: player.ratingBasis,
         sourceProvider: player.source?.provider,
         sourceFileName: player.source?.fileName,
@@ -664,6 +705,62 @@ function compactPlayersForSnapshot(
         appearance: player.appearance,
       }
     })
+
+  return assignCompactPlayerResidualRanks(players)
+}
+
+function assignCompactPlayerResidualRanks(players: CompactPlayer[]): CompactPlayer[] {
+  const residualRanks = new Map(
+    players
+      .filter((player) =>
+        player.individualResidual
+        && player.individualResidual.sampleGames >= playerModelParameters.minimumRankedSourcedPlayerGames,
+      )
+      .toSorted((left, right) =>
+        (right.individualResidual?.score ?? -Infinity) - (left.individualResidual?.score ?? -Infinity)
+        || right.games - left.games
+        || left.name.localeCompare(right.name),
+      )
+      .map((player, index) => [player.id, index + 1]),
+  )
+
+  return players.map((player) => {
+    if (!player.individualResidual) return player
+    const residualRank = residualRanks.get(player.id)
+    return {
+      ...player,
+      individualResidual: {
+        ...player.individualResidual,
+        rank: residualRank,
+        rolePowerRank: player.rank,
+        rankDelta: residualRank ? player.rank - residualRank : undefined,
+      },
+    }
+  })
+}
+
+function sameTeamTopFiveClustering(players: CompactPlayer[], scope: string): SameTeamTopFiveClusteringDiagnostic {
+  const topN = 5
+  const teams = new Map<string, { team: string; teamCode?: string; roles: Role[]; players: string[] }>()
+  for (const player of players.slice(0, topN)) {
+    const current = teams.get(player.team) ?? { team: player.team, teamCode: player.teamCode, roles: [], players: [] }
+    current.roles.push(player.role)
+    current.players.push(player.name)
+    teams.set(player.team, current)
+  }
+
+  return {
+    status: 'diagnostic-not-failure',
+    topN,
+    scope,
+    teams: Array.from(teams.values())
+      .map((team) => ({
+        ...team,
+        count: team.players.length,
+      }))
+      .filter((team) => team.count > 1)
+      .toSorted((left, right) => right.count - left.count || left.team.localeCompare(right.team)),
+  }
 }
 
 type PlayerHistoryEntry = PlayerStanding['history'][number]

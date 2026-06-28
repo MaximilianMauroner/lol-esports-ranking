@@ -393,6 +393,126 @@ test('sourced Oracle player stats produce player ratings without checked-in rost
   assert.ok(alphaBot.playerShare > 0)
 })
 
+test('sourced Oracle player diagnostics summarize same-role stat context', () => {
+  const players = buildPlayerModel([
+    matchFixture({
+      id: 'sourced-player-diagnostics',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'oe-sourced-player-diagnostics',
+      sourceFileName: 'oracle-fixture.csv',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', true, {
+        Bot: { kills: 12, deaths: 1, assists: 8, damageShare: 0.38, earnedGoldShare: 0.31, vspm: 0.9 },
+      }),
+      teamBRoster: sourcedRosterFixture('beta', 'red', false, {
+        Bot: { kills: 1, deaths: 6, assists: 2, damageShare: 0.15, earnedGoldShare: 0.17, vspm: 0.55 },
+      }),
+    }),
+  ], {})
+  const diagnostics = playerFor(players, 'alpha-Bot').diagnostics
+
+  assert.ok(diagnostics)
+  assert.equal(diagnostics.sourceProvider, 'oracles-elixir')
+  assert.equal(diagnostics.scope, 'rated-complete-role-matchups')
+  assert.equal(diagnostics.sampleGames, 1)
+  assert.equal(diagnostics.wins, 1)
+  assert.equal(diagnostics.losses, 0)
+  assert.equal(diagnostics.winRate, 1)
+  assert.equal(diagnostics.damageShare.value, 0.38)
+  assert.equal(diagnostics.earnedGoldShare.value, 0.31)
+  assert.equal(diagnostics.kda.value, 20)
+  assert.equal(diagnostics.vspm.value, 0.9)
+  assert.equal(diagnostics.visionScore.value, null)
+  assert.equal(diagnostics.visionScore.missing, 1)
+  assert.ok((diagnostics.noWinStatScore.value ?? 0) > 0.8)
+  assert.ok((diagnostics.sameRoleMatchupDiff.value ?? 0) > 0.65)
+
+  const residual = playerFor(players, 'alpha-Bot').individualResidual
+  assert.ok(residual)
+  assert.equal(residual.sourceProvider, 'oracles-elixir')
+  assert.equal(residual.metricVersion, 'individual-residual-v0')
+  assert.equal(residual.scope, 'shadow-rated-complete-role-matchups')
+  assert.equal(residual.sampleGames, 1)
+  assert.equal(residual.confidence, 1.7)
+  assert.equal(residual.explanation.teamWinRate, 1)
+  assert.equal(residual.controls.role, 'Bot')
+  assert.equal(residual.controls.primaryLeague, 'LCK')
+  assert.equal(residual.controls.leagueGames, 1)
+  assert.ok((residual.adjustedSameRoleDiff.value ?? 0) > 0.2)
+  assert.ok(residual.score > 120)
+})
+
+test('sourced Oracle player diagnostics preserve missing optional stat fields', () => {
+  const players = buildPlayerModel([
+    matchFixture({
+      id: 'sourced-player-diagnostics-missing',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'oe-sourced-player-diagnostics-missing',
+      sourceFileName: 'oracle-fixture.csv',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', true, {
+        Mid: { damageShare: undefined, earnedGoldShare: undefined, vspm: undefined },
+      }),
+      teamBRoster: sourcedRosterFixture('beta', 'red', false),
+    }),
+  ], {})
+  const diagnostics = playerFor(players, 'alpha-Mid').diagnostics
+
+  assert.ok(diagnostics)
+  assert.equal(diagnostics.sampleGames, 1)
+  assert.deepEqual(diagnostics.damageShare, { value: null, games: 0, missing: 1 })
+  assert.deepEqual(diagnostics.earnedGoldShare, { value: null, games: 0, missing: 1 })
+  assert.deepEqual(diagnostics.vspm, { value: null, games: 0, missing: 1 })
+  assert.equal(diagnostics.kda.value, 6.5)
+  assert.equal(diagnostics.noWinStatScore.games, 1)
+
+  const residual = playerFor(players, 'alpha-Mid').individualResidual
+  assert.ok(residual)
+  assert.equal(residual.sampleGames, 1)
+  assert.equal(residual.adjustedSameRoleDiff.games, 1)
+  assert.equal(residual.explanation.noWinStatScore.games, 1)
+  assert.equal(residual.expectedNoWinStatScore.games, 1)
+  assert.equal(residual.confidence, 1.7)
+  assert.equal(Number.isFinite(residual.score), true)
+})
+
+test('individual residual separates same-team players with identical team win rate', () => {
+  const matches = Array.from({ length: 60 }, (_, index) => matchFixture({
+    id: `high-team-win-residual-${index}`,
+    date: dateInJanuary(index + 1),
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: `high-team-win-residual-${index}`,
+    sourceFileName: 'oracle-fixture.csv',
+    winner: 'Alpha',
+    teamARoster: sourcedRosterFixture('alpha', 'blue', true, {
+      Top: { kills: 0, deaths: 5, assists: 3, damageShare: 0.13, earnedGoldShare: 0.14, vspm: 0.55 },
+      Jungle: { kills: 3, deaths: 3, assists: 8, damageShare: 0.15, earnedGoldShare: 0.17, vspm: 1.05 },
+      Mid: { kills: 9, deaths: 1, assists: 8, damageShare: 0.36, earnedGoldShare: 0.29, vspm: 1.2 },
+      Bot: { kills: 10, deaths: 1, assists: 5, damageShare: 0.4, earnedGoldShare: 0.33, vspm: 0.95 },
+      Support: { kills: 1, deaths: 1, assists: 16, damageShare: 0.08, earnedGoldShare: 0.09, vspm: 3.1 },
+    }),
+    teamBRoster: sourcedRosterFixture('beta', 'red', false, {
+      Top: { kills: 5, deaths: 2, assists: 6, damageShare: 0.27, earnedGoldShare: 0.24, vspm: 0.95 },
+      Jungle: { kills: 2, deaths: 4, assists: 5, damageShare: 0.15, earnedGoldShare: 0.17, vspm: 1 },
+      Mid: { kills: 1, deaths: 5, assists: 3, damageShare: 0.18, earnedGoldShare: 0.18, vspm: 0.8 },
+      Bot: { kills: 1, deaths: 6, assists: 2, damageShare: 0.15, earnedGoldShare: 0.17, vspm: 0.6 },
+      Support: { kills: 0, deaths: 6, assists: 4, damageShare: 0.05, earnedGoldShare: 0.08, vspm: 1.6 },
+    }),
+  }))
+  const players = buildPlayerModel(matches, {}, { teams })
+  const alphaTop = playerFor(players, 'alpha-Top')
+  const alphaMid = playerFor(players, 'alpha-Mid')
+  const alphaBot = playerFor(players, 'alpha-Bot')
+  const alphaPlayers = (['Top', 'Jungle', 'Mid', 'Bot', 'Support'] as const).map((role) => playerFor(players, `alpha-${role}`))
+  const residualScores = alphaPlayers.map((player) => player.individualResidual?.score)
+
+  assert.equal(alphaPlayers.every((player) => player.individualResidual?.sampleGames === 60), true)
+  assert.equal(alphaPlayers.every((player) => player.individualResidual?.confidence === 100), true)
+  assert.equal(alphaPlayers.every((player) => player.individualResidual?.explanation.teamWinRate === 1), true)
+  assert.ok(new Set(residualScores).size > 1)
+  assert.ok((alphaMid.individualResidual?.score ?? 0) > (alphaTop.individualResidual?.score ?? 0) + 10)
+  assert.ok((alphaBot.individualResidual?.score ?? 0) > (alphaTop.individualResidual?.score ?? 0) + 10)
+  assert.ok(typeof alphaMid.individualResidual?.rank === 'number')
+})
+
 test('sourced player ratings do not inject role-specific mass on balanced schedules', () => {
   const matches = Array.from({ length: 90 }, (_, index) => {
     const alphaWon = index % 2 === 0

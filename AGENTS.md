@@ -19,6 +19,7 @@
 - Keep Asana task comments/status current during longer repo runs and at closeout, especially when moving tasks between sections.
 - Keep ranking claims tied to the data source and model version that produced them.
 - Do not present seeded or sample data as official LoL Esports data.
+- Use shadcn/ui components from `src/components/ui` wherever they make sense for the UI surface, including dashboard controls and Recharts-backed dashboard charts. Build custom components only when shadcn does not fit the interaction or data-density need.
 - The goal is for the score to be as accurate as possible, so if you have a better way to do something, please suggest it.
 - Another goal is to have a score for leagues that is accurate and fair
 - Not all games should be scored equally - some leagues are more competitive than others, and the scoring should reflect that. And tournaments should be scored more than regular season games.

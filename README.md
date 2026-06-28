@@ -9,23 +9,23 @@ The app serves the latest committed browser-safe snapshot from `public/data/`. I
 ## Run
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Useful checks:
 
 ```bash
-npm test
-npm run typecheck
-npm run lint
-npm run build
-npm run release:check
+pnpm test
+pnpm run typecheck
+pnpm run lint
+pnpm run build
+pnpm run release:check
 ```
 
 ## Styling
 
-The UI uses plain React components with product styles in `src/index.css`. Theme tokens, layout rules, table styling, loading states, and responsive behavior live there.
+The UI uses shadcn/ui-style React components in `src/components/ui` where they fit the surface, including controls and Recharts-backed dashboard charts. Product tokens and layout styles live in `src/index.css` and the files it imports.
 
 ## Static Data Strategy
 
@@ -40,7 +40,7 @@ By default, Vercel, Cloudflare Pages, and other static hosts serve the committed
 Static data can be generated without source inputs for a no-data smoke fixture:
 
 ```bash
-npm run data:build
+pnpm run data:build
 ```
 
 With no source arguments, this writes a valid `no-data` summary instead of falling back to seeded samples. The app does not recalculate rankings in React render. It loads a compact default board first, then lazy-loads compact per-filter shards from `public/data/snapshots/`. Event and region filters narrow the presented rows while preserving the global rating scale. Season filters publish the chronological model state through the selected season, so older years do not inherit current-year standings.
@@ -48,9 +48,9 @@ With no source arguments, this writes a valid `no-data` summary instead of falli
 The normal local refresh workflow is:
 
 ```bash
-npm run data:download
-npm run data:crunch
-npm run release:check
+pnpm run data:download
+pnpm run data:crunch
+pnpm run release:check
 git add data/raw/manifest.json public/data/ranking-summary.json public/data/players.json public/data/team-history.json public/data/snapshots
 git commit -m "Refresh LoL esports ranking data"
 git push
@@ -65,23 +65,23 @@ Commit the generated `public/data` payload after review so the deployed client c
 To override Oracle discovery with direct CSV URLs, include them in the download step:
 
 ```bash
-npm run data:download -- --oracle-csv-url "https://example.com/path/to/oracle.csv"
-npm run data:crunch
+pnpm run data:download -- --oracle-csv-url "https://example.com/path/to/oracle.csv"
+pnpm run data:crunch
 ```
 
 Useful download flags:
 
 ```bash
-npm run data:download -- --start 2024-01-01 --end 2026-06-26
-npm run data:download -- --oracle-required true
-npm run data:download -- --oracle false
-npm run data:download -- --leaguepedia false
+pnpm run data:download -- --start 2024-01-01 --end 2026-06-26
+pnpm run data:download -- --oracle-required true
+pnpm run data:download -- --oracle false
+pnpm run data:download -- --leaguepedia false
 ```
 
 To build from Oracle's Elixir CSVs:
 
 ```bash
-npm run data:build:oracle -- data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv
+pnpm run data:build:oracle -- data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv
 ```
 
 Oracle rows are normalized into match records using `gameid`, side, team, result, kills, gold, objectives, game length, league, year, split, playoffs, patch, and data-completeness fields when present.
@@ -89,14 +89,14 @@ Oracle rows are normalized into match records using `gameid`, side, team, result
 To build from a fetched Leaguepedia Cargo snapshot:
 
 ```bash
-npm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
-npm run data:build:leaguepedia -- data/raw/leaguepedia/leaguepedia-2026.json
+pnpm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
+pnpm run data:build:leaguepedia -- data/raw/leaguepedia/leaguepedia-2026.json
 ```
 
 To combine both community sources for the algorithm:
 
 ```bash
-npm run data:build -- --oracle-csv data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv --leaguepedia-json data/raw/leaguepedia/leaguepedia-2026.json
+pnpm run data:build -- --oracle-csv data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv --leaguepedia-json data/raw/leaguepedia/leaguepedia-2026.json
 ```
 
 Oracle's Elixir has precedence for duplicate games because it carries richer game-stat fields. Leaguepedia Cargo fills gaps and supplies broad match/event coverage. Overlapping scored rows are merged only when canonical team/winner identity plus source IDs or team stat lines identify the same game; broad date/team/winner matching is reserved for result-only gap-fill rows so separate same-winner games in a series are preserved. Sponsor-era aliases such as DRX/Kiwoom DRX, OKSavingsBank BRION/HANJIN BRION, and DN Freecs/DN SOOPers are normalized before dedupe. Seeded data is explicitly marked as `sourceProvider: "seed"` and should be used only for local demo snapshots.
@@ -112,8 +112,8 @@ The intended pipeline has three layers:
 Fetch examples:
 
 ```bash
-npm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
-npm run fetch:riot-gpr -- --year 2026 --milestone current --output data/raw/riot-gpr/riot-gpr-2026-current.json
+pnpm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
+pnpm run fetch:riot-gpr -- --year 2026 --milestone current --output data/raw/riot-gpr/riot-gpr-2026-current.json
 ```
 
 Leaguepedia rate-limits aggressively. The fetcher uses pagination and a delay, but repeated ad hoc queries can still be throttled.
@@ -140,7 +140,7 @@ Recommended Vercel environment variables:
 - `CRON_SECRET`: required bearer token for `/api/recalculate-rankings`.
 - `BLOB_READ_WRITE_TOKEN`: enables the cron function to publish `rankings/latest-summary.json`, compact filter shards, player ratings, rating history, and the full audit artifact.
 - `ORACLES_ELIXIR_CSV_URL`: optional direct CSV URL for scheduled Oracle's Elixir import.
-- `LEAGUEPEDIA_MATCHES_JSON_URL`: optional JSON URL produced by `npm run fetch:leaguepedia`, used as match/event gap-fill for scheduled snapshots.
+- `LEAGUEPEDIA_MATCHES_JSON_URL`: optional JSON URL produced by `pnpm run fetch:leaguepedia`, used as match/event gap-fill for scheduled snapshots.
 - `VITE_RANKING_DATA_URL`: public Blob URL the browser should load in production.
 
 Deployed static files are immutable at runtime, so the scheduled function publishes to Blob rather than trying to modify files inside a deployment. If you use this mode, set `VITE_RANKING_DATA_URL` to the public Blob summary URL. The browser-facing Blob payload is the summary contract, not the full calculation artifact; it includes the public URLs for its shard, player-rating, and team-history companions. If no public source produces rows, the cron returns a `no-data` result instead of publishing seeded sample data.

@@ -3,6 +3,7 @@
 const numberFormatter = new Intl.NumberFormat('en')
 const ratingFormatter = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
 const oneDecimal = new Intl.NumberFormat('en', { maximumFractionDigits: 1 })
+const twoDecimal = new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const dateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
 const dateTimeFormatter = new Intl.DateTimeFormat('en', {
   month: 'short',
@@ -62,6 +63,10 @@ export function formatSigned(value?: number) {
 
 export function formatDecimal(value?: number) {
   return typeof value === 'number' && Number.isFinite(value) ? oneDecimal.format(value) : '—'
+}
+
+export function formatMultiplier(value?: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? twoDecimal.format(value) : '—'
 }
 
 /** Confidence-style values already on a 0-100 scale. */

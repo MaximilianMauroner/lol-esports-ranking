@@ -13,6 +13,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardHeader } from '../components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { LineChart, type ChartSeries } from '../components/LineChart'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 
 type SortKey = 'rank' | 'rating' | 'wins'
 type TrajectoryMetric = 'rating' | 'rank'
@@ -224,7 +225,7 @@ export function TeamsView({
               </DataState>
             ) : (
               <div className="tablewrap">
-                <table className="ranking-table gpr-grid">
+                <Table className="ranking-table gpr-grid">
                   <colgroup>
                     <col className="gpr-col-rank" />
                     <col className="gpr-col-team" />
@@ -232,56 +233,62 @@ export function TeamsView({
                     <col className="gpr-col-record" />
                     <col className="gpr-col-action" />
                   </colgroup>
-                  <thead>
-                    <tr>
+                  <TableHeader>
+                    <TableRow>
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
-                      <th scope="col">Team</th>
+                      <TableHead>Team</TableHead>
                       <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
                       <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" className="gpr-col-record" />
-                      <th scope="col" className="center" aria-label="Add to comparison" />
-                    </tr>
-                  </thead>
-                  <tbody>
+                      <TableHead className="center" aria-label="Add to comparison" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {visible.map((team) => {
                       const key = teamKey(team)
                       const total = team.wins + team.losses
                       return (
-                        <tr
+                        <TableRow
                           key={key}
                           className={`gpr-row${pickedKeys.has(key) ? ' is-picked' : ''}`}
                         >
-                          <td>
+                          <TableCell>
                             <span className="gpr-rankcell">
                               <span className={`gpr-rank${typeof team.rank === 'number' && team.rank <= 3 ? ' podium' : ''}`}>
                                 {team.rank ?? '—'}
                               </span>
                               <Movement value={team.movement} />
                             </span>
-                          </td>
-                          <td>
-                            <button type="button" className="team-cell team-cell__button" onClick={() => setDetailKey(key)} aria-label={`View ${team.team} details`}>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="team-cell team-cell__button"
+                              onClick={() => setDetailKey(key)}
+                              aria-label={`View ${team.team} details`}
+                            >
                               <span className="team-mark sm">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
                               <div className="ent">
                                 <b>{team.team}</b>
                                 <small>{teamSubtitle(team)}</small>
                               </div>
-                            </button>
-                          </td>
-                          <td className="right">
+                            </Button>
+                          </TableCell>
+                          <TableCell className="right">
                             <HeatChip value={team.rating} min={ratingMin} max={ratingMax} label={formatRating(team.rating)} />
-                          </td>
-                          <td className="right num gpr-col-record">
+                          </TableCell>
+                          <TableCell className="right num gpr-col-record">
                             <b className="record-main">{formatRecord(team.wins, team.losses)}</b>{' '}
                             <span className="record-ratio">{formatRatio(total > 0 ? team.wins / total : undefined)}</span>
-                          </td>
-                          <td className="center">
+                          </TableCell>
+                          <TableCell className="center">
                             <PickButton picked={pickedKeys.has(key)} onToggle={() => onToggle(team)} label={team.team} />
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
 
@@ -389,7 +396,7 @@ export function TeamsView({
         ) : null}
       </Card>
 
-      <Matchup standings={sorted} pickedTeams={pickedTeams} model={model} />
+      <Matchup standings={sorted} pickedTeams={pickedTeams} model={model} history={history} />
 
       {detailTeam ? (
         <TeamDetailModal
@@ -824,37 +831,37 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
 
       {players.length > 0 ? (
         <div className="player-rank-table">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Rank</th>
-                <th scope="col">Player</th>
-                <th scope="col">Role</th>
-                <th scope="col" className="right">Rating</th>
-                <th scope="col" className="right" title="Team games">Games</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Rank</TableHead>
+                <TableHead>Player</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead className="right">Rating</TableHead>
+                <TableHead className="right" title="Team games">Games</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {players.map((player) => (
-                <tr key={player.id}>
-                  <td className={`rank-cell${player.rank <= 3 ? ' podium' : ''}`}>#{player.rank}</td>
-                  <td>
+                <TableRow key={player.id}>
+                  <TableCell className={`rank-cell${player.rank <= 3 ? ' podium' : ''}`}>#{player.rank}</TableCell>
+                  <TableCell>
                     <div className="ent">
                       <b>{player.name}</b>
                       <small>impact ×{formatDecimal(player.impactMultiplier)}</small>
                     </div>
-                  </td>
-                  <td>
+                  </TableCell>
+                  <TableCell>
                     <span className="role-pill">{player.role}</span>
-                  </td>
-                  <td className="right">
+                  </TableCell>
+                  <TableCell className="right">
                     <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />
-                  </td>
-                  <td className="right num">{formatTeamGames(player)}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="right num">{formatTeamGames(player)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       ) : (
         <p className="muted player-rank-card__empty">No sourced player rankings for this team in the current scope.</p>
@@ -1005,10 +1012,12 @@ function Matchup({
   standings,
   pickedTeams,
   model,
+  history,
 }: {
   standings: RankingSummaryStanding[]
   pickedTeams: RankingSummaryStanding[]
   model?: Pick<ModelInfo, 'version' | 'configHash'>
+  history?: Record<string, TeamHistorySeries>
 }) {
   const options = useMemo(() => standings.slice(0, 200), [standings])
   const optionKeys = useMemo(() => new Set(options.map(teamKey)), [options])
@@ -1030,6 +1039,7 @@ function Matchup({
   const a = options.find((team) => teamKey(team) === selectedAKey) ?? options[0]
   const b = options.find((team) => teamKey(team) === selectedBKey) ?? options.find((team) => team !== a)
   const matchup = a && b && a !== b ? estimatePublicMatchup(a, b, model) : undefined
+  const headToHead = matchup ? headToHeadForTeams(matchup.home, matchup.away, history) : undefined
 
   if (options.length < 2) return null
 
@@ -1117,6 +1127,13 @@ function Matchup({
                 <small>Power edge</small>
                 <b>{formatSigned(matchup.ratingEdge)}</b>
               </span>
+              {headToHead ? (
+                <span className="matchup__fact--h2h">
+                  <small>Actual H2H</small>
+                  <b>{formatHeadToHeadRecord(headToHead)}</b>
+                  <em>{formatHeadToHeadDetail(headToHead)}</em>
+                </span>
+              ) : null}
               <span>
                 <small>Model</small>
                 <b>{matchup.modelVersion}</b>
@@ -1132,6 +1149,103 @@ function Matchup({
       </div>
     </Card>
   )
+}
+
+type HeadToHeadSummary = {
+  home: RankingSummaryStanding
+  away: RankingSummaryStanding
+  homeSeriesWins: number
+  awaySeriesWins: number
+  homeGameWins: number
+  awayGameWins: number
+  meetings: number
+  latest?: {
+    date: string
+    event?: string
+    homeWins: number
+    awayWins: number
+  }
+}
+
+function headToHeadForTeams(
+  home: RankingSummaryStanding,
+  away: RankingSummaryStanding,
+  history?: Record<string, TeamHistorySeries>,
+): HeadToHeadSummary | undefined {
+  const fromHome = headToHeadFromSeries(home, away, history?.[teamKey(home)], false)
+  if (fromHome) return fromHome
+  return headToHeadFromSeries(home, away, history?.[teamKey(away)], true)
+}
+
+function headToHeadFromSeries(
+  home: RankingSummaryStanding,
+  away: RankingSummaryStanding,
+  series: TeamHistorySeries | undefined,
+  reverse: boolean,
+): HeadToHeadSummary | undefined {
+  const points = (series?.points ?? [])
+    .filter((point) => {
+      const context = point[3]
+      return context?.opponent && sameTeamIdentity(context.opponent, reverse ? home : away)
+    })
+    .sort((left, right) => left[0].localeCompare(right[0]))
+  if (points.length === 0) return undefined
+
+  const summary: HeadToHeadSummary = {
+    home,
+    away,
+    homeSeriesWins: 0,
+    awaySeriesWins: 0,
+    homeGameWins: 0,
+    awayGameWins: 0,
+    meetings: 0,
+  }
+
+  for (const point of points) {
+    const context = point[3]
+    if (!context) continue
+    const sourceWins = typeof context.wins === 'number' ? context.wins : context.result === 'W' ? 1 : 0
+    const sourceLosses = typeof context.losses === 'number' ? context.losses : context.result === 'L' ? 1 : 0
+    const homeWins = reverse ? sourceLosses : sourceWins
+    const awayWins = reverse ? sourceWins : sourceLosses
+    summary.homeGameWins += homeWins
+    summary.awayGameWins += awayWins
+    if (homeWins === awayWins) continue
+    summary.meetings += 1
+    if (homeWins > awayWins) summary.homeSeriesWins += 1
+    else summary.awaySeriesWins += 1
+    summary.latest = {
+      date: point[0],
+      event: context.event,
+      homeWins,
+      awayWins,
+    }
+  }
+
+  return summary.meetings > 0 ? summary : undefined
+}
+
+function sameTeamIdentity(value: string, team: RankingSummaryStanding) {
+  const normalized = normalizeTeamIdentity(value)
+  return normalized === normalizeTeamIdentity(team.team) || normalized === normalizeTeamIdentity(team.code)
+}
+
+function normalizeTeamIdentity(value?: string) {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function formatHeadToHeadRecord(summary: HeadToHeadSummary) {
+  const homeLabel = summary.home.code ?? summary.home.team
+  const awayLabel = summary.away.code ?? summary.away.team
+  return `${homeLabel} ${summary.homeSeriesWins}-${summary.awaySeriesWins} ${awayLabel}`
+}
+
+function formatHeadToHeadDetail(summary: HeadToHeadSummary) {
+  const gameRecord = `${summary.homeGameWins}-${summary.awayGameWins} games`
+  const latest = summary.latest
+    ? `latest ${formatDate(summary.latest.date)} ${summary.latest.homeWins}-${summary.latest.awayWins}`
+    : undefined
+  return [`${formatNumber(summary.meetings)} series`, gameRecord, latest].filter(Boolean).join(' · ')
 }
 
 function MatchupTeamCard({

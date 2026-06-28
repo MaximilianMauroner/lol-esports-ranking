@@ -1,12 +1,12 @@
 {
   "schemaVersion": 14,
-  "generatedAt": "2026-06-28T12:46:38.961Z",
+  "generatedAt": "2026-06-28T13:39:21.678Z",
   "source": "Oracle's Elixir primary with Leaguepedia Cargo gap-fill",
   "sources": [
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-06-28T12:46:36.075Z",
+      "retrievedAt": "2026-06-28T13:39:19.400Z",
       "coverageStart": "2025-01-11",
       "coverageEnd": "2025-12-29",
       "rowCount": 10038,
@@ -16,7 +16,7 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-06-28T12:46:38.142Z",
+      "retrievedAt": "2026-06-28T13:39:21.028Z",
       "coverageStart": "2026-01-08",
       "coverageEnd": "2026-06-28",
       "rowCount": 5940,
@@ -51,7 +51,7 @@
   "model": {
     "name": "Transparent GPR",
     "version": "transparent-gpr-v0.38.0",
-    "configHash": "fnv1a-5224e795",
+    "configHash": "fnv1a-7c68d101",
     "parameters": {
       "initialTeamRating": 1500,
       "initialLeagueRating": 1500,
@@ -201,6 +201,10 @@
           "kda": 0.14,
           "vision": 0.1
         },
+        "individualResidualMetricVersion": "individual-residual-v0",
+        "individualResidualStrengthProxyWeight": 0.28,
+        "individualResidualScoreScale": 100,
+        "individualResidualMinimumRankedGames": 20,
         "roleStatBaselines": {
           "Top": {
             "damageShare": 0.23,
@@ -512,7 +516,7 @@
     "ratingProof": {
       "sourceProvider": "oracles-elixir",
       "modelVersion": "transparent-gpr-v0.38.0",
-      "modelConfigHash": "fnv1a-5224e795",
+      "modelConfigHash": "fnv1a-7c68d101",
       "ratedPlayerCount": 3677,
       "ratedTeamCount": 562,
       "sampleSize": 159780,
@@ -978,7 +982,7 @@
     "metrics": {
       "target": "published-game",
       "modelVersion": "transparent-gpr-v0.38.0",
-      "modelConfigHash": "fnv1a-5224e795",
+      "modelConfigHash": "fnv1a-7c68d101",
       "predictionCount": 22152,
       "accuracy": 0.6118,
       "brierScore": 0.2333,
@@ -9976,7 +9980,7 @@
         "region": "All"
       },
       "modelVersion": "transparent-gpr-v0.38.0",
-      "modelConfigHash": "fnv1a-5224e795",
+      "modelConfigHash": "fnv1a-7c68d101",
       "matchCount": 22152,
       "sourceBreakdown": [
         {

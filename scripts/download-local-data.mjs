@@ -76,7 +76,7 @@ if (!skipLeaguepedia) {
 }
 
 if (args.riotGpr !== undefined || args.skipRiotGpr === true || args.riotGprOutput !== undefined) {
-  warnings.push('Riot GPR is not part of the local data-source manifest. Use npm run fetch:riot-gpr explicitly for manual benchmark snapshots.')
+  warnings.push('Riot GPR is not part of the local data-source manifest. Use pnpm run fetch:riot-gpr explicitly for manual benchmark snapshots.')
 }
 
 if (oracleCsvPaths.length === 0) {
