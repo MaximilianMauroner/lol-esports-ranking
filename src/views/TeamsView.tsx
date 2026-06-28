@@ -8,7 +8,9 @@ import { rankingTargetExplanations } from '../lib/rankingExplanations'
 import { extent, formatDate, formatDateRange, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
-import { DataState, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
+import { CountBadge, DataState, Field, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
+import { Button } from '../components/ui/button'
+import { Card, CardHeader } from '../components/ui/card'
 import { LineChart, type ChartSeries } from '../components/LineChart'
 
 type SortKey = 'rank' | 'rating' | 'wins'
@@ -170,7 +172,7 @@ export function TeamsView({
     <div className="view">
       <div className="gpr-layout">
         <div className="gpr-main">
-          <section className="panel">
+          <Card className="panel">
             <div className="gpr-toolbar">
               <div className="gpr-toolbar__title">
                 <h2>Current</h2>
@@ -185,19 +187,16 @@ export function TeamsView({
                   ]}
                   onChange={setEligibilityFilter}
                 />
-                <label className="field" style={{ gridAutoFlow: 'column', alignItems: 'center', gap: 8 }}>
-                  <span>Region</span>
-                  <select value={region} onChange={(event) => setRegion(event.target.value)}>
-                    {regionOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {formatCompetitionRegionLabel(option)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <span className="count">
+                <Field
+                  label="Region"
+                  value={region}
+                  options={regionOptions.map((option) => ({ value: option, label: formatCompetitionRegionLabel(option) }))}
+                  onChange={setRegion}
+                  className="field--inline"
+                />
+                <CountBadge>
                   {visible.length} of {filtered.length}
-                </span>
+                </CountBadge>
               </div>
               <p className="eligibility-note">{eligibilityNote}</p>
             </div>
@@ -276,7 +275,7 @@ export function TeamsView({
                 </table>
               </div>
             )}
-          </section>
+          </Card>
         </div>
 
         <aside className="gpr-sidebar">
@@ -286,7 +285,7 @@ export function TeamsView({
         </aside>
       </div>
 
-      <section className="panel compact-panel trajectory-panel">
+      <Card className="panel compact-panel trajectory-panel">
         <div className="panel__head trajectory-panel__head">
           <div className="panel__title">
             <p className="eyebrow">Over time</p>
@@ -306,9 +305,9 @@ export function TeamsView({
               ]}
               onChange={setMetric}
             />
-            <span className="count">
+            <CountBadge>
               {pickedTeams.length > 0 ? `${chartSeries.length} selected` : 'Showing top 5 · pick teams above to focus'}
-            </span>
+            </CountBadge>
           </div>
         </div>
         {!history ? (
@@ -349,7 +348,7 @@ export function TeamsView({
             ))}
           </div>
         ) : null}
-      </section>
+      </Card>
 
       <Matchup standings={sorted} pickedTeams={pickedTeams} model={model} />
 
@@ -558,9 +557,9 @@ function TeamDetailModal({
             <span className="team-mark">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
             <h2>{team.team}</h2>
           </div>
-          <button ref={closeRef} type="button" className="modal__close" onClick={onClose} aria-label="Close">
+          <Button ref={closeRef} type="button" variant="ghost" size="icon" className="modal__close" onClick={onClose} aria-label="Close">
             <X size={18} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
 
         <div className="modal__body">
@@ -1025,42 +1024,32 @@ function Matchup({
   }
 
   return (
-    <section className="panel matchup-panel">
-      <div className="panel__head matchup-panel__head">
+    <Card className="panel matchup-panel">
+      <CardHeader className="panel__head matchup-panel__head">
         <div className="panel__title">
           <p className="eyebrow">Estimator</p>
           <h2>Head-to-head matchup</h2>
           <p className="panel__hint">Neutral single-game forecast from published team score and uncertainty.</p>
         </div>
-        <span className="count">{seedNote}</span>
-      </div>
+        <CountBadge>{seedNote}</CountBadge>
+      </CardHeader>
       <div className="matchup">
         <div className="matchup__picks">
-          <label className="field">
-            <span>Team A</span>
-            <select value={selectedAKey} onChange={(event) => onSelectA(event.target.value)}>
-              {options.map((team) => (
-                <option key={teamKey(team)} value={teamKey(team)}>
-                  {team.rank ? `#${team.rank} ` : ''}
-                  {team.team}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="matchup__swap" type="button" onClick={onSwap} aria-label="Swap matchup teams">
+          <Field
+            label="Team A"
+            value={selectedAKey}
+            options={options.map((team) => ({ value: teamKey(team), label: `${team.rank ? `#${team.rank} ` : ''}${team.team}` }))}
+            onChange={onSelectA}
+          />
+          <Button className="matchup__swap" variant="secondary" size="icon" type="button" onClick={onSwap} aria-label="Swap matchup teams">
             <ArrowLeftRight size={16} aria-hidden="true" />
-          </button>
-          <label className="field">
-            <span>Team B</span>
-            <select value={selectedBKey} onChange={(event) => onSelectB(event.target.value)}>
-              {options.map((team) => (
-                <option key={teamKey(team)} value={teamKey(team)}>
-                  {team.rank ? `#${team.rank} ` : ''}
-                  {team.team}
-                </option>
-              ))}
-            </select>
-          </label>
+          </Button>
+          <Field
+            label="Team B"
+            value={selectedBKey}
+            options={options.map((team) => ({ value: teamKey(team), label: `${team.rank ? `#${team.rank} ` : ''}${team.team}` }))}
+            onChange={onSelectB}
+          />
         </div>
 
         {matchup ? (
@@ -1103,7 +1092,7 @@ function Matchup({
           <p className="muted">Pick two different teams to estimate the matchup.</p>
         )}
       </div>
-    </section>
+    </Card>
   )
 }
 

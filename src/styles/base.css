@@ -59,6 +59,26 @@
   --shadow-2: 0 10px 28px oklch(0 0 0 / 0.38), 0 1px 2px oklch(0 0 0 / 0.46);
   --shadow-pop: 0 24px 64px oklch(0 0 0 / 0.55);
 
+  /* shadcn/ui semantic tokens mapped to the existing LoL Esports palette. */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--on-accent);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text);
+  --muted-surface: var(--surface-2);
+  --muted-foreground: var(--muted);
+  --destructive: var(--league-red);
+  --destructive-foreground: var(--text-strong);
+  --border: var(--line-strong);
+  --input: var(--line-strong);
+  --ring: var(--focus);
+  --radius: var(--r);
+
   --r-sm: 4px;
   --r: 8px;
   --r-lg: 8px;

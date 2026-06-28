@@ -1,5 +1,12 @@
 import type { ChangeEvent, ReactNode } from 'react'
 import { Search } from 'lucide-react'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Select } from './ui/select'
+import { cn } from '../lib/utils'
+import { Badge } from './ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { fillClass, formatSigned, heatClass, movementClass, pctWithin } from '../lib/display'
 
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
@@ -194,41 +201,60 @@ export function ConfBar({ value }: { value?: number }) {
 }
 
 export function PickButton({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
+  const tooltip = picked ? `Remove ${label} from comparison` : `Add ${label} to comparison`
   return (
-    <button
-      type="button"
-      className={`pickbtn${picked ? ' is-picked' : ''}`}
-      onClick={onToggle}
-      aria-pressed={picked}
-      title={picked ? `Remove ${label} from comparison` : `Add ${label} to comparison`}
-    >
-      {picked ? '✓' : '+'}
-      <span className="sr-only">{picked ? `Remove ${label}` : `Add ${label}`}</span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          className={cn(
+            'pickbtn grid size-[26px] place-items-center rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]',
+            picked && 'is-picked border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]',
+          )}
+          onClick={onToggle}
+          aria-pressed={picked}
+          title={tooltip}
+        >
+          {picked ? '✓' : '+'}
+          <span className="sr-only">{picked ? `Remove ${label}` : `Add ${label}`}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
   )
 }
+
+type FieldOption = string | { value: string; label: string }
 
 export function Field({
   label,
   value,
   options,
   onChange,
+  className,
 }: {
   label: string
   value: string
-  options: string[]
+  options: FieldOption[]
   onChange: (value: string) => void
+  className?: string
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
-      <select value={value} onChange={(event: ChangeEvent<HTMLSelectElement>) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+    <label className={cn('field grid min-w-0 gap-1.5', className)}>
+      <span className="pl-0.5 text-[0.68rem] uppercase tracking-[0.1em] text-[var(--faint)]">{label}</span>
+      <Select value={value} onChange={(event: ChangeEvent<HTMLSelectElement>) => onChange(event.target.value)}>
+        {options.map((option) => {
+          const value = typeof option === 'string' ? option : option.value
+          const label = typeof option === 'string' ? option : option.label
+          return (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          )
+        })}
+      </Select>
     </label>
   )
 }
@@ -243,10 +269,10 @@ export function SearchInput({
   placeholder: string
 }) {
   return (
-    <label className="search">
+    <label className="search flex min-w-[min(220px,100%)] items-center gap-2 rounded-[var(--r)] border border-[var(--line-strong)] bg-[var(--surface-2)] px-3 py-2 text-[var(--muted)] transition-colors focus-within:border-[var(--accent-line)]">
       <Search size={17} aria-hidden="true" />
       <span className="sr-only">{placeholder}</span>
-      <input type="search" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <Input className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0" type="search" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </label>
   )
 }
@@ -261,30 +287,45 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="seg" role="tablist">
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(nextValue) => {
+        if (nextValue) onChange(nextValue as T)
+      }}
+      className="seg inline-flex max-w-full gap-1 overflow-x-auto rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface-2)] p-1"
+      role="tablist"
+    >
       {options.map((option) => (
-        <button
+        <ToggleGroupItem
           key={option.value}
-          type="button"
+          value={option.value}
           role="tab"
           aria-selected={value === option.value}
-          className={value === option.value ? 'is-active' : ''}
-          onClick={() => onChange(option.value)}
+          className={cn('rounded-[7px] text-[var(--muted)] hover:text-[var(--text)]', value === option.value && 'is-active bg-[var(--surface-3)] text-[var(--text-strong)]')}
         >
           {option.label}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   )
 }
 
 export function DataState({ icon, title, children }: { icon: ReactNode; title: string; children?: ReactNode }) {
   return (
-    <div className="state">
+    <div className="state grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)]">
       {icon}
       <h3>{title}</h3>
       {children ? <p>{children}</p> : null}
     </div>
+  )
+}
+
+export function CountBadge({ children, variant = 'secondary' }: { children: ReactNode; variant?: 'default' | 'secondary' | 'warning' }) {
+  return (
+    <Badge variant={variant} className="count tabular-nums">
+      {children}
+    </Badge>
   )
 }
 

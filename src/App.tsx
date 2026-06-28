@@ -43,6 +43,11 @@ import { RegionsView } from './views/RegionsView'
 import { TeamsView } from './views/TeamsView'
 import { PlayersView } from './views/PlayersView'
 import { RegionBadge } from './components/ui'
+import { Button } from './components/ui/button'
+import { Alert } from './components/ui/alert'
+import { Card } from './components/ui/card'
+import { Skeleton } from './components/ui/skeleton'
+import { cn } from './lib/utils'
 
 type Mode = 'regions' | 'teams' | 'players'
 
@@ -338,24 +343,25 @@ function App() {
 
         <div className="season-tabs" role="group" aria-label="Year-over-year data split">
           {seasonTabs.map((season) => (
-            <button
+            <Button
               key={season}
               type="button"
+              variant="ghost"
               aria-pressed={activeSeason === season}
-              className={activeSeason === season ? 'is-active' : ''}
+              className={cn('season-tabs__button', activeSeason === season && 'is-active')}
               onClick={() => setScope(season === 'All' ? 'all' : `season:${season}`)}
             >
               {season}
-            </button>
+            </Button>
           ))}
         </div>
 
         {seeded ? (
           <div className="view" style={{ paddingBottom: 0 }}>
-            <div className="notice" role="status">
+            <Alert className="notice" role="status">
               <AlertTriangle size={17} aria-hidden="true" />
               Seeded sample data is loaded. These are not official LoL Esports rankings.
-            </div>
+            </Alert>
           </div>
         ) : null}
 
@@ -440,9 +446,10 @@ function App() {
               ))
             : null}
         </div>
-        <button
+        <Button
           type="button"
-          className="btn btn--ghost"
+          variant="ghost"
+          className="border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           onClick={() => {
             if (mode === 'regions') setRegionPicks([])
             else if (mode === 'teams') setTeamPicks([])
@@ -450,10 +457,10 @@ function App() {
           }}
         >
           Clear
-        </button>
-        <button type="button" className="btn btn--primary" onClick={() => setDrawerOpen(true)} disabled={trayPicks < 2}>
+        </Button>
+        <Button type="button" variant="default" className="border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-strong)]" onClick={() => setDrawerOpen(true)} disabled={trayPicks < 2}>
           Compare {trayPicks}
-        </button>
+        </Button>
       </div>
 
       <CompareDrawer
@@ -580,13 +587,13 @@ function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotSt
   const isLoading = state.status === 'loading'
   return (
     <section className="view">
-      <div className="panel">
+      <Card className="panel">
         <div className="state" aria-busy={isLoading}>
           {isLoading ? <BarChart3 size={26} aria-hidden="true" /> : <AlertTriangle size={26} aria-hidden="true" />}
           <h3>{isLoading ? `Loading ${scope}` : `Snapshot unavailable for ${scope}`}</h3>
           <p>{isLoading ? 'Fetching the exact public shard for this scope.' : state.message}</p>
         </div>
-      </div>
+      </Card>
     </section>
   )
 }
@@ -594,15 +601,15 @@ function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotSt
 function BootScreen() {
   return (
     <main className="bootscreen">
-      <div className="bootcard" aria-busy="true">
+      <Card className="bootcard" aria-busy="true">
         <div className="bootcard__head">
           <BarChart3 size={20} aria-hidden="true" />
           Loading power index
         </div>
-        <div className="skeleton wide" />
-        <div className="skeleton mid" />
-        <div className="skeleton short" />
-      </div>
+        <Skeleton className="skeleton wide" />
+        <Skeleton className="skeleton mid" />
+        <Skeleton className="skeleton short" />
+      </Card>
     </main>
   )
 }
@@ -610,17 +617,17 @@ function BootScreen() {
 function ErrorScreen({ message }: { message: string }) {
   return (
     <main className="bootscreen">
-      <div className="bootcard error">
+      <Card className="bootcard error">
         <div className="bootcard__head">
           <AlertTriangle size={20} aria-hidden="true" />
           Snapshot unavailable
         </div>
         <p className="muted">{message}</p>
-        <button type="button" className="btn btn--primary" onClick={() => window.location.reload()}>
+        <Button type="button" variant="default" className="border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-strong)]" onClick={() => window.location.reload()}>
           <RefreshCw size={15} aria-hidden="true" />
           Retry
-        </button>
-      </div>
+        </Button>
+      </Card>
     </main>
   )
 }
