@@ -1,6 +1,7 @@
 import type { Region, TeamProfile } from '../types'
 
 export const knownTeamIdentities: Record<string, TeamProfile> = {
+  "Anyone's Legend": { name: "Anyone's Legend", code: 'AL', region: 'LPL', league: 'LPL' },
   'Bilibili Gaming': { name: 'Bilibili Gaming', code: 'BLG', region: 'LPL', league: 'LPL' },
   'BNK FEARX': { name: 'BNK FEARX', code: 'BFX', region: 'LCK', league: 'LCK' },
   Cloud9: { name: 'Cloud9', code: 'C9', region: 'LCS', league: 'LCS' },
@@ -28,6 +29,7 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
 
 const exactTeamAliases: Record<string, string> = {
   '9Gaming Esports': '9Gaming',
+  'AG.AL': "Anyone's Legend",
   'DN Freecs': 'DN SOOPers',
   DRX: 'Kiwoom DRX',
   'Dplus Kia': 'Dplus KIA',

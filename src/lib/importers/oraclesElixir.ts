@@ -3,6 +3,13 @@ import { canonicalTeamNameFor, regionForLeague, teamCodeFor, teamIdentityFor } f
 
 type CsvRecord = Record<string, string>
 
+const exactOraclePlayerIdAliases: Record<string, string> = {
+  // Oracle split the same MVK/MGN top-laner across 2025/2026 LCP rows.
+  'oe:player:fa6ab005227d25bf19d02ca58f00cab': 'oe:player:75019a36fdf85666fbd9396ae4fc7ec',
+  // Oracle split the same New Meta top-laner across adjacent 2026 LJL splits.
+  'oe:player:ec32405553073660d757af1100d45b7': 'oe:player:0a86dddc699c7e6fe7f1e43153a5cbe',
+}
+
 export type OracleImportResult = {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -147,7 +154,7 @@ function rosterForSide(rows: CsvRecord[], side: string, observedAt: string): Mat
   for (const row of sideRows) {
     const role = roleForOraclePosition(value(row, 'position'))
     const name = value(row, 'playername')
-    const id = value(row, 'playerid') || unresolvedPlayerIdFor(row)
+    const id = canonicalOraclePlayerIdFor(row)
     if (!role || !id || seenRoles.has(role)) continue
     players.push({
       id,
@@ -167,6 +174,12 @@ function rosterForSide(rows: CsvRecord[], side: string, observedAt: string): Mat
     completeness: rosterCompleteness(players),
     players: players.sort((left, right) => roleOrder(left.role) - roleOrder(right.role)),
   }
+}
+
+function canonicalOraclePlayerIdFor(row: CsvRecord) {
+  const sourceId = value(row, 'playerid')
+  if (sourceId) return exactOraclePlayerIdAliases[sourceId] ?? sourceId
+  return unresolvedPlayerIdFor(row)
 }
 
 function playerStatsFor(row: CsvRecord, side: string) {
@@ -378,6 +391,8 @@ function sum(rows: CsvRecord[], key: string) {
 }
 
 function normalizeDate(valueToNormalize: string) {
+  const sourceDate = valueToNormalize.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+  if (sourceDate) return sourceDate
   const parsed = Date.parse(valueToNormalize)
   if (Number.isFinite(parsed)) return new Date(parsed).toISOString().slice(0, 10)
   return valueToNormalize.slice(0, 10)

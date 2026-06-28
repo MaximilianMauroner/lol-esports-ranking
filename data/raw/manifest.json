@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-26T16:02:04.810Z",
+  "generatedAt": "2026-06-28T09:39:26.638Z",
   "start": "2025-01-01",
-  "end": "2026-06-26",
+  "end": "2026-06-28",
   "files": {
     "leaguepediaJson": [
       "data/raw/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json"
@@ -32,6 +32,6 @@
   },
   "warnings": [
     "Leaguepedia was downloaded via Special:CargoExport instead of api.php cargoquery because api.php was rate-limited.",
-    "Oracle 2026 currently covers matches through 2026-06-21 in the downloaded CSV; Leaguepedia gap-fill covers public ScoreboardGames rows through 2026-06-23 for the requested window."
+    "Oracle primary data was refreshed through 2026-06-28; the existing Leaguepedia backup file was preserved because the live Leaguepedia refresh was rate-limited on 2026-06-28."
   ]
 }

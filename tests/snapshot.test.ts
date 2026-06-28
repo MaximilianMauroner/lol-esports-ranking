@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPlayerDirectory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
+import { compactStanding } from '../src/lib/publicArtifacts/schema.ts'
 import type { StaticRankingData } from '../src/lib/snapshot.ts'
 import type { MatchRecord, PlayerStanding, Role, Side, TeamProfile, TeamStanding } from '../src/types.ts'
 import { rosters, sampleMatches, teams } from './fixtures/rankingFixtures.ts'
@@ -103,6 +104,9 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   const directory = createPlayerDirectory(data)
 
   assert.equal(directory.artifactKind, 'player-directory')
+  assert.equal(directory.metric.id, 'role-power')
+  assert.equal(directory.metric.teamResultSignal, 'included')
+  assert.equal(directory.metric.independentSkillClaim, false)
   assert.equal(directory.ratedPlayerCount, 1)
   assert.equal(directory.ratedTeamCount, 1)
   assert.deepEqual(directory.roles, ['Mid'])
@@ -126,8 +130,10 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
     playerTeam: 'Gen.G',
     playerTeamCode: 'GEN',
     result: 'W',
-    teamKills: 16,
-    opponentKills: 8,
+    wins: 1,
+    losses: 0,
+    games: 1,
+    bestOf: 1,
     sourceProvider: 'oracles-elixir',
     sourceFileName: 'oracle-fixture.csv',
     sourceGameId: 'oe-player-proof',
@@ -142,6 +148,479 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
     latestObservedEvent: 'LCK 2026 Rounds 1-2',
   }])
   assert.equal(directory.modelVersion, 'transparent-gpr-vT')
+})
+
+test('createPlayerDirectory groups recent player game rows into match series', () => {
+  const standing = {
+    team: 'Bilibili Gaming',
+    code: 'BLG',
+    region: 'LPL',
+    league: 'LPL',
+  } as TeamStanding
+  const appearance = {
+    primaryTeam: 'Bilibili Gaming',
+    primaryTeamGames: 100,
+    primaryTeamShare: 1,
+    latestTeamGames: 100,
+    latestTeamShare: 1,
+    roleGames: 100,
+    roleShare: 1,
+    teamsPlayed: 1,
+    rolesPlayed: 1,
+    teamHistory: [{
+      team: 'Bilibili Gaming',
+      games: 100,
+      latestObservedAt: '2026-06-14',
+      latestObservedEvent: 'LPL 2026 Split 2',
+    }],
+    roleHistory: [{ role: 'Mid', games: 100 }],
+    flags: [],
+  } satisfies PlayerStanding['appearance']
+  const seriesGame = (gameId: string, gameNumber: number): PlayerStanding['history'][number] => ({
+    date: '2026-06-14',
+    event: 'LPL 2026 Split 2',
+    opponent: 'Top Esports',
+    opponentTeamCode: 'TES',
+    playerTeam: 'Bilibili Gaming',
+    playerTeamCode: 'BLG',
+    result: 'W',
+    bestOf: 1,
+    rating: 205,
+    delta: 1,
+    source: {
+      provider: 'oracles-elixir',
+      gameId,
+      matchId: `LPL 2026 Split 2_Finals_1_${gameNumber}`,
+      fileName: 'oracle-fixture.csv',
+      date: '2026-06-14',
+      event: 'LPL 2026 Split 2',
+      bestOf: 1,
+    },
+  })
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'key',
+    teams: {},
+    snapshots: {
+      key: {
+        standings: [standing],
+        players: [
+          sourcedPlayer({
+            id: 'knight',
+            name: 'Knight',
+            team: 'Bilibili Gaming',
+            role: 'Mid',
+            rank: 1,
+            rating: 210,
+            source: {
+              provider: 'oracles-elixir',
+              gameId: 'tes-game-3',
+              fileName: 'oracle-fixture.csv',
+              date: '2026-06-14',
+              event: 'LPL 2026 Split 2',
+            },
+            history: [
+              {
+                date: '2026-06-13',
+                event: 'LPL 2026 Split 2',
+                opponent: 'Team WE',
+                opponentTeamCode: 'WE',
+                playerTeam: 'Bilibili Gaming',
+                playerTeamCode: 'BLG',
+                result: 'W',
+                bestOf: 3,
+                rating: 202,
+                delta: 1,
+                source: {
+                  provider: 'oracles-elixir',
+                  gameId: 'we-game-1',
+                  fileName: 'oracle-fixture.csv',
+                  date: '2026-06-13',
+                  event: 'LPL 2026 Split 2',
+                  bestOf: 3,
+                },
+              },
+              seriesGame('tes-game-1', 1),
+              seriesGame('tes-game-2', 2),
+              seriesGame('tes-game-3', 3),
+            ],
+            appearance,
+          }),
+        ],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const directory = createPlayerDirectory(data)
+
+  assert.deepEqual(directory.players[0]?.recentMatches?.map((match) => ({
+    opponent: match.opponentTeamCode,
+    result: match.result,
+    wins: match.wins,
+    losses: match.losses,
+    games: match.games,
+    bestOf: match.bestOf,
+    sourceGameId: match.sourceGameId,
+    sourceGameIds: match.sourceGameIds,
+  })), [
+    {
+      opponent: 'WE',
+      result: 'W',
+      wins: 1,
+      losses: 0,
+      games: 1,
+      bestOf: 1,
+      sourceGameId: 'we-game-1',
+      sourceGameIds: undefined,
+    },
+    {
+      opponent: 'TES',
+      result: 'W',
+      wins: 3,
+      losses: 0,
+      games: 3,
+      bestOf: 5,
+      sourceGameId: 'tes-game-3',
+      sourceGameIds: ['tes-game-1', 'tes-game-2', 'tes-game-3'],
+    },
+  ])
+})
+
+test('public team standing records count matches instead of source game rows', () => {
+  const historyPoint = (
+    opponent: string,
+    result: 'W' | 'L',
+    gameId: string,
+    bestOf: number,
+    delta: number,
+  ): TeamStanding['history'][number] => ({
+    date: opponent === 'Top Esports' ? '2026-06-14' : '2026-06-20',
+    event: 'LPL 2026 Split 2',
+    opponent,
+    rating: 1800 + delta,
+    baseRating: 1700,
+    leagueAdjustment: 100,
+    sideAdjustment: 0,
+    ratingComponents: {
+      leagueAnchor: 1700,
+      teamStableOffset: 0,
+      rosterPriorOffset: 0,
+      momentum: 0,
+      contextAdjustment: 0,
+      uncertainty: 40,
+    },
+    ratingUpdate: {
+      teamStableDelta: delta,
+      leagueGameDelta: 0,
+      leaguePlacementDelta: 0,
+      momentumDelta: 0,
+      rosterPriorDelta: 0,
+      uncertaintyDelta: 0,
+      sideAdjustment: 0,
+      patchAdjustment: 0,
+    },
+    rank: 1,
+    delta,
+    tier: 'major-playoffs',
+    result,
+    source: {
+      provider: 'oracles-elixir',
+      gameId,
+      fileName: 'oracle-fixture.csv',
+      bestOf,
+    },
+  })
+  const standing = {
+    team: 'Bilibili Gaming',
+    code: 'BLG',
+    region: 'LPL',
+    league: 'LPL',
+    wins: 4,
+    losses: 2,
+    form: ['W', 'W', 'W', 'W', 'L'],
+    history: [
+      historyPoint('Top Esports', 'W', 'tes-game-1', 5, 5),
+      historyPoint('Top Esports', 'W', 'tes-game-2', 5, 7),
+      historyPoint('Top Esports', 'W', 'tes-game-3', 5, 6),
+      historyPoint('JD Gaming', 'W', 'jdg-game-1', 3, 3),
+      historyPoint('JD Gaming', 'L', 'jdg-game-2', 3, -8),
+      historyPoint('JD Gaming', 'L', 'jdg-game-3', 3, -6),
+    ],
+  } as unknown as Parameters<typeof compactStanding>[0]
+
+  const compact = compactStanding(standing)
+
+  assert.equal(compact.wins, 1)
+  assert.equal(compact.losses, 1)
+  assert.deepEqual(compact.form, ['W', 'L'])
+  assert.deepEqual(compact.recentMatches.map((match) => ({
+    opponent: match.opponent,
+    result: match.result,
+    wins: match.wins,
+    losses: match.losses,
+    games: match.games,
+    bestOf: match.bestOf,
+  })), [
+    {
+      opponent: 'Top Esports',
+      result: 'W',
+      wins: 3,
+      losses: 0,
+      games: 3,
+      bestOf: 5,
+    },
+    {
+      opponent: 'JD Gaming',
+      result: 'L',
+      wins: 1,
+      losses: 2,
+      games: 3,
+      bestOf: 3,
+    },
+  ])
+})
+
+test('public team recent match bestOf follows the observed decisive score', () => {
+  const historyPoint = (
+    opponent: string,
+    result: 'W' | 'L',
+    gameId: string,
+    bestOf: number,
+    delta: number,
+  ): TeamStanding['history'][number] => ({
+    date: '2026-05-27',
+    event: 'Playoffs',
+    opponent,
+    rating: 1700 + delta,
+    baseRating: 1650,
+    leagueAdjustment: 50,
+    sideAdjustment: 0,
+    ratingComponents: {
+      leagueAnchor: 1650,
+      teamStableOffset: 0,
+      rosterPriorOffset: 0,
+      momentum: 0,
+      contextAdjustment: 0,
+      uncertainty: 40,
+    },
+    ratingUpdate: {
+      teamStableDelta: delta,
+      leagueGameDelta: 0,
+      leaguePlacementDelta: 0,
+      momentumDelta: 0,
+      rosterPriorDelta: 0,
+      uncertaintyDelta: 0,
+      sideAdjustment: 0,
+      patchAdjustment: 0,
+    },
+    rank: 1,
+    delta,
+    tier: 'major-playoffs',
+    result,
+    source: {
+      provider: 'oracles-elixir',
+      gameId,
+      fileName: 'oracle-fixture.csv',
+      bestOf,
+    },
+  })
+  const compact = compactStanding({
+    team: 'Bilibili Gaming',
+    code: 'BLG',
+    region: 'LPL',
+    league: 'LPL',
+    wins: 4,
+    losses: 0,
+    form: ['W', 'W', 'W', 'W'],
+    history: [
+      historyPoint('Top Esports', 'W', 'tes-game-1', 5, 6),
+      historyPoint('Top Esports', 'W', 'tes-game-2', 5, 7),
+      historyPoint('Team WE', 'W', 'we-game-1', 2, 4),
+      historyPoint('Team WE', 'W', 'we-game-2', 2, 5),
+    ],
+  } as unknown as Parameters<typeof compactStanding>[0])
+
+  assert.deepEqual(compact.recentMatches.map((match) => ({
+    opponent: match.opponent,
+    wins: match.wins,
+    losses: match.losses,
+    bestOf: match.bestOf,
+  })), [
+    {
+      opponent: 'Top Esports',
+      wins: 2,
+      losses: 0,
+      bestOf: 3,
+    },
+    {
+      opponent: 'Team WE',
+      wins: 2,
+      losses: 0,
+      bestOf: 2,
+    },
+  ])
+})
+
+test('public team standing records infer match series when source rows say bo1', () => {
+  const historyPoint = (
+    result: 'W' | 'L',
+    gameId: string,
+    delta: number,
+  ): TeamStanding['history'][number] => ({
+    date: '2025-11-09',
+    event: 'WLDs 2025',
+    opponent: 'KT Rolster',
+    rating: 1700 + delta,
+    baseRating: 1650,
+    leagueAdjustment: 50,
+    sideAdjustment: 0,
+    ratingComponents: {
+      leagueAnchor: 1650,
+      teamStableOffset: 0,
+      rosterPriorOffset: 0,
+      momentum: 0,
+      contextAdjustment: 0,
+      uncertainty: 40,
+    },
+    ratingUpdate: {
+      teamStableDelta: delta,
+      leagueGameDelta: 0,
+      leaguePlacementDelta: 0,
+      momentumDelta: 0,
+      rosterPriorDelta: 0,
+      uncertaintyDelta: 0,
+      sideAdjustment: 0,
+      patchAdjustment: 0,
+    },
+    rank: 1,
+    delta,
+    tier: 'worlds-playoffs',
+    result,
+    source: {
+      provider: 'oracles-elixir',
+      gameId,
+      fileName: 'oracle-fixture.csv',
+      bestOf: 1,
+    },
+  })
+  const compact = compactStanding({
+    team: 'T1',
+    code: 'T1',
+    region: 'LCK',
+    league: 'LCK',
+    wins: 2,
+    losses: 1,
+    form: ['L', 'W', 'W'],
+    history: [
+      historyPoint('L', 'worlds-final-game-1', -8),
+      historyPoint('W', 'worlds-final-game-2', 5),
+      historyPoint('W', 'worlds-final-game-3', 6),
+    ],
+  } as unknown as Parameters<typeof compactStanding>[0])
+
+  assert.equal(compact.wins, 1)
+  assert.equal(compact.losses, 0)
+  assert.deepEqual(compact.form, ['W'])
+  assert.deepEqual(compact.recentMatches.map((match) => ({
+    opponent: match.opponent,
+    result: match.result,
+    wins: match.wins,
+    losses: match.losses,
+    games: match.games,
+    bestOf: match.bestOf,
+  })), [{
+    opponent: 'KT Rolster',
+    result: 'W',
+    wins: 2,
+    losses: 1,
+    games: 3,
+    bestOf: 3,
+  }])
+})
+
+test('event-scoped public standings keep same-day Bo-series siblings across source event labels', () => {
+  const splitTeams: Record<string, TeamProfile> = {
+    'Karmine Corp': { name: 'Karmine Corp', code: 'KC', region: 'LEC', league: 'LEC' },
+    Fnatic: { name: 'Fnatic', code: 'FNC', region: 'LEC', league: 'LEC' },
+  }
+  const splitSeriesGame = (
+    id: string,
+    event: string,
+    sourceProvider: NonNullable<MatchRecord['sourceProvider']>,
+    winner: 'Karmine Corp' | 'Fnatic',
+    gameNumber: number,
+  ): MatchRecord => ({
+    id,
+    sourceProvider,
+    sourceGameId: id,
+    sourceFileName: `${sourceProvider}.fixture`,
+    dataCompleteness: sourceProvider === 'oracles-elixir' ? 'complete' : 'scoreboard-game-stats',
+    date: '2025-09-26',
+    season: 2025,
+    event,
+    phase: 'Round 2',
+    region: 'LEC',
+    league: 'LEC',
+    teamAHomeLeague: 'LEC',
+    teamBHomeLeague: 'LEC',
+    teamARegion: 'LEC',
+    teamBRegion: 'LEC',
+    patch: '25.18',
+    bestOf: 5,
+    tier: 'major-playoffs',
+    teamA: 'Karmine Corp',
+    teamB: 'Fnatic',
+    winner,
+    teamAKills: winner === 'Karmine Corp' ? 20 + gameNumber : 4 + gameNumber,
+    teamBKills: winner === 'Fnatic' ? 13 + gameNumber : 7 + gameNumber,
+    teamAGold: winner === 'Karmine Corp' ? 71000 + gameNumber : 54000 + gameNumber,
+    teamBGold: winner === 'Fnatic' ? 73000 + gameNumber : 70000 + gameNumber,
+  })
+  const data = createStaticRankingData({
+    matches: [
+      splitSeriesGame('oracle-game-1', 'LEC 2025 Summer', 'oracles-elixir', 'Fnatic', 1),
+      splitSeriesGame('oracle-game-2', 'LEC 2025 Summer', 'oracles-elixir', 'Fnatic', 2),
+      splitSeriesGame('leaguepedia-game-3', 'LEC/2025 Season/Summer Playoffs', 'leaguepedia-cargo', 'Karmine Corp', 3),
+      splitSeriesGame('leaguepedia-game-4', 'LEC/2025 Season/Summer Playoffs', 'leaguepedia-cargo', 'Fnatic', 4),
+    ],
+    teams: splitTeams,
+    rosters: {},
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+
+  const { snapshots } = createStaticRankingSummaryData(data)
+  const shard = snapshots[snapshotKey({ season: 'All', event: 'LEC/2025 Season/Summer Playoffs', region: 'All' })]
+  const karmine = shard.standings.find((standing) => standing.team === 'Karmine Corp')
+  const fnatic = shard.standings.find((standing) => standing.team === 'Fnatic')
+
+  assert.equal(karmine?.wins, 0)
+  assert.equal(karmine?.losses, 1)
+  assert.deepEqual(karmine?.recentMatches.map((match) => ({
+    event: match.event,
+    opponent: match.opponent,
+    result: match.result,
+    wins: match.wins,
+    losses: match.losses,
+    games: match.games,
+    bestOf: match.bestOf,
+  })), [{
+    event: 'LEC/2025 Season/Summer Playoffs',
+    opponent: 'Fnatic',
+    result: 'L',
+    wins: 1,
+    losses: 3,
+    games: 4,
+    bestOf: 5,
+  }])
+  assert.equal(fnatic?.wins, 1)
+  assert.equal(fnatic?.losses, 0)
+  assert.equal(
+    shard.standings
+      .flatMap((standing) => standing.recentMatches)
+      .some((match) => match.games && match.games > 1 && match.wins === match.losses),
+    false,
+  )
 })
 
 test('createPlayerDirectory credits season rows to the primary scoped team', () => {
@@ -389,6 +868,175 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
   assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.delta, 10)
   assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.sourceProvider, 'oracles-elixir')
   assert.equal(history.series[teamStandingKey(omittedStanding)], undefined)
+})
+
+test('createTeamHistory publishes match-level history points for multi-game series', () => {
+  const standing = {
+    team: 'Hanwha Life Esports',
+    code: 'HLE',
+    region: 'LCK',
+    history: [
+      {
+        date: '2026-05-20',
+        event: 'LCK 2026 Rounds 1-2',
+        opponent: 'T1',
+        rating: 1639,
+        baseRating: 1639,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: {},
+        rank: 1,
+        delta: 7,
+        tier: 'regional-regular',
+        result: 'W',
+        source: { provider: 'oracles-elixir', gameId: 'warmup-game', fileName: 'fixture.csv', bestOf: 1 },
+      },
+      {
+        date: '2026-05-27',
+        event: 'LCK 2026 Rounds 1-2',
+        opponent: 'Gen.G',
+        rating: 1635,
+        baseRating: 1635,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: {},
+        rank: 1,
+        delta: 10,
+        tier: 'regional-regular',
+        result: 'W',
+        source: {
+          provider: 'oracles-elixir',
+          gameId: 'hle-gen-game-1',
+          matchId: 'LCK 2026 Rounds 1-2_Round 1_1_1',
+          fileName: 'fixture.csv',
+          bestOf: 3,
+        },
+      },
+      {
+        date: '2026-05-27',
+        event: 'LCK 2026 Rounds 1-2',
+        opponent: 'Gen.G',
+        rating: 1622,
+        baseRating: 1622,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: {},
+        rank: 2,
+        delta: -13,
+        tier: 'regional-regular',
+        result: 'L',
+        source: {
+          provider: 'oracles-elixir',
+          gameId: 'hle-gen-game-2',
+          matchId: 'LCK 2026 Rounds 1-2_Round 1_1_2',
+          fileName: 'fixture.csv',
+          bestOf: 3,
+        },
+      },
+      {
+        date: '2026-05-27',
+        event: 'LCK 2026 Rounds 1-2',
+        opponent: 'Gen.G',
+        rating: 1611,
+        baseRating: 1611,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: {},
+        rank: 2,
+        delta: -11,
+        tier: 'regional-regular',
+        result: 'L',
+        source: {
+          provider: 'oracles-elixir',
+          gameId: 'hle-gen-game-3',
+          matchId: 'LCK 2026 Rounds 1-2_Round 1_1_3',
+          fileName: 'fixture.csv',
+          bestOf: 3,
+        },
+      },
+    ],
+  } as TeamStanding
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'key',
+    teams: {},
+    snapshots: {
+      key: {
+        standings: [standing],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const history = createTeamHistory(data)
+  const points = history.series[teamStandingKey(standing)].points
+  const seriesPoint = points[1]
+
+  assert.equal(points.length, 2)
+  assert.equal(history.pointCount, 2)
+  assert.equal(seriesPoint[1], 1611)
+  assert.equal(seriesPoint[3]?.result, 'L')
+  assert.equal(seriesPoint[3]?.wins, 1)
+  assert.equal(seriesPoint[3]?.losses, 2)
+  assert.equal(seriesPoint[3]?.games, 3)
+  assert.equal(seriesPoint[3]?.bestOf, 3)
+  assert.equal(seriesPoint[3]?.delta, -14)
+  assert.deepEqual(seriesPoint[3]?.sourceGameIds, ['hle-gen-game-1', 'hle-gen-game-2', 'hle-gen-game-3'])
+})
+
+test('createTeamHistory skips unresolved tied match groups', () => {
+  const historyPoint = (
+    date: string,
+    opponent: string,
+    result: 'W' | 'L',
+    gameId: string,
+    bestOf: number,
+    delta: number,
+  ): TeamStanding['history'][number] => ({
+    date,
+    event: 'LCK 2026 Rounds 1-2',
+    opponent,
+    rating: 1600 + delta,
+    baseRating: 1600,
+    leagueAdjustment: 0,
+    ratingComponents: {},
+    ratingUpdate: {},
+    rank: 1,
+    delta,
+    tier: 'regional-regular',
+    result,
+    source: { provider: 'oracles-elixir', gameId, fileName: 'fixture.csv', bestOf },
+  })
+  const standing = {
+    team: 'T1',
+    code: 'T1',
+    region: 'LCK',
+    history: [
+      historyPoint('2026-05-20', 'Gen.G', 'W', 'decisive-1', 3, 8),
+      historyPoint('2026-05-20', 'Gen.G', 'W', 'decisive-2', 3, 5),
+      historyPoint('2026-05-27', 'Hanwha Life Esports', 'W', 'tied-1', 3, 7),
+      historyPoint('2026-05-27', 'Hanwha Life Esports', 'L', 'tied-2', 3, -9),
+      historyPoint('2026-06-03', 'Dplus KIA', 'W', 'single-1', 1, 4),
+    ],
+  } as TeamStanding
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'key',
+    teams: {},
+    snapshots: {
+      key: {
+        standings: [standing],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const history = createTeamHistory(data)
+  const points = history.series[teamStandingKey(standing)].points
+
+  assert.equal(history.pointCount, 2)
+  assert.deepEqual(points.map((point) => point[3]?.opponent), ['Gen.G', 'Dplus KIA'])
+  assert.equal(points.some((point) => point[3]?.wins === point[3]?.losses), false)
 })
 
 test('generated snapshots carry model and source provenance', () => {
@@ -784,6 +1432,12 @@ test('scheduled public snapshots publish sourced player rating proof without shi
   const seasonPlayers = playerDirectory.scopedPlayers?.[snapshotKey({ season: '2026', event: 'All', region: 'All' })] ?? []
 
   assert.equal(data.playerData.status, 'sourced-player-stats')
+  assert.equal(data.playerData.metric.id, 'role-power')
+  assert.equal(data.playerData.metric.teamResultSignal, 'included')
+  assert.equal(data.playerData.metric.independentSkillClaim, false)
+  assert.equal(manifest.playerData.metric.id, 'role-power')
+  assert.equal(manifest.playerData.metric.independentSkillClaim, false)
+  assert.equal(playerDirectory.metric.id, 'role-power')
   assert.ok(proof)
   assert.equal(proof.sourceProvider, 'oracles-elixir')
   assert.equal(proof.modelVersion, data.model.version)

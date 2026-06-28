@@ -95,7 +95,7 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
   if (!sourceGameId || !teamA || !teamB || !winner || !date) return null
 
   const league = inferLeague(event)
-  const phase = inferPhase(event)
+  const phase = inferPhase(`${event} ${text(game.id)}`)
   const season = yearFromDate(date)
   const teamAHomeLeague = teamHomeLeague(game, 'A', teamA, league)
   const teamBHomeLeague = teamHomeLeague(game, 'B', teamB, league)
@@ -169,6 +169,8 @@ function numberOrZero(value: unknown) {
 
 function normalizeDate(valueToNormalize: string) {
   if (!valueToNormalize) return ''
+  const sourceDate = valueToNormalize.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+  if (sourceDate) return sourceDate
   const parsed = Date.parse(valueToNormalize)
   if (Number.isFinite(parsed)) return new Date(parsed).toISOString().slice(0, 10)
   return valueToNormalize.slice(0, 10)
@@ -271,7 +273,14 @@ function isRegion(value: string): value is Region {
 
 function inferPhase(event: string) {
   const textValue = event.toLowerCase()
-  if (textValue.includes('playoff') || textValue.includes('bracket') || textValue.includes('knockout')) return 'Playoffs'
+  if (
+    textValue.includes('playoff')
+    || textValue.includes('bracket')
+    || textValue.includes('knockout')
+    || /(^|[^a-z0-9])(grand[\s_-]+)?finals?([^a-z0-9]|$)/.test(textValue)
+    || /(^|[^a-z0-9])semi[\s_-]*finals?([^a-z0-9]|$)/.test(textValue)
+    || /(^|[^a-z0-9])quarter[\s_-]*finals?([^a-z0-9]|$)/.test(textValue)
+  ) return 'Playoffs'
   if (textValue.includes('play-in') || textValue.includes('play in')) return 'Play-in'
   if (textValue.includes('swiss')) return 'Swiss'
   return 'Regular season'

@@ -63,14 +63,14 @@ const COMPARE_LIMIT = 4
 
 const MODES: { id: Mode; label: string; tagline: string; icon: typeof Globe2 }[] = [
   { id: 'regions', label: 'Regions', tagline: 'Power by league', icon: Globe2 },
-  { id: 'teams', label: 'Teams', tagline: 'Ratings & matchups', icon: Users },
+  { id: 'teams', label: 'Teams', tagline: 'Power scores & matchups', icon: Users },
   { id: 'players', label: 'Players', tagline: 'Role-rated index', icon: UserRound },
 ]
 
 const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
-  regions: { eyebrow: 'Regional strength', title: 'Region Power Index' },
+  regions: { eyebrow: 'Regional strength', title: 'Region power scores' },
   teams: { eyebrow: 'Tier 1 team strength', title: 'Global Power Rankings' },
-  players: { eyebrow: 'Player strength', title: 'Player Ratings' },
+  players: { eyebrow: 'Role-conditioned player strength', title: 'Player Role Power' },
 }
 
 function App() {
@@ -84,6 +84,8 @@ function App() {
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [playerPicks, setPlayerPicks] = useState<CompactPlayer[]>([])
+  const [teamSearch, setTeamSearch] = useState('')
+  const [playerSearch, setPlayerSearch] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const data = loadState.status === 'ready' ? loadState.data : undefined
 
@@ -149,6 +151,10 @@ function App() {
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
+  }, [mode])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [mode])
 
   const effectiveScope = useMemo(() => (data ? normalizeScopeForData(scope, data) : scope), [data, scope])
@@ -282,10 +288,11 @@ function App() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <nav className="rail" aria-label="Primary">
         <button type="button" className="rail__brand" onClick={goHome} aria-label="Go to Teams home">
           <span className="rail__mark">
-            <img src="/logo.svg" alt="" aria-hidden="true" />
+            <img src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
           </span>
           <div>
             <b>Power Index</b>
@@ -332,12 +339,11 @@ function App() {
         </div>
       </nav>
 
-      <div className="main">
+      <main id="main-content" className="main" tabIndex={-1}>
         <header className="topbar">
           <div className="topbar__title">
             <p className="eyebrow">{MODE_TITLES[mode].eyebrow}</p>
             <h1>{MODE_TITLES[mode].title}</h1>
-            <p>{scopeLabel(effectiveScope)} · {provenance.source}</p>
           </div>
         </header>
 
@@ -369,14 +375,15 @@ function App() {
           <ScopedSnapshotState state={snapshotState} scope={scopeLabel(effectiveScope)} />
         ) : (
           <>
-            {mode === 'regions' ? <RegionsView regions={regions} pickedIds={regionPickIds} onToggle={toggleRegion} /> : null}
+            {mode === 'regions' ? <RegionsView regions={regions} standings={standings} pickedIds={regionPickIds} onToggle={toggleRegion} /> : null}
             {mode === 'teams' ? (
               <TeamsView
                 standings={standings}
                 regions={regions}
                 model={readyData.model}
                 players={activePlayers}
-                search=""
+                search={teamSearch}
+                onSearchChange={setTeamSearch}
                 pickedTeams={teamPicks}
                 history={activeTeamHistory?.series}
                 updatedAt={formatDate(readyData.generatedAt)}
@@ -396,8 +403,10 @@ function App() {
             {mode === 'players' ? (
               <PlayersView
                 players={activePlayers}
+                metric={players?.metric ?? readyData.playerData.metric}
                 roles={activePlayerRoles}
-                search=""
+                search={playerSearch}
+                onSearchChange={setPlayerSearch}
                 pickedIds={playerPickIds}
                 onToggle={togglePlayer}
               />
@@ -409,59 +418,60 @@ function App() {
           Ratings sourced from {provenance.source}. Model {provenance.model} · config {provenance.config}.
           {readyData.playerData?.description ? ` ${readyData.playerData.description}` : ''}
         </p>
-      </div>
+      </main>
 
-      <div className={`tray${trayPicks > 0 ? ' is-shown' : ''}`}>
-        <span className="tray__label">{trayLabel}</span>
-        <div className="tray__chips">
-          {mode === 'regions'
-            ? regionPicks.map((region) => (
-                <span className="chip" key={regionKey(region)}>
-                  <RegionBadge region={region.region} size="sm" />
-                  <b>{region.region}</b>
-                  <button type="button" onClick={() => toggleRegion(region)} aria-label={`Remove ${region.region}`}>
-                    ✕
-                  </button>
-                </span>
-              ))
-            : null}
-          {mode === 'teams'
-            ? teamPicks.map((team) => (
-                <span className="chip" key={teamKey(team)}>
-                  <b>{team.code ?? team.team}</b>
-                  <button type="button" onClick={() => toggleTeam(team)} aria-label={`Remove ${team.team}`}>
-                    ✕
-                  </button>
-                </span>
-              ))
-            : null}
-          {mode === 'players'
-            ? playerPicks.map((player) => (
-                <span className="chip" key={player.id}>
-                  <b>{player.name}</b>
-                  <button type="button" onClick={() => togglePlayer(player)} aria-label={`Remove ${player.name}`}>
-                    ✕
-                  </button>
-                </span>
-              ))
-            : null}
+      {trayPicks > 0 ? (
+        <div className="tray is-shown">
+          <span className="tray__label">{trayLabel}</span>
+          <div className="tray__chips">
+            {mode === 'regions'
+              ? regionPicks.map((region) => (
+                  <span className="chip" key={regionKey(region)}>
+                    <RegionBadge region={region.region} size="sm" />
+                    <b>{region.region}</b>
+                    <button type="button" onClick={() => toggleRegion(region)} aria-label={`Remove ${region.region}`}>
+                      ✕
+                    </button>
+                  </span>
+                ))
+              : null}
+            {mode === 'teams'
+              ? teamPicks.map((team) => (
+                  <span className="chip" key={teamKey(team)}>
+                    <b>{team.code ?? team.team}</b>
+                    <button type="button" onClick={() => toggleTeam(team)} aria-label={`Remove ${team.team}`}>
+                      ✕
+                    </button>
+                  </span>
+                ))
+              : null}
+            {mode === 'players'
+              ? playerPicks.map((player) => (
+                  <span className="chip" key={player.id}>
+                    <b>{player.name}</b>
+                    <button type="button" onClick={() => togglePlayer(player)} aria-label={`Remove ${player.name}`}>
+                      ✕
+                    </button>
+                  </span>
+                ))
+              : null}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              if (mode === 'regions') setRegionPicks([])
+              else if (mode === 'teams') setTeamPicks([])
+              else setPlayerPicks([])
+            }}
+          >
+            Clear
+          </Button>
+          <Button type="button" variant="default" onClick={() => setDrawerOpen(true)} disabled={trayPicks < 2}>
+            Compare {trayPicks}
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          className="border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-          onClick={() => {
-            if (mode === 'regions') setRegionPicks([])
-            else if (mode === 'teams') setTeamPicks([])
-            else setPlayerPicks([])
-          }}
-        >
-          Clear
-        </Button>
-        <Button type="button" variant="default" className="border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-strong)]" onClick={() => setDrawerOpen(true)} disabled={trayPicks < 2}>
-          Compare {trayPicks}
-        </Button>
-      </div>
+      ) : null}
 
       <CompareDrawer
         open={drawerOpen && mode === 'regions'}
@@ -592,6 +602,13 @@ function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotSt
           {isLoading ? <BarChart3 size={26} aria-hidden="true" /> : <AlertTriangle size={26} aria-hidden="true" />}
           <h3>{isLoading ? `Loading ${scope}` : `Snapshot unavailable for ${scope}`}</h3>
           <p>{isLoading ? 'Fetching the exact public shard for this scope.' : state.message}</p>
+          {isLoading ? (
+            <div className="state__skeleton" aria-hidden="true">
+              <Skeleton className="wide" />
+              <Skeleton className="mid" />
+              <Skeleton className="short" />
+            </div>
+          ) : null}
         </div>
       </Card>
     </section>
@@ -606,9 +623,9 @@ function BootScreen() {
           <BarChart3 size={20} aria-hidden="true" />
           Loading power index
         </div>
-        <Skeleton className="skeleton wide" />
-        <Skeleton className="skeleton mid" />
-        <Skeleton className="skeleton short" />
+        <Skeleton className="wide" />
+        <Skeleton className="mid" />
+        <Skeleton className="short" />
       </Card>
     </main>
   )
@@ -623,7 +640,7 @@ function ErrorScreen({ message }: { message: string }) {
           Snapshot unavailable
         </div>
         <p className="muted">{message}</p>
-        <Button type="button" variant="default" className="border border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-strong)]" onClick={() => window.location.reload()}>
+        <Button type="button" variant="default" onClick={() => window.location.reload()}>
           <RefreshCw size={15} aria-hidden="true" />
           Retry
         </Button>

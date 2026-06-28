@@ -23,6 +23,13 @@
   font-size: 0.88rem;
 }
 
+.state__skeleton {
+  display: grid;
+  gap: 10px;
+  width: min(280px, 100%);
+  margin-top: 4px;
+}
+
 .bootscreen {
   min-height: 100vh;
   display: grid;
@@ -71,7 +78,7 @@
 }
 
 .footnote {
-  padding: 26px clamp(18px, 3vw, 36px);
+  padding: 26px var(--page-x);
   color: var(--faint);
   font-size: 0.76rem;
   line-height: 1.6;
@@ -117,8 +124,8 @@
     grid-column: 1 / -1;
     grid-row: 2;
   }
-  .region-row {
-    grid-template-columns: 44px minmax(120px, 1.3fr) minmax(120px, 1fr) minmax(150px, 1.4fr) auto;
+  .region-row__open {
+    grid-template-columns: 44px minmax(120px, 1.3fr) minmax(120px, 1fr) minmax(150px, 1.4fr);
   }
   .region-intl {
     display: none;
@@ -135,16 +142,20 @@
   .rail__mode small {
     display: none;
   }
+  .rail__foot div {
+    display: none;
+  }
 }
 
 @media (max-width: 900px) {
   .rail {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
     gap: 8px 12px;
     padding: 8px 12px 10px;
   }
   .rail__brand {
+    justify-self: start;
     min-height: 36px;
     margin-right: auto;
   }
@@ -152,10 +163,13 @@
     display: none;
   }
   .rail__nav {
-    flex: 1 1 100%;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
   }
   .rail__mode {
     min-height: 40px;
@@ -171,18 +185,14 @@
     white-space: nowrap;
   }
   .main {
-    padding-bottom: calc(var(--tray-h) + 24px);
-  }
-  .field select {
-    width: 100%;
-    max-width: 100%;
+    padding-bottom: calc(var(--tray-h) + 24px + env(safe-area-inset-bottom));
   }
   .tray {
     left: 0;
     bottom: 0;
   }
-  .region-row {
-    grid-template-columns: 40px minmax(0, 1fr) auto;
+  .region-row__open {
+    grid-template-columns: 40px minmax(120px, 1fr) minmax(98px, auto);
     gap: 12px;
   }
   .region-score {
@@ -198,14 +208,6 @@
   }
   .team-dossier__identity h2 {
     font-size: 1.35rem;
-  }
-  .modal {
-    align-items: stretch;
-    padding: 12px;
-  }
-  .modal__panel {
-    width: 100%;
-    max-height: calc(100vh - 24px);
   }
   .modal__body {
     padding: 14px;
@@ -263,9 +265,6 @@
   .method-panel {
     max-width: none;
   }
-  .drawer {
-    grid-template-columns: 0 1fr;
-  }
   .region-detail__stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -294,9 +293,6 @@
     flex: 1 1 100%;
     min-width: 0;
   }
-  .gpr-toolbar .toolbar .field {
-    flex: 1 1 160px;
-  }
   .pager {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -305,11 +301,35 @@
   .pager__buttons {
     justify-content: end;
   }
+  .player-match-detail__head {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+  }
+  .player-match-detail__head [data-slot="badge"] {
+    justify-self: start;
+  }
   .player-match {
-    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .player-match__score {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .player-match__main b,
+  .player-match__main small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .player-match__source {
     grid-column: 2 / -1;
+    justify-self: stretch;
+    overflow: hidden;
+    text-align: left;
   }
   .panel__head .spacer {
     margin-left: 0;
@@ -346,10 +366,6 @@
   .topbar__title {
     flex-basis: 100%;
   }
-  .search {
-    width: 100%;
-    min-width: 0;
-  }
   .gpr-toolbar {
     display: grid;
     grid-template-columns: 1fr;
@@ -359,12 +375,15 @@
     grid-template-columns: 1fr;
     width: 100%;
   }
+  .toolbar label,
+  .toolbar .select-shell,
+  .toolbar select {
+    width: 100%;
+    max-width: 100%;
+  }
   .trajectory-panel__controls {
     justify-content: flex-start;
     margin-left: 0;
-  }
-  .trajectory-panel__controls .count {
-    text-align: left;
   }
   .matchup__picks {
     grid-template-columns: 1fr;
@@ -384,12 +403,6 @@
   }
   .matchup__facts {
     grid-template-columns: 1fr;
-  }
-  .modal {
-    padding: 8px;
-  }
-  .modal__panel {
-    max-height: calc(100vh - 16px);
   }
   .modal__head {
     padding: 14px;
@@ -451,14 +464,65 @@
   .trend-card__plot .chart svg {
     min-height: 220px;
   }
-  .gpr-toolbar .count {
-    justify-self: start;
-  }
   .drawer__after {
     padding: 14px;
   }
   .region-detail__body {
     padding: 14px;
+  }
+  .region-panel__head {
+    display: grid;
+    align-items: start;
+  }
+  .region-row {
+    grid-template-columns: minmax(0, 1fr) 62px;
+  }
+  .region-row__open {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    padding: 14px 0 14px 12px;
+  }
+  .region-rank {
+    grid-row: span 2;
+    text-align: left;
+  }
+  .region-id {
+    gap: 9px;
+  }
+  .region-id b,
+  .region-id small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .region-score {
+    grid-column: 2;
+    grid-template-columns: auto minmax(72px, 1fr);
+    align-items: center;
+    min-width: 0;
+    max-width: 156px;
+  }
+  .region-score .heatbar {
+    display: none;
+  }
+  .region-mobile-stat {
+    display: inline;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .region-score .heat {
+    justify-self: start;
+  }
+  .region-pick {
+    align-self: stretch;
+    display: grid;
+    place-items: center;
+    padding: 0 14px 0 0;
   }
   .region-detail__hero {
     display: grid;
@@ -518,5 +582,34 @@
   .profile-bar strong {
     grid-column: 2;
     grid-row: 1;
+  }
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  button,
+  [role="button"],
+  [data-slot="button"],
+  [data-slot="toggle"],
+  [data-slot="toggle-group-item"],
+  .rail__brand,
+  .rail__mode,
+  table.ranking-table .sort-button,
+  .team-cell__button,
+  .form-trigger,
+  .chip button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  [data-slot="input"],
+  [data-slot="select"] {
+    min-height: 44px;
+  }
+
+  .impact-note {
+    min-width: 0;
+    min-height: 0;
   }
 }

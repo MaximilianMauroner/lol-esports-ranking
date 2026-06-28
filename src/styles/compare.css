@@ -1,6 +1,9 @@
 /* ---------------- Compare tray + drawer ---------------- */
 
 .tray {
+  --tray-pad-x: clamp(18px, 3vw, 36px);
+  --tray-pad-y: 10px;
+
   position: fixed;
   left: var(--rail-w);
   right: 0;
@@ -10,7 +13,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px clamp(18px, 3vw, 36px);
+  padding:
+    var(--tray-pad-y)
+    max(var(--tray-pad-x), env(safe-area-inset-right))
+    calc(var(--tray-pad-y) + env(safe-area-inset-bottom))
+    max(var(--tray-pad-x), env(safe-area-inset-left));
   background: oklch(0.18 0.005 250 / 0.94);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--line-strong);
@@ -35,6 +42,7 @@
   gap: 8px;
   overflow-x: auto;
   flex: 1;
+  min-width: 0;
   padding: 2px 0;
 }
 
@@ -42,7 +50,8 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 4px 6px 4px 5px;
+  max-width: 100%;
+  padding: 3px 5px;
   border-radius: 999px;
   background: var(--surface-3);
   border: 1px solid var(--line-strong);
@@ -52,14 +61,18 @@
 }
 
 .chip b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
 }
 
 .chip button {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
   border: 0;
   border-radius: 999px;
   background: var(--surface);
@@ -69,6 +82,38 @@
 
 .chip button:hover {
   color: var(--loss);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --tray-h: 104px;
+  }
+
+  .tray {
+    --tray-pad-x: 12px;
+    --tray-pad-y: 8px;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .tray__label {
+    display: none;
+  }
+
+  .tray__chips {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .tray > button {
+    justify-self: end;
+  }
+
+  .chip {
+    max-width: min(180px, 52vw);
+  }
 }
 
 .drawer {
@@ -145,9 +190,14 @@
 }
 
 .region-detail__body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   padding: 18px 22px 24px;
+}
+
+.region-detail__body > * {
+  flex: none;
 }
 
 .region-detail__hero {
@@ -219,12 +269,48 @@
   border-bottom: 0;
 }
 
-.region-detail__stat span {
+.region-detail__stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  text-align: left;
+  cursor: help;
+}
+
+.region-detail__stat-label:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.region-detail__stat-label svg {
+  flex: 0 0 auto;
+  opacity: 0.72;
+}
+
+.region-detail__stat-label:hover,
+.region-detail__stat-label:focus-visible {
+  color: var(--text);
+}
+
+.region-detail__stat-label span {
   color: var(--faint);
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-weight: 620;
+}
+
+.region-detail__stat-label:hover span,
+.region-detail__stat-label:focus-visible span {
+  color: inherit;
 }
 
 .region-detail__stat strong {
@@ -252,6 +338,10 @@
 
 .region-detail__teams {
   display: grid;
+  max-height: min(420px, 42vh);
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
 }
 
 .region-detail__team {
@@ -592,7 +682,7 @@
 
 .cmp {
   width: 100%;
-  min-width: max-content;
+  min-width: 620px;
   border-collapse: collapse;
 }
 
@@ -637,10 +727,66 @@
   font-weight: 680;
 }
 
-.cmp td.best::after {
-  content: "▲";
-  font-size: 0.58rem;
+.cmp__best {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-3);
   color: var(--accent-strong);
-  margin-left: 6px;
+  font-size: 0.62rem;
+  font-weight: 680;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   vertical-align: middle;
+}
+
+@media (max-width: 640px) {
+  .cmp {
+    min-width: 520px;
+  }
+
+  .cmp[data-compare-count="2"] {
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  .cmp th,
+  .cmp td {
+    padding: 10px 12px;
+  }
+
+  .cmp[data-compare-count="2"] th,
+  .cmp[data-compare-count="2"] td {
+    padding-inline: 8px;
+  }
+
+  .cmp[data-compare-count="2"] thead th:first-child,
+  .cmp[data-compare-count="2"] th[scope="row"] {
+    width: 36%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+  }
+
+  .cmp[data-compare-count="2"] thead th:not(:first-child) {
+    width: 32%;
+  }
+
+  .cmp thead th .ent b {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+
+  .cmp[data-compare-count="2"] thead th .ent b {
+    max-width: none;
+  }
 }

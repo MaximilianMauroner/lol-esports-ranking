@@ -1,4 +1,4 @@
-import type { LeagueStrength, LeagueTierName, Region } from '../types'
+import type { LeagueStrength, LeagueTierName, Region, TeamEligibility } from '../types'
 import type { PublicTeamStanding } from './publicArtifacts/schema'
 import { currentTopTierRegionForLeague } from '../data/regionTaxonomy'
 
@@ -38,7 +38,9 @@ export type RegionTopTeam = {
   rank?: number
 }
 
-type RegionStanding = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league' | 'rating' | 'rank'>
+type RegionStanding = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league' | 'rating' | 'rank'> & {
+  eligibility?: TeamEligibility
+}
 
 const TIER_RANK: Record<LeagueTierName, number> = {
   'tier-one': 0,
@@ -73,6 +75,7 @@ export function deriveRegionStrength(
       .filter((team) => flagshipLeagueNames.size === 0 || (team.league && flagshipLeagueNames.has(team.league)))
       .slice()
       .sort((left, right) => ratingOf(right) - ratingOf(left))
+    const rankedRegionTeams = regionTeams.filter((team) => team.eligibility?.eligible !== false)
 
     const internationalWins = sum(flagshipLeagues, (league) => league.wins)
     const internationalLosses = sum(flagshipLeagues, (league) => league.losses)
@@ -96,7 +99,7 @@ export function deriveRegionStrength(
       region,
       rank: 0,
       score: weightedLeagueScore(flagshipLeagues),
-      topTeamRating: regionTeams.length > 0 ? ratingOf(regionTeams[0]) : 0,
+      topTeamRating: rankedRegionTeams.length > 0 ? ratingOf(rankedRegionTeams[0]) : 0,
       teamCount: regionTeams.length,
       ecosystemTeamCount: ecosystemTeams.length,
       leagueCount: flagshipLeagues.length,
@@ -111,7 +114,7 @@ export function deriveRegionStrength(
       averageOpponentRating: averageOpponentRating === undefined ? undefined : Number(averageOpponentRating.toFixed(1)),
       flagshipLeague: flagship?.league,
       tier: flagship?.tier,
-      topTeams: regionTeams.slice(0, 5).map((team) => ({
+      topTeams: rankedRegionTeams.map((team) => ({
         team: team.team,
         code: team.code,
         rating: ratingOf(team),

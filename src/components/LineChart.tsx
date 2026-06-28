@@ -1,4 +1,13 @@
-import { useId, useMemo, useRef, useState } from 'react'
+import { useId, useMemo } from 'react'
+import {
+  CartesianGrid,
+  Line,
+  LineChart as RechartsLineChart,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from './ui/chart'
 
 export type ChartSeries = {
   id: string
@@ -7,15 +16,19 @@ export type ChartSeries = {
   points: { t: number; y: number }[]
 }
 
-type Hover = { x: number; t: number }
+type ChartDatum = {
+  t: number
+  [key: string]: number
+}
 
-const W = 920
-const PAD = { top: 18, right: 20, bottom: 30, left: 46 }
+type SeriesMeta = {
+  key: string
+  series: ChartSeries
+}
 
 const tickDate = new Intl.DateTimeFormat('en', { month: 'short', year: '2-digit' })
 const fullDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
 
-/** Hand-rolled responsive multi-line chart with a shared hover readout. */
 export function LineChart({
   series,
   height = 300,
@@ -37,152 +50,122 @@ export function LineChart({
   yReverse?: boolean
   curve?: 'linear' | 'step'
 }) {
-  const gradientId = useId()
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [hover, setHover] = useState<Hover | null>(null)
-
+  const chartId = useId().replace(/:/g, '')
   const domain = useMemo(() => computeDomain(series, yDomain), [series, yDomain])
+  const { data, meta } = useMemo(() => buildChartData(series), [series])
+  const config = useMemo<ChartConfig>(
+    () =>
+      Object.fromEntries(
+        meta.map(({ key, series: entry }) => [
+          key,
+          {
+            label: entry.label,
+            color: entry.color,
+          },
+        ]),
+      ),
+    [meta],
+  )
 
-  if (series.length === 0 || domain === null) {
+  if (series.length === 0 || domain === null || data.length === 0) {
     return <p className="muted" style={{ padding: 20 }}>Select teams to plot their rating over time.</p>
   }
 
   const { minT, maxT, minY, maxY } = domain
-  const plotW = W - PAD.left - PAD.right
-  const plotH = height - PAD.top - PAD.bottom
-  const xOf = (t: number) => PAD.left + ((t - minT) / (maxT - minT || 1)) * plotW
-  const yOf = (y: number) => {
-    const ratio = (y - minY) / (maxY - minY || 1)
-    return PAD.top + (yReverse ? ratio : 1 - ratio) * plotH
-  }
-
   const yTicks = providedYTicks ?? niceTicks(minY, maxY, 4)
   const formatYTick = yTickFormat ?? yFormat
   const xTicks = timeTicks(minT, maxT, 5)
-  const pathFor = curve === 'step' ? stepPath : linePath
-
-  function onMove(event: React.PointerEvent<SVGSVGElement>) {
-    const svg = svgRef.current
-    if (!svg) return
-    const rect = svg.getBoundingClientRect()
-    const px = ((event.clientX - rect.left) / rect.width) * W
-    if (px < PAD.left || px > W - PAD.right) {
-      setHover(null)
-      return
-    }
-    const t = minT + ((px - PAD.left) / plotW) * (maxT - minT)
-    setHover({ x: px, t })
-  }
-
-  const readout = hover
-    ? series
-        .map((s) => ({ series: s, point: nearestPoint(s.points, hover.t) }))
-        .filter((entry): entry is { series: ChartSeries; point: { t: number; y: number } } => entry.point !== null)
-    : []
+  const lineType = curve === 'step' ? 'stepAfter' : 'linear'
 
   return (
-    <div className="chart">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${W} ${height}`}
-        preserveAspectRatio="none"
+    <div className="chart-shell">
+      <ChartContainer
+        id={chartId}
+        config={config}
+        className="chart chart--recharts"
+        style={{ height }}
         role="img"
-        aria-label={`${yLabel} over time for ${series.map((s) => s.label).join(', ')}`}
-        onPointerMove={onMove}
-        onPointerLeave={() => setHover(null)}
+        aria-label={`${yLabel} over time for ${series.map((entry) => entry.label).join(', ')}`}
       >
-        <defs>
-          <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.16" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        {yTicks.map((tick) => (
-          <g key={`y-${tick}`}>
-            <line className="chart__grid" x1={PAD.left} x2={W - PAD.right} y1={yOf(tick)} y2={yOf(tick)} />
-            <text className="chart__axis" x={PAD.left - 8} y={yOf(tick)} textAnchor="end" dominantBaseline="middle">
-              {formatYTick(tick)}
-            </text>
-          </g>
-        ))}
-
-        {xTicks.map((tick) => (
-          <text key={`x-${tick}`} className="chart__axis" x={xOf(tick)} y={height - 10} textAnchor="middle">
-            {tickDate.format(new Date(tick))}
-          </text>
-        ))}
-
-        {series.length === 1 ? (
-          <path
-            d={`${pathFor(series[0].points, xOf, yOf)} L ${xOf(series[0].points.at(-1)!.t)} ${yOf(yReverse ? maxY : minY)} L ${xOf(series[0].points[0].t)} ${yOf(yReverse ? maxY : minY)} Z`}
-            fill={`url(#${gradientId})`}
-            stroke="none"
+        <RechartsLineChart data={data} margin={{ top: 18, right: 20, bottom: 16, left: 4 }}>
+          <CartesianGrid vertical={false} strokeDasharray="0" />
+          <XAxis
+            dataKey="t"
+            type="number"
+            domain={[minT, maxT]}
+            ticks={xTicks}
+            tickLine={false}
+            axisLine={false}
+            minTickGap={28}
+            tickFormatter={(value) => tickDate.format(new Date(Number(value)))}
           />
-        ) : null}
-
-        {series.map((s) => (
-          <path key={s.id} className="chart__line" d={pathFor(s.points, xOf, yOf)} stroke={s.color} fill="none" />
-        ))}
-
-        {series.length <= 2 ? series.flatMap((s) => (
-          s.points.length <= 36
-            ? s.points.map((point, index) => (
-                <circle
-                  key={`${s.id}-${index}-${point.t}-${point.y}`}
-                  className="chart__point"
-                  cx={xOf(point.t)}
-                  cy={yOf(point.y)}
-                  r={3.4}
-                  fill={s.color}
-                />
-              ))
-            : []
-        )) : null}
-
-        {hover ? (
-          <line className="chart__cursor" x1={hover.x} x2={hover.x} y1={PAD.top} y2={height - PAD.bottom} />
-        ) : null}
-
-        {readout.map((entry) => (
-          <circle
-            key={entry.series.id}
-            cx={xOf(entry.point.t)}
-            cy={yOf(entry.point.y)}
-            r={3.5}
-            fill="var(--surface)"
-            stroke={entry.series.color}
-            strokeWidth={2}
+          <YAxis
+            type="number"
+            width={44}
+            domain={[minY, maxY]}
+            ticks={yTicks}
+            reversed={yReverse}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(value) => formatYTick(Number(value))}
           />
-        ))}
-      </svg>
+          <RechartsTooltip
+            cursor={{ stroke: 'var(--line-strong)', strokeDasharray: '3 3' }}
+            content={
+              <ChartTooltipContent
+                labelFormatter={(label) => fullDate.format(new Date(Number(label)))}
+                valueFormatter={(value) => yFormat(Number(value))}
+              />
+            }
+          />
+          {meta.map(({ key, series: entry }) => (
+            <Line
+              key={entry.id}
+              dataKey={key}
+              name={entry.label}
+              type={lineType}
+              stroke={`var(--color-${key})`}
+              strokeWidth={2.4}
+              connectNulls
+              dot={entry.points.length <= 36 && series.length <= 2 ? { r: 3.2, strokeWidth: 2 } : false}
+              activeDot={{ r: 4, stroke: 'var(--surface)', strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
+          ))}
+        </RechartsLineChart>
+      </ChartContainer>
 
       <div className="chart__legend">
-        {series.map((s) => (
-          <span className="chart__key" key={s.id}>
-            <i style={{ background: s.color }} />
-            {s.label}
+        {meta.map(({ key, series: entry }) => (
+          <span className="chart__key" key={entry.id}>
+            <i style={{ background: `var(--color-${key})` }} aria-hidden="true" />
+            {entry.label}
           </span>
         ))}
       </div>
-
-      {hover && readout.length > 0 ? (
-        <div className="chart__readout" style={{ left: `${(hover.x / W) * 100}%` }}>
-          <b>{fullDate.format(new Date(hover.t))}</b>
-          {readout
-            .slice()
-            .sort((a, b) => yReverse ? a.point.y - b.point.y : b.point.y - a.point.y)
-            .map((entry) => (
-              <span key={entry.series.id}>
-                <i style={{ background: entry.series.color }} />
-                {entry.series.label}
-                <strong>{yFormat(entry.point.y)}</strong>
-              </span>
-            ))}
-        </div>
-      ) : null}
     </div>
   )
+}
+
+function buildChartData(series: ChartSeries[]) {
+  const dataByTime = new Map<number, ChartDatum>()
+  const meta: SeriesMeta[] = series.map((entry, index) => ({
+    key: `series${index}`,
+    series: entry,
+  }))
+
+  for (const { key, series: entry } of meta) {
+    for (const point of entry.points) {
+      const datum = dataByTime.get(point.t) ?? { t: point.t }
+      datum[key] = point.y
+      dataByTime.set(point.t, datum)
+    }
+  }
+
+  return {
+    data: [...dataByTime.values()].sort((left, right) => left.t - right.t),
+    meta,
+  }
 }
 
 function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: number }) {
@@ -190,8 +173,8 @@ function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: numb
   let maxT = -Infinity
   let minY = Infinity
   let maxY = -Infinity
-  for (const s of series) {
-    for (const point of s.points) {
+  for (const entry of series) {
+    for (const point of entry.points) {
       if (point.t < minT) minT = point.t
       if (point.t > maxT) maxT = point.t
       if (point.y < minY) minY = point.y
@@ -204,37 +187,6 @@ function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: numb
   }
   const padY = Math.max(8, (maxY - minY) * 0.08)
   return { minT, maxT, minY: minY - padY, maxY: maxY + padY }
-}
-
-function linePath(points: { t: number; y: number }[], xOf: (t: number) => number, yOf: (y: number) => number) {
-  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xOf(point.t).toFixed(1)} ${yOf(point.y).toFixed(1)}`).join(' ')
-}
-
-function stepPath(points: { t: number; y: number }[], xOf: (t: number) => number, yOf: (y: number) => number) {
-  if (points.length === 0) return ''
-  const [first, ...rest] = points
-  const commands = [`M ${xOf(first.t).toFixed(1)} ${yOf(first.y).toFixed(1)}`]
-  let previous = first
-  for (const point of rest) {
-    commands.push(`L ${xOf(point.t).toFixed(1)} ${yOf(previous.y).toFixed(1)}`)
-    commands.push(`L ${xOf(point.t).toFixed(1)} ${yOf(point.y).toFixed(1)}`)
-    previous = point
-  }
-  return commands.join(' ')
-}
-
-function nearestPoint(points: { t: number; y: number }[], t: number) {
-  if (points.length === 0) return null
-  let best = points[0]
-  let bestDist = Math.abs(points[0].t - t)
-  for (const point of points) {
-    const dist = Math.abs(point.t - t)
-    if (dist < bestDist) {
-      best = point
-      bestDist = dist
-    }
-  }
-  return best
 }
 
 function niceTicks(min: number, max: number, count: number) {

@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
-import { useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
+import { DataState } from './ui'
 import { Button } from './ui/button'
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from './ui/sheet'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 export type CompareColumn = {
   id: string
@@ -37,52 +39,36 @@ export function CompareDrawer<E>({
   onClose: () => void
   onRemove: (id: string) => void
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    if (activeElement && !activeElement.closest('.drawer')) previousFocusRef.current = activeElement
-    closeRef.current?.focus()
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      const previousFocus = previousFocusRef.current
-      window.setTimeout(() => {
-        if (document.querySelector('.drawer.is-open')) return
-        if (previousFocus?.isConnected) previousFocus.focus()
-        previousFocusRef.current = null
-      }, 0)
-    }
-  }, [open, onClose])
-
-  if (!open) return null
-
   return (
-    <div className="drawer is-open" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="drawer__scrim" onClick={onClose} />
-      <div className="drawer__panel">
-        <div className="drawer__head">
-          <h2>{title}</h2>
-          <Button ref={closeRef} type="button" variant="ghost" className="border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]" onClick={onClose}>
-            <X size={16} aria-hidden="true" />
-            Close
-          </Button>
-        </div>
-        <div className="drawer__body">
+    <Sheet open={open} onOpenChange={(nextOpen) => {
+      if (!nextOpen) onClose()
+    }}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-full max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(980px,94vw)] sm:max-w-none"
+      >
+        <SheetHeader className="drawer__head flex-row items-center p-[18px_22px] text-left">
+          <SheetTitle className="mr-auto text-[1.1rem] font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
+          <SheetClose asChild>
+            <Button type="button" variant="ghost">
+              <X size={16} aria-hidden="true" />
+              Close
+            </Button>
+          </SheetClose>
+        </SheetHeader>
+        <div className="drawer__body min-h-0 flex-1 overflow-auto overscroll-contain">
           {entities.length === 0 ? (
-            <p className="footnote">Nothing selected yet. Use the + button on any row to add it here.</p>
+            <DataState icon={<Plus size={26} aria-hidden="true" />} title="Nothing selected yet">
+              Add rows from the ranking view to compare them here.
+            </DataState>
           ) : (
             <>
               <div className="drawer__table tablewrap">
-                <table className="cmp">
+                <table className="cmp" data-compare-count={columns.length}>
                   <thead>
                     <tr>
-                      <th scope="col" />
+                      <th scope="col" aria-label="Metric" />
                       {columns.map((column) => (
                         <th key={column.id} scope="col">
                           <div className="ent">
@@ -92,16 +78,21 @@ export function CompareDrawer<E>({
                             </span>
                             {column.sub ? <small>{column.sub}</small> : null}
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="border border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-                            style={{ padding: '2px 6px', marginTop: 4 }}
-                            onClick={() => onRemove(column.id)}
-                          >
-                            <X size={12} aria-hidden="true" /> Remove
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="mt-1 rounded-[var(--r-sm)]"
+                                onClick={() => onRemove(column.id)}
+                                aria-label={`Remove ${column.name} from comparison`}
+                              >
+                                <X size={14} aria-hidden="true" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Remove {column.name}</TooltipContent>
+                          </Tooltip>
                         </th>
                       ))}
                     </tr>
@@ -115,6 +106,11 @@ export function CompareDrawer<E>({
                           {entities.map((entity, index) => (
                             <td key={columns[index].id} className={best.has(columns[index].id) ? 'best' : ''}>
                               {row.cell(entity)}
+                              {best.has(columns[index].id) ? (
+                                <span className="cmp__best" aria-label={`Best ${row.label.toLowerCase()} value`}>
+                                  Best
+                                </span>
+                              ) : null}
                             </td>
                           ))}
                         </tr>
@@ -127,8 +123,8 @@ export function CompareDrawer<E>({
             </>
           )}
         </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -142,8 +138,8 @@ function bestIds<E>(entities: E[], columns: CompareColumn[], row: CompareRow<E>)
     row.better === 'low'
       ? Math.min(...valid.map((entry) => entry.value))
       : Math.max(...valid.map((entry) => entry.value))
-  for (const entry of valid) {
-    if (entry.value === target) ids.add(entry.id)
-  }
+  const winners = valid.filter((entry) => entry.value === target)
+  if (winners.length !== 1) return ids
+  ids.add(winners[0].id)
   return ids
 }

@@ -78,6 +78,38 @@ test('deriveRegionStrength uses flagship leagues instead of diluting majors with
   assert.deepEqual(lec.topTeams.map((entry) => entry.team), ['G2 Esports'])
 })
 
+test('deriveRegionStrength lists eligible flagship teams as current representatives', () => {
+  const rows = deriveRegionStrength(
+    [
+      league({ league: 'LCS', region: 'LCS', tier: 'tier-two', score: 1420, wins: 4, losses: 6, internationalMatches: 10 }),
+    ],
+    [
+      {
+        ...team('Stale High Rating', 'LCS', 1510, 10),
+        league: 'LCS',
+        eligibility: { eligible: false, reasons: ['stale'] },
+      },
+      {
+        ...team('Current Leader', 'LCS', 1450, 20),
+        league: 'LCS',
+        eligibility: { eligible: true, reasons: [] },
+      },
+      {
+        ...team('Current Second', 'LCS', 1430, 21),
+        league: 'LCS',
+        eligibility: { eligible: true, reasons: [] },
+      },
+    ] as RankingSummaryStanding[],
+  )
+
+  const lcs = rows.find((row) => row.region === 'LCS')
+
+  assert.ok(lcs)
+  assert.equal(lcs.teamCount, 3)
+  assert.equal(lcs.topTeamRating, 1450)
+  assert.deepEqual(lcs.topTeams.map((entry) => entry.team), ['Current Leader', 'Current Second'])
+})
+
 test('deriveRegionStrength folds APAC domestic feeders under LCP for current top-tier region power', () => {
   const rows = deriveRegionStrength(
     [

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, ArrowLeftRight, BarChart3, Crosshair, Swords, Trophy, Users, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Activity, ArrowLeftRight, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Crosshair, Swords, Trophy, Users, X } from 'lucide-react'
 import type { CompactPlayer, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type { PublicRecentMatch } from '../lib/publicArtifacts/schema'
 import type { RegionStrength } from '../lib/regionStrength'
@@ -8,9 +8,10 @@ import { rankingTargetExplanations } from '../lib/rankingExplanations'
 import { extent, formatDate, formatDateRange, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
-import { CountBadge, DataState, Field, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
+import { CountBadge, DataState, Field, FormDots, HeatChip, PickButton, RegionBadge, SearchInput, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Card, CardHeader } from '../components/ui/card'
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { LineChart, type ChartSeries } from '../components/LineChart'
 
 type SortKey = 'rank' | 'rating' | 'wins'
@@ -27,19 +28,18 @@ type TeamDataSummary = {
   notes?: string[]
 }
 
-const TEAM_ROW_LIMIT = 60
+const TEAM_RANK_AXIS_LIMIT = 60
+const TEAM_PAGE_SIZES = [15, 25, 50, 80] as const
+const DEFAULT_TEAM_PAGE_SIZE = 25
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
-const LEAGUE_LOGOS: Record<string, string> = {
-  LPL: '/league-icons/lpl.png',
-}
-
 export function TeamsView({
   standings,
   regions,
   model,
   players,
   search,
+  onSearchChange,
   pickedTeams,
   history,
   updatedAt,
@@ -51,6 +51,7 @@ export function TeamsView({
   model?: Pick<ModelInfo, 'version' | 'configHash'>
   players?: CompactPlayer[]
   search: string
+  onSearchChange: (value: string) => void
   pickedTeams: RankingSummaryStanding[]
   history?: Record<string, TeamHistorySeries>
   updatedAt?: string
@@ -60,6 +61,8 @@ export function TeamsView({
   const [region, setRegion] = useState('All')
   const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>('ranked')
   const [sortKey, setSortKey] = useState<SortKey>('rank')
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_TEAM_PAGE_SIZE)
+  const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
   const [detailKey, setDetailKey] = useState<string | null>(null)
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
 
@@ -96,7 +99,12 @@ export function TeamsView({
       : 'Every team in this scope currently passes ranking eligibility.'
 
   const sorted = useMemo(() => sortStandings(filtered, sortKey), [filtered, sortKey])
-  const visible = sorted.slice(0, TEAM_ROW_LIMIT)
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const pageScopeKey = `${region}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${pageSize}`
+  const requestedPage = pageState.scopeKey === pageScopeKey ? pageState.page : 1
+  const currentPage = Math.min(requestedPage, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const visible = sorted.slice(pageStart, pageStart + pageSize)
   const [ratingMin, ratingMax] = useMemo(() => extent(filtered.map((team) => team.rating)), [filtered])
 
   const detailTeam = useMemo(
@@ -168,6 +176,14 @@ export function TeamsView({
     setSortKey(key as SortKey)
   }
 
+  function updatePage(nextPage: number) {
+    setPageState({ scopeKey: pageScopeKey, page: Math.min(Math.max(1, nextPage), totalPages) })
+  }
+
+  function updatePageSize(value: number) {
+    setPageSize(value)
+  }
+
   return (
     <div className="view">
       <div className="gpr-layout">
@@ -179,6 +195,7 @@ export function TeamsView({
                 {updatedAt ? <p className="gpr-updated">Updated {updatedAt}</p> : null}
               </div>
               <div className="toolbar">
+                <SearchInput value={search} onChange={onSearchChange} placeholder="Search teams" />
                 <Segmented
                   value={eligibilityFilter}
                   options={[
@@ -192,10 +209,10 @@ export function TeamsView({
                   value={region}
                   options={regionOptions.map((option) => ({ value: option, label: formatCompetitionRegionLabel(option) }))}
                   onChange={setRegion}
-                  className="field--inline"
+                  className="grid-flow-col items-center gap-2"
                 />
                 <CountBadge>
-                  {visible.length} of {filtered.length}
+                  {sorted.length === 0 ? 0 : pageStart + 1}-{pageStart + visible.length} of {filtered.length}
                 </CountBadge>
               </div>
               <p className="eligibility-note">{eligibilityNote}</p>
@@ -207,20 +224,20 @@ export function TeamsView({
               </DataState>
             ) : (
               <div className="tablewrap">
-                <table className="grid gpr-grid">
+                <table className="ranking-table gpr-grid">
                   <colgroup>
-                    <col style={{ width: '88px' }} />
-                    <col />
-                    <col style={{ width: '128px' }} />
-                    <col style={{ width: '128px' }} />
-                    <col style={{ width: '56px' }} />
+                    <col className="gpr-col-rank" />
+                    <col className="gpr-col-team" />
+                    <col className="gpr-col-score" />
+                    <col className="gpr-col-record" />
+                    <col className="gpr-col-action" />
                   </colgroup>
                   <thead>
                     <tr>
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
                       <th scope="col">Team</th>
-                      <SortHeader label="Power Score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
-                      <SortHeader label="Win / Loss" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" />
+                      <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
+                      <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" className="gpr-col-record" />
                       <th scope="col" className="center" aria-label="Add to comparison" />
                     </tr>
                   </thead>
@@ -232,40 +249,32 @@ export function TeamsView({
                         <tr
                           key={key}
                           className={`gpr-row${pickedKeys.has(key) ? ' is-picked' : ''}`}
-                          onClick={() => setDetailKey(key)}
-                          tabIndex={0}
-                          role="button"
-                          aria-label={`View ${team.team} details`}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              setDetailKey(key)
-                            }
-                          }}
                         >
-                          <td className="gpr-rankcell">
-                            <span className={`gpr-rank${typeof team.rank === 'number' && team.rank <= 3 ? ' podium' : ''}`}>
-                              {team.rank ?? '—'}
+                          <td>
+                            <span className="gpr-rankcell">
+                              <span className={`gpr-rank${typeof team.rank === 'number' && team.rank <= 3 ? ' podium' : ''}`}>
+                                {team.rank ?? '—'}
+                              </span>
+                              <Movement value={team.movement} />
                             </span>
-                            <Movement value={team.movement} />
                           </td>
                           <td>
-                            <div className="team-cell">
+                            <button type="button" className="team-cell team-cell__button" onClick={() => setDetailKey(key)} aria-label={`View ${team.team} details`}>
                               <span className="team-mark sm">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
                               <div className="ent">
                                 <b>{team.team}</b>
                                 <small>{teamSubtitle(team)}</small>
                               </div>
-                            </div>
+                            </button>
                           </td>
                           <td className="right">
                             <HeatChip value={team.rating} min={ratingMin} max={ratingMax} label={formatRating(team.rating)} />
                           </td>
-                          <td className="right num">
+                          <td className="right num gpr-col-record">
                             <b className="record-main">{formatRecord(team.wins, team.losses)}</b>{' '}
                             <span className="record-ratio">{formatRatio(total > 0 ? team.wins / total : undefined)}</span>
                           </td>
-                          <td className="center" onClick={(event) => event.stopPropagation()}>
+                          <td className="center">
                             <PickButton picked={pickedKeys.has(key)} onToggle={() => onToggle(team)} label={team.team} />
                           </td>
                         </tr>
@@ -275,6 +284,36 @@ export function TeamsView({
                 </table>
               </div>
             )}
+
+            {sorted.length > 0 ? (
+              <div className="pager" aria-label="Team table pagination">
+                <div className="pager__size">
+                  <Field
+                    label="Rows"
+                    value={String(pageSize)}
+                    options={TEAM_PAGE_SIZES.map((option) => String(option))}
+                    onChange={(value) => updatePageSize(Number(value))}
+                  />
+                </div>
+                <CountBadge>
+                  Page {currentPage} of {totalPages}
+                </CountBadge>
+                <div className="pager__buttons">
+                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First page">
+                    <ChevronsLeft size={16} aria-hidden="true" />
+                  </Button>
+                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
+                    <ChevronLeft size={16} aria-hidden="true" />
+                  </Button>
+                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </Button>
+                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">
+                    <ChevronsRight size={16} aria-hidden="true" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </Card>
         </div>
 
@@ -300,7 +339,7 @@ export function TeamsView({
             <Segmented
               value={metric}
               options={[
-                { value: 'rating', label: 'Power Score' },
+                { value: 'rating', label: 'Power score' },
                 { value: 'rank', label: 'Rank' },
               ]}
               onChange={setMetric}
@@ -316,7 +355,7 @@ export function TeamsView({
           <LineChart
             series={chartSeries}
             height={300}
-            yLabel={metric === 'rank' ? 'Rank' : 'Power Score'}
+            yLabel={metric === 'rank' ? 'Rank' : 'Power score'}
             yFormat={metric === 'rank' ? (value) => `#${Math.round(value)}` : undefined}
             yTickFormat={metric === 'rank' ? (value) => Math.round(value) === 1 ? '#1 best' : `#${Math.round(value)}` : undefined}
             yDomain={rankAxis?.domain}
@@ -384,7 +423,7 @@ function rankAxisForSeries(series: ChartSeries[]) {
     .map((rank) => Math.round(rank))
   if (ranks.length === 0) return undefined
   const axisMax = Math.max(5, Math.max(...ranks))
-  const clampedMax = Math.min(TEAM_ROW_LIMIT, axisMax)
+  const clampedMax = Math.min(TEAM_RANK_AXIS_LIMIT, axisMax)
   const ticks = clampedMax <= 8
     ? Array.from({ length: clampedMax }, (_, index) => index + 1)
     : uniqueSorted([1, Math.round(clampedMax * 0.25), Math.round(clampedMax * 0.5), Math.round(clampedMax * 0.75), clampedMax])
@@ -436,9 +475,9 @@ function RegionalStrengthPanel({ regions }: { regions: RegionStrength[] }) {
   const ranked = useMemo(() => [...regions].sort((a, b) => b.score - a.score).slice(0, 8), [regions])
   if (ranked.length === 0) return null
   return (
-    <section className="method-panel" aria-label="Regional strength score">
+    <section className="method-panel" aria-label="Region power scores">
       <div className="method-list">
-        <h3>Regional Strength Score</h3>
+        <h3>Region power scores</h3>
         <div className="region-strength-grid">
           {ranked.map((region) => (
             <div className="region-strength-cell" key={region.region}>
@@ -511,28 +550,6 @@ function TeamDetailModal({
   players: CompactPlayer[]
   onClose: () => void
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
-
-  useEffect(() => {
-    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    if (activeElement && !activeElement.closest('.modal')) previousFocusRef.current = activeElement
-    closeRef.current?.focus()
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      const previousFocus = previousFocusRef.current
-      window.setTimeout(() => {
-        if (document.querySelector('.modal')) return
-        if (previousFocus?.isConnected) previousFocus.focus()
-        previousFocusRef.current = null
-      }, 0)
-    }
-  }, [onClose])
-
   const trendSeries = useMemo<ChartSeries[]>(() => {
     if (!series || series.points.length < 2) return []
     return [{
@@ -549,20 +566,28 @@ function TeamDetailModal({
   const trendSummary = useMemo(() => summarizeTeamTrend(series), [series])
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-label={`${team.team} details`}>
-      <div className="modal__scrim" onClick={onClose} />
-      <div className="modal__panel">
-        <div className="modal__head">
+    <Dialog open onOpenChange={(nextOpen) => {
+      if (!nextOpen) onClose()
+    }}>
+      <DialogContent
+        showCloseButton={false}
+        aria-label={`${team.team} details`}
+        className="flex max-h-[90vh] w-[min(1040px,96vw)] max-w-none flex-col gap-0 overflow-hidden rounded-[var(--r-lg)] border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:max-w-none"
+      >
+        <DialogHeader className="modal__head flex-row items-center text-left">
           <div className="team-dossier__identity">
             <span className="team-mark">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
-            <h2>{team.team}</h2>
+            <DialogTitle>{team.team}</DialogTitle>
           </div>
-          <Button ref={closeRef} type="button" variant="ghost" size="icon" className="modal__close" onClick={onClose} aria-label="Close">
-            <X size={18} aria-hidden="true" />
-          </Button>
-        </div>
+          <DialogClose asChild>
+            <Button type="button" variant="ghost" aria-label="Close">
+              <X size={16} aria-hidden="true" />
+              Close
+            </Button>
+          </DialogClose>
+        </DialogHeader>
 
-        <div className="modal__body">
+        <div className="modal__body min-h-0 flex-1">
           <section className="team-detail-hero" aria-label={`${team.team} summary`}>
             <div className="team-detail-hero__score">
               <span className="team-detail-hero__rank">#{team.rank}</span>
@@ -573,7 +598,7 @@ function TeamDetailModal({
             </div>
             <div className="team-detail-hero__facts">
               <span>
-                <small>Record</small>
+                <small>Match record</small>
                 <b>{formatRecord(team.wins, team.losses)} ({formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})</b>
               </span>
               <span>
@@ -597,7 +622,7 @@ function TeamDetailModal({
               <div className="stat-list">
                 <StatRow
                   icon={<Swords size={25} />}
-                  label="Win / Loss Record"
+                  label="Match Win / Loss"
                   value={`${formatRecord(team.wins, team.losses)} (${formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})`}
                 />
                 <StatRow
@@ -641,7 +666,7 @@ function TeamDetailModal({
                 <p className="eyebrow">Power trajectory</p>
                 <h3>Ranking Trends</h3>
               </div>
-              <span>Power Score</span>
+              <span>Power score</span>
             </div>
             {trendSummary ? (
               <div className="trend-summary" aria-label={`${team.team} trend summary`}>
@@ -657,15 +682,15 @@ function TeamDetailModal({
             ) : null}
             {trendSeries.length > 0 ? (
               <div className="trend-card__plot">
-                <LineChart series={trendSeries} height={340} yLabel="Power Score" />
+                <LineChart series={trendSeries} height={340} yLabel="Power score" />
               </div>
             ) : (
               <p className="muted" style={{ paddingTop: 16 }}>Not enough history to chart this team yet.</p>
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -690,7 +715,7 @@ function RecentMatches({ matches, form }: { matches?: PublicRecentMatch[]; form?
               <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`}>{match.result}</span>
               <div className="recent-match-row__main">
                 <b>vs {match.opponent}</b>
-                <small>{formatDate(match.date)} · {match.event}</small>
+                <small title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
               </div>
               <div className="recent-match-row__rating">
                 <strong>{formatRating(match.rating)}</strong>
@@ -706,6 +731,17 @@ function RecentMatches({ matches, form }: { matches?: PublicRecentMatch[]; form?
   )
 }
 
+function formatTeamMatchMeta(match: PublicRecentMatch) {
+  return [formatDate(match.date), match.event].filter(Boolean).join(' · ')
+}
+
+function formatTeamMatchDetail(match: PublicRecentMatch) {
+  if (typeof match.wins !== 'number' || typeof match.losses !== 'number') return undefined
+  const score = `${match.wins}-${match.losses}`
+  const bestOf = typeof match.bestOf === 'number' && match.bestOf > 1 ? `Bo${match.bestOf}` : undefined
+  return [formatTeamMatchMeta(match), score, bestOf].filter(Boolean).join(' · ')
+}
+
 function LeagueSigil({
   league,
   fallbackLabel,
@@ -716,16 +752,12 @@ function LeagueSigil({
   small?: boolean
 }) {
   const code = league.trim().toUpperCase()
-  const logo = LEAGUE_LOGOS[code]
-  const className = `league-sigil${small ? ' small' : ''}${logo ? ' has-logo' : ''}`
-  if (logo) {
-    return (
-      <span className={className}>
-        <img src={logo} alt="" aria-hidden="true" />
-      </span>
-    )
-  }
-  return <span className={className}>{fallbackLabel ?? league.slice(0, 1)}</span>
+  const badgeRegion = code || (fallbackLabel ?? league)
+  return (
+    <span className={`league-sigil${small ? ' small' : ''}`} aria-hidden="true">
+      <RegionBadge region={badgeRegion} size="sm" />
+    </span>
+  )
 }
 
 function leagueCodeFromEventLabel(label: string) {
@@ -787,7 +819,7 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
           <h3>Player Rankings</h3>
           <p>Individual rows for {team.code ?? team.team} in the current scope.</p>
         </div>
-        {players.length > 0 ? <span className="count">{players.length} players</span> : null}
+        {players.length > 0 ? <CountBadge>{players.length} players</CountBadge> : null}
       </div>
 
       {players.length > 0 ? (
@@ -799,8 +831,7 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
                 <th scope="col">Player</th>
                 <th scope="col">Role</th>
                 <th scope="col" className="right">Rating</th>
-                <th scope="col" className="right">Team Games</th>
-                <th scope="col">Form</th>
+                <th scope="col" className="right" title="Team games">Games</th>
               </tr>
             </thead>
             <tbody>
@@ -820,9 +851,6 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
                     <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />
                   </td>
                   <td className="right num">{formatTeamGames(player)}</td>
-                  <td>
-                    <FormDots form={player.form} />
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -918,8 +946,18 @@ function MethodologyPanel() {
 }
 
 function methodIcon(index: number) {
-  const icons = [<Trophy size={22} />, <BarChart3 size={22} />, <Activity size={22} />, <Crosshair size={22} />]
-  return icons[index] ?? <Activity size={22} />
+  switch (index) {
+    case 0:
+      return <Trophy size={22} />
+    case 1:
+      return <BarChart3 size={22} />
+    case 2:
+      return <Activity size={22} />
+    case 3:
+      return <Crosshair size={22} />
+    default:
+      return <Activity size={22} />
+  }
 }
 
 function sortStandings(rows: RankingSummaryStanding[], key: SortKey) {
@@ -1029,7 +1067,7 @@ function Matchup({
         <div className="panel__title">
           <p className="eyebrow">Estimator</p>
           <h2>Head-to-head matchup</h2>
-          <p className="panel__hint">Neutral single-game forecast from published team score and uncertainty.</p>
+          <p className="panel__hint">Neutral single-game forecast from published power score and uncertainty.</p>
         </div>
         <CountBadge>{seedNote}</CountBadge>
       </CardHeader>
@@ -1065,7 +1103,7 @@ function Matchup({
             <div className="matchup__probability">
               <span>{homePct}%</span>
               <div className="oddsbar" aria-label={`${matchup.home.team} ${homePct} percent, ${matchup.away.team} ${awayPct} percent`}>
-                <i style={{ width: `${homePct}%` }} />
+                <i style={{ width: `${homePct}%` }} aria-hidden="true" />
                 <span className="oddsbar__midline" />
               </div>
               <span>{awayPct}%</span>
@@ -1076,7 +1114,7 @@ function Matchup({
                 <b>{favorite?.team}</b>
               </span>
               <span>
-                <small>Rating edge</small>
+                <small>Power edge</small>
                 <b>{formatSigned(matchup.ratingEdge)}</b>
               </span>
               <span>
@@ -1085,7 +1123,7 @@ function Matchup({
               </span>
             </div>
             <p className="matchup__note">
-              Probability is model-derived and assumes neutral court, current roster state, and the same score source as the table above.
+              Probability is model-derived and assumes neutral court, current roster state, and the same power-score source as the table above.
             </p>
           </>
         ) : (
@@ -1125,11 +1163,11 @@ function MatchupTeamCard({
           <b>{team.rank ? `#${team.rank}` : '—'}</b>
         </span>
         <span>
-          <small>Power</small>
+          <small>Power score</small>
           <b>{formatRating(team.rating)}</b>
         </span>
         <span>
-          <small>Record</small>
+          <small>Match record</small>
           <b>{formatRecord(team.wins, team.losses)} {formatRatio(total > 0 ? team.wins / total : undefined)}</b>
         </span>
         <span>

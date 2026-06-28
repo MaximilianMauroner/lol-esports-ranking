@@ -56,15 +56,42 @@ function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string
 
 function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
   if (retainedMatch.sourceProvider !== 'oracles-elixir' || duplicateMatch.sourceProvider !== 'leaguepedia-cargo') return
-  if (!isQualifierMetadata(duplicateMatch) || retainedMatch.tier === 'qualifier') return
-  retainedMatch.event = duplicateMatch.event
+  if (isQualifierMetadata(duplicateMatch) && retainedMatch.tier !== 'qualifier') {
+    retainedMatch.event = duplicateMatch.event
+    retainedMatch.phase = duplicateMatch.phase
+    retainedMatch.tier = duplicateMatch.tier
+    retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
+    return
+  }
+
+  if (!hasStrongerCompetitionMetadata(retainedMatch, duplicateMatch)) return
   retainedMatch.phase = duplicateMatch.phase
   retainedMatch.tier = duplicateMatch.tier
+  if (duplicateMatch.bestOf > retainedMatch.bestOf) retainedMatch.bestOf = duplicateMatch.bestOf
   retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
 }
 
 function isQualifierMetadata(match: MatchRecord) {
   return match.tier === 'qualifier' && /\bqualifier/i.test(`${match.event} ${match.phase}`)
+}
+
+function hasStrongerCompetitionMetadata(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
+  if (tierRank(duplicateMatch.tier) <= tierRank(retainedMatch.tier)) return false
+  return duplicateMatch.region === 'International' || retainedMatch.region === 'International'
+}
+
+function tierRank(tier: MatchRecord['tier']) {
+  const ranks: Record<MatchRecord['tier'], number> = {
+    qualifier: 0,
+    'regional-regular': 1,
+    'major-playoffs': 2,
+    'minor-international': 3,
+    'msi-play-in': 4,
+    'worlds-main': 5,
+    'msi-bracket': 6,
+    'worlds-playoffs': 7,
+  }
+  return ranks[tier]
 }
 
 function matchKeys(match: MatchRecord) {

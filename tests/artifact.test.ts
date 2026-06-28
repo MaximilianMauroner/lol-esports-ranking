@@ -47,6 +47,10 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(defaultSnapshot.standings?.every((standing) => typeof standingComponent(standing, 'teamStableOffset') === 'number'), true)
   assert.equal(defaultSnapshot.standings?.every((standing) => typeof standingUpdate(standing, 'teamStableDelta') === 'number'), true)
   assert.equal(defaultSnapshot.standings?.every((standing) => typeof standingUpdate(standing, 'leaguePlacementDelta') === 'number'), true)
+  assert.equal(summary.playerData?.metric?.id, 'role-power')
+  assert.equal(summary.playerData?.metric?.teamResultSignal, 'included')
+  assert.equal(summary.playerData?.metric?.independentSkillClaim, false)
+  assert.equal(playerDirectory.metric.id, summary.playerData?.metric?.id)
   assert.equal(proofPlayers.some((player) => 'history' in player || 'form' in player || 'impactDrivers' in player), false)
   assert.equal(summary.playerData?.awardSignals?.status, 'source-missing')
   assert.equal(summary.playerData?.awardSignals?.awardResidualsApplied, false)
@@ -212,7 +216,7 @@ test('generated public source coverage reconciles with default and shard snapsho
   }
 })
 
-test('generated 2026 scope exposes source-season records and scoped history', async () => {
+test('generated 2026 scope exposes match-level display records and scoped history', async () => {
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const teamHistory = parsePublicTeamHistory(await readJson('public/data/team-history.json'))
   const entry = summary.snapshotIndex?.['2026__All__All']
@@ -222,10 +226,24 @@ test('generated 2026 scope exposes source-season records and scoped history', as
 
   const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
   const displayedTeamRecordSides = shard.standings.reduce((total, standing) => total + standing.wins + standing.losses, 0)
+  const sourceGameSides = shard.matchCount * 2
+  const seriesRecentMatch = shard.standings
+    .flatMap((standing) => standing.recentMatches)
+    .find((match) => typeof match.games === 'number' && match.games > 1)
+  const hleVsGenGHistory = teamHistory.series['Hanwha Life Esports__LCK__HLE']?.points
+    .filter((point) => point[0] === '2026-05-27' && point[3]?.opponent === 'Gen.G') ?? []
   const scopedSeries = teamHistory.scopedSeries?.['2026__All__All']
   const scopedDates = Object.values(scopedSeries ?? {}).flatMap((series) => series.points.map((point) => point[0]))
 
-  assert.equal(displayedTeamRecordSides, shard.matchCount * 2)
+  assert.ok(displayedTeamRecordSides > 0)
+  assert.ok(displayedTeamRecordSides < sourceGameSides)
+  assert.ok(seriesRecentMatch)
+  assert.equal((seriesRecentMatch.wins ?? 0) + (seriesRecentMatch.losses ?? 0), seriesRecentMatch.games)
+  assert.equal(hleVsGenGHistory.length, 1)
+  assert.equal(hleVsGenGHistory[0]?.[3]?.wins, 1)
+  assert.equal(hleVsGenGHistory[0]?.[3]?.losses, 2)
+  assert.equal(hleVsGenGHistory[0]?.[3]?.games, 3)
+  assert.equal(hleVsGenGHistory[0]?.[3]?.bestOf, 3)
   assert.ok(scopedSeries)
   assert.ok(scopedDates.length > 0)
   assert.equal(scopedDates.some((date) => date.startsWith('2025-')), true)

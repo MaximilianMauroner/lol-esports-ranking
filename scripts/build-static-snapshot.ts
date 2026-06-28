@@ -1,3 +1,5 @@
+import { once } from 'node:events'
+import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { knownTeamIdentities } from '../src/data/teamIdentity'
@@ -80,7 +82,7 @@ const snapshot = createStaticRankingData({
 })
 
 await mkdir(dirname(output), { recursive: true })
-await writeFile(output, `${JSON.stringify(snapshot, null, 2)}\n`)
+await writeJsonFile(output, snapshot)
 const summaryOutput = resolve(publicDataDir, 'ranking-summary.json')
 const snapshotDir = resolve(publicDataDir, 'snapshots')
 const summary = createStaticRankingSummaryData(snapshot, {
@@ -202,6 +204,67 @@ async function atomicWriteFile(path: string, contents: string) {
   const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`
   await writeFile(tempPath, contents)
   await rename(tempPath, path)
+}
+
+async function writeJsonFile(path: string, value: unknown) {
+  const stream = createWriteStream(path, { encoding: 'utf8' })
+
+  async function writeChunk(chunk: string) {
+    if (!stream.write(chunk)) await once(stream, 'drain')
+  }
+
+  try {
+    await writeJsonValue(writeChunk, value, 0, false)
+    await writeChunk('\n')
+    stream.end()
+    await once(stream, 'finish')
+  } catch (error) {
+    stream.destroy()
+    throw error
+  }
+}
+
+async function writeJsonValue(
+  writeChunk: (chunk: string) => Promise<void>,
+  value: unknown,
+  depth: number,
+  inArray: boolean,
+) {
+  if (typeof value === 'object' && value !== null && typeof (value as { toJSON?: unknown }).toJSON === 'function') {
+    value = (value as { toJSON: () => unknown }).toJSON()
+  }
+
+  if (value === null || typeof value !== 'object') {
+    await writeChunk(JSON.stringify(value) ?? (inArray ? 'null' : 'null'))
+    return
+  }
+
+  if (Array.isArray(value)) {
+    await writeChunk('[')
+    for (let index = 0; index < value.length; index += 1) {
+      await writeChunk(`${index === 0 ? '\n' : ',\n'}${indent(depth + 1)}`)
+      await writeJsonValue(writeChunk, value[index] ?? null, depth + 1, true)
+    }
+    if (value.length > 0) await writeChunk(`\n${indent(depth)}`)
+    await writeChunk(']')
+    return
+  }
+
+  const entries = Object.entries(value).filter(([, entryValue]) => {
+    return entryValue !== undefined && typeof entryValue !== 'function' && typeof entryValue !== 'symbol'
+  })
+  await writeChunk('{')
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, entryValue] = entries[index]
+    await writeChunk(`${index === 0 ? '\n' : ',\n'}${indent(depth + 1)}${JSON.stringify(key)}: `)
+    await writeJsonValue(writeChunk, entryValue, depth + 1, false)
+  }
+  if (entries.length > 0) await writeChunk(`\n${indent(depth)}`)
+  await writeChunk('}')
+}
+
+function indent(depth: number) {
+  return '  '.repeat(depth)
 }
 
 async function removeStaleShardFiles(directory: string, expectedFiles: Set<string>) {

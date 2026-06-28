@@ -32,6 +32,10 @@ export type PublicRecentMatch = {
   result: 'W' | 'L'
   rating: number
   delta: number
+  wins?: number
+  losses?: number
+  games?: number
+  bestOf?: number
 }
 
 export type PublicTeamStanding = {
@@ -117,6 +121,16 @@ export type PlayerRatingProof = {
   topPlayers: CompactPlayerRating[]
 }
 
+export type PlayerMetricInfo = {
+  id: 'role-power'
+  label: string
+  shortLabel: string
+  description: string
+  interpretation: string
+  teamResultSignal: 'included'
+  independentSkillClaim: false
+}
+
 export type CompactPlayer = {
   id: string
   name: string
@@ -140,11 +154,17 @@ export type CompactPlayer = {
     playerTeam?: string
     playerTeamCode?: string
     result: 'W' | 'L'
+    wins?: number
+    losses?: number
+    games?: number
+    bestOf?: number
     teamKills?: number
     opponentKills?: number
     sourceProvider?: string
     sourceFileName?: string
     sourceGameId?: string
+    sourceMatchId?: string
+    sourceGameIds?: string[]
     sourceUrl?: string
   }[]
   impactMultiplier: number
@@ -167,6 +187,7 @@ export type PublicPlayerDirectory = {
   modelVersion: string
   modelConfigHash: string
   sourceProvider: string
+  metric: PlayerMetricInfo
   ratedPlayerCount: number
   ratedTeamCount: number
   roles: Role[]
@@ -180,9 +201,14 @@ export type PublicTeamHistoryPointContext = {
   delta?: number
   tier?: string
   result?: 'W' | 'L'
+  wins?: number
+  losses?: number
+  games?: number
+  bestOf?: number
   sourceProvider?: string
   sourceGameId?: string
   sourceMatchId?: string
+  sourceGameIds?: string[]
   sourceFileName?: string
   sourceUrl?: string
 }
@@ -224,6 +250,7 @@ export type PublicRankingManifest = {
   playerData: {
     status: 'no-data' | 'seeded-demo-rosters' | 'sourced-player-stats'
     description: string
+    metric: PlayerMetricInfo
     awardSignals: AwardSignalData
     ratingProof?: PlayerRatingProof
   }
@@ -261,6 +288,7 @@ export function snapshotShardUrlPathForKey(key: string, basePath = '/data/snapsh
 }
 
 export function compactStanding(standing: PublicTeamStandingInput): PublicTeamStanding {
+  const matchRecord = standing.history ? teamMatchRecord(standing.history) : undefined
   return {
     team: standing.team,
     code: standing.code,
@@ -280,31 +308,102 @@ export function compactStanding(standing: PublicTeamStandingInput): PublicTeamSt
     rank: standing.rank,
     previousRank: standing.previousRank,
     movement: standing.movement,
-    wins: standing.wins,
-    losses: standing.losses,
+    wins: matchRecord?.wins ?? standing.wins,
+    losses: matchRecord?.losses ?? standing.losses,
     confidence: standing.confidence,
     uncertainty: standing.uncertainty,
-    form: standing.form,
+    form: matchRecord?.form ?? standing.form,
     strongestFactor: standing.strongestFactor,
     eligibility: standing.eligibility,
     factors: standing.factors,
     recentEvents: standing.recentEvents,
-    recentMatches: standing.history ? compactRecentMatches(standing.history) : (standing.recentMatches ?? []),
+    recentMatches: matchRecord?.recentMatches ?? standing.recentMatches ?? [],
   }
 }
 
-function compactRecentMatches(history: TeamHistoryPoint[] = []): PublicRecentMatch[] {
-  return history
-    .filter((point) => Boolean(point.date) && Boolean(point.event) && Boolean(point.opponent))
-    .slice(-5)
-    .map((point) => ({
-      date: point.date,
-      event: point.event,
-      opponent: point.opponent,
-      result: point.result,
-      rating: Math.round(point.rating),
-      delta: Math.round(point.delta),
-    }))
+function teamMatchRecord(history: TeamHistoryPoint[] = []) {
+  const matches = groupTeamHistoryIntoMatches(history.filter((point) => Boolean(point.date) && Boolean(point.event) && Boolean(point.opponent)))
+  const resolvedMatches = matches
+    .map((match) => ({ match, result: teamMatchResult(match) }))
+    .filter((record): record is { match: TeamMatchGroup; result: 'W' | 'L' } => Boolean(record.result))
+  const recentMatches = resolvedMatches.slice(-5).map(({ match, result }) => teamRecentMatch(match, result))
+  const wins = resolvedMatches.filter((match) => match.result === 'W').length
+  const losses = resolvedMatches.length - wins
+
+  return {
+    wins,
+    losses,
+    form: resolvedMatches.slice(-5).map((match) => match.result),
+    recentMatches,
+  }
+}
+
+type TeamMatchGroup = {
+  key: string
+  entries: TeamHistoryPoint[]
+}
+
+function groupTeamHistoryIntoMatches(history: TeamHistoryPoint[]): TeamMatchGroup[] {
+  const groups: TeamMatchGroup[] = []
+
+  for (const point of history) {
+    const key = teamHistoryMatchKey(point)
+    const current = groups.at(-1)
+    if (current?.key === key) {
+      current.entries.push(point)
+      continue
+    }
+    groups.push({ key, entries: [point] })
+  }
+
+  return groups
+}
+
+function teamHistoryMatchKey(point: TeamHistoryPoint) {
+  return [
+    'series',
+    point.date,
+    point.opponent,
+  ].join('\u0000')
+}
+
+function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L'): PublicRecentMatch {
+  const latest = group.entries.at(-1)!
+  const wins = group.entries.filter((entry) => entry.result === 'W').length
+  const losses = group.entries.length - wins
+  const bestOf = bestOfForScore(wins, losses, latest.source.bestOf)
+
+  return {
+    date: latest.date,
+    event: latest.event,
+    opponent: latest.opponent,
+    result,
+    rating: Math.round(latest.rating),
+    delta: group.entries.reduce((total, entry) => total + Math.round(entry.delta), 0),
+    wins,
+    losses,
+    games: group.entries.length,
+    ...(typeof bestOf === 'number' ? { bestOf } : {}),
+  }
+}
+
+function teamMatchResult(group: TeamMatchGroup) {
+  const wins = group.entries.filter((entry) => entry.result === 'W').length
+  const losses = group.entries.length - wins
+  if (wins === losses) return undefined
+  return wins > losses ? 'W' : 'L'
+}
+
+function bestOfForScore(wins: number, losses: number, explicit?: number) {
+  const games = wins + losses
+  if (games <= 0) return explicit
+  const requiredWins = Math.max(wins, losses)
+  const inferred = wins === losses ? games : Math.max(games, requiredWins * 2 - 1)
+  if (typeof explicit !== 'number' || !Number.isFinite(explicit)) return inferred
+
+  const explicitGames = Math.trunc(explicit)
+  const winsNeeded = Math.floor(explicitGames / 2) + 1
+  return games <= explicitGames && requiredWins >= winsNeeded ? explicitGames : inferred
 }
 
 export function parsePublicRankingManifest(value: unknown): PublicRankingManifest {
@@ -316,6 +415,8 @@ export function parsePublicRankingManifest(value: unknown): PublicRankingManifes
   assertString(value.defaultSnapshotKey, 'ranking manifest defaultSnapshotKey')
   assertObject(value.model, 'ranking manifest model')
   assertObject(value.coverage, 'ranking manifest coverage')
+  assertObject(value.playerData, 'ranking manifest playerData')
+  assertObject(value.playerData.metric, 'ranking manifest playerData metric')
   assertObject(value.snapshotIndex, 'ranking manifest snapshotIndex')
   assertObject(value.snapshots, 'ranking manifest snapshots')
   return value as PublicRankingManifest
@@ -340,6 +441,7 @@ export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirector
   assertString(value.generatedAt, 'player directory generatedAt')
   assertString(value.modelVersion, 'player directory modelVersion')
   assertString(value.modelConfigHash, 'player directory modelConfigHash')
+  assertObject(value.metric, 'player directory metric')
   assertArray(value.players, 'player directory players')
   if ('scopedPlayers' in value) assertObject(value.scopedPlayers, 'player directory scopedPlayers')
   return value as PublicPlayerDirectory

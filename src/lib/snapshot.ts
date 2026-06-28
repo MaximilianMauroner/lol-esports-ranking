@@ -9,6 +9,7 @@ import type {
   Role,
   SeasonSummary,
   TeamEligibility,
+  TeamHistoryPoint,
   TeamProfile,
   TeamStanding,
 } from '../types'
@@ -25,6 +26,7 @@ import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
 import type {
   CompactPlayer,
   CompactPlayerRating,
+  PlayerMetricInfo,
   PlayerRatingProof,
   PublicPlayerDirectory,
   PublicRankingManifest,
@@ -38,6 +40,16 @@ import type {
 
 export type { CompactPlayer, CompactPlayerRating, PlayerRatingProof } from './publicArtifacts/schema'
 export { snapshotKey } from './publicArtifacts/schema'
+
+export const rolePowerPlayerMetric: PlayerMetricInfo = {
+  id: 'role-power',
+  label: 'Role Power',
+  shortLabel: 'Role Power',
+  description: 'Role-conditioned player rating from sourced game stats.',
+  interpretation: 'This metric includes team-result signal and should not be read as independent best-in-role proof.',
+  teamResultSignal: 'included',
+  independentSkillClaim: false,
+}
 
 export type SnapshotFilter = {
   season: string
@@ -143,7 +155,7 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
     omissionPolicy: {
       minimumPointsPerSeries,
       omittedSeriesCount: defaultHistory.omittedSeriesCount,
-      reason: 'Standings with fewer than two valid rating-history points are omitted because a trend line needs at least two points.',
+      reason: 'Standings with fewer than two resolved rating-history points are omitted because a trend line needs at least two points; unresolved tied match groups are skipped.',
     },
     teamCount: Object.keys(defaultHistory.series).length,
     pointCount: defaultHistory.pointCount,
@@ -158,29 +170,10 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
   let pointCount = 0
 
   for (const standing of standings) {
-    const points = (standing.history ?? [])
-      .filter((point) => Boolean(point.date) && Number.isFinite(point.rating))
-      .map((point): TeamHistoryPointCompact => {
-        const base: TeamHistoryPointCompact = [point.date, Math.round(point.rating), point.rank]
-        if (!includeContext) return base
-        return [
-          point.date,
-          Math.round(point.rating),
-          point.rank,
-          {
-            event: point.event,
-            opponent: point.opponent,
-            delta: typeof point.delta === 'number' && Number.isFinite(point.delta) ? Number(point.delta.toFixed(1)) : undefined,
-            tier: point.tier,
-            result: point.result,
-            sourceProvider: point.source?.provider,
-            sourceGameId: point.source?.gameId,
-            sourceMatchId: point.source?.matchId,
-            sourceFileName: point.source?.fileName,
-            sourceUrl: point.source?.url,
-          },
-        ]
-      })
+    const validHistory = (standing.history ?? []).filter((point) => Boolean(point.date) && Number.isFinite(point.rating))
+    const points = groupTeamHistoryPointsIntoMatches(validHistory)
+      .filter(isResolvedTeamHistoryMatchGroup)
+      .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext))
       .sort((left, right) => left[0].localeCompare(right[0]))
     if (points.length < minimumPointsPerSeries) {
       omittedSeriesCount += 1
@@ -196,6 +189,82 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
   }
 
   return { series, omittedSeriesCount, pointCount }
+}
+
+type TeamHistoryPublicMatchGroup = {
+  key: string
+  entries: TeamHistoryPoint[]
+}
+
+function groupTeamHistoryPointsIntoMatches(history: TeamHistoryPoint[]): TeamHistoryPublicMatchGroup[] {
+  const groups: TeamHistoryPublicMatchGroup[] = []
+
+  for (const point of history) {
+    const key = teamHistoryPublicMatchKey(point)
+    const current = groups.at(-1)
+    if (current?.key === key) {
+      current.entries.push(point)
+      continue
+    }
+    groups.push({ key, entries: [point] })
+  }
+
+  return groups
+}
+
+function isResolvedTeamHistoryMatchGroup(group: TeamHistoryPublicMatchGroup) {
+  const wins = group.entries.filter((entry) => entry.result === 'W').length
+  const losses = group.entries.filter((entry) => entry.result === 'L').length
+  return wins !== losses
+}
+
+function teamHistoryPublicMatchKey(point: TeamHistoryPoint) {
+  return [
+    'series',
+    point.date,
+    point.event ?? '',
+    point.opponent ?? '',
+    point.source?.provider ?? '',
+    point.source?.fileName ?? '',
+    String(point.source?.bestOf ?? ''),
+  ].join('\u0000')
+}
+
+function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includeContext: boolean): TeamHistoryPointCompact {
+  const latest = group.entries.at(-1)!
+  const base: TeamHistoryPointCompact = [latest.date, Math.round(latest.rating), latest.rank]
+  if (!includeContext) return base
+
+  const wins = group.entries.filter((entry) => entry.result === 'W').length
+  const losses = group.entries.filter((entry) => entry.result === 'L').length
+  const bestOf = bestOfForScore(wins, losses, latest.source?.bestOf)
+  const sourceGameIds = unique(group.entries.map((entry) => entry.source?.gameId).filter((value): value is string => Boolean(value)))
+  const delta = group.entries.reduce((total, entry) => (
+    typeof entry.delta === 'number' && Number.isFinite(entry.delta) ? total + entry.delta : total
+  ), 0)
+
+  return [
+    latest.date,
+    Math.round(latest.rating),
+    latest.rank,
+    {
+      event: latest.event,
+      opponent: latest.opponent,
+      delta: Number(delta.toFixed(1)),
+      tier: latest.tier,
+      result: wins === losses ? undefined : wins > losses ? 'W' : 'L',
+      wins,
+      losses,
+      games: group.entries.length,
+      ...(typeof bestOf === 'number' ? { bestOf } : {}),
+      sourceProvider: latest.source?.provider,
+      sourceGameId: sourceGameIds.at(-1),
+      sourceMatchId: latest.source?.matchId,
+      ...(sourceGameIds.length > 1 ? { sourceGameIds } : {}),
+      sourceFileName: latest.source?.fileName,
+      sourceUrl: latest.source?.url,
+    },
+  ]
 }
 
 function isSeasonHistoryScope(filter: SnapshotFilter | undefined) {
@@ -247,6 +316,7 @@ export type StaticRankingData = {
   playerData: {
     status: 'no-data' | 'seeded-demo-rosters' | 'sourced-player-stats'
     description: string
+    metric: PlayerMetricInfo
     awardSignals: AwardSignalData
     ratingProof?: PlayerRatingProof
   }
@@ -473,12 +543,13 @@ export function createStaticRankingData({
     playerData: {
       status: hasObservedGameRosters || playerRatingProof ? 'sourced-player-stats' : matches.length === 0 || !hasRosters ? 'no-data' : 'seeded-demo-rosters',
       description: playerRatingProof
-        ? "Oracle's Elixir player rows provide observed game rosters, value-weighted roster continuity for team ratings, role-conditioned player ratings, and gated prior-only player-rating prediction adjustments."
+        ? "Oracle's Elixir player rows provide observed game rosters, value-weighted roster continuity for team ratings, Role Power player ratings, and gated prior-only player-rating prediction adjustments. Role Power includes team-result signal and is not independent best-in-role proof."
         : hasObservedGameRosters
-          ? "Oracle's Elixir player rows provide observed game rosters and value-weighted roster continuity for team ratings; player ratings require sourced player stat rows."
+          ? "Oracle's Elixir player rows provide observed game rosters and value-weighted roster continuity for team ratings; Role Power ratings require sourced player stat rows."
         : matches.length === 0 || !hasRosters
           ? 'No sourced player timeline or roster-continuity data is available for this snapshot.'
           : 'Player timelines use checked-in demo rosters and a transparent dynamic-share model, not official sourced player ratings.',
+      metric: rolePowerPlayerMetric,
       awardSignals: {
         status: 'source-missing',
         description: 'Oracle CSVs and Leaguepedia ScoreboardGames do not provide dated human MVP/POG/All-Pro signal in this local pipeline, so AwardResidualZ remains unapplied instead of inferred from visible stats.',
@@ -522,6 +593,7 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
     sourceProvider: 'oracles-elixir',
+    metric: rolePowerPlayerMetric,
     ratedPlayerCount: players.length,
     ratedTeamCount: new Set(players.map((player) => player.team)).size,
     roles: ROLE_ORDER.filter((role) => players.some((player) => player.role === role)),
@@ -594,28 +666,97 @@ function compactPlayersForSnapshot(
     })
 }
 
+type PlayerHistoryEntry = PlayerStanding['history'][number]
+
+type PlayerMatchGroup = {
+  key: string
+  entries: PlayerHistoryEntry[]
+}
+
 function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['recentMatches'] {
-  const recent = player.history
-    .filter((entry) => entry.result && entry.opponent)
+  const recent = groupPlayerHistoryIntoMatches(player.history.filter((entry) => entry.result && entry.opponent))
+    .filter(({ entries }) => {
+      const wins = entries.filter((entry) => entry.result === 'W').length
+      const losses = entries.filter((entry) => entry.result === 'L').length
+      return wins !== losses
+    })
     .slice(-5)
 
   if (recent.length === 0) return undefined
 
-  return recent.map((entry) => ({
-    date: entry.date,
-    event: entry.event,
-    opponent: entry.opponent ?? 'Unknown opponent',
-    opponentTeamCode: entry.opponentTeamCode,
-    playerTeam: entry.playerTeam,
-    playerTeamCode: entry.playerTeamCode,
-    result: entry.result ?? 'L',
-    teamKills: entry.teamKills,
-    opponentKills: entry.opponentKills,
-    sourceProvider: entry.source?.provider,
-    sourceFileName: entry.source?.fileName,
-    sourceGameId: entry.source?.gameId,
-    sourceUrl: entry.source?.url,
-  }))
+  return recent.map(({ entries }) => {
+    const latest = entries.at(-1)!
+    const wins = entries.filter((entry) => entry.result === 'W').length
+    const losses = entries.filter((entry) => entry.result === 'L').length
+    const sourceGameIds = unique(entries.map((entry) => entry.source?.gameId).filter((value): value is string => Boolean(value)))
+    const bestOf = bestOfForScore(wins, losses, latest.bestOf ?? latest.source?.bestOf)
+    const sourceMatchId = latest.source?.matchId
+
+    return {
+      date: latest.date,
+      event: latest.event,
+      opponent: latest.opponent ?? 'Unknown opponent',
+      opponentTeamCode: latest.opponentTeamCode,
+      playerTeam: latest.playerTeam,
+      playerTeamCode: latest.playerTeamCode,
+      result: wins > losses ? 'W' : 'L',
+      wins,
+      losses,
+      games: entries.length,
+      ...(typeof bestOf === 'number' ? { bestOf } : {}),
+      sourceProvider: latest.source?.provider,
+      sourceFileName: latest.source?.fileName,
+      sourceGameId: sourceGameIds.at(-1),
+      ...(sourceMatchId ? { sourceMatchId } : {}),
+      ...(sourceGameIds.length > 1 ? { sourceGameIds } : {}),
+      sourceUrl: latest.source?.url,
+    }
+  })
+}
+
+function groupPlayerHistoryIntoMatches(history: PlayerHistoryEntry[]): PlayerMatchGroup[] {
+  const groups: PlayerMatchGroup[] = []
+
+  for (const entry of history) {
+    const key = playerHistoryMatchKey(entry)
+    const current = groups.at(-1)
+    if (current?.key === key) {
+      current.entries.push(entry)
+      continue
+    }
+    groups.push({ key, entries: [entry] })
+  }
+
+  return groups
+}
+
+function playerHistoryMatchKey(entry: PlayerHistoryEntry) {
+  return [
+    'series',
+    entry.date,
+    entry.event,
+    entry.playerTeam ?? '',
+    entry.opponent ?? '',
+    entry.source?.provider ?? '',
+    entry.source?.fileName ?? '',
+    String(entry.bestOf ?? entry.source?.bestOf ?? ''),
+  ].join('\u0000')
+}
+
+function bestOfForScore(wins: number, losses: number, explicit?: number) {
+  const games = wins + losses
+  if (games <= 0) return explicit
+  const requiredWins = Math.max(wins, losses)
+  const inferred = wins === losses ? games : Math.max(games, requiredWins * 2 - 1)
+  if (typeof explicit !== 'number' || !Number.isFinite(explicit)) return inferred
+
+  const explicitGames = Math.trunc(explicit)
+  const winsNeeded = Math.floor(explicitGames / 2) + 1
+  return games <= explicitGames && requiredWins >= winsNeeded ? explicitGames : inferred
+}
+
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values)]
 }
 
 function creditedTeamForPlayer(player: PlayerStanding, filter: SnapshotFilter | undefined) {
@@ -909,13 +1050,17 @@ function filteredStandings(
   }
 
   const historyKeys = historyKeysForMatches(matches)
+  const seriesSiblingKeys = seriesSiblingKeysForMatches(matches)
   const scopedProfiles = scopedTeamProfilesForMatches(matches, teams)
   const lastDate = datesFor(matches).at(-1) ?? new Date().toISOString().slice(0, 10)
   const leagueInternationalMatches = leagueInternationalMatchesFor(matches, teams)
   return standings
     .filter((standing) => teamNames.has(standing.team))
     .map((standing) => {
-      const history = standing.history.filter((point) => historyKeys.has(historyKey(standing.team, point.date, point.event, point.opponent)))
+      const history = standing.history.filter((point) =>
+        historyKeys.has(historyKey(standing.team, point.date, point.event, point.opponent))
+        || seriesSiblingKeys.has(seriesSiblingKey(standing.team, point.date, point.opponent)),
+      )
       const scopedWins = history.filter((point) => point.result === 'W').length
       const scopedLosses = history.filter((point) => point.result === 'L').length
       const scopedProfile = scopedProfiles.get(standing.team)
@@ -1035,8 +1180,22 @@ function historyKeysForMatches(matches: MatchRecord[]) {
   return keys
 }
 
+function seriesSiblingKeysForMatches(matches: MatchRecord[]) {
+  const keys = new Set<string>()
+  for (const match of matches) {
+    if (match.bestOf <= 1) continue
+    keys.add(seriesSiblingKey(match.teamA, match.date, match.teamB))
+    keys.add(seriesSiblingKey(match.teamB, match.date, match.teamA))
+  }
+  return keys
+}
+
 function historyKey(team: string, date: string, event: string, opponent: string) {
   return `${team}\u0000${date}\u0000${event}\u0000${opponent}`
+}
+
+function seriesSiblingKey(team: string, date: string, opponent: string) {
+  return `${team}\u0000${date}\u0000${opponent}`
 }
 
 function leagueInternationalMatchesFor(matches: MatchRecord[], teams: Record<string, TeamProfile>) {

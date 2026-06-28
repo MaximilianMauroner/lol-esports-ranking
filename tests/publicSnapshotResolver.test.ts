@@ -89,6 +89,15 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     playerData: {
       status: 'no-data',
       description: 'test',
+      metric: {
+        id: 'role-power',
+        label: 'Role Power',
+        shortLabel: 'Role Power',
+        description: 'Role-conditioned player rating from sourced game stats.',
+        interpretation: 'This metric includes team-result signal and should not be read as independent best-in-role proof.',
+        teamResultSignal: 'included',
+        independentSkillClaim: false,
+      },
       awardSignals: { status: 'source-missing', description: 'test', sourceProvidersChecked: [], awardResidualsApplied: false },
     },
     walkForward: { metrics: {} as PublicRankingManifest['walkForward']['metrics'] },

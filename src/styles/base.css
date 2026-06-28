@@ -89,6 +89,7 @@
   --rail-w: 0px;
   --app-nav-h: 66px;
   --tray-h: 60px;
+  --page-x: clamp(20px, 4vw, 56px);
 
   font-family: var(--sans);
   font-synthesis: none;

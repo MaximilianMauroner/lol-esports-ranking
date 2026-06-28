@@ -21,7 +21,7 @@ export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
   { key: 'flagship', label: 'Flagship league', cell: (r) => r.flagshipLeague ?? 'Multiple leagues' },
   { key: 'tier', label: 'League tier', cell: (r) => formatTier(r.tier) },
   { key: 'teams', label: 'Flagship teams', cell: (r) => formatNumber(r.teamCount), score: (r) => r.teamCount, better: 'high' },
-  { key: 'topteam', label: 'Top team rating', cell: (r) => formatRating(r.topTeamRating), score: (r) => r.topTeamRating, better: 'high' },
+  { key: 'topteam', label: 'Top team power', cell: (r) => formatRating(r.topTeamRating), score: (r) => r.topTeamRating, better: 'high' },
   { key: 'record', label: 'International record', cell: (r) => formatRecord(r.internationalWins, r.internationalLosses) },
   {
     key: 'winrate',
@@ -46,7 +46,7 @@ export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
   },
   {
     key: 'opponent',
-    label: 'Avg opponent',
+    label: 'Opponent power',
     cell: (r) => formatRating(r.averageOpponentRating),
     score: (r) => r.averageOpponentRating ?? Number.NEGATIVE_INFINITY,
     better: 'high',
@@ -55,7 +55,7 @@ export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
 ]
 
 export const TEAM_COMPARE_ROWS: CompareRow<RankingSummaryStanding>[] = [
-  { key: 'rating', label: 'Rating', cell: (t) => formatRating(t.rating), score: (t) => t.rating ?? 0, better: 'high' },
+  { key: 'rating', label: 'Power score', cell: (t) => formatRating(t.rating), score: (t) => t.rating ?? 0, better: 'high' },
   { key: 'rank', label: 'Global rank', cell: (t) => `#${t.rank ?? '—'}`, score: (t) => t.rank ?? Infinity, better: 'low' },
   { key: 'region', label: 'Region', cell: (t) => t.region ?? '—' },
   { key: 'league', label: 'League', cell: (t) => t.league ?? '—' },
@@ -101,16 +101,16 @@ export type CompareProfileMetric<E> = {
 }
 
 export const REGION_PROFILE_METRICS: CompareProfileMetric<RegionStrength>[] = [
-  { key: 'score', label: 'Power', value: (r) => r.score, format: formatRating },
-  { key: 'topteam', label: 'Top team', value: (r) => r.topTeamRating, format: formatRating },
+  { key: 'score', label: 'Power score', value: (r) => r.score, format: formatRating },
+  { key: 'topteam', label: 'Top team power', value: (r) => r.topTeamRating, format: formatRating },
   { key: 'adjusted', label: 'Adj. intl.', value: (r) => r.opponentAdjustedWinRate, format: formatRatio },
   { key: 'expected', label: 'Vs expected', value: (r) => r.winsOverExpected, format: formatSignedDecimal },
-  { key: 'opponent', label: 'Schedule', value: (r) => r.averageOpponentRating, format: formatRating },
+  { key: 'opponent', label: 'Opponent power', value: (r) => r.averageOpponentRating, format: formatRating },
   { key: 'connectivity', label: 'Connectivity', value: (r) => r.connectivity, format: formatRatio },
 ]
 
 export const TEAM_PROFILE_METRICS: CompareProfileMetric<RankingSummaryStanding>[] = [
-  { key: 'rating', label: 'Power', value: (t) => t.rating, format: formatRating },
+  { key: 'rating', label: 'Power score', value: (t) => t.rating, format: formatRating },
   { key: 'rank', label: 'Rank', value: (t) => t.rank, format: (value) => (typeof value === 'number' ? `#${Math.round(value)}` : '—'), better: 'low' },
   { key: 'winrate', label: 'Win rate', value: (t) => winRate(t.wins, t.losses), format: formatRatio },
   { key: 'confidence', label: 'Confidence', value: (t) => t.confidence, format: formatPercentValue },

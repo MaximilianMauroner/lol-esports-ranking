@@ -45,7 +45,7 @@ export function RegionBadge({ region, size = 'md' }: { region: string; size?: 's
       aria-label={`${code} region badge`}
     >
       {logoSrc ? (
-        <img className="region-badge__logo" src={logoSrc} alt="" aria-hidden="true" />
+        <img className="region-badge__logo" src={logoSrc} alt="" aria-hidden="true" width={44} height={36} />
       ) : (
         <>
           <svg viewBox="0 0 48 40" aria-hidden="true" focusable="false">
@@ -138,7 +138,7 @@ export function FormDots({ form }: { form?: string[] }) {
       {recent.map((result, index) => {
         const win = result.toLowerCase() === 'w'
         return (
-          <i key={`${result}-${index}`} className={win ? 'w' : 'l'}>
+          <i key={`${result}-${index}`} className={win ? 'w' : 'l'} aria-hidden="true">
             {win ? 'W' : 'L'}
           </i>
         )
@@ -157,7 +157,7 @@ export function FactorBars({ factors }: { factors?: Record<string, number> }) {
       aria-label={FACTOR_KEYS.map((key) => `${key} ${Math.round((factors[key] ?? 0) * 100)}%`).join(', ')}
     >
       {FACTOR_KEYS.map((key) => (
-        <i key={key} style={{ height: `${Math.max(10, Math.round((factors[key] ?? 0) * 100))}%` }} />
+        <i key={key} style={{ height: `${Math.max(10, Math.round((factors[key] ?? 0) * 100))}%` }} aria-hidden="true" />
       ))}
     </span>
   )
@@ -210,15 +210,15 @@ export function PickButton({ picked, onToggle, label }: { picked: boolean; onTog
           variant="secondary"
           size="icon"
           className={cn(
-            'pickbtn grid size-[26px] place-items-center rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] transition-colors hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]',
-            picked && 'is-picked border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]',
+            'text-[var(--muted)]',
+            picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]',
           )}
           onClick={onToggle}
+          aria-label={tooltip}
           aria-pressed={picked}
           title={tooltip}
         >
-          {picked ? '✓' : '+'}
-          <span className="sr-only">{picked ? `Remove ${label}` : `Add ${label}`}</span>
+          <span aria-hidden="true">{picked ? '✓' : '+'}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
@@ -242,7 +242,7 @@ export function Field({
   className?: string
 }) {
   return (
-    <label className={cn('field grid min-w-0 gap-1.5', className)}>
+    <label className={cn('grid min-w-0 gap-1.5', className)}>
       <span className="pl-0.5 text-[0.68rem] uppercase tracking-[0.1em] text-[var(--faint)]">{label}</span>
       <Select value={value} onChange={(event: ChangeEvent<HTMLSelectElement>) => onChange(event.target.value)}>
         {options.map((option) => {
@@ -263,13 +263,15 @@ export function SearchInput({
   value,
   onChange,
   placeholder,
+  className,
 }: {
   value: string
   onChange: (value: string) => void
   placeholder: string
+  className?: string
 }) {
   return (
-    <label className="search flex min-w-[min(220px,100%)] items-center gap-2 rounded-[var(--r)] border border-[var(--line-strong)] bg-[var(--surface-2)] px-3 py-2 text-[var(--muted)] transition-colors focus-within:border-[var(--accent-line)]">
+    <label className={cn('flex min-w-[min(220px,100%)] items-center gap-2 rounded-[var(--r)] border border-[var(--line-strong)] bg-[var(--surface-2)] px-3 py-2 text-[var(--muted)] transition-colors focus-within:border-[var(--accent-line)] max-sm:w-full max-sm:bg-[var(--surface)]', className)}>
       <Search size={17} aria-hidden="true" />
       <span className="sr-only">{placeholder}</span>
       <Input className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0" type="search" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
@@ -281,28 +283,30 @@ export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  ariaLabel = 'Filter options',
+  className,
 }: {
   value: T
   options: { value: T; label: string }[]
   onChange: (value: T) => void
+  ariaLabel?: string
+  className?: string
 }) {
   return (
     <ToggleGroup
       type="single"
       value={value}
+      aria-label={ariaLabel}
       onValueChange={(nextValue) => {
         if (nextValue) onChange(nextValue as T)
       }}
-      className="seg inline-flex max-w-full gap-1 overflow-x-auto rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface-2)] p-1"
-      role="tablist"
+      className={cn('inline-flex max-w-full flex-wrap gap-1 rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface-2)] p-1 max-sm:w-full max-sm:border-0 max-sm:bg-transparent max-sm:p-0', className)}
     >
       {options.map((option) => (
         <ToggleGroupItem
           key={option.value}
           value={option.value}
-          role="tab"
-          aria-selected={value === option.value}
-          className={cn('rounded-[7px] text-[var(--muted)] hover:text-[var(--text)]', value === option.value && 'is-active bg-[var(--surface-3)] text-[var(--text-strong)]')}
+          className={cn('rounded-[7px] text-[var(--muted)] hover:text-[var(--text)]', value === option.value && 'bg-[var(--surface-3)] text-[var(--text-strong)]')}
         >
           {option.label}
         </ToggleGroupItem>
@@ -323,7 +327,7 @@ export function DataState({ icon, title, children }: { icon: ReactNode; title: s
 
 export function CountBadge({ children, variant = 'secondary' }: { children: ReactNode; variant?: 'default' | 'secondary' | 'warning' }) {
   return (
-    <Badge variant={variant} className="count tabular-nums">
+    <Badge variant={variant} className="w-fit justify-self-start text-[0.76rem] text-[var(--muted)] tabular-nums">
       {children}
     </Badge>
   )
@@ -336,6 +340,7 @@ export function SortHeader({
   descending,
   onSort,
   align,
+  className,
 }: {
   label: string
   columnKey: string
@@ -343,6 +348,7 @@ export function SortHeader({
   descending: boolean
   onSort: (key: string) => void
   align?: 'right' | 'center'
+  className?: string
 }) {
   const active = sortKey === columnKey
   function activateSort() {
@@ -352,19 +358,13 @@ export function SortHeader({
   return (
     <th
       scope="col"
-      className={`sortable${active ? ' is-sorted' : ''}${align ? ` ${align}` : ''}`}
+      className={`sortable${active ? ' is-sorted' : ''}${align ? ` ${align}` : ''}${className ? ` ${className}` : ''}`}
       aria-sort={active ? (descending ? 'descending' : 'ascending') : 'none'}
-      tabIndex={0}
-      onClick={activateSort}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          activateSort()
-        }
-      }}
     >
-      {label}
-      {active ? (descending ? ' ↓' : ' ↑') : ''}
+      <button type="button" className="sort-button" onClick={activateSort}>
+        <span>{label}</span>
+        {active ? <span aria-hidden="true">{descending ? '↓' : '↑'}</span> : null}
+      </button>
     </th>
   )
 }

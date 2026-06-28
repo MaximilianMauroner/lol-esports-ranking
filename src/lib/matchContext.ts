@@ -28,5 +28,6 @@ export function sourceTraceFor(match: MatchRecord) {
     completeness: match.dataCompleteness,
     date: match.date,
     event: match.event,
+    bestOf: match.bestOf,
   }
 }

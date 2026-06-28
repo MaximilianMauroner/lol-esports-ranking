@@ -1,12 +1,13 @@
 import { Fragment, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserRound } from 'lucide-react'
-import type { CompactPlayer } from '../lib/snapshot'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Info, UserRound } from 'lucide-react'
+import type { CompactPlayer, PlayerMetricInfo } from '../lib/publicArtifacts/schema'
 import type { Role } from '../types'
 import { formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { extent, formatDate, formatDecimal, formatNumber, formatRating } from '../lib/display'
-import { ConfBar, CountBadge, DataState, Delta, Field, FormDots, HeatChip, PickButton, Segmented, SortHeader } from '../components/ui'
+import { ConfBar, CountBadge, DataState, Delta, Field, FormDots, HeatChip, PickButton, SearchInput, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 
 type SortKey = 'rank' | 'rating' | 'games'
 type RoleFilter = Role | 'All'
@@ -16,14 +17,18 @@ const DEFAULT_PLAYER_PAGE_SIZE = 80
 
 export function PlayersView({
   players,
+  metric,
   roles,
   search,
+  onSearchChange,
   pickedIds,
   onToggle,
 }: {
   players: CompactPlayer[]
+  metric?: PlayerMetricInfo
   roles: Role[]
   search: string
+  onSearchChange: (value: string) => void
   pickedIds: Set<string>
   onToggle: (player: CompactPlayer) => void
 }) {
@@ -60,6 +65,15 @@ export function PlayersView({
   const visible = sorted.slice(pageStart, pageStart + pageSize)
   const expandedPlayerId = expandedState.scopeKey === pageScopeKey ? expandedState.playerId : undefined
   const [ratingMin, ratingMax] = useMemo(() => extent(filtered.map((player) => player.rating)), [filtered])
+  const playerMetric: PlayerMetricInfo = metric ?? {
+    id: 'role-power',
+    label: 'Role Power',
+    shortLabel: 'Role Power',
+    description: 'Role-conditioned player rating from sourced game stats.',
+    interpretation: 'This metric includes team-result signal and should not be read as independent best-in-role proof.',
+    teamResultSignal: 'included',
+    independentSkillClaim: false,
+  }
 
   const roleOptions = useMemo(
     () => [{ value: 'All' as RoleFilter, label: 'All' }, ...roles.map((entry) => ({ value: entry as RoleFilter, label: entry }))],
@@ -100,24 +114,26 @@ export function PlayersView({
   return (
     <div className="view">
       <p className="view__intro">
-        Role-conditioned player ratings from observed game stats, ranked across every region. Team labels are backed by
-        observed appearance history and show how much of the player sample was actually played for the displayed team.
+        {playerMetric.label} ranks role-conditioned player performance from observed game stats. {playerMetric.interpretation} Team
+        labels show how much of the sample was played for the displayed team.
       </p>
 
       <Card className="panel">
-        <div className="panel__head">
+        <div className="panel__head player-panel__head">
           <div>
             <p className="eyebrow">Player ratings</p>
-            <h2>Player Index</h2>
+            <h2>{playerMetric.label}</h2>
+            <p className="panel__hint">{playerMetric.description}</p>
           </div>
-          <div className="toolbar spacer">
-            <Segmented value={role} options={roleOptions} onChange={updateRole} />
+          <div className="toolbar spacer player-panel__controls">
+            <SearchInput value={search} onChange={onSearchChange} placeholder="Search players" className="player-filter-search" />
+            <Segmented value={role} options={roleOptions} onChange={updateRole} className="player-filter-roles" />
             <Field
               label="Region"
               value={region}
               options={regionOptions.map((option) => ({ value: option, label: formatCompetitionRegionLabel(option) }))}
               onChange={updateRegion}
-              className="field--inline"
+              className="grid-flow-col items-center gap-2 player-filter-field"
             />
             <CountBadge>
               {sorted.length === 0 ? 0 : pageStart + 1}-{pageStart + visible.length} of {filtered.length}
@@ -131,73 +147,95 @@ export function PlayersView({
           </DataState>
         ) : (
           <div className="tablewrap">
-            <table className="grid">
+            <table className="ranking-table player-grid">
               <thead>
                 <tr>
                   <th scope="col" className="center" aria-label="Add to comparison" />
                   <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
-                  <th scope="col">Player</th>
-                  <th scope="col">Role</th>
-                  <th scope="col">Team</th>
-                  <SortHeader label="Rating" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
-                  <SortHeader label="Games" columnKey="games" sortKey={sortKey} descending onSort={onSort} align="right" />
-                  <th scope="col">Form</th>
-                  <th scope="col">Availability</th>
+                  <th scope="col" className="player-col-player">Player</th>
+                  <th scope="col" className="player-col-role">Role</th>
+                  <th scope="col" className="player-col-team">Team</th>
+                  <SortHeader label="Rating" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" className="player-col-rating" />
+                  <SortHeader label="Games" columnKey="games" sortKey={sortKey} descending onSort={onSort} align="right" className="player-col-games" />
+                  <th scope="col" className="player-col-form">Form</th>
+                  <th scope="col" className="player-col-availability">Availability</th>
                 </tr>
               </thead>
               <tbody>
-                {visible.map((player) => (
-                  <Fragment key={player.id}>
+                {visible.map((player) => {
+                  const isExpanded = expandedPlayerId === player.id
+                  const recentMatchesLabel = `${isExpanded ? 'Hide' : 'Show'} recent matches for ${player.name}`
+                  return (
+                    <Fragment key={player.id}>
                     <tr className={pickedIds.has(player.id) ? 'is-picked' : ''}>
                       <td className="center">
                         <PickButton picked={pickedIds.has(player.id)} onToggle={() => onToggle(player)} label={player.name} />
                       </td>
                       <td className={`rank-cell${player.rank <= 3 ? ' podium' : ''}`}>{player.rank}</td>
-                      <td>
+                      <td className="player-col-player">
                         <div className="ent">
                           <b>{player.name}</b>
-                          <small>impact ×{formatDecimal(player.impactMultiplier)}</small>
+                          <small>
+                            <span className="player-mobile-team">{player.teamCode ?? player.team} · </span>
+                            <ImpactMultiplier value={player.impactMultiplier} />
+                          </small>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="form-trigger player-form-inline"
+                            aria-expanded={isExpanded}
+                            aria-label={recentMatchesLabel}
+                            onClick={() => toggleRecentMatches(player.id)}
+                            title={recentMatchesLabel}
+                          >
+                            <FormDots form={player.form} />
+                          </Button>
                         </div>
                       </td>
-                      <td>
+                      <td className="player-col-role">
                         <span className="role-pill">{player.role}</span>
                       </td>
-                      <td>
+                      <td className="player-col-team">
                         <div className="ent">
                           <b>{player.teamCode ?? player.team}</b>
-                          <small title={appearanceTitle(player)}>{teamAppearanceLabel(player)}</small>
+                          <small className="player-team-meta" title={appearanceTitle(player)} aria-label={teamAppearanceLabel(player)}>
+                            <span className="player-team-meta__full">{teamAppearanceLabel(player)}</span>
+                            <span className="player-team-meta__short" aria-hidden="true">{player.region ?? '—'}</span>
+                          </small>
                         </div>
                       </td>
-                      <td className="right">
+                      <td className="right player-col-rating">
                         <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />{' '}
                         <Delta value={player.delta} />
                       </td>
-                      <td className="right num">{formatNumber(player.games)}</td>
-                      <td>
+                      <td className="right num player-col-games">{formatNumber(player.games)}</td>
+                      <td className="player-col-form">
                         <Button
                           type="button"
                           variant="ghost"
                           className="form-trigger"
-                          aria-expanded={expandedPlayerId === player.id}
+                          aria-expanded={isExpanded}
+                          aria-label={recentMatchesLabel}
                           onClick={() => toggleRecentMatches(player.id)}
-                          title={`Show recent matches for ${player.name}`}
+                          title={recentMatchesLabel}
                         >
                           <FormDots form={player.form} />
                         </Button>
                       </td>
-                      <td>
+                      <td className="player-col-availability">
                         <ConfBar value={Math.round((player.availability ?? 0) * 100)} />
                       </td>
                     </tr>
-                    {expandedPlayerId === player.id ? (
+                    {isExpanded ? (
                       <tr className="player-match-row">
                         <td colSpan={9}>
                           <PlayerRecentMatches player={player} />
                         </td>
                       </tr>
                     ) : null}
-                  </Fragment>
-                ))}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -217,16 +255,16 @@ export function PlayersView({
               Page {currentPage} of {totalPages}
             </CountBadge>
             <div className="pager__buttons">
-              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First page">
+              <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First page">
                 <ChevronsLeft size={16} aria-hidden="true" />
               </Button>
-              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
+              <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
                 <ChevronLeft size={16} aria-hidden="true" />
               </Button>
-              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
+              <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
                 <ChevronRight size={16} aria-hidden="true" />
               </Button>
-              <Button type="button" variant="secondary" size="icon" className="size-[30px] rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-[var(--accent-line)] hover:text-[var(--accent-strong)]" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">
+              <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">
                 <ChevronsRight size={16} aria-hidden="true" />
               </Button>
             </div>
@@ -234,6 +272,27 @@ export function PlayersView({
         ) : null}
       </Card>
     </div>
+  )
+}
+
+function ImpactMultiplier({ value }: { value: number }) {
+  const label = `impact ×${formatDecimal(value)}`
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className="impact-note" aria-label={`${label}. Explain impact multiplier`}>
+          <span>{label}</span>
+          <Info size={12} aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="start" className="impact-tooltip">
+        <b>Impact multiplier</b>
+        <span>
+          Starts at 1.0 and adjusts the player's base role share with objective/stat impact, rating signal, award residuals,
+          and recent form. A 1.1 value means roughly 10% more model weight before availability and roster normalization.
+        </span>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -251,22 +310,23 @@ function PlayerRecentMatches({ player }: { player: CompactPlayer }) {
   return (
     <div className="player-match-detail">
       <div className="player-match-detail__head">
-        <b>{player.name} recent matches</b>
-        <CountBadge>Source-backed from {player.sourceProvider ?? 'the player artifact'}</CountBadge>
+        <div className="player-match-detail__title">
+          <b>{player.name} recent matches</b>
+          <small>Source rows used for the player rating proof</small>
+        </div>
+        <CountBadge>{formatPlayerSourceBadge(player)}</CountBadge>
       </div>
-      <div className="player-match-list">
+      <div className="player-match-list" aria-label={`${player.name} recent match source proof`}>
         {matches.slice().reverse().map((match, index) => (
-          <div className="player-match" key={`${match.date}-${match.sourceGameId ?? match.event}-${index}`}>
-            <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`}>{match.result}</span>
+          <div className="player-match" key={`${match.date}-${match.sourceMatchId ?? match.sourceGameId ?? match.event}-${index}`}>
+            <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`} aria-label={match.result === 'W' ? 'Win' : 'Loss'}>{match.result}</span>
             <div className="player-match__main">
-              <b>
-                {(match.playerTeam ?? player.teamCode ?? player.team)} vs {match.opponent}
-              </b>
-              <small>{match.event} · {formatDate(match.date)}</small>
+              <b>{formatMatchTitle(match, player)}</b>
+              <small>{formatMatchMeta(match)}</small>
             </div>
-            <span className="player-match__score">{formatScore(match.teamKills, match.opponentKills)}</span>
-            <small className="player-match__source">
-              {[match.sourceProvider, match.sourceFileName, match.sourceGameId].filter(Boolean).join(' · ') || 'Source metadata unavailable'}
+            <span className="player-match__score">{formatMatchScore(match)}</span>
+            <small className="player-match__source" title={formatMatchSource(match, true)}>
+              {formatMatchSource(match)}
             </small>
           </div>
         ))}
@@ -275,9 +335,47 @@ function PlayerRecentMatches({ player }: { player: CompactPlayer }) {
   )
 }
 
-function formatScore(teamKills?: number, opponentKills?: number) {
-  if (typeof teamKills !== 'number' || typeof opponentKills !== 'number') return '—'
-  return `${teamKills}-${opponentKills}`
+type CompactRecentPlayerMatch = NonNullable<CompactPlayer['recentMatches']>[number]
+
+function formatPlayerSourceBadge(player: CompactPlayer) {
+  return player.sourceProvider ? `${player.sourceProvider} source` : 'player artifact source'
+}
+
+function formatMatchTitle(match: CompactRecentPlayerMatch, player: CompactPlayer) {
+  const team = match.playerTeamCode ?? match.playerTeam ?? player.teamCode ?? player.team
+  const opponent = match.opponentTeamCode ?? match.opponent
+  return `${team} vs ${opponent}`
+}
+
+function formatMatchMeta(match: CompactRecentPlayerMatch) {
+  return [
+    match.event,
+    typeof match.bestOf === 'number' && match.bestOf > 1 ? `Bo${match.bestOf}` : undefined,
+    formatDate(match.date),
+  ].filter(Boolean).join(' · ')
+}
+
+function formatMatchScore(match: CompactRecentPlayerMatch) {
+  if (typeof match.wins === 'number' && typeof match.losses === 'number') return `${match.wins}-${match.losses}`
+  if (typeof match.teamKills === 'number' && typeof match.opponentKills === 'number') return `${match.teamKills}-${match.opponentKills}`
+  return '—'
+}
+
+function formatMatchSource(match: CompactRecentPlayerMatch, full = false) {
+  const sourceFileName = full ? match.sourceFileName : formatSourceFileName(match.sourceFileName)
+  const sourceId = match.sourceMatchId
+    ? `match ${match.sourceMatchId}`
+    : typeof match.games === 'number' && match.games > 1
+      ? `${formatNumber(match.games)} rows`
+      : match.sourceGameId
+  return [match.sourceProvider, sourceFileName, sourceId].filter(Boolean).join(' · ') || 'Source metadata unavailable'
+}
+
+function formatSourceFileName(fileName?: string) {
+  if (!fileName) return undefined
+  const year = fileName.match(/^(20\d{2})_/)?.[1]
+  if (year && fileName.includes('OraclesElixir')) return `${year} Oracle CSV`
+  return fileName
 }
 
 function teamAppearanceLabel(player: CompactPlayer) {

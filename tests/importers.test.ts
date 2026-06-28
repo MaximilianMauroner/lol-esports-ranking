@@ -46,6 +46,33 @@ test('Leaguepedia international rows use known team home leagues when explicit f
   assert.notEqual(lpl.delta, 0)
 })
 
+test('Leaguepedia competition rows resolve exact team aliases before known identity fallback', () => {
+  const result = importLeaguepediaSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-06-26T00:00:00.000Z',
+    matches: [
+      {
+        id: 'lp-ewc-alias',
+        date: '2025-07-19',
+        event: 'Esports World Cup 2025',
+        patch: '25.14',
+        teamA: 'AG.AL',
+        teamB: 'T1',
+        winner: 'AG.AL',
+        bestOf: 3,
+      },
+    ],
+  })
+
+  const match = result.matches[0]
+  assert.equal(match.teamA, "Anyone's Legend")
+  assert.equal(match.winner, "Anyone's Legend")
+  assert.equal(match.teamAHomeLeague, 'LPL')
+  assert.equal(match.teamARegion, 'LPL')
+  assert.equal(result.teams["Anyone's Legend"].code, 'AL')
+  assert.equal(result.teams["Anyone's Legend"].league, 'LPL')
+})
+
 test('Leaguepedia domestic rows keep sourced league over static known identity', () => {
   const result = importLeaguepediaSnapshot({
     source: 'fixture',
@@ -302,6 +329,60 @@ test('community merge keeps Oracle stats but adopts Leaguepedia qualifier metada
   assert.equal(merged[0].teamAGold, 65000)
 })
 
+test('community merge upgrades Oracle duplicate tier and best-of from stronger Leaguepedia metadata', () => {
+  const oracleMatch: MatchRecord = matchFixture({
+    id: 'oe-msi-final-game',
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: 'oe-msi-final-game-id',
+    date: '2025-07-13',
+    event: 'MSI 2025',
+    phase: 'Regular season',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-play-in',
+    bestOf: 1,
+    teamA: 'Gen.G',
+    teamB: 'T1',
+    winner: 'Gen.G',
+    teamAKills: 24,
+    teamBKills: 10,
+    teamAGold: 62122,
+    teamBGold: 49028,
+  })
+  const leaguepediaDuplicate: MatchRecord = matchFixture({
+    id: 'lp-msi-final-game',
+    sourceProvider: 'leaguepedia-cargo',
+    sourceGameId: '2025 Mid-Season Invitational_Finals_1_2',
+    date: '2025-07-13',
+    event: '2025 Mid-Season Invitational',
+    phase: 'Playoffs',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-bracket',
+    bestOf: 5,
+    teamA: 'Gen.G',
+    teamB: 'T1',
+    winner: 'Gen.G',
+    teamAKills: 24,
+    teamBKills: 10,
+    teamAGold: 62122,
+    teamBGold: 49028,
+  })
+
+  const merged = mergeCommunityMatchSources({
+    oracleMatches: [oracleMatch],
+    leaguepediaMatches: [leaguepediaDuplicate],
+  })
+
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].sourceProvider, 'oracles-elixir')
+  assert.equal(merged[0].event, 'MSI 2025')
+  assert.equal(merged[0].phase, 'Playoffs')
+  assert.equal(merged[0].tier, 'msi-bracket')
+  assert.equal(merged[0].bestOf, 5)
+  assert.equal(merged[0].sourceMatchId, '2025 Mid-Season Invitational_Finals_1_2')
+})
+
 test('community merge keeps distinct scored same-winner series games', () => {
   const oracleMatch: MatchRecord = matchFixture({
     id: 'oe-series-game-3',
@@ -356,6 +437,7 @@ test('team identity cleanup maps exact source display aliases only', () => {
   assert.equal(canonicalTeamNameFor('Team Secret Whales'), 'Team Secret Whales')
   assert.equal(canonicalTeamNameFor('ZEN Esports (Vietnamese Team)'), 'ZEN Esports')
   assert.equal(canonicalTeamNameFor('9Gaming Esports'), '9Gaming')
+  assert.equal(canonicalTeamNameFor('AG.AL'), "Anyone's Legend")
   assert.equal(canonicalTeamNameFor('OKSavingsBank BRION'), 'HANJIN BRION')
   assert.equal(canonicalTeamNameFor('DN Freecs'), 'DN SOOPers')
   assert.equal(canonicalTeamNameFor('DRX'), 'Kiwoom DRX')
@@ -371,6 +453,8 @@ test('team code cleanup uses known source abbreviations for major teams', () => 
   const identities = [
     ['LNG Esports', 'LNG'],
     ['EDward Gaming', 'EDG'],
+    ["Anyone's Legend", 'AL'],
+    ['AG.AL', 'AL'],
     ['KT Rolster', 'KT'],
     ['BNK FEARX', 'BFX'],
     ['Dplus Kia', 'DK'],
@@ -602,6 +686,37 @@ test('Leaguepedia import treats First Stand as an MSI-level international bracke
   assert.equal(match?.teamBHomeLeague, 'LCK')
 })
 
+test('Leaguepedia import treats Mid-Season Invitational bracket and final ids as MSI bracket signal', () => {
+  const result = importLeaguepediaSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-06-26T00:00:00.000Z',
+    matches: [
+      {
+        id: '2025 Mid-Season Invitational_Bracket Round 2_1_5',
+        date: '2025-07-05',
+        datetimeUtc: '2025-07-05 03:17:00',
+        event: '2025 Mid-Season Invitational',
+        teamA: 'Gen.G',
+        teamB: "Anyone's Legend",
+        winner: 'Gen.G',
+      },
+      {
+        id: '2025 Mid-Season Invitational_Finals_1_1',
+        date: '2025-07-13',
+        datetimeUtc: '2025-07-13 00:16:00',
+        event: '2025 Mid-Season Invitational',
+        teamA: 'Gen.G',
+        teamB: 'T1',
+        winner: 'Gen.G',
+      },
+    ],
+  })
+
+  assert.deepEqual(result.matches.map((match) => match.phase), ['Playoffs', 'Playoffs'])
+  assert.deepEqual(result.matches.map((match) => match.tier), ['msi-bracket', 'msi-bracket'])
+  assert.deepEqual(result.matches.map((match) => match.bestOf), [5, 5])
+})
+
 test('Oracle import treats EMEA Masters as competition-only instead of a team home league', () => {
   const result = importOraclesElixirCsv([
     'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
@@ -803,6 +918,44 @@ test('Oracle import maps player rows into sourced game rosters', () => {
   assert.equal(faker?.stats?.earnedGoldShare, 0.22)
   assert.equal(faker?.stats?.visionScore, 34)
   assert.equal(faker?.stats?.vspm, 1.05)
+})
+
+test('Oracle import applies exact player id aliases without fuzzy same-name merging', () => {
+  const result = importOraclesElixirCsv([
+    'gameid,date,year,league,split,playoffs,patch,position,side,playername,playerid,teamname,teamid,result,kills,totalgold',
+    'new-meta-1,2026-02-23,2026,LJL,Winter,1,16.04,team,Blue,,team-blue,New Meta,team-new-meta,1,18,65000',
+    'new-meta-1,2026-02-23,2026,LJL,Winter,1,16.04,team,Red,,team-red,DetonatioN FocusMe,team-dfm,0,12,59000',
+    'new-meta-1,2026-02-23,2026,LJL,Winter,1,16.04,top,Blue,advance,oe:player:ec32405553073660d757af1100d45b7,New Meta,team-new-meta,1,4,12000',
+    'new-meta-1,2026-02-23,2026,LJL,Winter,1,16.04,top,Red,advance,oe:player:unrelated-same-handle,DetonatioN FocusMe,team-dfm,0,2,11000',
+    'new-meta-2,2026-03-08,2026,LJL,Winter,1,16.05,team,Blue,,team-blue,New Meta,team-new-meta,1,18,65000',
+    'new-meta-2,2026-03-08,2026,LJL,Winter,1,16.05,team,Red,,team-red,DetonatioN FocusMe,team-dfm,0,12,59000',
+    'new-meta-2,2026-03-08,2026,LJL,Winter,1,16.05,top,Blue,advance,oe:player:0a86dddc699c7e6fe7f1e43153a5cbe,New Meta,team-new-meta,1,4,12000',
+    'new-meta-2,2026-03-08,2026,LJL,Winter,1,16.05,top,Red,advance,oe:player:unrelated-same-handle,DetonatioN FocusMe,team-dfm,0,2,11000',
+    'mvk-1,2025-05-30,2025,LCP,Split 2,0,15.10,team,Blue,,team-mvk,MGN Vikings Esports,team-mvk,1,17,64000',
+    'mvk-1,2025-05-30,2025,LCP,Split 2,0,15.10,team,Red,,team-tsw,Team Secret Whales,team-tsw,0,10,58000',
+    'mvk-1,2025-05-30,2025,LCP,Split 2,0,15.10,top,Blue,Kratos,oe:player:fa6ab005227d25bf19d02ca58f00cab,MGN Vikings Esports,team-mvk,1,5,12500',
+    'mvk-1,2025-05-30,2025,LCP,Split 2,0,15.10,top,Red,Hasmed,oe:player:hasmed,Team Secret Whales,team-tsw,0,2,11200',
+    'mvk-2,2026-06-05,2026,LCP,Split 2,0,16.11,team,Blue,,team-mvk,MVK Esports,team-mvk,1,19,65500',
+    'mvk-2,2026-06-05,2026,LCP,Split 2,0,16.11,team,Red,,team-tsw,Team Secret Whales,team-tsw,0,9,57100',
+    'mvk-2,2026-06-05,2026,LCP,Split 2,0,16.11,top,Blue,Kratos,oe:player:75019a36fdf85666fbd9396ae4fc7ec,MVK Esports,team-mvk,1,6,13200',
+    'mvk-2,2026-06-05,2026,LCP,Split 2,0,16.11,top,Red,Hasmed,oe:player:hasmed,Team Secret Whales,team-tsw,0,1,10900',
+  ].join('\n'))
+
+  const firstNewMeta = result.matches.find((match) => match.sourceGameId === 'new-meta-1')
+  const secondNewMeta = result.matches.find((match) => match.sourceGameId === 'new-meta-2')
+  const firstMvk = result.matches.find((match) => match.sourceGameId === 'mvk-1')
+  const secondMvk = result.matches.find((match) => match.sourceGameId === 'mvk-2')
+  const firstNewMetaTop = firstNewMeta?.teamARoster?.players[0]
+  const secondNewMetaTop = secondNewMeta?.teamARoster?.players[0]
+  const firstMvkTop = firstMvk?.teamARoster?.players[0]
+  const secondMvkTop = secondMvk?.teamARoster?.players[0]
+  const unrelatedSameHandle = firstNewMeta?.teamBRoster?.players[0]
+
+  assert.equal(firstNewMetaTop?.id, 'oe:player:0a86dddc699c7e6fe7f1e43153a5cbe')
+  assert.equal(secondNewMetaTop?.id, 'oe:player:0a86dddc699c7e6fe7f1e43153a5cbe')
+  assert.equal(firstMvkTop?.id, 'oe:player:75019a36fdf85666fbd9396ae4fc7ec')
+  assert.equal(secondMvkTop?.id, 'oe:player:75019a36fdf85666fbd9396ae4fc7ec')
+  assert.equal(unrelatedSameHandle?.id, 'oe:player:unrelated-same-handle')
 })
 
 test('Oracle import marks incomplete player rows as a partial roster', () => {

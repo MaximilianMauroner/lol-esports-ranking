@@ -29,6 +29,10 @@ type RegionTrendEvent = {
   event?: string
   tier?: string
   result?: 'W' | 'L'
+  wins?: number
+  losses?: number
+  games?: number
+  bestOf?: number
   delta?: number
   rating: number
   source?: string
@@ -118,7 +122,7 @@ export function CompareProfileChart<E>({
                   return (
                     <div className={`profile-bar${isBest ? ' is-best' : ''}`} key={columns[index].id}>
                       <span className="profile-bar__name">
-                        <i style={{ background: color }} />
+                        <i style={{ background: color }} aria-hidden="true" />
                         {columns[index].name}
                       </span>
                       <span className="profile-bar__track" aria-hidden="true">
@@ -208,7 +212,7 @@ function RegionTrendChart({
       <div className="compare-chart__head">
         <div>
           <p className="eyebrow">Over time</p>
-          <h3>Region strength trend</h3>
+          <h3>Region power trend</h3>
         </div>
         {history ? (
           <span className="compare-chart__meta">
@@ -220,7 +224,7 @@ function RegionTrendChart({
         <p className="muted compare-chart__empty">Loading team history…</p>
       ) : series.length > 0 ? (
         <>
-          <LineChart series={series} height={300} yLabel="Avg team power" yFormat={formatRating} />
+          <LineChart series={series} height={300} yLabel="Avg power score" yFormat={formatRating} />
           <RegionTrendEvents events={events} />
         </>
       ) : (
@@ -250,7 +254,7 @@ function RegionTrendEvents({ events }: { events: RegionTrendEvent[] }) {
           <article className="region-event" key={event.id}>
             <div className="region-event__top">
               <span className="region-event__region">
-                <i style={{ background: event.regionColor }} />
+                <i style={{ background: event.regionColor }} aria-hidden="true" />
                 {event.region}
               </span>
               <time dateTime={event.date}>{formatDate(event.date)}</time>
@@ -259,7 +263,7 @@ function RegionTrendEvents({ events }: { events: RegionTrendEvent[] }) {
             <div className="region-event__main">
               <b>{event.team}</b>
               {event.opponent ? <span>vs {event.opponent}</span> : null}
-              {event.result ? <em>{event.result}</em> : null}
+              {formatRegionTrendMatchScore(event) ? <em>{formatRegionTrendMatchScore(event)}</em> : null}
             </div>
             <div className="region-event__meta">
               <span>{event.event ?? 'Unknown event'}</span>
@@ -350,6 +354,10 @@ function collectRegionTrendEvents(
         event: context?.event,
         tier: context?.tier,
         result: context?.result,
+        wins: context?.wins,
+        losses: context?.losses,
+        games: context?.games,
+        bestOf: context?.bestOf,
         delta,
         rating: point[1],
         source: formatSource(context),
@@ -393,7 +401,7 @@ function TeamCompareChart({
       <div className="compare-chart__head">
         <div>
           <p className="eyebrow">Over time</p>
-          <h3>Power Score trend</h3>
+          <h3>Power score trend</h3>
         </div>
         {history ? (
           <span className="compare-chart__meta">
@@ -404,7 +412,7 @@ function TeamCompareChart({
       {!history ? (
         <p className="muted compare-chart__empty">Loading team history…</p>
       ) : series.length > 0 ? (
-        <LineChart series={series} height={300} yLabel="Power Score" yFormat={formatRating} />
+        <LineChart series={series} height={300} yLabel="Power score" yFormat={formatRating} />
       ) : (
         <p className="muted compare-chart__empty">Not enough history to chart the selected teams yet.</p>
       )}
@@ -432,8 +440,16 @@ function formatTierLabel(value: string) {
 
 function formatSource(context?: PublicTeamHistoryPoint[3]) {
   if (!context?.sourceProvider) return undefined
-  if (context.sourceGameId) return `${context.sourceProvider} · ${context.sourceGameId}`
   if (context.sourceMatchId) return `${context.sourceProvider} · ${context.sourceMatchId}`
+  if (context.sourceGameIds && context.sourceGameIds.length > 1) return `${context.sourceProvider} · ${context.sourceGameIds.length} source rows`
+  if (context.sourceGameId) return `${context.sourceProvider} · ${context.sourceGameId}`
   if (context.sourceFileName) return `${context.sourceProvider} · ${context.sourceFileName}`
   return context.sourceProvider
+}
+
+function formatRegionTrendMatchScore(event: RegionTrendEvent) {
+  if (typeof event.wins !== 'number' || typeof event.losses !== 'number') return event.result
+  const score = `${event.wins}-${event.losses}`
+  const bestOf = typeof event.bestOf === 'number' && event.bestOf > 1 ? `Bo${event.bestOf}` : undefined
+  return [event.result, score, bestOf].filter(Boolean).join(' · ')
 }

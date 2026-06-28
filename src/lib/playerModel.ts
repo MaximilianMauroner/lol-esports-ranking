@@ -6,6 +6,8 @@ import type {
   MatchRecord,
   PlayerAppearanceFlag,
   PlayerAppearanceSummary,
+  PlayerDiagnostics,
+  PlayerGameStats,
   PlayerProfile,
   PlayerStanding,
   Role,
@@ -426,6 +428,7 @@ function applySourcedPlayerUpdates(
             opponent,
             playerTeam: team,
             result: player.stats.won ? 'W' : 'L',
+            bestOf: match.bestOf,
             teamKills: side === 'A' ? match.teamAKills : match.teamBKills,
             opponentKills: side === 'A' ? match.teamBKills : match.teamAKills,
             source: sourceTraceFor(match),
@@ -655,6 +658,7 @@ function sourceTraceFor(match: MatchRecord): SourceTrace {
     completeness: match.dataCompleteness,
     date: match.date,
     event: match.event,
+    bestOf: match.bestOf,
   }
 }
 

@@ -93,6 +93,7 @@ export type SourceTrace = {
   completeness?: string
   date?: string
   event?: string
+  bestOf?: number
 }
 
 export type TeamProfile = {
@@ -124,6 +125,26 @@ export type PlayerGameStats = {
   visionScore?: number
   vspm?: number
   gpr?: number
+}
+
+export type PlayerDiagnosticAverage = {
+  value: number | null
+  games: number
+  missing: number
+}
+
+export type PlayerDiagnostics = {
+  sampleGames: number
+  wins: number
+  losses: number
+  winRate: number | null
+  noWinStatScore: PlayerDiagnosticAverage
+  sameRoleMatchupDiff: PlayerDiagnosticAverage
+  damageShare: PlayerDiagnosticAverage
+  earnedGoldShare: PlayerDiagnosticAverage
+  kda: PlayerDiagnosticAverage
+  visionScore: PlayerDiagnosticAverage
+  vspm: PlayerDiagnosticAverage
 }
 
 export type RosterPlayerAppearance = {
@@ -383,6 +404,7 @@ export type PlayerStanding = {
     playerTeam?: string
     playerTeamCode?: string
     result?: 'W' | 'L'
+    bestOf?: number
     teamKills?: number
     opponentKills?: number
     source?: SourceTrace
@@ -391,6 +413,7 @@ export type PlayerStanding = {
   }[]
   source?: SourceTrace
   appearance?: PlayerAppearanceSummary
+  diagnostics?: PlayerDiagnostics
 }
 
 export type EventSummary = {
