@@ -101,9 +101,6 @@
 /* ---------------- Responsive ---------------- */
 
 @media (max-width: 1180px) {
-  .rail__foot div {
-    display: none;
-  }
   .gpr-layout {
     grid-template-columns: 1fr;
   }
@@ -142,9 +139,6 @@
   .rail__mode small {
     display: none;
   }
-  .rail__foot div {
-    display: none;
-  }
 }
 
 @media (max-width: 900px) {
@@ -159,23 +153,20 @@
     min-height: 36px;
     margin-right: auto;
   }
-  .rail__foot {
-    display: none;
-  }
   .rail__nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
     gap: 6px;
     width: 100%;
     margin: 0;
     padding: 0;
-    overflow: visible;
+    overflow-x: auto;
   }
   .rail__mode {
+    flex: 0 0 min(38vw, 144px);
     min-height: 40px;
     min-width: 0;
-    justify-content: center;
-    text-align: center;
+    justify-content: flex-start;
+    text-align: left;
     padding: 7px 6px;
   }
   .rail__mode b {
@@ -365,6 +356,17 @@
 @media (max-width: 640px) {
   .topbar__title {
     flex-basis: 100%;
+  }
+  .topbar__meta {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px 14px;
+  }
+  .topbar__meta div {
+    min-width: min(108px, 45%);
+  }
+  .topbar__meta b {
+    max-width: 100%;
   }
   .gpr-toolbar {
     display: grid;

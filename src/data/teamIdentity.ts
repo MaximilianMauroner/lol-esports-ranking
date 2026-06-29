@@ -1,4 +1,5 @@
-import type { Region, TeamProfile } from '../types'
+import type { TeamProfile } from '../types'
+export { regionForLeague } from './competitionTaxonomy'
 
 export const knownTeamIdentities: Record<string, TeamProfile> = {
   "Anyone's Legend": { name: "Anyone's Legend", code: 'AL', region: 'LPL', league: 'LPL' },
@@ -50,10 +51,6 @@ const normalizedTeamAliases = new Map(
   Object.entries(exactTeamAliases).map(([alias, canonical]) => [normalizeIdentityKey(alias), canonical]),
 )
 
-const emeaLeagueCodes = new Set(['AL', 'CCWS', 'CT', 'EBL', 'EM', 'HC', 'HLL', 'HM', 'HW', 'IC', 'LES', 'LFL2', 'LIT', 'LPLOL', 'NEXO', 'NL', 'PRMP', 'RL', 'ROL'])
-const latamLeagueCodes = new Set(['CD', 'LRN', 'LRS'])
-const apacLeagueCodes = new Set(['LTS'])
-
 export function cleanDisplayName(value: string) {
   return decodeHtmlEntities(value).replace(/\s+/g, ' ').trim()
 }
@@ -81,30 +78,6 @@ export function teamCodeFor(teamName: string) {
     .toUpperCase()
   if (acronym.length >= 2) return acronym
   return cleaned.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() || 'UNK'
-}
-
-export function regionForLeague(league: string): Region {
-  const normalized = league.toUpperCase()
-  if (emeaLeagueCodes.has(normalized)) return 'LEC'
-  if (latamLeagueCodes.has(normalized)) return 'CBLOL'
-  if (apacLeagueCodes.has(normalized)) return 'LCP'
-  if (normalized.includes('LCK')) return 'LCK'
-  if (normalized.includes('LAS')) return 'LCK'
-  if (normalized.includes('LPL')) return 'LPL'
-  if (normalized.includes('DCUP') || normalized.includes('DEMACIA CUP')) return 'LPL'
-  if (normalized.includes('LEC')) return 'LEC'
-  if (normalized.includes('EMEA') || normalized.includes('LFL') || normalized.includes('NLC') || normalized.includes('PRM')) return 'LEC'
-  if (normalized.includes('LVP') || normalized.includes('SUPERLIGA') || normalized.includes('TCL') || normalized.includes('ARABIAN')) return 'LEC'
-  if (normalized.includes('HITPOINT') || normalized.includes('ROAD OF LEGENDS')) return 'LEC'
-  if (normalized.includes('LCS')) return 'LCS'
-  if (normalized.includes('LTA N') || normalized.includes('LTA NORTH') || normalized.includes('NACL')) return 'LCS'
-  if (normalized.includes('LCP')) return 'LCP'
-  if (normalized.includes('LJL') || normalized.includes('LCO')) return 'LCP'
-  if (normalized.includes('CBLOL')) return 'CBLOL'
-  if (normalized.includes('LTA S') || normalized.includes('LTA SOUTH') || normalized.includes('LLA') || normalized.includes('CIRCUITO DESAFIANTE')) return 'CBLOL'
-  if (normalized.includes('VCS')) return 'VCS'
-  if (normalized.includes('PCS')) return 'PCS'
-  return 'International'
 }
 
 function normalizeIdentityKey(value: string) {

@@ -1,11 +1,14 @@
 import { useMemo, type CSSProperties } from 'react'
 import type {
+  PublicRegionHistoryPoint,
+  PublicRegionHistoryScope,
   PublicTeamHistoryDirectory as TeamHistoryDirectory,
   PublicTeamHistoryPoint,
+  PublicTeamHistoryShard,
   PublicTeamStanding as RankingSummaryStanding,
 } from '../lib/publicArtifacts/schema'
 import { formatDate, formatRating, teamKey } from '../lib/display'
-import type { RegionStrength } from '../lib/regionStrength'
+import { isRegionPowerTeam, type RegionStrength } from '../lib/regionStrength'
 import type { CompareColumn } from './CompareDrawer'
 import {
   REGION_PROFILE_METRICS,
@@ -14,10 +17,14 @@ import {
   regionKey,
 } from './compareAnalysisData'
 import { LineChart, type ChartSeries } from './LineChart'
+import { TeamHistoryLineChart } from './TeamHistoryLineChart'
+import { dailyChartPointsFromHistoryPoints } from '../lib/teamHistoryChart'
+import type { RegionHistoryScopeState, TeamHistoryArtifactState } from '../hooks/usePublicArtifacts'
 
 const REGION_TREND_TEAM_LIMIT = 5
 const REGION_TREND_EVENT_LIMIT = 8
 const COMPARE_SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)']
+type TeamHistoryLike = TeamHistoryDirectory | PublicTeamHistoryShard
 
 type RegionTrendEvent = {
   id: string
@@ -42,17 +49,21 @@ export function RegionCompareAnalysis({
   regions,
   columns,
   standings,
-  history,
+  historyState,
+  regionHistoryState,
+  regionHistory,
 }: {
   regions: RegionStrength[]
   columns: CompareColumn[]
   standings: RankingSummaryStanding[]
-  history?: TeamHistoryDirectory
+  historyState: TeamHistoryArtifactState
+  regionHistoryState: RegionHistoryScopeState
+  regionHistory?: PublicRegionHistoryScope
 }) {
   return (
     <>
       <CompareProfileChart title="Region power profile" eyebrow="Current scope" entities={regions} columns={columns} metrics={REGION_PROFILE_METRICS} />
-      <RegionTrendChart regions={regions} standings={standings} history={history} />
+      <RegionTrendChart regions={regions} standings={standings} historyState={historyState} regionHistoryState={regionHistoryState} regionHistory={regionHistory} />
     </>
   )
 }
@@ -60,16 +71,16 @@ export function RegionCompareAnalysis({
 export function TeamCompareAnalysis({
   teams,
   columns,
-  history,
+  historyState,
 }: {
   teams: RankingSummaryStanding[]
   columns: CompareColumn[]
-  history?: TeamHistoryDirectory
+  historyState: TeamHistoryArtifactState
 }) {
   return (
     <>
       <CompareProfileChart title="Team profile" eyebrow="Current scope" entities={teams} columns={columns} metrics={TEAM_PROFILE_METRICS} />
-      <TeamCompareChart teams={teams} history={history} />
+      <TeamCompareChart teams={teams} historyState={historyState} />
     </>
   )
 }
@@ -168,13 +179,19 @@ function profilePercent(value: number | undefined, values: (number | undefined)[
 function RegionTrendChart({
   regions,
   standings,
-  history,
+  historyState,
+  regionHistoryState,
+  regionHistory,
 }: {
   regions: RegionStrength[]
   standings: RankingSummaryStanding[]
-  history?: TeamHistoryDirectory
+  historyState: TeamHistoryArtifactState
+  regionHistoryState: RegionHistoryScopeState
+  regionHistory?: PublicRegionHistoryScope
 }) {
+  const history = historyState.status === 'ready' ? historyState.data : undefined
   const trend = useMemo(() => {
+    if (regionHistory) return regionHistoryTrend(regions, regionHistory)
     if (!history) return []
     return regions
       .map((region, index): { series: ChartSeries; events: RegionTrendEvent[] } | null => {
@@ -193,8 +210,9 @@ function RegionTrendChart({
         }
       })
       .filter((entry): entry is { series: ChartSeries; events: RegionTrendEvent[] } => entry !== null)
-  }, [history, regions, standings])
+  }, [history, regionHistory, regions, standings])
   const series = useMemo(() => trend.map((entry) => entry.series), [trend])
+  const fallbackNote = !regionHistory && history ? regionHistoryFallbackNote(regionHistoryState) : undefined
   const events = useMemo(
     () =>
       trend
@@ -214,17 +232,24 @@ function RegionTrendChart({
           <p className="eyebrow">Over time</p>
           <h3>Region power trend</h3>
         </div>
-        {history ? (
+        {regionHistory ? (
           <span className="compare-chart__meta">
-            Top current teams · Model {history.modelVersion} · {formatDate(history.generatedAt)}
+            International league-strength history · {regionHistory.regionCount} regions
+          </span>
+        ) : history ? (
+          <span className="compare-chart__meta">
+            Derived top-team average · Model {history.modelVersion} · {formatDate(history.generatedAt)}
           </span>
         ) : null}
       </div>
-      {!history ? (
-        <p className="muted compare-chart__empty">Loading team history…</p>
+      {fallbackNote ? <p className="compare-chart__note muted">{fallbackNote}</p> : null}
+      {!regionHistory && historyState.status === 'loading' ? (
+        <p className="muted compare-chart__empty">Loading history…</p>
+      ) : !regionHistory && (historyState.status === 'missing' || historyState.status === 'error') ? (
+        <p className="muted compare-chart__empty">{historyState.message}</p>
       ) : series.length > 0 ? (
         <>
-          <LineChart series={series} height={300} yLabel="Avg power score" yFormat={formatRating} />
+          <LineChart series={series} height={300} yLabel={regionHistory ? 'Region power score' : 'Avg team power score'} yFormat={formatRating} />
           <RegionTrendEvents events={events} />
         </>
       ) : (
@@ -232,6 +257,33 @@ function RegionTrendChart({
       )}
     </section>
   )
+}
+
+function regionHistoryFallbackNote(state: RegionHistoryScopeState) {
+  if (state.status === 'loading') return 'Region history is still loading; this chart is temporarily derived from the current top-team average.'
+  if (state.status === 'missing' || state.status === 'error') return `${state.message} Showing a derived top-team average instead.`
+  return undefined
+}
+
+function regionHistoryTrend(regions: RegionStrength[], history: PublicRegionHistoryScope) {
+  return regions
+    .map((region, index): { series: ChartSeries; events: RegionTrendEvent[] } | null => {
+      const regionSeries = history.series[region.region]
+      if (!regionSeries || regionSeries.points.length < 2) return null
+      const color = COMPARE_SERIES_COLORS[index % COMPARE_SERIES_COLORS.length]
+      return {
+        series: {
+          id: regionKey(region),
+          label: region.region,
+          color,
+          points: regionSeries.points
+            .map((point) => ({ t: Date.parse(point[0]), y: point[1] }))
+            .filter((point) => Number.isFinite(point.t) && Number.isFinite(point.y)),
+        },
+        events: collectRegionHistoryEvents(region, regionSeries.points, color),
+      }
+    })
+    .filter((entry): entry is { series: ChartSeries; events: RegionTrendEvent[] } => entry !== null)
 }
 
 function RegionTrendEvents({ events }: { events: RegionTrendEvent[] }) {
@@ -278,18 +330,49 @@ function RegionTrendEvents({ events }: { events: RegionTrendEvent[] }) {
   )
 }
 
-function selectRegionTrendTeams(region: RegionStrength, standings: RankingSummaryStanding[], history: TeamHistoryDirectory) {
+function collectRegionHistoryEvents(
+  region: RegionStrength,
+  points: PublicRegionHistoryPoint[],
+  regionColor: string,
+) {
+  const events: RegionTrendEvent[] = []
+  let previous: PublicRegionHistoryPoint | undefined
+  for (const point of points) {
+    const context = point[3]
+    const delta = previous ? Number((point[1] - previous[1]).toFixed(1)) : undefined
+    previous = point
+    if (typeof delta !== 'number' || !Number.isFinite(delta) || Math.abs(delta) < 0.5) continue
+    events.push({
+      id: `${region.region}-${point[0]}-${context?.event ?? 'region-history'}-${point[1]}`,
+      region: region.region,
+      regionColor,
+      date: point[0],
+      team: context?.leagues?.join(', ') ?? region.region,
+      opponent: context?.opponentRegions?.join(', '),
+      event: context?.event,
+      tier: context?.tier,
+      wins: context?.wins,
+      losses: context?.losses,
+      delta,
+      rating: point[1],
+      source: context?.source,
+    })
+  }
+  return events
+}
+
+function selectRegionTrendTeams(region: RegionStrength, standings: RankingSummaryStanding[], history: TeamHistoryLike) {
   const topTeamNames = new Set(region.topTeams.map((team) => team.team))
   const topTeamCodes = new Set(region.topTeams.map((team) => team.code).filter((code): code is string => Boolean(code)))
   const regionTeams = standings
-    .filter((team) => team.region === region.region && Boolean(history.series[teamKey(team)]))
+    .filter((team) => isRegionPowerTeam(region, team) && Boolean(history.series[teamKey(team)]))
     .sort((left, right) => (right.rating ?? 0) - (left.rating ?? 0))
   const preferred = regionTeams.filter((team) => topTeamNames.has(team.team) || (team.code ? topTeamCodes.has(team.code) : false))
   const candidates = preferred.length > 0 ? preferred : regionTeams
   return candidates.slice(0, REGION_TREND_TEAM_LIMIT)
 }
 
-function aggregateRegionTrend(teams: RankingSummaryStanding[], history: TeamHistoryDirectory) {
+function aggregateRegionTrend(teams: RankingSummaryStanding[], history: TeamHistoryLike) {
   const entries = teams
     .map((team) => {
       const series = history.series[teamKey(team)]
@@ -330,7 +413,7 @@ function aggregateRegionTrend(teams: RankingSummaryStanding[], history: TeamHist
 function collectRegionTrendEvents(
   region: RegionStrength,
   teams: RankingSummaryStanding[],
-  history: TeamHistoryDirectory,
+  history: TeamHistoryLike,
   regionColor: string,
 ) {
   const events: RegionTrendEvent[] = []
@@ -370,27 +453,25 @@ function collectRegionTrendEvents(
 
 function TeamCompareChart({
   teams,
-  history,
+  historyState,
 }: {
   teams: RankingSummaryStanding[]
-  history?: TeamHistoryDirectory
+  historyState: TeamHistoryArtifactState
 }) {
+  const history = historyState.status === 'ready' ? historyState.data : undefined
   const series = useMemo<ChartSeries[]>(() => {
     if (!history) return []
     return teams
       .map((team, index): ChartSeries | null => {
         const teamSeries = history.series[teamKey(team)]
         if (!teamSeries || teamSeries.points.length < 2) return null
-        const byDay = new Map<string, (typeof teamSeries.points)[number]>()
-        for (const point of teamSeries.points) byDay.set(point[0], point)
+        const points = dailyChartPointsFromHistoryPoints(teamSeries.points)
+        if (points.length < 2) return null
         return {
           id: teamKey(team),
           label: team.code ?? team.team,
           color: COMPARE_SERIES_COLORS[index % COMPARE_SERIES_COLORS.length],
-          points: [...byDay.values()].map((point) => ({
-            t: Date.parse(point[0]),
-            y: point[1],
-          })),
+          points,
         }
       })
       .filter((entry): entry is ChartSeries => entry !== null)
@@ -409,10 +490,12 @@ function TeamCompareChart({
           </span>
         ) : null}
       </div>
-      {!history ? (
+      {historyState.status === 'loading' ? (
         <p className="muted compare-chart__empty">Loading team history…</p>
+      ) : historyState.status !== 'ready' ? (
+        <p className="muted compare-chart__empty">{historyState.message}</p>
       ) : series.length > 0 ? (
-        <LineChart series={series} height={300} yLabel="Power score" yFormat={formatRating} />
+        <TeamHistoryLineChart series={series} height={300} yLabel="Power score" yFormat={formatRating} />
       ) : (
         <p className="muted compare-chart__empty">Not enough history to chart the selected teams yet.</p>
       )}

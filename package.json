@@ -3,12 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22 <27"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "start": "node scripts/railway-server.mjs",
     "data:build": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data",
     "data:download": "node scripts/download-local-data.mjs",
     "data:crunch": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --manifest data/raw/manifest.json",
+    "data:refresh": "node scripts/refresh-data-if-changed.mjs",
     "data:build:oracle": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --oracle-csv",
     "data:build:leaguepedia": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --leaguepedia-json",
     "typecheck": "tsc -b",
@@ -16,10 +21,13 @@
     "test": "tsx --test tests/**/*.test.ts",
     "release:check": "pnpm run data:crunch && pnpm test && pnpm run typecheck && pnpm run lint && pnpm run build",
     "preview": "vite preview",
+    "railway:start": "node scripts/railway-server.mjs",
+    "railway:refresh": "node scripts/refresh-data-if-changed.mjs",
     "fetch:leaguepedia": "node scripts/fetch-leaguepedia.mjs",
     "fetch:riot-gpr": "node scripts/fetch-riot-gpr-snapshot.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
     "@base-ui/react": "^1.6.0",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@phosphor-icons/react": "^2.1.10",

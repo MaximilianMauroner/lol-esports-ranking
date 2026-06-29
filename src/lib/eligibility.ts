@@ -1,8 +1,15 @@
 import { leagueTierDefinitions } from '../data/leagueTiers'
 import type { EligibilityReason, LeagueTierName, TeamEligibility, TeamHistoryPoint } from '../types'
+import {
+  groupAdjacentTimelineEntries,
+  isResolvedTimelineResult,
+  summarizeTimelineResults,
+  timelineGroupKey,
+} from './timelineCompaction'
 
 export const defaultEligibilityConfig = {
-  minTotalGames: 30,
+  // Eligibility consumes match-level history; 20 matches is roughly the old 30-game gate for Bo3-heavy leagues.
+  minTotalGames: 20,
   currentWindowDays: 90,
   minCurrentWindowGames: 6,
   maxUncertainty: 105,
@@ -51,6 +58,27 @@ export function evaluateTeamEligibility(
     daysSinceLastMatch,
     lastPlayed,
   }
+}
+
+export function matchLevelEligibilityHistory(history: TeamHistoryPoint[]): TeamHistoryPoint[] {
+  return groupAdjacentTimelineEntries(
+    history.filter((point) => Boolean(point.date) && Boolean(point.event) && Boolean(point.opponent)),
+    teamEligibilityMatchKey,
+  )
+    .filter((group) => isResolvedTimelineResult(summarizeTimelineResults(group.entries, (entry) => entry.result)))
+    .map((group) => group.entries.at(-1)!)
+}
+
+function teamEligibilityMatchKey(point: TeamHistoryPoint) {
+  return timelineGroupKey([
+    'series',
+    point.date,
+    point.event ?? '',
+    point.opponent ?? '',
+    point.source?.provider ?? '',
+    point.source?.fileName ?? '',
+    String(point.source?.bestOf ?? ''),
+  ])
 }
 
 function daysBetween(leftDate: string, rightDate: string) {

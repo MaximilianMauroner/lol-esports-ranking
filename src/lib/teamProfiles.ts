@@ -1,6 +1,13 @@
-import { canonicalTeamNameFor, regionForLeague, teamCodeFor, teamIdentityFor } from '../data/teamIdentity'
-import { leagueTierFor } from '../data/leagueTiers'
+import {
+  isCompetitionOnlyLeague,
+  isKnownDomesticHomeLeague,
+  leagueProfileScore,
+  regionForLeague,
+} from '../data/competitionTaxonomy'
+import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../data/teamIdentity'
 import type { MatchRecord, Region, TeamProfile } from '../types'
+
+export { isCompetitionOnlyLeague, isUnknownLeague } from '../data/competitionTaxonomy'
 
 type LeagueObservation = {
   league: string
@@ -77,7 +84,7 @@ function observeTeam(
 ) {
   const teamName = canonicalTeamNameFor(rawTeamName)
   teamNames.add(teamName)
-  if (!homeLeague || isUnknownLeague(homeLeague) || isCompetitionOnlyLeague(homeLeague)) return
+  if (!isKnownDomesticHomeLeague(homeLeague)) return
 
   const byLeague = observations.get(teamName) ?? new Map<string, LeagueObservation>()
   observations.set(teamName, byLeague)
@@ -118,41 +125,4 @@ function isUsefulProfile(profile: TeamProfile) {
 function profileScore(profile: TeamProfile) {
   if (profile.league === 'Unknown' || profile.region === 'International' || isCompetitionOnlyLeague(profile.league)) return 0
   return leagueProfileScore(profile.league)
-}
-
-function leagueProfileScore(league: string) {
-  const tier = leagueTierFor(league).tier
-  if (tier === 'tier-one') return 5
-  if (tier === 'tier-two') return 4
-  if (tier === 'tier-three') return 3
-  if (tier === 'emerging') return 2
-  return 1
-}
-
-export function isCompetitionOnlyLeague(league: string) {
-  const normalized = league.trim().toUpperCase()
-  return normalized === 'MSI'
-    || normalized === 'WORLDS'
-    || normalized === 'WORLD'
-    || normalized === 'WLD'
-    || normalized === 'WLDS'
-    || normalized === 'FST'
-    || normalized === 'EWC'
-    || normalized === 'ASI'
-    || normalized === 'AC'
-    || normalized === 'DCUP'
-    || normalized === 'KESPA'
-    || normalized === 'EM'
-    || normalized === 'LTA'
-    || normalized === 'EMEA MASTERS'
-    || normalized.includes('WORLD CHAMPIONSHIP')
-    || normalized.includes('MID-SEASON INVITATIONAL')
-    || normalized.includes('FIRST STAND')
-    || normalized.includes('ESPORTS WORLD CUP')
-    || normalized.includes('ASIA MASTER')
-    || normalized.includes('ASIA MASTERS')
-}
-
-export function isUnknownLeague(league: string) {
-  return league.trim().toUpperCase() === 'UNKNOWN'
 }

@@ -383,6 +383,61 @@ test('community merge upgrades Oracle duplicate tier and best-of from stronger L
   assert.equal(merged[0].sourceMatchId, '2025 Mid-Season Invitational_Finals_1_2')
 })
 
+test('community merge does not promote domestic Oracle playoff rows to international tiers', () => {
+  const oracleMatch: MatchRecord = matchFixture({
+    id: 'oe-lck-road-to-msi-game',
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: 'oe-lck-road-to-msi-game-id',
+    date: '2026-06-13',
+    event: 'LCK 2026 Rounds 1-2',
+    phase: 'Playoffs',
+    region: 'LCK',
+    league: 'LCK',
+    tier: 'major-playoffs',
+    bestOf: 5,
+    teamA: 'Gen.G',
+    teamB: 'KT Rolster',
+    winner: 'Gen.G',
+    teamAKills: 19,
+    teamBKills: 20,
+    teamAGold: 124584,
+    teamBGold: 120221,
+  })
+  const leaguepediaDuplicate: MatchRecord = matchFixture({
+    id: 'lp-lck-road-to-msi-game',
+    sourceProvider: 'leaguepedia-cargo',
+    sourceGameId: 'LCK/2026 Season/Road to MSI_Round 3_2_3',
+    date: '2026-06-13',
+    event: 'LCK/2026 Season/Road to MSI',
+    phase: 'Playoffs',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-play-in',
+    bestOf: 5,
+    teamA: 'Gen.G',
+    teamB: 'KT Rolster',
+    winner: 'Gen.G',
+    teamAKills: 19,
+    teamBKills: 20,
+    teamAGold: 124584,
+    teamBGold: 120221,
+    gameLengthSeconds: undefined,
+  })
+
+  const merged = mergeCommunityMatchSources({
+    oracleMatches: [oracleMatch],
+    leaguepediaMatches: [leaguepediaDuplicate],
+  })
+
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].sourceProvider, 'oracles-elixir')
+  assert.equal(merged[0].event, 'LCK 2026 Rounds 1-2')
+  assert.equal(merged[0].region, 'LCK')
+  assert.equal(merged[0].league, 'LCK')
+  assert.equal(merged[0].tier, 'major-playoffs')
+  assert.equal(merged[0].sourceMatchId, undefined)
+})
+
 test('community merge keeps distinct scored same-winner series games', () => {
   const oracleMatch: MatchRecord = matchFixture({
     id: 'oe-series-game-3',
@@ -715,6 +770,30 @@ test('Leaguepedia import treats Mid-Season Invitational bracket and final ids as
   assert.deepEqual(result.matches.map((match) => match.phase), ['Playoffs', 'Playoffs'])
   assert.deepEqual(result.matches.map((match) => match.tier), ['msi-bracket', 'msi-bracket'])
   assert.deepEqual(result.matches.map((match) => match.bestOf), [5, 5])
+})
+
+test('Leaguepedia import treats LCK Road to MSI as a domestic playoff path', () => {
+  const result = importLeaguepediaSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-06-26T00:00:00.000Z',
+    matches: [
+      {
+        id: 'LCK/2026 Season/Road to MSI_Round 3_2_3',
+        date: '2026-06-13',
+        event: 'LCK/2026 Season/Road to MSI',
+        teamA: 'Gen.G',
+        teamB: 'KT Rolster',
+        winner: 'Gen.G',
+      },
+    ],
+  })
+  const match = result.matches[0]
+
+  assert.equal(match?.league, 'LCK')
+  assert.equal(match?.region, 'LCK')
+  assert.equal(match?.tier, 'major-playoffs')
+  assert.equal(match?.teamAHomeLeague, 'LCK')
+  assert.equal(match?.teamBHomeLeague, 'LCK')
 })
 
 test('Oracle import treats EMEA Masters as competition-only instead of a team home league', () => {

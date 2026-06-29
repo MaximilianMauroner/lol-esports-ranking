@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { effectiveLeagueRating, leagueEffectiveRatingCapsByTier } from '../src/data/leagueTiers.ts'
+import { ensureLeague, updateLeagueStrengthForSeries } from '../src/lib/leagueRatings.ts'
 import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
+import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset } from '../src/lib/ratingCalculations.ts'
 import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/types.ts'
 
 const teams: Record<string, TeamProfile> = {
@@ -10,7 +12,7 @@ const teams: Record<string, TeamProfile> = {
   Gamma: { name: 'Gamma', code: 'GAM', region: 'LPL', league: 'LPL' },
 }
 
-test('team Elo is result-only and series-damped per game', () => {
+test('team latent strength is result-only and allocates evidence across stable and form', () => {
   const dominantWin = buildRankingModel([matchFixture({
     id: 'dominant-win',
     teamAKills: 35,
@@ -36,8 +38,235 @@ test('team Elo is result-only and series-damped per game', () => {
 
   assert.equal(dominantAlpha.baseRating, narrowAlpha.baseRating)
   assert.equal(dominantAlpha.rating, narrowAlpha.rating)
-  assert.ok(bo5Alpha.baseRating - 1500 < dominantAlpha.baseRating - 1500)
+  assert.equal(bo5Alpha.baseRating, dominantAlpha.baseRating)
   assert.ok(bo5Alpha.baseRating > 1500)
+  assert.equal(dominantAlpha.ratingUpdate.teamStableShare, 0.9)
+  assert.equal(dominantAlpha.ratingUpdate.teamFormShare, 0.1)
+  assert.ok((dominantAlpha.ratingUpdate.resultEvidence ?? 0) > dominantAlpha.ratingUpdate.teamStableDelta)
+  assert.ok(dominantAlpha.ratingUpdate.momentumDelta > 0)
+  assert.equal(dominantAlpha.ratingUpdate.neutralResultResidual, 0.5)
+  assert.equal(dominantAlpha.ratingUpdate.updateUnit, 'series-atomic')
+})
+
+test('series rows publish one atomic team and league strength update', () => {
+  const extendedTeams: Record<string, TeamProfile> = {
+    ...teams,
+    Delta: { name: 'Delta', code: 'DEL', region: 'LCS', league: 'LCS' },
+  }
+  const model = buildRankingModel(seriesFixture({
+    id: 'msi-alpha-delta',
+    date: '2026-02-01',
+    event: 'MSI Fixture',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-bracket',
+    teamA: 'Alpha',
+    teamB: 'Delta',
+    teamBHomeLeague: 'LCS',
+    teamBRegion: 'LCS',
+    winners: ['Alpha', 'Alpha', 'Alpha'],
+  }), { ...extendedTeams })
+  const alphaHistory = standingFor(model, 'Alpha').history.filter((point) => point.event === 'MSI Fixture')
+
+  assert.equal(model.predictions.filter((prediction) => prediction.event === 'MSI Fixture').length, 3)
+  assert.equal(alphaHistory.length, 3)
+  assert.deepEqual(alphaHistory.map((point) => point.ratingUpdate.updateUnit), [
+    'series-member-no-team-update',
+    'series-member-no-team-update',
+    'series-atomic',
+  ])
+  assert.deepEqual(alphaHistory.slice(0, 2).map((point) => point.delta), [0, 0])
+  assert.ok((alphaHistory.at(-1)?.ratingUpdate.teamStableDelta ?? 0) > 0)
+  assert.equal(leagueFor(model, 'LCK').internationalMatches, 1)
+  assert.equal(leagueFor(model, 'LCS').internationalMatches, 1)
+})
+
+test('interleaved same-date series rows still publish one atomic team update', () => {
+  const extendedTeams: Record<string, TeamProfile> = {
+    ...teams,
+    Delta: { name: 'Delta', code: 'DEL', region: 'LCS', league: 'LCS' },
+  }
+  const series = seriesFixture({
+    id: 'interleaved-alpha-delta',
+    date: '2026-02-01',
+    event: 'MSI Interleaved Fixture',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-bracket',
+    bestOf: 5,
+    teamA: 'Alpha',
+    teamB: 'Delta',
+    teamBHomeLeague: 'LCS',
+    teamBRegion: 'LCS',
+    winners: ['Alpha', 'Delta', 'Alpha', 'Delta', 'Delta'],
+  })
+  const model = buildRankingModel([
+    series[0],
+    matchFixture({
+      id: 'same-day-beta-gamma-1',
+      sourceGameId: 'same-day-beta-gamma-1',
+      date: '2026-02-01',
+      event: 'LCK Same Day Fixture',
+      teamA: 'Beta',
+      teamB: 'Gamma',
+      winner: 'Beta',
+    }),
+    series[1],
+    matchFixture({
+      id: 'same-day-beta-gamma-2',
+      sourceGameId: 'same-day-beta-gamma-2',
+      date: '2026-02-01',
+      event: 'LCK Same Day Fixture',
+      teamA: 'Beta',
+      teamB: 'Gamma',
+      winner: 'Gamma',
+    }),
+    series[2],
+    series[3],
+    series[4],
+  ], { ...extendedTeams })
+  const alphaHistory = standingFor(model, 'Alpha').history.filter((point) => point.event === 'MSI Interleaved Fixture')
+
+  assert.equal(alphaHistory.length, 5)
+  assert.deepEqual(alphaHistory.map((point) => point.ratingUpdate.updateUnit), [
+    'series-member-no-team-update',
+    'series-member-no-team-update',
+    'series-member-no-team-update',
+    'series-member-no-team-update',
+    'series-atomic',
+  ])
+  assert.deepEqual(alphaHistory.slice(0, 4).map((point) => point.delta), [0, 0, 0, 0])
+  assert.equal(alphaHistory.at(-1)?.result, 'L')
+  assert.ok((alphaHistory.at(-1)?.ratingUpdate.teamStableDelta ?? 0) < 0)
+  assert.ok((alphaHistory.at(-1)?.delta ?? 0) < 0)
+})
+
+test('series expectation can value an elite win above an expected sweep', () => {
+  const extendedTeams: Record<string, TeamProfile> = {
+    Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },
+    Beta: { name: 'Beta', code: 'BET', region: 'LCK', league: 'LCK' },
+    Gamma: { name: 'Gamma', code: 'GAM', region: 'LCK', league: 'LCK' },
+    Delta: { name: 'Delta', code: 'DEL', region: 'LCS', league: 'LCS' },
+    Epsilon: { name: 'Epsilon', code: 'EPS', region: 'LCS', league: 'LCS' },
+  }
+  const setup = [
+    ...Array.from({ length: 24 }, (_, index) => matchFixture({
+      id: `gamma-setup-${index}`,
+      date: dateInJanuary(index + 1),
+      teamA: 'Gamma',
+      teamB: 'Beta',
+      winner: 'Gamma',
+    })),
+    ...Array.from({ length: 8 }, (_, index) => matchFixture({
+      id: `alpha-setup-${index}`,
+      date: dateInJanuary(index + 25),
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Alpha',
+    })),
+    ...Array.from({ length: 24 }, (_, index) => matchFixture({
+      id: `delta-setup-${index}`,
+      date: dateInJanuary(index + 33),
+      event: 'LCS 2026 Spring',
+      region: 'LCS',
+      league: 'LCS',
+      teamAHomeLeague: 'LCS',
+      teamBHomeLeague: 'LCS',
+      teamARegion: 'LCS',
+      teamBRegion: 'LCS',
+      teamA: 'Epsilon',
+      teamB: 'Delta',
+      winner: 'Epsilon',
+    })),
+  ]
+  const eliteWin = buildRankingModel([
+    ...setup,
+    ...seriesFixture({
+      id: 'alpha-gamma-series',
+      date: '2026-03-01',
+      sourceProvider: 'leaguepedia-cargo',
+      sourceMatchIdPrefix: 'LCK/2026 Season/Road to MSI_Round 4_1',
+      event: 'LCK 2026 Road to MSI',
+      teamA: 'Alpha',
+      teamB: 'Gamma',
+      bestOf: 5,
+      winners: ['Alpha', 'Gamma', 'Alpha', 'Gamma', 'Alpha'],
+    }),
+  ], { ...extendedTeams })
+  const expectedSweep = buildRankingModel([
+    ...setup,
+    ...seriesFixture({
+      id: 'alpha-delta-series',
+      date: '2026-03-01',
+      sourceProvider: 'oracles-elixir',
+      event: 'MSI 2026',
+      region: 'International',
+      league: 'MSI',
+      tier: 'msi-bracket',
+      teamA: 'Alpha',
+      teamB: 'Delta',
+      teamBHomeLeague: 'LCS',
+      teamBRegion: 'LCS',
+      winners: ['Alpha', 'Alpha', 'Alpha'],
+    }),
+  ], { ...extendedTeams })
+  const eliteHistory = standingFor(eliteWin, 'Alpha').history.filter((point) => point.event === 'LCK 2026 Road to MSI')
+  const sweepHistory = standingFor(expectedSweep, 'Alpha').history.filter((point) => point.event === 'MSI 2026')
+  const eliteDelta = eliteHistory.reduce((total, point) => total + point.delta, 0)
+  const sweepDelta = sweepHistory.reduce((total, point) => total + point.delta, 0)
+
+  assert.equal(eliteWin.predictions.filter((prediction) => prediction.event === 'LCK 2026 Road to MSI').length, 5)
+  assert.equal(eliteHistory.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic').length, 1)
+  assert.equal(sweepHistory.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic').length, 1)
+  assert.ok(eliteDelta > sweepDelta, `expected elite delta ${eliteDelta} to beat expected sweep delta ${sweepDelta}`)
+})
+
+test('domestic stable gains in weaker leagues are shrunk before global publication', () => {
+  const extendedTeams: Record<string, TeamProfile> = {
+    ...teams,
+    LecLeader: { name: 'LecLeader', code: 'LEA', region: 'LEC', league: 'LEC' },
+    LecRival: { name: 'LecRival', code: 'LER', region: 'LEC', league: 'LEC' },
+  }
+  const model = buildRankingModel([
+    ...Array.from({ length: 12 }, (_, index) => matchFixture({
+      id: `lck-domestic-${index}`,
+      date: dateInJanuary(index + 1),
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Alpha',
+    })),
+    ...Array.from({ length: 12 }, (_, index) => matchFixture({
+      id: `lec-domestic-${index}`,
+      date: dateInJanuary(index + 1),
+      event: 'LEC 2026 Spring',
+      league: 'LEC',
+      region: 'LEC',
+      teamAHomeLeague: 'LEC',
+      teamBHomeLeague: 'LEC',
+      teamARegion: 'LEC',
+      teamBRegion: 'LEC',
+      teamA: 'LecLeader',
+      teamB: 'LecRival',
+      winner: 'LecLeader',
+    })),
+  ], { ...extendedTeams })
+
+  const lckLeader = standingFor(model, 'Alpha')
+  const lecLeader = standingFor(model, 'LecLeader')
+
+  assert.equal(lckLeader.ratingUpdate.teamStableShare, 0.9)
+  assert.equal(lecLeader.ratingUpdate.teamStableShare, 0.59)
+  assert.ok(lckLeader.ratingComponents.teamStableOffset > lecLeader.ratingComponents.teamStableOffset)
+  assert.ok(lckLeader.rating - lecLeader.rating > 55)
+  assert.equal(lecLeader.ratingUpdate.unavailableChannels.includes('domestic-relative-strength:global-transfer-shrunk'), true)
+})
+
+test('published roster prior caps positive player signal for sustained losing records', () => {
+  assert.equal(publishedRosterPriorOffset(24, 3, 8), 24)
+  assert.equal(publishedRosterPriorOffset(24, 12, 12), 24)
+  assert.equal(publishedRosterPriorOffset(24, 9, 21), 6)
+  assert.equal(publishedRosterPriorOffset(24, 5, 7), 14)
+  assert.equal(publishedRosterPriorOffset(-24, 9, 21), -24)
 })
 
 test('league Elo only updates from international cross-league games with smaller K', () => {
@@ -65,6 +294,62 @@ test('league Elo only updates from international cross-league games with smaller
   assert.notEqual(leagueFor(internationalCrossLeague, 'LCK').score, 1500)
   assert.notEqual(leagueFor(internationalCrossLeague, 'LPL').score, 1500)
   assert.ok(Math.abs(leagueFor(internationalCrossLeague, 'LCK').score - 1500) < Math.abs(standingFor(internationalCrossLeague, 'Alpha').baseRating - 1500))
+})
+
+test('league Elo preserves fractional international residual evidence', () => {
+  const leagueScores = new Map<string, number>()
+  const previousLeagueScores = new Map<string, number>()
+  const leagueWins = new Map<string, number>()
+  const leagueLosses = new Map<string, number>()
+  const leagueExpectedWins = new Map<string, number>()
+  const leagueOpponentRatingSums = new Map<string, number>()
+  const leagueForms = new Map<string, string[]>()
+  const leagueMatchCounts = new Map<string, number>()
+  const leagueLastEvents = new Map<string, string>()
+  const leagueLastUpdated = new Map<string, string>()
+  for (const league of ['LCK', 'LPL']) {
+    ensureLeague(league, leagueScores, previousLeagueScores, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts)
+  }
+
+  const delta = updateLeagueStrengthForSeries({
+    match: matchFixture({
+      id: 'fractional-league-evidence',
+      event: 'MSI Fractional Fixture',
+      region: 'International',
+      league: 'MSI',
+      tier: 'msi-bracket',
+      teamB: 'Gamma',
+      teamBHomeLeague: 'LPL',
+      teamBRegion: 'LPL',
+    }),
+    leagueA: 'LCK',
+    leagueB: 'LPL',
+    leagueScoreA: 1500,
+    leagueScoreB: 1500,
+    leagueExpectedRatingA: 1500,
+    leagueExpectedRatingB: 1500,
+    expectedOutcomeA: 0.563,
+    expectedOutcomeB: 0.437,
+    observedOutcomeA: 1,
+    observedOutcomeB: 0,
+    strengthSignal: 1,
+    recency: 0.83,
+    leagueScores,
+    previousLeagueScores,
+    leagueWins,
+    leagueLosses,
+    leagueExpectedWins,
+    leagueOpponentRatingSums,
+    leagueForms,
+    leagueMatchCounts,
+    leagueLastEvents,
+    leagueLastUpdated,
+  })
+
+  assert.equal(delta.deltaA, 8.705)
+  assert.equal(delta.deltaB, -8.705)
+  assert.equal(leagueScores.get('LCK'), 1508.705)
+  assert.equal(leagueScores.get('LPL'), 1491.295)
 })
 
 test('emerging league effective ratings cannot publish above tier-three baseline', () => {
@@ -115,8 +400,46 @@ test('league adjustment preserves same-league base-rating gaps before momentum',
   assert.equal(typeof alpha.ratingUpdate.teamStableDelta, 'number')
   assert.equal(typeof alpha.ratingUpdate.leagueGameDelta, 'number')
   assert.equal(typeof alpha.ratingUpdate.leaguePlacementDelta, 'number')
+  assert.equal(typeof alpha.ratingUpdate.resultEvidence, 'number')
+  assert.equal(typeof alpha.ratingUpdate.neutralResultResidual, 'number')
+  assert.equal(typeof alpha.ratingUpdate.seriesStrengthSignal, 'number')
   assert.equal(alpha.history.at(-1)?.rating, componentRating(alpha.history.at(-1) ?? alpha))
   assert.equal(typeof alpha.history.at(-1)?.ratingUpdate.momentumDelta, 'number')
+})
+
+test('published league anchor relief is gated by sourced team evidence', () => {
+  assert.equal(publishedLeagueAnchorContextAdjustment({
+    leagueScore: 1417,
+    teamRating: 1529,
+    wins: 19,
+    losses: 8,
+    uncertainty: 30,
+    rosterBasis: 'sourced',
+  }), 20)
+  assert.equal(publishedLeagueAnchorContextAdjustment({
+    leagueScore: 1536,
+    teamRating: 1470,
+    wins: 11,
+    losses: 20,
+    uncertainty: 32,
+    rosterBasis: 'sourced',
+  }), -12.6)
+  assert.equal(publishedLeagueAnchorContextAdjustment({
+    leagueScore: 1465,
+    teamRating: 1506,
+    wins: 16,
+    losses: 14,
+    uncertainty: 30,
+    rosterBasis: 'sourced',
+  }), 0)
+  assert.equal(publishedLeagueAnchorContextAdjustment({
+    leagueScore: 1417,
+    teamRating: 1529,
+    wins: 19,
+    losses: 8,
+    uncertainty: 30,
+    rosterBasis: 'unknown',
+  }), 0)
 })
 
 test('international league resume accounts for participating opponent strength', () => {
@@ -833,6 +1156,25 @@ function internationalVsGamma(id: string) {
     teamBRegion: 'LPL',
     tier: 'worlds-main',
   })
+}
+
+function seriesFixture({
+  id,
+  winners,
+  sourceMatchIdPrefix,
+  ...overrides
+}: Partial<MatchRecord> & {
+  id: string
+  winners: string[]
+  sourceMatchIdPrefix?: string
+}): MatchRecord[] {
+  return winners.map((winner, index) => matchFixture({
+    ...overrides,
+    id: `${id}-game-${index + 1}`,
+    sourceGameId: `${id}-game-${index + 1}`,
+    ...(sourceMatchIdPrefix ? { sourceMatchId: `${sourceMatchIdPrefix}_${index + 1}` } : {}),
+    winner,
+  }))
 }
 
 function matchFixture(overrides: Partial<MatchRecord>): MatchRecord {

@@ -48,6 +48,7 @@ export function CompareDrawer<E>({
         side="right"
         showCloseButton={false}
         className="w-full max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(980px,94vw)] sm:max-w-none"
+        style={{ width: 'min(980px, 100vw)', maxWidth: 'none' }}
       >
         <SheetHeader className="drawer__head flex-row items-center p-[18px_22px] text-left">
           <SheetTitle className="mr-auto text-[1.1rem] font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
@@ -103,7 +104,7 @@ export function CompareDrawer<E>({
                       const best = bestIds(entities, columns, row)
                       return (
                         <TableRow key={row.key}>
-                          <TableHead>{row.label}</TableHead>
+                          <TableHead scope="row">{row.label}</TableHead>
                           {entities.map((entity, index) => (
                             <TableCell key={columns[index].id} className={best.has(columns[index].id) ? 'best' : ''}>
                               {row.cell(entity)}

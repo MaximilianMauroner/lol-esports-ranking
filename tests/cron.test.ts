@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import handler, { isAuthorizedCronRequest } from '../api/recalculate-rankings.ts'
+import handler, { isAuthorizedCronRequest, publishSnapshot } from '../api/recalculate-rankings.ts'
+import { createStaticRankingData } from '../src/lib/snapshot.ts'
+import { parsePublicRankingManifest, parsePublicRegionHistory, parsePublicTeamHistoryIndex, parsePublicTeamHistoryShard } from '../src/lib/publicArtifacts/schema.ts'
+import { rosters, sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 test('cron auth requires the configured bearer secret', () => {
   assert.equal(isAuthorizedCronRequest(undefined, undefined), false)
@@ -39,6 +42,63 @@ test('cron reports no-data snapshots instead of falling back to seeded rows', as
   }
 })
 
+test('cron publisher uploads static-parity companion artifacts with blob manifest URLs', async () => {
+  const snapshot = createStaticRankingData({
+    matches: sampleMatches,
+    teams,
+    rosters,
+    source: 'cron publisher fixture',
+  })
+  const uploads: Array<{ pathname: string; value: unknown }> = []
+
+  const published = await publishSnapshot(snapshot, async (pathname, body, options) => {
+    assert.deepEqual(options, {
+      access: 'public',
+      allowOverwrite: true,
+      contentType: 'application/json',
+    })
+    uploads.push({ pathname, value: JSON.parse(body) })
+    return { url: `https://blob.example/${pathname}` }
+  })
+  const uploadPaths = new Set(uploads.map((upload) => upload.pathname))
+
+  assert.equal(uploadPaths.has('rankings/team-history.json'), false)
+  assert.equal(uploadPaths.has('rankings/history/team-series.json'), false)
+  assert.equal(uploadPaths.has('rankings/history/team-series/index.json'), true)
+  assert.equal(uploadPaths.has('rankings/history/region-series.json'), true)
+  assert.equal(published.teamHistoryIndexBlobUrl, 'https://blob.example/rankings/history/team-series/index.json')
+  assert.equal(published.regionHistoryBlobUrl, 'https://blob.example/rankings/history/region-series.json')
+
+  const summary = parsePublicRankingManifest(uploadedValue(uploads, 'rankings/latest-summary.json'))
+  assert.equal(summary.fullSnapshotUrl, 'https://blob.example/rankings/latest-full.json')
+  assert.equal(summary.playerDirectoryUrl, 'https://blob.example/rankings/entities/players.json')
+  assert.equal(summary.teamDirectoryUrl, 'https://blob.example/rankings/entities/teams.json')
+  assert.equal(summary.teamHistoryIndexUrl, 'https://blob.example/rankings/history/team-series/index.json')
+  assert.equal(summary.regionHistoryUrl, 'https://blob.example/rankings/history/region-series.json')
+  assert.equal(Object.prototype.hasOwnProperty.call(summary, 'teamHistoryUrl'), false)
+
+  for (const entry of Object.values(summary.snapshotIndex)) {
+    assert.match(entry.url, /^https:\/\/blob\.example\/rankings\/scopes\//)
+    assert.equal(uploadPaths.has(blobPath(entry.url)), true, `missing uploaded snapshot shard ${entry.url}`)
+  }
+
+  const teamHistoryIndex = parsePublicTeamHistoryIndex(uploadedValue(uploads, 'rankings/history/team-series/index.json'))
+  assert.equal(teamHistoryIndex.artifactKind, 'team-history-index')
+  assert.equal(Object.keys(teamHistoryIndex.scopeIndex).length, published.teamHistoryShardCount)
+  for (const entry of Object.values(teamHistoryIndex.scopeIndex)) {
+    assert.match(entry.url, /^https:\/\/blob\.example\/rankings\/history\/team-series\//)
+    assert.equal(uploadPaths.has(blobPath(entry.url)), true, `missing uploaded team-history shard ${entry.url}`)
+    const teamHistoryShard = parsePublicTeamHistoryShard(uploadedValue(uploads, blobPath(entry.url)))
+    assert.equal(teamHistoryShard.artifactKind, 'team-history-scope')
+    assert.deepEqual(teamHistoryShard.filter, entry.filter)
+    assert.equal(teamHistoryShard.teamCount, entry.teamCount)
+    assert.equal(teamHistoryShard.pointCount, entry.pointCount)
+  }
+
+  const regionHistory = parsePublicRegionHistory(uploadedValue(uploads, 'rankings/history/region-series.json'))
+  assert.equal(regionHistory.defaultScopeKey, snapshot.defaultSnapshotKey)
+})
+
 async function callHandler({ authorization, userAgent }: { authorization?: string; userAgent?: string }) {
   const response = new MockResponse()
   await handler(
@@ -52,6 +112,18 @@ async function callHandler({ authorization, userAgent }: { authorization?: strin
     response,
   )
   return response
+}
+
+function uploadedValue(uploads: Array<{ pathname: string; value: unknown }>, pathname: string) {
+  const upload = uploads.findLast((entry) => entry.pathname === pathname)
+  assert.ok(upload, `missing upload ${pathname}`)
+  return upload.value
+}
+
+function blobPath(url: string) {
+  const prefix = 'https://blob.example/'
+  assert.equal(url.startsWith(prefix), true)
+  return url.slice(prefix.length)
 }
 
 class MockResponse {

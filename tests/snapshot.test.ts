@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createPlayerDirectory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
-import { compactStanding } from '../src/lib/publicArtifacts/schema.ts'
+import { createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION, compactStanding } from '../src/lib/publicArtifacts/schema.ts'
 import type { StaticRankingData } from '../src/lib/snapshot.ts'
-import type { MatchRecord, PlayerStanding, Role, Side, TeamProfile, TeamStanding } from '../src/types.ts'
+import type { LeagueStrengthHistoryPoint, MatchRecord, PlayerStanding, Role, Side, TeamProfile, TeamStanding } from '../src/types.ts'
 import { rosters, sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 function sourcedPlayer(overrides: Partial<PlayerStanding> & Pick<PlayerStanding, 'id' | 'name' | 'team' | 'role' | 'rank'>): PlayerStanding {
@@ -170,14 +170,9 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   assert.equal(chovy.teamGames, 100)
   assert.equal(chovy.teamShare, 1)
   assert.equal(chovy.sourceProvider, 'oracles-elixir')
-  assert.equal(chovy.sourceGameId, 'oe-player-proof')
-  assert.equal(chovy.sourceFileName, 'oracle-fixture.csv')
   assert.equal(chovy.latestObservedAt, '2026-06-26')
   assert.equal(chovy.latestObservedEvent, 'LCK 2026 Rounds 1-2')
-  assert.equal(chovy.diagnostics?.sourceProvider, 'oracles-elixir')
-  assert.equal(chovy.diagnostics?.sampleGames, 100)
-  assert.equal(chovy.diagnostics?.winRate, 0.68)
-  assert.deepEqual(chovy.diagnostics?.visionScore, { value: null, games: 0, missing: 100 })
+  assert.equal(chovy.diagnostics, undefined)
   assert.equal(chovy.individualResidual?.sourceProvider, 'oracles-elixir')
   assert.equal(chovy.individualResidual?.metricVersion, 'individual-residual-v0')
   assert.equal(chovy.individualResidual?.score, 113.4)
@@ -185,7 +180,7 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   assert.equal(chovy.individualResidual?.rolePowerRank, 1)
   assert.equal(chovy.individualResidual?.rankDelta, 0)
   assert.equal(chovy.individualResidual?.confidence, 96.5)
-  assert.equal(chovy.individualResidual?.controls.primaryLeague, 'LCK')
+  assert.equal(chovy.individualResidual?.controls, undefined)
   assert.deepEqual(chovy.recentMatches, [{
     date: '2026-06-26',
     event: 'LCK 2026 Rounds 1-2',
@@ -198,10 +193,6 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
     losses: 0,
     games: 1,
     bestOf: 1,
-    sourceProvider: 'oracles-elixir',
-    sourceFileName: 'oracle-fixture.csv',
-    sourceGameId: 'oe-player-proof',
-    sourceUrl: undefined,
   }])
   assert.equal(chovy.appearance?.latestTeamGames, 100)
   assert.equal(chovy.appearance?.roleGames, 100)
@@ -325,29 +316,26 @@ test('createPlayerDirectory groups recent player game rows into match series', (
     losses: match.losses,
     games: match.games,
     bestOf: match.bestOf,
-    sourceGameId: match.sourceGameId,
     sourceGameIds: match.sourceGameIds,
   })), [
     {
       opponent: 'WE',
       result: 'W',
       wins: 1,
-      losses: 0,
-      games: 1,
-      bestOf: 1,
-      sourceGameId: 'we-game-1',
-      sourceGameIds: undefined,
-    },
+    losses: 0,
+    games: 1,
+    bestOf: 1,
+    sourceGameIds: undefined,
+  },
     {
       opponent: 'TES',
       result: 'W',
       wins: 3,
-      losses: 0,
-      games: 3,
-      bestOf: 5,
-      sourceGameId: 'tes-game-3',
-      sourceGameIds: ['tes-game-1', 'tes-game-2', 'tes-game-3'],
-    },
+    losses: 0,
+    games: 3,
+    bestOf: 5,
+    sourceGameIds: undefined,
+  },
   ])
 })
 
@@ -654,7 +642,13 @@ test('event-scoped public standings keep same-day Bo-series siblings across sour
   })
 
   const { snapshots } = createStaticRankingSummaryData(data)
-  const shard = snapshots[snapshotKey({ season: 'All', event: 'LEC/2025 Season/Summer Playoffs', region: 'All' })]
+  const eventKey = snapshotKey({ season: 'All', event: 'LEC/2025 Season/Summer Playoffs', region: 'All' })
+  assert.equal(snapshots[eventKey], undefined)
+  const internalSnapshot = data.snapshots[eventKey]
+  assert.ok(internalSnapshot)
+  const shard = {
+    standings: internalSnapshot.standings.map((standing) => compactStanding(standing, { includeRatingUpdate: false })),
+  }
   const karmine = shard.standings.find((standing) => standing.team === 'Karmine Corp')
   const fnatic = shard.standings.find((standing) => standing.team === 'Fnatic')
 
@@ -1048,6 +1042,98 @@ test('createTeamHistory publishes match-level history points for multi-game seri
   assert.deepEqual(seriesPoint[3]?.sourceGameIds, ['hle-gen-game-1', 'hle-gen-game-2', 'hle-gen-game-3'])
 })
 
+test('createTeamHistory preserves the final atomic delta for model-correct series rows', () => {
+  const standing = {
+    team: 'Karmine Corp',
+    code: 'KC',
+    region: 'LEC',
+    history: [
+      {
+        date: '2026-05-30',
+        event: 'LEC 2026 Spring',
+        opponent: 'Natus Vincere',
+        rating: 1545,
+        baseRating: 1540,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: { updateUnit: 'series-atomic' },
+        rank: 2,
+        delta: 9,
+        tier: 'major-playoffs',
+        result: 'W',
+        source: { provider: 'oracles-elixir', gameId: 'kc-warmup-game', fileName: 'fixture.csv', bestOf: 1 },
+      },
+      ...[
+        { gameId: 'LOLTMNT05_195683', result: 'W', rating: 1554, delta: 0, updateUnit: 'series-member-no-team-update' },
+        { gameId: 'LOLTMNT05_196635', result: 'L', rating: 1554, delta: 0, updateUnit: 'series-member-no-team-update' },
+        { gameId: 'LOLTMNT05_196637', result: 'W', rating: 1554, delta: 0, updateUnit: 'series-member-no-team-update' },
+        { gameId: 'LOLTMNT05_195687', result: 'L', rating: 1554, delta: 0, updateUnit: 'series-member-no-team-update' },
+        { gameId: 'LOLTMNT05_196638', result: 'L', rating: 1546, delta: -9, updateUnit: 'series-atomic' },
+      ].map(({ gameId, result, rating, delta, updateUnit }) => ({
+        date: '2026-06-07',
+        event: 'LEC 2026 Spring',
+        opponent: 'G2 Esports',
+        rating,
+        baseRating: rating,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: gameId === 'LOLTMNT05_196638'
+          ? {
+              updateUnit,
+              teamStableDelta: -7.2,
+              leagueGameDelta: -0.7,
+              leaguePlacementDelta: 0.2,
+              momentumDelta: -0.9,
+              rosterPriorDelta: -1.1,
+              uncertaintyDelta: 0,
+              resultEvidence: -8.8,
+              neutralResultResidual: -0.43,
+              seriesStrengthSignal: -1.12,
+            }
+          : { updateUnit },
+        rank: 2,
+        delta,
+        tier: 'major-playoffs',
+        result,
+        source: { provider: 'oracles-elixir', gameId, fileName: 'fixture.csv', bestOf: 5 },
+      })),
+    ],
+  } as TeamStanding
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'key',
+    teams: {},
+    snapshots: {
+      key: {
+        standings: [standing],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const history = createTeamHistory(data)
+  const points = history.series[teamStandingKey(standing)].points
+  const seriesPoint = points[1]
+
+  assert.equal(points.length, 2)
+  assert.equal(seriesPoint[3]?.result, 'L')
+  assert.equal(seriesPoint[3]?.wins, 2)
+  assert.equal(seriesPoint[3]?.losses, 3)
+  assert.equal(seriesPoint[3]?.games, 5)
+  assert.equal(seriesPoint[3]?.bestOf, 5)
+  assert.equal(seriesPoint[3]?.delta, -9)
+  assert.deepEqual(seriesPoint[3]?.model, {
+    e: 0.43,
+  })
+  assert.deepEqual(seriesPoint[3]?.sourceGameIds, [
+    'LOLTMNT05_195683',
+    'LOLTMNT05_196635',
+    'LOLTMNT05_196637',
+    'LOLTMNT05_195687',
+    'LOLTMNT05_196638',
+  ])
+})
+
 test('createTeamHistory final point matches published standing rating', () => {
   const standing = {
     team: 'Bilibili Gaming',
@@ -1094,12 +1180,19 @@ test('createTeamHistory final point matches published standing rating', () => {
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
-  const latest = history.series[teamStandingKey(standing)].points.at(-1)
+  const points = history.series[teamStandingKey(standing)].points
+  const matchPoint = points.at(-2)
+  const latest = points.at(-1)
 
+  assert.equal(points.length, 3)
+  assert.equal(matchPoint?.[1], 1704)
+  assert.equal(matchPoint?.[3]?.opponent, 'Top Esports')
+  assert.equal(matchPoint?.[3]?.result, 'W')
   assert.equal(latest?.[1], 1699)
   assert.equal(latest?.[2], 1)
-  assert.equal(latest?.[3]?.opponent, 'Top Esports')
-  assert.equal(latest?.[3]?.result, 'W')
+  assert.equal(latest?.[3]?.kind, 'standing-adjustment')
+  assert.equal(latest?.[3]?.event, 'Published standing adjustment')
+  assert.equal(latest?.[3]?.delta, -5)
 })
 
 test('createTeamHistory skips unresolved tied match groups', () => {
@@ -1157,6 +1250,211 @@ test('createTeamHistory skips unresolved tied match groups', () => {
   assert.equal(points.some((point) => point[3]?.wins === point[3]?.losses), false)
 })
 
+test('createTeamHistoryArtifacts slices default and season scopes into indexed shards', () => {
+  const data = createStaticRankingData({
+    matches: sampleMatches,
+    teams,
+    rosters,
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+  const seasonKey = snapshotKey({ season: '2026', event: 'All', region: 'All' })
+  const history = createTeamHistoryArtifacts(data, {
+    teamHistoryUrlForKey: (key) => `/history/${key}.json`,
+  })
+  const defaultEntry = history.index.scopeIndex[data.defaultSnapshotKey]
+  const seasonEntry = history.index.scopeIndex[seasonKey]
+  const seasonShard = history.shards[seasonKey]
+
+  assert.equal(history.index.artifactKind, 'team-history-index')
+  assert.equal(history.index.defaultScopeKey, data.defaultSnapshotKey)
+  assert.ok(defaultEntry)
+  assert.ok(seasonEntry)
+  assert.ok(seasonShard)
+  assert.equal(seasonEntry.url, `/history/${seasonKey}.json`)
+  assert.deepEqual(seasonEntry.filter, { season: '2026', event: 'All', region: 'All' })
+  assert.deepEqual(seasonShard.filter, seasonEntry.filter)
+  assert.equal(seasonEntry.teamCount, seasonShard.teamCount)
+  assert.equal(seasonEntry.pointCount, seasonShard.pointCount)
+  assert.equal(history.shards[data.defaultSnapshotKey].pointCount, defaultEntry.pointCount)
+})
+
+test('season checkpoint scopes publish movement and companion history artifacts', () => {
+  const checkpointMatches: MatchRecord[] = [
+    checkpointMatch('lck-opener', '2026-01-17', 'LCK 2026 Spring', 'LCK', 'Gen.G', 'T1', 'Gen.G'),
+    checkpointMatch('fst-final', '2026-03-22', 'FST 2026', 'FST', 'Gen.G', 'G2 Esports', 'Gen.G'),
+    checkpointMatch('ewc-match', '2026-05-14', 'EWC 2026', 'EWC', 'G2 Esports', 'T1', 'T1'),
+    checkpointMatch('msi-final', '2026-06-28', 'MSI 2026', 'MSI', 'T1', 'Gen.G', 'T1'),
+    checkpointMatch('worlds-final', '2026-11-08', 'WLDs 2026', 'WLDs', 'T1', 'Bilibili Gaming', 'T1'),
+  ]
+  const data = createStaticRankingData({
+    matches: checkpointMatches,
+    teams,
+    rosters: {},
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+  const checkpoints = data.filterOptions.checkpoints?.['2026'] ?? []
+  const [split1, split2, split3] = checkpoints
+  assert.ok(split1)
+  assert.ok(split2)
+  assert.ok(split3)
+  const checkpointFilter = { season: '2026', event: 'All', region: 'All', checkpoint: split2.id } as const
+  const checkpointKey = snapshotKey(checkpointFilter)
+  const checkpointSnapshot = data.snapshots[checkpointKey]
+  const worldsSnapshot = data.snapshots[snapshotKey({ season: '2026', event: 'All', region: 'All', checkpoint: split3.id })]
+  const summary = createStaticRankingSummaryData(data)
+  const teamHistory = createTeamHistoryArtifacts(data)
+  const regionHistory = createRegionHistory(data)
+
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1', 'split-2', 'split-3'])
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.boundaryEvent), ['FST 2026', 'MSI 2026', 'WLDs 2026'])
+  assert.equal(checkpoints.some((checkpoint) => checkpoint.boundaryEvent === 'EWC 2026'), false)
+  assert.deepEqual(
+    checkpoints.map(({ startDate, endDate, previousEndDate }) => ({ startDate, endDate, previousEndDate })),
+    [
+      { startDate: '2026-01-01', endDate: '2026-03-22', previousEndDate: undefined },
+      { startDate: '2026-03-23', endDate: '2026-06-28', previousEndDate: '2026-03-22' },
+      { startDate: '2026-06-29', endDate: '2026-11-08', previousEndDate: '2026-06-28' },
+    ],
+  )
+  assert.ok(checkpointSnapshot)
+  assert.ok(worldsSnapshot)
+  assert.deepEqual(checkpointSnapshot.filter, checkpointFilter)
+  assert.equal(checkpointSnapshot.matchCount, 2)
+  assert.equal(worldsSnapshot.matchCount, 1)
+  assert.equal(checkpointSnapshot.events.map((event) => event.event).includes('EWC 2026'), true)
+  assert.equal(checkpointSnapshot.standings.some((standing) => standing.movement !== 0 || standing.delta !== 0), true)
+  assert.ok(summary.manifest.snapshotIndex[checkpointKey])
+  assert.ok(summary.snapshots[checkpointKey])
+  assert.ok(teamHistory.index.scopeIndex[checkpointKey])
+  assert.ok(teamHistory.shards[checkpointKey])
+  assert.ok(regionHistory.scopes[checkpointKey])
+})
+
+test('season checkpoint boundaries ignore domestic Road to MSI and Esports World Cup labels', () => {
+  const data = createStaticRankingData({
+    matches: [
+      checkpointMatch('fst-final', '2026-03-22', 'FST 2026', 'FST', 'Gen.G', 'G2 Esports', 'Gen.G'),
+      checkpointMatch('road-to-msi', '2026-06-13', 'LCK/2026 Season/Road to MSI', 'LCK', 'Gen.G', 'T1', 'Gen.G'),
+      checkpointMatch('ewc-full-name', '2026-07-05', 'Esports World Cup 2026', 'EWC', 'G2 Esports', 'T1', 'T1'),
+    ],
+    teams,
+    rosters: {},
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+  const checkpoints = data.filterOptions.checkpoints?.['2026'] ?? []
+
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1'])
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.boundaryEvent), ['FST 2026'])
+})
+
+function checkpointMatch(
+  id: string,
+  date: string,
+  event: string,
+  league: string,
+  teamA: string,
+  teamB: string,
+  winner: string,
+): MatchRecord {
+  return {
+    id,
+    sourceProvider: 'seed',
+    dataCompleteness: 'complete',
+    season: Number(date.slice(0, 4)),
+    date,
+    event,
+    phase: 'Bracket',
+    region: league === 'LCK' ? 'LCK' : 'International',
+    league,
+    patch: '26.1',
+    bestOf: league === 'LCK' ? 1 : 5,
+    tier: checkpointTier(league),
+    teamA,
+    teamB,
+    winner,
+    teamAKills: winner === teamA ? 20 : 12,
+    teamBKills: winner === teamB ? 20 : 12,
+    teamAGold: winner === teamA ? 70000 : 58000,
+    teamBGold: winner === teamB ? 70000 : 58000,
+  }
+}
+
+function checkpointTier(league: string): MatchRecord['tier'] {
+  if (league === 'LCK') return 'regional-regular'
+  if (league === 'EWC') return 'minor-international'
+  if (league === 'WLDs') return 'worlds-main'
+  return 'msi-bracket'
+}
+
+test('createRegionHistory publishes first-class region timelines from league-strength history', () => {
+  const data = createStaticRankingData({
+    matches: sampleMatches,
+    teams,
+    rosters,
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+  const seasonKey = snapshotKey({ season: '2026', event: 'All', region: 'All' })
+  const history = createRegionHistory(data)
+  const defaultScope = history.scopes[history.defaultScopeKey]
+  const seasonScope = history.scopes[seasonKey]
+  const sourcePoints = Object.values(defaultScope?.series ?? {})
+    .flatMap((series) => series.points)
+    .filter((point) => point[3]?.source === 'league-strength-history')
+
+  assert.equal(history.artifactKind, 'region-history')
+  assert.equal(history.defaultScopeKey, data.defaultSnapshotKey)
+  assert.ok(defaultScope)
+  assert.ok(seasonScope)
+  assert.equal(defaultScope.regionCount, Object.keys(defaultScope.series).length)
+  assert.ok(defaultScope.pointCount > 0)
+  assert.ok(sourcePoints.length > 0)
+  assert.equal(sourcePoints.some((point) => (point[3]?.opponentRegions?.length ?? 0) > 0), true)
+})
+
+test('createRegionHistory context only describes leagues used for region power scores', () => {
+  const filter = { season: 'All', event: 'All', region: 'All' } as const
+  const key = snapshotKey(filter)
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-gpr-test', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: key,
+    snapshots: {
+      [key]: {
+        filter,
+        regions: [
+          {
+            region: 'LEC',
+            rank: 1,
+            score: 1460,
+            topTeamRating: 1540,
+            teamCount: 1,
+            ecosystemTeamCount: 2,
+            leagueCount: 1,
+            ecosystemLeagueCount: 2,
+            flagshipLeagues: ['LEC'],
+            connectivity: 0.8,
+            internationalWins: 1,
+            internationalLosses: 0,
+            flagshipLeague: 'LEC',
+            tier: 'tier-two',
+            topTeams: [{ team: 'G2 Esports', code: 'G2', rating: 1540, rank: 1 }],
+          },
+        ],
+        leagueHistory: [
+          leagueHistoryPoint({ league: 'LEC', region: 'LEC', opponentLeague: 'LCK', opponentRegion: 'LCK', score: 1460 }),
+          leagueHistoryPoint({ league: 'PRM', region: 'LEC', opponentLeague: 'LCK', opponentRegion: 'LCK', score: 1390 }),
+        ],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const history = createRegionHistory(data)
+  const context = history.scopes[key]?.series.LEC?.points.find((point) => point[3]?.source === 'league-strength-history')?.[3]
+
+  assert.deepEqual(context?.leagues, ['LEC'])
+  assert.equal(context?.leagues?.includes('PRM'), false)
+})
+
 test('generated snapshots carry model and source provenance', () => {
   const data = createStaticRankingData({
     matches: sampleMatches,
@@ -1167,7 +1465,7 @@ test('generated snapshots carry model and source provenance', () => {
 
   assert.equal(data.dataMode, 'seeded-sample')
   assert.equal(data.artifactKind, 'full-ranking-artifact')
-  assert.equal(data.schemaVersion, 14)
+  assert.equal(data.schemaVersion, PUBLIC_ARTIFACT_SCHEMA_VERSION)
   assert.equal(data.coverage.seededSample, true)
   assert.equal(data.coverage.sourceProviders.includes('seed'), true)
   assert.equal(data.dataQuality.matchCount, sampleMatches.length)
@@ -1176,7 +1474,7 @@ test('generated snapshots carry model and source provenance', () => {
   assert.equal(typeof data.dataQuality.rosterCoverage.missingRosterSides, 'number')
   assert.equal(Array.isArray(data.dataQuality.identityCoverage.unresolvedLeagueSummaries), true)
   assert.equal(data.sources.some((source) => source.kind === 'seed'), true)
-  assert.match(data.model.version, /^transparent-gpr-v/)
+  assert.equal(data.model.version, 'transparent-gpr-v0.0.0')
   assert.match(data.model.configHash, /^fnv1a-/)
   assert.equal(data.snapshots[data.defaultSnapshotKey].artifactKind, 'full-ranking-snapshot')
   assert.equal(data.snapshots[data.defaultSnapshotKey].modelVersion, data.model.version)
@@ -1214,6 +1512,68 @@ test('event filters preserve the global rating scale instead of rebuilding mini-
   assert.equal(eventSnapshot.modelVersion, data.model.version)
 })
 
+test('scoped snapshots carry only filter-relevant league strength history', () => {
+  const scopedTeams: Record<string, TeamProfile> = {
+    'Gen.G': { name: 'Gen.G', code: 'GEN', region: 'LCK', league: 'LCK' },
+    T1: { name: 'T1', code: 'T1', region: 'LCK', league: 'LCK' },
+    'G2 Esports': { name: 'G2 Esports', code: 'G2', region: 'LEC', league: 'LEC' },
+    'Bilibili Gaming': { name: 'Bilibili Gaming', code: 'BLG', region: 'LPL', league: 'LPL' },
+  }
+  const internationalMatch = (
+    id: string,
+    date: string,
+    event: string,
+    teamA: string,
+    teamB: string,
+    winner: string,
+    tier: MatchRecord['tier'] = 'msi-bracket',
+  ): MatchRecord => ({
+    id,
+    sourceProvider: 'seed',
+    dataCompleteness: 'complete',
+    date,
+    season: Number(date.slice(0, 4)),
+    event,
+    phase: 'Bracket',
+    region: 'International',
+    league: event,
+    teamAHomeLeague: scopedTeams[teamA]?.league,
+    teamBHomeLeague: scopedTeams[teamB]?.league,
+    teamARegion: scopedTeams[teamA]?.region,
+    teamBRegion: scopedTeams[teamB]?.region,
+    patch: '26.1',
+    bestOf: 1,
+    tier,
+    teamA,
+    teamB,
+    winner,
+    teamAKills: winner === teamA ? 20 : 12,
+    teamBKills: winner === teamB ? 20 : 12,
+    teamAGold: winner === teamA ? 70000 : 58000,
+    teamBGold: winner === teamB ? 70000 : 58000,
+  })
+  const data = createStaticRankingData({
+    matches: [
+      internationalMatch('msi-lck-lec', '2026-05-01', 'MSI 2026', 'Gen.G', 'G2 Esports', 'Gen.G'),
+      internationalMatch('worlds-lck-lpl', '2026-10-01', 'Worlds 2026', 'T1', 'Bilibili Gaming', 'Bilibili Gaming', 'worlds-main'),
+    ],
+    teams: scopedTeams,
+    rosters: {},
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+  const globalSnapshot = data.snapshots[data.defaultSnapshotKey]
+  const eventSnapshot = data.snapshots[snapshotKey({ season: 'All', event: 'MSI 2026', region: 'All' })]
+  const lckSnapshot = data.snapshots[snapshotKey({ season: 'All', event: 'All', region: 'LCK' })]
+
+  assert.ok(globalSnapshot.leagueHistory.length > eventSnapshot.leagueHistory.length)
+  assert.ok(eventSnapshot.leagueHistory.length > 0)
+  assert.equal(eventSnapshot.leagueHistory.every((point) => point.event === 'MSI 2026'), true)
+  assert.equal(eventSnapshot.leagueHistory.some((point) => point.event === 'Worlds 2026'), false)
+  assert.ok(lckSnapshot.leagueHistory.length > 0)
+  assert.equal(lckSnapshot.leagueHistory.every((point) => point.region === 'LCK'), true)
+  assert.equal(lckSnapshot.leagueHistory.some((point) => point.region === 'LEC' || point.region === 'LPL'), false)
+})
+
 test('region filters list teams from that region instead of their opponents', () => {
   const data = createStaticRankingData({
     matches: sampleMatches,
@@ -1230,13 +1590,15 @@ test('region filters list teams from that region instead of their opponents', ()
   assert.equal(lecSnapshot.standings.every((standing) => standing.region === 'LEC'), true)
 })
 
-test('region filters fold APAC feeder regions under current LCP scope', () => {
+test('published rating universe excludes APAC feeder league teams from rating scopes', () => {
   const apacTeams: Record<string, TeamProfile> = {
     'CTBC Flying Oyster': { name: 'CTBC Flying Oyster', code: 'CFO', region: 'LCP', league: 'LCP' },
+    'Team Secret Whales': { name: 'Team Secret Whales', code: 'TSW', region: 'LCP', league: 'LCP' },
     'PSG Talon': { name: 'PSG Talon', code: 'PSG', region: 'PCS', league: 'PCS' },
     'GAM Esports': { name: 'GAM Esports', code: 'GAM', region: 'VCS', league: 'VCS' },
   }
   const matches: MatchRecord[] = [
+    apacRegionMatch('apac-lcp-lcp', 'LCP', 'LCP', 'LCP', 'CTBC Flying Oyster', 'Team Secret Whales', 'CTBC Flying Oyster'),
     apacRegionMatch('apac-lcp-pcs', 'LCP', 'LCP', 'PCS', 'CTBC Flying Oyster', 'PSG Talon', 'CTBC Flying Oyster'),
     apacRegionMatch('apac-vcs-pcs', 'VCS', 'VCS', 'PCS', 'GAM Esports', 'PSG Talon', 'GAM Esports'),
   ]
@@ -1253,10 +1615,11 @@ test('region filters fold APAC feeder regions under current LCP scope', () => {
   assert.equal(data.filterOptions.regions.includes('VCS'), false)
   assert.equal(data.filterOptions.regions.includes('LCP'), true)
   assert.equal(data.snapshots[snapshotKey({ season: 'All', event: 'All', region: 'PCS' })], undefined)
+  assert.equal(data.coverage.matchCount, 1)
   assert.ok(lcpSnapshot)
   assert.deepEqual(
     new Set(lcpSnapshot.standings.map((standing) => standing.team)),
-    new Set(['CTBC Flying Oyster', 'PSG Talon', 'GAM Esports']),
+    new Set(['CTBC Flying Oyster', 'Team Secret Whales']),
   )
   assert.equal(lcpSnapshot.regions.some((region) => region.region === 'PCS' || region.region === 'VCS'), false)
   assert.equal(lcpSnapshot.regions.some((region) => region.region === 'LCP'), true)
@@ -1308,10 +1671,36 @@ test('region filters use dated side regions instead of current global team ident
 test('region filters do not assign unknown competition-only teams from event region alone', () => {
   const competitionTeams: Record<string, TeamProfile> = {
     'G2 Esports': { name: 'G2 Esports', code: 'G2', region: 'LEC', league: 'LEC' },
+    Fnatic: { name: 'Fnatic', code: 'FNC', region: 'LEC', league: 'LEC' },
     Witchcraft: { name: 'Witchcraft', code: 'WITC', region: 'International', league: 'Unknown' },
   }
   const data = createStaticRankingData({
     matches: [
+      {
+        id: 'lec-known-side',
+        sourceProvider: 'seed',
+        dataCompleteness: 'complete',
+        date: '2026-01-01',
+        season: 2026,
+        event: 'LEC 2026 Winter',
+        phase: 'Regular season',
+        region: 'LEC',
+        league: 'LEC',
+        teamAHomeLeague: 'LEC',
+        teamBHomeLeague: 'LEC',
+        teamARegion: 'LEC',
+        teamBRegion: 'LEC',
+        patch: '26.1',
+        bestOf: 1,
+        tier: 'regional-regular',
+        teamA: 'G2 Esports',
+        teamB: 'Fnatic',
+        winner: 'G2 Esports',
+        teamAKills: 18,
+        teamBKills: 10,
+        teamAGold: 65000,
+        teamBGold: 56000,
+      },
       {
         id: 'em-unknown-side',
         sourceProvider: 'seed',
@@ -1345,7 +1734,7 @@ test('region filters do not assign unknown competition-only teams from event reg
   assert.equal(lecSnapshot.standings.every((standing) => standing.region === 'LEC'), true)
 })
 
-test('season filters publish season-end standings instead of current global standings', () => {
+test('season filters publish calendar-aligned season-end standings instead of current global standings', () => {
   const seasonTeams: Record<string, TeamProfile> = {
     Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },
     Beta: { name: 'Beta', code: 'BET', region: 'LCK', league: 'LCK' },
@@ -1401,13 +1790,12 @@ test('season filters publish season-end standings instead of current global stan
   assert.equal(season2025.standings[0]?.team, 'Alpha')
   assert.equal(season2025.standings.some((standing) => standing.recentEvents.some((event) => event.includes('2026'))), false)
   assert.notEqual(seasonAlpha.rating, globalAlpha.rating)
-  assert.equal(season2026.matchCount, 7)
-  assert.equal(season2026Alpha.wins, 1)
+  assert.equal(season2026.matchCount, 6)
+  assert.equal(season2026Alpha.wins, 0)
   assert.equal(season2026Alpha.losses, 6)
   assert.equal(season2026Beta.wins, 6)
-  assert.equal(season2026Beta.losses, 1)
+  assert.equal(season2026Beta.losses, 0)
   assert.deepEqual(season2026Beta.history.map((point) => point.date), [
-    '2025-12-20',
     '2026-01-01',
     '2026-01-08',
     '2026-01-15',
@@ -1415,12 +1803,19 @@ test('season filters publish season-end standings instead of current global stan
     '2026-01-29',
     '2026-02-05',
   ])
+  assert.equal(season2026Beta.history.some((point) => point.event.includes('2026') && point.date.startsWith('2025-')), false)
   assert.notEqual(season2026Beta.rating, cold2026Beta.rating)
 
   const history = createTeamHistory(data)
-  const scoped2026 = history.scopedSeries?.[snapshotKey({ season: '2026', event: 'All', region: 'All' })]
+  const scoped2026 = history.scopeIndex?.[snapshotKey({ season: '2026', event: 'All', region: 'All' })]
+  const betaSeries = history.series[teamStandingKey(season2026Beta)]
   assert.ok(scoped2026)
-  assert.deepEqual(scoped2026[teamStandingKey(season2026Beta)]?.points.map((point) => point[0]), [
+  assert.ok(scoped2026.includes(teamStandingKey(season2026Beta)))
+  assert.deepEqual(betaSeries?.points.map((point) => point[0]), [
+    '2025-01-01',
+    '2025-01-08',
+    '2025-01-15',
+    '2025-01-22',
     '2025-12-20',
     '2026-01-01',
     '2026-01-08',
@@ -1429,8 +1824,8 @@ test('season filters publish season-end standings instead of current global stan
     '2026-01-29',
     '2026-02-05',
   ])
-  assert.equal(scoped2026[teamStandingKey(season2026Beta)]?.points.at(-1)?.[3]?.opponent, 'Alpha')
-  assert.equal(scoped2026[teamStandingKey(season2026Beta)]?.points.at(-1)?.[3]?.result, 'W')
+  assert.equal(betaSeries?.points.at(-1)?.[3]?.opponent, 'Alpha')
+  assert.equal(betaSeries?.points.at(-1)?.[3]?.result, 'W')
 })
 
 test('season scoped standings use league observed inside that season', () => {
@@ -1439,7 +1834,7 @@ test('season scoped standings use league observed inside that season', () => {
     Opponent: { name: 'Opponent', code: 'OPP', region: 'LEC', league: 'LEC' },
   }
   const matches = [
-    scopedLeagueMatch('rats-2025-nlc', '2025-01-01', 2025, 'NLC', 'Rats'),
+    scopedLeagueMatch('rats-2025-lcs', '2025-01-01', 2025, 'LCS', 'Rats'),
     scopedLeagueMatch('rats-2026-lec', '2026-01-01', 2026, 'LEC', 'Opponent'),
   ]
 
@@ -1456,11 +1851,9 @@ test('season scoped standings use league observed inside that season', () => {
 
   assert.ok(rats2025)
   assert.ok(rats2026)
-  assert.equal(rats2025.league, 'NLC')
-  assert.equal(rats2025.region, 'LEC')
-  assert.equal(rats2025.ratingComponents.leagueAnchor, 1300)
-  assert.equal(rats2025.eligibility.eligible, false)
-  assert.equal(rats2025.eligibility.reasons.includes('unanchored-league'), true)
+  assert.equal(rats2025.league, 'LCS')
+  assert.equal(rats2025.region, 'LCS')
+  assert.equal(rats2025.eligibility.reasons.includes('unanchored-league'), false)
   assert.equal(rats2026.league, 'LEC')
 })
 
@@ -1495,36 +1888,38 @@ test('scheduled public summaries omit standing histories and seed-source rows', 
   const { manifest, snapshots } = createStaticRankingSummaryData(data)
   const publicArtifact = createStaticRankingSummaryData(data, {
     fullSnapshotUrl: '/data/ranking-snapshot.full.json',
-    playerDirectoryUrl: '/data/players.json',
-    teamHistoryUrl: '/data/team-history.json',
+    playerDirectoryUrl: '/data/entities/players.json',
+    teamHistoryIndexUrl: '/data/history/team-series/index.json',
+    regionHistoryUrl: '/data/history/region-series.json',
   })
   const publicArtifactManifest = publicArtifact.manifest
-  const defaultSnapshot = manifest.snapshots[manifest.defaultSnapshotKey]
   const defaultShard = snapshots[manifest.defaultSnapshotKey]
-  const firstStanding = defaultSnapshot?.standings[0]
+  const firstStanding = defaultShard?.standings[0]
   const firstShardStanding = defaultShard?.standings[0]
 
   assert.equal(data.sources.some((source) => source.kind === 'seed'), false)
   assert.equal(manifest.artifactKind, 'public-ranking-manifest')
   assert.equal(Object.prototype.hasOwnProperty.call(manifest, 'fullSnapshotUrl'), false)
   assert.equal(publicArtifactManifest.fullSnapshotUrl, '/data/ranking-snapshot.full.json')
-  assert.equal(publicArtifactManifest.playerDirectoryUrl, '/data/players.json')
-  assert.equal(publicArtifactManifest.teamHistoryUrl, '/data/team-history.json')
-  assert.ok(defaultSnapshot)
-  assert.equal(defaultSnapshot.artifactKind, 'public-snapshot-shard')
+  assert.equal(publicArtifactManifest.playerDirectoryUrl, '/data/entities/players.json')
+  assert.equal(publicArtifactManifest.teamHistoryIndexUrl, '/data/history/team-series/index.json')
+  assert.equal(Object.prototype.hasOwnProperty.call(publicArtifactManifest, 'teamHistoryUrl'), false)
+  assert.equal(publicArtifactManifest.regionHistoryUrl, '/data/history/region-series.json')
+  assert.equal(manifest.snapshots, undefined)
+  assert.ok(defaultShard)
+  assert.equal(defaultShard.artifactKind, 'public-snapshot-shard')
   assert.ok(firstStanding)
   assert.equal(typeof firstStanding.rosterBasis, 'string')
   assert.equal(typeof firstStanding.uncertainty, 'number')
   assert.equal(Array.isArray(firstStanding.form), true)
   assert.equal(Array.isArray(firstStanding.recentMatches), true)
-  assert.equal(firstStanding.recentMatches.length, 0)
+  assert.equal(firstStanding.recentMatches.length > 0, true)
   assert.equal(typeof firstStanding.leagueScore, 'number')
   assert.equal(typeof firstStanding.leagueAdjustment, 'number')
   assert.equal(typeof firstStanding.ratingComponents?.leagueAnchor, 'number')
   assert.equal(typeof firstStanding.ratingComponents?.teamStableOffset, 'number')
   assert.equal(typeof firstStanding.ratingComponents?.momentum, 'number')
-  assert.equal(typeof firstStanding.ratingUpdate?.teamStableDelta, 'number')
-  assert.equal(typeof firstStanding.ratingUpdate?.leaguePlacementDelta, 'number')
+  assert.equal(firstStanding.ratingUpdate, undefined)
   assert.equal(typeof firstStanding.eligibility?.eligible, 'boolean')
   assert.ok(firstShardStanding)
   assert.equal(firstShardStanding.recentMatches.length > 0, true)
@@ -1532,7 +1927,36 @@ test('scheduled public summaries omit standing histories and seed-source rows', 
   assert.equal(typeof firstShardStanding.recentMatches[0]?.event, 'string')
   assert.equal(typeof firstShardStanding.recentMatches[0]?.date, 'string')
   assert.equal(manifest.walkForward.metrics.target, 'published-game')
-  assert.equal(defaultSnapshot.standings.some((standing) => 'history' in standing), false)
+  assert.equal(defaultShard.standings.some((standing) => 'history' in standing), false)
+})
+
+test('standing eligibility uses match-level history instead of raw game rows', () => {
+  const matches = Array.from({ length: 16 }).flatMap((_, index) => [
+    seriesEligibilityMatch(index, 1),
+    seriesEligibilityMatch(index, 2),
+  ])
+  const data = createStaticRankingData({
+    matches,
+    teams: sourcedTeams,
+    rosters: {},
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    dataMode: 'scheduled-public-data',
+    source: "Oracle's Elixir fixture",
+  })
+  const { manifest, snapshots } = createStaticRankingSummaryData(data)
+  const fullAlpha = data.snapshots[data.defaultSnapshotKey].standings.find((standing) => standing.team === 'Alpha')
+  const publicAlpha = snapshots[manifest.defaultSnapshotKey]?.standings.find((standing) => standing.team === 'Alpha')
+
+  assert.ok(fullAlpha)
+  assert.equal(fullAlpha.wins, 32)
+  assert.equal(fullAlpha.eligibility.totalGames, 16)
+  assert.equal(fullAlpha.eligibility.eligible, false)
+  assert.equal(fullAlpha.eligibility.reasons.includes('low-total-volume'), true)
+  assert.ok(publicAlpha)
+  assert.equal(publicAlpha.wins, 16)
+  assert.equal(publicAlpha.losses, 0)
+  assert.equal(publicAlpha.eligibility.eligible, false)
+  assert.equal(publicAlpha.eligibility.reasons.includes('low-total-volume'), true)
 })
 
 test('scheduled public snapshots publish sourced player rating proof without shipping summary players', () => {
@@ -1546,7 +1970,8 @@ test('scheduled public snapshots publish sourced player rating proof without shi
   })
   const { manifest } = createStaticRankingSummaryData(data)
   const fullDefaultSnapshot = data.snapshots[data.defaultSnapshotKey]
-  const summaryDefaultSnapshot = manifest.snapshots[manifest.defaultSnapshotKey]
+  const { snapshots } = createStaticRankingSummaryData(data)
+  const summaryDefaultSnapshot = snapshots[manifest.defaultSnapshotKey]
   const proof = manifest.playerData.ratingProof
   const playerDirectory = createPlayerDirectory(data)
   const seasonPlayers = playerDirectory.scopedPlayers?.[snapshotKey({ season: '2026', event: 'All', region: 'All' })] ?? []
@@ -1624,6 +2049,39 @@ function sourcedMatchFixture(): MatchRecord {
   }
 }
 
+function seriesEligibilityMatch(seriesIndex: number, gameIndex: 1 | 2): MatchRecord {
+  const date = `2026-06-${String(seriesIndex + 1).padStart(2, '0')}`
+  return {
+    id: `series-eligibility-${seriesIndex}-${gameIndex}`,
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: `oe-series-eligibility-${seriesIndex}-${gameIndex}`,
+    sourceFileName: 'oracle-fixture.csv',
+    dataCompleteness: 'complete',
+    date,
+    season: 2026,
+    event: 'LCK 2026 Spring',
+    phase: 'Regular season',
+    region: 'LCK',
+    league: 'LCK',
+    teamAHomeLeague: 'LCK',
+    teamBHomeLeague: 'LCK',
+    teamARegion: 'LCK',
+    teamBRegion: 'LCK',
+    teamASide: 'blue',
+    teamBSide: 'red',
+    patch: '26.1',
+    bestOf: 3,
+    tier: 'regional-regular',
+    teamA: 'Alpha',
+    teamB: 'Beta',
+    winner: 'Alpha',
+    teamAKills: 20,
+    teamBKills: 12,
+    teamAGold: 65000,
+    teamBGold: 59000,
+  }
+}
+
 function seasonFilterMatch(id: string, date: string, winner: 'Alpha' | 'Beta', season = Number(date.slice(0, 4))): MatchRecord {
   return {
     id,
@@ -1659,6 +2117,7 @@ function scopedLeagueMatch(
   homeLeague: string,
   winner: 'Rats' | 'Opponent',
 ): MatchRecord {
+  const region = homeLeague === 'LCS' ? 'LCS' : 'LEC'
   return {
     id,
     sourceProvider: 'seed',
@@ -1667,12 +2126,12 @@ function scopedLeagueMatch(
     season,
     event: `${homeLeague} ${season} Spring`,
     phase: 'Regular season',
-    region: 'LEC',
+    region,
     league: homeLeague,
     teamAHomeLeague: homeLeague,
     teamBHomeLeague: homeLeague,
-    teamARegion: 'LEC',
-    teamBRegion: 'LEC',
+    teamARegion: region,
+    teamBRegion: region,
     patch: '26.1',
     bestOf: 1,
     tier: 'regional-regular',
@@ -1761,6 +2220,25 @@ function apacRegionMatch(
     teamBKills: winner === teamB ? 18 : 10,
     teamAGold: winner === teamA ? 65000 : 56000,
     teamBGold: winner === teamB ? 65000 : 56000,
+  }
+}
+
+function leagueHistoryPoint(overrides: Partial<LeagueStrengthHistoryPoint> & Pick<LeagueStrengthHistoryPoint, 'league' | 'region' | 'opponentLeague' | 'opponentRegion'>): LeagueStrengthHistoryPoint {
+  return {
+    date: '2026-01-01',
+    event: 'Example International',
+    tier: 'minor-international',
+    result: 'W',
+    score: 1500,
+    delta: 1,
+    wins: 1,
+    losses: 0,
+    expectedWins: 0.5,
+    winsOverExpected: 0.5,
+    opponentAdjustedWinRate: 0.75,
+    averageOpponentRating: 1500,
+    internationalMatches: 1,
+    ...overrides,
   }
 }
 

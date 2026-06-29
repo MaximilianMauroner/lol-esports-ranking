@@ -329,6 +329,10 @@ table.ranking-table tbody tr.is-picked {
   display: none;
 }
 
+.player-mobile-context {
+  display: none;
+}
+
 .role-pill,
 .region-pill {
   display: inline-block;
@@ -730,6 +734,17 @@ table.ranking-table tbody tr.is-picked {
   }
 }
 
+@media (max-width: 360px) {
+  .player-filter-roles {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .player-filter-roles [data-slot="button"] {
+    flex: 1 1 calc(33.333% - 8px);
+  }
+}
+
 .pager {
   --pager-control-h: 36px;
 
@@ -771,7 +786,15 @@ table.ranking-table tbody tr.is-picked {
   }
 
   table.ranking-table.player-grid thead {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   table.ranking-table.player-grid tbody {
@@ -881,6 +904,14 @@ table.ranking-table tbody tr.is-picked {
 
   table.ranking-table.player-grid .player-mobile-team {
     display: inline;
+  }
+
+  table.ranking-table.player-grid .player-mobile-context {
+    display: block;
+    overflow: hidden;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   table.ranking-table.player-grid .player-form-inline {
@@ -1212,7 +1243,15 @@ table.ranking-table tbody tr.is-picked {
 }
 
 .chart--recharts {
+  width: 100%;
+  min-width: 0;
   min-height: 220px;
+  aspect-ratio: auto;
+  overflow: hidden;
+}
+
+.chart--recharts svg {
+  overflow: hidden;
 }
 
 .chart__grid {
@@ -1291,6 +1330,103 @@ table.ranking-table tbody tr.is-picked {
 .chart__tooltip {
   position: static;
   transform: none;
+}
+
+.chart__tooltip--rich {
+  min-width: 260px;
+  max-width: min(420px, 86vw);
+  white-space: normal;
+  gap: 8px;
+}
+
+.chart__tooltip-list {
+  display: grid;
+  gap: 8px;
+}
+
+.chart__tooltip-row {
+  display: grid;
+  gap: 4px;
+}
+
+.chart__tooltip-main {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(70px, auto);
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.chart__tooltip-main em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: normal;
+}
+
+.chart__tooltip-row small {
+  margin-left: 20px;
+  color: var(--faint);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.chart__tooltip-value {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+}
+
+.chart__tooltip-net {
+  color: var(--faint);
+  font-size: 0.66rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+.chart__tooltip-matches,
+.chart__tooltip-model {
+  display: grid;
+  gap: 5px;
+  margin-left: 20px;
+}
+
+.chart__tooltip-matches {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.chart__tooltip-matches div {
+  overflow-wrap: anywhere;
+}
+
+.chart__tooltip-expectation {
+  color: var(--faint);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.chart__tooltip-attribution {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chart__tooltip .chart__tooltip-chip {
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  width: fit-content;
+  gap: 0;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in oklch, var(--line-strong), transparent 20%);
+  border-radius: 4px;
+  color: var(--muted);
+  background: color-mix(in oklch, var(--surface), transparent 55%);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .chart__readout b,

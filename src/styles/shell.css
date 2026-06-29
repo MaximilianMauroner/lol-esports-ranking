@@ -33,7 +33,7 @@
   z-index: 50;
   min-height: var(--app-nav-h);
   display: grid;
-  grid-template-columns: minmax(158px, max-content) minmax(0, 1fr) minmax(0, max-content);
+  grid-template-columns: minmax(158px, max-content) minmax(0, 1fr);
   align-items: center;
   gap: clamp(10px, 1.6vw, 22px);
   padding: 10px var(--page-x);
@@ -55,6 +55,7 @@
   cursor: pointer;
   font: inherit;
   text-align: left;
+  text-decoration: none;
   transition: background 0.16s ease;
 }
 
@@ -128,15 +129,17 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  flex: 0 0 auto;
-  max-width: min(220px, 100%);
+  flex: 1 1 132px;
+  max-width: min(186px, 100%);
   min-height: 44px;
+  min-width: 0;
   padding: 7px 10px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--muted);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
@@ -181,36 +184,6 @@
 
 .rail__mode.is-active small {
   color: var(--accent-strong);
-}
-
-.rail__foot {
-  margin-left: auto;
-  padding: 0;
-  font-size: 0.74rem;
-  color: var(--faint);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
-  min-width: 0;
-  max-width: min(44vw, 640px);
-}
-
-.rail__foot div {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.rail__foot b {
-  color: var(--muted);
-  font-weight: 600;
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .statusdot {
@@ -280,6 +253,37 @@
   overflow-wrap: anywhere;
 }
 
+.topbar__meta {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 18px;
+  max-width: min(100%, 680px);
+  min-width: 0;
+  padding: 8px 0 1px;
+  color: var(--faint);
+  font-size: 0.74rem;
+}
+
+.topbar__meta div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.topbar__meta b {
+  max-width: 190px;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .season-tabs {
   display: flex;
   align-items: stretch;
@@ -333,6 +337,101 @@
   height: 4px;
   background: var(--accent);
   border-radius: 999px 999px 0 0;
+}
+
+.checkpoint-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 8px var(--page-x);
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.checkpoint-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.checkpoint-tabs__button {
+  flex: 0 0 auto;
+  min-width: 86px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.checkpoint-tabs__button > span,
+.checkpoint-tabs__button > small {
+  display: block;
+  line-height: 1.1;
+}
+
+.checkpoint-tabs__button > span {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.checkpoint-tabs__button > small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 560;
+}
+
+.checkpoint-tabs__button em {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 7px;
+  padding: 1px 5px 2px;
+  border-radius: 999px;
+  background: var(--win-soft);
+  color: var(--win);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 760;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+.checkpoint-tabs__button:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.checkpoint-tabs__button.is-active {
+  border-color: color-mix(in oklch, var(--accent), white 12%);
+  background: color-mix(in oklch, var(--accent), transparent 86%);
+  color: var(--text-strong);
+}
+
+.checkpoint-tabs__button.is-ongoing {
+  border-color: color-mix(in oklch, var(--win), var(--line) 55%);
+}
+
+.checkpoint-tabs__button--future {
+  display: grid;
+  place-content: center;
+  cursor: default;
+  border-style: dashed;
+  background: color-mix(in oklch, var(--surface-2), transparent 34%);
+  color: var(--faint);
+}
+
+.checkpoint-tabs__button--future:hover {
+  border-color: var(--line);
+  color: var(--faint);
+}
+
+.checkpoint-tabs__button--future > small {
+  color: var(--faint);
 }
 
 /* ---------------- View layout ---------------- */

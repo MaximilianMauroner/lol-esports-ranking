@@ -1,34 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, BarChart3, Globe2, RefreshCw, UserRound, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { Activity, AlertTriangle, BarChart3, FileText, Globe2, RefreshCw, Swords, Trophy, Users } from 'lucide-react'
 import type {
   CompactPlayer,
   PublicPlayerDirectory as PlayerDirectory,
-  PublicRankingManifest as RankingData,
+  SnapshotCheckpointOption,
   SnapshotFilter,
-  PublicTeamHistoryDirectory as TeamHistoryDirectory,
   PublicTeamStanding as RankingSummaryStanding,
 } from './lib/publicArtifacts/schema'
-import {
-  parsePublicPlayerDirectory,
-  parsePublicRankingManifest,
-  parsePublicRankingShard,
-  parsePublicTeamHistory,
-  snapshotKey as publicSnapshotKey,
-} from './lib/publicArtifacts/schema'
-import {
-  resolvePublicSnapshotState,
-  validatePublicSnapshotShard,
-  type PublicSnapshotCacheEntry,
-  type PublicSnapshotState,
-} from './lib/publicArtifacts/resolver'
+import { snapshotKey } from './lib/publicArtifacts/schema'
+import type { PublicSnapshotState } from './lib/publicArtifacts/resolver'
 import {
   formatDate,
   formatNumber,
+  formatSigned,
   teamKey,
 } from './lib/display'
+import { deriveRankingFlair, type RankingFlair, type RankingMovementPick } from './lib/rankingFlair'
 import type { RegionStrength } from './lib/regionStrength'
 import { CompareDrawer } from './components/CompareDrawer'
 import { CompareProfileChart, RegionCompareAnalysis, TeamCompareAnalysis } from './components/CompareAnalysis'
+import { RankingShowcase, type RankingShowcaseProps } from './components/RankingShowcase'
 import {
   PLAYER_COMPARE_ROWS,
   PLAYER_PROFILE_METRICS,
@@ -42,229 +33,133 @@ import {
 import { RegionsView } from './views/RegionsView'
 import { TeamsView } from './views/TeamsView'
 import { PlayersView } from './views/PlayersView'
+import { ArenaView } from './views/ArenaView'
+import { WorldsLabView } from './views/WorldsLabView'
+import { SplitRaceView } from './views/SplitRaceView'
+import { ReceiptsView } from './views/ReceiptsView'
 import { RegionBadge } from './components/ui'
 import { Button } from './components/ui/button'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
 import { Skeleton } from './components/ui/skeleton'
 import { cn } from './lib/utils'
+import {
+  checkpointFromScope,
+  checkpointOptionsForSeason,
+  checkpointScope,
+  scopeLabel,
+  seasonFromScope,
+  usePublicArtifacts,
+} from './hooks/usePublicArtifacts'
 
-type Mode = 'regions' | 'teams' | 'players'
+type ToolMode = 'rankings' | 'arena' | 'worlds-lab' | 'split-race' | 'receipts'
+type LegacyMode = 'regions' | 'players'
+type Mode = ToolMode | LegacyMode
 
-type LoadState =
-  | { status: 'loading' }
-  | { status: 'ready'; data: RankingData }
-  | { status: 'error'; message: string }
-
-const DATA_URL = import.meta.env.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
-const PLAYERS_URL = import.meta.env.VITE_PLAYER_DATA_URL || '/data/players.json'
-const TEAM_HISTORY_URL = import.meta.env.VITE_TEAM_HISTORY_URL || '/data/team-history.json'
 const COMPARE_LIMIT = 4
+const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 
-const MODES: { id: Mode; label: string; tagline: string; icon: typeof Globe2 }[] = [
-  { id: 'regions', label: 'Regions', tagline: 'Power by league', icon: Globe2 },
-  { id: 'teams', label: 'Teams', tagline: 'Power scores & matchups', icon: Users },
-  { id: 'players', label: 'Players', tagline: 'Role-rated index', icon: UserRound },
+const MODES: { id: Mode; label: string; tagline: string; icon: typeof BarChart3 }[] = [
+  { id: 'rankings', label: 'Rankings', tagline: 'Board, tiers, podium', icon: BarChart3 },
+  { id: 'regions', label: 'Regions', tagline: 'Regional strength', icon: Globe2 },
+  { id: 'arena', label: 'Arena', tagline: 'Series matchup lab', icon: Swords },
+  { id: 'worlds-lab', label: 'Worlds Lab', tagline: 'Swiss & bracket odds', icon: Trophy },
+  { id: 'split-race', label: 'Split Race', tagline: 'Rank race timeline', icon: Activity },
+  { id: 'players', label: 'Players', tagline: 'Role power', icon: Users },
+  { id: 'receipts', label: 'Receipts', tagline: 'Shareable ranking proof', icon: FileText },
 ]
 
 const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
   regions: { eyebrow: 'Regional strength', title: 'Region power scores' },
-  teams: { eyebrow: 'Tier 1 team strength', title: 'Global Power Rankings' },
+  rankings: { eyebrow: 'Tier 1 team strength', title: 'Global Power Rankings' },
+  arena: { eyebrow: 'Matchup tools', title: 'Arena' },
+  'worlds-lab': { eyebrow: 'Tournament simulation', title: 'Worlds Lab' },
+  'split-race': { eyebrow: 'Season movement', title: 'Split Race' },
+  receipts: { eyebrow: 'Ranking provenance', title: 'Receipts' },
   players: { eyebrow: 'Role-conditioned player strength', title: 'Player Role Power' },
 }
 
 function App() {
-  const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' })
-  const [players, setPlayers] = useState<PlayerDirectory | undefined>()
-  const [teamHistory, setTeamHistory] = useState<TeamHistoryDirectory | undefined>()
   const [mode, setMode] = useState<Mode>(readModeFromHash)
-  const [scope, setScope] = useState(currentYearScope)
-  const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
-  const snapshotCacheRef = useRef(snapshotCache)
+  const [scope, setScope] = useState(() => readScopeFromHash() ?? currentYearScope())
+  const {
+    manifestState,
+    effectiveScope,
+    filter,
+    seasonYears,
+    snapshotState,
+    snapshot,
+    playersState,
+    teamHistoryState,
+    regionHistoryState,
+  } = usePublicArtifacts(scope)
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [playerPicks, setPlayerPicks] = useState<CompactPlayer[]>([])
   const [teamSearch, setTeamSearch] = useState('')
   const [playerSearch, setPlayerSearch] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const data = loadState.status === 'ready' ? loadState.data : undefined
+  const mainRef = useRef<HTMLElement | null>(null)
+  const didMountModeRef = useRef(false)
 
   useEffect(() => {
-    const controller = new AbortController()
-    async function load() {
-      try {
-        const response = await fetch(DATA_URL, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) throw new Error(`Snapshot request failed with ${response.status}`)
-        const data = parsePublicRankingManifest(await response.json())
-        setLoadState({ status: 'ready', data })
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setLoadState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load snapshot' })
-      }
-    }
-    void load()
-    return () => controller.abort()
-  }, [])
-
-  useEffect(() => {
-    if (!data) return
-    const controller = new AbortController()
-    const url = resolveArtifactUrl(data.playerDirectoryUrl ?? PLAYERS_URL, DATA_URL)
-    async function load() {
-      try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) return
-        setPlayers(parsePublicPlayerDirectory(await response.json()))
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        console.error(error)
-      }
-    }
-    void load()
-    return () => controller.abort()
-  }, [data])
-
-  useEffect(() => {
-    if (!data) return
-    const controller = new AbortController()
-    const url = resolveArtifactUrl(data.teamHistoryUrl ?? TEAM_HISTORY_URL, DATA_URL)
-    async function load() {
-      try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) return
-        setTeamHistory(parsePublicTeamHistory(await response.json()))
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        console.error(error)
-      }
-    }
-    void load()
-    return () => controller.abort()
-  }, [data])
-
-  useEffect(() => {
-    replaceHashForMode(mode)
     function onHashChange() {
-      const nextMode = readModeFromHash()
-      setMode(nextMode)
-      replaceHashForMode(nextMode)
+      setMode(readModeFromHash())
+      const nextScope = readScopeFromHash()
+      if (nextScope) setScope(nextScope)
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [mode])
+  }, [])
+
+  useEffect(() => {
+    replaceHashForModeAndScope(mode, effectiveScope)
+  }, [effectiveScope, mode])
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    if (didMountModeRef.current) {
+      requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }))
+    } else {
+      didMountModeRef.current = true
+    }
   }, [mode])
-
-  const effectiveScope = useMemo(() => (data ? normalizeScopeForData(scope, data) : scope), [data, scope])
-  const filter = useMemo(() => scopeToFilter(effectiveScope), [effectiveScope])
-  const snapshotState = useMemo(() => resolvePublicSnapshotState(data, filter, snapshotCache), [data, filter, snapshotCache])
-  const snapshot = snapshotState.status === 'ready' ? snapshotState.snapshot : undefined
-  const activeTeamHistory = useMemo(() => teamHistoryForScope(teamHistory, filter), [teamHistory, filter])
-
-  useEffect(() => {
-    snapshotCacheRef.current = snapshotCache
-  }, [snapshotCache])
-
-  useEffect(() => {
-    if (!data) return
-    const manifest = data
-    const key = publicSnapshotKey(filter)
-    const cacheEntry = snapshotCacheRef.current[key]
-    if (cacheEntry?.status === 'ready' || cacheEntry?.status === 'loading') return
-    const embeddedSnapshot = manifest.snapshots?.[key]
-    const embeddedHasRecentMatches = embeddedSnapshot?.standings.some((standing) => standing.recentMatches.length > 0) ?? false
-    if (embeddedSnapshot && embeddedHasRecentMatches) return
-    const expected = manifest.snapshotIndex?.[key]
-    if (!expected) {
-      setSnapshotCache((current) => ({
-        ...current,
-        [key]: { status: 'missing', message: `No generated snapshot exists for ${scopeLabel(effectiveScope)}.` },
-      }))
-      return
-    }
-    const url = resolveArtifactUrl(expected.url, DATA_URL)
-    const controller = new AbortController()
-    setSnapshotCache((current) => ({ ...current, [key]: { status: 'loading' } }))
-    async function load() {
-      try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) throw new Error(`Filter snapshot failed with ${response.status}`)
-        const next = parsePublicRankingShard(await response.json())
-        validatePublicSnapshotShard(key, expected, next, manifest)
-        setSnapshotCache((current) => ({ ...current, [key]: { status: 'ready', snapshot: next } }))
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setSnapshotCache((current) => ({
-          ...current,
-          [key]: { status: 'error', message: error instanceof Error ? error.message : 'Unable to load filtered snapshot' },
-        }))
-      }
-    }
-    void load()
-    return () => controller.abort()
-  }, [data, effectiveScope, filter])
 
   const standings = useMemo(() => snapshot?.standings ?? [], [snapshot])
   const regions = useMemo(() => snapshot?.regions ?? [], [snapshot])
+  const rankingFlair = useMemo(() => deriveRankingFlair(standings), [standings])
+  const activeRegionHistory = regionHistoryState.status === 'ready' ? regionHistoryState.data : undefined
 
-  const regionPickIds = useMemo(() => new Set(regionPicks.map(regionKey)), [regionPicks])
-  const playerPickIds = useMemo(() => new Set(playerPicks.map((player) => player.id)), [playerPicks])
-  const activePlayers = useMemo(() => playersForScope(players, filter), [players, filter])
-  const activePlayerRoles = useMemo(
-    () => players?.roles.filter((role) => activePlayers.some((player) => player.role === role)) ?? [],
-    [activePlayers, players],
+  const activePlayers = useMemo(
+    () => playersState.status === 'ready' ? playersForScope(playersState.data, filter) : [],
+    [filter, playersState],
   )
-
-  useEffect(() => {
-    setRegionPicks((current) => reconcilePicks(current, regions, regionKey))
-  }, [regions])
-
-  useEffect(() => {
-    setTeamPicks((current) => reconcilePicks(current, standings, teamKey))
-  }, [standings])
-
-  useEffect(() => {
-    setPlayerPicks((current) => reconcilePicks(current, activePlayers, (player) => player.id))
-  }, [activePlayers])
+  const activePlayerRoles = useMemo(
+    () => playersState.status === 'ready' ? playersState.data.roles.filter((role) => activePlayers.some((player) => player.role === role)) : [],
+    [activePlayers, playersState],
+  )
+  const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
+  const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, standings, teamKey), [standings, teamPicks])
+  const activePlayerPicks = useMemo(() => reconcilePicks(playerPicks, activePlayers, (player) => player.id), [activePlayers, playerPicks])
+  const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
+  const playerPickIds = useMemo(() => new Set(activePlayerPicks.map((player) => player.id)), [activePlayerPicks])
 
   function toggleRegion(region: RegionStrength) {
-    const key = regionKey(region)
-    setRegionPicks((current) =>
-      current.some((entry) => regionKey(entry) === key)
-        ? current.filter((entry) => regionKey(entry) !== key)
-        : current.length >= COMPARE_LIMIT
-          ? [...current.slice(1), region]
-          : [...current, region],
-    )
+    setRegionPicks((current) => toggleLimitedPick(reconcilePicks(current, regions, regionKey), region, regionKey))
   }
 
   function toggleTeam(team: RankingSummaryStanding) {
-    const key = teamKey(team)
-    setTeamPicks((current) =>
-      current.some((entry) => teamKey(entry) === key)
-        ? current.filter((entry) => teamKey(entry) !== key)
-        : current.length >= COMPARE_LIMIT
-          ? [...current.slice(1), team]
-          : [...current, team],
-    )
+    setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, standings, teamKey), team, teamKey))
   }
 
   function togglePlayer(player: CompactPlayer) {
-    setPlayerPicks((current) =>
-      current.some((entry) => entry.id === player.id)
-        ? current.filter((entry) => entry.id !== player.id)
-        : current.length >= COMPARE_LIMIT
-          ? [...current.slice(1), player]
-          : [...current, player],
-    )
+    setPlayerPicks((current) => toggleLimitedPick(reconcilePicks(current, activePlayers, (entry) => entry.id), player, (entry) => entry.id))
   }
 
-  if (loadState.status === 'loading') return <BootScreen />
-  if (loadState.status === 'error') return <ErrorScreen message={loadState.message} />
+  if (manifestState.status === 'loading') return <BootScreen />
+  if (manifestState.status !== 'ready') return <ErrorScreen message={manifestState.message} />
 
-  const readyData = loadState.data
+  const readyData = manifestState.data
   const provenance = {
     source: readyData.source ?? 'Unknown source',
     model: snapshot?.modelVersion ?? readyData.model?.version ?? 'unknown',
@@ -273,24 +168,36 @@ function App() {
   const seeded = readyData.dataMode === 'seeded-sample' || readyData.coverage?.seededSample === true
   const status = seeded ? 'sample' : readyData.dataMode === 'no-data' ? 'empty' : 'public'
   const matchCount = snapshot?.matchCount ?? readyData.coverage?.matchCount
-  const trayPicks = mode === 'regions' ? regionPicks.length : mode === 'teams' ? teamPicks.length : mode === 'players' ? playerPicks.length : 0
-  const trayLabel = mode === 'regions' ? 'Region compare' : mode === 'teams' ? 'Team compare' : 'Player compare'
-  const teamColumns = teamCompareColumns(teamPicks)
-  const playerColumns = playerCompareColumns(playerPicks)
-  const regionColumns = regionCompareColumns(regionPicks)
-  const yearTabs = orderedSeasonYears(readyData)
-  const seasonTabs = [...yearTabs.slice(0, 4), 'All']
-  const activeSeason = effectiveScope.startsWith('season:') ? effectiveScope.slice(7) : effectiveScope === 'all' ? 'All' : undefined
-  const goHome = () => {
-    setMode('teams')
-    replaceHashForMode('teams')
+  const trayPicks = mode === 'regions'
+    ? activeRegionPicks.length
+    : isTeamToolMode(mode)
+      ? activeTeamPicks.length
+      : mode === 'players'
+        ? activePlayerPicks.length
+        : 0
+  const trayLabel = mode === 'regions' ? 'Region compare' : isTeamToolMode(mode) ? 'Team compare' : 'Player compare'
+  const teamColumns = teamCompareColumns(activeTeamPicks)
+  const playerColumns = playerCompareColumns(activePlayerPicks)
+  const regionColumns = regionCompareColumns(activeRegionPicks)
+  const seasonTabs = [...seasonYears.slice(0, 4), 'All']
+  const activeSeason = seasonFromScope(effectiveScope)
+  const activeCheckpoint = checkpointFromScope(effectiveScope)
+  const checkpointTabs = activeSeason && activeSeason !== 'All'
+    ? checkpointOptionsForSeason(readyData, activeSeason)
+    : []
+  const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
+  const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
+  const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    setMode('rankings')
+    replaceHashForModeAndScope('rankings', effectiveScope)
   }
 
   return (
     <div className="app">
       <a className="skip-link" href="#main-content">Skip to content</a>
         <nav className="rail" aria-label="Primary">
-          <Button type="button" variant="ghost" className="rail__brand" onClick={goHome} aria-label="Go to Teams home">
+          <a className="rail__brand" href={hashForModeAndScope('rankings', effectiveScope)} onClick={goHome} aria-label="Go to Rankings home">
             <span className="rail__mark">
               <img src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
             </span>
@@ -298,18 +205,16 @@ function App() {
               <b>Power Index</b>
               <span>LoL Esports</span>
             </div>
-          </Button>
+          </a>
         <div className="rail__label">Compare</div>
         <div className="rail__nav">
           {MODES.map((entry) => {
             const Icon = entry.icon
             return (
-              <Button
+              <a
                 key={entry.id}
-                type="button"
-                variant="ghost"
+                href={hashForModeAndScope(entry.id, effectiveScope)}
                 className={`rail__mode${mode === entry.id ? ' is-active' : ''}`}
-                onClick={() => setMode(entry.id)}
                 aria-current={mode === entry.id ? 'page' : undefined}
               >
                 <Icon size={18} aria-hidden="true" />
@@ -317,34 +222,34 @@ function App() {
                   <b>{entry.label}</b>
                   <small>{entry.tagline}</small>
                 </span>
-              </Button>
+              </a>
             )
           })}
         </div>
-        <div className="rail__foot">
-          <span className={`statusdot ${status}`}>
-            {seeded ? 'Seeded sample' : readyData.dataMode === 'no-data' ? 'No ranking data' : 'Public-source data'}
-          </span>
-          <div>
-            <span>Matches</span>
-            <b>{formatNumber(matchCount)}</b>
-          </div>
-          <div>
-            <span>Model</span>
-            <b>{provenance.model}</b>
-          </div>
-          <div>
-            <span>Updated</span>
-            <b>{formatDate(readyData.generatedAt)}</b>
-          </div>
-        </div>
       </nav>
 
-      <main id="main-content" className="main" tabIndex={-1}>
+      <main id="main-content" className="main" tabIndex={-1} ref={mainRef}>
         <header className="topbar">
           <div className="topbar__title">
             <p className="eyebrow">{MODE_TITLES[mode].eyebrow}</p>
             <h1>{MODE_TITLES[mode].title}</h1>
+          </div>
+          <div className="topbar__meta" aria-label="Data status">
+            <span className={`statusdot ${status}`}>
+              {seeded ? 'Seeded sample' : readyData.dataMode === 'no-data' ? 'No ranking data' : 'Public-source data'}
+            </span>
+            <div>
+              <span>Matches</span>
+              <b>{formatNumber(matchCount)}</b>
+            </div>
+            <div>
+              <span>Model</span>
+              <b>{provenance.model}</b>
+            </div>
+            <div>
+              <span>Updated</span>
+              <b>{formatDate(readyData.generatedAt)}</b>
+            </div>
           </div>
         </header>
 
@@ -363,6 +268,52 @@ function App() {
           ))}
         </div>
 
+        {activeSeason && activeSeason !== 'All' && checkpointTabs.length > 0 ? (
+          <div className="checkpoint-tabs" role="group" aria-label={`${activeSeason} checkpoints`}>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-pressed={!activeCheckpoint}
+              className={cn('checkpoint-tabs__button', !activeCheckpoint && 'is-active')}
+              onClick={() => setScope(`season:${activeSeason}`)}
+            >
+              <span>Full year</span>
+            </Button>
+            {checkpointTabs.map((checkpoint) => {
+              const ongoing = checkpoint.id === ongoingCheckpointId
+              return (
+                <Button
+                  key={checkpoint.id}
+                  type="button"
+                  variant="ghost"
+                  title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
+                  aria-pressed={activeCheckpoint === checkpoint.id}
+                  aria-label={`${checkpoint.label} through ${checkpoint.boundaryEvent}${ongoing ? ', ongoing' : ''}`}
+                  className={cn('checkpoint-tabs__button', activeCheckpoint === checkpoint.id && 'is-active', ongoing && 'is-ongoing')}
+                  onClick={() => setScope(checkpointScope(activeSeason, checkpoint.id))}
+                >
+                  <span>
+                    {checkpoint.label}
+                    {ongoing ? <em>Ongoing</em> : null}
+                  </span>
+                  <small>{formatDate(checkpoint.endDate)}</small>
+                </Button>
+              )
+            })}
+            {pendingCheckpoint ? (
+              <div
+                className="checkpoint-tabs__button checkpoint-tabs__button--future"
+                aria-disabled="true"
+                aria-label={`${pendingCheckpoint.label} has not started yet`}
+                title={`${pendingCheckpoint.label} has not started yet.`}
+              >
+                <span>{pendingCheckpoint.label}</span>
+                <small>Not started</small>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {seeded ? (
           <div className="view" style={{ paddingBottom: 0 }}>
             <Alert className="notice" role="status">
@@ -377,38 +328,50 @@ function App() {
         ) : (
           <>
             {mode === 'regions' ? <RegionsView regions={regions} standings={standings} pickedIds={regionPickIds} onToggle={toggleRegion} /> : null}
-            {mode === 'teams' ? (
-              <TeamsView
-                standings={standings}
-                regions={regions}
-                model={readyData.model}
-                players={activePlayers}
-                search={teamSearch}
-                onSearchChange={setTeamSearch}
-                pickedTeams={teamPicks}
-                history={activeTeamHistory?.series}
-                updatedAt={formatDate(readyData.generatedAt)}
-                dataSummary={{
-                  source: readyData.source,
-                  matchCount,
-                  coverageStart: readyData.coverage?.coverageStart,
-                  coverageEnd: readyData.coverage?.coverageEnd,
-                  latestMatchDate: readyData.coverage?.latestMatchDate,
-                  seeded,
-                  sourceBreakdown: snapshot?.sourceBreakdown ?? [],
-                  notes: readyData.dataQuality?.notes,
-                }}
-                onToggle={toggleTeam}
-              />
+            {mode === 'rankings' ? (
+              <>
+                <div className="view">
+                  <RankingShowcase {...rankingShowcaseProps(rankingFlair, standings)} />
+                </div>
+                <TeamsView
+                  standings={standings}
+                  regions={regions}
+                  model={readyData.model}
+                  players={activePlayers}
+                  search={teamSearch}
+                  onSearchChange={setTeamSearch}
+                  pickedTeams={activeTeamPicks}
+                  historyState={teamHistoryState}
+                  updatedAt={formatDate(readyData.generatedAt)}
+                  dataSummary={{
+                    source: readyData.source,
+                    sources: readyData.sources,
+                    scopeLabel: scopeLabel(effectiveScope),
+                    matchCount,
+                    coverageStart: readyData.coverage?.coverageStart,
+                    coverageEnd: readyData.coverage?.coverageEnd,
+                    latestMatchDate: readyData.coverage?.latestMatchDate,
+                    seeded,
+                    sourceBreakdown: snapshot?.sourceBreakdown ?? [],
+                    notes: readyData.dataQuality?.notes,
+                  }}
+                  onToggle={toggleTeam}
+                />
+              </>
             ) : null}
+            {mode === 'arena' ? <ArenaView standings={standings} pickedTeams={activeTeamPicks} model={readyData.model} historyState={teamHistoryState} /> : null}
+            {mode === 'worlds-lab' ? <WorldsLabView standings={standings} pickedTeams={activeTeamPicks} model={readyData.model} /> : null}
+            {mode === 'split-race' ? <SplitRaceView standings={standings} pickedTeams={activeTeamPicks} model={readyData.model} historyState={teamHistoryState} /> : null}
+            {mode === 'receipts' ? <ReceiptsView standings={standings} players={activePlayers} manifest={readyData} snapshot={snapshot} pickedTeams={activeTeamPicks} /> : null}
             {mode === 'players' ? (
               <PlayersView
                 players={activePlayers}
-                metric={players?.metric ?? readyData.playerData.metric}
+                metric={playersState.status === 'ready' ? playersState.data.metric : readyData.playerData.metric}
                 roles={activePlayerRoles}
                 search={playerSearch}
                 onSearchChange={setPlayerSearch}
                 pickedIds={playerPickIds}
+                artifactState={playersState}
                 onToggle={togglePlayer}
               />
             ) : null}
@@ -426,7 +389,7 @@ function App() {
           <span className="tray__label">{trayLabel}</span>
           <div className="tray__chips">
             {mode === 'regions'
-              ? regionPicks.map((region) => (
+              ? activeRegionPicks.map((region) => (
                   <span className="chip" key={regionKey(region)}>
                     <RegionBadge region={region.region} size="sm" />
                     <b>{region.region}</b>
@@ -436,8 +399,8 @@ function App() {
                   </span>
                 ))
               : null}
-            {mode === 'teams'
-              ? teamPicks.map((team) => (
+            {isTeamToolMode(mode)
+              ? activeTeamPicks.map((team) => (
                   <span className="chip" key={teamKey(team)}>
                     <b>{team.code ?? team.team}</b>
                     <Button type="button" variant="ghost" size="icon" onClick={() => toggleTeam(team)} aria-label={`Remove ${team.team}`}>
@@ -447,7 +410,7 @@ function App() {
                 ))
               : null}
             {mode === 'players'
-              ? playerPicks.map((player) => (
+              ? activePlayerPicks.map((player) => (
                   <span className="chip" key={player.id}>
                     <b>{player.name}</b>
                     <Button type="button" variant="ghost" size="icon" onClick={() => togglePlayer(player)} aria-label={`Remove ${player.name}`}>
@@ -462,7 +425,7 @@ function App() {
             variant="ghost"
             onClick={() => {
               if (mode === 'regions') setRegionPicks([])
-              else if (mode === 'teams') setTeamPicks([])
+              else if (isTeamToolMode(mode)) setTeamPicks([])
               else setPlayerPicks([])
             }}
           >
@@ -477,30 +440,30 @@ function App() {
       <CompareDrawer
         open={drawerOpen && mode === 'regions'}
         title="Region comparison"
-        entities={regionPicks}
+        entities={activeRegionPicks}
         columns={regionColumns}
         rows={REGION_COMPARE_ROWS}
-        after={<RegionCompareAnalysis regions={regionPicks} columns={regionColumns} standings={standings} history={activeTeamHistory} />}
+        after={<RegionCompareAnalysis regions={activeRegionPicks} columns={regionColumns} standings={standings} historyState={teamHistoryState} regionHistoryState={regionHistoryState} regionHistory={activeRegionHistory} />}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
       />
       <CompareDrawer
-        open={drawerOpen && mode === 'teams'}
+        open={drawerOpen && isTeamToolMode(mode)}
         title="Team comparison"
-        entities={teamPicks}
+        entities={activeTeamPicks}
         columns={teamColumns}
         rows={TEAM_COMPARE_ROWS}
-        after={<TeamCompareAnalysis teams={teamPicks} columns={teamColumns} history={activeTeamHistory} />}
+        after={<TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
       />
       <CompareDrawer
         open={drawerOpen && mode === 'players'}
         title="Player comparison"
-        entities={playerPicks}
+        entities={activePlayerPicks}
         columns={playerColumns}
         rows={PLAYER_COMPARE_ROWS}
-        after={<CompareProfileChart title="Player profile" eyebrow="Current scope" entities={playerPicks} columns={playerColumns} metrics={PLAYER_PROFILE_METRICS} />}
+        after={<CompareProfileChart title="Player profile" eyebrow="Current scope" entities={activePlayerPicks} columns={playerColumns} metrics={PLAYER_PROFILE_METRICS} />}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setPlayerPicks((current) => current.filter((player) => player.id !== id))}
       />
@@ -510,77 +473,161 @@ function App() {
 
 function readModeFromHash(): Mode {
   const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
-  return hash === 'teams' || hash === 'players' || hash === 'regions' ? hash : 'teams'
+  const segment = hashModeSegment(hash)
+  if (segment === 'teams') return 'rankings'
+  return isKnownMode(segment) ? segment : 'rankings'
 }
 
-function replaceHashForMode(mode: Mode) {
-  if (typeof window === 'undefined' || window.location.hash.slice(1) === mode) return
-  window.history.replaceState(null, '', `#${mode}`)
+function readScopeFromHash() {
+  if (typeof window === 'undefined') return undefined
+  const query = window.location.hash.slice(1).split('?', 2)[1]
+  if (!query) return undefined
+  const scope = new URLSearchParams(query).get('scope')
+  return isKnownScope(scope) ? scope : undefined
+}
+
+function replaceHashForModeAndScope(mode: Mode, scope: string) {
+  if (typeof window === 'undefined') return
+  const nextHash = hashForModeAndScope(mode, scope, window.location.hash.slice(1))
+  if (window.location.hash === nextHash) return
+  window.history.replaceState(null, '', nextHash)
+}
+
+function hashForModeAndScope(mode: Mode, scope: string, currentHash = '') {
+  const query = new URLSearchParams(currentHash.split('?', 2)[1] ?? '')
+  query.set('scope', scope)
+  const queryString = query.toString()
+  return `#${hashPathForMode(mode, currentHash)}${queryString ? `?${queryString}` : ''}`
+}
+
+function hashPathForMode(mode: Mode, currentHash: string) {
+  const path = currentHash.split('?', 1)[0]
+  if (mode === 'receipts' && path.startsWith('receipts/') && path.length > 'receipts/'.length) return path
+  return mode
+}
+
+function hashModeSegment(hash: string) {
+  return hash.split(/[/?]/, 1)[0]
+}
+
+function isKnownMode(value: string): value is Mode {
+  return value === 'rankings'
+    || value === 'arena'
+    || value === 'worlds-lab'
+    || value === 'split-race'
+    || value === 'receipts'
+    || value === 'regions'
+    || value === 'players'
+}
+
+function isKnownScope(value: string | null): value is string {
+  return value === 'all' || Boolean(value?.startsWith('event:')) || /^season:\d{4}(?::(?:checkpoint:)?[A-Za-z0-9_-]+)?$/.test(value ?? '')
+}
+
+function pendingCheckpointForSeason(
+  activeSeason: string | undefined,
+  seasonYears: string[],
+  checkpoints: SnapshotCheckpointOption[],
+) {
+  if (!activeSeason || activeSeason !== seasonYears[0] || checkpoints.length === 0) return undefined
+  const checkpointIds = new Set(checkpoints.map((checkpoint) => checkpoint.id))
+  const latestCheckpoint = checkpoints.at(-1)
+  const latestIndex = latestCheckpoint ? CHECKPOINT_SEQUENCE.indexOf(latestCheckpoint.id as typeof CHECKPOINT_SEQUENCE[number]) : -1
+  if (latestIndex < 0) return undefined
+  const nextId = CHECKPOINT_SEQUENCE[latestIndex + 1]
+  if (!nextId || checkpointIds.has(nextId)) return undefined
+  return { id: nextId, label: checkpointLabel(nextId) }
+}
+
+function checkpointLabel(id: string) {
+  return id
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function isTeamToolMode(mode: Mode): mode is ToolMode {
+  return mode === 'rankings'
+    || mode === 'arena'
+    || mode === 'worlds-lab'
+    || mode === 'split-race'
+    || mode === 'receipts'
+}
+
+function rankingShowcaseProps(flair: RankingFlair, standings: RankingSummaryStanding[]): RankingShowcaseProps {
+  const standingsByCode = new Map(standings.map((standing) => [standing.code, standing]))
+  const spicy = flair.spicyTakeConfidence[0]
+  return {
+    title: 'GPR show board',
+    subtitle: 'Tier bands, podium, movement, upset evidence, and confidence context from the current public snapshot.',
+    podium: flair.podium.map((entry) => {
+      const standing = standingsByCode.get(entry.code)
+      return {
+        id: entry.code,
+        team: entry.team,
+        code: entry.code,
+        region: entry.region,
+        league: entry.league,
+        rank: entry.rank,
+        rating: entry.rating,
+        movement: standing?.movement,
+      }
+    }),
+    tierCounts: tierCountsFor(flair),
+    biggestRiser: movementSpotlight(flair.movement.biggestRiser),
+    biggestFaller: movementSpotlight(flair.movement.biggestFaller),
+    upset: flair.upsetHeadline ? {
+      headline: flair.upsetHeadline.headline,
+      winner: flair.upsetHeadline.winner,
+      loser: flair.upsetHeadline.opponent,
+      event: flair.upsetHeadline.event,
+      score: `${formatSigned(flair.upsetHeadline.matchDelta)} rating`,
+      date: flair.upsetHeadline.date,
+      description: `Upset score ${formatNumber(flair.upsetHeadline.score)} from match delta, rating gap, and rank gap.`,
+    } : undefined,
+    confidenceBand: spicy ? {
+      label: `${spicy.code}: ${spicy.label}`,
+      value: spicy.score,
+      tone: spicy.band === 'high' ? 'spicy' : spicy.band === 'medium' ? 'warm' : 'cool',
+      description: `${formatNumber(spicy.recentMatchCount)} recent matches with +/-${formatNumber(spicy.uncertainty)} uncertainty.`,
+    } : undefined,
+  }
+}
+
+function tierCountsFor(flair: RankingFlair) {
+  return (['S', 'A', 'B', 'C'] as const).map((tier) => {
+    const teams = flair.tiers.filter((entry) => entry.tier === tier)
+    return {
+      tier,
+      label: `${tier}-tier`,
+      count: teams.length,
+      teams: teams.slice(0, 4).map((entry) => entry.code),
+    }
+  })
+}
+
+function movementSpotlight(pick: RankingMovementPick | null) {
+  if (!pick) return undefined
+  return {
+    team: pick.team,
+    code: pick.code,
+    movement: pick.movement,
+    fromRank: pick.previousRank,
+    toRank: pick.rank,
+    ratingDelta: pick.ratingDelta,
+    description: `${formatSigned(pick.ratingDelta)} rating over the previous snapshot.`,
+  }
 }
 
 function currentYearScope() {
   return `season:${new Date().getFullYear()}`
 }
 
-function orderedSeasonYears(data: RankingData) {
-  return [...new Set((data.filterOptions?.seasons ?? []).filter(isSeasonYear))].sort((left, right) => Number(right) - Number(left))
-}
-
-function normalizeScopeForData(scope: string, data: RankingData) {
-  if (!scope.startsWith('season:')) return scope
-  const years = orderedSeasonYears(data)
-  if (years.includes(scope.slice(7))) return scope
-  return years[0] ? `season:${years[0]}` : 'all'
-}
-
-function isSeasonYear(value: string) {
-  return /^\d{4}$/.test(value)
-}
-
-function scopeToFilter(scope: string): SnapshotFilter {
-  if (scope.startsWith('season:')) return { season: scope.slice(7), event: 'All', region: 'All' }
-  if (scope.startsWith('event:')) return { season: 'All', event: scope.slice(6), region: 'All' }
-  return { season: 'All', event: 'All', region: 'All' }
-}
-
-function scopeLabel(scope: string) {
-  if (scope.startsWith('season:')) return `${scope.slice(7)} source season`
-  if (scope.startsWith('event:')) return scope.slice(6)
-  return 'All seasons & events'
-}
-
-function resolveArtifactUrl(url: string, baseUrl: string) {
-  if (/^[a-z][a-z\d+.-]*:/i.test(url) || url.startsWith('/')) return url
-  const resolvedBase = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
-    ? baseUrl
-    : new URL(baseUrl, window.location.origin).toString()
-  return new URL(url, resolvedBase).toString()
-}
-
-function teamHistoryForScope(history: TeamHistoryDirectory | undefined, filter: SnapshotFilter) {
-  if (!history) return undefined
-  const scopedSeries = history.scopedSeries?.[publicSnapshotKey(filter)]
-  if (!scopedSeries && filter.season === 'All' && filter.event === 'All' && filter.region === 'All') return history
-  if (!scopedSeries) {
-    return {
-      ...history,
-      teamCount: 0,
-      pointCount: 0,
-      series: {},
-    }
-  }
-  return {
-    ...history,
-    teamCount: Object.keys(scopedSeries).length,
-    pointCount: Object.values(scopedSeries).reduce((total, series) => total + series.points.length, 0),
-    series: scopedSeries,
-  }
-}
-
 function playersForScope(directory: PlayerDirectory | undefined, filter: SnapshotFilter) {
   if (!directory) return []
   if (filter.season === 'All' && filter.event === 'All' && filter.region === 'All') return directory.players
-  if (filter.season !== 'All' && filter.event === 'All' && filter.region === 'All') return directory.scopedPlayers?.[publicSnapshotKey(filter)] ?? []
+  if (filter.season !== 'All' && filter.event === 'All' && filter.region === 'All') return directory.scopedPlayers?.[snapshotKey(filter)] ?? []
   return []
 }
 
@@ -592,6 +639,14 @@ function reconcilePicks<T>(current: T[], available: T[], keyFor: (item: T) => st
     .filter((item): item is T => Boolean(item))
   if (next.length === current.length && next.every((item, index) => item === current[index])) return current
   return next
+}
+
+function toggleLimitedPick<T>(current: T[], item: T, keyFor: (item: T) => string) {
+  const key = keyFor(item)
+  if (current.some((entry) => keyFor(entry) === key)) {
+    return current.filter((entry) => keyFor(entry) !== key)
+  }
+  return current.length >= COMPARE_LIMIT ? [...current.slice(1), item] : [...current, item]
 }
 
 function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string }) {

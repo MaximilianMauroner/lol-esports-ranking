@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { resolvePublicSnapshotState, validatePublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
-import type { PublicRankingManifest, PublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
+import { resolvePublicSnapshotState, validatePublicSnapshotShard, validatePublicTeamHistoryShard } from '../src/lib/publicArtifacts/resolver.ts'
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION, snapshotKey, type PublicRankingManifest, type PublicRankingShard, type PublicTeamHistoryIndex, type PublicTeamHistoryShard } from '../src/lib/publicArtifacts/schema.ts'
 
 test('non-default missing snapshot never falls back to embedded default snapshot', () => {
   const data = manifest()
@@ -15,19 +15,43 @@ test('non-default indexed snapshot reports loading until exact shard arrives', (
     snapshotIndex: {
       All__All__All: {
         filter: { season: 'All', event: 'All', region: 'All' },
-        url: '/data/snapshots/All__All__All.json',
+        url: '/data/scopes/all.json',
         matchCount: 10,
         sourceBreakdown: [],
       },
       '2026__All__All': {
         filter: { season: '2026', event: 'All', region: 'All' },
-        url: '/data/snapshots/2026__All__All.json',
+        url: '/data/scopes/season-2026.json',
         matchCount: 4,
         sourceBreakdown: [],
       },
     },
   })
   const state = resolvePublicSnapshotState(data, { season: '2026', event: 'All', region: 'All' }, {})
+
+  assert.equal(state.status, 'loading')
+})
+
+test('checkpoint indexed snapshot reports loading until exact shard arrives', () => {
+  const filter = { season: '2026', event: 'All', region: 'All', checkpoint: 'split-1' } as const
+  const key = snapshotKey(filter)
+  const data = manifest({
+    snapshotIndex: {
+      All__All__All: {
+        filter: { season: 'All', event: 'All', region: 'All' },
+        url: '/data/scopes/all.json',
+        matchCount: 10,
+        sourceBreakdown: [],
+      },
+      [key]: {
+        filter,
+        url: '/data/scopes/season-2026-split-1.json',
+        matchCount: 5,
+        sourceBreakdown: [],
+      },
+    },
+  })
+  const state = resolvePublicSnapshotState(data, filter, {})
 
   assert.equal(state.status, 'loading')
 })
@@ -51,7 +75,7 @@ test('shard validation rejects scope drift', () => {
       '2026__All__All',
       {
         filter: { season: '2026', event: 'All', region: 'All' },
-        url: '/data/snapshots/2026__All__All.json',
+        url: '/data/scopes/season-2026.json',
         matchCount: 4,
         sourceBreakdown: [],
       },
@@ -61,11 +85,23 @@ test('shard validation rejects scope drift', () => {
   )
 })
 
+test('team history shard validation rejects scope drift', () => {
+  const index = teamHistoryIndex()
+  assert.throws(() =>
+    validatePublicTeamHistoryShard(
+      '2026__All__All',
+      index.scopeIndex['2026__All__All'],
+      teamHistoryShard({ filter: { season: 'All', event: 'All', region: 'All' }, teamCount: 1, pointCount: 2 }),
+      index,
+    ),
+  )
+})
+
 function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRankingManifest {
-  const defaultShard = shard({ filter: { season: 'All', event: 'All', region: 'All' }, matchCount: 10 })
   return {
     artifactKind: 'public-ranking-manifest',
-    schemaVersion: 14,
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMeta(),
     generatedAt: '2026-06-27T00:00:00.000Z',
     source: 'test',
     sources: [],
@@ -110,19 +146,73 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     snapshotIndex: {
       All__All__All: {
         filter: { season: 'All', event: 'All', region: 'All' },
-        url: '/data/snapshots/All__All__All.json',
+        url: '/data/scopes/all.json',
         matchCount: 10,
         sourceBreakdown: [],
       },
     },
-    snapshots: { All__All__All: defaultShard },
     ...overrides,
+  }
+}
+
+function teamHistoryIndex(overrides: Partial<PublicTeamHistoryIndex> = {}): PublicTeamHistoryIndex {
+  return {
+    artifactKind: 'team-history-index',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMeta(),
+    generatedAt: '2026-06-27T00:00:00.000Z',
+    modelVersion: 'test-model',
+    modelConfigHash: 'test-config',
+    defaultScopeKey: 'All__All__All',
+    omissionPolicy: {
+      minimumPointsPerSeries: 2,
+      omittedSeriesCount: 0,
+      reason: 'test',
+    },
+    scopeIndex: {
+      All__All__All: {
+        filter: { season: 'All', event: 'All', region: 'All' },
+        url: '/data/history/team-series/all.json',
+        teamCount: 1,
+        pointCount: 2,
+      },
+      '2026__All__All': {
+        filter: { season: '2026', event: 'All', region: 'All' },
+        url: '/data/history/team-series/season-2026.json',
+        teamCount: 1,
+        pointCount: 2,
+      },
+    },
+    ...overrides,
+  }
+}
+
+function teamHistoryShard(
+  overrides: Pick<PublicTeamHistoryShard, 'filter' | 'teamCount' | 'pointCount'>,
+): PublicTeamHistoryShard {
+  return {
+    artifactKind: 'team-history-scope',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMeta(),
+    generatedAt: '2026-06-27T00:00:00.000Z',
+    modelVersion: 'test-model',
+    modelConfigHash: 'test-config',
+    filter: overrides.filter,
+    omissionPolicy: {
+      minimumPointsPerSeries: 2,
+      omittedSeriesCount: 0,
+      reason: 'test',
+    },
+    teamCount: overrides.teamCount,
+    pointCount: overrides.pointCount,
+    series: {},
   }
 }
 
 function shard(overrides: Pick<PublicRankingShard, 'filter' | 'matchCount'>): PublicRankingShard {
   return {
     artifactKind: 'public-snapshot-shard',
+    artifactMeta: artifactMeta(),
     filter: overrides.filter,
     modelVersion: 'test-model',
     modelConfigHash: 'test-config',
@@ -131,5 +221,15 @@ function shard(overrides: Pick<PublicRankingShard, 'filter' | 'matchCount'>): Pu
     standings: [],
     leagues: [],
     regions: [],
+  }
+}
+
+function artifactMeta() {
+  return {
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    runId: 'run_test_test-model_test-config',
+    generatedAt: '2026-06-27T00:00:00.000Z',
+    modelVersion: 'test-model',
+    modelConfigHash: 'test-config',
   }
 }

@@ -1,9 +1,12 @@
 import type {
   EventSummary,
+  LeagueStrengthHistoryPoint,
   LeagueStrength,
   LeagueTierName,
   MatchRecord,
+  PlayerAppearanceSummary,
   PlayerProfile,
+  PlayerIndividualResidual,
   PlayerStanding,
   Region,
   Role,
@@ -18,11 +21,33 @@ import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierR
 import { regionForLeague } from '../data/teamIdentity'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
 import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
-import { evaluateTeamEligibility } from './eligibility'
+import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibility'
 import { playerModelParameters } from './playerModel'
 import { summarizePredictions, type WalkForwardMetrics } from './predictionModel'
-import { compactStanding as compactPublicStanding, snapshotKey, snapshotShardUrlPathForKey } from './publicArtifacts/schema'
+import { filterPublishedRatingUniverseInput } from './ratingUniverse'
+import {
+  PUBLIC_ARTIFACT_SCHEMA_VERSION,
+  artifactMetaFor,
+  compactStanding as compactPublicStanding,
+  leagueIdFor,
+  snapshotKey,
+  snapshotShardUrlPathForKey,
+  teamIdFor,
+  teamHistoryShardUrlPathForKey,
+} from './publicArtifacts/schema'
 import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
+import {
+  groupAdjacentTimelineEntries,
+  groupEntriesByDate,
+  groupTimelineEntriesByKey,
+  inferBestOfForScore,
+  isResolvedTimelineResult,
+  summarizeTimelineResults,
+  timelineGroupKey,
+  timelineSourceSummary,
+  uniqueValues,
+} from './timelineCompaction'
+import { homeLeagueForMatch } from './matchContext'
 import type {
   CompactPlayer,
   CompactPlayerRating,
@@ -30,14 +55,24 @@ import type {
   PlayerMetricInfo,
   PlayerRatingProof,
   PublicPlayerDirectory,
-  SameTeamTopFiveClusteringDiagnostic,
+  PublicRegionHistoryDirectory,
+  PublicRegionHistoryPoint,
+  PublicRegionHistoryPointContext,
+  PublicRegionHistorySeries,
+  PublicRegionHistoryScope,
   PublicRankingManifest,
   PublicRankingShard,
+  PublicTeamHistoryIndex,
   PublicTeamHistoryDirectory,
+  PublicTeamHistoryShard,
+  PublicTeamHistoryModelContext,
   PublicTeamHistoryPoint,
+  PublicTeamHistoryPointContext,
   PublicTeamHistorySeries,
   PublicTeamStanding,
   PublicSnapshotIndexEntry,
+  PublicTeamDirectory,
+  SameTeamTopFiveClusteringDiagnostic,
 } from './publicArtifacts/schema'
 
 export type { CompactPlayer, CompactPlayerRating, PlayerRatingProof } from './publicArtifacts/schema'
@@ -67,6 +102,18 @@ export type SnapshotFilter = {
   season: string
   event: string
   region: Region | 'All'
+  checkpoint?: string
+}
+
+export type SnapshotCheckpointOption = {
+  id: string
+  season: string
+  label: string
+  startDate: string
+  endDate: string
+  boundaryEvent: string
+  previousEndDate?: string
+  description: string
 }
 
 type RankingModel = ReturnType<typeof buildRankingModel>
@@ -85,6 +132,14 @@ export type DataSourceInfo = {
   coverageStart?: string
   coverageEnd?: string
   rowCount?: number
+  warnings?: DataSourceWarning[]
+}
+
+export type DataSourceWarning = {
+  kind: 'freshness' | 'rate-limit' | 'download' | 'coverage' | 'source-policy'
+  severity: 'info' | 'warning' | 'error'
+  message: string
+  observedAt?: string
 }
 
 export type ModelInfo = {
@@ -140,9 +195,15 @@ export type DataQualityAudit = {
 }
 
 export type PlayerDirectory = PublicPlayerDirectory
+export type TeamDirectory = PublicTeamDirectory
 export type TeamHistoryPointCompact = PublicTeamHistoryPoint
 export type TeamHistorySeries = PublicTeamHistorySeries
 export type TeamHistoryDirectory = PublicTeamHistoryDirectory
+export type TeamHistoryArtifacts = {
+  index: PublicTeamHistoryIndex
+  shards: Record<string, PublicTeamHistoryShard>
+}
+export type RegionHistoryDirectory = PublicRegionHistoryDirectory
 
 /**
  * Flattens per-team rating history from the default snapshot into a compact,
@@ -153,14 +214,23 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
   const defaultSnapshot = data.snapshots[data.defaultSnapshotKey]
   const minimumPointsPerSeries = 2
   const defaultHistory = buildTeamHistorySeries(defaultSnapshot?.standings ?? [], minimumPointsPerSeries)
-  const scopedSeries = Object.fromEntries(
+  const scopeIndex = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([, snapshot]) => isSeasonHistoryScope(snapshot.filter))
-      .map(([key, snapshot]) => [key, buildTeamHistorySeries(snapshot.standings, minimumPointsPerSeries).series]),
+      .map(([key, snapshot]) => [
+        key,
+        Object.keys(buildTeamHistorySeries(snapshot.standings, minimumPointsPerSeries, { includeContext: false }).series),
+      ]),
   )
 
   return {
     artifactKind: 'team-history',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMetaFor({
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+    }),
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
@@ -172,7 +242,256 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
     teamCount: Object.keys(defaultHistory.series).length,
     pointCount: defaultHistory.pointCount,
     series: defaultHistory.series,
-    ...(Object.keys(scopedSeries).length > 0 ? { scopedSeries } : {}),
+    ...(Object.keys(scopeIndex).length > 0 ? { scopeIndex } : {}),
+  }
+}
+
+export function createTeamHistoryArtifacts(
+  data: StaticRankingData,
+  {
+    teamHistoryUrlForKey = teamHistoryShardUrlPathForKey,
+  }: {
+    teamHistoryUrlForKey?: (key: string) => string
+  } = {},
+): TeamHistoryArtifacts {
+  const historyScopes = Object.entries(data.snapshots)
+    .filter(([key, snapshot]) => key === data.defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter))
+  const shards = Object.fromEntries(
+    historyScopes.map(([key, snapshot]) => [key, createTeamHistoryShard(data, snapshot)]),
+  )
+  const defaultShard = shards[data.defaultSnapshotKey]
+  const omissionPolicy = defaultShard?.omissionPolicy ?? {
+    minimumPointsPerSeries: 2,
+    omittedSeriesCount: 0,
+    reason: 'Standings with fewer than two resolved rating-history points are omitted because a trend line needs at least two points; unresolved tied match groups are skipped.',
+  }
+
+  return {
+    index: {
+      artifactKind: 'team-history-index',
+      schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+      artifactMeta: artifactMetaFor({
+        generatedAt: data.generatedAt,
+        modelVersion: data.model.version,
+        modelConfigHash: data.model.configHash,
+      }),
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+      defaultScopeKey: data.defaultSnapshotKey,
+      omissionPolicy,
+      scopeIndex: Object.fromEntries(
+        Object.entries(shards).map(([key, shard]) => [
+          key,
+          {
+            filter: shard.filter,
+            url: teamHistoryUrlForKey(key),
+            teamCount: shard.teamCount,
+            pointCount: shard.pointCount,
+          },
+        ]),
+      ),
+    },
+    shards,
+  }
+}
+
+function createTeamHistoryShard(
+  data: StaticRankingData,
+  snapshot: ComputedRankingSnapshot | undefined,
+): PublicTeamHistoryShard {
+  const minimumPointsPerSeries = 2
+  const history = buildTeamHistorySeries(snapshot?.standings ?? [], minimumPointsPerSeries)
+  return {
+    artifactKind: 'team-history-scope',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMetaFor({
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+    }),
+    generatedAt: data.generatedAt,
+    modelVersion: data.model.version,
+    modelConfigHash: data.model.configHash,
+    filter: snapshot?.filter ?? data.defaultFilter,
+    omissionPolicy: {
+      minimumPointsPerSeries,
+      omittedSeriesCount: history.omittedSeriesCount,
+      reason: 'Standings with fewer than two resolved rating-history points are omitted because a trend line needs at least two points; unresolved tied match groups are skipped.',
+    },
+    teamCount: Object.keys(history.series).length,
+    pointCount: history.pointCount,
+    series: history.series,
+  }
+}
+
+export function createRegionHistory(data: StaticRankingData): RegionHistoryDirectory {
+  const scopes = Object.fromEntries(
+    Object.entries(data.snapshots)
+      .filter(([key, snapshot]) => key === data.defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter))
+      .map(([key, snapshot]) => [key, createRegionHistoryScope(snapshot)]),
+  )
+
+  return {
+    artifactKind: 'region-history',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMetaFor({
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+    }),
+    generatedAt: data.generatedAt,
+    modelVersion: data.model.version,
+    modelConfigHash: data.model.configHash,
+    defaultScopeKey: data.defaultSnapshotKey,
+    scopes,
+  }
+}
+
+const REGION_HISTORY_TIER_RANK: Record<LeagueTierName, number> = {
+  'tier-one': 0,
+  'tier-two': 1,
+  'tier-three': 2,
+  emerging: 3,
+  unknown: 4,
+}
+
+function createRegionHistoryScope(snapshot: ComputedRankingSnapshot): PublicRegionHistoryScope {
+  const series: Record<string, PublicRegionHistorySeries> = Object.fromEntries(
+    snapshot.regions.map((region) => [region.region, { region: region.region, points: [] }]),
+  )
+  const publishedRegions = new Set(Object.keys(series))
+  const latestByLeague = new Map<string, LeagueStrengthHistoryPoint>()
+  const pointsByDate = groupRegionLeagueHistoryByDate(snapshot.leagueHistory)
+
+  for (const [date, points] of pointsByDate) {
+    for (const point of points) {
+      latestByLeague.set(point.league, point)
+    }
+    const rankedRegions = rankRegionHistoryRows(latestByLeague, publishedRegions)
+    const touchedRegions = new Set<string>()
+    for (const point of points) {
+      const region = currentTopTierRegionForLeague(point.league, point.region)
+      const row = rankedRegions.get(region)
+      if (row?.flagshipLeagues.includes(point.league)) touchedRegions.add(region)
+    }
+    for (const region of touchedRegions) {
+      const row = rankedRegions.get(region)
+      const target = series[region]
+      if (!row || !target) continue
+      const context = regionHistoryContext(region, points, row.flagshipLeagues)
+      const point: PublicRegionHistoryPoint = context
+        ? [date, row.score, row.rank, context]
+        : [date, row.score, row.rank]
+      const previous = target.points.at(-1)
+      if (previous && previous[0] === point[0] && previous[1] === point[1] && previous[2] === point[2]) continue
+      target.points.push(point)
+    }
+  }
+
+  alignFinalRegionHistoryPoints(series, snapshot.regions)
+  return {
+    filter: snapshot.filter,
+    regionCount: Object.keys(series).length,
+    pointCount: Object.values(series).reduce((total, entry) => total + entry.points.length, 0),
+    series,
+  }
+}
+
+function groupRegionLeagueHistoryByDate(points: LeagueStrengthHistoryPoint[]) {
+  return groupEntriesByDate(points, (point) => point.date)
+    .map(({ date, entries }) => [date, entries] as const)
+}
+
+function rankRegionHistoryRows(latestByLeague: Map<string, LeagueStrengthHistoryPoint>, publishedRegions: Set<string>) {
+  const pointsByRegion = new Map<string, LeagueStrengthHistoryPoint[]>()
+  for (const point of latestByLeague.values()) {
+    const region = currentTopTierRegionForLeague(point.league, point.region)
+    if (!publishedRegions.has(region)) continue
+    const bucket = pointsByRegion.get(region) ?? []
+    bucket.push(point)
+    pointsByRegion.set(region, bucket)
+  }
+
+  const rows = [...pointsByRegion.entries()]
+    .map(([region, points]) => {
+      const flagshipPoints = flagshipRegionHistoryPoints(points)
+      return {
+        region,
+        score: regionHistoryScore(flagshipPoints),
+        flagshipLeagues: uniqueValues(flagshipPoints.map((point) => point.league)),
+      }
+    })
+    .filter((row) => row.flagshipLeagues.length > 0 && Number.isFinite(row.score))
+    .sort((left, right) => right.score - left.score || left.region.localeCompare(right.region))
+
+  return new Map(rows.map((row, index) => [row.region, { ...row, rank: index + 1 }]))
+}
+
+function regionHistoryScore(flagshipPoints: LeagueStrengthHistoryPoint[]) {
+  if (flagshipPoints.length === 0) return 0
+  let weightedTotal = 0
+  let weightTotal = 0
+  for (const point of flagshipPoints) {
+    const weight = Math.max(1, point.internationalMatches)
+    weightedTotal += point.score * weight
+    weightTotal += weight
+  }
+  return Number((weightTotal > 0 ? weightedTotal / weightTotal : meanRegionHistoryScore(flagshipPoints)).toFixed(1))
+}
+
+function flagshipRegionHistoryPoints(points: LeagueStrengthHistoryPoint[]) {
+  if (points.length === 0) return []
+  const bestTierRank = Math.min(...points.map((point) => REGION_HISTORY_TIER_RANK[leagueTierFor(point.league).tier]))
+  return points.filter((point) => REGION_HISTORY_TIER_RANK[leagueTierFor(point.league).tier] === bestTierRank)
+}
+
+function meanRegionHistoryScore(points: LeagueStrengthHistoryPoint[]) {
+  if (points.length === 0) return 0
+  return points.reduce((total, point) => total + point.score, 0) / points.length
+}
+
+function regionHistoryContext(region: string, points: LeagueStrengthHistoryPoint[], flagshipLeagues: string[]): PublicRegionHistoryPointContext | undefined {
+  const flagshipLeagueNames = new Set(flagshipLeagues)
+  const regionPoints = points.filter((point) => currentTopTierRegionForLeague(point.league, point.region) === region && flagshipLeagueNames.has(point.league))
+  if (regionPoints.length === 0) return undefined
+  const latest = regionPoints.at(-1)!
+  const context: PublicRegionHistoryPointContext = {
+    event: latest.event,
+    tier: latest.tier,
+    leagues: uniqueValues(regionPoints.map((point) => point.league)),
+    opponentRegions: uniqueValues(regionPoints.map((point) => currentTopTierRegionForLeague(point.opponentLeague, point.opponentRegion))),
+    wins: regionPoints.reduce((total, point) => total + (point.result === 'W' ? 1 : 0), 0),
+    losses: regionPoints.reduce((total, point) => total + (point.result === 'L' ? 1 : 0), 0),
+    winsOverExpected: roundOptional(regionPoints.reduce((total, point) => total + (point.winsOverExpected ?? 0), 0), 2, { keepZero: true }),
+    opponentAdjustedWinRate: roundOptional(latest.opponentAdjustedWinRate, 3, { keepZero: true }),
+    source: 'league-strength-history',
+  }
+  return omitUndefined(context)
+}
+
+function alignFinalRegionHistoryPoints(series: Record<string, PublicRegionHistorySeries>, regions: RegionStrength[]) {
+  const latestDate = Object.values(series)
+    .flatMap((entry) => entry.points.map((point) => point[0]))
+    .sort()
+    .at(-1)
+  if (!latestDate) return
+
+  for (const region of regions) {
+    const target = series[region.region]
+    if (!target || target.points.length === 0) continue
+    const latest = target.points.at(-1)!
+    const finalScore = Number(region.score.toFixed(1))
+    if (latest[1] === finalScore && latest[2] === region.rank) continue
+    target.points.push([
+      latestDate,
+      finalScore,
+      region.rank,
+      {
+        event: 'Published region score',
+        source: 'league-strength-history',
+      },
+    ])
   }
 }
 
@@ -194,8 +513,10 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
       omittedSeriesCount += 1
       continue
     }
+    const key = teamStandingKey(standing)
+    pointCount -= series[key]?.points.length ?? 0
     pointCount += points.length
-    series[teamStandingKey(standing)] = {
+    series[key] = {
       team: standing.team,
       code: standing.code,
       region: standing.region,
@@ -213,13 +534,27 @@ function alignFinalTeamHistoryPoint(standing: TeamStanding, points: TeamHistoryP
 
   const latest = points.at(-1)!
   if (latest[1] === finalRating && latest[2] === finalRank) return points
-  const aligned: TeamHistoryPointCompact = latest[3]
-    ? [latest[0], finalRating, finalRank, latest[3]]
+  const adjustment = finalRating - latest[1]
+  const context = compactStandingAdjustmentContext(standing, adjustment)
+  const aligned: TeamHistoryPointCompact = context
+    ? [latest[0], finalRating, finalRank, context]
     : [latest[0], finalRating, finalRank]
-  return [
-    ...points.slice(0, -1),
-    aligned,
-  ]
+  return [...points, aligned]
+}
+
+function compactStandingAdjustmentContext(
+  standing: TeamStanding,
+  adjustment: number,
+): PublicTeamHistoryPointContext | undefined {
+  const components = compactTeamHistoryComponents(standing.ratingComponents)
+  const context: PublicTeamHistoryPointContext = {
+    kind: 'standing-adjustment',
+    adjustmentReason: 'published-standing-reconciliation',
+    event: 'Published standing adjustment',
+    delta: Number(adjustment.toFixed(1)),
+    ...(components ? { model: { c: components } } : {}),
+  }
+  return omitUndefined(context)
 }
 
 type TeamHistoryPublicMatchGroup = {
@@ -228,29 +563,15 @@ type TeamHistoryPublicMatchGroup = {
 }
 
 function groupTeamHistoryPointsIntoMatches(history: TeamHistoryPoint[]): TeamHistoryPublicMatchGroup[] {
-  const groups: TeamHistoryPublicMatchGroup[] = []
-
-  for (const point of history) {
-    const key = teamHistoryPublicMatchKey(point)
-    const current = groups.at(-1)
-    if (current?.key === key) {
-      current.entries.push(point)
-      continue
-    }
-    groups.push({ key, entries: [point] })
-  }
-
-  return groups
+  return groupAdjacentTimelineEntries(history, teamHistoryPublicMatchKey)
 }
 
 function isResolvedTeamHistoryMatchGroup(group: TeamHistoryPublicMatchGroup) {
-  const wins = group.entries.filter((entry) => entry.result === 'W').length
-  const losses = group.entries.filter((entry) => entry.result === 'L').length
-  return wins !== losses
+  return isResolvedTimelineResult(summarizeTimelineResults(group.entries, (entry) => entry.result))
 }
 
 function teamHistoryPublicMatchKey(point: TeamHistoryPoint) {
-  return [
+  return timelineGroupKey([
     'series',
     point.date,
     point.event ?? '',
@@ -258,7 +579,7 @@ function teamHistoryPublicMatchKey(point: TeamHistoryPoint) {
     point.source?.provider ?? '',
     point.source?.fileName ?? '',
     String(point.source?.bestOf ?? ''),
-  ].join('\u0000')
+  ])
 }
 
 function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includeContext: boolean): TeamHistoryPointCompact {
@@ -266,13 +587,13 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
   const base: TeamHistoryPointCompact = [latest.date, Math.round(latest.rating), latest.rank]
   if (!includeContext) return base
 
-  const wins = group.entries.filter((entry) => entry.result === 'W').length
-  const losses = group.entries.filter((entry) => entry.result === 'L').length
-  const bestOf = bestOfForScore(wins, losses, latest.source?.bestOf)
-  const sourceGameIds = unique(group.entries.map((entry) => entry.source?.gameId).filter((value): value is string => Boolean(value)))
+  const resultSummary = summarizeTimelineResults(group.entries, (entry) => entry.result)
+  const bestOf = inferBestOfForScore(resultSummary.wins, resultSummary.losses, latest.source?.bestOf)
+  const sourceSummary = timelineSourceSummary(group.entries, (entry) => entry.source)
   const delta = group.entries.reduce((total, entry) => (
     typeof entry.delta === 'number' && Number.isFinite(entry.delta) ? total + entry.delta : total
   ), 0)
+  const modelContext = compactTeamHistoryModelContext(group.entries, resultSummary.result)
 
   return [
     latest.date,
@@ -283,28 +604,105 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
       opponent: latest.opponent,
       delta: Number(delta.toFixed(1)),
       tier: latest.tier,
-      result: wins === losses ? undefined : wins > losses ? 'W' : 'L',
-      wins,
-      losses,
-      games: group.entries.length,
+      result: resultSummary.result,
+      wins: resultSummary.wins,
+      losses: resultSummary.losses,
+      games: resultSummary.games,
       ...(typeof bestOf === 'number' ? { bestOf } : {}),
-      sourceProvider: latest.source?.provider,
-      sourceGameId: sourceGameIds.at(-1),
-      sourceMatchId: latest.source?.matchId,
-      ...(sourceGameIds.length > 1 ? { sourceGameIds } : {}),
-      sourceFileName: latest.source?.fileName,
-      sourceUrl: latest.source?.url,
+      ...sourceSummary,
+      ...(modelContext ? { model: modelContext } : {}),
     },
   ]
+}
+
+function compactTeamHistoryModelContext(
+  entries: TeamHistoryPoint[],
+  result: 'W' | 'L' | undefined,
+): PublicTeamHistoryModelContext | undefined {
+  const update = latestInformativeRatingUpdate(entries)
+  const residual = finiteNumber(update?.neutralResultResidual)
+  const observed = result === 'W' ? 1 : result === 'L' ? 0 : undefined
+  const expected = typeof observed === 'number' && typeof residual === 'number'
+    ? clamp01(observed - residual)
+    : undefined
+  const components = compactTeamHistoryComponents(entries.at(-1)?.ratingComponents)
+  const context: PublicTeamHistoryModelContext = {
+    e: roundOptional(expected, 3, { keepZero: true }),
+    ...(components ? { c: components } : {}),
+  }
+  return omitUndefined(context)
+}
+
+function compactTeamHistoryComponents(
+  components: TeamHistoryPoint['ratingComponents'] | undefined,
+): PublicTeamHistoryModelContext['c'] | undefined {
+  if (!components) return undefined
+  const values = [
+    finiteNumber(components.leagueAnchor),
+    finiteNumber(components.teamStableOffset),
+    finiteNumber(components.rosterPriorOffset),
+    finiteNumber(components.momentum),
+    finiteNumber(components.contextAdjustment),
+  ]
+  if (values.some((value) => typeof value !== 'number')) return undefined
+  return values.map((value) => roundRequired(value ?? 0, 1)) as PublicTeamHistoryModelContext['c']
+}
+
+function latestInformativeRatingUpdate(entries: TeamHistoryPoint[]) {
+  return entries
+    .toReversed()
+    .map((entry) => entry.ratingUpdate)
+    .find((update) => Boolean(update && (
+      update.updateUnit !== 'series-member-no-team-update'
+      || hasFiniteRatingUpdateField(update, 'resultEvidence')
+      || hasFiniteRatingUpdateField(update, 'neutralResultResidual')
+      || hasFiniteRatingUpdateField(update, 'seriesStrengthSignal')
+    )))
+}
+
+function hasFiniteRatingUpdateField(update: TeamHistoryPoint['ratingUpdate'], key: keyof TeamHistoryPoint['ratingUpdate']) {
+  return typeof finiteNumber(update[key]) === 'number'
+}
+
+function finiteNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function roundOptional(value: number | undefined, decimals: number, { keepZero = false }: { keepZero?: boolean } = {}) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  const factor = 10 ** decimals
+  const rounded = Math.round(value * factor) / factor
+  const normalized = Object.is(rounded, -0) ? 0 : rounded
+  if (!keepZero && Math.abs(normalized) < 0.05) return undefined
+  return normalized
+}
+
+function roundRequired(value: number, decimals: number) {
+  const factor = 10 ** decimals
+  const rounded = Math.round(value * factor) / factor
+  return Object.is(rounded, -0) ? 0 : rounded
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T): T | undefined {
+  const entries = Object.entries(value).filter(([, entry]) => entry !== undefined)
+  return entries.length > 0 ? Object.fromEntries(entries) as T : undefined
+}
+
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value))
 }
 
 function isSeasonHistoryScope(filter: SnapshotFilter | undefined) {
   return Boolean(filter && filter.season !== 'All' && filter.event === 'All' && filter.region === 'All')
 }
 
+function isSeasonPlayerScope(filter: SnapshotFilter | undefined) {
+  return isSeasonHistoryScope(filter) && !filter?.checkpoint
+}
+
 /** Mirrors the UI `teamKey` so history can be looked up from a summary standing. */
 export function teamStandingKey(standing: Pick<TeamStanding, 'team' | 'region' | 'code'>) {
-  return `${standing.team}__${standing.region ?? ''}__${standing.code ?? ''}`
+  return teamIdFor(standing)
 }
 
 export type AwardSignalData = {
@@ -329,6 +727,7 @@ export type ComputedRankingSnapshot = {
   sourceBreakdown: SnapshotSourceBreakdown[]
   standings: TeamStanding[]
   leagues: LeagueStrength[]
+  leagueHistory: LeagueStrengthHistoryPoint[]
   players: PlayerStanding[]
   events: EventSummary[]
   seasons: SeasonSummary[]
@@ -337,7 +736,7 @@ export type ComputedRankingSnapshot = {
 
 export type StaticRankingData = {
   artifactKind: 'full-ranking-artifact'
-  schemaVersion: 14
+  schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   generatedAt: string
   source: string
   sources: DataSourceInfo[]
@@ -359,6 +758,7 @@ export type StaticRankingData = {
     seasons: string[]
     events: string[]
     regions: Array<Region | 'All'>
+    checkpoints?: Record<string, SnapshotCheckpointOption[]>
   }
   defaultFilter: SnapshotFilter
   defaultSnapshotKey: string
@@ -376,12 +776,18 @@ export function createStaticRankingSummaryData(
   {
     fullSnapshotUrl,
     playerDirectoryUrl,
+    teamDirectoryUrl,
+    teamHistoryIndexUrl,
     teamHistoryUrl,
+    regionHistoryUrl,
     snapshotUrlForKey = snapshotShardUrlPathForKey,
   }: {
     fullSnapshotUrl?: string
     playerDirectoryUrl?: string
+    teamDirectoryUrl?: string
+    teamHistoryIndexUrl?: string
     teamHistoryUrl?: string
+    regionHistoryUrl?: string
     snapshotUrlForKey?: (key: string) => string
   } = {},
 ): {
@@ -389,9 +795,10 @@ export function createStaticRankingSummaryData(
   snapshots: Record<string, RankingSummarySnapshot>
 } {
   const snapshots = Object.fromEntries(
-    Object.entries(data.snapshots).map(([key, snapshot]) => [key, compactSnapshot(snapshot)]),
+    Object.entries(data.snapshots)
+      .filter(([key, snapshot]) => shouldPublishPublicScope(key, snapshot, data.defaultSnapshotKey))
+      .map(([key, snapshot]) => [key, compactSnapshot(snapshot, data.generatedAt)]),
   )
-  const defaultSnapshot = snapshots[data.defaultSnapshotKey]
   const snapshotIndex = Object.fromEntries(
     Object.entries(snapshots).map(([key, snapshot]) => [
       key,
@@ -403,13 +810,6 @@ export function createStaticRankingSummaryData(
       },
     ]),
   )
-  const manifestDefaultSnapshot = defaultSnapshot
-    ? {
-        ...defaultSnapshot,
-        standings: defaultSnapshot.standings.map((standing) => ({ ...standing, recentMatches: [] })),
-      }
-    : undefined
-  const manifestSnapshots = manifestDefaultSnapshot ? { [data.defaultSnapshotKey]: manifestDefaultSnapshot } : {}
   const { artifactKind: _artifactKind, snapshots: _snapshots, teams: _teams, ...manifestBase } = data
   void _artifactKind
   void _snapshots
@@ -419,37 +819,58 @@ export function createStaticRankingSummaryData(
     manifest: {
       ...manifestBase,
       artifactKind: 'public-ranking-manifest',
+      artifactMeta: artifactMetaFor({
+        generatedAt: data.generatedAt,
+        modelVersion: data.model.version,
+        modelConfigHash: data.model.configHash,
+      }),
       summaryMode: 'browser-summary',
       ...(fullSnapshotUrl ? { fullSnapshotUrl } : {}),
       ...(playerDirectoryUrl ? { playerDirectoryUrl } : {}),
+      ...(teamDirectoryUrl ? { teamDirectoryUrl } : {}),
+      ...(teamHistoryIndexUrl ? { teamHistoryIndexUrl } : {}),
       ...(teamHistoryUrl ? { teamHistoryUrl } : {}),
+      ...(regionHistoryUrl ? { regionHistoryUrl } : {}),
       teamCount: Object.keys(data.teams).length,
       snapshotIndex,
-      snapshots: manifestSnapshots,
     },
     snapshots,
   }
 }
 
-function compactSnapshot(snapshot: ComputedRankingSnapshot): RankingSummarySnapshot {
+function compactSnapshot(snapshot: ComputedRankingSnapshot, generatedAt: string): RankingSummarySnapshot {
   const {
     artifactKind: _artifactKind,
     standings,
     players: _players,
     events: _events,
     seasons: _seasons,
+    leagueHistory: _leagueHistory,
     ...summary
   } = snapshot
   void _artifactKind
   void _players
   void _events
   void _seasons
+  void _leagueHistory
 
   return {
     ...summary,
     artifactKind: 'public-snapshot-shard',
-    standings: standings.map(compactPublicStanding),
+    artifactMeta: artifactMetaFor({
+      generatedAt,
+      modelVersion: summary.modelVersion,
+      modelConfigHash: summary.modelConfigHash,
+    }),
+    standings: standings.map((standing, index) => compactPublicStanding(standing, {
+      includeRecentMatches: index < 100,
+      includeRatingUpdate: false,
+    })),
   }
+}
+
+function shouldPublishPublicScope(key: string, snapshot: ComputedRankingSnapshot, defaultSnapshotKey: string) {
+  return key === defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter)
 }
 
 export function createStaticRankingData({
@@ -469,11 +890,20 @@ export function createStaticRankingData({
   dataMode?: StaticRankingData['dataMode']
   externalSources?: DataSourceInfo[]
 }): StaticRankingData {
+  const ratingUniverse = filterPublishedRatingUniverseInput(matches, teams)
+  matches = ratingUniverse.matches
+  teams = ratingUniverse.teams
   const resolvedDataMode = dataMode ?? (matches.length === 0 ? 'no-data' : 'seeded-sample')
   const hasOracleSource = matches.some((match) => match.sourceProvider === 'oracles-elixir')
   const hasLeaguepediaSource = matches.some((match) => match.sourceProvider === 'leaguepedia-cargo')
   const seasons = ['All', ...Array.from(new Set(matches.map(matchSeasonKey))).sort().reverse()]
   const events = ['All', ...Array.from(new Set(matches.map((match) => match.event))).sort()]
+  const checkpointOptions = buildSeasonCheckpointOptions(matches)
+  const checkpointByFilterKey = new Map(
+    Object.values(checkpointOptions)
+      .flat()
+      .map((checkpoint) => [checkpointFilterKey(checkpoint.season, checkpoint.id), checkpoint]),
+  )
   const observedCurrentRegions = new Set(
     Object.values(teams)
       .map((team) => currentTopTierRegionForLeague(team.league, team.region))
@@ -486,13 +916,15 @@ export function createStaticRankingData({
   const seasonRankingCache = new Map<string, RankingScope>()
   const rankingScopeForFilter = (filter: SnapshotFilter): RankingScope => {
     if (filter.season === 'All') return globalRankingScope
-    const cached = seasonRankingCache.get(filter.season)
+    const cacheKey = snapshotKey(filter)
+    const cached = seasonRankingCache.get(cacheKey)
     if (cached) return cached
 
-    const seasonMatches = matchesThroughSeason(matches, filter.season)
-    const seasonTeams = teamProfilesForRankingScope(seasonMatches, teams)
-    const scope = { ranking: buildRankingModel(seasonMatches, seasonTeams), teams: seasonTeams }
-    seasonRankingCache.set(filter.season, scope)
+    const checkpoint = checkpointForFilter(filter, checkpointByFilterKey)
+    const scopeMatches = checkpoint ? matchesThroughDate(matches, checkpoint.endDate) : matchesThroughSeason(matches, filter.season)
+    const scopeTeams = teamProfilesForRankingScope(scopeMatches, teams)
+    const scope = { ranking: buildRankingModel(scopeMatches, scopeTeams), teams: scopeTeams }
+    seasonRankingCache.set(cacheKey, scope)
     return scope
   }
   const globalPlayers = buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
@@ -500,10 +932,11 @@ export function createStaticRankingData({
   const playersForFilter = (filter: SnapshotFilter, filteredMatches: MatchRecord[], scope: RankingScope): PlayerStanding[] => {
     if (filter.event !== 'All' || filter.region !== 'All') return []
     if (filter.season === 'All') return globalPlayers
-    const cached = seasonPlayerCache.get(filter.season)
+    const cacheKey = snapshotKey(filter)
+    const cached = seasonPlayerCache.get(cacheKey)
     if (cached) return cached
     const players = buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
-    seasonPlayerCache.set(filter.season, players)
+    seasonPlayerCache.set(cacheKey, players)
     return players
   }
   const hasRosters = Object.keys(rosters).length > 0
@@ -512,12 +945,17 @@ export function createStaticRankingData({
   const seedMatches = matches.filter((match) => (match.sourceProvider ?? 'seed') === 'seed')
   const defaultFilter: SnapshotFilter = { season: 'All', event: 'All', region: 'All' }
 
-  for (const filter of buildSnapshotFilters(matches, teams)) {
-    const filteredMatches = filterMatches(matches, teams, filter)
+  for (const filter of buildSnapshotFilters(matches, teams, checkpointOptions)) {
+    const checkpoint = checkpointForFilter(filter, checkpointByFilterKey)
+    const filteredMatches = filterMatches(matches, teams, filter, checkpoint)
     const snapshotScope = rankingScopeForFilter(filter)
     const filteredTeamNames = teamNamesForFilter(filteredMatches, snapshotScope.teams, filter)
     const snapshotLeagues = snapshotScope.ranking.leagues.filter((league) => filter.region === 'All' || currentTopTierRegionForLeague(league.league, league.region) === filter.region)
-    const snapshotStandings = filteredStandings(snapshotScope.ranking.standings, filteredMatches, filteredTeamNames, filter, snapshotScope.teams)
+    const snapshotStandings = withCheckpointMovement(
+      filteredStandings(snapshotScope.ranking.standings, filteredMatches, filteredTeamNames, filter, snapshotScope.teams),
+      checkpoint ? baselineRankingForCheckpoint(checkpoint, matches, teams).standings : undefined,
+    )
+    const snapshotLeagueHistory = leagueHistoryForFilter(snapshotScope.ranking.leagueHistory, filteredMatches, snapshotScope.teams, filter)
     snapshots[snapshotKey(filter)] = {
       artifactKind: 'full-ranking-snapshot',
       filter,
@@ -527,6 +965,7 @@ export function createStaticRankingData({
       sourceBreakdown: sourceBreakdown(filteredMatches),
       standings: snapshotStandings,
       leagues: snapshotLeagues,
+      leagueHistory: snapshotLeagueHistory,
       players: playersForFilter(filter, filteredMatches, snapshotScope),
       events: filterEventSummaries(snapshotScope.ranking.events, filteredMatches),
       seasons: filterSeasonSummaries(snapshotScope.ranking.seasons, filteredMatches),
@@ -536,7 +975,7 @@ export function createStaticRankingData({
 
   return {
     artifactKind: 'full-ranking-artifact',
-    schemaVersion: 14,
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     generatedAt,
     source,
     sources: [
@@ -593,7 +1032,7 @@ export function createStaticRankingData({
       metrics: summarizePredictions(globalRanking.predictions),
     },
     dataMode: resolvedDataMode,
-    filterOptions: { seasons, events, regions },
+    filterOptions: { seasons, events, regions, ...(Object.keys(checkpointOptions).length > 0 ? { checkpoints: checkpointOptions } : {}) },
     defaultFilter,
     defaultSnapshotKey: snapshotKey(defaultFilter),
     snapshots,
@@ -613,8 +1052,8 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
   const players = compactPlayersForSnapshot(defaultSnapshot, data.teams)
   const scopedPlayers: Record<string, CompactPlayer[]> = Object.fromEntries(
     Object.entries(data.snapshots)
-      .filter(([key, snapshot]) => key !== data.defaultSnapshotKey && isSeasonHistoryScope(snapshot.filter))
-      .map(([key, snapshot]) => [key, compactPlayersForSnapshot(snapshot, data.teams)])
+      .filter(([key, snapshot]) => key !== data.defaultSnapshotKey && isSeasonPlayerScope(snapshot.filter))
+      .map(([key, snapshot]) => [key, compactPlayersForSnapshot(snapshot, data.teams, { detail: 'scope' })])
       .filter(([, rows]) => rows.length > 0),
   )
   const scopedSameTeamTopFiveClustering: Record<string, SameTeamTopFiveClusteringDiagnostic> = Object.fromEntries(
@@ -623,6 +1062,12 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
 
   return {
     artifactKind: 'player-directory',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMetaFor({
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+    }),
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
@@ -641,9 +1086,42 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
   }
 }
 
+export function createTeamDirectory(data: StaticRankingData): TeamDirectory {
+  const teams = Object.values(data.teams)
+    .map((team) => ({
+      teamId: teamIdFor({ team: team.name, region: team.region, code: team.code }),
+      name: team.name,
+      code: team.code,
+      region: team.region,
+      league: team.league,
+      leagueId: leagueIdFor(team),
+      providerAliases: {
+        'oracles-elixir': uniqueValues([team.name, team.code].filter(Boolean)),
+        'leaguepedia-cargo': uniqueValues([team.name, team.code].filter(Boolean)),
+      },
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name))
+
+  return {
+    artifactKind: 'team-directory',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMetaFor({
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+    }),
+    generatedAt: data.generatedAt,
+    modelVersion: data.model.version,
+    modelConfigHash: data.model.configHash,
+    teamCount: teams.length,
+    teams,
+  }
+}
+
 function compactPlayersForSnapshot(
   snapshot: Pick<ComputedRankingSnapshot, 'filter' | 'players' | 'standings'> | undefined,
   teams: Record<string, TeamProfile>,
+  { detail = 'default' }: { detail?: 'default' | 'scope' } = {},
 ): CompactPlayer[] {
   const sourced = (snapshot?.players ?? [])
     .filter((player) =>
@@ -670,13 +1148,17 @@ function compactPlayersForSnapshot(
         && creditedTeam.games >= playerModelParameters.minimumRankedSourcedPlayerGames
         && (player.appearance?.roleGames ?? player.games) >= playerModelParameters.minimumRankedSourcedPlayerGames
     })
+    .slice(0, detail === 'scope' ? 100 : Number.POSITIVE_INFINITY)
     .map((player, index) => {
       const creditedTeam = creditedTeamForPlayer(player, snapshot?.filter)
       const meta = teamMeta.get(creditedTeam.team)
-      return {
+      const teamId = teamIdFor({ team: creditedTeam.team, region: meta?.region, code: meta?.code })
+      const compact: CompactPlayer = {
         id: player.id,
+        playerId: player.id,
         name: player.name,
         team: creditedTeam.team,
+        teamId,
         teamCode: meta?.code,
         teamGames: creditedTeam.games,
         teamShare: creditedTeam.share,
@@ -688,22 +1170,19 @@ function compactPlayersForSnapshot(
         games: player.games,
         delta: player.delta,
         form: player.form,
-        recentMatches: compactPlayerRecentMatches(player),
+        ...(detail === 'default' ? { recentMatches: compactPlayerRecentMatches(player) } : {}),
         impactMultiplier: player.impactMultiplier,
         availability: player.availability,
         roleCertainty: player.roleCertainty,
         impactDrivers: player.impactDrivers,
-        diagnostics: player.diagnostics,
-        individualResidual: player.individualResidual,
+        individualResidual: compactPlayerResidual(player.individualResidual),
         ratingBasis: player.ratingBasis,
         sourceProvider: player.source?.provider,
-        sourceFileName: player.source?.fileName,
-        sourceGameId: player.source?.gameId,
-        sourceUrl: player.source?.url,
         latestObservedAt: player.source?.date,
         latestObservedEvent: player.source?.event,
-        appearance: player.appearance,
+        ...(detail === 'default' ? { appearance: compactPlayerAppearance(player.appearance) } : {}),
       }
+      return compact
     })
 
   return assignCompactPlayerResidualRanks(players)
@@ -737,6 +1216,36 @@ function assignCompactPlayerResidualRanks(players: CompactPlayer[]): CompactPlay
       },
     }
   })
+}
+
+function compactPlayerResidual(residual: PlayerIndividualResidual | undefined): CompactPlayer['individualResidual'] {
+  if (!residual) return undefined
+  return {
+    sourceProvider: residual.sourceProvider,
+    metricVersion: residual.metricVersion,
+    scope: residual.scope,
+    score: residual.score,
+    confidence: residual.confidence,
+    sampleGames: residual.sampleGames,
+  }
+}
+
+function compactPlayerAppearance(appearance: PlayerAppearanceSummary | undefined): CompactPlayer['appearance'] {
+  if (!appearance) return undefined
+  return {
+    primaryTeam: appearance.primaryTeam,
+    primaryTeamGames: appearance.primaryTeamGames,
+    primaryTeamShare: appearance.primaryTeamShare,
+    latestTeamGames: appearance.latestTeamGames,
+    latestTeamShare: appearance.latestTeamShare,
+    roleGames: appearance.roleGames,
+    roleShare: appearance.roleShare,
+    teamsPlayed: appearance.teamsPlayed,
+    rolesPlayed: appearance.rolesPlayed,
+    teamHistory: appearance.teamHistory.slice(0, 4),
+    roleHistory: appearance.roleHistory,
+    flags: appearance.flags,
+  }
 }
 
 function sameTeamTopFiveClustering(players: CompactPlayer[], scope: string): SameTeamTopFiveClusteringDiagnostic {
@@ -773,22 +1282,17 @@ type PlayerMatchGroup = {
 function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['recentMatches'] {
   const recent = groupPlayerHistoryIntoMatches(player.history.filter((entry) => entry.result && entry.opponent))
     .filter(({ entries }) => {
-      const wins = entries.filter((entry) => entry.result === 'W').length
-      const losses = entries.filter((entry) => entry.result === 'L').length
-      return wins !== losses
+      return isResolvedTimelineResult(summarizeTimelineResults(entries, (entry) => entry.result))
     })
-    .slice(-5)
+    .slice(-2)
 
   if (recent.length === 0) return undefined
 
   return recent.map(({ entries }) => {
     const latest = entries.at(-1)!
-    const wins = entries.filter((entry) => entry.result === 'W').length
-    const losses = entries.filter((entry) => entry.result === 'L').length
-    const sourceGameIds = unique(entries.map((entry) => entry.source?.gameId).filter((value): value is string => Boolean(value)))
-    const bestOf = bestOfForScore(wins, losses, latest.bestOf ?? latest.source?.bestOf)
-    const sourceMatchId = latest.source?.matchId
-
+    const resultSummary = summarizeTimelineResults(entries, (entry) => entry.result)
+    if (!resultSummary.result) throw new Error('Cannot compact unresolved player timeline match')
+    const bestOf = inferBestOfForScore(resultSummary.wins, resultSummary.losses, latest.bestOf ?? latest.source?.bestOf)
     return {
       date: latest.date,
       event: latest.event,
@@ -796,39 +1300,21 @@ function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['rece
       opponentTeamCode: latest.opponentTeamCode,
       playerTeam: latest.playerTeam,
       playerTeamCode: latest.playerTeamCode,
-      result: wins > losses ? 'W' : 'L',
-      wins,
-      losses,
-      games: entries.length,
+      result: resultSummary.result,
+      wins: resultSummary.wins,
+      losses: resultSummary.losses,
+      games: resultSummary.games,
       ...(typeof bestOf === 'number' ? { bestOf } : {}),
-      sourceProvider: latest.source?.provider,
-      sourceFileName: latest.source?.fileName,
-      sourceGameId: sourceGameIds.at(-1),
-      ...(sourceMatchId ? { sourceMatchId } : {}),
-      ...(sourceGameIds.length > 1 ? { sourceGameIds } : {}),
-      sourceUrl: latest.source?.url,
     }
   })
 }
 
 function groupPlayerHistoryIntoMatches(history: PlayerHistoryEntry[]): PlayerMatchGroup[] {
-  const groups: PlayerMatchGroup[] = []
-
-  for (const entry of history) {
-    const key = playerHistoryMatchKey(entry)
-    const current = groups.at(-1)
-    if (current?.key === key) {
-      current.entries.push(entry)
-      continue
-    }
-    groups.push({ key, entries: [entry] })
-  }
-
-  return groups
+  return groupAdjacentTimelineEntries(history, playerHistoryMatchKey)
 }
 
 function playerHistoryMatchKey(entry: PlayerHistoryEntry) {
-  return [
+  return timelineGroupKey([
     'series',
     entry.date,
     entry.event,
@@ -837,23 +1323,7 @@ function playerHistoryMatchKey(entry: PlayerHistoryEntry) {
     entry.source?.provider ?? '',
     entry.source?.fileName ?? '',
     String(entry.bestOf ?? entry.source?.bestOf ?? ''),
-  ].join('\u0000')
-}
-
-function bestOfForScore(wins: number, losses: number, explicit?: number) {
-  const games = wins + losses
-  if (games <= 0) return explicit
-  const requiredWins = Math.max(wins, losses)
-  const inferred = wins === losses ? games : Math.max(games, requiredWins * 2 - 1)
-  if (typeof explicit !== 'number' || !Number.isFinite(explicit)) return inferred
-
-  const explicitGames = Math.trunc(explicit)
-  const winsNeeded = Math.floor(explicitGames / 2) + 1
-  return games <= explicitGames && requiredWins >= winsNeeded ? explicitGames : inferred
-}
-
-function unique<T>(values: T[]): T[] {
-  return [...new Set(values)]
+  ])
 }
 
 function creditedTeamForPlayer(player: PlayerStanding, filter: SnapshotFilter | undefined) {
@@ -1078,9 +1548,100 @@ function sourceBreakdown(matches: MatchRecord[]): SnapshotSourceBreakdown[] {
     .sort((left, right) => left.provider.localeCompare(right.provider))
 }
 
-function filterMatches(matches: MatchRecord[], teams: Record<string, TeamProfile>, filter: SnapshotFilter) {
+export function leagueHistoryForFilter(
+  history: LeagueStrengthHistoryPoint[],
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  filter: SnapshotFilter,
+) {
+  if (isDefaultFilter(filter)) return history
+  if (history.length === 0 || matches.length === 0) return []
+
+  const scopedKeys = leagueHistoryKeysForMatches(matches, teams, filter)
+  return history.filter((point) => scopedKeys.has(leagueHistoryPointKey(point)))
+}
+
+function leagueHistoryKeysForMatches(
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  filter: SnapshotFilter,
+) {
+  const keys = new Set<string>()
+  const sortedMatches = matches.toSorted((left, right) => left.date.localeCompare(right.date))
+
+  for (const dateGroup of groupEntriesByDate(sortedMatches, (match) => match.date)) {
+    for (const seriesGroup of groupTimelineEntriesByKey(dateGroup.entries, rankingSeriesKeyForMatch)) {
+      const finalMatch = seriesGroup.entries.at(-1)
+      if (!finalMatch) continue
+      addLeagueHistoryPointKey(keys, finalMatch, teams, filter, 'A')
+      addLeagueHistoryPointKey(keys, finalMatch, teams, filter, 'B')
+    }
+  }
+
+  return keys
+}
+
+function addLeagueHistoryPointKey(
+  keys: Set<string>,
+  match: MatchRecord,
+  teams: Record<string, TeamProfile>,
+  filter: SnapshotFilter,
+  side: 'A' | 'B',
+) {
+  const opponentSide = side === 'A' ? 'B' : 'A'
+  const league = homeLeagueForMatch(match, side, teams)
+  const region = modelRegionForMatchSide(match, side, teams)
+  if (filter.region !== 'All' && currentTopTierRegionForLeague(league, region) !== filter.region) return
+
+  keys.add(leagueHistoryPointKey({
+    date: match.date,
+    event: match.event,
+    tier: match.tier,
+    league,
+    region,
+    opponentLeague: homeLeagueForMatch(match, opponentSide, teams),
+    opponentRegion: modelRegionForMatchSide(match, opponentSide, teams),
+  }))
+}
+
+function leagueHistoryPointKey(point: Pick<LeagueStrengthHistoryPoint, 'date' | 'event' | 'tier' | 'league' | 'region' | 'opponentLeague' | 'opponentRegion'>) {
+  return timelineGroupKey([
+    point.date,
+    point.event,
+    point.tier,
+    point.league,
+    point.region,
+    point.opponentLeague,
+    point.opponentRegion,
+  ])
+}
+
+function rankingSeriesKeyForMatch(match: MatchRecord) {
+  const provider = match.sourceProvider ?? 'unknown'
+  if (match.sourceMatchId) return timelineGroupKey(['source-match', provider, sourceSeriesId(match.sourceMatchId)])
+  const [left, right] = [match.teamA, match.teamB].sort((a, b) => a.localeCompare(b))
+  return timelineGroupKey(['inferred-series', match.date, provider, match.event, left, right])
+}
+
+function sourceSeriesId(sourceMatchId: string) {
+  return sourceMatchId.replace(/_[1-5]$/, '')
+}
+
+function modelRegionForMatchSide(match: MatchRecord, side: 'A' | 'B', teams: Record<string, TeamProfile>): Region {
+  if (side === 'A') return match.teamARegion ?? teams[match.teamA]?.region ?? match.region
+  return match.teamBRegion ?? teams[match.teamB]?.region ?? match.region
+}
+
+function filterMatches(
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  filter: SnapshotFilter,
+  checkpoint?: SnapshotCheckpointOption,
+) {
   return matches.filter((match) => {
-    const seasonMatches = filter.season === 'All' || matchSeasonKey(match) === filter.season
+    const seasonMatches = checkpoint
+      ? matchBelongsToCheckpointScope(match, checkpoint)
+      : filter.season === 'All' || matchBelongsToSeasonScope(match, filter.season)
     const eventMatches = filter.event === 'All' || match.event === filter.event
     const regionMatches = filter.region === 'All' || matchBelongsToRegion(match, teams, filter.region)
     return seasonMatches && eventMatches && regionMatches
@@ -1096,11 +1657,54 @@ function matchesThroughSeason(matches: MatchRecord[], season: string) {
   if (!Number.isFinite(seasonNumber)) return matches
   return matches.filter((match) => {
     const year = Number(matchSeasonKey(match))
-    return Number.isFinite(year) && year <= seasonNumber
+    return Number.isFinite(year) && year <= seasonNumber && isCalendarAlignedSeasonMatch(match)
   })
 }
 
-function buildSnapshotFilters(matches: MatchRecord[], teams: Record<string, TeamProfile>) {
+function matchesThroughDate(matches: MatchRecord[], endDate: string) {
+  return matches.filter((match) => match.date <= endDate && isCalendarAlignedSeasonMatch(match))
+}
+
+function baselineRankingForCheckpoint(
+  checkpoint: SnapshotCheckpointOption,
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+) {
+  const baselineMatches = checkpoint.previousEndDate
+    ? matchesThroughDate(matches, checkpoint.previousEndDate)
+    : matches.filter((match) => match.date < checkpoint.startDate && isCalendarAlignedSeasonMatch(match))
+  const baselineTeams = teamProfilesForRankingScope(baselineMatches, teams)
+  return buildRankingModel(baselineMatches, baselineTeams)
+}
+
+function withCheckpointMovement(standings: TeamStanding[], baselineStandings: TeamStanding[] | undefined) {
+  if (!baselineStandings) return standings
+  const currentTeamNames = new Set(standings.map((standing) => standing.team))
+  const baseline = new Map(
+    baselineStandings
+      .filter((standing) => currentTeamNames.has(standing.team))
+      .sort((left, right) => Number(right.eligibility.eligible) - Number(left.eligibility.eligible) || right.rating - left.rating)
+      .map((standing, index) => [standing.team, { ...standing, rank: index + 1 }]),
+  )
+
+  return standings.map((standing) => {
+    const previous = baseline.get(standing.team)
+    if (!previous) return { ...standing, previousRank: standing.rank, previousRating: standing.rating, movement: 0, delta: 0 }
+    return {
+      ...standing,
+      previousRank: previous.rank,
+      previousRating: previous.rating,
+      movement: previous.rank - standing.rank,
+      delta: standing.rating - previous.rating,
+    }
+  })
+}
+
+function buildSnapshotFilters(
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  checkpoints: Record<string, SnapshotCheckpointOption[]>,
+) {
   const filters = new Map<string, SnapshotFilter>()
   const addFilter = (filter: SnapshotFilter) => filters.set(snapshotKey(filter), filter)
   addFilter({ season: 'All', event: 'All', region: 'All' })
@@ -1115,6 +1719,10 @@ function buildSnapshotFilters(matches: MatchRecord[], teams: Record<string, Team
     }
   }
 
+  for (const checkpoint of Object.values(checkpoints).flat()) {
+    addFilter({ season: checkpoint.season, event: 'All', region: 'All', checkpoint: checkpoint.id })
+  }
+
   return Array.from(filters.values()).sort((left, right) => {
     if (snapshotKey(left) === snapshotKey({ season: 'All', event: 'All', region: 'All' })) return -1
     if (snapshotKey(right) === snapshotKey({ season: 'All', event: 'All', region: 'All' })) return 1
@@ -1124,6 +1732,126 @@ function buildSnapshotFilters(matches: MatchRecord[], teams: Record<string, Team
 
 function matchSeasonKey(match: MatchRecord) {
   return Number.isFinite(match.season) ? String(match.season) : match.date?.slice(0, 4) || String(match.season)
+}
+
+function matchBelongsToSeasonScope(match: MatchRecord, season: string) {
+  return matchSeasonKey(match) === season && isCalendarAlignedSeasonMatch(match)
+}
+
+function matchBelongsToCheckpointScope(match: MatchRecord, checkpoint: SnapshotCheckpointOption) {
+  if (!matchBelongsToSeasonScope(match, checkpoint.season)) return false
+  if (match.date > checkpoint.endDate) return false
+  if (checkpoint.previousEndDate && match.date <= checkpoint.previousEndDate) return false
+  return match.date >= checkpoint.startDate
+}
+
+const checkpointBoundaryDefinitions = [
+  { id: 'split-1', label: 'Split 1', kind: 'first-stand' },
+  { id: 'split-2', label: 'Split 2', kind: 'msi' },
+  { id: 'split-3', label: 'Split 3', kind: 'worlds' },
+] as const
+
+type CheckpointBoundaryDefinition = typeof checkpointBoundaryDefinitions[number]
+type CheckpointBoundaryKind = CheckpointBoundaryDefinition['kind']
+type CheckpointBoundaryEvent = {
+  definition: CheckpointBoundaryDefinition
+  event: string
+  firstMatchDate: string
+  endDate: string
+}
+
+function buildSeasonCheckpointOptions(matches: MatchRecord[]) {
+  const checkpointsBySeason = new Map<string, Map<CheckpointBoundaryKind, CheckpointBoundaryEvent>>()
+
+  for (const match of matches) {
+    const definition = checkpointBoundaryDefinitionForMatch(match)
+    if (!definition) continue
+    const season = matchSeasonKey(match)
+    if (!matchBelongsToSeasonScope(match, season)) continue
+    const byBoundary = checkpointsBySeason.get(season) ?? new Map<CheckpointBoundaryKind, CheckpointBoundaryEvent>()
+    checkpointsBySeason.set(season, byBoundary)
+    const current = byBoundary.get(definition.kind) ?? {
+      definition,
+      event: match.event,
+      firstMatchDate: match.date,
+      endDate: match.date,
+    }
+    byBoundary.set(definition.kind, {
+      definition,
+      event: match.date >= current.endDate ? match.event : current.event,
+      firstMatchDate: match.date < current.firstMatchDate ? match.date : current.firstMatchDate,
+      endDate: match.date > current.endDate ? match.date : current.endDate,
+    })
+  }
+
+  return Object.fromEntries(
+    Array.from(checkpointsBySeason.entries())
+      .map(([season, boundaries]) => {
+        let previousEndDate: string | undefined
+        const seasonStart = `${season}-01-01`
+        const checkpoints = checkpointBoundaryDefinitions
+          .map((definition): SnapshotCheckpointOption | undefined => {
+            const boundary = boundaries.get(definition.kind)
+            if (!boundary) return undefined
+            const checkpoint: SnapshotCheckpointOption = {
+              id: definition.id,
+              season,
+              label: definition.label,
+              startDate: previousEndDate ? nextCalendarDate(previousEndDate) : seasonStart,
+              endDate: boundary.endDate,
+              boundaryEvent: boundary.event,
+              ...(previousEndDate ? { previousEndDate } : {}),
+              description: `${season} ${definition.label} through ${boundary.event}`,
+            }
+            previousEndDate = boundary.endDate
+            return checkpoint
+          })
+          .filter((checkpoint): checkpoint is SnapshotCheckpointOption => Boolean(checkpoint))
+        return checkpoints.length > 0 ? [season, checkpoints] as const : undefined
+      })
+      .filter((entry): entry is readonly [string, SnapshotCheckpointOption[]] => Boolean(entry)),
+  )
+}
+
+function checkpointBoundaryDefinitionForMatch(match: MatchRecord): CheckpointBoundaryDefinition | undefined {
+  const text = `${match.league} ${match.event}`.toUpperCase()
+  if (match.tier === 'qualifier') return undefined
+  if (/\bQUALIFIERS?\b/.test(text)) return undefined
+  if (!isCheckpointBoundaryCompetition(match)) return undefined
+  if (/\bFST\b/.test(text) || text.includes('FIRST STAND')) return checkpointBoundaryDefinitions[0]
+  if (/\bMSI\b/.test(text) || text.includes('MID-SEASON INVITATIONAL')) return checkpointBoundaryDefinitions[1]
+  if (/\bWLDS?\b/.test(text) || /\bWORLDS\b/.test(text) || text.includes('WORLD CHAMPIONSHIP')) return checkpointBoundaryDefinitions[2]
+  return undefined
+}
+
+function isCheckpointBoundaryCompetition(match: MatchRecord) {
+  if (match.region === 'International') return true
+  const league = match.league.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()
+  return ['FST', 'MSI', 'WLD', 'WLDS', 'WORLDS', 'WORLD CHAMPIONSHIP'].includes(league)
+}
+
+function nextCalendarDate(date: string) {
+  const parsed = new Date(`${date}T00:00:00.000Z`)
+  parsed.setUTCDate(parsed.getUTCDate() + 1)
+  return parsed.toISOString().slice(0, 10)
+}
+
+function checkpointForFilter(
+  filter: SnapshotFilter,
+  checkpoints: Map<string, SnapshotCheckpointOption>,
+) {
+  return filter.checkpoint ? checkpoints.get(checkpointFilterKey(filter.season, filter.checkpoint)) : undefined
+}
+
+function checkpointFilterKey(season: string, checkpoint: string) {
+  return `${season}\u0000${checkpoint}`
+}
+
+function isCalendarAlignedSeasonMatch(match: MatchRecord) {
+  const sourceSeason = Number(matchSeasonKey(match))
+  const calendarYear = Number(match.date?.slice(0, 4))
+  if (!Number.isFinite(sourceSeason) || !Number.isFinite(calendarYear)) return true
+  return sourceSeason === calendarYear
 }
 
 function regionsForMatch(match: MatchRecord, teams: Record<string, TeamProfile>) {
@@ -1160,9 +1888,18 @@ function filteredStandings(
       )
       const scopedWins = history.filter((point) => point.result === 'W').length
       const scopedLosses = history.filter((point) => point.result === 'L').length
+      const eligibilityHistory = matchLevelEligibilityHistory(history)
       const scopedProfile = scopedProfiles.get(standing.team)
       const league = scopedProfile?.league ?? standing.league
       const region = scopedProfile?.region ?? standing.region
+      const scopedEligibility = evaluateTeamEligibility({
+        history: eligibilityHistory,
+        lastDate,
+        uncertainty: standing.uncertainty,
+        leagueTier: leagueTierFor(league).tier,
+        leagueInternationalMatches: leagueInternationalMatches.get(league) ?? 0,
+        isDevelopmentalTeam: isDevelopmentalTeamName(standing.team),
+      })
       return {
         ...standing,
         league,
@@ -1172,14 +1909,7 @@ function filteredStandings(
         form: history.slice(-5).map((point) => point.result),
         history,
         recentEvents: Array.from(new Set(history.slice(-4).map((point) => point.event))).reverse(),
-        eligibility: evaluateTeamEligibility({
-          history,
-          lastDate,
-          uncertainty: standing.uncertainty,
-          leagueTier: leagueTierFor(league).tier,
-          leagueInternationalMatches: leagueInternationalMatches.get(league) ?? 0,
-          isDevelopmentalTeam: isDevelopmentalTeamName(standing.team),
-        }),
+        eligibility: filter.checkpoint ? standing.eligibility : scopedEligibility,
       }
     })
     .sort((left, right) => Number(right.eligibility.eligible) - Number(left.eligibility.eligible) || right.rating - left.rating)

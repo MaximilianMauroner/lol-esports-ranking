@@ -16,6 +16,22 @@ The importance assigned to a match because of its competitive context, such as W
 
 A dated view of ratings, ranks, movement, confidence, and explanatory factors.
 
+## Run
+
+A single execution of the ranking pipeline that produces one coherent set of public artifacts. All artifacts from the same run share `runId`, `generatedAt`, `modelVersion`, and `modelConfigHash`.
+
+## Artifact
+
+A generated public JSON file with a declared purpose, schema version, provenance metadata, and a stable URL. Artifacts are the audit surface for the browser and read wrappers.
+
+## Scope
+
+The selected ranking view inside a run, such as all matches or a source season. A scope filters ranking rows without changing the entity IDs used across artifacts.
+
+## Entity
+
+A stable ID-addressable domain object such as a team, player, event, or league. Display names and provider names are metadata for an entity, not join keys.
+
 ## Team Timeline
 
 The history of a team's rating and rank changes across matches or events.

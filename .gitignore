@@ -28,17 +28,20 @@ data/**/*.sqlite
 data/**/*.db
 !data/README.md
 
-# Commit the generated client payload from data:crunch:
-# public/data/ranking-summary.json
-# public/data/players.json
-# public/data/team-history.json
-# public/data/snapshots/*.json
+# Commit only the compact browser payload from data:crunch. Railway uploads
+# the same payload to Bucket storage, plus larger audit artifacts that should
+# stay out of Git.
+public/data/**
 !public/data/
 !public/data/ranking-summary.json
-!public/data/players.json
-!public/data/team-history.json
-!public/data/snapshots/
-!public/data/snapshots/*.json
+!public/data/entities/
+!public/data/entities/*.json
+!public/data/history/
+!public/data/history/region-series.json
+!public/data/history/team-series/
+!public/data/history/team-series/*.json
+!public/data/scopes/
+!public/data/scopes/*.json
 
 # Do not ship/re-add full public snapshots; they can exceed GitHub limits.
 public/data/ranking-snapshot.json

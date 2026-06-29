@@ -1,25 +1,30 @@
 import { useMemo, useState } from 'react'
-import { Activity, ArrowLeftRight, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Crosshair, Swords, Trophy, Users, X } from 'lucide-react'
-import type { CompactPlayer, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
+import { Activity, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Crosshair, Swords, Trophy, Users, X } from 'lucide-react'
+import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type { PublicRecentMatch } from '../lib/publicArtifacts/schema'
 import type { RegionStrength } from '../lib/regionStrength'
-import { estimatePublicMatchup } from '../lib/publicMatchup'
 import { rankingTargetExplanations } from '../lib/rankingExplanations'
 import { extent, formatDate, formatDateRange, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { CountBadge, DataState, Field, FormDots, HeatChip, PickButton, RegionBadge, SearchInput, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
-import { Card, CardHeader } from '../components/ui/card'
+import { Card } from '../components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
-import { LineChart, type ChartSeries } from '../components/LineChart'
+import { type ChartSeries } from '../components/LineChart'
+import { TeamHistoryLineChart } from '../components/TeamHistoryLineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import type { ChartPoint } from '../lib/chartPoints'
+import { dailyChartPointsFromHistoryPoints, deriveDailyRankSeries } from '../lib/teamHistoryChart'
+import type { TeamHistoryArtifactState } from '../hooks/usePublicArtifacts'
 
 type SortKey = 'rank' | 'rating' | 'wins'
 type TrajectoryMetric = 'rating' | 'rank'
 type EligibilityFilter = 'ranked' | 'all'
 type TeamDataSummary = {
   source?: string
+  sources?: DataSourceInfo[]
+  scopeLabel?: string
   matchCount?: number
   coverageStart?: string
   coverageEnd?: string
@@ -27,6 +32,10 @@ type TeamDataSummary = {
   seeded?: boolean
   sourceBreakdown?: { provider: string; matchCount: number }[]
   notes?: string[]
+  regionFilter?: string
+  tableTeamCount?: number
+  scopeTeamCount?: number
+  hiddenFromRankedCount?: number
 }
 
 const TEAM_RANK_AXIS_LIMIT = 60
@@ -42,7 +51,7 @@ export function TeamsView({
   search,
   onSearchChange,
   pickedTeams,
-  history,
+  historyState,
   updatedAt,
   dataSummary,
   onToggle,
@@ -54,7 +63,7 @@ export function TeamsView({
   search: string
   onSearchChange: (value: string) => void
   pickedTeams: RankingSummaryStanding[]
-  history?: Record<string, TeamHistorySeries>
+  historyState: TeamHistoryArtifactState
   updatedAt?: string
   dataSummary?: TeamDataSummary
   onToggle: (team: RankingSummaryStanding) => void
@@ -66,6 +75,7 @@ export function TeamsView({
   const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
   const [detailKey, setDetailKey] = useState<string | null>(null)
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
+  const history = historyState.status === 'ready' ? historyState.data.series : undefined
 
   const pickedKeys = useMemo(() => new Set(pickedTeams.map(teamKey)), [pickedTeams])
 
@@ -98,6 +108,16 @@ export function TeamsView({
     : hiddenFromRankedCount > 0
       ? `${formatNumber(filtered.length)} teams total, including ${formatNumber(hiddenFromRankedCount)} review rows kept out of the ranked board.`
       : 'Every team in this scope currently passes ranking eligibility.'
+  const panelData = useMemo<TeamDataSummary | undefined>(() => dataSummary
+    ? {
+        ...dataSummary,
+        regionFilter: region,
+        tableTeamCount: filtered.length,
+        scopeTeamCount: standings.length,
+        hiddenFromRankedCount,
+      }
+    : undefined,
+  [dataSummary, filtered.length, hiddenFromRankedCount, region, standings.length])
 
   const sorted = useMemo(() => sortStandings(filtered, sortKey), [filtered, sortKey])
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
@@ -119,7 +139,7 @@ export function TeamsView({
 
   const focusTeams = pickedTeams.length > 0 ? pickedTeams : sorted.slice(0, 5)
   const dailyRankSeries = useMemo(
-    () => metric === 'rank' && history ? deriveDailyRankSeries(history) : new Map<string, { t: number; y: number }[]>(),
+    () => metric === 'rank' && history ? deriveDailyRankSeries(history) : new Map<string, ChartPoint[]>(),
     [history, metric],
   )
   const chartSeries = useMemo<ChartSeries[]>(() => {
@@ -139,16 +159,13 @@ export function TeamsView({
           }
         }
         if (!series || series.points.length < 2) return null
-        // Collapse to one point per day (the day's closing value) so the lines
-        // read as a trend instead of intraday churn.
-        const byDay = new Map<string, (typeof series.points)[number]>()
-        for (const point of series.points) byDay.set(point[0], point)
-        const daily = [...byDay.values()]
+        const daily = dailyChartPointsFromHistoryPoints(series.points)
+        if (daily.length < 2) return null
         return {
           id: key,
           label: team.code ?? team.team,
           color: SERIES_COLORS[index % SERIES_COLORS.length],
-          points: daily.map((point) => ({ t: Date.parse(point[0]), y: point[1] })),
+          points: daily,
         }
       })
       .filter((series): series is ChartSeries => series !== null)
@@ -204,6 +221,7 @@ export function TeamsView({
                     { value: 'all', label: 'All teams' },
                   ]}
                   onChange={setEligibilityFilter}
+                  ariaLabel="Team eligibility filter"
                 />
                 <Field
                   label="Region"
@@ -327,7 +345,7 @@ export function TeamsView({
         <aside className="gpr-sidebar">
           <RegionalStrengthPanel regions={regions} />
           <MethodologyPanel />
-          <DataModelPanel model={model} data={dataSummary} />
+          <DataModelPanel model={model} data={panelData} />
         </aside>
       </div>
 
@@ -350,16 +368,19 @@ export function TeamsView({
                 { value: 'rank', label: 'Rank' },
               ]}
               onChange={setMetric}
+              ariaLabel="Team trajectory metric"
             />
             <CountBadge>
               {pickedTeams.length > 0 ? `${chartSeries.length} selected` : 'Showing top 5 · pick teams above to focus'}
             </CountBadge>
           </div>
         </div>
-        {!history ? (
+        {historyState.status === 'loading' ? (
           <p className="muted" style={{ padding: 20 }}>Loading rating history…</p>
+        ) : historyState.status !== 'ready' ? (
+          <p className="muted" style={{ padding: 20 }}>{historyState.message}</p>
         ) : (
-          <LineChart
+          <TeamHistoryLineChart
             series={chartSeries}
             height={300}
             yLabel={metric === 'rank' ? 'Rank' : 'Power score'}
@@ -395,8 +416,6 @@ export function TeamsView({
           </div>
         ) : null}
       </Card>
-
-      <Matchup standings={sorted} pickedTeams={pickedTeams} model={model} history={history} />
 
       {detailTeam ? (
         <TeamDetailModal
@@ -444,40 +463,6 @@ function uniqueSorted(values: number[]) {
   return [...new Set(values.filter((value) => Number.isFinite(value) && value >= 1).map(Math.round))].sort((a, b) => a - b)
 }
 
-function deriveDailyRankSeries(history: Record<string, TeamHistorySeries>) {
-  const updatesByDay = new Map<string, { key: string; rating: number }[]>()
-  for (const [key, series] of Object.entries(history)) {
-    const dayCloseRatings = new Map<string, number>()
-    for (const point of series.points) {
-      const [date, rating] = point
-      if (date && Number.isFinite(rating)) dayCloseRatings.set(date, rating)
-    }
-    for (const [date, rating] of dayCloseRatings) {
-      const updates = updatesByDay.get(date) ?? []
-      updates.push({ key, rating })
-      updatesByDay.set(date, updates)
-    }
-  }
-
-  const ratings = new Map<string, number>()
-  const rankedSeries = new Map<string, { t: number; y: number }[]>()
-  const days = [...updatesByDay.keys()].sort()
-  for (const day of days) {
-    for (const update of updatesByDay.get(day) ?? []) ratings.set(update.key, update.rating)
-    const rankedKeys = [...ratings.entries()]
-      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-      .map(([key]) => key)
-    const t = Date.parse(day)
-    for (let index = 0; index < rankedKeys.length; index += 1) {
-      const key = rankedKeys[index]
-      const points = rankedSeries.get(key) ?? []
-      points.push({ t, y: index + 1 })
-      rankedSeries.set(key, points)
-    }
-  }
-  return rankedSeries
-}
-
 function RegionalStrengthPanel({ regions }: { regions: RegionStrength[] }) {
   const ranked = useMemo(() => [...regions].sort((a, b) => b.score - a.score).slice(0, 8), [regions])
   if (ranked.length === 0) return null
@@ -502,7 +487,15 @@ function RegionalStrengthPanel({ regions }: { regions: RegionStrength[] }) {
 
 function DataModelPanel({ model, data }: { model?: Pick<ModelInfo, 'version' | 'configHash'>; data?: TeamDataSummary }) {
   const providers = [...(data?.sourceBreakdown ?? [])].sort((a, b) => b.matchCount - a.matchCount).slice(0, 3)
-  const notes = (data?.notes ?? []).filter(Boolean).slice(0, 1)
+  const activeSources = (data?.sources ?? []).filter((source) => source.status === 'active')
+  const sourceFreshness = activeSources.filter((source) => source.retrievedAt || source.coverageEnd || source.rowCount).slice(0, 4)
+  const warnings = uniqueSourceWarnings(activeSources.flatMap((source) => source.warnings ?? [])).slice(0, 3)
+  const notes = (data?.notes ?? []).filter(Boolean).slice(0, 2)
+  const filterFoot = data?.regionFilter && data.regionFilter !== 'All'
+    ? `${formatCompetitionRegionLabel(data.regionFilter)} table filter shows ${formatNumber(data.tableTeamCount)} of ${formatNumber(data.scopeTeamCount)} teams. Match, coverage, and provider counts remain ${data.scopeLabel ?? 'the current snapshot'} totals.`
+    : data?.scopeLabel
+      ? `Snapshot scope: ${data.scopeLabel}.`
+      : undefined
 
   return (
     <section className="method-panel data-model-panel" aria-label="Data and model provenance">
@@ -513,16 +506,24 @@ function DataModelPanel({ model, data }: { model?: Pick<ModelInfo, 'version' | '
           <b>{model?.version ?? 'unknown'}</b>
         </span>
         <span>
-          <small>Matches</small>
+          <small>Snapshot matches</small>
           <b>{formatNumber(data?.matchCount)}</b>
         </span>
         <span>
-          <small>Coverage</small>
+          <small>Snapshot coverage</small>
           <b>{formatDateRange(data?.coverageStart, data?.coverageEnd)}</b>
+        </span>
+        <span>
+          <small>Team rows</small>
+          <b>{formatNumber(data?.tableTeamCount)} / {formatNumber(data?.scopeTeamCount)}</b>
         </span>
         <span>
           <small>Config</small>
           <b>{model?.configHash ?? 'unknown'}</b>
+        </span>
+        <span>
+          <small>Scope</small>
+          <b>{data?.scopeLabel ?? 'Current snapshot'}</b>
         </span>
       </div>
       {providers.length > 0 ? (
@@ -535,15 +536,65 @@ function DataModelPanel({ model, data }: { model?: Pick<ModelInfo, 'version' | '
           ))}
         </div>
       ) : null}
+      {sourceFreshness.length > 0 ? (
+        <div className="provider-list" aria-label="Source freshness">
+          {sourceFreshness.map((source) => (
+            <div className="provider-row" key={source.name}>
+              <span title={source.description}>{compactSourceName(source.name)}</span>
+              <b>{sourceFreshnessLabel(source)}</b>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {data?.seeded ? (
         <p className="method-foot danger">Seeded sample data is active. Do not treat these rows as official rankings.</p>
+      ) : warnings.length > 0 ? (
+        <>
+          {warnings.map((warning, index) => (
+            <p className={`method-foot${warning.severity === 'error' || warning.severity === 'warning' ? ' danger' : ''}`} key={`${warning.kind}-${index}`}>
+              {warning.message}
+            </p>
+          ))}
+          {filterFoot ? <p className="method-foot">{filterFoot}</p> : null}
+        </>
       ) : notes.length > 0 ? (
-        <p className="method-foot">{notes[0]}</p>
+        <>
+          {notes.map((note) => <p className="method-foot" key={note}>{note}</p>)}
+          {filterFoot ? <p className="method-foot">{filterFoot}</p> : null}
+        </>
       ) : (
-        <p className="method-foot">Latest match: {formatDate(data?.latestMatchDate)}</p>
+        <>
+          <p className="method-foot">Latest match: {formatDate(data?.latestMatchDate)}</p>
+          {filterFoot ? <p className="method-foot">{filterFoot}</p> : null}
+        </>
       )}
     </section>
   )
+}
+
+function compactSourceName(name: string) {
+  if (name.includes("Oracle's Elixir")) return name.replace("Oracle's Elixir CSV: ", 'Oracle ')
+  if (name.includes('Leaguepedia Cargo')) return name.replace('Leaguepedia Cargo: ', 'Leaguepedia ')
+  return name
+}
+
+function sourceFreshnessLabel(source: DataSourceInfo) {
+  const parts = [
+    source.retrievedAt ? `retrieved ${formatDate(source.retrievedAt)}` : undefined,
+    source.coverageEnd ? `through ${formatDate(source.coverageEnd)}` : undefined,
+    typeof source.rowCount === 'number' ? `${formatNumber(source.rowCount)} rows` : undefined,
+  ]
+  return parts.filter(Boolean).join(' · ') || 'source metadata'
+}
+
+function uniqueSourceWarnings(warnings: NonNullable<DataSourceInfo['warnings']>) {
+  const seen = new Set<string>()
+  return warnings.filter((warning) => {
+    const key = `${warning.kind}\u0000${warning.message}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function TeamDetailModal({
@@ -563,7 +614,7 @@ function TeamDetailModal({
       id: teamKey(team),
       label: team.code ?? team.team,
       color: 'var(--accent)',
-      points: series.points.map((point) => ({ t: Date.parse(point[0]), y: point[1] })),
+      points: dailyChartPointsFromHistoryPoints(series.points),
     }]
   }, [series, team])
 
@@ -689,7 +740,7 @@ function TeamDetailModal({
             ) : null}
             {trendSeries.length > 0 ? (
               <div className="trend-card__plot">
-                <LineChart series={trendSeries} height={340} yLabel="Power score" />
+                <TeamHistoryLineChart series={trendSeries} height={340} yLabel="Power score" />
               </div>
             ) : (
               <p className="muted" style={{ paddingTop: 16 }}>Not enough history to chart this team yet.</p>
@@ -1006,289 +1057,4 @@ function formatTeamGames(player: CompactPlayer) {
   const teamGames = player.teamGames ?? player.appearance?.latestTeamGames
   if (typeof teamGames !== 'number') return formatNumber(player.games)
   return `${formatNumber(teamGames)} / ${formatNumber(player.games)}`
-}
-
-function Matchup({
-  standings,
-  pickedTeams,
-  model,
-  history,
-}: {
-  standings: RankingSummaryStanding[]
-  pickedTeams: RankingSummaryStanding[]
-  model?: Pick<ModelInfo, 'version' | 'configHash'>
-  history?: Record<string, TeamHistorySeries>
-}) {
-  const options = useMemo(() => standings.slice(0, 200), [standings])
-  const optionKeys = useMemo(() => new Set(options.map(teamKey)), [options])
-  const seedKeys = useMemo(() => {
-    const picked = pickedTeams.map(teamKey).filter((key) => optionKeys.has(key))
-    const first = picked[0] ?? (options[0] ? teamKey(options[0]) : '')
-    const second = picked.find((key) => key !== first) ?? options.map(teamKey).find((key) => key !== first) ?? ''
-    return { a: first, b: second }
-  }, [optionKeys, options, pickedTeams])
-  const [aKey, setAKey] = useState('')
-  const [bKey, setBKey] = useState('')
-
-  const selectedAKey = optionKeys.has(aKey) ? aKey : seedKeys.a
-  const selectedBKey = optionKeys.has(bKey) && bKey !== selectedAKey
-    ? bKey
-    : seedKeys.b !== selectedAKey
-      ? seedKeys.b
-      : options.map(teamKey).find((key) => key !== selectedAKey) ?? ''
-  const a = options.find((team) => teamKey(team) === selectedAKey) ?? options[0]
-  const b = options.find((team) => teamKey(team) === selectedBKey) ?? options.find((team) => team !== a)
-  const matchup = a && b && a !== b ? estimatePublicMatchup(a, b, model) : undefined
-  const headToHead = matchup ? headToHeadForTeams(matchup.home, matchup.away, history) : undefined
-
-  if (options.length < 2) return null
-
-  const homePct = matchup ? Math.round(matchup.homeWinProbability * 100) : 0
-  const awayPct = matchup ? 100 - homePct : 0
-  const favorite = matchup ? (homePct >= awayPct ? matchup.home : matchup.away) : undefined
-  const seedNote = aKey || bKey
-    ? 'Custom matchup'
-    : pickedTeams.length >= 2
-      ? 'Seeded from selected teams'
-      : 'Defaulting to current top two'
-
-  function replacementKey(exclude: string) {
-    return options.map(teamKey).find((key) => key !== exclude) ?? ''
-  }
-
-  function onSelectA(nextKey: string) {
-    setAKey(nextKey)
-    if (nextKey === selectedBKey) setBKey(replacementKey(nextKey))
-  }
-
-  function onSelectB(nextKey: string) {
-    setBKey(nextKey)
-    if (nextKey === selectedAKey) setAKey(replacementKey(nextKey))
-  }
-
-  function onSwap() {
-    setAKey(selectedBKey)
-    setBKey(selectedAKey)
-  }
-
-  return (
-    <Card className="panel matchup-panel">
-      <CardHeader className="panel__head matchup-panel__head">
-        <div className="panel__title">
-          <p className="eyebrow">Estimator</p>
-          <h2>Head-to-head matchup</h2>
-          <p className="panel__hint">Neutral single-game forecast from published power score and uncertainty.</p>
-        </div>
-        <CountBadge>{seedNote}</CountBadge>
-      </CardHeader>
-      <div className="matchup">
-        <div className="matchup__picks">
-          <Field
-            label="Team A"
-            value={selectedAKey}
-            options={options.map((team) => ({ value: teamKey(team), label: `${team.rank ? `#${team.rank} ` : ''}${team.team}` }))}
-            onChange={onSelectA}
-          />
-          <Button className="matchup__swap" variant="secondary" size="icon" type="button" onClick={onSwap} aria-label="Swap matchup teams">
-            <ArrowLeftRight size={16} aria-hidden="true" />
-          </Button>
-          <Field
-            label="Team B"
-            value={selectedBKey}
-            options={options.map((team) => ({ value: teamKey(team), label: `${team.rank ? `#${team.rank} ` : ''}${team.team}` }))}
-            onChange={onSelectB}
-          />
-        </div>
-
-        {matchup ? (
-          <>
-            <div className="matchup__stage">
-              <MatchupTeamCard team={matchup.home} probability={homePct} label="Team A" />
-              <div className="matchup__versus" aria-hidden="true">
-                <Swords size={18} />
-                <span>vs</span>
-              </div>
-              <MatchupTeamCard team={matchup.away} probability={awayPct} label="Team B" align="right" />
-            </div>
-            <div className="matchup__probability">
-              <span>{homePct}%</span>
-              <div className="oddsbar" aria-label={`${matchup.home.team} ${homePct} percent, ${matchup.away.team} ${awayPct} percent`}>
-                <i style={{ width: `${homePct}%` }} aria-hidden="true" />
-                <span className="oddsbar__midline" />
-              </div>
-              <span>{awayPct}%</span>
-            </div>
-            <div className="matchup__facts">
-              <span>
-                <small>Favorite</small>
-                <b>{favorite?.team}</b>
-              </span>
-              <span>
-                <small>Power edge</small>
-                <b>{formatSigned(matchup.ratingEdge)}</b>
-              </span>
-              {headToHead ? (
-                <span className="matchup__fact--h2h">
-                  <small>Actual H2H</small>
-                  <b>{formatHeadToHeadRecord(headToHead)}</b>
-                  <em>{formatHeadToHeadDetail(headToHead)}</em>
-                </span>
-              ) : null}
-              <span>
-                <small>Model</small>
-                <b>{matchup.modelVersion}</b>
-              </span>
-            </div>
-            <p className="matchup__note">
-              Probability is model-derived and assumes neutral court, current roster state, and the same power-score source as the table above.
-            </p>
-          </>
-        ) : (
-          <p className="muted">Pick two different teams to estimate the matchup.</p>
-        )}
-      </div>
-    </Card>
-  )
-}
-
-type HeadToHeadSummary = {
-  home: RankingSummaryStanding
-  away: RankingSummaryStanding
-  homeSeriesWins: number
-  awaySeriesWins: number
-  homeGameWins: number
-  awayGameWins: number
-  meetings: number
-  latest?: {
-    date: string
-    event?: string
-    homeWins: number
-    awayWins: number
-  }
-}
-
-function headToHeadForTeams(
-  home: RankingSummaryStanding,
-  away: RankingSummaryStanding,
-  history?: Record<string, TeamHistorySeries>,
-): HeadToHeadSummary | undefined {
-  const fromHome = headToHeadFromSeries(home, away, history?.[teamKey(home)], false)
-  if (fromHome) return fromHome
-  return headToHeadFromSeries(home, away, history?.[teamKey(away)], true)
-}
-
-function headToHeadFromSeries(
-  home: RankingSummaryStanding,
-  away: RankingSummaryStanding,
-  series: TeamHistorySeries | undefined,
-  reverse: boolean,
-): HeadToHeadSummary | undefined {
-  const points = (series?.points ?? [])
-    .filter((point) => {
-      const context = point[3]
-      return context?.opponent && sameTeamIdentity(context.opponent, reverse ? home : away)
-    })
-    .sort((left, right) => left[0].localeCompare(right[0]))
-  if (points.length === 0) return undefined
-
-  const summary: HeadToHeadSummary = {
-    home,
-    away,
-    homeSeriesWins: 0,
-    awaySeriesWins: 0,
-    homeGameWins: 0,
-    awayGameWins: 0,
-    meetings: 0,
-  }
-
-  for (const point of points) {
-    const context = point[3]
-    if (!context) continue
-    const sourceWins = typeof context.wins === 'number' ? context.wins : context.result === 'W' ? 1 : 0
-    const sourceLosses = typeof context.losses === 'number' ? context.losses : context.result === 'L' ? 1 : 0
-    const homeWins = reverse ? sourceLosses : sourceWins
-    const awayWins = reverse ? sourceWins : sourceLosses
-    summary.homeGameWins += homeWins
-    summary.awayGameWins += awayWins
-    if (homeWins === awayWins) continue
-    summary.meetings += 1
-    if (homeWins > awayWins) summary.homeSeriesWins += 1
-    else summary.awaySeriesWins += 1
-    summary.latest = {
-      date: point[0],
-      event: context.event,
-      homeWins,
-      awayWins,
-    }
-  }
-
-  return summary.meetings > 0 ? summary : undefined
-}
-
-function sameTeamIdentity(value: string, team: RankingSummaryStanding) {
-  const normalized = normalizeTeamIdentity(value)
-  return normalized === normalizeTeamIdentity(team.team) || normalized === normalizeTeamIdentity(team.code)
-}
-
-function normalizeTeamIdentity(value?: string) {
-  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
-}
-
-function formatHeadToHeadRecord(summary: HeadToHeadSummary) {
-  const homeLabel = summary.home.code ?? summary.home.team
-  const awayLabel = summary.away.code ?? summary.away.team
-  return `${homeLabel} ${summary.homeSeriesWins}-${summary.awaySeriesWins} ${awayLabel}`
-}
-
-function formatHeadToHeadDetail(summary: HeadToHeadSummary) {
-  const gameRecord = `${summary.homeGameWins}-${summary.awayGameWins} games`
-  const latest = summary.latest
-    ? `latest ${formatDate(summary.latest.date)} ${summary.latest.homeWins}-${summary.latest.awayWins}`
-    : undefined
-  return [`${formatNumber(summary.meetings)} series`, gameRecord, latest].filter(Boolean).join(' · ')
-}
-
-function MatchupTeamCard({
-  team,
-  probability,
-  label,
-  align = 'left',
-}: {
-  team: RankingSummaryStanding
-  probability: number
-  label: string
-  align?: 'left' | 'right'
-}) {
-  const total = team.wins + team.losses
-  return (
-    <article className={`matchup-team${align === 'right' ? ' is-away' : ''}`}>
-      <div className="matchup-team__identity">
-        <span className="team-mark">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
-        <div>
-          <small>{label}</small>
-          <b>{team.team}</b>
-          <em>{team.league ?? team.region}</em>
-        </div>
-      </div>
-      <strong className="matchup-team__probability">{probability}%</strong>
-      <div className="matchup-team__metrics">
-        <span>
-          <small>Rank</small>
-          <b>{team.rank ? `#${team.rank}` : '—'}</b>
-        </span>
-        <span>
-          <small>Power score</small>
-          <b>{formatRating(team.rating)}</b>
-        </span>
-        <span>
-          <small>Match record</small>
-          <b>{formatRecord(team.wins, team.losses)} {formatRatio(total > 0 ? team.wins / total : undefined)}</b>
-        </span>
-        <span>
-          <small>Uncertainty</small>
-          <b>±{formatRating(team.uncertainty)}</b>
-        </span>
-      </div>
-    </article>
-  )
 }

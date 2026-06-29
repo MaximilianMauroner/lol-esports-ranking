@@ -3,8 +3,9 @@ import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
 import { importLeaguepediaSnapshot, type LeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
-import { createPlayerDirectory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory } from '../src/lib/snapshot'
-import { snapshotShardFileName } from '../src/lib/publicArtifacts/schema'
+import { createStaticRankingData } from '../src/lib/snapshot'
+import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
+import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 import type { MatchRecord } from '../src/types'
 
@@ -49,15 +50,21 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     leaguepediaMatches: leaguepediaImport?.matches ?? [],
   })
 
-  const matches = importedMatches
   const importedTeams = mergeTeamProfiles([leaguepediaImport?.teams ?? {}, oracleImport?.teams ?? {}])
   const mergedTeams = importedMatches.length ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities } : {}
-  const dataMode = importedMatches.length ? 'scheduled-public-data' : 'no-data'
+  const ratingUniverse = filterPublishedRatingUniverseInput(importedMatches, mergedTeams)
+  const matches = ratingUniverse.matches
+  const teams = ratingUniverse.teams
+  const dataMode = matches.length ? 'scheduled-public-data' : 'no-data'
+  const oracleRatedMatches = oracleImport ? filterPublishedRatingUniverseMatches(oracleImport.matches, mergedTeams) : []
+  const leaguepediaRatedMatches = leaguepediaImport ? filterPublishedRatingUniverseMatches(leaguepediaImport.matches, mergedTeams) : []
   const snapshot = createStaticRankingData({
     matches,
-    teams: mergedTeams,
+    teams,
     rosters: {},
-    source: importedMatches.length ? describeCommunitySource(Boolean(oracleImport), Boolean(leaguepediaImport)) : 'no public match data available',
+    source: matches.length
+      ? describeCommunitySource(Boolean(oracleImport), Boolean(leaguepediaImport))
+      : importedMatches.length ? 'no rated public match data available for published team universe' : 'no public match data available',
     dataMode,
     externalSources: [
       ...(oracleImport
@@ -67,11 +74,11 @@ export default async function handler(request: JsonRequest, response: JsonRespon
               kind: 'game-stats' as const,
               url: oracleCsvUrl,
               retrievedAt: oracleImport.source.retrievedAt,
-              coverageStart: dateRange(oracleImport.matches).start,
-              coverageEnd: dateRange(oracleImport.matches).end,
-              rowCount: oracleImport.matches.length,
-              description: `${oracleImport.matches.length} normalized games imported during scheduled recalculation. ${oracleImport.source.attribution}`,
-              status: 'active' as const,
+              coverageStart: dateRange(oracleRatedMatches).start,
+              coverageEnd: dateRange(oracleRatedMatches).end,
+              rowCount: oracleRatedMatches.length,
+              description: `${oracleRatedMatches.length} rated games retained from ${oracleImport.matches.length} Oracle's Elixir imports during scheduled recalculation. ${oracleImport.source.attribution}`,
+              status: oracleRatedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
             },
           ]
         : []),
@@ -82,11 +89,11 @@ export default async function handler(request: JsonRequest, response: JsonRespon
               kind: 'match-data' as const,
               url: leaguepediaJsonUrl,
               retrievedAt: leaguepediaImport.source.retrievedAt,
-              coverageStart: dateRange(leaguepediaImport.matches).start,
-              coverageEnd: dateRange(leaguepediaImport.matches).end,
-              rowCount: leaguepediaImport.matches.length,
-              description: `${leaguepediaImport.matches.length} normalized games imported during scheduled recalculation for requested range ${leaguepediaImport.source.start ?? 'unknown'} to ${leaguepediaImport.source.end ?? 'unknown'}. ${leaguepediaImport.source.attribution}`,
-              status: 'active' as const,
+              coverageStart: dateRange(leaguepediaRatedMatches).start,
+              coverageEnd: dateRange(leaguepediaRatedMatches).end,
+              rowCount: leaguepediaRatedMatches.length,
+              description: `${leaguepediaRatedMatches.length} rated games retained from ${leaguepediaImport.matches.length} Leaguepedia Cargo imports during scheduled recalculation for requested range ${leaguepediaImport.source.start ?? 'unknown'} to ${leaguepediaImport.source.end ?? 'unknown'}. ${leaguepediaImport.source.attribution}`,
+              status: leaguepediaRatedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
             },
           ]
         : []),
@@ -109,50 +116,7 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     return
   }
 
-  const initialSummary = createStaticRankingSummaryData(snapshot)
-  const playerDirectory = createPlayerDirectory(snapshot)
-  const teamHistory = createTeamHistory(snapshot)
-  const [fullBlob, playerDirectoryBlob, teamHistoryBlob, shardBlobEntries] = await Promise.all([
-    put('rankings/latest-full.json', JSON.stringify(snapshot), {
-      access: 'public',
-      allowOverwrite: true,
-      contentType: 'application/json',
-    }),
-    put('rankings/players.json', JSON.stringify(playerDirectory), {
-      access: 'public',
-      allowOverwrite: true,
-      contentType: 'application/json',
-    }),
-    put('rankings/team-history.json', JSON.stringify(teamHistory), {
-      access: 'public',
-      allowOverwrite: true,
-      contentType: 'application/json',
-    }),
-    Promise.all(Object.entries(initialSummary.snapshots).map(async ([key, compactSnapshot]) => {
-      const blob = await put(`rankings/snapshots/${snapshotShardFileName(key)}`, JSON.stringify(compactSnapshot), {
-        access: 'public',
-        allowOverwrite: true,
-        contentType: 'application/json',
-      })
-      return [key, blob.url] as const
-    })),
-  ])
-  const shardUrls = new Map(shardBlobEntries)
-  const summary = createStaticRankingSummaryData(snapshot, {
-    fullSnapshotUrl: fullBlob.url,
-    playerDirectoryUrl: playerDirectoryBlob.url,
-    teamHistoryUrl: teamHistoryBlob.url,
-    snapshotUrlForKey: (key) => {
-      const url = shardUrls.get(key)
-      if (!url) throw new Error(`Missing uploaded shard URL for ${key}`)
-      return url
-    },
-  })
-  const summaryBlob = await put('rankings/latest-summary.json', JSON.stringify(summary.manifest), {
-    access: 'public',
-    allowOverwrite: true,
-    contentType: 'application/json',
-  })
+  const published = await publishSnapshot(snapshot)
 
   response.status(200).json({
     ok: true,
@@ -162,10 +126,87 @@ export default async function handler(request: JsonRequest, response: JsonRespon
     source: snapshot.source,
     modelVersion: snapshot.model.version,
     modelConfigHash: snapshot.model.configHash,
-    blobUrl: summaryBlob.url,
+    blobUrl: published.summaryBlobUrl,
+    fullBlobUrl: published.fullBlobUrl,
+    playerDirectoryBlobUrl: published.playerDirectoryBlobUrl,
+    teamHistoryBlobUrl: published.teamHistoryIndexBlobUrl,
+    teamHistoryIndexBlobUrl: published.teamHistoryIndexBlobUrl,
+    regionHistoryBlobUrl: published.regionHistoryBlobUrl,
+  })
+}
+
+type BlobUploadOptions = {
+  access: 'public'
+  allowOverwrite: true
+  contentType: 'application/json'
+}
+
+type BlobUploadResult = {
+  url: string
+}
+
+type BlobUpload = (pathname: string, body: string, options: BlobUploadOptions) => Promise<BlobUploadResult>
+
+export async function publishSnapshot(snapshot: ReturnType<typeof createStaticRankingData>, upload: BlobUpload = put) {
+  const localPlan = createPublicArtifactWritePlan(snapshot)
+  const teamHistoryShardCount = localPlan.writes.filter((entry) =>
+    entry.relativePath.startsWith(`${PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir}/`)
+    && entry.relativePath !== PUBLIC_ARTIFACT_PATHS.teamHistoryIndex,
+  ).length
+  const companionWrites = localPlan.writes.filter((entry) =>
+    entry.relativePath !== PUBLIC_ARTIFACT_PATHS.manifest
+    && entry.relativePath !== PUBLIC_ARTIFACT_PATHS.teamHistoryIndex,
+  )
+  const [fullBlob, uploadedEntries] = await Promise.all([
+    uploadJson(upload, 'rankings/latest-full.json', snapshot),
+    Promise.all(
+      companionWrites.map(async (entry) => {
+        const blob = await uploadJson(upload, `rankings/${entry.relativePath}`, entry.value)
+        return [entry.relativePath, blob.url] as const
+      }),
+    ),
+  ])
+  const blobUrls = new Map(uploadedEntries)
+  const indexPlan = createPublicArtifactWritePlan(snapshot, {
+    fullSnapshotUrl: fullBlob.url,
+    urlForPath: (relativePath) => {
+      if (relativePath === PUBLIC_ARTIFACT_PATHS.teamHistoryIndex) return `/data/${relativePath}`
+      const url = blobUrls.get(relativePath)
+      if (!url) throw new Error(`Missing uploaded public artifact URL for ${relativePath}`)
+      return url
+    },
+  })
+  const teamHistoryIndex = indexPlan.writes.find((entry) => entry.relativePath === PUBLIC_ARTIFACT_PATHS.teamHistoryIndex)
+  if (!teamHistoryIndex) throw new Error('Missing generated team history index artifact')
+  const teamHistoryIndexBlob = await uploadJson(upload, `rankings/${teamHistoryIndex.relativePath}`, teamHistoryIndex.value)
+  blobUrls.set(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, teamHistoryIndexBlob.url)
+
+  const blobPlan = createPublicArtifactWritePlan(snapshot, {
+    fullSnapshotUrl: fullBlob.url,
+    urlForPath: (relativePath) => {
+      const url = blobUrls.get(relativePath)
+      if (!url) throw new Error(`Missing uploaded public artifact URL for ${relativePath}`)
+      return url
+    },
+  })
+  const summaryBlob = await uploadJson(upload, 'rankings/latest-summary.json', blobPlan.manifest)
+
+  return {
+    summaryBlobUrl: summaryBlob.url,
     fullBlobUrl: fullBlob.url,
-    playerDirectoryBlobUrl: playerDirectoryBlob.url,
-    teamHistoryBlobUrl: teamHistoryBlob.url,
+    playerDirectoryBlobUrl: blobUrls.get(PUBLIC_ARTIFACT_PATHS.players),
+    teamHistoryIndexBlobUrl: blobUrls.get(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex),
+    regionHistoryBlobUrl: blobUrls.get(PUBLIC_ARTIFACT_PATHS.regionHistory),
+    snapshotShardCount: Object.keys(blobPlan.snapshots).length,
+    teamHistoryShardCount,
+  }
+}
+
+function uploadJson(upload: BlobUpload, pathname: string, value: unknown) {
+  return upload(pathname, JSON.stringify(value), {
+    access: 'public',
+    allowOverwrite: true,
+    contentType: 'application/json',
   })
 }
 

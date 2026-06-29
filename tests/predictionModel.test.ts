@@ -376,8 +376,8 @@ test('future execution stats do not change earlier execution-shadow predictions'
 
 test('same-day execution ratings are frozen before all same-day predictions', () => {
   const backtest = buildWalkForwardBacktest([
-    matchFixture({ id: 'execution-same-day-1', date: '2026-01-01', winner: 'Alpha', teamAKills: 35, teamBKills: 2, teamAGold: 78000, teamBGold: 40000 }),
-    matchFixture({ id: 'execution-same-day-2', date: '2026-01-01', winner: 'Alpha', teamAKills: 35, teamBKills: 2, teamAGold: 78000, teamBGold: 40000 }),
+    matchFixture({ id: 'execution-same-day-1', date: '2026-01-01', winner: 'Alpha', teamAKills: 2, teamBKills: 35, teamAGold: 40000, teamBGold: 78000 }),
+    matchFixture({ id: 'execution-same-day-2', date: '2026-01-01', winner: 'Alpha', teamAKills: 2, teamBKills: 35, teamAGold: 40000, teamBGold: 78000 }),
     matchFixture({ id: 'execution-next-day', date: '2026-01-02', winner: 'Alpha' }),
   ], { ...teams })
   const first = backtest.predictions[0]

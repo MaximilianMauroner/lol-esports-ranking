@@ -1,0 +1,90 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: railway-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "9.15.9"
+  RAILWAY_PROJECT_ID: "2bf26cbc-4cfa-4114-87c0-83b446f30816"
+  RAILWAY_SERVICE_ID: "d01fe39e-81a4-4230-b997-f13fe8af351b"
+  RAILWAY_ENVIRONMENT: production
+  RAILWAY_PUBLIC_URL: "https://web-production-1740be.up.railway.app"
+
+jobs:
+  deploy:
+    name: Test, build, and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.repository == 'MaximilianMauroner/lol-esports-ranking'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ]; then
+            echo "RAILWAY_TOKEN is not configured in this repository's GitHub Actions secrets."
+            exit 1
+          fi
+
+          railway up \
+            --ci \
+            --project "${RAILWAY_PROJECT_ID}" \
+            --service "${RAILWAY_SERVICE_ID}" \
+            --environment "${RAILWAY_ENVIRONMENT}" \
+            --message "GitHub Actions deploy ${GITHUB_SHA}"
+
+      - name: Smoke check Railway health
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS "${RAILWAY_PUBLIC_URL}/api/health"; then
+              exit 0
+            fi
+
+            echo "Waiting for Railway health check (${attempt}/30)..."
+            sleep 10
+          done
+
+          exit 1

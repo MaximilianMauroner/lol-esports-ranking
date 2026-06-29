@@ -108,7 +108,8 @@ export function movementClass(value?: number) {
   return value > 0 ? 'up' : 'down'
 }
 
-/** Stable identity for a team standing (no native id in the snapshot rows). */
-export function teamKey(team: { team: string; region?: string; code?: string }) {
+/** Stable identity for a team standing, falling back for pre-v17 artifacts. */
+export function teamKey(team: { teamId?: string; team: string; region?: string; code?: string }) {
+  if (team.teamId) return team.teamId
   return `${team.team}__${team.region ?? ''}__${team.code ?? ''}`
 }

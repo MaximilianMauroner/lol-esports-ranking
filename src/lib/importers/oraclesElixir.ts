@@ -1,5 +1,11 @@
 import type { MatchRecord, MatchRosterSnapshot, Region, Role, RosterCompleteness, RosterPlayerAppearance, TeamProfile } from '../../types'
-import { canonicalTeamNameFor, regionForLeague, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
+import {
+  inferEventTier,
+  regionForCompetitionSide,
+  regionForLeague,
+  resolveHomeLeagueForCompetition,
+} from '../../data/competitionTaxonomy'
+import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 
 type CsvRecord = Record<string, string>
 
@@ -97,12 +103,24 @@ function normalizeGame(
   const patch = value(first, 'patch')
   const blueIdentity = teamIdentityFor(blueTeam)
   const redIdentity = teamIdentityFor(redTeam)
-  const homeLeague = competitionOnlyLeague(league) ? undefined : league
-  const homeRegion = homeLeague ? leagueToRegion(homeLeague) : undefined
-  const blueHomeLeague = importedSideHomeLeague(league, homeLeague, blueIdentity)
-  const redHomeLeague = importedSideHomeLeague(league, homeLeague, redIdentity)
-  const blueRegion = importedSideRegion(league, homeRegion, blueHomeLeague, blueIdentity)
-  const redRegion = importedSideRegion(league, homeRegion, redHomeLeague, redIdentity)
+  const blueHomeLeague = resolveHomeLeagueForCompetition({
+    competitionLeague: league,
+    identityLeague: blueIdentity?.league,
+  })
+  const redHomeLeague = resolveHomeLeagueForCompetition({
+    competitionLeague: league,
+    identityLeague: redIdentity?.league,
+  })
+  const blueRegion = regionForCompetitionSide({
+    competitionLeague: league,
+    homeLeague: blueHomeLeague,
+    identityRegion: blueIdentity?.region,
+  })
+  const redRegion = regionForCompetitionSide({
+    competitionLeague: league,
+    homeLeague: redHomeLeague,
+    identityRegion: redIdentity?.region,
+  })
   const date = normalizeDate(value(first, 'date'))
 
   return {
@@ -116,7 +134,7 @@ function normalizeGame(
     season: year || new Date().getUTCFullYear(),
     event: event || league,
     phase: playoffs ? 'Playoffs' : 'Regular season',
-    region: leagueToRegion(league),
+    region: regionForLeague(league),
     league,
     teamAHomeLeague: blueHomeLeague,
     teamBHomeLeague: redHomeLeague,
@@ -128,7 +146,7 @@ function normalizeGame(
     teamBRoster: rosterForSide(rows, 'red', date),
     patch,
     bestOf: bestOfForGame(first, playoffs),
-    tier: inferTier(league, event, playoffs),
+    tier: inferEventTier({ league, event, playoffs }),
     teamA: blueTeam,
     teamB: redTeam,
     winner,
@@ -273,26 +291,6 @@ function upsertTeam(teams: Record<string, TeamProfile>, teamName: string, league
   }
 }
 
-function importedSideHomeLeague(competitionLeague: string, homeLeague: string | undefined, identity: TeamProfile | undefined) {
-  if (homeLeague) return homeLeague
-  return shouldUseIdentityForCompetitionFallback(competitionLeague) ? identity?.league : undefined
-}
-
-function importedSideRegion(
-  competitionLeague: string,
-  homeRegion: Region | undefined,
-  homeLeague: string | undefined,
-  identity: TeamProfile | undefined,
-): Region | undefined {
-  if (homeRegion) return homeRegion
-  if (homeLeague && homeLeague !== 'Unknown') return leagueToRegion(homeLeague)
-  return shouldUseIdentityForCompetitionFallback(competitionLeague) ? identity?.region : undefined
-}
-
-function shouldUseIdentityForCompetitionFallback(league: string) {
-  return competitionOnlyLeague(league) && league.trim().toUpperCase() !== 'LTA'
-}
-
 function aggregateTeamRows(rows: CsvRecord[]) {
   const sides = new Map<string, CsvRecord[]>()
   for (const row of rows) {
@@ -401,54 +399,6 @@ function normalizeDate(valueToNormalize: string) {
 function yearFromDate(date: string) {
   const parsed = Number(normalizeDate(date).slice(0, 4))
   return Number.isFinite(parsed) ? parsed : 0
-}
-
-function leagueToRegion(league: string): Region {
-  return regionForLeague(league)
-}
-
-function competitionOnlyLeague(league: string) {
-  const normalized = league.toUpperCase()
-  return normalized.includes('MSI')
-    || normalized.includes('WORLD')
-    || normalized.includes('ESPORTS WORLD CUP')
-    || normalized.includes('ASIA MASTER')
-    || normalized.includes('ASIA MASTERS')
-    || normalized.includes('EMEA MASTERS')
-    || normalized === 'WLD'
-    || normalized === 'WLDS'
-    || normalized === 'EWC'
-    || normalized === 'FST'
-    || normalized === 'ASI'
-    || normalized === 'AC'
-    || normalized === 'DCUP'
-    || normalized === 'KESPA'
-    || normalized === 'EM'
-    || normalized === 'LTA'
-}
-
-function inferTier(league: string, event: string, playoffs: boolean): MatchRecord['tier'] {
-  const text = `${league} ${event}`.toLowerCase()
-  if (text.includes('academic esports world tournament') || text.includes('university esports')) return 'qualifier'
-  if (text.includes('online qualifier') || text.includes('online qualifiers')) return 'qualifier'
-  if (/\bdcup\b/.test(text) || text.includes('demacia cup')) return playoffs ? 'major-playoffs' : 'regional-regular'
-  if (text.includes('first stand') || /\bfst\b/.test(text)) return 'msi-bracket'
-  if (text.includes('emea masters')
-    || /\bem\b/.test(text)
-    || text.includes('minor')
-    || /\bewc\b/.test(text)
-    || text.includes('esports world cup')
-    || text.includes('asia master')
-    || /\basi\b/.test(text)
-    || /\bac\b/.test(text)
-    || text.includes('kespa')) return 'minor-international'
-  if (/\bwlds?\b/.test(text)) return playoffs ? 'worlds-playoffs' : 'worlds-main'
-  if (text.includes('world') && playoffs) return 'worlds-playoffs'
-  if (text.includes('world')) return 'worlds-main'
-  if (text.includes('msi') && playoffs) return 'msi-bracket'
-  if (text.includes('msi')) return 'msi-play-in'
-  if (playoffs) return 'major-playoffs'
-  return 'regional-regular'
 }
 
 function bestOfForGame(row: CsvRecord, playoffs: boolean) {

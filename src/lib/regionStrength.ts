@@ -1,6 +1,6 @@
 import type { LeagueStrength, LeagueTierName, Region, TeamEligibility } from '../types'
 import type { PublicTeamStanding } from './publicArtifacts/schema'
-import { currentTopTierRegionForLeague } from '../data/regionTaxonomy'
+import { currentTopTierRegionForLeague, isMajorRegionPowerRegion } from '../data/regionTaxonomy'
 
 export type RegionStrength = {
   region: Region | string
@@ -17,6 +17,8 @@ export type RegionStrength = {
   leagueCount: number
   /** All leagues currently mapped into this broad region ecosystem. */
   ecosystemLeagueCount: number
+  /** League names used for the region score and its representative-team analysis. */
+  flagshipLeagues: string[]
   /** Mean league connectivity (0-1): how well the region's results tie into the global graph. */
   connectivity: number
   internationalWins: number
@@ -42,6 +44,8 @@ type RegionStanding = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'lea
   eligibility?: TeamEligibility
 }
 
+export type RegionPowerTeamInput = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league'>
+
 const TIER_RANK: Record<LeagueTierName, number> = {
   'tier-one': 0,
   'tier-two': 1,
@@ -60,9 +64,9 @@ export function deriveRegionStrength(
   standings: RegionStanding[],
   { includeInternational = false }: { includeInternational?: boolean } = {},
 ): RegionStrength[] {
-  const leaguesByRegion = groupBy(leagues, (league) => currentTopTierRegionForLeague(league.league, league.region))
-  const teamsByRegion = groupBy(standings, (team) => currentTopTierRegionForLeague(team.league, team.region))
-  const regionNames = new Set<string>([...leaguesByRegion.keys(), ...teamsByRegion.keys()])
+  const leaguesByRegion = groupBy(leagues, (league) => regionPowerRegionFor(league.league, league.region, includeInternational))
+  const teamsByRegion = groupBy(standings, (team) => regionPowerRegionFor(team.league, team.region, includeInternational))
+  const regionNames = new Set<string>(leaguesByRegion.keys())
 
   const rows: RegionStrength[] = []
   for (const region of regionNames) {
@@ -72,7 +76,7 @@ export function deriveRegionStrength(
     const flagshipLeagueNames = new Set(flagshipLeagues.map((league) => league.league))
     const ecosystemTeams = teamsByRegion.get(region) ?? []
     const regionTeams = ecosystemTeams
-      .filter((team) => flagshipLeagueNames.size === 0 || (team.league && flagshipLeagueNames.has(team.league)))
+      .filter((team) => teamBelongsToRegionPowerLeagues(region, flagshipLeagueNames, team))
       .slice()
       .sort((left, right) => ratingOf(right) - ratingOf(left))
     const rankedRegionTeams = regionTeams.filter((team) => team.eligibility?.eligible !== false)
@@ -104,6 +108,7 @@ export function deriveRegionStrength(
       ecosystemTeamCount: ecosystemTeams.length,
       leagueCount: flagshipLeagues.length,
       ecosystemLeagueCount: ecosystemLeagues.length,
+      flagshipLeagues: [...flagshipLeagueNames],
       connectivity: mean(flagshipLeagues, (league) => league.connectivity),
       internationalWins,
       internationalLosses,
@@ -126,6 +131,32 @@ export function deriveRegionStrength(
   return rows
     .sort((left, right) => right.score - left.score || (right.winsOverExpected ?? 0) - (left.winsOverExpected ?? 0) || right.topTeamRating - left.topTeamRating)
     .map((row, index) => ({ ...row, rank: index + 1 }))
+}
+
+export function regionPowerLeagueNames(region: Pick<RegionStrength, 'flagshipLeagues' | 'flagshipLeague'>): string[] {
+  if ((region.flagshipLeagues ?? []).length > 0) return region.flagshipLeagues
+  return region.flagshipLeague ? [region.flagshipLeague] : []
+}
+
+export function isRegionPowerTeam(region: Pick<RegionStrength, 'region' | 'flagshipLeagues' | 'flagshipLeague' | 'topTeams'>, team: RegionPowerTeamInput) {
+  const leagueNames = new Set(regionPowerLeagueNames(region))
+  const teamRegion = regionPowerRegionFor(team.league, team.region)
+  if (teamRegion !== region.region) return false
+  if (leagueNames.size > 0) return Boolean(team.league && leagueNames.has(team.league))
+
+  return region.topTeams.some((topTeam) => topTeam.team === team.team || (topTeam.code && team.code === topTeam.code))
+}
+
+function teamBelongsToRegionPowerLeagues(region: string, flagshipLeagueNames: Set<string>, team: RegionStanding) {
+  if (flagshipLeagueNames.size === 0) return false
+  return regionPowerRegionFor(team.league, team.region) === region && Boolean(team.league && flagshipLeagueNames.has(team.league))
+}
+
+function regionPowerRegionFor(league: string | undefined, fallbackRegion: string | undefined, includeInternational = false) {
+  const region = currentTopTierRegionForLeague(league, fallbackRegion)
+  if (isMajorRegionPowerRegion(region)) return region
+  if (includeInternational && region === 'International') return region
+  return undefined
 }
 
 function flagshipLeaguesFor(leagues: LeagueStrength[]) {

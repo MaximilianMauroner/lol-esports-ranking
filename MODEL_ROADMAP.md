@@ -2,10 +2,10 @@
 
 ## Ranking Target
 
-The ranking target is predictive current strength. Standings are side-neutral team strength; source-row walk-forward predictions use known side context when the source supplies it.
+The ranking target is context-neutral latent current strength. Standings estimate how strong a team is against a representative field under average draft, side, matchup, patch, and current-roster conditions. Source-row walk-forward predictions remain a forecast and validation layer; they use known side context when the source supplies it.
 
 ```text
-Who is most likely to beat whom on the current patch, with current rosters, under neutral side context?
+How strong is this team right now against a representative field, under average draft, side, matchup, and current-roster conditions?
 ```
 
 This is not a trophy table, fame score, or retrospective achievement list. Every public ranking claim should identify the data source, model version, model config hash, coverage window, and whether the input includes seeded/demo data.
@@ -26,7 +26,8 @@ LeagueAnchor
 
 Current implementation status:
 
-- `transparent-gpr-v0.34.0` has the team-result Elo spine, seasonal league anchors, stable team offsets, roster/player priors, capped fast-decaying momentum, event K values, best-of damping, online recency decay, opponent-strength-adjusted cross-league league strength with emerging-league published anchor caps, international placement residuals, prior-only side-aware published walk-forward predictions, patch/split/season retention, uncertainty bands, chronological season-snapshot scope with season-scoped team ranking profiles, canonical source-identity/stat-line dedupe, source provenance, date-batched walk-forward prediction, sourced Oracle game-roster basis, value-weighted roster-continuity carryover, role-conditioned sourced player ratings with league-tier signal shrinkage, a 20-game role sample gate, a 20-game displayed-team sample gate, gated player-adjusted predictions, shadow execution-residual validation, compact segmented validation metrics, schema `13` public component and update-ledger fields, compact player-source observation traces, player appearance provenance for shown-team and role sample auditing, regional alias cleanup for EMEA/LATAM/APAC secondary leagues, data-quality audit counts, flagship-region strength rows, explicit global-cup/event taxonomy with First Stand/FST treated as an MSI-level bracket signal and duplicate EWC online qualifiers retaining Leaguepedia qualifier metadata, source-observed team-profile derivation, developmental-team eligibility gates, lower-tier ecosystem eligibility gates, scoped 30-game total-volume eligibility, ranked/audit public team modes, and public component explanations.
+- `transparent-gpr-v0.0.0` is the canonical public model version for every pre-1.0 artifact. Exact experimental lineage is identified by `model.configHash`, active parameters, schema version, and committed source/data provenance rather than by incrementing `v0.x` model numbers.
+- The active pre-1.0 model retargets the public score as a context-neutral latent team-strength estimate and applies team/league strength movement atomically at resolved series level. Match outcomes are treated as evidence, not the ranking target itself. The active implementation allocates each result residual into durable `TeamStableOffset` and fast-decaying `Momentum`/form shares, exposes that allocation in the public rating-update ledger, keeps sourced player ratings as the active player layer, and publishes first-class region history from league-strength history. Draft, style-counter, lineup-synergy, and richer player/lineup propagation remain follow-up layers until source coverage and walk-forward validation can support them.
 - Player ratings are sourced post-game outputs from Oracle player rows. A prior-only player-rating adjustment is now enabled for published predictions after clearing the walk-forward gate; team-only baseline probabilities remain available in metrics for auditability.
 - Award/POG residuals are source-blocked in the current local pipeline: Oracle CSVs and Leaguepedia ScoreboardGames do not provide dated human MVP/POG/All-Pro signals, so `AwardResidualZ` remains unapplied rather than inferred from visible stats.
 - Execution residuals are modeled only in a parallel shadow ledger until a walk-forward gate proves they improve forward prediction. Post-game kills, gold, and objectives update that shadow ledger after the date's predictions are emitted; they do not leak into their own pre-game prediction.
@@ -62,7 +63,7 @@ Use breaking changes for:
 - Cleaner source ingestion and model calibration.
 - Simpler long-term architecture.
 
-When making a breaking change, bump the model version or schema version as appropriate, regenerate affected snapshots, update docs/tests, and state the migration impact.
+When making a breaking pre-1.0 model change, keep the model version at `transparent-gpr-v0.0.0`, rely on `model.configHash` for exact model-parameter provenance, bump schema versions when the public artifact shape changes, regenerate affected snapshots, update docs/tests, and state the migration impact.
 
 ## Player Importance
 
@@ -136,7 +137,7 @@ returning_players / 5
 
 If a high-impact support accounts for 24% of team value, losing that support should hurt more than losing a 16% weak-side top. Roster changes should also widen uncertainty until new evidence arrives.
 
-Current `transparent-gpr-v0.34.0` standings expose whether each team has a complete latest Oracle game roster (`sourced`), partial roster evidence (`assumed-continuous`), or no roster evidence (`unknown`). The model compares the current complete lineup against the prior complete lineup using role-value weights; lower continuity regresses only the stable team offset toward the league anchor and raises uncertainty before prediction. A rebuilt team therefore keeps the league baseline but does not inherit the old org roster's full peak rating. Player standings are rated from sourced Oracle player-game stats after each game. Prior player ratings, momentum, and known side context also produce pre-game adjustments for published walk-forward predictions; the metrics retain neutral team-only and player-adjusted deltas for auditability.
+Current pre-1.0 standings expose whether each team has a complete latest Oracle game roster (`sourced`), partial roster evidence (`assumed-continuous`), or no roster evidence (`unknown`). The model compares the current complete lineup against the prior complete lineup using role-value weights; lower continuity regresses only the stable team offset toward the league anchor and raises uncertainty before prediction. A rebuilt team therefore keeps the league baseline but does not inherit the old org roster's full peak rating. Player standings are rated from sourced Oracle player-game stats after each game. Prior player ratings, momentum, and known side context also produce pre-game adjustments for published walk-forward predictions; the metrics retain neutral team-only and player-adjusted deltas for auditability.
 
 Migration impact from `v0.11.0` to `v0.12.0`: league Elo and region summaries now use the participating teams' pregame power when scoring international cross-league games. A league receives more credit for a win against a high-rated representative and less credit for an expected win against a lower-rated representative. Public snapshot schema `5` adds `expectedWins`, `winsOverExpected`, `opponentAdjustedWinRate`, and `averageOpponentRating` to league rows.
 
@@ -177,6 +178,10 @@ Migration impact from `v0.31.0` to `v0.32.0`: emerging and unknown leagues now a
 Migration impact from `v0.32.0` to `v0.33.0`: season-scoped public player rows are rebuilt from the active season's appearances, credited to the player's primary team in that scope, and gated by both role games and displayed-team games. Multi-team players still keep appearance provenance, but narrow transfer fragments and substitute/reserve samples no longer publish as top-board player claims. Event scopes without a scoped public player population no longer fall back to the global player list. Public schema remains `13`, but player ranks and player/team labels are not comparable to v0.32.
 
 Migration impact from `v0.33.0` to `v0.34.0`: team eligibility is recomputed after applying season, event, or region filters instead of carrying the all-time/global eligibility object into scoped shards. The default eligibility config now requires 30 total scoped games in addition to current-volume, staleness, uncertainty, and league-anchor checks. The public team table defaults to ranked rows, while provisional low-volume or unanchored rows remain available in audit mode with explicit reasons. Public schema remains `13`, but scoped team ranks and eligibility are not comparable to v0.33.
+
+Migration impact from `v0.38.0` to `v0.39.0`: the public ranking target is now documented and serialized as context-neutral latent team strength rather than direct match-winner prediction. Team result residuals are allocated into durable stable-strength and fast-decaying form shares instead of all durable team movement, and compact browser `ratingUpdate` rows expose `resultEvidence`, `neutralResultResidual`, `seriesStrengthSignal`, `teamStableShare`, `teamFormShare`, and eligible `leagueSignalShare`. Full derived audit snapshots also keep inactive player/lineup/direct-region shadow shares. Public schema `15` is not comparable to v0.38 because team stable offsets are intentionally less reactive while form absorbs more short-term evidence.
+
+Migration impact from `v0.39.0` to `v0.40.0`: team stable/form and league game-strength updates now use the resolved series as the canonical update unit. Pregame predictions and execution-residual evidence still run per source game row, but non-final series rows publish `series-member-no-team-update` ledgers with zero team/league movement and the final row publishes the full `series-atomic` residual. Public schema remains `15`, but rating movement is not comparable to v0.39 because Bo3/Bo5 rows are no longer counted as multiple damped rating events.
 
 ## Validation Order
 

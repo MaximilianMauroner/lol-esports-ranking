@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import {
+  eventTierRank,
+  inferEventTier,
+  regionForCompetitionSide,
+  resolveHomeLeagueForCompetition,
+} from '../src/data/competitionTaxonomy.ts'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles.ts'
 import type { MatchRecord, TeamProfile } from '../src/types.ts'
 
@@ -10,6 +16,36 @@ test('mergeTeamProfiles does not let later unknown profiles replace useful leagu
   ])
 
   assert.equal(merged['Karmine Corp Blue'].league, 'LFL')
+})
+
+test('competition taxonomy keeps home-league fallback and event tier policy centralized', () => {
+  assert.equal(resolveHomeLeagueForCompetition({
+    competitionLeague: 'MSI',
+    identityLeague: 'LCK',
+    unknownLeague: 'Unknown',
+  }), 'LCK')
+  assert.equal(regionForCompetitionSide({
+    competitionLeague: 'MSI',
+    homeLeague: 'LCK',
+    identityRegion: 'LCK',
+    missingRegion: 'International',
+  }), 'LCK')
+
+  assert.equal(resolveHomeLeagueForCompetition({
+    competitionLeague: 'LTA',
+    identityLeague: 'LCS',
+  }), undefined)
+  assert.equal(regionForCompetitionSide({
+    competitionLeague: 'LTA',
+    identityRegion: 'LCS',
+  }), undefined)
+
+  assert.equal(inferEventTier({
+    league: 'Worlds',
+    event: 'World Championship 2026',
+    phase: 'Playoffs',
+  }), 'worlds-playoffs')
+  assert.ok(eventTierRank('worlds-playoffs') > eventTierRank('regional-regular'))
 })
 
 test('deriveTeamProfilesFromMatches prefers dominant non-competition home league over file order', () => {

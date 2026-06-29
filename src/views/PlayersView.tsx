@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import type { PlayerDirectoryState } from '../hooks/usePublicArtifacts'
 
 type SortKey = 'rank' | 'rating' | 'individualResidual' | 'games'
 type RoleFilter = Role | 'All'
@@ -23,6 +24,7 @@ export function PlayersView({
   search,
   onSearchChange,
   pickedIds,
+  artifactState,
   onToggle,
 }: {
   players: CompactPlayer[]
@@ -31,6 +33,7 @@ export function PlayersView({
   search: string
   onSearchChange: (value: string) => void
   pickedIds: Set<string>
+  artifactState?: PlayerDirectoryState
   onToggle: (player: CompactPlayer) => void
 }) {
   const [role, setRole] = useState<RoleFilter>('All')
@@ -128,7 +131,13 @@ export function PlayersView({
           </div>
           <div className="toolbar spacer player-panel__controls">
             <SearchInput value={search} onChange={onSearchChange} placeholder="Search players" className="player-filter-search" />
-            <Segmented value={role} options={roleOptions} onChange={updateRole} className="player-filter-roles" />
+            <Segmented
+              value={role}
+              options={roleOptions}
+              onChange={updateRole}
+              ariaLabel="Player role filter"
+              className="player-filter-roles"
+            />
             <Field
               label="Region"
               value={region}
@@ -142,7 +151,15 @@ export function PlayersView({
           </div>
         </div>
 
-        {visible.length === 0 ? (
+        {artifactState?.status === 'loading' ? (
+          <DataState icon={<UserRound size={26} aria-hidden="true" />} title="Loading player ratings">
+            Fetching the player directory artifact for the current ranking scope.
+          </DataState>
+        ) : artifactState && artifactState.status !== 'ready' ? (
+          <DataState icon={<UserRound size={26} aria-hidden="true" />} title="Player ratings unavailable">
+            {artifactState.message}
+          </DataState>
+        ) : visible.length === 0 ? (
           <DataState icon={<UserRound size={26} aria-hidden="true" />} title="No players match">
             Adjust the search, role, or region filter to see ranked players.
           </DataState>
@@ -166,6 +183,7 @@ export function PlayersView({
               <TableBody>
                 {visible.map((player) => {
                   const isExpanded = expandedPlayerId === player.id
+                  const detailId = `player-detail-${domSafeId(player.id)}`
                   const recentMatchesLabel = `${isExpanded ? 'Hide' : 'Show'} diagnostics and recent matches for ${player.name}`
                   return (
                     <Fragment key={player.id}>
@@ -179,6 +197,7 @@ export function PlayersView({
                           <b>{player.name}</b>
                           <small>
                             <span className="player-mobile-team">{player.teamCode ?? player.team} · </span>
+                            <span className="player-mobile-context">{mobilePlayerContext(player)}</span>
                             <ImpactMultiplier value={player.impactMultiplier} />
                           </small>
                           <Button
@@ -186,6 +205,7 @@ export function PlayersView({
                             variant="ghost"
                             className="form-trigger player-form-inline"
                             aria-expanded={isExpanded}
+                            aria-controls={detailId}
                             aria-label={recentMatchesLabel}
                             onClick={() => toggleRecentMatches(player.id)}
                             title={recentMatchesLabel}
@@ -220,6 +240,7 @@ export function PlayersView({
                           variant="ghost"
                           className="form-trigger"
                           aria-expanded={isExpanded}
+                          aria-controls={detailId}
                           aria-label={recentMatchesLabel}
                           onClick={() => toggleRecentMatches(player.id)}
                           title={recentMatchesLabel}
@@ -232,7 +253,7 @@ export function PlayersView({
                       </TableCell>
                     </TableRow>
                     {isExpanded ? (
-                      <TableRow className="player-match-row">
+                      <TableRow className="player-match-row" id={detailId}>
                         <TableCell colSpan={10}>
                           <PlayerRecentMatches player={player} />
                         </TableCell>
@@ -278,6 +299,10 @@ export function PlayersView({
       </Card>
     </div>
   )
+}
+
+function domSafeId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '-')
 }
 
 function ImpactMultiplier({ value }: { value: number }) {
@@ -364,7 +389,7 @@ function PlayerRecentMatches({ player }: { player: CompactPlayer }) {
 
 type CompactRecentPlayerMatch = NonNullable<CompactPlayer['recentMatches']>[number]
 type CompactPlayerDiagnostics = NonNullable<CompactPlayer['diagnostics']>
-type CompactPlayerDiagnosticMetric = CompactPlayerDiagnostics['damageShare']
+type CompactPlayerDiagnosticMetric = NonNullable<CompactPlayerDiagnostics['damageShare']>
 type CompactPlayerIndividualResidual = NonNullable<CompactPlayer['individualResidual']>
 
 function PlayerDiagnosticsPanel({ player }: { player: CompactPlayer }) {
@@ -373,20 +398,20 @@ function PlayerDiagnosticsPanel({ player }: { player: CompactPlayer }) {
   if (!diagnostics && !residual) return null
   const residualItems = residual ? [
     { label: 'Individual Residual', value: formatRating(residual.score), note: formatResidualRankNote(residual) },
-    { label: 'Adjusted diff', value: formatMetricSignedRatio(residual.adjustedSameRoleDiff), note: metricCoverageLabel(residual.adjustedSameRoleDiff) },
-    { label: 'Expected no-win', value: formatMetricRatio(residual.expectedNoWinStatScore), note: formatResidualControlNote(residual) },
-    { label: 'Strength proxy', value: formatMetricSignedRatio(residual.opponentStrengthProxy), note: 'pre-game rating edge' },
-  ] : []
+    residual.adjustedSameRoleDiff ? { label: 'Adjusted diff', value: formatMetricSignedRatio(residual.adjustedSameRoleDiff), note: metricCoverageLabel(residual.adjustedSameRoleDiff) } : undefined,
+    residual.expectedNoWinStatScore ? { label: 'Expected no-win', value: formatMetricRatio(residual.expectedNoWinStatScore), note: formatResidualControlNote(residual) } : undefined,
+    residual.opponentStrengthProxy ? { label: 'Strength proxy', value: formatMetricSignedRatio(residual.opponentStrengthProxy), note: 'pre-game rating edge' } : undefined,
+  ].filter((item): item is { label: string; value: string; note: string } => Boolean(item)) : []
   const diagnosticItems = diagnostics ? [
-    { label: 'Win rate', value: diagnostics.winRate === null ? '—' : formatRatio(diagnostics.winRate), note: `${formatNumber(diagnostics.wins)}-${formatNumber(diagnostics.losses)}` },
-    { label: 'No-win stat', value: formatMetricRatio(diagnostics.noWinStatScore), note: metricCoverageLabel(diagnostics.noWinStatScore) },
-    { label: 'Same-role diff', value: formatMetricSignedRatio(diagnostics.sameRoleMatchupDiff), note: metricCoverageLabel(diagnostics.sameRoleMatchupDiff) },
-    { label: 'Damage share', value: formatMetricRatio(diagnostics.damageShare), note: metricCoverageLabel(diagnostics.damageShare) },
-    { label: 'Gold share', value: formatMetricRatio(diagnostics.earnedGoldShare), note: metricCoverageLabel(diagnostics.earnedGoldShare) },
-    { label: 'KDA', value: formatMetricDecimal(diagnostics.kda), note: metricCoverageLabel(diagnostics.kda) },
-    { label: 'Vision score', value: formatMetricDecimal(diagnostics.visionScore), note: metricCoverageLabel(diagnostics.visionScore) },
-    { label: 'VSPM', value: formatMetricDecimal(diagnostics.vspm), note: metricCoverageLabel(diagnostics.vspm) },
-  ] : []
+    { label: 'Win rate', value: diagnostics.winRate === null || diagnostics.winRate === undefined ? '—' : formatRatio(diagnostics.winRate), note: `${formatNumber(diagnostics.wins ?? 0)}-${formatNumber(diagnostics.losses ?? 0)}` },
+    diagnostics.noWinStatScore ? { label: 'No-win stat', value: formatMetricRatio(diagnostics.noWinStatScore), note: metricCoverageLabel(diagnostics.noWinStatScore) } : undefined,
+    diagnostics.sameRoleMatchupDiff ? { label: 'Same-role diff', value: formatMetricSignedRatio(diagnostics.sameRoleMatchupDiff), note: metricCoverageLabel(diagnostics.sameRoleMatchupDiff) } : undefined,
+    diagnostics.damageShare ? { label: 'Damage share', value: formatMetricRatio(diagnostics.damageShare), note: metricCoverageLabel(diagnostics.damageShare) } : undefined,
+    diagnostics.earnedGoldShare ? { label: 'Gold share', value: formatMetricRatio(diagnostics.earnedGoldShare), note: metricCoverageLabel(diagnostics.earnedGoldShare) } : undefined,
+    diagnostics.kda ? { label: 'KDA', value: formatMetricDecimal(diagnostics.kda), note: metricCoverageLabel(diagnostics.kda) } : undefined,
+    diagnostics.visionScore ? { label: 'Vision score', value: formatMetricDecimal(diagnostics.visionScore), note: metricCoverageLabel(diagnostics.visionScore) } : undefined,
+    diagnostics.vspm ? { label: 'VSPM', value: formatMetricDecimal(diagnostics.vspm), note: metricCoverageLabel(diagnostics.vspm) } : undefined,
+  ].filter((item): item is { label: string; value: string; note: string } => Boolean(item)) : []
   const items = [
     ...residualItems,
     ...diagnosticItems,
@@ -465,6 +490,7 @@ function formatResidualRankDelta(delta: number) {
 }
 
 function formatResidualControlNote(residual: CompactPlayerIndividualResidual) {
+  if (!residual.controls) return `${formatNumber(residual.sampleGames)} sampled games`
   return [
     residual.controls.primaryLeague,
     `${formatNumber(residual.controls.leagueGames)} league games`,
@@ -513,19 +539,42 @@ function formatSourceFileName(fileName?: string) {
   return fileName
 }
 
+function mobilePlayerContext(player: CompactPlayer) {
+  const residual = player.individualResidual ? `IR ${formatRating(player.individualResidual.score)}` : undefined
+  return [
+    player.role,
+    teamAttributionShort(player),
+    `${formatNumber(player.games)} games`,
+    residual,
+    `${formatRatio(player.availability)} avail`,
+  ].filter(Boolean).join(' · ')
+}
+
+function teamAttributionShort(player: CompactPlayer) {
+  const latestTeam = player.teamCode ?? player.team
+  const appearance = player.appearance
+  if (!appearance) return latestTeam
+  const latestGames = player.teamGames ?? appearance.latestTeamGames
+  const primaryDiffers = appearance.primaryTeam && appearance.primaryTeam !== player.team
+  return primaryDiffers
+    ? `${latestTeam} latest ${formatNumber(latestGames)}g`
+    : `${latestTeam} ${formatNumber(latestGames)}g`
+}
+
 function teamAppearanceLabel(player: CompactPlayer) {
   const appearance = player.appearance
   if (!appearance) return player.region ?? '—'
   const teamGames = player.teamGames ?? appearance.latestTeamGames
-  const teamSample = teamGames === player.games
-    ? `all ${formatNumber(player.games)} games`
-    : `${formatNumber(teamGames)} of ${formatNumber(player.games)} games`
+  const latestSample = `Latest team: ${formatNumber(teamGames)} of ${formatNumber(player.games)} games`
+  const primarySample = appearance.primaryTeam && appearance.primaryTeam !== player.team
+    ? `primary ${appearance.primaryTeam} ${formatNumber(appearance.primaryTeamGames)} games`
+    : `primary sample: ${formatNumber(appearance.primaryTeamGames)} of ${formatNumber(player.games)} games`
   const flags = appearance.flags.includes('multi-team-career')
     ? 'multi-team'
     : appearance.flags.includes('thin-latest-team-sample')
       ? 'thin team sample'
       : undefined
-  return [formatCompetitionRegionLabel(player.region), teamSample, flags].filter(Boolean).join(' · ')
+  return [latestSample, primarySample, formatCompetitionRegionLabel(player.region), flags].filter(Boolean).join(' · ')
 }
 
 function appearanceTitle(player: CompactPlayer) {

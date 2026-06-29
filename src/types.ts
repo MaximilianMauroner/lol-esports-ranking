@@ -269,6 +269,21 @@ export type RatingUpdateLedger = {
   uncertaintyDelta: number
   sideAdjustment: number
   patchAdjustment: number
+  ratingTarget?: string
+  updateUnit?: string
+  resultEvidence?: number
+  neutralResultResidual?: number
+  seriesStrengthSignal?: number
+  teamStableShare?: number
+  teamFormShare?: number
+  playerSignalShare?: number
+  lineupSignalShare?: number
+  leagueSignalShare?: number
+  directRegionSignalShare?: number
+  playerSignalDelta?: number
+  lineupSignalDelta?: number
+  directRegionSignalDelta?: number
+  unavailableChannels?: string[]
 }
 
 export type FactorBreakdown = {
@@ -299,6 +314,26 @@ export type LeagueStrength = {
   form: string[]
   lastEvent?: string
   lastUpdated?: string
+}
+
+export type LeagueStrengthHistoryPoint = {
+  date: string
+  event: string
+  tier: EventTier
+  league: string
+  region: Region
+  opponentLeague: string
+  opponentRegion: Region
+  result: 'W' | 'L'
+  score: number
+  delta: number
+  wins: number
+  losses: number
+  expectedWins?: number
+  winsOverExpected?: number
+  opponentAdjustedWinRate?: number
+  averageOpponentRating?: number
+  internationalMatches: number
 }
 
 export type PregamePrediction = {

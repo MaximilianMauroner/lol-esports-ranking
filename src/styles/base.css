@@ -17,7 +17,7 @@
   --text: oklch(0.91 0.006 250);
   --text-strong: oklch(0.97 0.004 250);
   --muted: oklch(0.69 0.006 250);
-  --faint: oklch(0.52 0.006 250);
+  --faint: oklch(0.64 0.006 250);
 
   --accent: oklch(0.79 0.155 205);
   --accent-strong: oklch(0.86 0.145 200);
@@ -137,6 +137,8 @@ select,
 input {
   font: inherit;
   color: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {

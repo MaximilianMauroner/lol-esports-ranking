@@ -1,6 +1,7 @@
 # Repository Instructions
 
 - Use subagents whenever it makes sense and can speed up work.
+- Pre 1.0 breaking changes are encouraged when they improve accuracy, fairness, provenance, model clarity, or long-term maintainability. Prefer the better system over compatibility.
 - Use Asana for task management.
 - Use the existing Asana project `LoL Esports Ranking` (`1216072655616005`) for task management. Put tasks in the workflow section that matches their current state:
   - `Inbox / Idea Captured`: raw ideas, untriaged requests, or tasks missing enough context to classify.
@@ -15,6 +16,7 @@
   - `Merged / Closed`: merged, shipped, duplicate, or otherwise intentionally closed; leave an Asana comment explaining closure when closing non-obvious work.
   - `Blocked on Human`: needs a human/owner decision, credential, review, or external account action before progress can continue.
   - `Blocked on Dependency`: blocked by another task, upstream data/provider issue, CI/deploy dependency, or unavailable external system; link dependencies in Asana when possible.
+- Do not create new tasks if old tasks are around which can be reused or repurposed. Instead, update the old task with new context and move it to the appropriate workflow section.
 - Do not create new tasks in legacy/default sections such as `Untitled section` or `Done`; rename or move them into the workflow above.
 - Keep Asana task comments/status current during longer repo runs and at closeout, especially when moving tasks between sections.
 - Keep ranking claims tied to the data source and model version that produced them.

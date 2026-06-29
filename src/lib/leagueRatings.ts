@@ -27,7 +27,43 @@ export function ensureLeague(
   leagueMatchCounts.set(league, 0)
 }
 
-export function updateLeagueStrengthForMatch({
+type LeagueStrengthState = {
+  leagueScores: Map<string, number>
+  previousLeagueScores: Map<string, number>
+  leagueWins: Map<string, number>
+  leagueLosses: Map<string, number>
+  leagueExpectedWins: Map<string, number>
+  leagueOpponentRatingSums: Map<string, number>
+  leagueForms: Map<string, string[]>
+  leagueMatchCounts: Map<string, number>
+  leagueLastEvents: Map<string, string>
+  leagueLastUpdated: Map<string, string>
+}
+
+type LeagueStrengthUpdateBase = LeagueStrengthState & {
+  match: MatchRecord
+  leagueA: string
+  leagueB: string
+  leagueScoreA: number
+  leagueScoreB: number
+  leagueExpectedRatingA: number
+  leagueExpectedRatingB: number
+  recency: number
+}
+
+export type LeagueStrengthGameUpdate = LeagueStrengthUpdateBase & {
+  aWon: boolean
+}
+
+export type LeagueStrengthSeriesUpdate = LeagueStrengthUpdateBase & {
+  expectedOutcomeA: number
+  expectedOutcomeB: number
+  observedOutcomeA: number
+  observedOutcomeB: number
+  strengthSignal: number
+}
+
+export function updateLeagueStrengthForGame({
   match,
   leagueA,
   leagueB,
@@ -47,44 +83,134 @@ export function updateLeagueStrengthForMatch({
   leagueMatchCounts,
   leagueLastEvents,
   leagueLastUpdated,
-}: {
-  match: MatchRecord
-  leagueA: string
-  leagueB: string
-  leagueScoreA: number
-  leagueScoreB: number
-  leagueExpectedRatingA: number
-  leagueExpectedRatingB: number
-  aWon: boolean
-  recency: number
-  leagueScores: Map<string, number>
-  previousLeagueScores: Map<string, number>
-  leagueWins: Map<string, number>
-  leagueLosses: Map<string, number>
-  leagueExpectedWins: Map<string, number>
-  leagueOpponentRatingSums: Map<string, number>
-  leagueForms: Map<string, string[]>
-  leagueMatchCounts: Map<string, number>
-  leagueLastEvents: Map<string, string>
-  leagueLastUpdated: Map<string, string>
+}: LeagueStrengthGameUpdate) {
+  const leagueKFactor = eventTierConfig[match.tier].leagueKFactor
+  const expectedOutcomeA = expectedScore(leagueExpectedRatingA, leagueExpectedRatingB)
+
+  return updateLeagueStrength({
+    match,
+    leagueA,
+    leagueB,
+    leagueScoreA,
+    leagueScoreB,
+    leagueExpectedRatingA,
+    leagueExpectedRatingB,
+    expectedOutcomeA,
+    expectedOutcomeB: 1 - expectedOutcomeA,
+    observedOutcomeA: aWon ? 1 : 0,
+    observedOutcomeB: aWon ? 0 : 1,
+    kFactor: leagueKFactor / Math.sqrt(normalizedBestOf(match.bestOf)),
+    recency,
+    leagueScores,
+    previousLeagueScores,
+    leagueWins,
+    leagueLosses,
+    leagueExpectedWins,
+    leagueOpponentRatingSums,
+    leagueForms,
+    leagueMatchCounts,
+    leagueLastEvents,
+    leagueLastUpdated,
+  })
+}
+
+export function updateLeagueStrengthForSeries({
+  match,
+  leagueA,
+  leagueB,
+  leagueScoreA,
+  leagueScoreB,
+  leagueExpectedRatingA,
+  leagueExpectedRatingB,
+  expectedOutcomeA,
+  expectedOutcomeB,
+  observedOutcomeA,
+  observedOutcomeB,
+  strengthSignal,
+  recency,
+  leagueScores,
+  previousLeagueScores,
+  leagueWins,
+  leagueLosses,
+  leagueExpectedWins,
+  leagueOpponentRatingSums,
+  leagueForms,
+  leagueMatchCounts,
+  leagueLastEvents,
+  leagueLastUpdated,
+}: LeagueStrengthSeriesUpdate) {
+  return updateLeagueStrength({
+    match,
+    leagueA,
+    leagueB,
+    leagueScoreA,
+    leagueScoreB,
+    leagueExpectedRatingA,
+    leagueExpectedRatingB,
+    expectedOutcomeA,
+    expectedOutcomeB,
+    observedOutcomeA,
+    observedOutcomeB,
+    kFactor: eventTierConfig[match.tier].leagueKFactor * strengthSignal,
+    recency,
+    leagueScores,
+    previousLeagueScores,
+    leagueWins,
+    leagueLosses,
+    leagueExpectedWins,
+    leagueOpponentRatingSums,
+    leagueForms,
+    leagueMatchCounts,
+    leagueLastEvents,
+    leagueLastUpdated,
+  })
+}
+
+function updateLeagueStrength({
+  match,
+  leagueA,
+  leagueB,
+  leagueScoreA,
+  leagueScoreB,
+  leagueExpectedRatingA,
+  leagueExpectedRatingB,
+  expectedOutcomeA,
+  expectedOutcomeB,
+  observedOutcomeA,
+  observedOutcomeB,
+  kFactor,
+  recency,
+  leagueScores,
+  previousLeagueScores,
+  leagueWins,
+  leagueLosses,
+  leagueExpectedWins,
+  leagueOpponentRatingSums,
+  leagueForms,
+  leagueMatchCounts,
+  leagueLastEvents,
+  leagueLastUpdated,
+}: LeagueStrengthUpdateBase & {
+  expectedOutcomeA: number
+  expectedOutcomeB: number
+  observedOutcomeA: number
+  observedOutcomeB: number
+  kFactor: number
 }) {
   const leagueKFactor = eventTierConfig[match.tier].leagueKFactor
   if (leagueA === leagueB || leagueA === 'Unknown' || leagueB === 'Unknown' || leagueKFactor === 0 || !isInternationalMatch(match)) {
     return { deltaA: 0, deltaB: 0 }
   }
 
-  const expectedLeagueA = expectedScore(leagueExpectedRatingA, leagueExpectedRatingB)
-  const expectedLeagueB = 1 - expectedLeagueA
-  const k = leagueKFactor / Math.sqrt(normalizedBestOf(match.bestOf))
-  const deltaA = Math.round(k * recency * ((aWon ? 1 : 0) - expectedLeagueA))
-  const deltaB = Math.round(k * recency * ((aWon ? 0 : 1) - expectedLeagueB))
+  const deltaA = Number((kFactor * recency * (observedOutcomeA - expectedOutcomeA)).toFixed(3))
+  const deltaB = Number((kFactor * recency * (observedOutcomeB - expectedOutcomeB)).toFixed(3))
 
   previousLeagueScores.set(leagueA, leagueScoreA)
   previousLeagueScores.set(leagueB, leagueScoreB)
   leagueScores.set(leagueA, leagueScoreA + deltaA)
   leagueScores.set(leagueB, leagueScoreB + deltaB)
-  updateLeagueRecord(leagueA, aWon, expectedLeagueA, leagueExpectedRatingB, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
-  updateLeagueRecord(leagueB, !aWon, expectedLeagueB, leagueExpectedRatingA, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
+  updateLeagueRecord(leagueA, observedOutcomeA > observedOutcomeB, expectedOutcomeA, leagueExpectedRatingB, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
+  updateLeagueRecord(leagueB, observedOutcomeB > observedOutcomeA, expectedOutcomeB, leagueExpectedRatingA, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
 
   return { deltaA, deltaB }
 }

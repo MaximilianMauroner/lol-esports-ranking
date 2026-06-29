@@ -1,4 +1,5 @@
 import type { MatchRecord } from '../../types'
+import { eventTierRank } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor } from '../../data/teamIdentity'
 
 export function mergeCommunityMatchSources({
@@ -76,22 +77,9 @@ function isQualifierMetadata(match: MatchRecord) {
 }
 
 function hasStrongerCompetitionMetadata(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
-  if (tierRank(duplicateMatch.tier) <= tierRank(retainedMatch.tier)) return false
+  if (eventTierRank(duplicateMatch.tier) <= eventTierRank(retainedMatch.tier)) return false
+  if (duplicateMatch.region === 'International' && retainedMatch.region !== 'International') return false
   return duplicateMatch.region === 'International' || retainedMatch.region === 'International'
-}
-
-function tierRank(tier: MatchRecord['tier']) {
-  const ranks: Record<MatchRecord['tier'], number> = {
-    qualifier: 0,
-    'regional-regular': 1,
-    'major-playoffs': 2,
-    'minor-international': 3,
-    'msi-play-in': 4,
-    'worlds-main': 5,
-    'msi-bracket': 6,
-    'worlds-playoffs': 7,
-  }
-  return ranks[tier]
 }
 
 function matchKeys(match: MatchRecord) {

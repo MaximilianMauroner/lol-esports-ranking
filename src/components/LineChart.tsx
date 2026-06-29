@@ -1,4 +1,4 @@
-import { useId, useMemo } from 'react'
+import { useId, useMemo, type ReactElement } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -7,23 +7,48 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { ChartContainer, ChartTooltipContent, type ChartConfig } from './ui/chart'
+import { ChartContainer, type ChartConfig } from './ui/chart'
+import { formatChartTimestamp, formatChartTooltipTimestamp } from '../lib/chartTime'
+
+export type ChartPoint = {
+  t: number
+  y: number
+  detail?: unknown
+}
 
 export type ChartSeries = {
   id: string
   label: string
   color: string
-  points: { t: number; y: number }[]
+  points: ChartPoint[]
 }
 
-type ChartDatum = {
-  t: number
-  [key: string]: number
-}
+type ChartDatum = { t: number } & Record<string, unknown>
 
 type SeriesMeta = {
   key: string
   series: ChartSeries
+}
+
+export type LineChartTooltipPayloadItem = {
+  dataKey?: string | number
+  name?: string | number
+  value?: unknown
+  color?: string
+  payload?: ChartDatum
+}
+
+export type LineChartProps = {
+  series: ChartSeries[]
+  height?: number
+  yLabel?: string
+  yFormat?: (value: number) => string
+  yTickFormat?: (value: number) => string
+  yDomain?: { min: number; max: number }
+  yTicks?: number[]
+  yReverse?: boolean
+  curve?: 'linear' | 'step'
+  tooltipContent?: ReactElement
 }
 
 const tickDate = new Intl.DateTimeFormat('en', { month: 'short', year: '2-digit' })
@@ -39,18 +64,10 @@ export function LineChart({
   yTicks: providedYTicks,
   yReverse = false,
   curve = 'linear',
-}: {
-  series: ChartSeries[]
-  height?: number
-  yLabel?: string
-  yFormat?: (value: number) => string
-  yTickFormat?: (value: number) => string
-  yDomain?: { min: number; max: number }
-  yTicks?: number[]
-  yReverse?: boolean
-  curve?: 'linear' | 'step'
-}) {
+  tooltipContent,
+}: LineChartProps) {
   const chartId = useId().replace(/:/g, '')
+  const summaryId = `${chartId}-summary`
   const domain = useMemo(() => computeDomain(series, yDomain), [series, yDomain])
   const { data, meta } = useMemo(() => buildChartData(series), [series])
   const config = useMemo<ChartConfig>(
@@ -68,7 +85,7 @@ export function LineChart({
   )
 
   if (series.length === 0 || domain === null || data.length === 0) {
-    return <p className="muted" style={{ padding: 20 }}>Select teams to plot their rating over time.</p>
+    return <p className="muted" style={{ padding: 20 }}>No chart data available.</p>
   }
 
   const { minT, maxT, minY, maxY } = domain
@@ -76,6 +93,13 @@ export function LineChart({
   const formatYTick = yTickFormat ?? yFormat
   const xTicks = timeTicks(minT, maxT, 5)
   const lineType = curve === 'step' ? 'stepAfter' : 'linear'
+  const summaries = meta.flatMap(({ series: entry }) => {
+    const summary = summarizeSeries(entry)
+    return summary ? [summary] : []
+  })
+  const summaryText = `${yLabel} chart data summary. ${summaries.map((entry) =>
+    `${entry.label}: latest ${formatPointSummary(entry.latest, yFormat)}, minimum ${formatPointSummary(entry.min, yFormat)}, maximum ${formatPointSummary(entry.max, yFormat)}, ${entry.count} points.`,
+  ).join(' ')}`
 
   return (
     <div className="chart-shell">
@@ -86,6 +110,7 @@ export function LineChart({
         style={{ height }}
         role="img"
         aria-label={`${yLabel} over time for ${series.map((entry) => entry.label).join(', ')}`}
+        aria-describedby={summaryId}
       >
         <RechartsLineChart data={data} margin={{ top: 18, right: 20, bottom: 16, left: 4 }}>
           <CartesianGrid vertical={false} strokeDasharray="0" />
@@ -97,7 +122,7 @@ export function LineChart({
             tickLine={false}
             axisLine={false}
             minTickGap={28}
-            tickFormatter={(value) => tickDate.format(new Date(Number(value)))}
+            tickFormatter={(value) => formatChartTimestamp(value, tickDate)}
           />
           <YAxis
             type="number"
@@ -111,12 +136,7 @@ export function LineChart({
           />
           <RechartsTooltip
             cursor={{ stroke: 'var(--line-strong)', strokeDasharray: '3 3' }}
-            content={
-              <ChartTooltipContent
-                labelFormatter={(label) => fullDate.format(new Date(Number(label)))}
-                valueFormatter={(value) => yFormat(Number(value))}
-              />
-            }
+            content={tooltipContent ?? <LineChartTooltip yFormat={yFormat} />}
           />
           {meta.map(({ key, series: entry }) => (
             <Line
@@ -134,6 +154,7 @@ export function LineChart({
           ))}
         </RechartsLineChart>
       </ChartContainer>
+      <div id={summaryId} className="sr-only">{summaryText}</div>
 
       <div className="chart__legend">
         {meta.map(({ key, series: entry }) => (
@@ -147,6 +168,30 @@ export function LineChart({
   )
 }
 
+function chartDetailDataKey(key: string) {
+  return `${key}Detail`
+}
+
+function summarizeSeries(series: ChartSeries) {
+  const points = series.points.filter(isValidPoint)
+  if (points.length === 0) return null
+  const latest = points[points.length - 1]
+  const min = points.reduce((best, point) => point.y < best.y ? point : best, points[0])
+  const max = points.reduce((best, point) => point.y > best.y ? point : best, points[0])
+  return {
+    id: series.id,
+    label: series.label,
+    latest,
+    min,
+    max,
+    count: points.length,
+  }
+}
+
+function formatPointSummary(point: ChartSeries['points'][number], formatValue: (value: number) => string) {
+  return `${formatValue(point.y)} on ${formatChartTimestamp(point.t, fullDate)}`
+}
+
 function buildChartData(series: ChartSeries[]) {
   const dataByTime = new Map<number, ChartDatum>()
   const meta: SeriesMeta[] = series.map((entry, index) => ({
@@ -156,8 +201,10 @@ function buildChartData(series: ChartSeries[]) {
 
   for (const { key, series: entry } of meta) {
     for (const point of entry.points) {
-      const datum = dataByTime.get(point.t) ?? { t: point.t }
+      if (!isValidPoint(point)) continue
+      const datum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
       datum[key] = point.y
+      if (point.detail) datum[chartDetailDataKey(key)] = point.detail
       dataByTime.set(point.t, datum)
     }
   }
@@ -175,6 +222,7 @@ function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: numb
   let maxY = -Infinity
   for (const entry of series) {
     for (const point of entry.points) {
+      if (!isValidPoint(point)) continue
       if (point.t < minT) minT = point.t
       if (point.t > maxT) maxT = point.t
       if (point.y < minY) minY = point.y
@@ -210,4 +258,55 @@ function timeTicks(min: number, max: number, count: number) {
   if (max <= min) return [min]
   const step = (max - min) / (count - 1)
   return Array.from({ length: count }, (_, index) => min + step * index)
+}
+
+function isValidPoint(point: ChartSeries['points'][number]) {
+  return Number.isFinite(point.t) && Number.isFinite(point.y)
+}
+
+function LineChartTooltip({
+  active,
+  payload,
+  yFormat,
+}: {
+  active?: boolean
+  payload?: LineChartTooltipPayloadItem[]
+  yFormat: (value: number) => string
+}) {
+  if (!active || !payload?.length) return null
+
+  const rows = payload
+    .map((item) => {
+      const value = Number(item.value)
+      const key = String(item.dataKey ?? '')
+      if (!Number.isFinite(value)) return null
+      return {
+        key,
+        label: String(item.name ?? key),
+        value,
+        color: item.color ?? 'var(--muted)',
+      }
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="chart__tooltip">
+      <b>{formatChartTooltipTimestamp(payload)}</b>
+      <div className="chart__tooltip-list">
+        {rows.map((row) => (
+          <div className="chart__tooltip-row" key={row.key}>
+            <div className="chart__tooltip-main">
+              <i style={{ background: row.color }} aria-hidden="true" />
+              <em>{row.label}</em>
+              <div className="chart__tooltip-value">
+                <strong>{yFormat(row.value)}</strong>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }

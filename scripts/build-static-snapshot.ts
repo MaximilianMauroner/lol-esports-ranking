@@ -6,15 +6,9 @@ import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
-import { createPlayerDirectory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory } from '../src/lib/snapshot'
-import {
-  parsePublicPlayerDirectory,
-  parsePublicRankingManifest,
-  parsePublicRankingShard,
-  parsePublicTeamHistory,
-  snapshotShardFileName,
-  snapshotShardUrlPathForKey,
-} from '../src/lib/publicArtifacts/schema'
+import { createStaticRankingData, type DataSourceWarning } from '../src/lib/snapshot'
+import { createPublicArtifactWritePlan, publicScopeArtifactPath, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
+import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
@@ -25,8 +19,8 @@ const oracleCsvPaths = uniquePaths([...readArgList('oracle-csv'), ...(manifest?.
 const leaguepediaJsonPaths = uniquePaths([...readArgList('leaguepedia-json'), ...(manifest?.files.leaguepediaJson ?? [])])
 const oracleImports = []
 const leaguepediaImports = []
-const MAX_PUBLIC_SNAPSHOT_SHARDS = 1_000
-const MAX_PUBLIC_DATA_BYTES = 50_000_000
+const oracleWarnings = manifestSourceWarnings('oracle', manifest?.warnings)
+const leaguepediaWarnings = manifestSourceWarnings('leaguepedia', manifest?.warnings)
 
 if (process.argv.includes('--seeded-sample')) {
   throw new Error('Seeded sample generation has been removed from the production build path. Provide public source files or use tests/fixtures/rankingFixtures.ts for unit fixtures.')
@@ -47,101 +41,86 @@ const importedMatches = mergeCommunityMatchSources({
   leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
 })
 const importedTeams = mergeTeamProfiles([...leaguepediaImports.map((result) => result.teams), ...oracleImports.map((result) => result.teams)])
-const matches = importedMatches
 const mergedTeams = importedMatches.length > 0 ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities } : {}
+const ratingUniverse = filterPublishedRatingUniverseInput(importedMatches, mergedTeams)
+const matches = ratingUniverse.matches
+const teams = ratingUniverse.teams
 const snapshot = createStaticRankingData({
   matches,
-  teams: mergedTeams,
+  teams,
   rosters: {},
-  source: importedMatches.length > 0 ? describeCommunitySource(oracleImports.length, leaguepediaImports.length) : 'no public match data available',
-  dataMode: importedMatches.length > 0 ? 'scheduled-public-data' : 'no-data',
+  source: matches.length > 0
+    ? describeCommunitySource(oracleImports.length, leaguepediaImports.length)
+    : importedMatches.length > 0 ? 'no rated public match data available for published team universe' : 'no public match data available',
+  dataMode: matches.length > 0 ? 'scheduled-public-data' : 'no-data',
   externalSources: [
-    ...oracleImports.map((result) => ({
-      name: result.source.fileName ? `Oracle's Elixir CSV: ${result.source.fileName}` : "Oracle's Elixir CSV",
-      kind: 'game-stats' as const,
-      url: result.source.url,
-      retrievedAt: result.source.retrievedAt,
-      coverageStart: dateRange(result.matches).start,
-      coverageEnd: dateRange(result.matches).end,
-      rowCount: result.matches.length,
-      description: `${result.source.gameCount} normalized games imported from Oracle's Elixir. ${result.source.attribution}`,
-      status: 'active' as const,
-    })),
-    ...leaguepediaImports.map((result) => ({
-      name: result.source.fileName ? `Leaguepedia Cargo: ${result.source.fileName}` : 'Leaguepedia Cargo',
-      kind: 'match-data' as const,
-      url: result.source.url,
-      retrievedAt: result.source.retrievedAt,
-      coverageStart: dateRange(result.matches).start,
-      coverageEnd: dateRange(result.matches).end,
-      rowCount: result.matches.length,
-      description: `${result.source.gameCount} normalized games imported from Leaguepedia Cargo for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'}. ${result.source.attribution}`,
-      status: 'active' as const,
-    })),
+    ...oracleImports.map((result) => {
+      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
+      return {
+        name: result.source.fileName ? `Oracle's Elixir CSV: ${result.source.fileName}` : "Oracle's Elixir CSV",
+        kind: 'game-stats' as const,
+        url: result.source.url,
+        retrievedAt: result.source.retrievedAt,
+        coverageStart: dateRange(ratedMatches).start,
+        coverageEnd: dateRange(ratedMatches).end,
+        rowCount: ratedMatches.length,
+        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after the published team-universe filter. ${result.source.attribution}`,
+        status: ratedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
+        ...(oracleWarnings.length > 0 ? { warnings: oracleWarnings } : {}),
+      }
+    }),
+    ...leaguepediaImports.map((result) => {
+      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
+      return {
+        name: result.source.fileName ? `Leaguepedia Cargo: ${result.source.fileName}` : 'Leaguepedia Cargo',
+        kind: 'match-data' as const,
+        url: result.source.url,
+        retrievedAt: result.source.retrievedAt,
+        coverageStart: dateRange(ratedMatches).start,
+        coverageEnd: dateRange(ratedMatches).end,
+        rowCount: ratedMatches.length,
+        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after the published team-universe filter. ${result.source.attribution}`,
+        status: ratedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
+        ...(leaguepediaWarnings.length > 0 ? { warnings: leaguepediaWarnings } : {}),
+      }
+    }),
   ],
 })
 
 await mkdir(dirname(output), { recursive: true })
 await writeJsonFile(output, snapshot)
-const summaryOutput = resolve(publicDataDir, 'ranking-summary.json')
-const snapshotDir = resolve(publicDataDir, 'snapshots')
-const summary = createStaticRankingSummaryData(snapshot, {
-  playerDirectoryUrl: '/data/players.json',
-  teamHistoryUrl: '/data/team-history.json',
-  snapshotUrlForKey: snapshotShardUrlPathForKey,
-})
-const summarySnapshots = Object.entries(summary.snapshots)
-const playerDirectory = createPlayerDirectory(snapshot)
-const playerDirectoryOutput = resolve(publicDataDir, 'players.json')
-const teamHistory = createTeamHistory(snapshot)
-const teamHistoryOutput = resolve(publicDataDir, 'team-history.json')
-const publicWrites = [
-  {
-    path: playerDirectoryOutput,
-    contents: `${JSON.stringify(playerDirectory)}\n`,
-    validate: (value: unknown) => parsePublicPlayerDirectory(value),
-  },
-  {
-    path: teamHistoryOutput,
-    contents: `${JSON.stringify(teamHistory)}\n`,
-    validate: (value: unknown) => parsePublicTeamHistory(value),
-  },
-  ...summarySnapshots.map(([key, compactSnapshot]) => ({
-    path: resolve(snapshotDir, snapshotShardFileName(key)),
-    contents: `${JSON.stringify(compactSnapshot)}\n`,
-    validate: (value: unknown) => parsePublicRankingShard(value),
-  })),
-  {
-    path: summaryOutput,
-    contents: `${JSON.stringify(summary.manifest, null, 2)}\n`,
-    validate: (value: unknown) => parsePublicRankingManifest(value),
-  },
-]
-const plannedPublicDataBytes = publicWrites.reduce((total, write) => total + Buffer.byteLength(write.contents), 0)
-if (summarySnapshots.length > MAX_PUBLIC_SNAPSHOT_SHARDS) {
-  throw new Error(`Public snapshot shard budget exceeded: ${summarySnapshots.length} > ${MAX_PUBLIC_SNAPSHOT_SHARDS}`)
-}
-if (plannedPublicDataBytes > MAX_PUBLIC_DATA_BYTES) {
-  throw new Error(`Public data budget exceeded: ${plannedPublicDataBytes} bytes > ${MAX_PUBLIC_DATA_BYTES} bytes`)
-}
+const publicPlan = createPublicArtifactWritePlan(snapshot)
+const summaryOutput = resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.manifest)
+const summarySnapshots = Object.entries(publicPlan.snapshots)
+const publicWrites = publicPlan.writes.map((entry) => ({
+  path: resolve(publicDataDir, entry.relativePath),
+  contents: entry.contents,
+  validate: entry.validate,
+}))
 
 for (const write of publicWrites) {
   write.validate(JSON.parse(write.contents))
 }
 
-await mkdir(snapshotDir, { recursive: true })
+await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir), { recursive: true, force: true })
+await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.teamHistory), { force: true })
+
 for (const write of publicWrites) {
   await atomicWriteFile(write.path, write.contents)
 }
-await removeStaleShardFiles(snapshotDir, new Set(summarySnapshots.map(([key]) => snapshotShardFileName(key))))
+await removeStaleShardFiles(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.scopeDir), new Set(summarySnapshots.map(([key]) => publicScopeArtifactPath(key).split('/').at(-1)!)))
+await rm(resolve(publicDataDir, 'snapshots'), { recursive: true, force: true })
+await rm(resolve(publicDataDir, 'team-history'), { recursive: true, force: true })
+await rm(resolve(publicDataDir, 'players.json'), { force: true })
+await rm(resolve(publicDataDir, 'region-history.json'), { force: true })
+await rm(resolve(publicDataDir, 'team-history.json'), { force: true })
 
 const publicDataBytes = await directorySize(publicDataDir)
 
 console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)
 console.log(`Wrote browser summary to ${summaryOutput}`)
-console.log(`Wrote ${playerDirectory.ratedPlayerCount} player ratings to ${playerDirectoryOutput}`)
-console.log(`Wrote ${teamHistory.pointCount} rating-history points for ${teamHistory.teamCount} teams to ${teamHistoryOutput}`)
-console.log(`Public data budget: ${summarySnapshots.length} shards, ${publicDataBytes} bytes`)
+console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
+console.log(`Public data budget: ${publicDataBytes} bytes`)
 
 function readArg(name: string) {
   const index = process.argv.indexOf(`--${name}`)
@@ -169,6 +148,38 @@ type LocalDataManifest = {
     oracleCsv?: string[]
     leaguepediaJson?: string[]
   }
+  warnings?: string[]
+}
+
+function manifestSourceWarnings(provider: 'oracle' | 'leaguepedia', warnings: string[] | undefined): DataSourceWarning[] {
+  return (warnings ?? [])
+    .filter((warning) => warningMatchesProvider(provider, warning))
+    .map((message) => ({
+      kind: sourceWarningKind(message),
+      severity: sourceWarningSeverity(message),
+      message,
+    }))
+}
+
+function warningMatchesProvider(provider: 'oracle' | 'leaguepedia', warning: string) {
+  const lower = warning.toLowerCase()
+  if (provider === 'oracle') return lower.includes('oracle')
+  return lower.includes('leaguepedia') || lower.includes('cargo')
+}
+
+function sourceWarningKind(message: string): DataSourceWarning['kind'] {
+  const lower = message.toLowerCase()
+  if (lower.includes('rate-limit')) return 'rate-limit'
+  if (lower.includes('download')) return 'download'
+  if (lower.includes('coverage') || lower.includes('through') || lower.includes('preserved')) return 'coverage'
+  return 'source-policy'
+}
+
+function sourceWarningSeverity(message: string): DataSourceWarning['severity'] {
+  const lower = message.toLowerCase()
+  if (lower.includes('failed') || lower.includes('unavailable')) return 'error'
+  if (lower.includes('rate-limit') || lower.includes('preserved')) return 'warning'
+  return 'info'
 }
 
 function describeCommunitySource(oracleCount: number, leaguepediaCount: number) {

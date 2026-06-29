@@ -22,17 +22,17 @@ export const rankingTargetExplanations: RankingExplanation[] = [
   {
     target: 'seasonal-anchoring',
     label: 'Seasonal Anchor',
-    description: 'Teams start from a league anchor, then add stable team offset, roster prior, momentum, context, and uncertainty.',
+    description: 'Public team power is a context-neutral latent-strength estimate from league anchor, stable team offset, roster prior, form, context, and uncertainty.',
   },
   {
     target: 'team-result',
     label: 'Team Result',
-    description: 'Game outcomes update stable team offset with event weight, best-of damping, and uncertainty-sensitive movement.',
+    description: 'Game outcomes are evidence: neutral result residuals are split into durable stable strength and fast-decaying form.',
   },
   {
     target: 'league-strength',
     label: 'League Strength',
-    description: 'Cross-league international games anchor regional context before it adjusts team power.',
+    description: 'Cross-league international games anchor regional context; sourced, low-uncertainty teams can receive capped context adjustments for league-anchor relief or recent same-league head-to-head tiebreaks.',
   },
   {
     target: 'recent-form',
@@ -62,7 +62,7 @@ export const rankingTargetExplanations: RankingExplanation[] = [
   {
     target: 'walk-forward-metrics',
     label: 'Walk-Forward',
-    description: 'Validation predicts each game from only prior data; published rows use known side context, while baseline variants stay neutral.',
+    description: 'Validation predicts each game from only prior data; match probabilities are a forecast layer, not the public ranking target.',
   },
 ]
 

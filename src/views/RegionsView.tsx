@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { Globe2, Info, Swords, Trophy, X } from 'lucide-react'
-import type { RegionStrength } from '../lib/regionStrength'
+import { isRegionPowerTeam, type RegionStrength } from '../lib/regionStrength'
 import type { PublicTeamStanding } from '../lib/publicArtifacts/schema'
 import { extent, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord } from '../lib/display'
-import { currentTopTierRegionForLeague } from '../data/regionTaxonomy'
 import { DataState, HeatBar, HeatChip, PickButton, RegionBadge } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
@@ -157,6 +156,7 @@ function RegionDetailDrawer({ region, teams, onClose }: { region: RegionStrength
           side="right"
           showCloseButton={false}
           className="w-full max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(980px,94vw)] sm:max-w-none"
+          style={{ width: 'min(980px, 100vw)', maxWidth: 'none' }}
         >
           <SheetHeader className="drawer__head flex-row items-center p-[18px_22px] text-left">
             <SheetTitle className="mr-auto text-[1.1rem] font-semibold text-[var(--text-strong)]">{region.region} region detail</SheetTitle>
@@ -261,11 +261,7 @@ function RegionDetailDrawer({ region, teams, onClose }: { region: RegionStrength
 
 function flagshipTeamsForRegion(region: RegionStrength, standings: RegionStanding[]): RegionDrawerTeam[] {
   return standings
-    .filter((team) => {
-      const teamRegion = currentTopTierRegionForLeague(team.league, team.region)
-      if (teamRegion !== region.region) return false
-      return region.leagueCount === 1 && region.flagshipLeague ? team.league === region.flagshipLeague : true
-    })
+    .filter((team) => isRegionPowerTeam(region, team))
     .slice()
     .sort((left, right) => right.rating - left.rating)
     .map((team) => ({

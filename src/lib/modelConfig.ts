@@ -1,6 +1,6 @@
 import { eventTierConfig } from '../data/rankingConfig'
 import { leagueTierModelParameters } from '../data/leagueTiers'
-import { currentRegionTaxonomyModelParameters } from '../data/regionTaxonomy'
+import { currentRegionTaxonomyModelParameters, ratedTeamUniverseModelParameters } from '../data/regionTaxonomy'
 import type { FactorBreakdown } from '../types'
 import { defaultEligibilityConfig } from './eligibility'
 import { executionResidualModelParameters } from './executionResidual'
@@ -13,6 +13,24 @@ export const initialTeamRating = 1500
 export const initialLeagueRating = 1500
 export const leagueEloWeight = 1
 export const leagueAdjustmentPolicy = 'seasonal-hierarchical-anchor'
+export const publishedLeagueAnchorPolicy = 'team-evidence-gated-anchor-relief-v1'
+export const publishedLeagueAnchorReliefConfig = {
+  minimumGames: 20,
+  maxUncertainty: 50,
+  minStableOffset: 25,
+  maxAdjustment: 20,
+  leagueGapShare: 0.35,
+} as const
+export const directHeadToHeadContextPolicy = 'recent-same-league-close-rating-tiebreak-v1'
+export const directHeadToHeadContextConfig = {
+  minimumGames: 20,
+  maxUncertainty: 50,
+  maxDays: 30,
+  minimumBestOf: 3,
+  maxRatingGap: 6,
+  maxAdjustment: 3,
+  overtakeMargin: 0.8,
+} as const
 export const recencyFloor = 0.62
 export const recencyRange = 0.38
 export const recencyDecayDays = 180
@@ -28,10 +46,38 @@ export const publishedPredictionSideAdjustment = 'side-aware-prior-only'
 export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'state-gap-regression'
 export const ratingUpdateRecencyWeight = 1
-export const leagueExpectedScoreSource = 'pregame-team-power-with-side-context'
+export const leagueExpectedScoreSource = 'pregame-neutral-series-team-power'
 export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-v13'
-export const snapshotSeasonScopePolicy = 'source-season-ranking-profile-with-prior-baseline'
+export const snapshotSeasonScopePolicy = 'calendar-aligned-season-ranking-profile-with-prior-baseline'
 export const validationBaselinePolicy = ['coin-flip', 'pregame-win-rate', 'team-only'] as const
+export const rankingTarget = 'context-neutral-latent-team-strength'
+export const matchOutcomeTargetPolicy = 'match-outcomes-are-evidence-not-ranking-target'
+export const canonicalUpdateUnitPolicy = 'series-atomic-team-and-league-strength'
+export const residualBudgetPolicy = 'latent-strength-result-budget-v1'
+export const latentStrengthBudgetShareSemantics = 'teamStable/teamForm split remaining team-local evidence after eligible league-anchor reservations'
+export const latentStrengthResultBudgetShares = {
+  teamStable: 0.9,
+  teamForm: 0.1,
+  leagueAnchor: 0.12,
+  playerSignalShadow: 0,
+  lineupSignalShadow: 0,
+  directRegionShadow: 0,
+} as const
+export const domesticStableTransferPolicy = 'league-tier-global-transfer-v1'
+export const domesticStableTransferWeightsByTier = {
+  'tier-one': 1,
+  'tier-two': 0.65,
+  'tier-three': 0.38,
+  emerging: 0.25,
+  unknown: 0.15,
+} as const
+export const publishedRosterPriorPolicy = 'current-record-capped-positive-player-prior-v1'
+export const publishedRosterPriorConfig = {
+  minimumGames: 12,
+  fullScaleWinRate: 0.5,
+  floorScaleWinRate: 0.35,
+  floorScale: 0.25,
+} as const
 export const rosterBasisSource = 'latest-observed-oracle-game-roster'
 export const rosterContinuityFloor = 0.55
 export const rosterChangeUncertaintyPenalty = 40
@@ -73,12 +119,18 @@ export const playerRatingPredictionPolicy = {
 } as const satisfies PredictionFeaturePolicy
 export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingPredictionPolicy)
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)
-export const transparentGprModelVersion = 'transparent-gpr-v0.38.0'
+// Before 1.0, the public model version intentionally stays stable; the
+// config hash carries exact provenance for breaking experimental iterations.
+export const transparentGprModelVersion = 'transparent-gpr-v0.0.0'
 export const transparentGprModelParameters = {
   initialTeamRating,
   initialLeagueRating,
   leagueEloWeight,
   leagueAdjustmentPolicy,
+  publishedLeagueAnchorPolicy,
+  publishedLeagueAnchorReliefConfig,
+  directHeadToHeadContextPolicy,
+  directHeadToHeadContextConfig,
   recencyFloor,
   recencyRange,
   recencyDecayDays,
@@ -98,6 +150,16 @@ export const transparentGprModelParameters = {
   sourcePipelineVersion,
   snapshotSeasonScopePolicy,
   validationBaselinePolicy,
+  rankingTarget,
+  matchOutcomeTargetPolicy,
+  canonicalUpdateUnitPolicy,
+  residualBudgetPolicy,
+  latentStrengthBudgetShareSemantics,
+  latentStrengthResultBudgetShares,
+  domesticStableTransferPolicy,
+  domesticStableTransferWeightsByTier,
+  publishedRosterPriorPolicy,
+  publishedRosterPriorConfig,
   rosterBasisSource,
   rosterContinuityFloor,
   rosterChangeUncertaintyPenalty,
@@ -132,6 +194,7 @@ export const transparentGprModelParameters = {
   eligibility: defaultEligibilityConfig,
   leagueTiers: leagueTierModelParameters,
   regionTaxonomy: currentRegionTaxonomyModelParameters,
+  ratingUniverse: ratedTeamUniverseModelParameters,
   walkForwardSegments: walkForwardSegmentKeys,
   eventKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.kFactor])),
   leagueKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.leagueKFactor])),
