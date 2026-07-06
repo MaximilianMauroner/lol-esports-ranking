@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tactical Rift OS Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { display: ["Arial Black","Inter","ui-sans-serif","system-ui"], mono: ["ui-monospace","SFMono-Regular","monospace"], sans: ["Inter","ui-sans-serif","system-ui"] } } } }
+  </script>
+  <style>
+    body { background: radial-gradient(circle at 78% 8%, rgba(255,90,103,.13), transparent 24rem), radial-gradient(circle at 16% 0%, rgba(80,242,166,.18), transparent 28rem), #04100b; }
+    .hud-grid { background-image: linear-gradient(rgba(80,242,166,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(80,242,166,.08) 1px, transparent 1px); background-size: 32px 32px; }
+    .cut { clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)); }
+  </style>
+</head>
+<body class="min-h-screen text-emerald-50 antialiased">
+  <main class="hud-grid min-h-screen px-5 py-5 sm:px-8 lg:px-10">
+    <nav class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 border-b border-emerald-300/25 pb-4 font-mono text-xs uppercase tracking-[0.2em] text-emerald-200/75">
+      <a href="index.html" class="text-emerald-300">Back to prototypes</a>
+      <span>Static prototype - fictional data only</span>
+    </nav>
+
+    <section class="mx-auto grid max-w-7xl gap-5 py-6 lg:grid-cols-[260px_1fr_280px]">
+      <aside class="cut border border-emerald-300/35 bg-black/55 p-5">
+        <p class="font-mono text-xs font-bold uppercase tracking-[0.28em] text-amber-300">Tactical Rift OS</p>
+        <h1 class="mt-5 font-display text-4xl uppercase leading-[0.9]">Command map first.</h1>
+        <p class="mt-5 text-sm leading-6 text-emerald-50/70">This world is a war-room surface: lanes, pings, sectors, and score claims as command signals. The map is a design object, not final data viz.</p>
+        <div class="mt-6 border border-rose-300/35 bg-rose-400/10 p-3 font-mono text-xs uppercase tracking-[0.18em] text-rose-100">Fictional data only</div>
+      </aside>
+
+      <article class="cut border border-emerald-300/35 bg-black/55 p-5">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-emerald-300/25 pb-4 font-mono text-xs uppercase tracking-[0.2em] text-emerald-200/70">
+          <span>Rift command layer</span><span>Scenario A-17</span>
+        </div>
+        <div class="aspect-[4/3] w-full md:aspect-[16/9]">
+          <svg viewBox="0 0 980 620" class="h-full w-full" role="img" aria-label="Fictional tactical rift command map">
+            <rect width="980" height="620" fill="#06120d"/>
+            <g stroke="#50f2a6" stroke-opacity=".13"><path d="M80 40 V580"/><path d="M220 40 V580"/><path d="M360 40 V580"/><path d="M500 40 V580"/><path d="M640 40 V580"/><path d="M780 40 V580"/><path d="M920 40 V580"/><path d="M40 100 H940"/><path d="M40 230 H940"/><path d="M40 360 H940"/><path d="M40 490 H940"/></g>
+            <path d="M120 520 L492 310 L860 96" fill="none" stroke="#50f2a6" stroke-width="10" stroke-linejoin="bevel"/>
+            <path d="M130 102 L492 310 L850 520" fill="none" stroke="#f7c75d" stroke-width="7" stroke-linejoin="bevel"/>
+            <path d="M210 420 C300 280 430 245 492 310 C570 390 702 352 796 214" fill="none" stroke="#ff5a67" stroke-width="5" stroke-linecap="square"/>
+            <g fill="#06120d" stroke="#50f2a6" stroke-width="4"><circle cx="492" cy="310" r="22"/><circle cx="120" cy="520" r="16"/><circle cx="860" cy="96" r="16"/></g>
+            <g fill="#f7c75d"><rect x="456" y="274" width="72" height="72" opacity=".22"/><circle cx="492" cy="310" r="8"/></g>
+            <g fill="#dfffee" font-family="ui-monospace, SFMono-Regular, monospace" font-size="17" font-weight="700"><text x="66" y="62">COMMAND MAP, ROUGH SCORE SIGNALS</text><text x="532" y="300">SIGNAL 88.6</text><text x="690" y="205">PRESSURE NODE</text><text x="132" y="505">BASELINE</text></g>
+          </svg>
+        </div>
+      </article>
+
+      <aside class="grid gap-4">
+        <section class="cut border border-emerald-300/35 bg-emerald-300/10 p-5">
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-emerald-300">Signals</p>
+          <div class="mt-5 space-y-4 font-mono text-xs uppercase tracking-[0.14em] text-emerald-50/80">
+            <div class="flex justify-between border-b border-emerald-300/25 pb-3"><span>Team vector</span><strong>88.6</strong></div>
+            <div class="flex justify-between border-b border-emerald-300/25 pb-3"><span>Player ping</span><strong>76.2</strong></div>
+            <div class="flex justify-between"><span>Region relay</span><strong>93.4</strong></div>
+          </div>
+        </section>
+        <section class="cut border border-amber-300/45 bg-amber-300/10 p-5">
+          <p class="font-mono text-xs uppercase tracking-[0.22em] text-amber-200">Distinctness</p>
+          <p class="mt-4 text-sm leading-6 text-emerald-50/75">This is a map/command-console layout, not a chart page or industrial telemetry panel.</p>
+        </section>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

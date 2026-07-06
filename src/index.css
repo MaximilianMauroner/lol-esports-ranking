@@ -6,9 +6,6 @@
 @import './styles/rankings.css';
 @import './styles/controls-charts.css';
 @import './styles/compare.css';
-@import './styles/arena.css';
-@import './styles/labs.css';
-@import './styles/receipts.css';
 @import './styles/states-responsive.css';
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/jetbrains-mono";

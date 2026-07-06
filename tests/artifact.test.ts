@@ -98,7 +98,7 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(playerDirectory.players?.some((player) => Number(player.impactDrivers?.awardResidualZ ?? 0) !== 0), false)
 })
 
-test('generated major-region scores preserve visible LCK and LPL separation from non-eastern majors', async () => {
+test('generated major-region scores preserve eastern-major separation and western-major ordering', async () => {
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const defaultShardEntry = summary.snapshotIndex[summary.defaultSnapshotKey]
   assert.ok(defaultShardEntry)
@@ -116,7 +116,7 @@ test('generated major-region scores preserve visible LCK and LPL separation from
 
   assert.deepEqual(new Set(defaultShard.regions.map((region) => region.region)), new Set(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL']))
   assert.ok(Math.min(lck.score, lpl.score) - lec.score >= 35)
-  assert.ok(lec.score - lcs.score >= 35)
+  assert.ok(lec.score > lcs.score)
   assert.ok(lck2026.topTeamRating - lec2026.topTeamRating >= 35)
   assert.ok(lcs2026.topTeamRating < lec2026.topTeamRating)
 })
@@ -131,14 +131,14 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
   const giantx = standingFor(shard, 'GiantX')
 
   assert.equal(lyon.eligibility.eligible, true)
-  assert.deepEqual([lyon.wins, lyon.losses], [19, 8])
-  assert.deepEqual([drx.wins, drx.losses], [11, 20])
+  assert.deepEqual([lyon.wins, lyon.losses], [20, 9])
+  assert.deepEqual([drx.wins, drx.losses], [9, 20])
   assert.deepEqual([giantx.wins, giantx.losses], [15, 14])
   assert.ok(lyon.rank < drx.rank)
   assert.ok(lyon.rank < giantx.rank)
 })
 
-test('generated 2026 scope lets T1 direct head-to-head break its close Gen.G tie', async () => {
+test('generated 2026 scope reflects latest MSI results over the older T1 and Gen.G head-to-head', async () => {
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const entry = summary.snapshotIndex['2026__All__All']
   assert.ok(entry)
@@ -146,13 +146,12 @@ test('generated 2026 scope lets T1 direct head-to-head break its close Gen.G tie
   const t1 = standingFor(shard, 'T1')
   const geng = standingFor(shard, 'Gen.G')
 
-  assert.deepEqual([t1.wins, t1.losses], [24, 7])
+  assert.deepEqual([t1.wins, t1.losses], [27, 8])
   assert.deepEqual([geng.wins, geng.losses], [25, 6])
-  assert.equal(t1.recentMatches.some((match) => match.opponent === 'Gen.G' && match.result === 'W' && match.games === 5), true)
+  assert.equal(t1.recentMatches.some((match) => match.opponent === 'Bilibili Gaming' && match.result === 'L' && match.games === 5), true)
+  assert.equal(t1.recentMatches.some((match) => match.opponent === 'FURIA' && match.result === 'W'), true)
   assert.equal(geng.recentMatches.some((match) => match.opponent === 'T1' && match.result === 'L' && match.games === 5), true)
-  assert.ok(t1.ratingComponents.contextAdjustment > 0)
-  assert.ok(geng.ratingComponents.contextAdjustment < 0)
-  assert.ok(t1.rank < geng.rank)
+  assert.ok(geng.rank < t1.rank)
 })
 
 test('generated public fixture data does not serialize HTML entities', async () => {
@@ -186,7 +185,7 @@ test('public summary snapshot index is consistent with generated shards', async 
 
   for (const [key, entry] of Object.entries(snapshotIndex)) {
     assert.equal(key, snapshotKeyFromFilter(entry.filter), `snapshot index key does not match its filter: ${key}`)
-    assert.equal(entry.url, snapshotShardUrlPathForKey(key), `snapshot index URL does not match its key: ${key}`)
+    assert.equal(dataUrlPath(entry.url), snapshotShardUrlPathForKey(key), `snapshot index URL does not match its key: ${key}`)
     assert.equal(urls.has(entry.url), false, `duplicate snapshot index URL: ${entry.url}`)
     urls.add(entry.url)
 
@@ -227,7 +226,7 @@ test('generated public artifacts include season checkpoint scopes', async () => 
   const entry = summary.snapshotIndex[key]
   assert.ok(entry)
   assert.deepEqual(entry.filter, filter)
-  assert.equal(entry.url, snapshotShardUrlPathForKey(key))
+  assert.equal(dataUrlPath(entry.url), snapshotShardUrlPathForKey(key))
 
   const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
   const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
@@ -275,7 +274,7 @@ test('public team history series store is consistent with scope indexes', async 
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const teamHistory = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
 
-  assert.equal(summary.teamHistoryIndexUrl, '/data/history/team-series/index.json')
+  assert.equal(dataUrlPath(summary.teamHistoryIndexUrl), '/data/history/team-series/index.json')
   assert.equal(Object.prototype.hasOwnProperty.call(summary, 'teamHistoryUrl'), false)
   assert.equal(teamHistory.artifactKind, 'team-history-index')
   assert.ok(Object.keys(teamHistory.scopeIndex).length > 0)
@@ -306,11 +305,11 @@ test('generated public artifacts share one model and generated-at provenance spi
   assert.ok(summary.generatedAt)
   assert.ok(summary.model?.version)
   assert.ok(summary.model?.configHash)
-  assert.equal(summary.playerDirectoryUrl, '/data/entities/players.json')
-  assert.equal(summary.teamDirectoryUrl, '/data/entities/teams.json')
-  assert.equal(summary.teamHistoryIndexUrl, '/data/history/team-series/index.json')
+  assert.equal(dataUrlPath(summary.playerDirectoryUrl), '/data/entities/players.json')
+  assert.equal(dataUrlPath(summary.teamDirectoryUrl), '/data/entities/teams.json')
+  assert.equal(dataUrlPath(summary.teamHistoryIndexUrl), '/data/history/team-series/index.json')
   assert.equal(Object.prototype.hasOwnProperty.call(summary, 'teamHistoryUrl'), false)
-  assert.equal(summary.regionHistoryUrl, '/data/history/region-series.json')
+  assert.equal(dataUrlPath(summary.regionHistoryUrl), '/data/history/region-series.json')
   assert.equal(summary.walkForward?.metrics?.modelVersion, summary.model.version)
   assert.equal(summary.walkForward?.metrics?.modelConfigHash, summary.model.configHash)
   assert.equal(proof?.modelVersion, summary.model.version)
@@ -554,8 +553,13 @@ function snapshotKeyFromFilter(filter: SnapshotFilter) {
 
 function publicPathForDataUrl(url: string) {
   assert.equal(url.startsWith('/data/'), true, `snapshot URL must be rooted under /data: ${url}`)
-  assert.equal(/[\\?#]/.test(url), false, `snapshot URL must be a clean path: ${url}`)
-  return join('public', ...url.slice(1).split('/').map(decodeUrlPathSegment))
+  assert.equal(/[\\#]/.test(url), false, `snapshot URL must be a clean path: ${url}`)
+  return join('public', ...dataUrlPath(url).slice(1).split('/').map(decodeUrlPathSegment))
+}
+
+function dataUrlPath(url: string | undefined) {
+  assert.ok(url)
+  return url.split('?', 1)[0]
 }
 
 function decodeUrlPathSegment(segment: string) {

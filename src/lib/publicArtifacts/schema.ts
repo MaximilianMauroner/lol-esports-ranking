@@ -900,7 +900,7 @@ function assertPublicSnapshotIndexEntry(key: string, value: unknown): asserts va
   }
   const url = value.url
   assertArtifactUrl(url, `ranking manifest snapshotIndex ${key} url`, '/data/scopes')
-  if (isLocalDataUrl(url)) assertEqual(url, snapshotShardUrlPathForKey(key), `ranking manifest snapshotIndex ${key} url`)
+  if (isLocalDataUrl(url)) assertEqual(localDataUrlPath(url), snapshotShardUrlPathForKey(key), `ranking manifest snapshotIndex ${key} url`)
   assertNonNegativeInteger(value.matchCount, `ranking manifest snapshotIndex ${key} matchCount`)
   assertArray(value.sourceBreakdown, `ranking manifest snapshotIndex ${key} sourceBreakdown`)
 }
@@ -938,7 +938,7 @@ function assertTeamHistoryIndexEntry(key: string, value: unknown): asserts value
   }
   const url = value.url
   assertArtifactUrl(url, `team history index scopeIndex ${key} url`, '/data/history')
-  if (isLocalDataUrl(url)) assertEqual(url, teamHistoryShardUrlPathForKey(key), `team history index scopeIndex ${key} url`)
+  if (isLocalDataUrl(url)) assertEqual(localDataUrlPath(url), teamHistoryShardUrlPathForKey(key), `team history index scopeIndex ${key} url`)
   assertNonNegativeInteger(value.teamCount, `team history index scopeIndex ${key} teamCount`)
   assertNonNegativeInteger(value.pointCount, `team history index scopeIndex ${key} pointCount`)
 }
@@ -1153,12 +1153,14 @@ function assertArtifactUrl(value: unknown, label: string, basePath = '/data'): a
 
 function assertDataUrlPath(value: unknown, label: string, basePath = '/data'): asserts value is string {
   assertString(value, label)
+  assertCleanLocalDataUrl(value, label)
+  const path = localDataUrlPath(value)
   const normalizedBase = basePath.replace(/\/$/, '')
-  if (!value.startsWith(`${normalizedBase}/`)) {
+  if (!path.startsWith(`${normalizedBase}/`)) {
     throw new Error(`Invalid public artifact: ${label} must be rooted under ${normalizedBase}/`)
   }
-  assertCleanUrlPath(value, label)
-  const segments = value.split('/')
+  assertCleanUrlPath(path, label)
+  const segments = path.split('/')
   assertCleanPathSegments(segments, label)
 }
 
@@ -1204,6 +1206,26 @@ function assertCleanPathSegments(segments: string[], label: string) {
 
 function isLocalDataUrl(value: string) {
   return value.startsWith('/data/')
+}
+
+function localDataUrlPath(value: string) {
+  return value.split('?', 1)[0]
+}
+
+function assertCleanLocalDataUrl(value: string, label: string) {
+  if (value.includes('#') || hasControlCharacter(value)) {
+    throw new Error(`Invalid public artifact: ${label} must be a clean URL path`)
+  }
+  const queryStart = value.indexOf('?')
+  if (queryStart === -1) return
+
+  const search = value.slice(queryStart + 1)
+  const params = new URLSearchParams(search)
+  const entries = Array.from(params.entries())
+  const version = entries[0]?.[1]
+  if (entries.length !== 1 || entries[0][0] !== 'v' || !version || !/^[A-Za-z0-9._~-]+$/.test(version)) {
+    throw new Error(`Invalid public artifact: ${label} may only include a non-empty v query parameter`)
+  }
 }
 
 function hasControlCharacter(value: string) {

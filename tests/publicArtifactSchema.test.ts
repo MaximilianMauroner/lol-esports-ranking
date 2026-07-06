@@ -19,6 +19,17 @@ import {
 
 test('public ranking manifest parser validates nested filters and data URL paths', () => {
   assert.doesNotThrow(() => parsePublicRankingManifest(manifest()))
+  assert.doesNotThrow(() => parsePublicRankingManifest(manifest({
+    playerDirectoryUrl: '/data/entities/players.json?v=run_20260628000000_test-model_test-config',
+    snapshotIndex: {
+      All__All__All: {
+        filter: { season: 'All', event: 'All', region: 'All' },
+        url: '/data/scopes/all.json?v=run_20260628000000_test-model_test-config',
+        matchCount: 0,
+        sourceBreakdown: [],
+      },
+    },
+  })))
 
   assert.throws(
     () => parsePublicRankingManifest(manifest({
@@ -31,7 +42,7 @@ test('public ranking manifest parser validates nested filters and data URL paths
         },
       },
     })),
-    /clean URL path/,
+    /v query parameter/,
   )
 
   assert.throws(

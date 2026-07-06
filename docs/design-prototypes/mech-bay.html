@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mech Bay Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { display: ["Arial Black","Inter","ui-sans-serif","system-ui"], mono: ["ui-monospace","SFMono-Regular","monospace"], sans: ["Inter","ui-sans-serif","system-ui"] } } } }
+  </script>
+  <style>
+    body { background: #111418; }
+    .steel { background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 36px 36px; }
+    .hazard { background: repeating-linear-gradient(135deg, #f6b73c 0 14px, #111418 14px 28px); }
+    .bay-cut { clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%); }
+  </style>
+</head>
+<body class="min-h-screen text-zinc-100 antialiased">
+  <main class="steel mx-auto min-h-screen max-w-7xl px-5 py-5 sm:px-8 lg:px-10">
+    <nav class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-700 pb-4 font-mono text-xs uppercase tracking-[0.22em] text-zinc-400">
+      <a href="index.html" class="text-[#f6b73c]">Back to prototypes</a>
+      <span>Static prototype - fictional data only</span>
+    </nav>
+
+    <section class="grid gap-5 py-6 lg:grid-cols-[320px_1fr]">
+      <aside class="border-2 border-[#f6b73c] bg-[#191d22]">
+        <div class="hazard h-6"></div>
+        <div class="p-6">
+          <p class="font-mono text-xs font-bold uppercase tracking-[0.28em] text-[#f6b73c]">Mech Bay 07</p>
+          <h1 class="mt-5 break-words font-display text-4xl uppercase leading-[0.86]">Score as a machine under repair.</h1>
+          <p class="mt-5 text-sm leading-6 text-zinc-300">This world is a maintenance bay: chassis plates, service tags, diagnostic gauges, and score as a tuned machine state. It intentionally avoids the tactical-map pattern.</p>
+          <p class="mt-5 border border-[#f6b73c]/55 p-3 font-mono text-xs uppercase tracking-[0.18em] text-[#f6b73c]">Fictional data only</p>
+        </div>
+      </aside>
+
+      <article class="grid gap-5 lg:grid-cols-[1fr_260px]">
+        <section class="border border-zinc-600 bg-[#1d232b] p-5">
+          <div class="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-600 pb-4 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
+            <span>Assembly schematic</span><span>Work order M-42</span>
+          </div>
+          <div class="aspect-[5/4] w-full md:aspect-[16/10]">
+            <svg viewBox="0 0 920 560" class="h-full w-full" role="img" aria-label="Fictional mech assembly score schematic">
+              <rect width="920" height="560" fill="#252a31"/>
+              <g stroke="#96a1ad" stroke-width="3" opacity=".55"><path d="M90 74 H830"/><path d="M90 486 H830"/><path d="M112 74 V486"/><path d="M808 74 V486"/></g>
+              <g fill="#111418" stroke="#f6b73c" stroke-width="6"><path d="M260 120 H600 L690 270 L600 430 H260 L170 270 Z"/><circle cx="430" cy="270" r="82"/><rect x="330" y="204" width="200" height="132"/></g>
+              <g stroke="#ff4b4b" stroke-width="9"><path d="M430 188 V92"/><path d="M512 270 H760"/><path d="M430 352 V470"/><path d="M348 270 H124"/></g>
+              <g fill="#f6b73c" font-family="ui-monospace, SFMono-Regular, monospace" font-size="17" font-weight="700"><text x="70" y="46">ROUGH PERFORMANCE CHASSIS</text><text x="636" y="264">LOAD 72.5</text><text x="366" y="184">CORE 84.9</text><text x="306" y="462">STABILITY 61.3</text></g>
+            </svg>
+          </div>
+        </section>
+
+        <aside class="grid gap-4">
+          <div class="bay-cut bg-[#f6b73c] py-5 pl-10 pr-4 text-[#111418]"><p class="font-mono text-xs uppercase tracking-[0.18em]">Core temp</p><p class="font-display text-5xl">84</p></div>
+          <div class="bay-cut bg-[#96a1ad] py-5 pl-10 pr-4 text-[#111418]"><p class="font-mono text-xs uppercase tracking-[0.18em]">Load drift</p><p class="font-display text-5xl">72</p></div>
+          <div class="bay-cut bg-[#ff4b4b] py-5 pl-10 pr-4 text-[#111418]"><p class="font-mono text-xs uppercase tracking-[0.18em]">Fault risk</p><p class="font-display text-5xl">19</p></div>
+          <div class="border border-zinc-600 bg-[#1d232b] p-5"><p class="font-mono text-xs uppercase tracking-[0.2em] text-[#f6b73c]">Distinctness</p><p class="mt-3 text-sm leading-6 text-zinc-300">Assembly schematic and maintenance tags, not command telemetry.</p></div>
+        </aside>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

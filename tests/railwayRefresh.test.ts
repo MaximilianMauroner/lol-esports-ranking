@@ -309,7 +309,7 @@ test('refresh wrapper bootstraps when manifest exists but raw files are missing'
   }
 })
 
-test('bucket publisher uploads public data, raw baseline, and full audit artifacts under the ranking prefix', async () => {
+test('bucket publisher skips full audit artifact upload by default', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-bucket-'))
   const publicDataDir = join(tempDir, 'public-data')
   const fullSnapshotPath = join(tempDir, 'derived', 'ranking-snapshot.full.json')
@@ -353,9 +353,12 @@ test('bucket publisher uploads public data, raw baseline, and full audit artifac
     const keys = sent.map((entry) => entry.input.Key).sort()
 
     assert.equal(result.enabled, true)
-    assert.equal(result.uploaded.length, 6)
+    assert.equal(result.uploaded.length, 5)
+    assert.deepEqual(result.skipped, [{
+      key: 'rankings/artifacts/latest-full.json',
+      reason: 'full-snapshot-upload-disabled',
+    }])
     assert.deepEqual(keys, [
-      'rankings/artifacts/latest-full.json',
       'rankings/data/ranking-summary.json',
       'rankings/data/scopes/all.json',
       'rankings/latest-publish.json',
@@ -364,6 +367,47 @@ test('bucket publisher uploads public data, raw baseline, and full audit artifac
       'rankings/raw/refresh-state.json',
     ])
     assert.equal(sent.every((entry) => entry.input.Bucket === 'bucket-123'), true)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('bucket publisher can opt in to full audit artifact upload', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-full-bucket-'))
+  const publicDataDir = join(tempDir, 'public-data')
+  const fullSnapshotPath = join(tempDir, 'derived', 'ranking-snapshot.full.json')
+  const manifestPath = join(tempDir, 'raw', 'manifest.json')
+  const statePath = join(tempDir, 'raw', 'refresh-state.json')
+  const sent: Array<{ input: { Key: string; Bucket: string; ContentType?: string } }> = []
+  const client = {
+    async send(command: { input: { Key: string; Bucket: string; ContentType?: string } }) {
+      sent.push({ input: command.input })
+      return {}
+    },
+  }
+
+  try {
+    await mkdir(publicDataDir, { recursive: true })
+    await mkdir(join(tempDir, 'derived'), { recursive: true })
+    await mkdir(join(tempDir, 'raw'), { recursive: true })
+    await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+    await writeFile(fullSnapshotPath, '{}\n')
+    await writeFile(manifestPath, '{"files":{}}\n')
+    await writeFile(statePath, '{}\n')
+
+    const result = await uploadRankingArtifacts({
+      publicDataDir,
+      fullSnapshotPath,
+      manifestPath,
+      statePath,
+      config: bucketConfig(),
+      client,
+      uploadFullSnapshot: true,
+    })
+
+    assert.equal(result.uploaded.some((entry) => entry.key === 'rankings/artifacts/latest-full.json'), true)
+    assert.deepEqual(result.skipped, [])
+    assert.equal(sent.some((entry) => entry.input.Key === 'rankings/artifacts/latest-full.json'), true)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }

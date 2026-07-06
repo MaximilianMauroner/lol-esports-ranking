@@ -1,10 +1,8 @@
 import type {
-  CompactPlayer,
   PublicTeamStanding as RankingSummaryStanding,
 } from '../lib/publicArtifacts/schema'
 import {
   formatDecimal,
-  formatMultiplier,
   formatNumber,
   formatPercentValue,
   formatRating,
@@ -74,28 +72,6 @@ export const TEAM_COMPARE_ROWS: CompareRow<RankingSummaryStanding>[] = [
   { key: 'factor', label: 'Strongest factor', cell: (t) => t.strongestFactor ?? '—' },
 ]
 
-export const PLAYER_COMPARE_ROWS: CompareRow<CompactPlayer>[] = [
-  { key: 'rating', label: 'Role Power', cell: (p) => formatRating(p.rating), score: (p) => p.rating, better: 'high' },
-  { key: 'residual', label: 'Individual Residual', cell: (p) => formatRating(p.individualResidual?.score), score: (p) => p.individualResidual?.score ?? -Infinity, better: 'high' },
-  { key: 'residualDelta', label: 'Residual vs Role Power', cell: (p) => formatResidualRankDelta(p), score: (p) => p.individualResidual?.rankDelta ?? 0, better: 'high' },
-  { key: 'residualConfidence', label: 'Residual confidence', cell: (p) => formatPercentValue(p.individualResidual?.confidence), score: (p) => p.individualResidual?.confidence ?? 0, better: 'high' },
-  { key: 'rank', label: 'Global rank', cell: (p) => `#${p.rank}`, score: (p) => p.rank, better: 'low' },
-  { key: 'role', label: 'Role', cell: (p) => p.role },
-  { key: 'team', label: 'Team', cell: (p) => `${p.team}${p.region ? ` (${p.region})` : ''}` },
-  { key: 'games', label: 'Games', cell: (p) => formatNumber(p.games), score: (p) => p.games, better: 'high' },
-  {
-    key: 'teamGames',
-    label: 'Shown-team games',
-    cell: (p) => formatAppearanceGames(p),
-    score: (p) => p.teamGames ?? p.appearance?.latestTeamGames ?? p.games,
-    better: 'high',
-  },
-  { key: 'impact', label: 'Impact multiplier', cell: (p) => `×${formatMultiplier(p.impactMultiplier)}`, score: (p) => p.impactMultiplier, better: 'high' },
-  { key: 'availability', label: 'Availability', cell: (p) => formatRatio(p.availability), score: (p) => p.availability, better: 'high' },
-  { key: 'certainty', label: 'Role certainty', cell: (p) => formatRatio(p.roleCertainty), score: (p) => p.roleCertainty, better: 'high' },
-  { key: 'form', label: 'Recent form', cell: (p) => <FormDots form={p.form} /> },
-]
-
 export type CompareProfileMetric<E> = {
   key: string
   label: string
@@ -121,17 +97,6 @@ export const TEAM_PROFILE_METRICS: CompareProfileMetric<RankingSummaryStanding>[
   { key: 'uncertainty', label: 'Uncertainty', value: (t) => t.uncertainty, format: formatRating, better: 'low' },
 ]
 
-export const PLAYER_PROFILE_METRICS: CompareProfileMetric<CompactPlayer>[] = [
-  { key: 'rating', label: 'Role Power', value: (p) => p.rating, format: formatRating },
-  { key: 'residual', label: 'Ind. Residual', value: (p) => p.individualResidual?.score, format: formatRating },
-  { key: 'residualConfidence', label: 'Residual conf.', value: (p) => p.individualResidual?.confidence, format: formatPercentValue },
-  { key: 'games', label: 'Games', value: (p) => p.games, format: formatNumber },
-  { key: 'teamGames', label: 'Shown-team games', value: (p) => p.teamGames ?? p.appearance?.latestTeamGames, format: formatNumber },
-  { key: 'impact', label: 'Impact', value: (p) => p.impactMultiplier, format: (value) => `×${formatMultiplier(value)}` },
-  { key: 'availability', label: 'Availability', value: (p) => p.availability, format: formatRatio },
-  { key: 'certainty', label: 'Role certainty', value: (p) => p.roleCertainty, format: formatRatio },
-]
-
 export function regionKey(region: RegionStrength) {
   return region.region
 }
@@ -149,10 +114,6 @@ export function teamCompareColumns(teams: RankingSummaryStanding[]): CompareColu
   return teams.map((team) => ({ id: teamKey(team), name: team.team, sub: `${team.region ?? '—'} · #${team.rank ?? '—'}` }))
 }
 
-export function playerCompareColumns(players: CompactPlayer[]): CompareColumn[] {
-  return players.map((player) => ({ id: player.id, name: player.name, sub: `${player.role} · ${player.teamCode ?? player.team}` }))
-}
-
 function winRate(wins?: number, losses?: number) {
   if (typeof wins !== 'number' || typeof losses !== 'number') return 0
   const total = wins + losses
@@ -163,19 +124,6 @@ function formatSignedDecimal(value?: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
   if (Math.abs(value) < 0.05) return '0'
   return value > 0 ? `+${formatDecimal(value)}` : formatDecimal(value)
-}
-
-function formatResidualRankDelta(player: CompactPlayer) {
-  const delta = player.individualResidual?.rankDelta
-  if (typeof delta !== 'number') return '—'
-  if (delta === 0) return 'even'
-  return delta > 0 ? `+${delta} ranks` : `${delta} ranks`
-}
-
-function formatAppearanceGames(player: CompactPlayer) {
-  const teamGames = player.teamGames ?? player.appearance?.latestTeamGames
-  if (typeof teamGames !== 'number') return formatNumber(player.games)
-  return `${formatNumber(teamGames)} / ${formatNumber(player.games)}`
 }
 
 function formatTier(value?: string) {

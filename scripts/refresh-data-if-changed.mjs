@@ -179,8 +179,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           bucket: bucketPublish.bucket,
           prefix: bucketPublish.prefix,
           uploadedCount: bucketPublish.uploaded.length,
+          skipped: bucketPublish.skipped,
         }
-        console.log(`Uploaded ${bucketPublish.uploaded.length} ranking artifact(s) to Railway bucket prefix ${bucketPublish.prefix || '(root)'}.`)
+        const skippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
+        console.log(`Uploaded ${bucketPublish.uploaded.length} ranking artifact(s) to Railway bucket prefix ${bucketPublish.prefix || '(root)'}${skippedMessage}.`)
       }
     } else if (!skipCrunch) {
       state.bucket = {

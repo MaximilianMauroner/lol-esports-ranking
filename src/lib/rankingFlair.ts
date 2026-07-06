@@ -287,7 +287,7 @@ function spicyBandForScore(score: number): SpicyTakeConfidenceBand {
 }
 
 function spicyBandLabel(band: SpicyTakeConfidenceBand) {
-  if (band === 'high') return 'Receipts ready'
+  if (band === 'high') return 'Evidence ready'
   if (band === 'medium') return 'Spicy but defensible'
   return 'Chaos warning'
 }

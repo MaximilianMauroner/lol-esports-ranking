@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { Activity, AlertTriangle, BarChart3, FileText, Globe2, RefreshCw, Swords, Trophy, Users } from 'lucide-react'
+import { AlertTriangle, BarChart3, Globe2, RefreshCw, X } from 'lucide-react'
 import type {
-  CompactPlayer,
   PublicPlayerDirectory as PlayerDirectory,
   SnapshotCheckpointOption,
   SnapshotFilter,
@@ -18,25 +17,17 @@ import {
 import { deriveRankingFlair, type RankingFlair, type RankingMovementPick } from './lib/rankingFlair'
 import type { RegionStrength } from './lib/regionStrength'
 import { CompareDrawer } from './components/CompareDrawer'
-import { CompareProfileChart, RegionCompareAnalysis, TeamCompareAnalysis } from './components/CompareAnalysis'
-import { RankingShowcase, type RankingShowcaseProps } from './components/RankingShowcase'
+import { RegionCompareAnalysis, TeamCompareAnalysis } from './components/CompareAnalysis'
+import type { RankingShowcaseProps } from './components/RankingShowcase'
 import {
-  PLAYER_COMPARE_ROWS,
-  PLAYER_PROFILE_METRICS,
   REGION_COMPARE_ROWS,
   TEAM_COMPARE_ROWS,
-  playerCompareColumns,
   regionCompareColumns,
   regionKey,
   teamCompareColumns,
 } from './components/compareAnalysisData'
 import { RegionsView } from './views/RegionsView'
 import { TeamsView } from './views/TeamsView'
-import { PlayersView } from './views/PlayersView'
-import { ArenaView } from './views/ArenaView'
-import { WorldsLabView } from './views/WorldsLabView'
-import { SplitRaceView } from './views/SplitRaceView'
-import { ReceiptsView } from './views/ReceiptsView'
 import { RegionBadge } from './components/ui'
 import { Button } from './components/ui/button'
 import { Alert } from './components/ui/alert'
@@ -52,9 +43,7 @@ import {
   usePublicArtifacts,
 } from './hooks/usePublicArtifacts'
 
-type ToolMode = 'rankings' | 'arena' | 'worlds-lab' | 'split-race' | 'receipts'
-type LegacyMode = 'regions' | 'players'
-type Mode = ToolMode | LegacyMode
+type Mode = 'rankings' | 'regions'
 
 const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
@@ -62,21 +51,11 @@ const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 const MODES: { id: Mode; label: string; tagline: string; icon: typeof BarChart3 }[] = [
   { id: 'rankings', label: 'Rankings', tagline: 'Board, tiers, podium', icon: BarChart3 },
   { id: 'regions', label: 'Regions', tagline: 'Regional strength', icon: Globe2 },
-  { id: 'arena', label: 'Arena', tagline: 'Series matchup lab', icon: Swords },
-  { id: 'worlds-lab', label: 'Worlds Lab', tagline: 'Swiss & bracket odds', icon: Trophy },
-  { id: 'split-race', label: 'Split Race', tagline: 'Rank race timeline', icon: Activity },
-  { id: 'players', label: 'Players', tagline: 'Role power', icon: Users },
-  { id: 'receipts', label: 'Receipts', tagline: 'Shareable ranking proof', icon: FileText },
 ]
 
 const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
   regions: { eyebrow: 'Regional strength', title: 'Region power scores' },
   rankings: { eyebrow: 'Tier 1 team strength', title: 'Global Power Rankings' },
-  arena: { eyebrow: 'Matchup tools', title: 'Arena' },
-  'worlds-lab': { eyebrow: 'Tournament simulation', title: 'Worlds Lab' },
-  'split-race': { eyebrow: 'Season movement', title: 'Split Race' },
-  receipts: { eyebrow: 'Ranking provenance', title: 'Receipts' },
-  players: { eyebrow: 'Role-conditioned player strength', title: 'Player Role Power' },
 }
 
 function App() {
@@ -95,9 +74,7 @@ function App() {
   } = usePublicArtifacts(scope)
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
-  const [playerPicks, setPlayerPicks] = useState<CompactPlayer[]>([])
   const [teamSearch, setTeamSearch] = useState('')
-  const [playerSearch, setPlayerSearch] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
@@ -134,15 +111,9 @@ function App() {
     () => playersState.status === 'ready' ? playersForScope(playersState.data, filter) : [],
     [filter, playersState],
   )
-  const activePlayerRoles = useMemo(
-    () => playersState.status === 'ready' ? playersState.data.roles.filter((role) => activePlayers.some((player) => player.role === role)) : [],
-    [activePlayers, playersState],
-  )
   const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
   const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, standings, teamKey), [standings, teamPicks])
-  const activePlayerPicks = useMemo(() => reconcilePicks(playerPicks, activePlayers, (player) => player.id), [activePlayers, playerPicks])
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
-  const playerPickIds = useMemo(() => new Set(activePlayerPicks.map((player) => player.id)), [activePlayerPicks])
 
   function toggleRegion(region: RegionStrength) {
     setRegionPicks((current) => toggleLimitedPick(reconcilePicks(current, regions, regionKey), region, regionKey))
@@ -152,32 +123,15 @@ function App() {
     setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, standings, teamKey), team, teamKey))
   }
 
-  function togglePlayer(player: CompactPlayer) {
-    setPlayerPicks((current) => toggleLimitedPick(reconcilePicks(current, activePlayers, (entry) => entry.id), player, (entry) => entry.id))
-  }
-
   if (manifestState.status === 'loading') return <BootScreen />
   if (manifestState.status !== 'ready') return <ErrorScreen message={manifestState.message} />
 
   const readyData = manifestState.data
-  const provenance = {
-    source: readyData.source ?? 'Unknown source',
-    model: snapshot?.modelVersion ?? readyData.model?.version ?? 'unknown',
-    config: snapshot?.modelConfigHash ?? readyData.model?.configHash ?? 'unknown',
-  }
   const seeded = readyData.dataMode === 'seeded-sample' || readyData.coverage?.seededSample === true
-  const status = seeded ? 'sample' : readyData.dataMode === 'no-data' ? 'empty' : 'public'
   const matchCount = snapshot?.matchCount ?? readyData.coverage?.matchCount
-  const trayPicks = mode === 'regions'
-    ? activeRegionPicks.length
-    : isTeamToolMode(mode)
-      ? activeTeamPicks.length
-      : mode === 'players'
-        ? activePlayerPicks.length
-        : 0
-  const trayLabel = mode === 'regions' ? 'Region compare' : isTeamToolMode(mode) ? 'Team compare' : 'Player compare'
+  const trayPicks = mode === 'regions' ? activeRegionPicks.length : activeTeamPicks.length
+  const trayLabel = mode === 'regions' ? 'Region compare' : 'Team compare'
   const teamColumns = teamCompareColumns(activeTeamPicks)
-  const playerColumns = playerCompareColumns(activePlayerPicks)
   const regionColumns = regionCompareColumns(activeRegionPicks)
   const seasonTabs = [...seasonYears.slice(0, 4), 'All']
   const activeSeason = seasonFromScope(effectiveScope)
@@ -185,6 +139,7 @@ function App() {
   const checkpointTabs = activeSeason && activeSeason !== 'All'
     ? checkpointOptionsForSeason(readyData, activeSeason)
     : []
+  const rankingSignals = rankingSignalsProps(rankingFlair)
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
   const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
   const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -234,85 +189,70 @@ function App() {
             <p className="eyebrow">{MODE_TITLES[mode].eyebrow}</p>
             <h1>{MODE_TITLES[mode].title}</h1>
           </div>
-          <div className="topbar__meta" aria-label="Data status">
-            <span className={`statusdot ${status}`}>
-              {seeded ? 'Seeded sample' : readyData.dataMode === 'no-data' ? 'No ranking data' : 'Public-source data'}
-            </span>
-            <div>
-              <span>Matches</span>
-              <b>{formatNumber(matchCount)}</b>
-            </div>
-            <div>
-              <span>Model</span>
-              <b>{provenance.model}</b>
-            </div>
-            <div>
-              <span>Updated</span>
-              <b>{formatDate(readyData.generatedAt)}</b>
-            </div>
-          </div>
         </header>
 
-        <div className="season-tabs" role="group" aria-label="Year-over-year data split">
-          {seasonTabs.map((season) => (
-            <Button
-              key={season}
-              type="button"
-              variant="ghost"
-              aria-pressed={activeSeason === season}
-              className={cn('season-tabs__button', activeSeason === season && 'is-active')}
-              onClick={() => setScope(season === 'All' ? 'all' : `season:${season}`)}
-            >
-              {season}
-            </Button>
-          ))}
-        </div>
-
-        {activeSeason && activeSeason !== 'All' && checkpointTabs.length > 0 ? (
-          <div className="checkpoint-tabs" role="group" aria-label={`${activeSeason} checkpoints`}>
-            <Button
-              type="button"
-              variant="ghost"
-              aria-pressed={!activeCheckpoint}
-              className={cn('checkpoint-tabs__button', !activeCheckpoint && 'is-active')}
-              onClick={() => setScope(`season:${activeSeason}`)}
-            >
-              <span>Full year</span>
-            </Button>
-            {checkpointTabs.map((checkpoint) => {
-              const ongoing = checkpoint.id === ongoingCheckpointId
-              return (
-                <Button
-                  key={checkpoint.id}
-                  type="button"
-                  variant="ghost"
-                  title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
-                  aria-pressed={activeCheckpoint === checkpoint.id}
-                  aria-label={`${checkpoint.label} through ${checkpoint.boundaryEvent}${ongoing ? ', ongoing' : ''}`}
-                  className={cn('checkpoint-tabs__button', activeCheckpoint === checkpoint.id && 'is-active', ongoing && 'is-ongoing')}
-                  onClick={() => setScope(checkpointScope(activeSeason, checkpoint.id))}
-                >
-                  <span>
-                    {checkpoint.label}
-                    {ongoing ? <em>Ongoing</em> : null}
-                  </span>
-                  <small>{formatDate(checkpoint.endDate)}</small>
-                </Button>
-              )
-            })}
-            {pendingCheckpoint ? (
-              <div
-                className="checkpoint-tabs__button checkpoint-tabs__button--future"
-                aria-disabled="true"
-                aria-label={`${pendingCheckpoint.label} has not started yet`}
-                title={`${pendingCheckpoint.label} has not started yet.`}
+        <div className="scope-tabs" aria-label="Snapshot scope controls">
+          <div className="season-tabs" role="group" aria-label="Season">
+            {seasonTabs.map((season) => (
+              <Button
+                key={season}
+                type="button"
+                variant="ghost"
+                aria-pressed={activeSeason === season}
+                className={cn('season-tabs__button', activeSeason === season && 'is-active')}
+                onClick={() => setScope(season === 'All' ? 'all' : `season:${season}`)}
               >
-                <span>{pendingCheckpoint.label}</span>
-                <small>Not started</small>
-              </div>
-            ) : null}
+                {season}
+              </Button>
+            ))}
           </div>
-        ) : null}
+
+          {activeSeason && activeSeason !== 'All' && checkpointTabs.length > 0 ? (
+            <div className="checkpoint-tabs" role="group" aria-label={`${activeSeason} checkpoints`}>
+              <Button
+                type="button"
+                variant="ghost"
+                aria-pressed={!activeCheckpoint}
+                className={cn('checkpoint-tabs__button', !activeCheckpoint && 'is-active')}
+                onClick={() => setScope(`season:${activeSeason}`)}
+              >
+                <span>Full year</span>
+              </Button>
+              {checkpointTabs.map((checkpoint) => {
+                const ongoing = checkpoint.id === ongoingCheckpointId
+                return (
+                  <Button
+                    key={checkpoint.id}
+                    type="button"
+                    variant="ghost"
+                    title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
+                    aria-pressed={activeCheckpoint === checkpoint.id}
+                    aria-label={`${checkpoint.label} through ${checkpoint.boundaryEvent}${ongoing ? ', ongoing' : ''}`}
+                    className={cn('checkpoint-tabs__button', activeCheckpoint === checkpoint.id && 'is-active', ongoing && 'is-ongoing')}
+                    onClick={() => setScope(checkpointScope(activeSeason, checkpoint.id))}
+                  >
+                    <span>
+                      {checkpoint.label}
+                      {ongoing ? <em>Ongoing</em> : null}
+                    </span>
+                    <small>{formatDate(checkpoint.endDate)}</small>
+                  </Button>
+                )
+              })}
+              {pendingCheckpoint ? (
+                <div
+                  className="checkpoint-tabs__button checkpoint-tabs__button--future"
+                  aria-disabled="true"
+                  aria-label={`${pendingCheckpoint.label} has not started yet`}
+                  title={`${pendingCheckpoint.label} has not started yet.`}
+                >
+                  <span>{pendingCheckpoint.label}</span>
+                  <small>Not started</small>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         {seeded ? (
           <div className="view" style={{ paddingBottom: 0 }}>
@@ -327,12 +267,9 @@ function App() {
           <ScopedSnapshotState state={snapshotState} scope={scopeLabel(effectiveScope)} />
         ) : (
           <>
-            {mode === 'regions' ? <RegionsView regions={regions} standings={standings} pickedIds={regionPickIds} onToggle={toggleRegion} /> : null}
+            {mode === 'regions' ? <RegionsView regions={regions} standings={standings} regionHistory={activeRegionHistory} pickedIds={regionPickIds} onToggle={toggleRegion} /> : null}
             {mode === 'rankings' ? (
               <>
-                <div className="view">
-                  <RankingShowcase {...rankingShowcaseProps(rankingFlair, standings)} />
-                </div>
                 <TeamsView
                   standings={standings}
                   regions={regions}
@@ -342,7 +279,8 @@ function App() {
                   onSearchChange={setTeamSearch}
                   pickedTeams={activeTeamPicks}
                   historyState={teamHistoryState}
-                  updatedAt={formatDate(readyData.generatedAt)}
+                  signals={rankingSignals}
+                  regionsHref={hashForModeAndScope('regions', effectiveScope)}
                   dataSummary={{
                     source: readyData.source,
                     sources: readyData.sources,
@@ -359,81 +297,76 @@ function App() {
                 />
               </>
             ) : null}
-            {mode === 'arena' ? <ArenaView standings={standings} pickedTeams={activeTeamPicks} model={readyData.model} historyState={teamHistoryState} /> : null}
-            {mode === 'worlds-lab' ? <WorldsLabView standings={standings} pickedTeams={activeTeamPicks} model={readyData.model} /> : null}
-            {mode === 'split-race' ? <SplitRaceView standings={standings} pickedTeams={activeTeamPicks} model={readyData.model} historyState={teamHistoryState} /> : null}
-            {mode === 'receipts' ? <ReceiptsView standings={standings} players={activePlayers} manifest={readyData} snapshot={snapshot} pickedTeams={activeTeamPicks} /> : null}
-            {mode === 'players' ? (
-              <PlayersView
-                players={activePlayers}
-                metric={playersState.status === 'ready' ? playersState.data.metric : readyData.playerData.metric}
-                roles={activePlayerRoles}
-                search={playerSearch}
-                onSearchChange={setPlayerSearch}
-                pickedIds={playerPickIds}
-                artifactState={playersState}
-                onToggle={togglePlayer}
-              />
-            ) : null}
           </>
         )}
-
-        <p className="footnote">
-          Ratings sourced from {provenance.source}. Model {provenance.model} · config {provenance.config}.
-          {readyData.playerData?.description ? ` ${readyData.playerData.description}` : ''}
-        </p>
       </main>
 
       {trayPicks > 0 ? (
         <div className="tray is-shown">
-          <span className="tray__label">{trayLabel}</span>
-          <div className="tray__chips">
-            {mode === 'regions'
-              ? activeRegionPicks.map((region) => (
-                  <span className="chip" key={regionKey(region)}>
-                    <RegionBadge region={region.region} size="sm" />
-                    <b>{region.region}</b>
-                    <Button type="button" variant="ghost" size="icon" onClick={() => toggleRegion(region)} aria-label={`Remove ${region.region}`}>
-                      ✕
-                    </Button>
-                  </span>
-                ))
-              : null}
-            {isTeamToolMode(mode)
-              ? activeTeamPicks.map((team) => (
-                  <span className="chip" key={teamKey(team)}>
-                    <b>{team.code ?? team.team}</b>
-                    <Button type="button" variant="ghost" size="icon" onClick={() => toggleTeam(team)} aria-label={`Remove ${team.team}`}>
-                      ✕
-                    </Button>
-                  </span>
-                ))
-              : null}
-            {mode === 'players'
-              ? activePlayerPicks.map((player) => (
-                  <span className="chip" key={player.id}>
-                    <b>{player.name}</b>
-                    <Button type="button" variant="ghost" size="icon" onClick={() => togglePlayer(player)} aria-label={`Remove ${player.name}`}>
-                      ✕
-                    </Button>
-                  </span>
-                ))
-              : null}
+          <div className="tray__bar" role="region" aria-label={`${trayLabel}: ${trayPicks} selected`}>
+            <span className="tray__label">{trayLabel}</span>
+            <div className="tray__chips">
+              {mode === 'regions'
+                ? activeRegionPicks.map((region) => (
+                    <span className="chip" key={regionKey(region)}>
+                      <RegionBadge region={region.region} size="sm" />
+                      <b>{region.region}</b>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="chip__remove"
+                        onClick={() => toggleRegion(region)}
+                        aria-label={`Remove ${region.region}`}
+                      >
+                        <X aria-hidden="true" />
+                      </Button>
+                    </span>
+                  ))
+                : null}
+              {mode === 'rankings'
+                ? activeTeamPicks.map((team) => (
+                    <span className="chip" key={teamKey(team)}>
+                      <b>{team.code ?? team.team}</b>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="chip__remove"
+                        onClick={() => toggleTeam(team)}
+                        aria-label={`Remove ${team.team}`}
+                      >
+                        <X aria-hidden="true" />
+                      </Button>
+                    </span>
+                  ))
+                : null}
+            </div>
+            <div className="tray__actions">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="tray__clear"
+                onClick={() => {
+                  if (mode === 'regions') setRegionPicks([])
+                  else setTeamPicks([])
+                }}
+              >
+                Clear
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="tray__primary"
+                onClick={() => setDrawerOpen(true)}
+                disabled={trayPicks < 2}
+              >
+                Compare {trayPicks}
+              </Button>
+            </div>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              if (mode === 'regions') setRegionPicks([])
-              else if (isTeamToolMode(mode)) setTeamPicks([])
-              else setPlayerPicks([])
-            }}
-          >
-            Clear
-          </Button>
-          <Button type="button" variant="default" onClick={() => setDrawerOpen(true)} disabled={trayPicks < 2}>
-            Compare {trayPicks}
-          </Button>
         </div>
       ) : null}
 
@@ -448,7 +381,7 @@ function App() {
         onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
       />
       <CompareDrawer
-        open={drawerOpen && isTeamToolMode(mode)}
+        open={drawerOpen && mode === 'rankings'}
         title="Team comparison"
         entities={activeTeamPicks}
         columns={teamColumns}
@@ -456,16 +389,6 @@ function App() {
         after={<TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
-      />
-      <CompareDrawer
-        open={drawerOpen && mode === 'players'}
-        title="Player comparison"
-        entities={activePlayerPicks}
-        columns={playerColumns}
-        rows={PLAYER_COMPARE_ROWS}
-        after={<CompareProfileChart title="Player profile" eyebrow="Current scope" entities={activePlayerPicks} columns={playerColumns} metrics={PLAYER_PROFILE_METRICS} />}
-        onClose={() => setDrawerOpen(false)}
-        onRemove={(id) => setPlayerPicks((current) => current.filter((player) => player.id !== id))}
       />
     </div>
   )
@@ -497,13 +420,7 @@ function hashForModeAndScope(mode: Mode, scope: string, currentHash = '') {
   const query = new URLSearchParams(currentHash.split('?', 2)[1] ?? '')
   query.set('scope', scope)
   const queryString = query.toString()
-  return `#${hashPathForMode(mode, currentHash)}${queryString ? `?${queryString}` : ''}`
-}
-
-function hashPathForMode(mode: Mode, currentHash: string) {
-  const path = currentHash.split('?', 1)[0]
-  if (mode === 'receipts' && path.startsWith('receipts/') && path.length > 'receipts/'.length) return path
-  return mode
+  return `#${mode}${queryString ? `?${queryString}` : ''}`
 }
 
 function hashModeSegment(hash: string) {
@@ -512,12 +429,7 @@ function hashModeSegment(hash: string) {
 
 function isKnownMode(value: string): value is Mode {
   return value === 'rankings'
-    || value === 'arena'
-    || value === 'worlds-lab'
-    || value === 'split-race'
-    || value === 'receipts'
     || value === 'regions'
-    || value === 'players'
 }
 
 function isKnownScope(value: string | null): value is string {
@@ -547,33 +459,11 @@ function checkpointLabel(id: string) {
     .join(' ')
 }
 
-function isTeamToolMode(mode: Mode): mode is ToolMode {
-  return mode === 'rankings'
-    || mode === 'arena'
-    || mode === 'worlds-lab'
-    || mode === 'split-race'
-    || mode === 'receipts'
-}
-
-function rankingShowcaseProps(flair: RankingFlair, standings: RankingSummaryStanding[]): RankingShowcaseProps {
-  const standingsByCode = new Map(standings.map((standing) => [standing.code, standing]))
+function rankingSignalsProps(flair: RankingFlair): RankingShowcaseProps {
   const spicy = flair.spicyTakeConfidence[0]
   return {
-    title: 'GPR show board',
-    subtitle: 'Tier bands, podium, movement, upset evidence, and confidence context from the current public snapshot.',
-    podium: flair.podium.map((entry) => {
-      const standing = standingsByCode.get(entry.code)
-      return {
-        id: entry.code,
-        team: entry.team,
-        code: entry.code,
-        region: entry.region,
-        league: entry.league,
-        rank: entry.rank,
-        rating: entry.rating,
-        movement: standing?.movement,
-      }
-    }),
+    title: 'Snapshot signals',
+    subtitle: 'Unique movement, tier, upset, and evidence context for this scope.',
     tierCounts: tierCountsFor(flair),
     biggestRiser: movementSpotlight(flair.movement.biggestRiser),
     biggestFaller: movementSpotlight(flair.movement.biggestFaller),
@@ -587,10 +477,10 @@ function rankingShowcaseProps(flair: RankingFlair, standings: RankingSummaryStan
       description: `Upset score ${formatNumber(flair.upsetHeadline.score)} from match delta, rating gap, and rank gap.`,
     } : undefined,
     confidenceBand: spicy ? {
-      label: `${spicy.code}: ${spicy.label}`,
+      label: `${spicy.code}: evidence coverage`,
       value: spicy.score,
       tone: spicy.band === 'high' ? 'spicy' : spicy.band === 'medium' ? 'warm' : 'cool',
-      description: `${formatNumber(spicy.recentMatchCount)} recent matches with +/-${formatNumber(spicy.uncertainty)} uncertainty.`,
+      description: `${formatNumber(spicy.recentMatchCount)} recent scored matches, rating uncertainty +/-${formatNumber(spicy.uncertainty)}.`,
     } : undefined,
   }
 }

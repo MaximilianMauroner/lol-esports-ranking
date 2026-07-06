@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rune Forge Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ["Arial Black", "Impact", "Inter", "ui-sans-serif", "system-ui"],
+            mono: ["ui-monospace", "SFMono-Regular", "monospace"],
+            sans: ["Inter", "ui-sans-serif", "system-ui"]
+          },
+          boxShadow: {
+            forge: "0 0 70px rgba(183,109,255,.24), inset 0 0 34px rgba(215,179,106,.08)",
+            ember: "0 0 48px rgba(255,123,84,.2)",
+            teal: "0 0 42px rgba(98,214,199,.18)"
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    html { background: #0d0a0e; }
+    body {
+      min-width: 320px;
+      overflow-x: hidden;
+      background:
+        radial-gradient(circle at 18% -12%, rgba(183, 109, 255, .24), transparent 28rem),
+        radial-gradient(circle at 92% 4%, rgba(98, 214, 199, .16), transparent 26rem),
+        radial-gradient(circle at 80% 56%, rgba(255, 123, 84, .15), transparent 30rem),
+        linear-gradient(180deg, #140d15 0%, #0d0a0e 42%, #080709 100%);
+    }
+    .forge-grid {
+      background-image:
+        linear-gradient(rgba(215, 179, 106, .07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215, 179, 106, .07) 1px, transparent 1px),
+        radial-gradient(circle at 1px 1px, rgba(215, 179, 106, .18) 1px, transparent 0);
+      background-size: 42px 42px, 42px 42px, 16px 16px;
+    }
+    .panel {
+      border: 1px solid rgba(184, 137, 75, .52);
+      background:
+        linear-gradient(180deg, rgba(38, 24, 35, .88), rgba(15, 10, 16, .9)),
+        radial-gradient(circle at 50% 0%, rgba(215, 179, 106, .09), transparent 18rem);
+      box-shadow: inset 0 1px rgba(255,255,255,.06);
+    }
+    .panel-soft {
+      border: 1px solid rgba(184, 137, 75, .36);
+      background: rgba(20, 13, 21, .74);
+      box-shadow: inset 0 1px rgba(255,255,255,.05);
+    }
+    .gem {
+      clip-path: polygon(50% 0, 92% 24%, 78% 100%, 22% 100%, 8% 24%);
+    }
+    .gem-cut {
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.35), transparent 28%),
+        radial-gradient(circle at 55% 34%, rgba(255,255,255,.24), transparent 32%),
+        linear-gradient(180deg, #b76dff, #4f2c78 58%, #1a1320);
+    }
+    .slot {
+      position: relative;
+      isolation: isolate;
+    }
+    .slot:before,
+    .slot:after {
+      content: "";
+      position: absolute;
+      inset: 10px;
+      border: 1px solid rgba(215, 179, 106, .34);
+      pointer-events: none;
+      z-index: -1;
+      transform: rotate(2deg);
+    }
+    .slot:after {
+      inset: 18px;
+      border-color: rgba(98, 214, 199, .14);
+      transform: rotate(-3deg);
+    }
+    .score-ring {
+      background:
+        radial-gradient(circle at center, #171019 0 54%, transparent 55%),
+        conic-gradient(from -70deg, #62d6c7 0 68%, rgba(98,214,199,.16) 68% 77%, rgba(215,179,106,.62) 77% 91%, rgba(255,123,84,.24) 91% 100%);
+    }
+    .heat-fill {
+      background: linear-gradient(90deg, #62d6c7, #d7b36a 58%, #ff7b54);
+    }
+    .rune-path {
+      background:
+        linear-gradient(90deg, rgba(98,214,199,.18), rgba(215,179,106,.72), rgba(255,123,84,.18)),
+        linear-gradient(90deg, transparent 0 11%, rgba(215,179,106,.28) 11% 12%, transparent 12% 31%, rgba(215,179,106,.28) 31% 32%, transparent 32% 55%, rgba(215,179,106,.28) 55% 56%, transparent 56% 79%, rgba(215,179,106,.28) 79% 80%, transparent 80% 100%);
+    }
+    .inventory-cell {
+      background:
+        linear-gradient(180deg, rgba(43, 27, 41, .92), rgba(18, 12, 19, .94)),
+        radial-gradient(circle at 50% 0%, rgba(183,109,255,.16), transparent 12rem);
+    }
+    .fine-label {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .text-shadow-glow { text-shadow: 0 0 34px rgba(215,179,106,.26); }
+  </style>
+</head>
+<body class="min-h-screen text-[#f5dfaa] antialiased">
+  <main class="forge-grid min-h-screen px-4 py-4 sm:px-6 lg:px-8">
+    <div class="mx-auto flex max-w-[1500px] flex-col gap-4">
+      <nav class="panel flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <a href="index.html" class="fine-label rounded border border-[#b8894b]/45 px-3 py-2 text-[#d7b36a] transition hover:border-[#d7b36a] hover:bg-[#d7b36a]/10">Back</a>
+          <div>
+            <p class="fine-label text-[#d7b36a]">Rune Forge</p>
+            <p class="text-xs text-[#cdbfce]">Performance score workbench</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 fine-label text-[#cdbfce]">
+          <span class="rounded border border-[#62d6c7]/35 bg-[#62d6c7]/10 px-3 py-2 text-[#62d6c7]">Mock model v0.4</span>
+          <span class="rounded border border-[#ff7b54]/35 bg-[#ff7b54]/10 px-3 py-2 text-[#ffb39d]">Fictional sample data only</span>
+        </div>
+      </nav>
+
+      <section class="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
+        <aside class="panel flex flex-col gap-4 p-4">
+          <div>
+            <p class="fine-label text-[#d7b36a]">Entity class</p>
+            <div class="mt-3 grid grid-cols-3 gap-2">
+              <button type="button" class="rounded border border-[#d7b36a] bg-[#d7b36a]/14 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#f5dfaa]">Team</button>
+              <button type="button" class="rounded border border-[#b8894b]/30 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#cdbfce]">Player</button>
+              <button type="button" class="rounded border border-[#b8894b]/30 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#cdbfce]">Region</button>
+            </div>
+          </div>
+
+          <div class="panel-soft p-3">
+            <label class="fine-label text-[#d7b36a]" for="season">Season vessel</label>
+            <select id="season" class="mt-2 w-full rounded border border-[#b8894b]/40 bg-[#100b11] px-3 py-2 text-sm text-[#f5dfaa] outline-none focus:border-[#62d6c7]">
+              <option>2026 split arc</option>
+              <option>2025 worlds arc</option>
+              <option>All mock seasons</option>
+            </select>
+          </div>
+
+          <div class="grid gap-2">
+            <p class="fine-label text-[#d7b36a]">Forge queue</p>
+            <button type="button" class="inventory-cell flex w-full min-w-0 items-center gap-3 overflow-hidden rounded border border-[#d7b36a]/80 p-3 text-left shadow-forge">
+              <span class="gem gem-cut block h-12 w-9 shrink-0"></span>
+              <span class="min-w-0">
+                <span class="block text-sm font-bold uppercase tracking-[0.08em] text-[#f5dfaa]">Harbor Prism</span>
+                <span class="block truncate text-xs text-[#cdbfce]">Team artifact, unstable rarity</span>
+              </span>
+              <span class="ml-auto shrink-0 font-display text-2xl text-[#d7b36a]">83</span>
+            </button>
+            <button type="button" class="inventory-cell flex w-full min-w-0 items-center gap-3 overflow-hidden rounded border border-[#b8894b]/35 p-3 text-left">
+              <span class="gem block h-12 w-9 shrink-0 bg-[#62d6c7] shadow-teal"></span>
+              <span class="min-w-0">
+                <span class="block text-sm font-bold uppercase tracking-[0.08em]">Axiom Crown</span>
+                <span class="block truncate text-xs text-[#cdbfce]">Team artifact, polished rarity</span>
+              </span>
+              <span class="ml-auto shrink-0 font-display text-2xl text-[#62d6c7]">81</span>
+            </button>
+            <button type="button" class="inventory-cell flex w-full min-w-0 items-center gap-3 overflow-hidden rounded border border-[#b8894b]/35 p-3 text-left">
+              <span class="gem block h-12 w-9 shrink-0 bg-[#ff7b54] shadow-ember"></span>
+              <span class="min-w-0">
+                <span class="block text-sm font-bold uppercase tracking-[0.08em]">Ember Pact</span>
+                <span class="block truncate text-xs text-[#cdbfce]">Player artifact, volatile rarity</span>
+              </span>
+              <span class="ml-auto shrink-0 font-display text-2xl text-[#ffb39d]">78</span>
+            </button>
+            <button type="button" class="inventory-cell flex w-full min-w-0 items-center gap-3 overflow-hidden rounded border border-[#b8894b]/35 p-3 text-left">
+              <span class="gem block h-12 w-9 shrink-0 bg-[#d7b36a]"></span>
+              <span class="min-w-0">
+                <span class="block text-sm font-bold uppercase tracking-[0.08em]">North Sigil</span>
+                <span class="block truncate text-xs text-[#cdbfce]">Region artifact, tempered rarity</span>
+              </span>
+              <span class="ml-auto shrink-0 font-display text-2xl text-[#d7b36a]">72</span>
+            </button>
+          </div>
+
+          <div class="panel-soft mt-auto p-4">
+            <p class="fine-label text-[#d7b36a]">Source oath</p>
+            <p class="mt-2 text-sm leading-6 text-[#cdbfce]">Every number on this page is invented for layout review and is not real esports data.</p>
+          </div>
+        </aside>
+
+        <section class="grid min-w-0 gap-4">
+          <article class="panel overflow-hidden">
+            <div class="grid min-h-[420px] gap-0">
+              <div class="slot grid gap-6 p-5 sm:p-6 lg:grid-cols-[240px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)]">
+                <div class="grid place-items-center rounded border border-[#b8894b]/45 bg-[#120c14]/70 p-5">
+                  <div class="relative grid aspect-[0.82] w-full max-w-[220px] place-items-center">
+                    <div class="absolute inset-0 rotate-6 rounded-[22%] border border-[#d7b36a]/30"></div>
+                    <div class="absolute inset-6 -rotate-6 rounded-[22%] border border-[#62d6c7]/20"></div>
+                    <div class="gem gem-cut grid aspect-[0.78] w-[72%] place-items-center shadow-forge">
+                      <div class="text-center">
+                        <p class="fine-label text-white/80">Power</p>
+                        <p class="font-display text-7xl leading-none text-white text-shadow-glow">83.6</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p class="fine-label text-[#d7b36a]">Selected artifact</p>
+                      <h1 class="mt-2 break-words font-display text-4xl uppercase leading-[0.92] text-[#f5dfaa] text-shadow-glow sm:text-5xl 2xl:text-6xl">Harbor Prism</h1>
+                      <p class="mt-3 max-w-2xl text-sm leading-6 text-[#cdbfce]">A team score object shaped around recent form, opponent steel, tournament weight, roster stability, and regional aura.</p>
+                    </div>
+                    <div class="rounded border border-[#b76dff]/50 bg-[#b76dff]/12 px-3 py-2 text-right">
+                      <p class="fine-label text-[#d9b8ff]">Rarity</p>
+                      <p class="text-sm font-bold uppercase tracking-[0.12em] text-white">Unstable</p>
+                    </div>
+                  </div>
+
+                  <div class="mt-6 grid gap-3 sm:grid-cols-3">
+                    <div class="panel-soft p-4">
+                      <p class="fine-label text-[#62d6c7]">Rank change</p>
+                      <p class="mt-2 font-display text-3xl text-[#62d6c7]">+4</p>
+                      <p class="text-xs text-[#cdbfce]">since last forge</p>
+                    </div>
+                    <div class="panel-soft p-4">
+                      <p class="fine-label text-[#d7b36a]">Confidence</p>
+                      <p class="mt-2 font-display text-3xl text-[#f5dfaa]">72%</p>
+                      <p class="text-xs text-[#cdbfce]">medium sample size</p>
+                    </div>
+                    <div class="panel-soft p-4">
+                      <p class="fine-label text-[#ff7b54]">Heat</p>
+                      <p class="mt-2 font-display text-3xl text-[#ffb39d]">Rising</p>
+                      <p class="text-xs text-[#cdbfce]">momentum chamber</p>
+                    </div>
+                  </div>
+
+                  <div class="mt-6 grid gap-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <p class="fine-label text-[#d7b36a]">Socket composition</p>
+                      <p class="fine-label text-[#cdbfce]">All values are mock</p>
+                    </div>
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <div class="panel-soft p-4">
+                        <div class="flex items-center justify-between gap-3">
+                          <p class="fine-label text-[#62d6c7]">Form ember</p>
+                          <p class="font-mono text-sm text-[#62d6c7]">+22.4</p>
+                        </div>
+                        <div class="mt-3 h-2 rounded bg-black/40"><div class="heat-fill h-2 rounded" style="width: 76%"></div></div>
+                      </div>
+                      <div class="panel-soft p-4">
+                        <div class="flex items-center justify-between gap-3">
+                          <p class="fine-label text-[#d7b36a]">Opponent steel</p>
+                          <p class="font-mono text-sm text-[#d7b36a]">+18.9</p>
+                        </div>
+                        <div class="mt-3 h-2 rounded bg-black/40"><div class="heat-fill h-2 rounded" style="width: 64%"></div></div>
+                      </div>
+                      <div class="panel-soft p-4">
+                        <div class="flex items-center justify-between gap-3">
+                          <p class="fine-label text-[#ff7b54]">Event flame</p>
+                          <p class="font-mono text-sm text-[#ffb39d]">+14.8</p>
+                        </div>
+                        <div class="mt-3 h-2 rounded bg-black/40"><div class="heat-fill h-2 rounded" style="width: 52%"></div></div>
+                      </div>
+                      <div class="panel-soft p-4">
+                        <div class="flex items-center justify-between gap-3">
+                          <p class="fine-label text-[#d9b8ff]">Roster seal</p>
+                          <p class="font-mono text-sm text-[#d9b8ff]">+9.6</p>
+                        </div>
+                        <div class="mt-3 h-2 rounded bg-black/40"><div class="heat-fill h-2 rounded" style="width: 38%"></div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <aside class="border-t border-[#b8894b]/35 bg-black/24 p-5">
+                <div class="grid gap-5 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div class="score-ring mx-auto grid aspect-square w-44 place-items-center rounded-full shadow-teal">
+                    <div class="grid aspect-square w-28 place-items-center rounded-full border border-[#b8894b]/40 bg-[#120c14] text-center">
+                      <p class="fine-label text-[#62d6c7]">Stability</p>
+                      <p class="font-display text-4xl text-[#f5dfaa]">68</p>
+                    </div>
+                  </div>
+                  <div class="grid gap-3 md:grid-cols-3 lg:grid-cols-3">
+                  <div class="panel-soft p-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <p class="text-sm font-semibold uppercase tracking-[0.12em]">Patch drift</p>
+                      <p class="font-mono text-xs text-[#ffb39d]">high</p>
+                    </div>
+                    <p class="mt-2 text-xs leading-5 text-[#cdbfce]">Model expects more volatility after a roster swap.</p>
+                  </div>
+                  <div class="panel-soft p-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <p class="text-sm font-semibold uppercase tracking-[0.12em]">Region aura</p>
+                      <p class="font-mono text-xs text-[#62d6c7]">+7.1</p>
+                    </div>
+                    <p class="mt-2 text-xs leading-5 text-[#cdbfce]">Aura is blended from fictional league strength samples.</p>
+                  </div>
+                  <div class="panel-soft p-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <p class="text-sm font-semibold uppercase tracking-[0.12em]">Sample seal</p>
+                      <p class="font-mono text-xs text-[#d7b36a]">12 matches</p>
+                    </div>
+                    <p class="mt-2 text-xs leading-5 text-[#cdbfce]">Small samples are visibly marked inside the artifact.</p>
+                  </div>
+                </div>
+                </div>
+              </aside>
+            </div>
+          </article>
+
+          <section class="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,.9fr)]">
+            <article class="panel p-5">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="fine-label text-[#d7b36a]">Season rune path</p>
+                  <h2 class="mt-2 font-display text-3xl uppercase leading-none">Power over the year</h2>
+                </div>
+                <p class="fine-label rounded border border-[#b8894b]/35 px-3 py-2 text-[#cdbfce]">Static state</p>
+              </div>
+
+              <div class="mt-8 overflow-hidden rounded border border-[#b8894b]/35 bg-black/24 p-4">
+                <div class="relative h-28">
+                  <div class="rune-path absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full"></div>
+                  <div class="absolute left-[6%] top-[26%] grid gap-2 text-center">
+                    <div class="gem mx-auto h-10 w-8 bg-[#62d6c7]"></div>
+                    <p class="fine-label text-[#cdbfce]">Jan</p>
+                    <p class="font-mono text-xs text-[#62d6c7]">64</p>
+                  </div>
+                  <div class="absolute left-[28%] top-[14%] grid gap-2 text-center">
+                    <div class="gem mx-auto h-14 w-11 bg-[#d7b36a] shadow-ember"></div>
+                    <p class="fine-label text-[#cdbfce]">Mar</p>
+                    <p class="font-mono text-xs text-[#d7b36a]">74</p>
+                  </div>
+                  <div class="absolute left-[52%] top-[4%] grid gap-2 text-center">
+                    <div class="gem gem-cut mx-auto h-16 w-12 shadow-forge"></div>
+                    <p class="fine-label text-[#cdbfce]">May</p>
+                    <p class="font-mono text-xs text-[#d9b8ff]">84</p>
+                  </div>
+                  <div class="absolute left-[78%] top-[21%] grid gap-2 text-center">
+                    <div class="gem mx-auto h-12 w-9 bg-[#ff7b54] shadow-ember"></div>
+                    <p class="fine-label text-[#cdbfce]">Jun</p>
+                    <p class="font-mono text-xs text-[#ffb39d]">80</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="panel-soft p-4">
+                  <p class="fine-label text-[#62d6c7]">Peak forge</p>
+                  <p class="mt-2 text-sm leading-5 text-[#cdbfce]">Best mock state after international-weighted wins.</p>
+                </div>
+                <div class="panel-soft p-4">
+                  <p class="fine-label text-[#d7b36a]">Cooling risk</p>
+                  <p class="mt-2 text-sm leading-5 text-[#cdbfce]">Domestic matches carry lower heat than global events.</p>
+                </div>
+                <div class="panel-soft p-4">
+                  <p class="fine-label text-[#ff7b54]">Next catalyst</p>
+                  <p class="mt-2 text-sm leading-5 text-[#cdbfce]">Upcoming mock playoff games can recast the artifact.</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel p-5">
+              <p class="fine-label text-[#d7b36a]">Duel comparator</p>
+              <h2 class="mt-2 font-display text-3xl uppercase leading-none">Artifact against artifact</h2>
+              <div class="mt-5 grid gap-3">
+                <div class="panel-soft grid grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 p-3">
+                  <span class="gem gem-cut block h-14 w-11"></span>
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-bold uppercase tracking-[0.12em]">Harbor Prism</p>
+                    <p class="text-xs text-[#cdbfce]">better event flame, weaker seal</p>
+                  </div>
+                  <p class="font-display text-3xl text-[#d7b36a]">83.6</p>
+                </div>
+                <div class="panel-soft grid grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 p-3">
+                  <span class="gem block h-14 w-11 bg-[#62d6c7] shadow-teal"></span>
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-bold uppercase tracking-[0.12em]">Axiom Crown</p>
+                    <p class="text-xs text-[#cdbfce]">steadier region aura, lower heat</p>
+                  </div>
+                  <p class="font-display text-3xl text-[#62d6c7]">81.2</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="panel-soft p-3">
+                    <p class="fine-label text-[#62d6c7]">Edge</p>
+                    <p class="mt-2 font-display text-3xl text-[#62d6c7]">+2.4</p>
+                  </div>
+                  <div class="panel-soft p-3">
+                    <p class="fine-label text-[#ff7b54]">Risk</p>
+                    <p class="mt-2 font-display text-3xl text-[#ffb39d]">+11%</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <aside class="grid gap-4">
+          <section class="panel p-4">
+            <div class="flex items-center justify-between gap-3">
+              <p class="fine-label text-[#d7b36a]">Inventory ranking</p>
+              <p class="fine-label text-[#cdbfce]">Top mock artifacts</p>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3">
+              <div class="inventory-cell rounded border border-[#d7b36a]/70 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="fine-label text-[#d7b36a]">01</span>
+                  <span class="fine-label text-[#62d6c7]">+4</span>
+                </div>
+                <div class="gem gem-cut mx-auto mt-3 h-16 w-12"></div>
+                <p class="mt-3 truncate text-sm font-bold uppercase tracking-[0.1em]">Harbor Prism</p>
+                <p class="font-display text-3xl text-[#f5dfaa]">83.6</p>
+              </div>
+              <div class="inventory-cell rounded border border-[#b8894b]/40 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="fine-label text-[#d7b36a]">02</span>
+                  <span class="fine-label text-[#62d6c7]">+1</span>
+                </div>
+                <div class="gem mx-auto mt-3 h-16 w-12 bg-[#62d6c7]"></div>
+                <p class="mt-3 truncate text-sm font-bold uppercase tracking-[0.1em]">Axiom Crown</p>
+                <p class="font-display text-3xl text-[#f5dfaa]">81.2</p>
+              </div>
+              <div class="inventory-cell rounded border border-[#b8894b]/40 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="fine-label text-[#d7b36a]">03</span>
+                  <span class="fine-label text-[#ffb39d]">-2</span>
+                </div>
+                <div class="gem mx-auto mt-3 h-16 w-12 bg-[#ff7b54]"></div>
+                <p class="mt-3 truncate text-sm font-bold uppercase tracking-[0.1em]">Ember Pact</p>
+                <p class="font-display text-3xl text-[#f5dfaa]">78.9</p>
+              </div>
+              <div class="inventory-cell rounded border border-[#b8894b]/40 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="fine-label text-[#d7b36a]">04</span>
+                  <span class="fine-label text-[#cdbfce]">0</span>
+                </div>
+                <div class="gem mx-auto mt-3 h-16 w-12 bg-[#d7b36a]"></div>
+                <p class="mt-3 truncate text-sm font-bold uppercase tracking-[0.1em]">North Sigil</p>
+                <p class="font-display text-3xl text-[#f5dfaa]">72.4</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel p-4">
+            <p class="fine-label text-[#d7b36a]">Region aura</p>
+            <div class="mt-4 grid gap-3">
+              <div class="panel-soft p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold uppercase tracking-[0.12em]">Pacific Circuit</p>
+                  <p class="font-mono text-sm text-[#62d6c7]">74.8</p>
+                </div>
+                <div class="mt-3 h-2 rounded bg-black/40"><div class="heat-fill h-2 rounded" style="width: 78%"></div></div>
+              </div>
+              <div class="panel-soft p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold uppercase tracking-[0.12em]">Atlantic Crown</p>
+                  <p class="font-mono text-sm text-[#d7b36a]">69.2</p>
+                </div>
+                <div class="mt-3 h-2 rounded bg-black/40"><div class="heat-fill h-2 rounded" style="width: 65%"></div></div>
+              </div>
+              <div class="panel-soft p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold uppercase tracking-[0.12em]">Northern Ward</p>
+                  <p class="font-mono text-sm text-[#ffb39d]">61.5</p>
+                </div>
+                <div class="mt-3 h-2 rounded bg-black/40"><div class="heat-fill h-2 rounded" style="width: 52%"></div></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel p-4">
+            <p class="fine-label text-[#d7b36a]">Fairness anvil</p>
+            <div class="mt-4 grid gap-3">
+              <div class="panel-soft p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold uppercase tracking-[0.12em]">League strength</p>
+                  <p class="font-mono text-sm text-[#62d6c7]">1.18x</p>
+                </div>
+                <p class="mt-2 text-xs leading-5 text-[#cdbfce]">Higher-competition leagues heat the base score more.</p>
+              </div>
+              <div class="panel-soft p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold uppercase tracking-[0.12em]">Event multiplier</p>
+                  <p class="font-mono text-sm text-[#d7b36a]">1.42x</p>
+                </div>
+                <p class="mt-2 text-xs leading-5 text-[#cdbfce]">Tournament games visibly outweigh routine split games.</p>
+              </div>
+              <div class="panel-soft p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold uppercase tracking-[0.12em]">Provenance seal</p>
+                  <p class="font-mono text-sm text-[#ffb39d]">mock</p>
+                </div>
+                <p class="mt-2 text-xs leading-5 text-[#cdbfce]">This prototype shows model language only, not official data.</p>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </section>
+
+      <footer class="panel flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-[#cdbfce]">
+        <p>Rune Forge prototype for design evaluation. Fictional teams, fictional regions, fictional scores.</p>
+        <p class="fine-label text-[#d7b36a]">No official esports claims</p>
+      </footer>
+    </div>
+  </main>
+</body>
+</html>

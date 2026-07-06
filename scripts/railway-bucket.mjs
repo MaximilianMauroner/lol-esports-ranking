@@ -58,23 +58,31 @@ export async function uploadRankingArtifacts({
   statePath,
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
+  uploadFullSnapshot = parseBoolean(process.env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT),
 } = {}) {
   if (!config.enabled) {
     return {
       enabled: false,
       missing: config.missing,
       uploaded: [],
+      skipped: [],
     }
   }
 
   const uploads = []
+  const skipped = []
   uploads.push(...await uploadDirectory(client, config, publicDataDir, 'data'))
   if (rawDir) {
     uploads.push(...await uploadRawSourceFiles(client, config, rawDir, manifestPath))
   }
 
-  if (fullSnapshotPath) {
+  if (fullSnapshotPath && uploadFullSnapshot) {
     uploads.push(await uploadFile(client, config, fullSnapshotPath, 'artifacts/latest-full.json'))
+  } else if (fullSnapshotPath) {
+    skipped.push({
+      key: bucketKey(config, 'artifacts/latest-full.json'),
+      reason: 'full-snapshot-upload-disabled',
+    })
   }
   if (manifestPath) {
     uploads.push(await uploadFile(client, config, manifestPath, 'raw/manifest.json'))
@@ -89,6 +97,7 @@ export async function uploadRankingArtifacts({
     prefix: config.prefix,
     artifactCount: uploads.length,
     artifacts: uploads.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
+    skipped,
   })
 
   return {
@@ -96,6 +105,7 @@ export async function uploadRankingArtifacts({
     bucket: config.bucket,
     prefix: config.prefix,
     uploaded: uploads,
+    skipped,
   }
 }
 

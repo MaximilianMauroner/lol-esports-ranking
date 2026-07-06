@@ -61,23 +61,27 @@ function TeamHistoryTooltip({
     <div className="chart__tooltip chart__tooltip--rich">
       <b>{formatChartTooltipTimestamp(payload)}</b>
       <div className="chart__tooltip-list">
-        {rows.map((row) => (
-          <div className="chart__tooltip-row" key={row.key}>
-            <div className="chart__tooltip-main">
-              <i style={{ background: row.color }} aria-hidden="true" />
-              <em>{row.label}</em>
-              <div className="chart__tooltip-value">
-                <strong>{yFormat(row.value)}</strong>
-                {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
-                  <b className="chart__tooltip-net">Net {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
-                ) : null}
+        {rows.map((row) => {
+          const closeNote = dailyCloseNote(row.detail)
+          return (
+            <div className="chart__tooltip-row" key={row.key}>
+              <div className="chart__tooltip-main">
+                <i style={{ background: row.color }} aria-hidden="true" />
+                <em>{row.label}</em>
+                <div className="chart__tooltip-value">
+                  <strong>{yFormat(row.value)}</strong>
+                  {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
+                    <b className="chart__tooltip-net">Close {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
+                  ) : null}
+                </div>
               </div>
+              {row.influence ? <small>{row.influence}</small> : null}
+              {closeNote ? <div className="chart__tooltip-note">{closeNote}</div> : null}
+              <TooltipMatchList detail={row.detail} />
+              <TooltipModelDetail detail={row.detail} />
             </div>
-            {row.influence ? <small>{row.influence}</small> : null}
-            <TooltipMatchList detail={row.detail} />
-            <TooltipModelDetail detail={row.detail} />
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -139,4 +143,44 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
       ) : null}
     </div>
   )
+}
+
+function dailyCloseNote(detail?: ChartPointDetail) {
+  const visibleDelta = finiteNumber(detail?.visibleDelta)
+  if (typeof visibleDelta !== 'number' || visibleDelta === 0) return undefined
+
+  const matchDelta = matchLedgerDelta(detail)
+  if (typeof matchDelta !== 'number' || matchDelta === 0 || Math.sign(matchDelta) === Math.sign(visibleDelta)) {
+    return undefined
+  }
+
+  const driver = strongestComponentDriver(detail)
+  const driverText = driver ? ` on ${driver.label} ${formatPreciseSignedDelta(driver.value)}` : ' after model recalibration'
+  return `Match ledger ${formatPreciseSignedDelta(matchDelta)}; daily close moved ${formatPreciseSignedDelta(visibleDelta)}${driverText}.`
+}
+
+function matchLedgerDelta(detail?: ChartPointDetail) {
+  const matches = (detail?.dayMatches ?? (detail && detail.kind !== 'standing-adjustment' ? [detail] : []))
+    .filter((entry) => entry.kind !== 'standing-adjustment')
+  if (matches.length === 0) return undefined
+
+  let total = 0
+  let seen = false
+  for (const match of matches) {
+    const delta = finiteNumber(match.delta)
+    if (typeof delta !== 'number') continue
+    total += delta
+    seen = true
+  }
+  return seen ? Math.round(total * 10) / 10 : undefined
+}
+
+function strongestComponentDriver(detail?: ChartPointDetail) {
+  return detail?.model?.componentAttribution
+    ?.toSorted((left, right) => Math.abs(right.value) - Math.abs(left.value))
+    .at(0)
+}
+
+function finiteNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }

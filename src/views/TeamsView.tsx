@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
-import { Activity, BarChart3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Crosshair, Swords, Trophy, Users, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, Users, X } from 'lucide-react'
 import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type { PublicRecentMatch } from '../lib/publicArtifacts/schema'
 import type { RegionStrength } from '../lib/regionStrength'
-import { rankingTargetExplanations } from '../lib/rankingExplanations'
 import { extent, formatDate, formatDateRange, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
-import { CountBadge, DataState, Field, FormDots, HeatChip, PickButton, RegionBadge, SearchInput, Segmented, SortHeader } from '../components/ui'
+import { CountBadge, DataState, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
-import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Input } from '../components/ui/input'
+import { Select } from '../components/ui/select'
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
+import { RankingShowcase, type RankingShowcaseProps } from '../components/RankingShowcase'
 import { type ChartSeries } from '../components/LineChart'
 import { TeamHistoryLineChart } from '../components/TeamHistoryLineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
@@ -52,7 +54,8 @@ export function TeamsView({
   onSearchChange,
   pickedTeams,
   historyState,
-  updatedAt,
+  signals,
+  regionsHref,
   dataSummary,
   onToggle,
 }: {
@@ -64,7 +67,8 @@ export function TeamsView({
   onSearchChange: (value: string) => void
   pickedTeams: RankingSummaryStanding[]
   historyState: TeamHistoryArtifactState
-  updatedAt?: string
+  signals?: RankingShowcaseProps
+  regionsHref?: string
   dataSummary?: TeamDataSummary
   onToggle: (team: RankingSummaryStanding) => void
 }) {
@@ -126,6 +130,9 @@ export function TeamsView({
   const currentPage = Math.min(requestedPage, totalPages)
   const pageStart = (currentPage - 1) * pageSize
   const visible = sorted.slice(pageStart, pageStart + pageSize)
+  const pageEnd = sorted.length === 0 ? 0 : pageStart + visible.length
+  const resultSummary = `${formatNumber(sorted.length === 0 ? 0 : pageStart + 1)}-${formatNumber(pageEnd)} of ${formatNumber(filtered.length)}`
+  const hasActiveFilters = search.trim() !== '' || region !== 'All' || eligibilityFilter !== 'ranked'
   const [ratingMin, ratingMax] = useMemo(() => extent(filtered.map((team) => team.rating)), [filtered])
 
   const detailTeam = useMemo(
@@ -202,18 +209,30 @@ export function TeamsView({
     setPageSize(value)
   }
 
+  function resetFilters() {
+    onSearchChange('')
+    setRegion('All')
+    setEligibilityFilter('ranked')
+    setPageState({ scopeKey: pageScopeKey, page: 1 })
+  }
+
   return (
     <div className="view">
       <div className="gpr-layout">
         <div className="gpr-main">
           <Card className="panel">
             <div className="gpr-toolbar">
-              <div className="gpr-toolbar__title">
-                <h2>Current</h2>
-                {updatedAt ? <p className="gpr-updated">Updated {updatedAt}</p> : null}
-              </div>
-              <div className="toolbar">
-                <SearchInput value={search} onChange={onSearchChange} placeholder="Search teams" />
+              <div className="gpr-filterbar" aria-label="Team ranking filters">
+                <label className="gpr-filterbar__search">
+                  <Search size={16} aria-hidden="true" />
+                  <span className="sr-only">Search teams</span>
+                  <Input
+                    type="search"
+                    value={search}
+                    placeholder="Filter teams..."
+                    onChange={(event) => onSearchChange(event.target.value)}
+                  />
+                </label>
                 <Segmented
                   value={eligibilityFilter}
                   options={[
@@ -222,17 +241,25 @@ export function TeamsView({
                   ]}
                   onChange={setEligibilityFilter}
                   ariaLabel="Team eligibility filter"
+                  className="gpr-filterbar__segmented"
                 />
-                <Field
-                  label="Region"
-                  value={region}
-                  options={regionOptions.map((option) => ({ value: option, label: formatCompetitionRegionLabel(option) }))}
-                  onChange={setRegion}
-                  className="grid-flow-col items-center gap-2"
-                />
-                <CountBadge>
-                  {sorted.length === 0 ? 0 : pageStart + 1}-{pageStart + visible.length} of {filtered.length}
-                </CountBadge>
+                <label className="gpr-filterbar__select">
+                  <span>Region</span>
+                  <Select value={region} onChange={(event) => setRegion(event.target.value)}>
+                    {regionOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {formatCompetitionRegionLabel(option)}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                {hasActiveFilters ? (
+                  <Button type="button" variant="ghost" size="sm" className="gpr-filterbar__reset" onClick={resetFilters}>
+                    Reset
+                    <X size={14} aria-hidden="true" />
+                  </Button>
+                ) : null}
+                <span className="gpr-filterbar__count">{resultSummary}</span>
               </div>
               <p className="eligibility-note">{eligibilityNote}</p>
             </div>
@@ -274,7 +301,7 @@ export function TeamsView({
                               <span className={`gpr-rank${typeof team.rank === 'number' && team.rank <= 3 ? ' podium' : ''}`}>
                                 {team.rank ?? '—'}
                               </span>
-                              <Movement value={team.movement} />
+                              <Movement value={team.movement} rank={team.rank} previousRank={team.previousRank} />
                             </span>
                           </TableCell>
                           <TableCell>
@@ -313,27 +340,29 @@ export function TeamsView({
             {sorted.length > 0 ? (
               <div className="pager" aria-label="Team table pagination">
                 <div className="pager__size">
-                  <Field
-                    label="Rows"
-                    value={String(pageSize)}
-                    options={TEAM_PAGE_SIZES.map((option) => String(option))}
-                    onChange={(value) => updatePageSize(Number(value))}
-                  />
+                  <span>Rows per page</span>
+                  <Select value={String(pageSize)} onChange={(event) => updatePageSize(Number(event.target.value))}>
+                    {TEAM_PAGE_SIZES.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </Select>
                 </div>
-                <CountBadge>
+                <div className="pager__page">
                   Page {currentPage} of {totalPages}
-                </CountBadge>
+                </div>
                 <div className="pager__buttons">
-                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First page">
+                  <Button type="button" variant="outline" size="icon" className="pager__edge" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First page">
                     <ChevronsLeft size={16} aria-hidden="true" />
                   </Button>
-                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
+                  <Button type="button" variant="outline" size="icon" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
                     <ChevronLeft size={16} aria-hidden="true" />
                   </Button>
-                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
+                  <Button type="button" variant="outline" size="icon" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
                     <ChevronRight size={16} aria-hidden="true" />
                   </Button>
-                  <Button type="button" variant="secondary" size="icon" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">
+                  <Button type="button" variant="outline" size="icon" className="pager__edge" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">
                     <ChevronsRight size={16} aria-hidden="true" />
                   </Button>
                 </div>
@@ -343,9 +372,9 @@ export function TeamsView({
         </div>
 
         <aside className="gpr-sidebar">
-          <RegionalStrengthPanel regions={regions} />
-          <MethodologyPanel />
-          <DataModelPanel model={model} data={panelData} />
+          <RegionalStrengthTeaser regions={regions} href={regionsHref} />
+          {signals ? <RankingShowcase {...signals} variant="rail" /> : null}
+          <DataSourcesDisclosure model={model} data={panelData} />
         </aside>
       </div>
 
@@ -418,7 +447,7 @@ export function TeamsView({
       </Card>
 
       {detailTeam ? (
-        <TeamDetailModal
+        <TeamDetailDrawer
           team={detailTeam}
           series={history?.[teamKey(detailTeam)]}
           players={detailPlayers}
@@ -429,10 +458,50 @@ export function TeamsView({
   )
 }
 
-function Movement({ value }: { value?: number }) {
-  if (!value || !Number.isFinite(value)) return <span className="gpr-move flat" aria-label="No change">–</span>
-  if (value > 0) return <span className="gpr-move up" aria-label={`Up ${value}`}>▲{value}</span>
-  return <span className="gpr-move down" aria-label={`Down ${Math.abs(value)}`}>▼{Math.abs(value)}</span>
+function Movement({ value, rank, previousRank }: { value?: number; rank?: number; previousRank?: number }) {
+  const label = rankMovementLabel({ value, rank, previousRank })
+  if (!value || !Number.isFinite(value)) return <span className="gpr-move flat" aria-label={label} title={label}>–</span>
+  if (value > 0) return <span className="gpr-move up" aria-label={label} title={label}>▲{value}</span>
+  return <span className="gpr-move down" aria-label={label} title={label}>▼{Math.abs(value)}</span>
+}
+
+function formatRankMovement(team: Pick<RankingSummaryStanding, 'movement' | 'previousRank' | 'rank'>) {
+  if (!team.movement || !Number.isFinite(team.movement)) return 'Flat'
+  const amount = Math.abs(Math.round(team.movement))
+  if (amount === 0) return 'Flat'
+  const direction = team.movement > 0 ? '+' : '-'
+  const unit = amount === 1 ? 'rank' : 'ranks'
+  if (Number.isFinite(team.previousRank) && Number.isFinite(team.rank)) {
+    return `${direction}${formatNumber(amount)} ${unit} (#${team.previousRank} to #${team.rank})`
+  }
+  return `${direction}${formatNumber(amount)} ${unit}`
+}
+
+function formatRatingMovement(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'Unknown'
+  const rounded = Math.round(value)
+  if (rounded === 0) return '0'
+  return rounded > 0 ? `+${formatNumber(Math.abs(rounded))}` : `-${formatNumber(Math.abs(rounded))}`
+}
+
+function movementTone(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.round(value) === 0) return 'flat'
+  return value > 0 ? 'up' : 'down'
+}
+
+function rankMovementLabel({
+  value,
+  rank,
+  previousRank,
+}: {
+  value?: number
+  rank?: number
+  previousRank?: number
+}) {
+  if (!value || !Number.isFinite(value)) return 'No rank change around latest team update'
+  const direction = value > 0 ? 'up' : 'down'
+  const range = Number.isFinite(previousRank) && Number.isFinite(rank) ? `, from #${previousRank} to #${rank}` : ''
+  return `Rank ${direction} ${Math.abs(value)} around latest team update${range}`
 }
 
 function teamSubtitle(team: RankingSummaryStanding) {
@@ -463,54 +532,56 @@ function uniqueSorted(values: number[]) {
   return [...new Set(values.filter((value) => Number.isFinite(value) && value >= 1).map(Math.round))].sort((a, b) => a - b)
 }
 
-function RegionalStrengthPanel({ regions }: { regions: RegionStrength[] }) {
-  const ranked = useMemo(() => [...regions].sort((a, b) => b.score - a.score).slice(0, 8), [regions])
+function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; href?: string }) {
+  const ranked = useMemo(() => [...regions].sort((a, b) => b.score - a.score), [regions])
   if (ranked.length === 0) return null
   return (
-    <section className="method-panel" aria-label="Region power scores">
-      <div className="method-list">
-        <h3>Region power scores</h3>
-        <div className="region-strength-grid">
-          {ranked.map((region) => (
-            <div className="region-strength-cell" key={region.region}>
-              <RegionBadge region={region.region} size="sm" />
-              <span className="region-strength-name">{region.region}</span>
-              <strong>{formatRating(region.score)}</strong>
-            </div>
-          ))}
+    <section className="method-panel region-teaser" aria-label="Region power scores">
+      <div className="rail-card-head">
+        <div>
+          <p className="eyebrow">Regional strength</p>
+          <h3>All regions</h3>
         </div>
+        {href ? <a href={href}>Details</a> : null}
       </div>
-      <p className="method-foot">Driven by match volume and international results.</p>
+      <div className="region-strength-grid">
+        {ranked.map((region) => (
+          <div className="region-strength-cell" key={region.region}>
+            <RegionBadge region={region.region} size="sm" />
+            <span className="region-strength-name">{region.region}</span>
+            <strong>{formatRating(region.score)}</strong>
+          </div>
+        ))}
+      </div>
+      <p className="method-foot">Weighted by match volume and international results.</p>
     </section>
   )
 }
 
-function DataModelPanel({ model, data }: { model?: Pick<ModelInfo, 'version' | 'configHash'>; data?: TeamDataSummary }) {
+function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'version' | 'configHash'>; data?: TeamDataSummary }) {
   const providers = [...(data?.sourceBreakdown ?? [])].sort((a, b) => b.matchCount - a.matchCount).slice(0, 3)
   const activeSources = (data?.sources ?? []).filter((source) => source.status === 'active')
   const sourceFreshness = activeSources.filter((source) => source.retrievedAt || source.coverageEnd || source.rowCount).slice(0, 4)
   const warnings = uniqueSourceWarnings(activeSources.flatMap((source) => source.warnings ?? [])).slice(0, 3)
   const notes = (data?.notes ?? []).filter(Boolean).slice(0, 2)
-  const filterFoot = data?.regionFilter && data.regionFilter !== 'All'
-    ? `${formatCompetitionRegionLabel(data.regionFilter)} table filter shows ${formatNumber(data.tableTeamCount)} of ${formatNumber(data.scopeTeamCount)} teams. Match, coverage, and provider counts remain ${data.scopeLabel ?? 'the current snapshot'} totals.`
-    : data?.scopeLabel
-      ? `Snapshot scope: ${data.scopeLabel}.`
-      : undefined
 
   return (
-    <section className="method-panel data-model-panel" aria-label="Data and model provenance">
-      <h2>Data &amp; model</h2>
+    <details className="rail-disclosure">
+      <summary>
+        <span>Data &amp; sources</span>
+        <small>Coverage, config, providers</small>
+      </summary>
       <div className="data-model-grid">
         <span>
           <small>Model</small>
           <b>{model?.version ?? 'unknown'}</b>
         </span>
         <span>
-          <small>Snapshot matches</small>
+          <small>Matches</small>
           <b>{formatNumber(data?.matchCount)}</b>
         </span>
         <span>
-          <small>Snapshot coverage</small>
+          <small>Coverage</small>
           <b>{formatDateRange(data?.coverageStart, data?.coverageEnd)}</b>
         </span>
         <span>
@@ -522,8 +593,8 @@ function DataModelPanel({ model, data }: { model?: Pick<ModelInfo, 'version' | '
           <b>{model?.configHash ?? 'unknown'}</b>
         </span>
         <span>
-          <small>Scope</small>
-          <b>{data?.scopeLabel ?? 'Current snapshot'}</b>
+          <small>Hidden review rows</small>
+          <b>{formatNumber(data?.hiddenFromRankedCount)}</b>
         </span>
       </div>
       {providers.length > 0 ? (
@@ -555,20 +626,15 @@ function DataModelPanel({ model, data }: { model?: Pick<ModelInfo, 'version' | '
               {warning.message}
             </p>
           ))}
-          {filterFoot ? <p className="method-foot">{filterFoot}</p> : null}
         </>
       ) : notes.length > 0 ? (
         <>
           {notes.map((note) => <p className="method-foot" key={note}>{note}</p>)}
-          {filterFoot ? <p className="method-foot">{filterFoot}</p> : null}
         </>
       ) : (
-        <>
-          <p className="method-foot">Latest match: {formatDate(data?.latestMatchDate)}</p>
-          {filterFoot ? <p className="method-foot">{filterFoot}</p> : null}
-        </>
+        <p className="method-foot">Latest match: {formatDate(data?.latestMatchDate)}</p>
       )}
-    </section>
+    </details>
   )
 }
 
@@ -597,7 +663,7 @@ function uniqueSourceWarnings(warnings: NonNullable<DataSourceInfo['warnings']>)
   })
 }
 
-function TeamDetailModal({
+function TeamDetailDrawer({
   team,
   series,
   players,
@@ -620,38 +686,50 @@ function TeamDetailModal({
 
   const totalGames = team.wins + team.losses
   const opponentFactor = Math.round((team.factors?.opponent ?? 0) * 100)
-  const eventRows = (team.recentEvents ?? []).slice(0, 3)
   const trendSummary = useMemo(() => summarizeTeamTrend(series), [series])
+  const uncertainty = team.ratingComponents?.uncertainty
 
   return (
-    <Dialog open onOpenChange={(nextOpen) => {
+    <Sheet open onOpenChange={(nextOpen) => {
       if (!nextOpen) onClose()
     }}>
-      <DialogContent
+      <SheetContent
+        side="right"
         showCloseButton={false}
+        overlayClassName="team-detail-sheet__overlay"
         aria-label={`${team.team} details`}
-        className="flex max-h-[90vh] w-[min(1040px,96vw)] max-w-none flex-col gap-0 overflow-hidden rounded-[var(--r-lg)] border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:max-w-none"
+        className="team-detail-sheet w-full max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(820px,94vw)] sm:max-w-none"
+        style={{ width: 'min(820px, 100vw)', maxWidth: 'none' }}
       >
-        <DialogHeader className="modal__head flex-row items-center text-left">
+        <SheetHeader className="team-detail-sheet__head flex-row items-center text-left">
           <div className="team-dossier__identity">
             <span className="team-mark">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
-            <DialogTitle>{team.team}</DialogTitle>
+            <div>
+              <p>Team inspector</p>
+              <div className="team-detail-title-row">
+                <SheetTitle>{team.team}</SheetTitle>
+                <span className="team-dossier__league">
+                  <LeagueSigil league={team.league} />
+                  <b>{team.league}</b>
+                </span>
+              </div>
+            </div>
           </div>
-          <DialogClose asChild>
+          <SheetClose asChild>
             <Button type="button" variant="ghost" aria-label="Close">
               <X size={16} aria-hidden="true" />
               Close
             </Button>
-          </DialogClose>
-        </DialogHeader>
+          </SheetClose>
+        </SheetHeader>
 
-        <div className="modal__body min-h-0 flex-1">
+        <div className="team-detail-sheet__body min-h-0 flex-1">
           <section className="team-detail-hero" aria-label={`${team.team} summary`}>
             <div className="team-detail-hero__score">
               <span className="team-detail-hero__rank">#{team.rank}</span>
               <div>
                 <strong>{formatRating(team.rating)}</strong>
-                <small>Power score</small>
+                <small>Power score{typeof uncertainty === 'number' ? ` ±${formatRating(uncertainty)}` : ''}</small>
               </div>
             </div>
             <div className="team-detail-hero__facts">
@@ -661,60 +739,35 @@ function TeamDetailModal({
               </span>
               <span>
                 <small>Latest delta</small>
-                <b>{formatSigned(team.delta)}</b>
+                <b className={movementTone(team.delta)}>{formatRatingMovement(team.delta)}</b>
+                <TeamRatingSparkline series={series} summary={trendSummary} teamName={team.team} />
+              </span>
+              <span>
+                <small>Rank movement</small>
+                <b className={movementTone(team.movement)}>{formatRankMovement(team)}</b>
               </span>
               <span>
                 <small>Opponent factor</small>
                 <b>{opponentFactor}%</b>
+                <em>Schedule signal</em>
               </span>
             </div>
-            <span className="team-dossier__league">
-              <LeagueSigil league={team.league} />
-              <b>{team.league}</b>
-            </span>
           </section>
 
-          <div className="team-detail-grid">
-            <div className="gpr-card">
-              <h3>Match Results</h3>
-              <div className="stat-list">
-                <StatRow
-                  icon={<Swords size={25} />}
-                  label="Match Win / Loss"
-                  value={`${formatRecord(team.wins, team.losses)} (${formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})`}
-                />
-                <StatRow
-                  icon={<Activity size={25} />}
-                  label="Rating Movement"
-                  detail="Latest model delta"
-                  value={formatSigned(team.delta)}
-                />
-                <StatRow
-                  icon={<Crosshair size={25} />}
-                  label="Opponent Factor"
-                  detail="Normalized model signal"
-                  value={`${opponentFactor}%`}
-                />
+          <div className="team-detail-stack">
+            <div className="gpr-card match-evidence-card">
+              <div className="match-evidence-card__head">
+                <div>
+                  <h3>Match Results</h3>
+                  <p>Last five scored matches. Ratings show post-match team power.</p>
+                </div>
+                <FormDots form={team.form} />
               </div>
 
-              <RecentMatches matches={team.recentMatches} form={team.form} />
-
-              <div className="event-list">
-                <h4>International &amp; Regional Events</h4>
-                {eventRows.length > 0 ? eventRows.map((event) => (
-                  <div className="event-row" key={event}>
-                    <LeagueSigil league={leagueCodeFromEventLabel(event)} fallbackLabel={event.slice(0, 1)} small />
-                    <b>{event}</b>
-                    <em>Recent</em>
-                  </div>
-                )) : (
-                  <p className="muted">No recent event labels in this snapshot.</p>
-                )}
-              </div>
-
-              <ComponentBreakdown team={team} />
+              <RecentMatches matches={team.recentMatches} />
             </div>
 
+            <ComponentBreakdown team={team} />
             <PlayerRankingCard team={team} players={players} />
           </div>
 
@@ -729,8 +782,8 @@ function TeamDetailModal({
             {trendSummary ? (
               <div className="trend-summary" aria-label={`${team.team} trend summary`}>
                 <TrendSummaryCell label="Opening" value={formatRating(trendSummary.opening)} detail={formatDate(trendSummary.startDate)} />
-                <TrendSummaryCell label="Current" value={formatRating(trendSummary.current)} detail={formatDate(trendSummary.endDate)} />
-                <TrendSummaryCell label="Net" value={formatSigned(trendSummary.netChange)} detail={`${trendSummary.pointCount} points`} />
+                <TrendSummaryCell label="Updates" value={formatNumber(trendSummary.pointCount)} detail={`Through ${formatDate(trendSummary.endDate)}`} />
+                <TrendSummaryCell label="Net" value={formatRatingMovement(trendSummary.netChange)} detail="from opening" />
                 <TrendSummaryCell
                   label="Peak"
                   value={formatRating(trendSummary.peak.value)}
@@ -747,25 +800,91 @@ function TeamDetailModal({
             )}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }
 
-function RecentMatches({ matches, form }: { matches?: PublicRecentMatch[]; form?: string[] }) {
+const SPARKLINE_WIDTH = 150
+const SPARKLINE_HEIGHT = 42
+
+function TeamRatingSparkline({
+  series,
+  summary,
+  teamName,
+}: {
+  series?: TeamHistorySeries
+  summary: TeamTrendSummary | null
+  teamName: string
+}) {
+  const sparkline = useMemo(() => {
+    if (!series || series.points.length < 2) return null
+    const dailyValues = dailyChartPointsFromHistoryPoints(series.points)
+      .slice(-24)
+      .map((point) => point.y)
+      .filter(Number.isFinite)
+    return sparklineShape(dailyValues, SPARKLINE_WIDTH, SPARKLINE_HEIGHT)
+  }, [series])
+
+  if (!sparkline || !summary) {
+    return null
+  }
+
+  const movement = formatRatingMovement(summary.netChange)
+  return (
+    <div
+      className="team-sparkline"
+      aria-label={`${teamName} rating trajectory net ${movement} from ${formatDate(summary.startDate)} to ${formatDate(summary.endDate)}`}
+    >
+      <svg viewBox={`0 0 ${SPARKLINE_WIDTH} ${SPARKLINE_HEIGHT}`} aria-hidden="true" focusable="false">
+        <polyline points={sparkline.points} />
+        <circle cx={sparkline.last.x} cy={sparkline.last.y} r="2.8" />
+      </svg>
+    </div>
+  )
+}
+
+type SparklineShape = {
+  points: string
+  last: { x: number; y: number }
+}
+
+function sparklineShape(values: number[], width: number, height: number): SparklineShape | null {
+  const finiteValues = values.filter(Number.isFinite)
+  if (finiteValues.length < 2) return null
+  const [min, max] = extent(finiteValues)
+  const range = max - min
+  const inset = 4
+  const drawableWidth = width - inset * 2
+  const drawableHeight = height - inset * 2
+  const coords = finiteValues.map((value, index) => {
+    const x = inset + (index / (finiteValues.length - 1)) * drawableWidth
+    const y = range === 0
+      ? height / 2
+      : inset + (1 - (value - min) / range) * drawableHeight
+    return { x: roundSparklineCoord(x), y: roundSparklineCoord(y) }
+  })
+  const last = coords.at(-1)!
+  return {
+    points: coords.map((point) => `${point.x},${point.y}`).join(' '),
+    last,
+  }
+}
+
+function roundSparklineCoord(value: number) {
+  return Math.round(value * 10) / 10
+}
+
+function RecentMatches({ matches }: { matches?: PublicRecentMatch[] }) {
   const recentMatches = (matches ?? []).slice(-5).toReversed()
 
   return (
     <section className="recent-matches" aria-label="Recent form matches">
-      <div className="recent-matches__head">
-        <span><BarChart3 size={25} /></span>
-        <div>
-          <b>Recent Form</b>
-          <small>Last 5 scored matches in this scope</small>
-        </div>
-        <FormDots form={form} />
+      <div className="recent-match-list__head" aria-hidden="true">
+        <span>Result</span>
+        <span>Opponent</span>
+        <span>Rating after</span>
       </div>
-
       {recentMatches.length > 0 ? (
         <div className="recent-match-list">
           {recentMatches.map((match, index) => (
@@ -777,7 +896,7 @@ function RecentMatches({ matches, form }: { matches?: PublicRecentMatch[]; form?
               </div>
               <div className="recent-match-row__rating">
                 <strong>{formatRating(match.rating)}</strong>
-                <small>{formatSigned(match.delta)}</small>
+                <small className={movementTone(match.delta)}>{formatRatingMovement(match.delta)}</small>
               </div>
             </div>
           ))}
@@ -816,10 +935,6 @@ function LeagueSigil({
       <RegionBadge region={badgeRegion} size="sm" />
     </span>
   )
-}
-
-function leagueCodeFromEventLabel(label: string) {
-  return label.trim().split(/\s+/)[0] ?? ''
 }
 
 type TeamTrendSummary = {
@@ -870,6 +985,25 @@ function TrendSummaryCell({ label, value, detail }: { label: string; value: stri
 function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; players: CompactPlayer[] }) {
   const [ratingMin, ratingMax] = useMemo(() => extent(players.map((player) => player.rating)), [players])
 
+  if (players.length === 0) {
+    return (
+      <aside className="gpr-card player-rank-card player-rank-card--empty" aria-label={`${team.team} player rankings`}>
+        <div className="player-rank-card__head">
+          <div>
+            <h3>
+              Player Rankings
+              <CountBadge>Source gap</CountBadge>
+            </h3>
+            <p>No player-level sources for {team.code ?? team.team} in this scope.</p>
+          </div>
+        </div>
+        <p className="muted player-rank-card__empty">
+          Team rating is backed by scored matches, opponent context, and model history.
+        </p>
+      </aside>
+    )
+  }
+
   return (
     <div className="gpr-card player-rank-card">
       <div className="player-rank-card__head">
@@ -877,46 +1011,42 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
           <h3>Player Rankings</h3>
           <p>Individual rows for {team.code ?? team.team} in the current scope.</p>
         </div>
-        {players.length > 0 ? <CountBadge>{players.length} players</CountBadge> : null}
+        <CountBadge>{players.length} players</CountBadge>
       </div>
 
-      {players.length > 0 ? (
-        <div className="player-rank-table">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Rank</TableHead>
-                <TableHead>Player</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="right">Rating</TableHead>
-                <TableHead className="right" title="Team games">Games</TableHead>
+      <div className="player-rank-table">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Rank</TableHead>
+              <TableHead>Player</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead className="right">Rating</TableHead>
+              <TableHead className="right" title="Team games">Games</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {players.map((player) => (
+              <TableRow key={player.id}>
+                <TableCell className={`rank-cell${player.rank <= 3 ? ' podium' : ''}`}>#{player.rank}</TableCell>
+                <TableCell>
+                  <div className="ent">
+                    <b>{player.name}</b>
+                    <small>impact ×{formatDecimal(player.impactMultiplier)}</small>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span className="role-pill">{player.role}</span>
+                </TableCell>
+                <TableCell className="right">
+                  <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />
+                </TableCell>
+                <TableCell className="right num">{formatTeamGames(player)}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {players.map((player) => (
-                <TableRow key={player.id}>
-                  <TableCell className={`rank-cell${player.rank <= 3 ? ' podium' : ''}`}>#{player.rank}</TableCell>
-                  <TableCell>
-                    <div className="ent">
-                      <b>{player.name}</b>
-                      <small>impact ×{formatDecimal(player.impactMultiplier)}</small>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="role-pill">{player.role}</span>
-                  </TableCell>
-                  <TableCell className="right">
-                    <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />
-                  </TableCell>
-                  <TableCell className="right num">{formatTeamGames(player)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : (
-        <p className="muted player-rank-card__empty">No sourced player rankings for this team in the current scope.</p>
-      )}
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
@@ -924,98 +1054,40 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
 function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
   const components = team.ratingComponents
   if (!components) return null
-  const componentRows = [
-    { label: 'League Anchor', value: formatRating(components.leagueAnchor) },
-    { label: 'Stable Offset', value: formatSigned(components.teamStableOffset) },
-    { label: 'Roster Prior', value: formatSigned(components.rosterPriorOffset) },
-    { label: 'Momentum', value: formatSigned(components.momentum) },
-    { label: 'Context', value: formatSigned(components.contextAdjustment) },
-    { label: 'Uncertainty', value: `±${formatRating(components.uncertainty)}` },
+  const contributionRows = [
+    { label: 'Stable offset', value: components.teamStableOffset },
+    { label: 'Roster prior', value: components.rosterPriorOffset },
+    { label: 'Momentum', value: components.momentum },
+    { label: 'Context', value: components.contextAdjustment },
   ]
-  const update = team.ratingUpdate
-  const updateRows = update ? [
-    { label: 'Stable', value: formatSigned(update.teamStableDelta) },
-    { label: 'League Game', value: formatSigned(update.leagueGameDelta) },
-    { label: 'Placement', value: formatSigned(update.leaguePlacementDelta) },
-    { label: 'Momentum', value: formatSigned(update.momentumDelta) },
-  ] : []
 
   return (
-    <div className="component-breakdown" aria-label={`${team.team} rating components`}>
+    <div className="gpr-card component-breakdown" aria-label={`${team.team} rating components`}>
       <div className="component-breakdown__head">
-        <h4>Power Components</h4>
-        <span>{formatRating(team.rating)}</span>
-      </div>
-      <div className="component-grid">
-        {componentRows.map((row) => (
-          <span key={row.label}>
-            <small>{row.label}</small>
-            <b>{row.value}</b>
-          </span>
-        ))}
-      </div>
-      {updateRows.length > 0 ? (
-        <div className="update-ledger">
-          {updateRows.map((row) => (
-            <span key={row.label}>
-              <small>{row.label}</small>
-              <b>{row.value}</b>
-            </span>
-          ))}
+        <div>
+          <h3>Power Components</h3>
+          <p>Score ledger from league anchor to current rating.</p>
         </div>
-      ) : null}
-    </div>
-  )
-}
-
-function StatRow({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail?: string }) {
-  return (
-    <div className="stat-row">
-      <span>{icon}</span>
-      <div>
-        <b>{label}</b>
-        {detail ? <small>{detail}</small> : null}
+        <span>{formatRating(team.rating)} ±{formatRating(components.uncertainty)}</span>
       </div>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
-function MethodologyPanel() {
-  const rows = rankingTargetExplanations.slice(0, 4)
-  return (
-    <section className="method-panel" aria-label="Global power ranking methodology">
-      <h2>What are Global Power Rankings?</h2>
-      <p>GPR is a model view of team strength. It combines transparent result, opponent, roster, and validation signals.</p>
-      <div className="method-list">
-        <h3>Team Performance</h3>
-        {rows.map((row, index) => (
-          <div className="method-row" key={row.target}>
-            <span>{methodIcon(index)}</span>
-            <div>
-              <b>{row.label}</b>
-              <small>{row.description}</small>
-            </div>
+      <div className="component-ledger">
+        <div className="component-ledger__row is-anchor">
+          <span>League anchor</span>
+          <b>{formatRating(components.leagueAnchor)}</b>
+        </div>
+        {contributionRows.map((row) => (
+          <div className="component-ledger__row" key={row.label}>
+            <span>{row.label}</span>
+            <b className={movementTone(row.value)}>{formatRatingMovement(row.value)}</b>
           </div>
         ))}
+        <div className="component-ledger__row is-total">
+          <span>Total power score</span>
+          <b>{formatRating(team.rating)}</b>
+        </div>
       </div>
-    </section>
+    </div>
   )
-}
-
-function methodIcon(index: number) {
-  switch (index) {
-    case 0:
-      return <Trophy size={22} />
-    case 1:
-      return <BarChart3 size={22} />
-    case 2:
-      return <Activity size={22} />
-    case 3:
-      return <Crosshair size={22} />
-    default:
-      return <Activity size={22} />
-  }
 }
 
 function sortStandings(rows: RankingSummaryStanding[], key: SortKey) {

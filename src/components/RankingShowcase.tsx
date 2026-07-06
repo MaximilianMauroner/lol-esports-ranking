@@ -1,4 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, Flame, Gauge, Trophy } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { Badge } from './ui/badge'
 import { cn } from '../lib/utils'
 import { formatPercentValue, formatRating, formatSigned } from '../lib/display'
@@ -72,6 +73,7 @@ export type RankingShowcaseProps = {
   biggestFaller?: RankingMovementSpotlight
   upset?: RankingUpsetHeadline
   confidenceBand?: RankingConfidenceBand
+  variant?: 'panel' | 'rail'
   className?: string
 }
 
@@ -87,29 +89,30 @@ export function RankingShowcase({
   biggestFaller,
   upset,
   confidenceBand,
+  variant = 'panel',
   className,
 }: RankingShowcaseProps) {
   const podiumTeams = podium.slice(0, 3)
   const tiers = normalizeTiers(tierStrips ?? tierCounts)
 
   return (
-    <section className={cn('ranking-showcase', className)} aria-label={title}>
+    <section className={cn('ranking-showcase', variant === 'rail' && 'ranking-showcase--rail', className)} aria-label={title}>
       <div className="ranking-showcase__header">
         <div>
-          <p className="receipt-eyebrow">Ranking showcase</p>
+          <p className="receipt-eyebrow">Snapshot readout</p>
           <h2>{title}</h2>
           <p>{subtitle}</p>
         </div>
-        <Badge variant="secondary">{podiumTeams.length} podium</Badge>
+        {podiumTeams.length > 0 ? <Badge variant="secondary">{podiumTeams.length} podium</Badge> : null}
       </div>
 
       <div className="ranking-showcase__grid">
-        <section className="ranking-showcase__podium-wrap" aria-label="Top three podium">
-          <div className="receipt-section-head">
-            <Trophy size={16} aria-hidden="true" />
-            <h3>Top three</h3>
-          </div>
-          {podiumTeams.length > 0 ? (
+        {podiumTeams.length > 0 ? (
+          <section className="ranking-showcase__podium-wrap" aria-label="Top three podium">
+            <div className="receipt-section-head">
+              <Trophy size={16} aria-hidden="true" />
+              <h3>Top three</h3>
+            </div>
             <ol className="ranking-showcase__podium">
               {podiumTeams.map((team, index) => (
                 <li className={cn('ranking-showcase__podium-team', podiumClass(index))} key={team.id ?? `${teamName(team)}-${index}`}>
@@ -125,10 +128,8 @@ export function RankingShowcase({
                 </li>
               ))}
             </ol>
-          ) : (
-            <p className="receipt-muted">No podium data supplied.</p>
-          )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="ranking-showcase__tiers" aria-label="Ranking tier counts">
           <div className="receipt-section-head">
@@ -138,7 +139,11 @@ export function RankingShowcase({
           {tiers.length > 0 ? (
             <div className="ranking-showcase__tier-strip">
               {tiers.map((tier) => (
-                <div className="ranking-showcase__tier" key={tier.tier}>
+                <div
+                  className={`ranking-showcase__tier is-${tier.tier.toLowerCase()}`}
+                  key={tier.tier}
+                  style={{ '--tier-size': tier.count } as CSSProperties}
+                >
                   <span>{tier.label ?? tier.tier}</span>
                   <b className="num">{tier.count}</b>
                   {tier.teams?.length ? <small>{tier.teams.slice(0, 3).join(', ')}</small> : null}
@@ -248,13 +253,13 @@ function movementClass(value?: number) {
 }
 
 function formatMovement(value?: number) {
-  if (!value) return '0'
-  return value > 0 ? `+${Math.round(value)}` : `${Math.round(value)}`
+  if (!value) return '–'
+  return value > 0 ? `▲ ${Math.round(value)}` : `▼ ${Math.abs(Math.round(value))}`
 }
 
 function movementRange(movement: RankingMovementSpotlight) {
   if (typeof movement.fromRank === 'number' && typeof movement.toRank === 'number') {
-    return `#${movement.fromRank} -> #${movement.toRank}`
+    return `#${movement.fromRank} → #${movement.toRank}`
   }
   if (typeof movement.ranks === 'number') return `${formatSigned(movement.ranks)} ranks`
   if (typeof movement.movement === 'number') return `${formatSigned(movement.movement)} ranks`

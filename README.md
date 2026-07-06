@@ -64,7 +64,7 @@ Commit the compact generated `public/data` payload after review when you need st
 
 ## Railway Server Deployment
 
-`railway.toml` deploys the app as a Railway web service. The production server serves the built Vite app from `dist/`, serves `/data/*` from local `public/data/` when a file is present, falls back to Railway Bucket storage when configured, and runs an hourly background refresh by default.
+`railway.toml` deploys the app as a Railway web service. The production server serves the built Vite app from `dist/`, serves `/data/*` from local `public/data/` when a file is present, falls back to Railway Bucket storage when configured, and keeps background refresh disabled unless `RANKING_REFRESH_ENABLED=true` is explicitly set. Data companion URLs include a run-version query string so Railway CDN can cache shard/entity/history JSON aggressively without mixing artifacts from different generated runs. The manifest keeps a short edge TTL so new runs are discovered quickly.
 
 ```bash
 railway link
@@ -85,34 +85,40 @@ The hourly refresh uses the same local pipeline as development:
 pnpm run data:refresh
 ```
 
-On each run, the wrapper downloads provider data into a staging directory, hashes the source content while ignoring volatile fetch timestamps, and compares it with the last successful refresh. If the source digest is unchanged, it skips the expensive crunch step. If source data changed, it promotes the staged raw files into `data/raw/`, writes `data/raw/manifest.json` plus `data/raw/refresh-state.json`, runs the same snapshot builder used by `pnpm run data:crunch`, and uploads generated artifacts to the Railway Bucket.
+On each run, the wrapper downloads provider data into a staging directory, hashes the source content while ignoring volatile fetch timestamps, and compares it with the last successful refresh. If the source digest is unchanged, it skips the expensive crunch step. If source data changed, it promotes the staged raw files into `data/raw/`, writes `data/raw/manifest.json` plus `data/raw/refresh-state.json`, runs the same snapshot builder used by `pnpm run data:crunch`, and uploads the compact browser payload plus refresh provenance to the Railway Bucket.
 
 For production, set `RANKING_REFRESH_LOOKBACK_DAYS=7` and `RANKING_REFRESH_BOOTSTRAP_START=2025-01-01`. With an existing raw baseline, each hourly run downloads only the rolling 7-day source window and merges those files into `data/raw` before crunching, so the ranking model still sees the full 2025-to-current coverage. If a fresh Railway container has no raw baseline, the refresh first restores `rankings/raw/files/**` from the Bucket; if no bucket baseline exists yet, it bootstraps once from `RANKING_REFRESH_BOOTSTRAP_START` through today and then subsequent hourly runs use the lookback window.
 
 Use a Railway Storage Bucket for generated artifacts that should not live in Git. Railway Buckets are private S3-compatible storage, so the app proxies `/data/*` through the Railway server instead of exposing the bucket publicly. The refresh job uploads:
 
 - `rankings/data/**`: the browser manifest, shard, entity, and history artifacts normally served from `/data/*`.
-- `rankings/artifacts/latest-full.json`: the full audit/calculation artifact that is too large for Git.
 - `rankings/raw/manifest.json`: the data-source manifest for provenance.
 - `rankings/raw/files/**`: the raw source baseline used to restore a fresh Railway container before lookback-only refreshes.
 - `rankings/raw/refresh-state.json` and `rankings/latest-publish.json`: refresh/publish audit metadata.
+- `rankings/artifacts/latest-full.json`: optional full audit/calculation artifact, uploaded only when `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT=true`.
+
+Railway Bucket egress is free only when clients download directly from the bucket, such as through presigned URLs. When the web service proxies bucket objects to users, Railway counts that as service egress. For this app, keep the same-origin `/data/*` proxy and enable Railway CDN caching on the web service so cache hits are served from the edge without reaching the service. Presigned GET URLs are useful for ad hoc large downloads, but they add URL-expiry and browser CORS concerns to the app's JSON contract.
 
 Recommended Railway variables:
 
 - `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION`, `ENDPOINT`: Railway Bucket S3 credentials. Use the Bucket service's variable-reference preset for the AWS SDK, or map these values manually.
 - `RANKING_BUCKET_PREFIX`: object prefix for ranking artifacts. Defaults to `rankings`.
 - `RANKING_BUCKET_UPLOAD_ENABLED`: set to `false` to crunch locally without uploading to the bucket. Defaults to enabled when bucket credentials exist.
+- `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT`: set to `true` only when you need the full audit snapshot in the Bucket. Defaults to disabled because this artifact is large and the browser does not use it.
 - `RANKING_BUCKET_REQUIRED`: set to `true` in production if refreshes should fail when bucket credentials are missing.
 - `RANKING_BUCKET_FORCE_PATH_STYLE`: set to `true` only if the Bucket credentials tab says this bucket needs path-style S3 URLs.
-- `RANKING_REFRESH_ENABLED`: set to `false` to disable the background scheduler. Defaults to enabled.
+- `RANKING_REFRESH_ENABLED`: set to `true` to enable the background scheduler. Defaults to disabled; manual `POST /api/refresh` still works when `CRON_SECRET` is configured.
 - `RANKING_REFRESH_INTERVAL_MINUTES`: refresh cadence. Defaults to `60`.
-- `RANKING_REFRESH_ON_START`: set to `false` to skip the startup refresh. Defaults to enabled.
+- `RANKING_REFRESH_ON_START`: set to `true` to run a refresh immediately after the server starts. Defaults to disabled.
 - `RANKING_REFRESH_LOOKBACK_DAYS`: optional rolling source-download window for scheduled refreshes. Production uses `7`.
 - `RANKING_REFRESH_BOOTSTRAP_START`: source coverage start date to use when no raw baseline exists locally or in the bucket. Production uses `2025-01-01`.
 - `RANKING_REFRESH_START`: source coverage start date when no lookback window is configured. Defaults to `2011-01-01` for full-history ranking context.
 - `RANKING_REFRESH_END`: optional fixed coverage end date. Defaults to the current UTC date.
 - `RANKING_REFRESH_DOWNLOAD_ARGS`: optional extra downloader flags, such as `--oracle-required true`.
 - `RANKING_BUCKET_RESTORE_RAW`: set to `false` to prevent restoring `rankings/raw/files/**` into `data/raw` before a refresh. Defaults to enabled when bucket credentials exist.
+- `RANKING_DATA_MANIFEST_CACHE_CONTROL`: cache policy for `/data/ranking-summary.json`. Defaults to `public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400`.
+- `RANKING_DATA_CACHE_CONTROL`: cache policy for versioned `/data/*` companion artifacts. Defaults to `public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800, stale-if-error=604800`.
+- `RANKING_GZIP_ENABLED`: set to `false` to disable gzip for JSON/text/SVG responses. Defaults to enabled.
 - `ORACLES_ELIXIR_CSV_URL`: optional direct Oracle CSV URL override.
 - `CRON_SECRET`: optional bearer token for manual `POST /api/refresh`.
 - `RANKING_RAW_DIR` and `RANKING_PUBLIC_DATA_DIR`: optional paths if you also mount a Railway volume for raw state or generated public data. Bucket storage is the durable default for deployable artifacts.

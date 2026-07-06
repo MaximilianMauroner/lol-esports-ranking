@@ -51,7 +51,7 @@ export type LineChartProps = {
   tooltipContent?: ReactElement
 }
 
-const tickDate = new Intl.DateTimeFormat('en', { month: 'short', year: '2-digit' })
+const tickDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
 const fullDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
 
 export function LineChart({

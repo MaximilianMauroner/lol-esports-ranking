@@ -1,9 +1,18 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
-import { Globe2, Info, Swords, Trophy, X } from 'lucide-react'
+import { Check, Globe2, Info, Plus, Swords, Trophy, X } from 'lucide-react'
 import { isRegionPowerTeam, type RegionStrength } from '../lib/regionStrength'
-import type { PublicTeamStanding } from '../lib/publicArtifacts/schema'
-import { extent, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord } from '../lib/display'
-import { DataState, HeatBar, HeatChip, PickButton, RegionBadge } from '../components/ui'
+import type { PublicRegionHistoryScope, PublicRegionHistorySeries, PublicTeamStanding } from '../lib/publicArtifacts/schema'
+import {
+  extent,
+  formatDate,
+  formatDecimal,
+  formatNumber,
+  formatRating,
+  formatRatio,
+  formatRecord,
+  pctWithin,
+} from '../lib/display'
+import { DataState, RegionBadge } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
@@ -11,11 +20,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/toolti
 export function RegionsView({
   regions,
   standings,
+  regionHistory,
   pickedIds,
   onToggle,
 }: {
   regions: RegionStrength[]
   standings: RegionStanding[]
+  regionHistory?: PublicRegionHistoryScope
   pickedIds: Set<string>
   onToggle: (region: RegionStrength) => void
 }) {
@@ -59,9 +70,9 @@ export function RegionsView({
         <RibbonCell icon={<Globe2 size={18} />} label="Regions tracked" value={String(regions.length)} detail="Excludes international events" />
         <RibbonCell
           icon={<Swords size={18} />}
-          label="Best intl. résumé"
+          label="Best international resume"
           value={bestRecord?.region ?? '—'}
-          detail={`${formatRatio(bestRecord?.opponentAdjustedWinRate)} adj · ${formatSignedDecimal(bestRecord?.winsOverExpected)} vs exp`}
+          detail={`${formatRatio(bestRecord?.opponentAdjustedWinRate)} adjusted · ${formatSignedDecimal(bestRecord?.winsOverExpected)} vs expected`}
         />
       </div>
 
@@ -71,66 +82,76 @@ export function RegionsView({
             <p className="eyebrow">Compare regions</p>
             <h2>{pickedCount > 0 ? `${pickedCount} selected` : 'Add regions to compare'}</h2>
           </div>
-          <span className="heatscale">
-            Cold<i aria-hidden="true" />Hot
+          <span className="region-power-key">
+            <span>Power</span>
+            <i aria-hidden="true" />
+            <strong>Higher score</strong>
           </span>
         </div>
 
         <div className="region-board">
-          {regions.map((region) => (
-            <div
-              key={region.region}
-              className={`region-row${pickedIds.has(region.region) ? ' is-picked' : ''}`}
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                className="region-row__open"
-                aria-label={`Open ${region.region} region detail`}
-                onClick={() => setSelectedRegionId(region.region)}
+          {regions.map((region) => {
+            const picked = pickedIds.has(region.region)
+
+            return (
+              <div
+                key={region.region}
+                className={`region-row${picked ? ' is-picked' : ''}`}
               >
-                <span className="region-rank">{region.rank}</span>
-                <span className="region-id">
-                  <RegionBadge region={region.region} />
-                  <span>
-                    <b>{region.region}</b>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="region-row__open"
+                  aria-label={`Open ${region.region} region detail`}
+                  onClick={() => setSelectedRegionId(region.region)}
+                >
+                  <span className="region-rank">{region.rank}</span>
+                  <span className="region-id">
+                    <RegionBadge region={region.region} />
+                    <span>
+                      <b>{region.region}</b>
+                      <small>
+                        {region.flagshipLeague ?? 'Multiple leagues'} · {region.teamCount} flagship teams
+                      </small>
+                    </span>
+                  </span>
+                  <span className="region-score">
+                    <RegionPowerMeter value={region.score} min={min} max={max} />
+                    <span className="region-mobile-stat">{formatSignedDecimal(region.winsOverExpected)} vs expected</span>
+                  </span>
+                  <span className="region-intl">
+                    <span>
+                      <b>{formatRecord(region.internationalWins, region.internationalLosses)}</b> intl ·{' '}
+                      {formatRatio(region.internationalWinRate)}
+                    </span>
                     <small>
-                      {region.flagshipLeague ?? 'Multiple leagues'} · {region.teamCount} flagship teams
+                      vs {formatRating(region.averageOpponentRating)} average · {formatSignedDecimal(region.winsOverExpected)} vs expected
                     </small>
                   </span>
-                </span>
-                <span className="region-score">
-                  <HeatChip value={region.score} min={min} max={max} label={formatRating(region.score)} />
-                  <HeatBar value={region.score} min={min} max={max} />
-                  <span className="region-mobile-stat">{formatSignedDecimal(region.winsOverExpected)} vs exp</span>
-                </span>
-                <span className="region-intl">
-                  <span>
-                    <b>{formatRecord(region.internationalWins, region.internationalLosses)}</b> intl ·{' '}
-                    {formatRatio(region.internationalWinRate)}
+                  <span className="region-teams">
+                    {region.topTeams.slice(0, 3).map((team) => (
+                      <span className="tag" key={team.team}>
+                        <b>{team.code ?? team.team.slice(0, 3).toUpperCase()}</b>
+                        {formatRating(team.rating)}
+                      </span>
+                    ))}
                   </span>
-                  <small>
-                    vs {formatRating(region.averageOpponentRating)} avg · {formatSignedDecimal(region.winsOverExpected)} vs exp
-                  </small>
-                </span>
-                <span className="region-teams">
-                  {region.topTeams.slice(0, 3).map((team) => (
-                    <span className="tag" key={team.team}>
-                      <b>{team.code ?? team.team.slice(0, 3).toUpperCase()}</b>
-                      {formatRating(team.rating)}
-                    </span>
-                  ))}
-                </span>
-              </Button>
-              <div className="region-pick">
-                <PickButton picked={pickedIds.has(region.region)} onToggle={() => onToggle(region)} label={region.region} />
+                </Button>
+                <div className="region-pick">
+                  <RegionCompareButton picked={picked} onToggle={() => onToggle(region)} label={region.region} />
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
-      <RegionDetailDrawer region={selectedRegion} teams={selectedRegionTeams} onClose={closeRegionDetail} />
+      <RegionDetailDrawer
+        region={selectedRegion}
+        teams={selectedRegionTeams}
+        series={selectedRegion ? regionHistory?.series[selectedRegion.region] : undefined}
+        onClose={closeRegionDetail}
+      />
     </div>
   )
 }
@@ -144,7 +165,128 @@ type RegionDrawerTeam = {
   rank?: number
 }
 
-function RegionDetailDrawer({ region, teams, onClose }: { region: RegionStrength | null; teams: RegionDrawerTeam[]; onClose: () => void }) {
+function RegionPowerMeter({ value, min, max }: { value: number; min: number; max: number }) {
+  const pct = pctWithin(value, min, max)
+
+  return (
+    <span className="region-power" aria-label={`Power score ${formatRating(value)}`}>
+      <span className="region-power__score">{formatRating(value)}</span>
+      <span className="region-power__meter" aria-hidden="true">
+        <span className="region-power__fill" style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  )
+}
+
+function RegionCompareButton({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
+  const tooltip = picked ? `Remove ${label} from comparison` : `Compare ${label}`
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className={`region-compare${picked ? ' is-picked' : ''}`}
+          onClick={onToggle}
+          aria-label={tooltip}
+          aria-pressed={picked}
+        >
+          {picked ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
+          <span>{picked ? 'Comparing' : 'Compare'}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+const REGION_SPARKLINE_WIDTH = 150
+const REGION_SPARKLINE_HEIGHT = 42
+
+function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistorySeries; region: string }) {
+  const shape = useMemo(() => {
+    const values = (series?.points ?? []).slice(-24).map((point) => point[1]).filter(Number.isFinite)
+    return sparklineShape(values, REGION_SPARKLINE_WIDTH, REGION_SPARKLINE_HEIGHT)
+  }, [series])
+  const first = series?.points[0]
+  const last = series?.points.at(-1)
+  const delta = first && last ? last[1] - first[1] : undefined
+  const deltaTone = typeof delta === 'number' && delta < 0
+    ? 'down'
+    : typeof delta === 'number' && delta > 0
+      ? 'up'
+      : undefined
+
+  if (!shape || !first || !last) {
+    return (
+      <div className="region-sparkline region-sparkline--empty" aria-label={`${region} region trajectory unavailable`}>
+        <small>Power trajectory</small>
+        <b>History pending</b>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="region-sparkline"
+      aria-label={`${region} region power trajectory ${formatSignedDecimal(delta)} from ${formatDate(first[0])} to ${formatDate(last[0])}`}
+    >
+      <div>
+        <small>Power trajectory</small>
+        <b className={deltaTone}>{formatSignedDecimal(delta)}</b>
+      </div>
+      <svg viewBox={`0 0 ${REGION_SPARKLINE_WIDTH} ${REGION_SPARKLINE_HEIGHT}`} role="img" focusable="false">
+        <polyline points={shape.points} />
+        <circle cx={shape.last.x} cy={shape.last.y} r="2.8" />
+      </svg>
+    </div>
+  )
+}
+
+type SparklineShape = {
+  points: string
+  last: { x: number; y: number }
+}
+
+function sparklineShape(values: number[], width: number, height: number): SparklineShape | null {
+  const finiteValues = values.filter(Number.isFinite)
+  if (finiteValues.length < 2) return null
+  const [min, max] = extent(finiteValues)
+  const range = max - min
+  const inset = 4
+  const drawableWidth = width - inset * 2
+  const drawableHeight = height - inset * 2
+  const coords = finiteValues.map((value, index) => {
+    const x = inset + (index / (finiteValues.length - 1)) * drawableWidth
+    const y = range === 0
+      ? height / 2
+      : inset + (1 - (value - min) / range) * drawableHeight
+    return { x: roundSparklineCoord(x), y: roundSparklineCoord(y) }
+  })
+  const last = coords.at(-1)!
+  return {
+    points: coords.map((point) => `${point.x},${point.y}`).join(' '),
+    last,
+  }
+}
+
+function roundSparklineCoord(value: number) {
+  return Math.round(value * 10) / 10
+}
+
+function RegionDetailDrawer({
+  region,
+  teams,
+  series,
+  onClose,
+}: {
+  region: RegionStrength | null
+  teams: RegionDrawerTeam[]
+  series?: PublicRegionHistorySeries
+  onClose: () => void
+}) {
   const displayedTeams = teams.length > 0 ? teams : region?.topTeams ?? []
 
   return (
@@ -168,90 +310,80 @@ function RegionDetailDrawer({ region, teams, onClose }: { region: RegionStrength
             </SheetClose>
           </SheetHeader>
           <div className="drawer__body region-detail__body min-h-0 flex-1 overflow-auto overscroll-contain">
-          <section className="region-detail__hero" aria-label={`${region.region} summary`}>
-            <div>
-              <p className="eyebrow">Region #{region.rank}</p>
-              <h3>{region.region}</h3>
-              <p>
-                {region.flagshipLeague ?? 'Multiple flagship leagues'} · {formatTier(region.tier)} · {formatNumber(region.teamCount)} flagship teams
-              </p>
-            </div>
-            <strong>
-              {formatRating(region.score)}
-              <span>Power score</span>
-            </strong>
-          </section>
+            <section className="region-detail__hero" aria-label={`${region.region} summary`}>
+              <div>
+                <p className="eyebrow">Region #{region.rank}</p>
+                <h3>{region.region}</h3>
+                <p className="region-detail__meta">
+                  <span>{region.flagshipLeague ?? 'Multiple flagship leagues'}</span>
+                  <span>{formatTier(region.tier)}</span>
+                  <span>{formatCountWithUnit(region.teamCount, 'flagship team')}</span>
+                  <span>{formatCountWithUnit(region.leagueCount, 'flagship league')}</span>
+                  <span>{formatCountWithUnit(region.ecosystemLeagueCount, 'ecosystem league')}</span>
+                </p>
+              </div>
+              <strong>
+                {formatRating(region.score)}
+                <span>Power score</span>
+              </strong>
+              <RegionPowerSparkline series={series} region={region.region} />
+            </section>
 
-          <section className="region-detail__stats" aria-label={`${region.region} metrics`}>
-            <DetailStat
-              label="Top team power"
-              value={formatRating(region.topTeamRating)}
-              description="Rating of the strongest eligible team in this region's flagship league layer."
-            />
-            <DetailStat
-              label="Flagship leagues"
-              value={formatNumber(region.leagueCount)}
-              description="Top competitive league layer used to calculate the region score."
-            />
-            <DetailStat
-              label="Ecosystem leagues"
-              value={formatNumber(region.ecosystemLeagueCount)}
-              description="All leagues mapped into the broader regional ecosystem, including lower tiers."
-            />
-            <DetailStat
-              label="Intl. record"
-              value={formatRecord(region.internationalWins, region.internationalLosses)}
-              description="Wins and losses by flagship leagues against teams from other regions."
-            />
-            <DetailStat
-              label="Intl. win rate"
-              value={formatRatio(region.internationalWinRate)}
-              description="Raw international match win rate before opponent strength adjustment."
-            />
-            <DetailStat
-              label="Adjusted intl. rate"
-              value={formatRatio(region.opponentAdjustedWinRate)}
-              description="International win rate adjusted for opponent power."
-            />
-            <DetailStat
-              label="Wins vs expected"
-              value={formatSignedDecimal(region.winsOverExpected)}
-              description="International wins above or below the model's opponent-adjusted expectation."
-            />
-            <DetailStat
-              label="Opponent power"
-              value={formatRating(region.averageOpponentRating)}
-              description="Average rating of international opponents faced by flagship leagues."
-            />
-            <DetailStat
-              label="Connectivity"
-              value={formatRatio(region.connectivity)}
-              description="How strongly this region is linked into the global match graph."
-            />
-          </section>
+            <section className="region-detail__stats" aria-label={`${region.region} metrics`}>
+              <DetailStat
+                label="International record"
+                value={formatRecord(region.internationalWins, region.internationalLosses)}
+                description={`Wins and losses by flagship leagues against teams from other regions. Raw rate: ${formatRatio(region.internationalWinRate)}.`}
+              />
+              <DetailStat
+                label="Adjusted international rate"
+                value={formatRatio(region.opponentAdjustedWinRate)}
+                description="International win rate adjusted for opponent power."
+              />
+              <DetailStat
+                label="Wins vs expected"
+                value={formatSignedDecimal(region.winsOverExpected)}
+                description="International wins above or below the model's opponent-adjusted expectation."
+              />
+              <DetailStat
+                label="Top team power"
+                value={formatRating(region.topTeamRating)}
+                description="Rating of the strongest eligible team in this region's flagship league layer."
+              />
+              <DetailStat
+                label="Opponent power"
+                value={formatRating(region.averageOpponentRating)}
+                description="Average rating of international opponents faced by flagship leagues."
+              />
+              <DetailStat
+                label="Connectivity"
+                value={formatRatio(region.connectivity)}
+                description="How strongly this region is linked into the global match graph."
+              />
+            </section>
 
-          <section className="region-detail__section" aria-label={`${region.region} teams`}>
-            <div className="region-detail__section-head">
-              <p className="eyebrow">League teams</p>
-              <h3>All flagship representatives</h3>
-            </div>
-            <div className="region-detail__teams">
-              {displayedTeams.length > 0 ? (
-                displayedTeams.map((team, index) => (
-                  <div className="region-detail__team" key={team.team}>
-                    <span>{team.rank ? `#${team.rank}` : `#${index + 1}`}</span>
-                    <div>
-                      <b>{team.team}</b>
-                      {team.code ? <small>{team.code}</small> : null}
+            <section className="region-detail__section" aria-label={`${region.region} teams`}>
+              <div className="region-detail__section-head">
+                <p className="eyebrow">League teams</p>
+                <h3>All flagship representatives</h3>
+              </div>
+              <div className="region-detail__teams">
+                {displayedTeams.length > 0 ? (
+                  displayedTeams.map((team, index) => (
+                    <div className="region-detail__team" key={team.team}>
+                      <span>{team.rank ? `#${team.rank}` : `#${index + 1}`}</span>
+                      <div>
+                        <b>{team.team}</b>
+                        {team.code ? <small>{team.code}</small> : null}
+                      </div>
+                      <strong>{formatRating(team.rating)}</strong>
                     </div>
-                    <strong>{formatRating(team.rating)}</strong>
-                  </div>
-                ))
-              ) : (
-                <p className="muted">No team rows are available for this region in the current scope.</p>
-              )}
-            </div>
-          </section>
+                  ))
+                ) : (
+                  <p className="muted">No team rows are available for this region in the current scope.</p>
+                )}
+              </div>
+            </section>
           </div>
         </SheetContent>
       ) : null}
@@ -313,6 +445,11 @@ function formatTier(value?: string) {
     .split('-')
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(' ')
+}
+
+function formatCountWithUnit(value: number | undefined, singular: string) {
+  const unit = value === 1 ? singular : `${singular}s`
+  return `${formatNumber(value)} ${unit}`
 }
 
 function formatSignedDecimal(value?: number) {

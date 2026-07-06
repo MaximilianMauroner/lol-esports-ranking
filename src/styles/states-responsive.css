@@ -111,16 +111,6 @@
   .team-dossier__grid {
     grid-template-columns: 1fr;
   }
-  .team-detail-grid {
-    grid-template-columns: 1fr;
-  }
-  .team-detail-hero {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .team-detail-hero__facts {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
   .region-row__open {
     grid-template-columns: 44px minmax(120px, 1.3fr) minmax(120px, 1fr) minmax(150px, 1.4fr);
   }
@@ -222,31 +212,7 @@
     grid-template-columns: 28px minmax(0, 1fr) auto;
     gap: 8px;
   }
-  .event-row {
-    grid-template-columns: 28px minmax(0, 1fr) auto;
-    gap: 8px;
-  }
-  .component-grid,
-  .update-ledger {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .component-grid span:nth-child(-n + 3),
-  .update-ledger span:nth-child(-n + 4) {
-    border-top: 1px solid var(--line);
-  }
-  .component-grid span:nth-child(-n + 2),
-  .update-ledger span:nth-child(-n + 2) {
-    border-top: 0;
-  }
-  .component-grid span:nth-child(3n + 1) {
-    border-left: 1px solid var(--line);
-  }
-  .component-grid span:nth-child(odd),
-  .update-ledger span:nth-child(odd) {
-    border-left: 0;
-  }
-  .stat-row strong,
-  .event-row em {
+  .stat-row strong {
     justify-self: end;
     grid-column: auto;
   }
@@ -274,20 +240,17 @@
   .gpr-sidebar {
     grid-template-columns: 1fr;
   }
-  .gpr-toolbar {
-    align-items: flex-start;
-  }
-  .gpr-toolbar__title {
-    flex: 1 1 130px;
-  }
-  .gpr-toolbar .toolbar {
-    flex: 1 1 100%;
+  .gpr-filterbar {
+    width: 100%;
     min-width: 0;
   }
+  .gpr-filterbar__search {
+    flex: 1 1 220px;
+  }
   .pager {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    justify-content: stretch;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 12px 18px;
   }
   .pager__buttons {
     justify-content: end;
@@ -372,16 +335,28 @@
     display: grid;
     grid-template-columns: 1fr;
   }
-  .gpr-toolbar .toolbar {
+  .gpr-filterbar {
     display: grid;
     grid-template-columns: 1fr;
     width: 100%;
   }
-  .toolbar label,
-  .toolbar .select-shell,
-  .toolbar select {
+  .gpr-filterbar__search,
+  .gpr-filterbar__segmented,
+  .gpr-filterbar__select,
+  .gpr-filterbar__select .select-shell,
+  .gpr-filterbar__select select {
     width: 100%;
     max-width: 100%;
+  }
+  .gpr-filterbar__select {
+    display: grid;
+    gap: 6px;
+  }
+  .gpr-filterbar__count {
+    margin-left: 0;
+  }
+  .gpr-filterbar__reset {
+    justify-self: start;
   }
   .trajectory-panel__controls {
     justify-content: flex-start;
@@ -427,15 +402,6 @@
   }
   .team-detail-hero__facts {
     grid-template-columns: 1fr;
-  }
-  .recent-matches__head {
-    grid-template-columns: 28px minmax(0, 1fr);
-  }
-  .recent-matches__head .formdots {
-    grid-column: 2;
-    justify-self: start;
-    margin-top: -6px;
-    padding-bottom: 12px;
   }
   .recent-match-row {
     grid-template-columns: 24px minmax(0, 1fr);
@@ -597,8 +563,7 @@
   .rail__mode,
   table.ranking-table .sort-button,
   .team-cell__button,
-  .form-trigger,
-  .chip button {
+  .form-trigger {
     min-width: 44px;
     min-height: 44px;
   }
@@ -613,5 +578,10 @@
   .impact-note {
     min-width: 0;
     min-height: 0;
+  }
+
+  .tray .chip__remove {
+    min-width: 22px;
+    min-height: 22px;
   }
 }

@@ -209,7 +209,7 @@ export function PickButton({ picked, onToggle, label }: { picked: boolean; onTog
           variant="secondary"
           size="icon"
           className={cn(
-            'text-[var(--muted)]',
+            'pick-button text-[var(--muted)]',
             picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]',
           )}
           onClick={onToggle}

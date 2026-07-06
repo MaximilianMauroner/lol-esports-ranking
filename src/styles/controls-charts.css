@@ -746,19 +746,29 @@ table.ranking-table tbody tr.is-picked {
 }
 
 .pager {
-  --pager-control-h: 36px;
+  --pager-control-h: 32px;
 
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 14px 0 0;
+  gap: 22px;
+  padding: 14px 2px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
+.pager__size,
 .pager__buttons {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.pager__size > span {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 560;
+  white-space: nowrap;
 }
 
 .pager__size .select-shell,
@@ -767,16 +777,52 @@ table.ranking-table tbody tr.is-picked {
   min-height: var(--pager-control-h);
 }
 
-.pager [data-slot="badge"] {
+.pager__size [data-slot="select"] {
+  min-width: 70px;
+  max-width: 76px;
+  padding-left: 10px;
+  font-size: 0.78rem;
+}
+
+.pager__page {
   display: inline-flex;
   align-items: center;
-  min-height: var(--pager-control-h);
-  padding-inline: 12px;
+  justify-content: center;
+  min-width: 92px;
+  height: var(--pager-control-h);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .pager__buttons [data-slot="button"] {
   width: var(--pager-control-h);
   height: var(--pager-control-h);
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.pager__buttons [data-slot="button"]:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+
+.pager__buttons [data-slot="button"]:disabled {
+  opacity: 0.42;
+}
+
+@media (max-width: 720px) {
+  .pager {
+    justify-content: flex-start;
+  }
+
+  .pager__edge {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1406,6 +1452,14 @@ table.ranking-table tbody tr.is-picked {
   color: var(--faint);
   font-size: 0.7rem;
   line-height: 1.35;
+}
+
+.chart__tooltip-note {
+  margin-left: 20px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .chart__tooltip-attribution {

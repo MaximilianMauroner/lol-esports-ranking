@@ -1,37 +1,48 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-28T09:39:26.638Z",
+  "generatedAt": "2026-07-06T11:05:44.768Z",
   "start": "2025-01-01",
-  "end": "2026-06-28",
+  "end": "2026-07-06",
   "files": {
-    "leaguepediaJson": [
-      "data/raw/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json"
-    ],
+    "leaguepediaJson": [],
     "oracleCsv": [
-      "data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
-      "data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
+      "/app/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
+      "/app/data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
     ]
   },
   "sources": {
     "oracle": {
       "role": "primary",
-      "status": "downloaded",
+      "status": "failed",
       "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH",
-      "apiUrl": "https://oe.datalisk.io/matchData",
       "discoveredCount": 13,
-      "downloadedCount": 2,
-      "failedCount": 0,
-      "failures": []
+      "downloadedCount": 0,
+      "failedCount": 1,
+      "failures": [
+        {
+          "source": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
+          "url": "https://drive.google.com/uc?export=download&id=1hnpbrUpBMS1TZI7IovfpKeZfWJH1Aptm",
+          "error": "download returned HTML (Google Drive - Quota exceeded)"
+        }
+      ],
+      "previousStatus": "downloaded",
+      "latestStatus": "failed"
     },
     "leaguepedia": {
       "role": "backup-gap-fill",
-      "status": "downloaded",
-      "downloadedCount": 1,
-      "method": "Special:CargoExport fallback because api.php cargoquery was rate-limited"
+      "status": "skipped",
+      "downloadedCount": 0,
+      "previousStatus": "skipped",
+      "latestStatus": "skipped"
     }
   },
   "warnings": [
-    "Leaguepedia was downloaded via Special:CargoExport instead of api.php cargoquery because api.php was rate-limited.",
-    "Oracle primary data was refreshed through 2026-06-28; the existing Leaguepedia backup file was preserved because the live Leaguepedia refresh was rate-limited on 2026-06-28."
-  ]
+    "Leaguepedia backup download skipped by --leaguepedia false or --skip-leaguepedia.",
+    "Oracle source 2026_LoL_esports_match_data_from_OraclesElixir.csv was not downloaded: download returned HTML (Google Drive - Quota exceeded)",
+    "No Oracle CSVs were downloaded. Leaguepedia remains available as the backup/gap-fill source if its download succeeded."
+  ],
+  "refreshWindow": {
+    "start": "2026-06-29",
+    "end": "2026-07-06"
+  }
 }

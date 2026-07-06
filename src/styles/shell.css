@@ -87,7 +87,7 @@
   display: block;
   overflow: hidden;
   font-size: 0.94rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--text-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -177,35 +177,14 @@
 
 .rail__mode.is-active {
   background: var(--surface-2);
-  border-color: var(--accent-line);
+  border-color: color-mix(in oklch, var(--rank-gold), var(--line) 38%);
   color: var(--text-strong);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--rank-gold);
 }
 
 .rail__mode.is-active small {
-  color: var(--accent-strong);
+  color: var(--rank-gold);
 }
-
-.statusdot {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.74rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.statusdot::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--win);
-  box-shadow: 0 0 0 3px var(--win-soft);
-}
-
-.statusdot.sample::before { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
-.statusdot.empty::before { background: var(--faint); box-shadow: none; }
 
 /* ---------------- Main column ---------------- */
 
@@ -221,9 +200,9 @@
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 16px 24px;
-  padding: 22px var(--page-x) 18px;
-  background: oklch(0.125 0.004 250 / 0.72);
+  padding: 18px var(--page-x) 14px;
   border-bottom: 1px solid var(--line);
+  background: oklch(0.125 0.004 250 / 0.72);
 }
 
 .topbar__title {
@@ -242,7 +221,7 @@
 .topbar__title h1 {
   font-size: 1.7rem;
   font-weight: 640;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-strong);
 }
 
@@ -253,48 +232,26 @@
   overflow-wrap: anywhere;
 }
 
-.topbar__meta {
+.scope-tabs {
   display: flex;
-  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px 18px;
-  max-width: min(100%, 680px);
-  min-width: 0;
-  padding: 8px 0 1px;
-  color: var(--faint);
-  font-size: 0.74rem;
-}
-
-.topbar__meta div {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.topbar__meta b {
-  max-width: 190px;
-  overflow: hidden;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  gap: 8px 14px;
+  padding: 8px var(--page-x);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in oklch, var(--surface) 76%, var(--bg));
 }
 
 .season-tabs {
   display: flex;
   align-items: stretch;
-  gap: 0;
-  padding: 0 var(--page-x);
-  min-height: 74px;
+  gap: 4px;
+  padding: 0;
+  min-height: 38px;
   overflow-x: auto;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(90deg, oklch(0.14 0.004 250), oklch(0.13 0.03 210 / 0.68) 42%, oklch(0.13 0.004 250));
+  background: transparent;
 }
 
 .season-tabs::-webkit-scrollbar {
@@ -305,16 +262,16 @@
   position: relative;
   flex: 0 0 auto;
   align-self: stretch;
-  height: auto;
+  height: 38px;
   min-width: 62px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--surface-2) 58%, transparent);
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.86rem;
   font-weight: 680;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   cursor: pointer;
   box-shadow: none;
 }
@@ -325,31 +282,24 @@
 
 .season-tabs__button.is-active {
   color: var(--text-strong);
-  background: var(--surface-2);
+  border-color: color-mix(in oklch, var(--accent), var(--line) 46%);
+  background: color-mix(in oklch, var(--accent), transparent 88%);
 }
 
 .season-tabs__button.is-active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4px;
-  background: var(--accent);
-  border-radius: 999px 999px 0 0;
+  content: none;
 }
 
 .checkpoint-tabs {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 58px;
-  padding: 8px var(--page-x);
+  min-height: 38px;
+  padding: 0;
   overflow-x: auto;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  background: transparent;
 }
 
 .checkpoint-tabs::-webkit-scrollbar {
@@ -359,7 +309,7 @@
 .checkpoint-tabs__button {
   flex: 0 0 auto;
   min-width: 86px;
-  height: 40px;
+  height: 38px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -462,7 +412,7 @@
 .section-head h2 {
   font-size: 1.05rem;
   font-weight: 640;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--text-strong);
 }
 

@@ -7,6 +7,7 @@ import {
   parsePublicTeamDirectory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  runIdForArtifact,
   scopeArtifactFileNameForKey,
   teamHistoryShardFileName,
 } from './schema'
@@ -51,6 +52,10 @@ export function localPublicDataUrl(relativePath: string) {
   return `/data/${relativePath}`
 }
 
+export function versionedPublicDataUrl(relativePath: string, version: string) {
+  return `${localPublicDataUrl(relativePath)}?v=${encodeURIComponent(version)}`
+}
+
 export function publicScopeArtifactPath(key: string) {
   return `${PUBLIC_ARTIFACT_PATHS.scopeDir}/${scopeArtifactFileNameForKey(key)}`
 }
@@ -69,19 +74,25 @@ export function createPublicArtifactWritePlan(
     urlForPath?: (relativePath: string) => string
   } = {},
 ): PublicArtifactWritePlan {
+  const artifactVersion = runIdForArtifact({
+    generatedAt: data.generatedAt,
+    modelVersion: data.model.version,
+    modelConfigHash: data.model.configHash,
+  })
+  const versionedUrlForPath = (relativePath: string) => withArtifactVersion(urlForPath(relativePath), artifactVersion)
   const playerDirectory = createPlayerDirectory(data)
   const teamDirectory = createTeamDirectory(data)
   const teamHistory = createTeamHistoryArtifacts(data, {
-    teamHistoryUrlForKey: (key) => urlForPath(publicTeamHistoryShardPath(key)),
+    teamHistoryUrlForKey: (key) => versionedUrlForPath(publicTeamHistoryShardPath(key)),
   })
   const regionHistory = createRegionHistory(data)
   const summary = createStaticRankingSummaryData(data, {
     fullSnapshotUrl,
-    playerDirectoryUrl: urlForPath(PUBLIC_ARTIFACT_PATHS.players),
-    teamDirectoryUrl: urlForPath(PUBLIC_ARTIFACT_PATHS.teams),
-    teamHistoryIndexUrl: urlForPath(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex),
-    regionHistoryUrl: urlForPath(PUBLIC_ARTIFACT_PATHS.regionHistory),
-    snapshotUrlForKey: (key) => urlForPath(publicScopeArtifactPath(key)),
+    playerDirectoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.players),
+    teamDirectoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.teams),
+    teamHistoryIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex),
+    regionHistoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.regionHistory),
+    snapshotUrlForKey: (key) => versionedUrlForPath(publicScopeArtifactPath(key)),
   })
 
   const writes: PublicArtifactWrite[] = [
@@ -106,6 +117,12 @@ export function createPublicArtifactWritePlan(
     writes,
     budgets: PUBLIC_ARTIFACT_BUDGETS,
   }
+}
+
+function withArtifactVersion(url: string, version: string) {
+  if (!url.startsWith('/data/')) return url
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}v=${encodeURIComponent(version)}`
 }
 
 export function assertPublicArtifactBudgets(writes: PublicArtifactWrite[], defaultSnapshotKey: string) {
