@@ -8,7 +8,7 @@ const output = resolve(args.output ?? 'data/leaguepedia-matches.json')
 const pageSize = Number(args.limit ?? 500)
 const maxRetries = Number(args.retries ?? 6)
 const retryDelayMs = Number(args.retryDelayMs ?? args.retryDelay ?? 60_000)
-const userAgent = args.userAgent ?? 'lol-esports-ranking-local/0.1 (public data research)'
+const userAgent = args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)'
 
 const fields = [
   'OverviewPage',

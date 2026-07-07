@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { publishedRatingScale } from '../src/lib/modelConfig.ts'
 import { buildTeamReceipt } from '../src/lib/receipts.ts'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, type CompactPlayer, type PublicRankingManifest, type PublicRankingShard, type PublicTeamStanding } from '../src/lib/publicArtifacts/schema.ts'
 
@@ -36,6 +37,7 @@ test('builds a typed team receipt with rating, movement, players, source, model,
   assert.equal(receipt.rating.current, 1710)
   assert.equal(receipt.rating.delta, 28)
   assert.equal(receipt.rating.components.leagueAnchor, 1500)
+  assert.ok(receipt.rating.update)
   assert.equal(receipt.rating.update.teamStableDelta, 6)
   assert.equal(receipt.movement.rankDelta, 3)
   assert.deepEqual(receipt.players.map((player) => player.role), ['Top', 'Support'])
@@ -93,8 +95,10 @@ function manifest(): BuildManifest {
       name: 'Fixture GPR',
       version: 'fixture-model',
       configHash: 'fixture-config',
+      ratingScale: publishedRatingScale,
       parameters: { fixture: true },
     },
+    ratingScale: publishedRatingScale,
     coverage: {
       matchCount: 42,
       sourceProviders: ['oracles-elixir'],
@@ -114,7 +118,8 @@ function shard(): BuildShard {
     sourceBreakdown: [
       {
         provider: 'oracles-elixir',
-        count: 42,
+        matchCount: 42,
+        completeness: ['complete'],
       },
     ],
   }
@@ -150,6 +155,8 @@ function player(overrides: Partial<CompactPlayer> = {}): CompactPlayer {
 function standing(overrides: Partial<PublicTeamStanding> = {}): PublicTeamStanding {
   return {
     team: 'Example',
+    teamId: 'Example__LCK__EX',
+    leagueId: 'LCK',
     code: 'EX',
     region: 'LCK',
     league: 'LCK',
@@ -221,5 +228,5 @@ function standing(overrides: Partial<PublicTeamStanding> = {}): PublicTeamStandi
   }
 }
 
-type BuildManifest = Pick<PublicRankingManifest, 'schemaVersion' | 'generatedAt' | 'source' | 'sources' | 'model' | 'coverage' | 'dataMode' | 'defaultFilter'>
+type BuildManifest = Pick<PublicRankingManifest, 'schemaVersion' | 'generatedAt' | 'source' | 'sources' | 'model' | 'ratingScale' | 'coverage' | 'dataMode' | 'defaultFilter'>
 type BuildShard = Pick<PublicRankingShard, 'filter' | 'modelVersion' | 'modelConfigHash' | 'matchCount' | 'sourceBreakdown'>

@@ -132,6 +132,8 @@ function recentMatch(overrides: Partial<PublicRecentMatch> = {}): PublicRecentMa
 
 function standing(overrides: Partial<PublicTeamStanding> = {}): PublicTeamStanding {
   return {
+    teamId: 'Example__LCK__EX',
+    leagueId: 'LCK',
     team: 'Example',
     code: 'EX',
     region: 'LCK',

@@ -147,7 +147,15 @@ type BlobUploadResult = {
 
 type BlobUpload = (pathname: string, body: string, options: BlobUploadOptions) => Promise<BlobUploadResult>
 
-export async function publishSnapshot(snapshot: ReturnType<typeof createStaticRankingData>, upload: BlobUpload = put) {
+export async function publishSnapshot(
+  snapshot: ReturnType<typeof createStaticRankingData>,
+  upload: BlobUpload = put,
+  {
+    uploadFullSnapshot = parseBoolean(process.env.RANKING_BLOB_UPLOAD_FULL_SNAPSHOT),
+  }: {
+    uploadFullSnapshot?: boolean
+  } = {},
+) {
   const localPlan = createPublicArtifactWritePlan(snapshot)
   const teamHistoryShardCount = localPlan.writes.filter((entry) =>
     entry.relativePath.startsWith(`${PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir}/`)
@@ -158,7 +166,7 @@ export async function publishSnapshot(snapshot: ReturnType<typeof createStaticRa
     && entry.relativePath !== PUBLIC_ARTIFACT_PATHS.teamHistoryIndex,
   )
   const [fullBlob, uploadedEntries] = await Promise.all([
-    uploadJson(upload, 'rankings/latest-full.json', snapshot),
+    uploadFullSnapshot ? uploadJson(upload, 'rankings/latest-full.json', snapshot) : Promise.resolve(undefined),
     Promise.all(
       companionWrites.map(async (entry) => {
         const blob = await uploadJson(upload, `rankings/${entry.relativePath}`, entry.value)
@@ -168,7 +176,7 @@ export async function publishSnapshot(snapshot: ReturnType<typeof createStaticRa
   ])
   const blobUrls = new Map(uploadedEntries)
   const indexPlan = createPublicArtifactWritePlan(snapshot, {
-    fullSnapshotUrl: fullBlob.url,
+    fullSnapshotUrl: fullBlob?.url,
     urlForPath: (relativePath) => {
       if (relativePath === PUBLIC_ARTIFACT_PATHS.teamHistoryIndex) return `/data/${relativePath}`
       const url = blobUrls.get(relativePath)
@@ -182,7 +190,7 @@ export async function publishSnapshot(snapshot: ReturnType<typeof createStaticRa
   blobUrls.set(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, teamHistoryIndexBlob.url)
 
   const blobPlan = createPublicArtifactWritePlan(snapshot, {
-    fullSnapshotUrl: fullBlob.url,
+    fullSnapshotUrl: fullBlob?.url,
     urlForPath: (relativePath) => {
       const url = blobUrls.get(relativePath)
       if (!url) throw new Error(`Missing uploaded public artifact URL for ${relativePath}`)
@@ -193,7 +201,7 @@ export async function publishSnapshot(snapshot: ReturnType<typeof createStaticRa
 
   return {
     summaryBlobUrl: summaryBlob.url,
-    fullBlobUrl: fullBlob.url,
+    fullBlobUrl: fullBlob?.url,
     playerDirectoryBlobUrl: blobUrls.get(PUBLIC_ARTIFACT_PATHS.players),
     teamHistoryIndexBlobUrl: blobUrls.get(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex),
     regionHistoryBlobUrl: blobUrls.get(PUBLIC_ARTIFACT_PATHS.regionHistory),
@@ -210,6 +218,10 @@ function uploadJson(upload: BlobUpload, pathname: string, value: unknown) {
   })
 }
 
+function parseBoolean(value: unknown) {
+  return value === true || value === 'true' || value === '1'
+}
+
 export function isAuthorizedCronRequest(authorization: string | undefined, secret: string | undefined) {
   if (!secret) return false
   return authorization === `Bearer ${secret}`
@@ -218,7 +230,7 @@ export function isAuthorizedCronRequest(authorization: string | undefined, secre
 async function fetchOracleCsv(url: string) {
   const csvResponse = await fetch(url, {
     headers: {
-      'user-agent': 'lol-esports-ranking-vercel-cron/0.1',
+      'user-agent': 'lol-esports-power-index-vercel-cron/0.1',
     },
   })
 
@@ -232,7 +244,7 @@ async function fetchOracleCsv(url: string) {
 async function fetchLeaguepediaJson(url: string) {
   const jsonResponse = await fetch(url, {
     headers: {
-      'user-agent': 'lol-esports-ranking-vercel-cron/0.1',
+      'user-agent': 'lol-esports-power-index-vercel-cron/0.1',
     },
   })
 

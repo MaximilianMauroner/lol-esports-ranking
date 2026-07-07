@@ -1,23 +1,12 @@
-import type { ChangeEvent, ReactNode } from 'react'
-import { Search } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from './ui/button'
-import { Input } from './ui/input'
-import { Select } from './ui/select'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { fillClass, formatSigned, heatClass, movementClass, pctWithin } from '../lib/display'
+import { fillClass, heatClass } from '../lib/display'
 
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
   return <span className={`heat ${heatClass(value, min, max)}`}>{label}</span>
-}
-
-export function HeatBar({ value, min, max }: { value: number; min: number; max: number }) {
-  return (
-    <div className="heatbar" aria-hidden="true">
-      <span className={`heatbar__fill ${fillClass(value, min, max)}`} style={{ width: `${pctWithin(value, min, max)}%` }} />
-    </div>
-  )
 }
 
 const REGION_BADGE_KEYS = new Set(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL', 'PCS', 'VCS'])
@@ -146,47 +135,6 @@ export function FormDots({ form }: { form?: string[] }) {
   )
 }
 
-const FACTOR_KEYS = ['context', 'recency', 'execution', 'opponent', 'league'] as const
-
-export function FactorBars({ factors }: { factors?: Record<string, number> }) {
-  if (!factors) return <span className="muted">—</span>
-  return (
-    <span
-      className="factorbars"
-      aria-label={FACTOR_KEYS.map((key) => `${key} ${Math.round((factors[key] ?? 0) * 100)}%`).join(', ')}
-    >
-      {FACTOR_KEYS.map((key) => (
-        <i key={key} style={{ height: `${Math.max(10, Math.round((factors[key] ?? 0) * 100))}%` }} aria-hidden="true" />
-      ))}
-    </span>
-  )
-}
-
-export function Sparkline({ values }: { values?: number[] }) {
-  if (!values || values.length < 2) return <span className="muted">—</span>
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || 1
-  const w = 92
-  const h = 26
-  const step = w / (values.length - 1)
-  const d = values
-    .map((value, index) => `${index === 0 ? 'M' : 'L'} ${(index * step).toFixed(1)} ${(h - 2 - ((value - min) / span) * (h - 4)).toFixed(1)}`)
-    .join(' ')
-  const trend = values[values.length - 1] - values[0]
-  const stroke = trend > 0 ? 'var(--up)' : trend < 0 ? 'var(--down)' : 'var(--faint)'
-  return (
-    <svg className="sparkline" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
-      <path d={d} style={{ stroke }} />
-    </svg>
-  )
-}
-
-export function Delta({ value }: { value?: number }) {
-  if (!value) return <span className="delta flat">±0</span>
-  return <span className={`delta ${movementClass(value)}`}>{formatSigned(value)}</span>
-}
-
 export function ConfBar({ value }: { value?: number }) {
   const pct = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
   return (
@@ -222,59 +170,6 @@ export function PickButton({ picked, onToggle, label }: { picked: boolean; onTog
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
-  )
-}
-
-type FieldOption = string | { value: string; label: string }
-
-export function Field({
-  label,
-  value,
-  options,
-  onChange,
-  className,
-}: {
-  label: string
-  value: string
-  options: FieldOption[]
-  onChange: (value: string) => void
-  className?: string
-}) {
-  return (
-    <label className={cn('grid min-w-0 gap-1.5', className)}>
-      <span className="pl-0.5 text-[0.68rem] uppercase tracking-[0.1em] text-[var(--faint)]">{label}</span>
-      <Select value={value} onChange={(event: ChangeEvent<HTMLSelectElement>) => onChange(event.target.value)}>
-        {options.map((option) => {
-          const value = typeof option === 'string' ? option : option.value
-          const label = typeof option === 'string' ? option : option.label
-          return (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          )
-        })}
-      </Select>
-    </label>
-  )
-}
-
-export function SearchInput({
-  value,
-  onChange,
-  placeholder,
-  className,
-}: {
-  value: string
-  onChange: (value: string) => void
-  placeholder: string
-  className?: string
-}) {
-  return (
-    <label className={cn('flex min-w-[min(220px,100%)] items-center gap-2 rounded-[var(--r)] border border-[var(--line-strong)] bg-[var(--surface-2)] px-3 py-2 text-[var(--muted)] transition-colors focus-within:border-[var(--accent-line)] max-sm:w-full max-sm:bg-[var(--surface)]', className)}>
-      <Search size={17} aria-hidden="true" />
-      <span className="sr-only">{placeholder}</span>
-      <Input className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0" type="search" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
-    </label>
   )
 }
 

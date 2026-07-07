@@ -42,7 +42,7 @@ test('cron reports no-data snapshots instead of falling back to seeded rows', as
   }
 })
 
-test('cron publisher uploads static-parity companion artifacts with blob manifest URLs', async () => {
+test('cron publisher uploads static-parity companion artifacts without full snapshot by default', async () => {
   const snapshot = createStaticRankingData({
     matches: sampleMatches,
     teams,
@@ -62,15 +62,17 @@ test('cron publisher uploads static-parity companion artifacts with blob manifes
   })
   const uploadPaths = new Set(uploads.map((upload) => upload.pathname))
 
+  assert.equal(uploadPaths.has('rankings/latest-full.json'), false)
   assert.equal(uploadPaths.has('rankings/team-history.json'), false)
   assert.equal(uploadPaths.has('rankings/history/team-series.json'), false)
   assert.equal(uploadPaths.has('rankings/history/team-series/index.json'), true)
   assert.equal(uploadPaths.has('rankings/history/region-series.json'), true)
+  assert.equal(published.fullBlobUrl, undefined)
   assert.equal(published.teamHistoryIndexBlobUrl, 'https://blob.example/rankings/history/team-series/index.json')
   assert.equal(published.regionHistoryBlobUrl, 'https://blob.example/rankings/history/region-series.json')
 
   const summary = parsePublicRankingManifest(uploadedValue(uploads, 'rankings/latest-summary.json'))
-  assert.equal(summary.fullSnapshotUrl, 'https://blob.example/rankings/latest-full.json')
+  assert.equal(Object.prototype.hasOwnProperty.call(summary, 'fullSnapshotUrl'), false)
   assert.equal(summary.playerDirectoryUrl, 'https://blob.example/rankings/entities/players.json')
   assert.equal(summary.teamDirectoryUrl, 'https://blob.example/rankings/entities/teams.json')
   assert.equal(summary.teamHistoryIndexUrl, 'https://blob.example/rankings/history/team-series/index.json')
@@ -97,6 +99,33 @@ test('cron publisher uploads static-parity companion artifacts with blob manifes
 
   const regionHistory = parsePublicRegionHistory(uploadedValue(uploads, 'rankings/history/region-series.json'))
   assert.equal(regionHistory.defaultScopeKey, snapshot.defaultSnapshotKey)
+})
+
+test('cron publisher can opt in to full snapshot blob upload', async () => {
+  const snapshot = createStaticRankingData({
+    matches: sampleMatches,
+    teams,
+    rosters,
+    source: 'cron publisher fixture',
+  })
+  const uploads: Array<{ pathname: string; value: unknown }> = []
+
+  const published = await publishSnapshot(
+    snapshot,
+    async (pathname, body) => {
+      uploads.push({ pathname, value: JSON.parse(body) })
+      return { url: `https://blob.example/${pathname}` }
+    },
+    { uploadFullSnapshot: true },
+  )
+
+  assert.equal(published.fullBlobUrl, 'https://blob.example/rankings/latest-full.json')
+  const fullSnapshot = uploadedValue(uploads, 'rankings/latest-full.json') as { artifactKind?: string; generatedAt?: string }
+  assert.equal(fullSnapshot.artifactKind, 'full-ranking-artifact')
+  assert.equal(fullSnapshot.generatedAt, snapshot.generatedAt)
+
+  const summary = parsePublicRankingManifest(uploadedValue(uploads, 'rankings/latest-summary.json'))
+  assert.equal(summary.fullSnapshotUrl, 'https://blob.example/rankings/latest-full.json')
 })
 
 async function callHandler({ authorization, userAgent }: { authorization?: string; userAgent?: string }) {

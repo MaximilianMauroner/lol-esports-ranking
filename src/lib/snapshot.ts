@@ -15,12 +15,26 @@ import type {
   TeamHistoryPoint,
   TeamProfile,
   TeamStanding,
+  PublishedRatingScale,
 } from '../types'
 import { leagueTierFor } from '../data/leagueTiers'
 import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../data/regionTaxonomy'
 import { regionForLeague } from '../data/teamIdentity'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
 import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
+import { publishedRatingScale } from './modelConfig'
+import {
+  teamNamesForDssContext,
+  withDeservedStandingComparison,
+  withDeservedStandingRegionComparison,
+  type ComputedTeamStanding,
+} from './deservedStandingPublicComparison'
+import {
+  publishedRating,
+  toPublishedLeagueStrength,
+  toPublishedRegionStrength,
+  toPublishedTeamStanding,
+} from './publishedRatingArtifacts'
 import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibility'
 import { playerModelParameters } from './playerModel'
 import { summarizePredictions, type WalkForwardMetrics } from './predictionModel'
@@ -146,6 +160,7 @@ export type ModelInfo = {
   name: string
   version: string
   configHash: string
+  ratingScale?: PublishedRatingScale
   parameters: unknown
 }
 
@@ -213,13 +228,14 @@ export type RegionHistoryDirectory = PublicRegionHistoryDirectory
 export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory {
   const defaultSnapshot = data.snapshots[data.defaultSnapshotKey]
   const minimumPointsPerSeries = 2
-  const defaultHistory = buildTeamHistorySeries(defaultSnapshot?.standings ?? [], minimumPointsPerSeries)
+  const ratingScale = data.model.ratingScale ?? publishedRatingScale
+  const defaultHistory = buildTeamHistorySeries(publishedTeamStandings(defaultSnapshot?.standings ?? [], ratingScale), minimumPointsPerSeries)
   const scopeIndex = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([, snapshot]) => isSeasonHistoryScope(snapshot.filter))
       .map(([key, snapshot]) => [
         key,
-        Object.keys(buildTeamHistorySeries(snapshot.standings, minimumPointsPerSeries, { includeContext: false }).series),
+        Object.keys(buildTeamHistorySeries(publishedTeamStandings(snapshot.standings, ratingScale), minimumPointsPerSeries, { includeContext: false }).series),
       ]),
   )
 
@@ -234,6 +250,7 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
+    ratingScale,
     omissionPolicy: {
       minimumPointsPerSeries,
       omittedSeriesCount: defaultHistory.omittedSeriesCount,
@@ -254,10 +271,11 @@ export function createTeamHistoryArtifacts(
     teamHistoryUrlForKey?: (key: string) => string
   } = {},
 ): TeamHistoryArtifacts {
+  const ratingScale = data.model.ratingScale ?? publishedRatingScale
   const historyScopes = Object.entries(data.snapshots)
     .filter(([key, snapshot]) => key === data.defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter))
   const shards = Object.fromEntries(
-    historyScopes.map(([key, snapshot]) => [key, createTeamHistoryShard(data, snapshot)]),
+    historyScopes.map(([key, snapshot]) => [key, createTeamHistoryShard(data, snapshot, ratingScale)]),
   )
   const defaultShard = shards[data.defaultSnapshotKey]
   const omissionPolicy = defaultShard?.omissionPolicy ?? {
@@ -278,6 +296,7 @@ export function createTeamHistoryArtifacts(
       generatedAt: data.generatedAt,
       modelVersion: data.model.version,
       modelConfigHash: data.model.configHash,
+      ratingScale,
       defaultScopeKey: data.defaultSnapshotKey,
       omissionPolicy,
       scopeIndex: Object.fromEntries(
@@ -299,9 +318,10 @@ export function createTeamHistoryArtifacts(
 function createTeamHistoryShard(
   data: StaticRankingData,
   snapshot: ComputedRankingSnapshot | undefined,
+  ratingScale: PublishedRatingScale = data.model.ratingScale ?? publishedRatingScale,
 ): PublicTeamHistoryShard {
   const minimumPointsPerSeries = 2
-  const history = buildTeamHistorySeries(snapshot?.standings ?? [], minimumPointsPerSeries)
+  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries)
   return {
     artifactKind: 'team-history-scope',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
@@ -313,6 +333,7 @@ function createTeamHistoryShard(
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
+    ratingScale,
     filter: snapshot?.filter ?? data.defaultFilter,
     omissionPolicy: {
       minimumPointsPerSeries,
@@ -326,10 +347,11 @@ function createTeamHistoryShard(
 }
 
 export function createRegionHistory(data: StaticRankingData): RegionHistoryDirectory {
+  const ratingScale = data.model.ratingScale ?? publishedRatingScale
   const scopes = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([key, snapshot]) => key === data.defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter))
-      .map(([key, snapshot]) => [key, createRegionHistoryScope(snapshot)]),
+      .map(([key, snapshot]) => [key, createRegionHistoryScope(snapshot, ratingScale)]),
   )
 
   return {
@@ -343,6 +365,7 @@ export function createRegionHistory(data: StaticRankingData): RegionHistoryDirec
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
+    ratingScale,
     defaultScopeKey: data.defaultSnapshotKey,
     scopes,
   }
@@ -356,7 +379,10 @@ const REGION_HISTORY_TIER_RANK: Record<LeagueTierName, number> = {
   unknown: 4,
 }
 
-function createRegionHistoryScope(snapshot: ComputedRankingSnapshot): PublicRegionHistoryScope {
+function createRegionHistoryScope(
+  snapshot: ComputedRankingSnapshot,
+  ratingScale: PublishedRatingScale,
+): PublicRegionHistoryScope {
   const series: Record<string, PublicRegionHistorySeries> = Object.fromEntries(
     snapshot.regions.map((region) => [region.region, { region: region.region, points: [] }]),
   )
@@ -381,15 +407,15 @@ function createRegionHistoryScope(snapshot: ComputedRankingSnapshot): PublicRegi
       if (!row || !target) continue
       const context = regionHistoryContext(region, points, row.flagshipLeagues)
       const point: PublicRegionHistoryPoint = context
-        ? [date, row.score, row.rank, context]
-        : [date, row.score, row.rank]
+        ? [date, publishedRating(row.score, ratingScale), row.rank, context]
+        : [date, publishedRating(row.score, ratingScale), row.rank]
       const previous = target.points.at(-1)
       if (previous && previous[0] === point[0] && previous[1] === point[1] && previous[2] === point[2]) continue
       target.points.push(point)
     }
   }
 
-  alignFinalRegionHistoryPoints(series, snapshot.regions)
+  alignFinalRegionHistoryPoints(series, snapshot.regions, ratingScale)
   return {
     filter: snapshot.filter,
     regionCount: Object.keys(series).length,
@@ -470,7 +496,11 @@ function regionHistoryContext(region: string, points: LeagueStrengthHistoryPoint
   return omitUndefined(context)
 }
 
-function alignFinalRegionHistoryPoints(series: Record<string, PublicRegionHistorySeries>, regions: RegionStrength[]) {
+function alignFinalRegionHistoryPoints(
+  series: Record<string, PublicRegionHistorySeries>,
+  regions: RegionStrength[],
+  ratingScale: PublishedRatingScale,
+) {
   const latestDate = Object.values(series)
     .flatMap((entry) => entry.points.map((point) => point[0]))
     .sort()
@@ -479,17 +509,17 @@ function alignFinalRegionHistoryPoints(series: Record<string, PublicRegionHistor
 
   for (const region of regions) {
     const target = series[region.region]
-    if (!target || target.points.length === 0) continue
-    const latest = target.points.at(-1)!
-    const finalScore = Number(region.score.toFixed(1))
-    if (latest[1] === finalScore && latest[2] === region.rank) continue
+    const finalScore = publishedRating(region.score, ratingScale)
+    if (!target) continue
+    const latest = target.points.at(-1)
+    if (latest && latest[1] === finalScore && latest[2] === region.rank) continue
     target.points.push([
       latestDate,
       finalScore,
       region.rank,
       {
         event: 'Published region score',
-        source: 'league-strength-history',
+        source: 'published-region-score',
       },
     ])
   }
@@ -525,6 +555,10 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
   }
 
   return { series, omittedSeriesCount, pointCount }
+}
+
+function publishedTeamStandings(standings: ComputedTeamStanding[], ratingScale: PublishedRatingScale) {
+  return standings.map((standing) => toPublishedTeamStanding(standing, ratingScale))
 }
 
 function alignFinalTeamHistoryPoint(standing: TeamStanding, points: TeamHistoryPointCompact[]) {
@@ -725,7 +759,7 @@ export type ComputedRankingSnapshot = {
   modelConfigHash: string
   matchCount: number
   sourceBreakdown: SnapshotSourceBreakdown[]
-  standings: TeamStanding[]
+  standings: ComputedTeamStanding[]
   leagues: LeagueStrength[]
   leagueHistory: LeagueStrengthHistoryPoint[]
   players: PlayerStanding[]
@@ -794,10 +828,11 @@ export function createStaticRankingSummaryData(
   manifest: StaticRankingSummaryData
   snapshots: Record<string, RankingSummarySnapshot>
 } {
+  const ratingScale = data.model.ratingScale ?? publishedRatingScale
   const snapshots = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([key, snapshot]) => shouldPublishPublicScope(key, snapshot, data.defaultSnapshotKey))
-      .map(([key, snapshot]) => [key, compactSnapshot(snapshot, data.generatedAt)]),
+      .map(([key, snapshot]) => [key, compactSnapshot(snapshot, data.generatedAt, ratingScale)]),
   )
   const snapshotIndex = Object.fromEntries(
     Object.entries(snapshots).map(([key, snapshot]) => [
@@ -824,6 +859,7 @@ export function createStaticRankingSummaryData(
         modelVersion: data.model.version,
         modelConfigHash: data.model.configHash,
       }),
+      ratingScale,
       summaryMode: 'browser-summary',
       ...(fullSnapshotUrl ? { fullSnapshotUrl } : {}),
       ...(playerDirectoryUrl ? { playerDirectoryUrl } : {}),
@@ -838,10 +874,16 @@ export function createStaticRankingSummaryData(
   }
 }
 
-function compactSnapshot(snapshot: ComputedRankingSnapshot, generatedAt: string): RankingSummarySnapshot {
+function compactSnapshot(
+  snapshot: ComputedRankingSnapshot,
+  generatedAt: string,
+  ratingScale: PublishedRatingScale,
+): RankingSummarySnapshot {
   const {
     artifactKind: _artifactKind,
     standings,
+    leagues,
+    regions,
     players: _players,
     events: _events,
     seasons: _seasons,
@@ -862,7 +904,10 @@ function compactSnapshot(snapshot: ComputedRankingSnapshot, generatedAt: string)
       modelVersion: summary.modelVersion,
       modelConfigHash: summary.modelConfigHash,
     }),
-    standings: standings.map((standing, index) => compactPublicStanding(standing, {
+    ratingScale,
+    leagues: leagues.map((league) => toPublishedLeagueStrength(league, ratingScale)),
+    regions: regions.map((region) => toPublishedRegionStrength(region, ratingScale)),
+    standings: standings.map((standing, index) => compactPublicStanding(toPublishedTeamStanding(standing, ratingScale), {
       includeRecentMatches: index < 100,
       includeRatingUpdate: false,
     })),
@@ -951,11 +996,35 @@ export function createStaticRankingData({
     const snapshotScope = rankingScopeForFilter(filter)
     const filteredTeamNames = teamNamesForFilter(filteredMatches, snapshotScope.teams, filter)
     const snapshotLeagues = snapshotScope.ranking.leagues.filter((league) => filter.region === 'All' || currentTopTierRegionForLeague(league.league, league.region) === filter.region)
+    const checkpointBaselineStandings = checkpoint ? baselineRankingForCheckpoint(checkpoint, matches, teams).standings : undefined
     const snapshotStandings = withCheckpointMovement(
       filteredStandings(snapshotScope.ranking.standings, filteredMatches, filteredTeamNames, filter, snapshotScope.teams),
-      checkpoint ? baselineRankingForCheckpoint(checkpoint, matches, teams).standings : undefined,
+      checkpointBaselineStandings,
     )
+    const dssContextStandings = filter.region === 'All'
+      ? snapshotStandings
+      : withCheckpointMovement(
+          filteredStandings(
+            snapshotScope.ranking.standings,
+            filteredMatches,
+            teamNamesForDssContext(filteredMatches),
+            filter,
+            snapshotScope.teams,
+          ),
+          checkpointBaselineStandings,
+        )
+    const standingsWithDss = withDeservedStandingComparison(snapshotStandings, filteredMatches, {
+      contextStandings: dssContextStandings,
+      useCheckpointBaseline: Boolean(checkpoint),
+    })
     const snapshotLeagueHistory = leagueHistoryForFilter(snapshotScope.ranking.leagueHistory, filteredMatches, snapshotScope.teams, filter)
+    const snapshotRegions = withDeservedStandingRegionComparison(
+      deriveRegionStrength(snapshotLeagues, standingsWithDss),
+      filteredMatches,
+      snapshotScope.teams,
+      standingsWithDss,
+      { contextStandings: dssContextStandings, useCheckpointBaseline: Boolean(checkpoint) },
+    )
     snapshots[snapshotKey(filter)] = {
       artifactKind: 'full-ranking-snapshot',
       filter,
@@ -963,13 +1032,13 @@ export function createStaticRankingData({
       modelConfigHash: transparentGprModelMetadata.configHash,
       matchCount: filteredMatches.length,
       sourceBreakdown: sourceBreakdown(filteredMatches),
-      standings: snapshotStandings,
+      standings: standingsWithDss,
       leagues: snapshotLeagues,
       leagueHistory: snapshotLeagueHistory,
       players: playersForFilter(filter, filteredMatches, snapshotScope),
       events: filterEventSummaries(snapshotScope.ranking.events, filteredMatches),
       seasons: filterSeasonSummaries(snapshotScope.ranking.seasons, filteredMatches),
-      regions: deriveRegionStrength(snapshotLeagues, snapshotStandings),
+      regions: snapshotRegions,
     }
   }
 

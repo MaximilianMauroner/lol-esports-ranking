@@ -83,18 +83,12 @@ export function formatWalkForwardMetrics(metrics?: WalkForwardMetrics) {
   if (!metrics || metrics.predictionCount === 0) return 'No walk-forward validation rows are available.'
   const winRateBaseline = metrics.baselineComparisons?.find((baseline) => baseline.key === 'pregame-win-rate')
   return [
-    `${formatInteger(metrics.predictionCount)} ${walkForwardTargetLabel(metrics.target)} predictions`,
+    `${formatInteger(metrics.predictionCount)} published game-level predictions`,
     `${formatPercent(metrics.accuracy)} accuracy`,
     `Brier ${formatDecimal(metrics.brierScore)}`,
     `log loss ${formatDecimal(metrics.logLoss)}`,
     ...(winRateBaseline ? [`${formatSignedDecimal(winRateBaseline.publishedBrierDelta)} Brier vs pre-game win rate`] : []),
   ].join(' · ')
-}
-
-function walkForwardTargetLabel(target: WalkForwardMetrics['target']) {
-  if (target === 'published-game') return 'published game-level'
-  if (target === 'neutral-game') return 'neutral game-level'
-  return target
 }
 
 function formatInteger(value: number) {

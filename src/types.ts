@@ -33,6 +33,18 @@ export type PregamePredictionVariantKey =
   | 'execution-baseline'
   | 'execution-adjusted'
 
+export type PublishedRatingScale = {
+  version: string
+  internalAnchor: number
+  publishedAnchor: number
+  spreadMultiplier: number
+  publishedMinimum: number
+  publishedMaximum: number
+  label: string
+  shortLabel: string
+  description: string
+}
+
 export type PregamePredictionVariant = {
   teamAGameWinProbability: number
   teamBGameWinProbability: number
@@ -211,6 +223,8 @@ export type MatchRecord = {
   teamBHomeLeague?: string
   teamARegion?: Region
   teamBRegion?: Region
+  teamASeed?: number
+  teamBSeed?: number
   teamASide?: Side
   teamBSide?: Side
   teamARoster?: MatchRosterSnapshot
@@ -408,6 +422,139 @@ export type TeamEligibility = {
   windowDays: number
   daysSinceLastMatch?: number
   lastPlayed?: string
+}
+
+export type DeservedStandingLeaderboard = 'main-deserved-standings' | 'conservative-deserved-standings' | 'predictive-power'
+
+export type DeservedStandingEligibilityLabel =
+  | 'Eligible'
+  | 'Provisional'
+  | 'Inactive'
+  | 'Developmental'
+  | 'Insufficient current-roster sample'
+  | 'Insufficient league connectivity'
+
+export type DeservedStandingMatchInput = {
+  matchId: string
+  date: string
+  event: string
+  stage: string
+  region: Region
+  league: string
+  teamA: string
+  teamB: string
+  teamALeague: string
+  teamBLeague: string
+  teamARoster?: MatchRosterSnapshot
+  teamBRoster?: MatchRosterSnapshot
+  teamACoachId?: string
+  teamBCoachId?: string
+  bestOf: number
+  teamAGamesWon: number
+  teamBGamesWon: number
+  teamASide?: Side
+  teamBSide?: Side
+  patch?: string
+  venue?: string
+  travelContext?: string
+  substitutes?: DeservedStandingSubstituteInput[]
+}
+
+export type DeservedStandingSubstituteInput = {
+  team: string
+  playerId: string
+  role: Role
+  seriesCount?: number
+  splitGameShare?: number
+  permanent?: boolean
+}
+
+export type DeservedStandingPlayerInput = {
+  playerId: string
+  currentTeam: string
+  role: Role
+  historicalTeams: string[]
+  gameParticipation: number
+  rolePerformanceZ?: number
+  championPool?: string[]
+  internationalExperience?: number
+  uncertainty: number
+}
+
+export type DeservedStandingLeagueInput = {
+  leagueId: string
+  region: Region
+  tier: LeagueTierName
+  flagship: boolean
+  prior: number
+  internationalMatches: number
+  translationRating: number
+  connectivity: number
+}
+
+export type DeservedStandingRegionInput = {
+  regionId: string
+  flagshipLeagues: string[]
+  internationalWins: number
+  internationalLosses: number
+  expectedInternationalWins: number
+  actualInternationalWins: number
+  stageAdvancement: number
+  topTeamScore: number
+  depthScore: number
+  connectivity: number
+}
+
+export type DeservedStandingSeriesResumeInput = {
+  observedSeriesResult: number
+  observedGameWinRate: number
+  expectedSeriesResult: number
+  expectedGameWinRate: number
+}
+
+export type DeservedStandingWeightedSeries = {
+  weightedSeriesValue: number
+  seriesWeight: number
+  rosterValidity: number
+  opponentReferenceStrength: number
+  standardOpponentReferenceStrength: number
+}
+
+export type DeservedStandingTeamComponents = {
+  baseScore: number
+  resumeRate: number
+  volumeReliability: number
+  resumePoints: number
+  scheduleRate: number
+  scheduleStrengthPoints: number
+  stagePoints: number
+  incomingPlayerBridgeCredit: number
+  instabilityPenalty: number
+  dss: number
+  conservativeDss?: number
+}
+
+export type DeservedStandingRosterEra = {
+  team: string
+  roster: MatchRosterSnapshot
+  coachId?: string
+  startDate: string
+  endDate?: string
+  matches: string[]
+  resumeLedger: string[]
+  playerContributionLedger: string[]
+  synergyLedger: string[]
+  uncertainty: number
+}
+
+export type DeservedStandingPlayerResumeLedger = {
+  playerId: string
+  careerResumeCredit: number
+  currentSeasonResumeCredit: number
+  currentSplitResumeCredit: number
+  internationalResumeCredit: number
+  roleResumeCredit: Partial<Record<Role, number>>
+  uncertainty: number
 }
 
 export type TeamStanding = {

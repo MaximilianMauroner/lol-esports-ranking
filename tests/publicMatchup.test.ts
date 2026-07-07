@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { publishedRatingScale } from '../src/lib/modelConfig.ts'
 import { estimatePublicMatchup } from '../src/lib/publicMatchup.ts'
+import { toPublishedRating, toPublishedRatingDelta } from '../src/lib/ratingCalculations.ts'
 import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
 
 test('public matchup defaults preserve game probability compatibility', () => {
   const estimate = estimatePublicMatchup(
     standing('Alpha', 1600, 40),
     standing('Beta', 1500, 40),
-    { version: 'model-v1', configHash: 'hash-v1' },
+    { version: 'model-v1', configHash: 'hash-v1', ratingScale: publishedRatingScale },
   )
 
   assert.equal(estimate.bestOf, 1)
@@ -42,8 +44,8 @@ test('public matchup applies explicit side assumptions as rating edge adjustment
   assert.equal(red.homeSide, 'red')
   assert.ok(blue.homeGameWinProbability > neutral.homeGameWinProbability)
   assert.ok(red.homeGameWinProbability < neutral.homeGameWinProbability)
-  assert.equal(blue.sideRatingEdge, 50)
-  assert.equal(red.sideRatingEdge, -50)
+  assert.equal(blue.sideRatingEdge, toPublishedRatingDelta(50))
+  assert.equal(red.sideRatingEdge, toPublishedRatingDelta(-50))
 })
 
 test('public matchup uncertainty bands bracket game and series estimates', () => {
@@ -67,7 +69,7 @@ function standing(team: string, rating: number, uncertainty: number): RankingSum
   return {
     team,
     code: team.slice(0, 3).toUpperCase(),
-    rating,
-    uncertainty,
+    rating: Math.round(toPublishedRating(rating)),
+    uncertainty: Math.round(toPublishedRatingDelta(uncertainty)),
   } as RankingSummaryStanding
 }

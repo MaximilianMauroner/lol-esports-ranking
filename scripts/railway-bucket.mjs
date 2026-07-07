@@ -59,6 +59,7 @@ export async function uploadRankingArtifacts({
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
   uploadFullSnapshot = parseBoolean(process.env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT),
+  refreshStateForUpload,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -88,7 +89,16 @@ export async function uploadRankingArtifacts({
     uploads.push(await uploadFile(client, config, manifestPath, 'raw/manifest.json'))
   }
   if (statePath) {
-    uploads.push(await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
+    if (refreshStateForUpload) {
+      uploads.push(await uploadJson(client, config, 'raw/refresh-state.json', refreshStateForUpload({
+        bucket: config.bucket,
+        prefix: config.prefix,
+        uploadedCount: uploads.length + 1,
+        skipped,
+      })))
+    } else {
+      uploads.push(await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
+    }
   }
 
   await uploadJson(client, config, 'latest-publish.json', {

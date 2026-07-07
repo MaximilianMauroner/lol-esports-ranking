@@ -90,9 +90,9 @@ test('walk-forward helper formats compact manifest metrics', () => {
   assert.match(description, /\+0.012 Brier vs pre-game win rate/)
 })
 
-test('walk-forward helper tolerates legacy metrics without baseline comparisons', () => {
+test('walk-forward helper tolerates metrics without baseline comparisons', () => {
   const description = formatWalkForwardMetrics({
-    target: 'neutral-game',
+    target: 'published-game',
     modelVersion: 'transparent-gpr-v-test',
     modelConfigHash: 'fnv1a-test',
     predictionCount: 1234,
@@ -101,6 +101,7 @@ test('walk-forward helper tolerates legacy metrics without baseline comparisons'
     logLoss: 0.6684,
     calibration: [],
     segments: [],
+    baselineComparisons: [],
     playerRatingShadow: {
       enabled: false,
       predictionCount: 1234,
@@ -125,6 +126,6 @@ test('walk-forward helper tolerates legacy metrics without baseline comparisons'
     },
   } as Parameters<typeof formatWalkForwardMetrics>[0])
 
-  assert.match(description, /1,234 neutral game-level predictions/)
+  assert.match(description, /1,234 published game-level predictions/)
   assert.doesNotMatch(description, /Brier vs pre-game win rate/)
 })

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { publishedRatingScale } from '../src/lib/modelConfig.ts'
 import { resolvePublicSnapshotState, validatePublicSnapshotShard, validatePublicTeamHistoryShard } from '../src/lib/publicArtifacts/resolver.ts'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, snapshotKey, type PublicRankingManifest, type PublicRankingShard, type PublicTeamHistoryIndex, type PublicTeamHistoryShard } from '../src/lib/publicArtifacts/schema.ts'
 
@@ -102,6 +103,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     artifactKind: 'public-ranking-manifest',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     artifactMeta: artifactMeta(),
+    ratingScale: publishedRatingScale,
     generatedAt: '2026-06-27T00:00:00.000Z',
     source: 'test',
     sources: [],
@@ -160,6 +162,7 @@ function teamHistoryIndex(overrides: Partial<PublicTeamHistoryIndex> = {}): Publ
     artifactKind: 'team-history-index',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     artifactMeta: artifactMeta(),
+    ratingScale: publishedRatingScale,
     generatedAt: '2026-06-27T00:00:00.000Z',
     modelVersion: 'test-model',
     modelConfigHash: 'test-config',
@@ -194,6 +197,7 @@ function teamHistoryShard(
     artifactKind: 'team-history-scope',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     artifactMeta: artifactMeta(),
+    ratingScale: publishedRatingScale,
     generatedAt: '2026-06-27T00:00:00.000Z',
     modelVersion: 'test-model',
     modelConfigHash: 'test-config',
@@ -210,10 +214,11 @@ function teamHistoryShard(
 }
 
 function shard(overrides: Pick<PublicRankingShard, 'filter' | 'matchCount'>): PublicRankingShard {
-  return {
-    artifactKind: 'public-snapshot-shard',
-    artifactMeta: artifactMeta(),
-    filter: overrides.filter,
+    return {
+      artifactKind: 'public-snapshot-shard',
+      artifactMeta: artifactMeta(),
+      ratingScale: publishedRatingScale,
+      filter: overrides.filter,
     modelVersion: 'test-model',
     modelConfigHash: 'test-config',
     matchCount: overrides.matchCount,

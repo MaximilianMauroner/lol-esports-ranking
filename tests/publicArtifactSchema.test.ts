@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { publishedRatingScale } from '../src/lib/modelConfig.ts'
 import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   filterFromSnapshotKey,
@@ -7,6 +8,7 @@ import {
   parsePublicRegionHistory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  type PublicTeamHistoryComponentSnapshot,
   snapshotKey,
   snapshotShardUrlPathForKey,
   teamHistoryShardUrlPathForKey,
@@ -153,7 +155,7 @@ test('team history shard parser validates point tuples and compact model context
               '2026-01-01',
               1500,
               1,
-              { model: { c: [1500, 10, 5, 0] } },
+              { model: { c: [1500, 10, 5, 0] as unknown as PublicTeamHistoryComponentSnapshot } },
             ],
           ],
         },
@@ -214,6 +216,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     source: 'test',
     sources: [],
     model: { name: 'Transparent GPR', version: 'test-model', configHash: 'test-config', parameters: {} },
+    ratingScale: publishedRatingScale,
     coverage: { matchCount: 0, sourceProviders: [], seededSample: false },
     dataQuality: {
       matchCount: 0,
@@ -269,6 +272,7 @@ function teamHistoryIndex(overrides: Partial<PublicTeamHistoryIndex> = {}): Publ
     generatedAt: '2026-06-28T00:00:00.000Z',
     modelVersion: 'test-model',
     modelConfigHash: 'test-config',
+    ratingScale: publishedRatingScale,
     defaultScopeKey: 'All__All__All',
     omissionPolicy: { minimumPointsPerSeries: 2, omittedSeriesCount: 0, reason: 'test' },
     scopeIndex: {
@@ -291,6 +295,7 @@ function teamHistoryShard(overrides: Partial<PublicTeamHistoryShard> = {}): Publ
     generatedAt: '2026-06-28T00:00:00.000Z',
     modelVersion: 'test-model',
     modelConfigHash: 'test-config',
+    ratingScale: publishedRatingScale,
     filter: { season: 'All', event: 'All', region: 'All' },
     omissionPolicy: { minimumPointsPerSeries: 2, omittedSeriesCount: 0, reason: 'test' },
     teamCount: 1,
@@ -333,6 +338,7 @@ function regionHistory(overrides: Partial<PublicRegionHistoryDirectory> = {}): P
     generatedAt: '2026-06-28T00:00:00.000Z',
     modelVersion: 'test-model',
     modelConfigHash: 'test-config',
+    ratingScale: publishedRatingScale,
     defaultScopeKey: 'All__All__All',
     scopes: {
       All__All__All: {

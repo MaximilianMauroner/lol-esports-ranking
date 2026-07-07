@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process'
 import { stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { normalize, resolve, sep } from 'node:path'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
 import { bucketConfigFromEnv, contentTypeForPath, getBucketObject } from './railway-bucket.mjs'
 
@@ -216,8 +218,7 @@ async function tryServeFile(response, rootDir, relativePath, { cacheControl, hea
   }
 
   const stream = createReadStream(path)
-  if (gzip) stream.pipe(createGzip()).pipe(response)
-  else stream.pipe(response)
+  await pipeBody(stream, response, { gzip })
   return true
 }
 
@@ -303,39 +304,23 @@ function sendJson(response, statusCode, value) {
 }
 
 async function pipeBody(body, response, { gzip = false } = {}) {
-  if (body && typeof body.pipe === 'function') {
-    if (gzip) body.pipe(createGzip()).pipe(response)
-    else body.pipe(response)
-    return
-  }
-  if (body && typeof body.transformToByteArray === 'function') {
-    const buffer = Buffer.from(await body.transformToByteArray())
-    if (!gzip) {
-      response.end(buffer)
-      return
-    }
-    const gzipStream = createGzip()
-    gzipStream.pipe(response)
-    gzipStream.end(buffer)
-    return
-  }
-  if (body && typeof body[Symbol.asyncIterator] === 'function') {
-    if (gzip) {
-      const gzipStream = createGzip()
-      gzipStream.pipe(response)
-      for await (const chunk of body) {
-        gzipStream.write(chunk)
-      }
-      gzipStream.end()
-      return
-    }
-    for await (const chunk of body) {
-      response.write(chunk)
-    }
+  const stream = await readableBody(body)
+  if (!stream) {
     response.end()
     return
   }
-  response.end()
+  if (gzip) await pipeline(stream, createGzip(), response)
+  else await pipeline(stream, response)
+}
+
+async function readableBody(body) {
+  if (!body) return null
+  if (typeof body.pipe === 'function') return body
+  if (typeof body.transformToByteArray === 'function') {
+    return Readable.from([Buffer.from(await body.transformToByteArray())])
+  }
+  if (typeof body[Symbol.asyncIterator] === 'function') return Readable.from(body)
+  return Readable.from([body])
 }
 
 function cacheControlForPath(path) {

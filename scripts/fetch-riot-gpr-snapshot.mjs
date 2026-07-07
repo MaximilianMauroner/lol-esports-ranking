@@ -10,7 +10,7 @@ const url = `https://lolesports.com/${locale}/gpr/${year}/${milestone}`
 
 const response = await fetch(url, {
   headers: {
-    'user-agent': args.userAgent ?? 'lol-esports-ranking-local/0.1 (public snapshot research)',
+    'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public snapshot research)',
   },
 })
 

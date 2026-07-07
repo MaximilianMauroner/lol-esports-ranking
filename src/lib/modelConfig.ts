@@ -1,7 +1,7 @@
 import { eventTierConfig } from '../data/rankingConfig'
 import { leagueTierModelParameters } from '../data/leagueTiers'
 import { currentRegionTaxonomyModelParameters, ratedTeamUniverseModelParameters } from '../data/regionTaxonomy'
-import type { FactorBreakdown } from '../types'
+import type { FactorBreakdown, PublishedRatingScale } from '../types'
 import { defaultEligibilityConfig } from './eligibility'
 import { executionResidualModelParameters } from './executionResidual'
 import { playerModelParameters } from './playerModel'
@@ -11,6 +11,17 @@ import { defaultRosterContinuityConfig } from './rosters'
 
 export const initialTeamRating = 1500
 export const initialLeagueRating = 1500
+export const publishedRatingScale = {
+  version: 'published-power-index-v1',
+  internalAnchor: 1500,
+  publishedAnchor: 1800,
+  spreadMultiplier: 3.25,
+  publishedMinimum: 1000,
+  publishedMaximum: 3000,
+  label: 'Power Index',
+  shortLabel: 'Power',
+  description: 'Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth.',
+} as const satisfies PublishedRatingScale
 export const leagueEloWeight = 1
 export const leagueAdjustmentPolicy = 'seasonal-hierarchical-anchor'
 export const publishedLeagueAnchorPolicy = 'team-evidence-gated-anchor-relief-v1'
@@ -94,8 +105,6 @@ export const rosterVolatilityKCeiling = 1.35
 export const momentumGameDecay = 0.88
 export const momentumSplitRetention = 0.2
 export const momentumPatchRetention = 0.65
-export const momentumKFactor = 10
-export const momentumExecutionKFactor = 0
 export const momentumCap = 70
 export const worldsPlacementResidualK = 2
 export const msiPlacementResidualK = 1.65
@@ -125,6 +134,7 @@ export const transparentGprModelVersion = 'transparent-gpr-v0.0.0'
 export const transparentGprModelParameters = {
   initialTeamRating,
   initialLeagueRating,
+  publishedRatingScale,
   leagueEloWeight,
   leagueAdjustmentPolicy,
   publishedLeagueAnchorPolicy,
@@ -177,8 +187,6 @@ export const transparentGprModelParameters = {
   momentumGameDecay,
   momentumSplitRetention,
   momentumPatchRetention,
-  momentumKFactor,
-  momentumExecutionKFactor,
   momentumCap,
   worldsPlacementResidualK,
   msiPlacementResidualK,
@@ -204,6 +212,7 @@ export const transparentGprModelMetadata = {
   name: 'Transparent GPR',
   version: transparentGprModelVersion,
   configHash: stableHash(transparentGprModelParameters),
+  ratingScale: publishedRatingScale,
   parameters: transparentGprModelParameters,
 } as const
 

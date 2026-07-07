@@ -144,44 +144,6 @@
   }
 }
 
-.drawer {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  grid-template-columns: 1fr min(980px, 94vw);
-  pointer-events: none;
-}
-
-.drawer__scrim {
-  background: oklch(0 0 0 / 0);
-  transition: background 0.28s ease;
-}
-
-.drawer__panel {
-  background: var(--surface);
-  border-left: 1px solid var(--line-strong);
-  box-shadow: var(--shadow-pop);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  transform: translateX(100%);
-  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-  overflow: hidden;
-}
-
-.drawer.is-open {
-  pointer-events: auto;
-}
-
-.drawer.is-open .drawer__scrim {
-  background: oklch(0 0 0 / 0.5);
-}
-
-.drawer.is-open .drawer__panel {
-  transform: translateX(0);
-}
-
 .drawer__head {
   display: flex;
   align-items: center;

@@ -1,10 +1,17 @@
 import type { ModelInfo, RankingSummaryStanding } from './snapshot'
+import { publishedRatingScale } from './modelConfig'
 import {
   estimateMatchupProbability,
   type MatchupSideAssumption,
   type MatchupUncertaintyBand,
   type ProbabilityBand,
 } from './matchupMath'
+import {
+  ratingScaleFromUnknown,
+  toInternalRating,
+  toInternalRatingDelta,
+  toPublishedRatingDelta,
+} from './ratingCalculations'
 
 export type PublicMatchupSideAssumption = 'neutral' | 'home-blue' | 'home-red'
 
@@ -43,7 +50,7 @@ export type PublicMatchupEstimate = {
   modelConfigHash: string
 }
 
-type PublicMatchupModel = Pick<ModelInfo, 'version' | 'configHash'>
+type PublicMatchupModel = Pick<ModelInfo, 'version' | 'configHash'> & Partial<Pick<ModelInfo, 'parameters' | 'ratingScale'>>
 
 export function estimatePublicMatchup(
   home: RankingSummaryStanding,
@@ -64,11 +71,22 @@ export function estimatePublicMatchup(
 ): PublicMatchupEstimate {
   const model = isPublicMatchupModel(modelOrOptions) ? modelOrOptions : undefined
   const options = isPublicMatchupModel(modelOrOptions) ? maybeOptions : modelOrOptions ?? {}
-  const homeRating = home.rating ?? 1500
-  const awayRating = away.rating ?? 1500
+  const ratingScale = ratingScaleForPublicMatchup(model)
+  const homePublishedRating = home.rating ?? ratingScale.publishedAnchor
+  const awayPublishedRating = away.rating ?? ratingScale.publishedAnchor
+  const homeRating = toInternalRating(homePublishedRating, ratingScale)
+  const awayRating = toInternalRating(awayPublishedRating, ratingScale)
   const prediction = estimateMatchupProbability(
-    { team: home.team, rating: homeRating, uncertainty: home.uncertainty ?? 100 },
-    { team: away.team, rating: awayRating, uncertainty: away.uncertainty ?? 100 },
+    {
+      team: home.team,
+      rating: homeRating,
+      uncertainty: toInternalRatingDelta(home.uncertainty ?? toPublishedRatingDelta(100, ratingScale), ratingScale),
+    },
+    {
+      team: away.team,
+      rating: awayRating,
+      uncertainty: toInternalRatingDelta(away.uncertainty ?? toPublishedRatingDelta(100, ratingScale), ratingScale),
+    },
     {
       ...options,
       sideAssumption: toMatchupSideAssumption(options.sideAssumption),
@@ -78,9 +96,9 @@ export function estimatePublicMatchup(
   return {
     home,
     away,
-    ratingEdge: homeRating - awayRating,
-    sideRatingEdge: prediction.sideRatingEdge,
-    adjustedRatingEdge: prediction.adjustedRatingEdge,
+    ratingEdge: homePublishedRating - awayPublishedRating,
+    sideRatingEdge: toPublishedRatingDelta(prediction.sideRatingEdge, ratingScale),
+    adjustedRatingEdge: toPublishedRatingDelta(prediction.adjustedRatingEdge, ratingScale),
     bestOf: prediction.bestOf,
     sideAssumption: toPublicSideAssumption(prediction.sideAssumption),
     homeSide: prediction.teamASide,
@@ -99,6 +117,16 @@ export function estimatePublicMatchup(
 
 function isPublicMatchupModel(input: PublicMatchupModel | PublicMatchupOptions | undefined): input is PublicMatchupModel {
   return Boolean(input && ('version' in input || 'configHash' in input))
+}
+
+function ratingScaleForPublicMatchup(model: PublicMatchupModel | undefined) {
+  const fromModel = ratingScaleFromUnknown(model?.ratingScale)
+  if (fromModel) return fromModel
+  if (model?.parameters && typeof model.parameters === 'object' && !Array.isArray(model.parameters)) {
+    const fromParameters = ratingScaleFromUnknown((model.parameters as Record<string, unknown>).publishedRatingScale)
+    if (fromParameters) return fromParameters
+  }
+  return publishedRatingScale
 }
 
 function toMatchupSideAssumption(sideAssumption: PublicMatchupSideAssumption | undefined): MatchupSideAssumption {

@@ -150,7 +150,7 @@ function run(command, commandArgs) {
 async function downloadCsv(url, outputPath) {
   const response = await fetch(url, {
     headers: {
-      'user-agent': args.userAgent ?? 'lol-esports-ranking-local/0.1 (public data research)',
+      'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)',
     },
   })
   if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
@@ -167,7 +167,7 @@ async function discoverOracleDriveCsvs(folderId) {
   const url = `https://drive.google.com/embeddedfolderview?id=${encodeURIComponent(folderId)}#list`
   const response = await fetch(url, {
     headers: {
-      'user-agent': args.userAgent ?? 'lol-esports-ranking-local/0.1 (public data research)',
+      'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)',
     },
   })
   if (!response.ok) throw new Error(`HTTP ${response.status} from Oracle Google Drive folder`)

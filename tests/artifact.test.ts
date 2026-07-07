@@ -12,6 +12,7 @@ import {
   parsePublicTeamDirectory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  PUBLIC_ARTIFACT_SCHEMA_VERSION,
   snapshotKey,
   snapshotShardUrlPathForKey,
   type SnapshotFilter,
@@ -37,7 +38,7 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   const proofPlayers = summary.playerData?.ratingProof?.topPlayers ?? []
 
   assert.equal(summary.artifactKind, 'public-ranking-manifest')
-  assert.equal(summary.schemaVersion, 17)
+  assert.equal(summary.schemaVersion, PUBLIC_ARTIFACT_SCHEMA_VERSION)
   assert.equal(summary.summaryMode, 'browser-summary')
   assert.equal(summary.snapshots, undefined)
   assert.ok(defaultSnapshot)
@@ -115,6 +116,9 @@ test('generated major-region scores preserve eastern-major separation and wester
   const lcs2026 = regionFor(season2026Shard, 'LCS')
 
   assert.deepEqual(new Set(defaultShard.regions.map((region) => region.region)), new Set(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL']))
+  assert.equal(defaultShard.regions.every((region) => typeof region.topThreeTeamRating === 'number'), true)
+  assert.equal(defaultShard.regions.every((region) => typeof region.totalTeamRating === 'number'), true)
+  assert.ok(lpl.topThreeTeamRating >= lpl.totalTeamRating)
   assert.ok(Math.min(lck.score, lpl.score) - lec.score >= 35)
   assert.ok(lec.score > lcs.score)
   assert.ok(lck2026.topTeamRating - lec2026.topTeamRating >= 35)

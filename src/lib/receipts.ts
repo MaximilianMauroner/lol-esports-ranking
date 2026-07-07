@@ -94,6 +94,7 @@ export type TeamReceipt = {
     name?: string
     version: string
     configHash: string
+    ratingScale?: PublicRankingManifest['ratingScale']
     parameters?: unknown
   }
   config: {
@@ -119,7 +120,7 @@ export type BuildTeamReceiptInput = {
   standing: PublicTeamStanding
   standings?: readonly PublicTeamStanding[]
   players?: readonly CompactPlayer[]
-  manifest?: Pick<PublicRankingManifest, 'schemaVersion' | 'generatedAt' | 'source' | 'sources' | 'model' | 'coverage' | 'dataMode' | 'defaultFilter'>
+  manifest?: Pick<PublicRankingManifest, 'schemaVersion' | 'generatedAt' | 'source' | 'sources' | 'model' | 'ratingScale' | 'coverage' | 'dataMode' | 'defaultFilter'>
   shard?: Pick<PublicRankingShard, 'filter' | 'modelVersion' | 'modelConfigHash' | 'matchCount' | 'sourceBreakdown'>
   generatedAt?: string
   asOf?: string
@@ -229,6 +230,7 @@ function modelForReceipt(
     name: manifestModel?.name,
     version: manifestModel?.version ?? shard?.modelVersion ?? unknownModelVersion,
     configHash: manifestModel?.configHash ?? shard?.modelConfigHash ?? unknownConfigHash,
+    ratingScale: manifestModel?.ratingScale,
     parameters: manifestModel?.parameters,
   }
 }

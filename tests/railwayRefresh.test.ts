@@ -4,8 +4,64 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-const { createSourceFingerprint, refreshDataIfChanged, refreshDateWindow } = await import('../scripts/refresh-data-if-changed.mjs')
-const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import('../scripts/railway-bucket.mjs')
+type RefreshRun = (command: string, commandArgs: string[]) => Promise<void>
+type RefreshResult = {
+  changed: boolean
+  fingerprint?: string
+  previousFingerprint?: string
+}
+type RefreshWindow = {
+  start: string
+  end: string
+  lookbackDays: number | null
+  bootstrapStart: string
+  mode: string
+}
+type RefreshModule = {
+  createSourceFingerprint: (manifest: unknown) => Promise<{ fingerprint: string }>
+  refreshDataIfChanged: (rawArgs?: string[], options?: {
+    run?: RefreshRun
+    bucketClient?: BucketClient
+  }) => Promise<RefreshResult>
+  refreshDateWindow: (options?: {
+    args?: Record<string, string | undefined>
+    env?: Record<string, string | undefined>
+    end?: string
+    hasExistingRawBaseline?: boolean
+  }) => RefreshWindow
+}
+type BucketConfig = ReturnType<typeof bucketConfig>
+type BucketClient = {
+  send(command: { input: Record<string, unknown> }): Promise<unknown>
+}
+type BucketUploadResult = {
+  enabled: boolean
+  bucket?: string
+  prefix?: string
+  uploaded: Array<{ key: string; bytes?: number; contentType?: string }>
+  skipped: Array<{ key: string; reason: string }>
+}
+type BucketModule = {
+  bucketKey: (config: BucketConfig, path: string) => string
+  getBucketObject: (path: string, options: { config: BucketConfig; client: BucketClient }) => Promise<{ found: boolean }>
+  safeObjectPath: (path: string) => string
+  safeRequestedObjectPath: (path: string) => string
+  uploadRankingArtifacts: (options: {
+    publicDataDir: string
+    rawDir?: string
+    fullSnapshotPath?: string
+    manifestPath?: string
+    statePath?: string
+    config: BucketConfig
+    client: BucketClient
+    uploadFullSnapshot?: boolean
+  }) => Promise<BucketUploadResult>
+}
+
+const refreshScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
+const bucketScriptPath: string = '../scripts/railway-bucket.mjs'
+const { createSourceFingerprint, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
+const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import(bucketScriptPath) as unknown as BucketModule
 
 test('source fingerprint ignores volatile fetch timestamps', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-fingerprint-'))
@@ -305,6 +361,103 @@ test('refresh wrapper bootstraps when manifest exists but raw files are missing'
     } else {
       process.env.RANKING_REFRESH_BOOTSTRAP_START = previousBootstrapStart
     }
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh wrapper uploads refresh state after bucket publish metadata is attached', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-state-upload-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const stagingDir = join(tempDir, 'staging')
+  const publicDataDir = join(tempDir, 'public-data')
+  const output = join(tempDir, 'derived', 'ranking-snapshot.full.json')
+  const previousEnv = { ...process.env }
+  const sent: Array<{ input: { Key: string; Bucket: string; Body?: unknown; ContentType?: string } }> = []
+  const client = {
+    async send(command: { input: { Key: string; Bucket: string; Body?: unknown; ContentType?: string } }) {
+      sent.push({ input: command.input })
+      return {}
+    },
+  }
+
+  async function fakeRun(command: string, commandArgs: string[]) {
+    if (commandArgs.includes('scripts/download-local-data.mjs')) {
+      const outDir = valueAfter(commandArgs, '--out-dir')
+      const nextManifestPath = valueAfter(commandArgs, '--manifest')
+      const oraclePath = join(outDir, 'oracles-elixir', '2026.csv')
+      await mkdir(join(outDir, 'oracles-elixir'), { recursive: true })
+      await writeFile(oraclePath, 'gameid,result\nnew,1\n')
+      await writeFile(nextManifestPath, `${JSON.stringify({
+        ...manifest(oraclePath),
+        files: {
+          leaguepediaJson: [],
+          oracleCsv: [oraclePath],
+        },
+      }, null, 2)}\n`)
+      return
+    }
+
+    if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
+      await mkdir(join(publicDataDir, 'scopes'), { recursive: true })
+      await mkdir(join(tempDir, 'derived'), { recursive: true })
+      await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+      await writeFile(join(publicDataDir, 'scopes', 'all.json'), '{}\n')
+      await writeFile(output, '{}\n')
+      return
+    }
+
+    throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
+  }
+
+  try {
+    process.env.RANKING_BUCKET_NAME = 'bucket-123'
+    process.env.RANKING_BUCKET_ENDPOINT = 'https://storage.railway.app'
+    process.env.RANKING_BUCKET_ACCESS_KEY_ID = 'access-key'
+    process.env.RANKING_BUCKET_SECRET_ACCESS_KEY = 'secret-key'
+    process.env.RANKING_BUCKET_PREFIX = 'rankings'
+    process.env.RANKING_BUCKET_RESTORE_RAW = 'false'
+
+    await refreshDataIfChanged([
+      '--raw-dir',
+      rawDir,
+      '--manifest',
+      manifestPath,
+      '--state',
+      statePath,
+      '--staging-dir',
+      stagingDir,
+      '--output',
+      output,
+      '--public-data-dir',
+      publicDataDir,
+      '--end',
+      '2026-06-29',
+    ], { run: fakeRun, bucketClient: client })
+
+    const uploadedStateBody = sent.find((entry) => entry.input.Key === 'rankings/raw/refresh-state.json')?.input.Body
+    assert.equal(typeof uploadedStateBody, 'string')
+    const uploadedState = JSON.parse(uploadedStateBody as string)
+    const localState = JSON.parse(await readFile(statePath, 'utf8'))
+
+    assert.deepEqual(uploadedState.bucket, {
+      enabled: true,
+      bucket: 'bucket-123',
+      prefix: 'rankings',
+      uploadedCount: 5,
+      skipped: [{
+        key: 'rankings/artifacts/latest-full.json',
+        reason: 'full-snapshot-upload-disabled',
+      }],
+    })
+    assert.deepEqual(localState.bucket, uploadedState.bucket)
+
+    const publishBody = sent.find((entry) => entry.input.Key === 'rankings/latest-publish.json')?.input.Body
+    assert.equal(typeof publishBody, 'string')
+    assert.equal(JSON.parse(publishBody as string).artifactCount, uploadedState.bucket.uploadedCount)
+  } finally {
+    process.env = previousEnv
     await rm(tempDir, { recursive: true, force: true })
   }
 })

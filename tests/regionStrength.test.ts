@@ -25,7 +25,7 @@ function team(name: string, region: Region, rating: number, rank: number): Ranki
   return { team: name, code: name.slice(0, 3).toUpperCase(), region, league: region, rating, rank } as RankingSummaryStanding
 }
 
-test('deriveRegionStrength ranks regions by weighted score and excludes International', () => {
+test('deriveRegionStrength ranks regions by top-three team strength and excludes International', () => {
   const leagues: LeagueStrength[] = [
     league({ league: 'LCK', region: 'LCK', score: 1520, wins: 18, losses: 6, internationalMatches: 24, connectivity: 0.8 }),
     league({ league: 'LEC', region: 'LEC', score: 1480, wins: 9, losses: 12, internationalMatches: 21, connectivity: 0.7 }),
@@ -46,6 +46,8 @@ test('deriveRegionStrength ranks regions by weighted score and excludes Internat
 
   const lck = rows[0]
   assert.equal(lck.topTeamRating, 1640)
+  assert.equal(lck.topThreeTeamRating, 1625)
+  assert.equal(lck.totalTeamRating, 1625)
   assert.equal(lck.internationalWins, 18)
   assert.equal(lck.internationalLosses, 6)
   assert.ok(lck.internationalWinRate && lck.internationalWinRate > 0.7)
@@ -72,7 +74,9 @@ test('deriveRegionStrength uses flagship leagues instead of diluting majors with
   const lec = rows.find((row) => row.region === 'LEC')
 
   assert.ok(lec)
-  assert.equal(lec.score, 1460)
+  assert.equal(lec.score, 1550)
+  assert.equal(lec.topThreeTeamRating, 1550)
+  assert.equal(lec.totalTeamRating, 1550)
   assert.equal(lec.flagshipLeague, 'LEC')
   assert.deepEqual(lec.flagshipLeagues, ['LEC'])
   assert.equal(lec.teamCount, 1)
@@ -109,7 +113,40 @@ test('deriveRegionStrength lists eligible flagship teams as current representati
   assert.ok(lcs)
   assert.equal(lcs.teamCount, 3)
   assert.equal(lcs.topTeamRating, 1450)
+  assert.equal(lcs.topThreeTeamRating, 1440)
+  assert.equal(lcs.totalTeamRating, 1440)
   assert.deepEqual(lcs.topTeams.map((entry) => entry.team), ['Current Leader', 'Current Second'])
+})
+
+test('deriveRegionStrength exposes top-three and total-region team averages without team-count sum bias', () => {
+  const rows = deriveRegionStrength(
+    [
+      league({ league: 'LPL', region: 'LPL', score: 1510, wins: 10, losses: 10, internationalMatches: 20 }),
+      league({ league: 'LCK', region: 'LCK', score: 1500, wins: 10, losses: 10, internationalMatches: 20 }),
+    ],
+    [
+      team('LPL Elite', 'LPL', 1700, 1),
+      team('LPL Second', 'LPL', 1600, 2),
+      team('LPL Third', 'LPL', 1500, 3),
+      team('LPL Lower', 'LPL', 1000, 4),
+      team('LCK Elite', 'LCK', 1650, 5),
+      team('LCK Second', 'LCK', 1640, 6),
+      team('LCK Third', 'LCK', 1630, 7),
+    ],
+  )
+
+  const lpl = rows.find((row) => row.region === 'LPL')
+  const lck = rows.find((row) => row.region === 'LCK')
+
+  assert.ok(lpl)
+  assert.ok(lck)
+  assert.equal(lpl.topTeamRating, 1700)
+  assert.equal(lpl.topThreeTeamRating, 1600)
+  assert.equal(lpl.totalTeamRating, 1450)
+  assert.equal(lck.topThreeTeamRating, 1640)
+  assert.equal(lck.totalTeamRating, 1640)
+  assert.ok(lpl.topThreeTeamRating > lpl.totalTeamRating)
+  assert.ok(lck.topThreeTeamRating > lpl.topThreeTeamRating)
 })
 
 test('deriveRegionStrength includes international participant regions and ignores feeder ecosystems', () => {

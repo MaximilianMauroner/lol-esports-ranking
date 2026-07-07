@@ -15,11 +15,10 @@ permissions:
 
 env:
   NODE_VERSION: "22"
-  PNPM_VERSION: "9.15.9"
   RAILWAY_PROJECT_ID: "2bf26cbc-4cfa-4114-87c0-83b446f30816"
   RAILWAY_SERVICE_ID: "d01fe39e-81a4-4230-b997-f13fe8af351b"
   RAILWAY_ENVIRONMENT: production
-  RAILWAY_PUBLIC_URL: "https://web-production-1740be.up.railway.app"
+  RAILWAY_PUBLIC_URL: "https://lol-esports-power-index.up.railway.app"
 
 jobs:
   deploy:
@@ -36,11 +35,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
 
-      - name: Set up pnpm
+      - name: Enable Corepack
         run: |
           corepack enable
-          corepack prepare pnpm@${PNPM_VERSION} --activate
+          pnpm --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -57,9 +57,6 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -69,7 +66,7 @@ jobs:
             exit 1
           fi
 
-          railway up \
+          pnpm dlx @railway/cli up \
             --ci \
             --project "${RAILWAY_PROJECT_ID}" \
             --service "${RAILWAY_SERVICE_ID}" \

@@ -1,14 +1,19 @@
-import type { LeagueStrength, LeagueTierName, Region, TeamEligibility } from '../types'
+import type { LeagueStrength, LeagueTierName, Region } from '../types'
 import type { PublicTeamStanding } from './publicArtifacts/schema'
 import { currentTopTierRegionForLeague, isMajorRegionPowerRegion } from '../data/regionTaxonomy'
 
 export type RegionStrength = {
   region: Region | string
   rank: number
-  /** Composite power score for the region's flagship competitive league layer. */
+  /** Primary regional strength score: average rating of the top three eligible flagship teams. */
   score: number
+  deservedStanding?: RegionDeservedStandingComparison
   /** Rating of the single strongest team in the region. */
   topTeamRating: number
+  /** Average rating of the top three eligible teams in the region's flagship league layer. */
+  topThreeTeamRating: number
+  /** Average rating of every eligible team in the region's flagship league layer. */
+  totalTeamRating: number
   /** Teams in the flagship league layer used for the region score. */
   teamCount: number
   /** All teams currently mapped into this broad region ecosystem. */
@@ -33,6 +38,19 @@ export type RegionStrength = {
   topTeams: RegionTopTeam[]
 }
 
+export type RegionDeservedStandingComparison = {
+  rank: number
+  score: number
+  rankDeltaFromPower: number
+  scoreDeltaFromPower: number
+  internationalResumePoints: number
+  seedPerformancePoints: number
+  stagePoints: number
+  seedPerformanceRate: number
+  internationalWinsAboveExpectation: number
+  connectivity: number
+}
+
 export type RegionTopTeam = {
   team: string
   code?: string
@@ -41,7 +59,7 @@ export type RegionTopTeam = {
 }
 
 type RegionStanding = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league' | 'rating' | 'rank'> & {
-  eligibility?: TeamEligibility
+  eligibility?: PublicTeamStanding['eligibility']
 }
 
 export type RegionPowerTeamInput = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league'>
@@ -80,6 +98,9 @@ export function deriveRegionStrength(
       .slice()
       .sort((left, right) => ratingOf(right) - ratingOf(left))
     const rankedRegionTeams = regionTeams.filter((team) => team.eligibility?.eligible !== false)
+    const topTeamRating = rankedRegionTeams.length > 0 ? ratingOf(rankedRegionTeams[0]) : 0
+    const topThreeTeamRating = averageTeamRating(rankedRegionTeams.slice(0, 3))
+    const totalTeamRating = averageTeamRating(rankedRegionTeams)
 
     const internationalWins = sum(flagshipLeagues, (league) => league.wins)
     const internationalLosses = sum(flagshipLeagues, (league) => league.losses)
@@ -102,8 +123,10 @@ export function deriveRegionStrength(
     rows.push({
       region,
       rank: 0,
-      score: weightedLeagueScore(flagshipLeagues),
-      topTeamRating: rankedRegionTeams.length > 0 ? ratingOf(rankedRegionTeams[0]) : 0,
+      score: topThreeTeamRating,
+      topTeamRating,
+      topThreeTeamRating,
+      totalTeamRating,
       teamCount: regionTeams.length,
       ecosystemTeamCount: ecosystemTeams.length,
       leagueCount: flagshipLeagues.length,
@@ -171,20 +194,13 @@ function byFlagship(left: LeagueStrength, right: LeagueStrength) {
   return right.internationalMatches - left.internationalMatches || right.score - left.score
 }
 
-function weightedLeagueScore(leagues: LeagueStrength[]) {
-  if (leagues.length === 0) return 0
-  let weightedTotal = 0
-  let weightTotal = 0
-  for (const league of leagues) {
-    const weight = Math.max(1, league.wins + league.losses)
-    weightedTotal += league.score * weight
-    weightTotal += weight
-  }
-  return weightTotal > 0 ? weightedTotal / weightTotal : mean(leagues, (league) => league.score)
-}
-
 function ratingOf(team: RegionStanding) {
   return typeof team.rating === 'number' && Number.isFinite(team.rating) ? team.rating : 0
+}
+
+function averageTeamRating(teams: RegionStanding[]) {
+  if (teams.length === 0) return 0
+  return Number(mean(teams, ratingOf).toFixed(1))
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string | undefined) {

@@ -173,6 +173,17 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           manifestPath,
           statePath,
           config: bucketConfig,
+          client: options.bucketClient,
+          refreshStateForUpload: ({ bucket, prefix, uploadedCount, skipped }) => {
+            state.bucket = {
+              enabled: true,
+              bucket,
+              prefix,
+              uploadedCount,
+              skipped,
+            }
+            return state
+          },
         })
         state.bucket = {
           enabled: true,

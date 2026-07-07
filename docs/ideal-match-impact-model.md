@@ -165,6 +165,57 @@ ResultResidualLoser = 0 - ExpectedWinLoser
 An upset is not a special case in the formula. It naturally has a larger
 residual because the winner had a lower expected win probability.
 
+### 2a. Separate Calibrated Elo from Published Ladder Elo
+
+The internal Elo scale and the public rating scale should not be forced to do
+the same job. The internal scale exists to produce calibrated win probabilities.
+The public scale exists to communicate hierarchy. Right now the published range
+is too narrow: elite teams can look only modestly separated from the field even
+when the model has enough evidence that they belong in a top-ladder tier.
+
+Add an explicit published rating transform:
+
+```text
+PublishedRating =
+  PublishedAnchor
+  + (InternalPower - InternalAnchor) * PublishedSpreadMultiplier
+```
+
+Initial target:
+
+- `InternalAnchor`: current neutral team power, usually `1500`
+- `PublishedAnchor`: `1800`
+- `PublishedSpreadMultiplier`: start in the `3.0` to `3.5` range
+- `PublishedMinimum`: about `1000`
+- `PublishedMaximum`: about `3000`
+
+This should make the public board feel more like a Grandmaster or Challenger
+ladder:
+
+- lower-ranked professional teams: roughly `1000` to `1500`
+- solid regional professional teams: roughly `1500` to `1900`
+- major-region playoff teams: roughly `1900` to `2250`
+- international contenders: roughly `2250` to `2550`
+- world-title favorites: roughly `2550` to `2850+`
+
+This scale is for the curated professional-team rating universe. Random,
+amateur, unresolved, or otherwise out-of-scope teams should be excluded before
+the published transform is applied instead of forcing the scale to accommodate
+them.
+
+The transform must be monotonic, versioned in model parameters, and applied
+consistently to team ratings, league anchors, rating components, history points,
+movement deltas, uncertainty bands, comparison tables, and exported public
+artifacts. Receipts should expose both the published rating and enough model
+metadata to trace the internal calibrated rating that produced it.
+
+Do not widen the public range by blindly increasing K values. If the actual
+internal Elo unit is rescaled, the expected-score denominator, K factors,
+uncertainty values, regression constants, caps, league-anchor adjustments, and
+historical comparisons must all be rescaled together and pass walk-forward
+calibration. The safer default is to keep calibrated internal Elo stable and add
+a documented published ladder scale.
+
 ### 3. Build Match Quality Multipliers
 
 The raw residual should be multiplied by auditable factors:
@@ -714,6 +765,8 @@ RepresentativeWeight =
 Examples:
 
 - A league champion beating another league champion is strong league evidence.
+- Seed expectation is region-specific: baseline keys include both region and
+  seed, so an `LPL #1` and an `LCS #1` are not the same expectation.
 - A third seed beating a first seed is stronger evidence for the third seed's
   league than a first seed beating a fourth seed.
 - A result from a substitute roster is weaker evidence about the league.
@@ -1082,6 +1135,36 @@ Benefit: fairer regions and cleaner APAC/feeder ecosystem handling.
 Run streak, execution, player, league representative, and region aggregation
 changes in shadow mode first. Promote each only with walk-forward evidence.
 
+### Step 10: Add a Grandmaster-Style Published Rating Scale
+
+Add a versioned display-scale layer after calibrated team power is computed. The
+first implementation should preserve internal prediction math, then publish a
+wider ladder-style Elo range with top teams landing around Grandmaster or
+Challenger-like values instead of clustering in a narrow 1500 to 1700 band.
+
+Implementation requirements:
+
+- keep internal Elo, expected win probability, and validation metrics on the
+  calibrated scale
+- publish `ratingScale` metadata with anchor, multiplier, min, max, and version
+- transform rating components and history points so chart deltas reconcile with
+  displayed standings
+- keep raw calibrated rating available in full audit artifacts
+- update copy from generic "rating" to "Power Index" or "published Elo" where
+  needed so users understand the number is a ladder-scale presentation
+- compare old and new public distributions before release; the top board should
+  show meaningful separation without changing rank order from the internal
+  model
+
+Acceptance target:
+
+- current published professional standings should span roughly `1000` to `2850`
+- at least the best international contenders should clear `2400`
+- the top team should feel visually distinct without requiring artificial
+  one-match jumps
+- win probabilities before and after the display-scale change should be
+  identical for the same internal model state
+
 ## Acceptance Examples
 
 ### Team B Beats Team A, Same League, No Streak
@@ -1157,12 +1240,19 @@ Before implementation, decide:
 - whether execution residuals become active globally or only in validated
   segments
 - what public compact fields are needed without bloating `ranking-summary.json`
+- whether the first Grandmaster-style rating range is a pure published transform
+  or a full internal Elo rescale; default to the published transform
+- exact published scale parameters, including anchor, multiplier, min, max, and
+  labels for elite bands
+- whether public compact artifacts should expose both internal calibrated rating
+  and published ladder Elo, or keep internal rating only in full audit artifacts
 
 ## Recommendation
 
 The next model should keep the current explainable Elo-like spine, but make every
-match update multi-channel and auditable. The most important change is not a
-bigger K value. It is separating what the match taught the model:
+match update multi-channel and auditable. Widening the public Elo range is a
+presentation and provenance problem first, not just a bigger K value. The model
+should separate what the match taught the model:
 
 ```text
 Result -> stable team signal

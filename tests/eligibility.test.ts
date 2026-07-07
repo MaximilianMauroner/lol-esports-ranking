@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { evaluateTeamEligibility, matchLevelEligibilityHistory } from '../src/lib/eligibility.ts'
+import { emptyRatingUpdateLedger } from '../src/lib/ratingCalculations.ts'
 import type { TeamHistoryPoint } from '../src/types.ts'
 
 test('eligibility reports explicit current-window and staleness reasons', () => {
@@ -121,6 +122,15 @@ function historyPoint(date: string, overrides: Partial<TeamHistoryPoint> = {}): 
     baseRating: 1500,
     leagueAdjustment: 0,
     sideAdjustment: 0,
+    ratingComponents: {
+      leagueAnchor: 1500,
+      teamStableOffset: 0,
+      rosterPriorOffset: 0,
+      momentum: 0,
+      contextAdjustment: 0,
+      uncertainty: 50,
+    },
+    ratingUpdate: emptyRatingUpdateLedger(),
     rank: 1,
     delta: 0,
     tier: 'regional-regular',

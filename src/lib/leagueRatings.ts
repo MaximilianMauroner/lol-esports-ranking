@@ -1,8 +1,7 @@
 import { eventTierConfig } from '../data/rankingConfig'
 import { leaguePriorFor } from '../data/leagueTiers'
 import type { MatchRecord } from '../types'
-import { normalizedBestOf } from './matchFormat'
-import { expectedScore, isInternationalMatch } from './ratingCalculations'
+import { isInternationalMatch } from './ratingCalculations'
 
 export function ensureLeague(
   league: string,
@@ -51,67 +50,12 @@ type LeagueStrengthUpdateBase = LeagueStrengthState & {
   recency: number
 }
 
-export type LeagueStrengthGameUpdate = LeagueStrengthUpdateBase & {
-  aWon: boolean
-}
-
 export type LeagueStrengthSeriesUpdate = LeagueStrengthUpdateBase & {
   expectedOutcomeA: number
   expectedOutcomeB: number
   observedOutcomeA: number
   observedOutcomeB: number
   strengthSignal: number
-}
-
-export function updateLeagueStrengthForGame({
-  match,
-  leagueA,
-  leagueB,
-  leagueScoreA,
-  leagueScoreB,
-  leagueExpectedRatingA,
-  leagueExpectedRatingB,
-  aWon,
-  recency,
-  leagueScores,
-  previousLeagueScores,
-  leagueWins,
-  leagueLosses,
-  leagueExpectedWins,
-  leagueOpponentRatingSums,
-  leagueForms,
-  leagueMatchCounts,
-  leagueLastEvents,
-  leagueLastUpdated,
-}: LeagueStrengthGameUpdate) {
-  const leagueKFactor = eventTierConfig[match.tier].leagueKFactor
-  const expectedOutcomeA = expectedScore(leagueExpectedRatingA, leagueExpectedRatingB)
-
-  return updateLeagueStrength({
-    match,
-    leagueA,
-    leagueB,
-    leagueScoreA,
-    leagueScoreB,
-    leagueExpectedRatingA,
-    leagueExpectedRatingB,
-    expectedOutcomeA,
-    expectedOutcomeB: 1 - expectedOutcomeA,
-    observedOutcomeA: aWon ? 1 : 0,
-    observedOutcomeB: aWon ? 0 : 1,
-    kFactor: leagueKFactor / Math.sqrt(normalizedBestOf(match.bestOf)),
-    recency,
-    leagueScores,
-    previousLeagueScores,
-    leagueWins,
-    leagueLosses,
-    leagueExpectedWins,
-    leagueOpponentRatingSums,
-    leagueForms,
-    leagueMatchCounts,
-    leagueLastEvents,
-    leagueLastUpdated,
-  })
 }
 
 export function updateLeagueStrengthForSeries({

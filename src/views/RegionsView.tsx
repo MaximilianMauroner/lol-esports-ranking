@@ -61,12 +61,12 @@ export function RegionsView({
   return (
     <div className="view">
       <p className="view__intro">
-        Regional power is the match-volume-weighted strength of each region's leagues, anchored to the same global
-        rating scale and tempered by international results. Add regions to compare their power profile in the shared drawer.
+        Regional strength is anchored on each region's top three eligible flagship teams, with whole-region depth shown alongside it.
+        Add regions to compare their profile in the shared drawer.
       </p>
 
       <div className="ribbon">
-        <RibbonCell icon={<Trophy size={18} />} label="Strongest region" value={strongest?.region ?? '—'} detail={`Power score ${formatRating(strongest?.score)}`} />
+        <RibbonCell icon={<Trophy size={18} />} label="Strongest region" value={strongest?.region ?? '—'} detail={`Top 3 score ${formatRating(strongest?.score)}`} />
         <RibbonCell icon={<Globe2 size={18} />} label="Regions tracked" value={String(regions.length)} detail="Excludes international events" />
         <RibbonCell
           icon={<Swords size={18} />}
@@ -83,7 +83,7 @@ export function RegionsView({
             <h2>{pickedCount > 0 ? `${pickedCount} selected` : 'Add regions to compare'}</h2>
           </div>
           <span className="region-power-key">
-            <span>Power</span>
+            <span>Top 3</span>
             <i aria-hidden="true" />
             <strong>Higher score</strong>
           </span>
@@ -116,7 +116,7 @@ export function RegionsView({
                     </span>
                   </span>
                   <span className="region-score">
-                    <RegionPowerMeter value={region.score} min={min} max={max} />
+                    <RegionPowerMeter value={region.score} min={min} max={max} label="Top 3 score" />
                     <span className="region-mobile-stat">{formatSignedDecimal(region.winsOverExpected)} vs expected</span>
                   </span>
                   <span className="region-intl">
@@ -165,11 +165,11 @@ type RegionDrawerTeam = {
   rank?: number
 }
 
-function RegionPowerMeter({ value, min, max }: { value: number; min: number; max: number }) {
+function RegionPowerMeter({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
   const pct = pctWithin(value, min, max)
 
   return (
-    <span className="region-power" aria-label={`Power score ${formatRating(value)}`}>
+    <span className="region-power" aria-label={`${label} ${formatRating(value)}`}>
       <span className="region-power__score">{formatRating(value)}</span>
       <span className="region-power__meter" aria-hidden="true">
         <span className="region-power__fill" style={{ width: `${pct}%` }} />
@@ -324,7 +324,7 @@ function RegionDetailDrawer({
               </div>
               <strong>
                 {formatRating(region.score)}
-                <span>Power score</span>
+                <span>Top 3 score</span>
               </strong>
               <RegionPowerSparkline series={series} region={region.region} />
             </section>
@@ -349,6 +349,16 @@ function RegionDetailDrawer({
                 label="Top team power"
                 value={formatRating(region.topTeamRating)}
                 description="Rating of the strongest eligible team in this region's flagship league layer."
+              />
+              <DetailStat
+                label="Top 3 region power"
+                value={formatRating(region.topThreeTeamRating)}
+                description="Average rating of the three strongest eligible flagship teams. If a region has fewer than three eligible teams, this averages the available teams."
+              />
+              <DetailStat
+                label="Total region power"
+                value={formatRating(region.totalTeamRating)}
+                description="Average rating across every eligible flagship team in the region. This is an average, not a sum, so larger leagues do not get automatic credit for team count."
               />
               <DetailStat
                 label="Opponent power"

@@ -13,10 +13,8 @@ export type CurrentNeutralPrediction = NeutralWinProbability & {
   teamBRosterBasis?: TeamStanding['rosterBasis']
 }
 
-export type WalkForwardTarget = 'published-game' | 'neutral-game'
-
 export type WalkForwardMetrics = {
-  target: WalkForwardTarget
+  target: 'published-game'
   modelVersion: string
   modelConfigHash: string
   predictionCount: number

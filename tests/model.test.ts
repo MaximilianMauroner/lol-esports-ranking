@@ -258,7 +258,7 @@ test('domestic stable gains in weaker leagues are shrunk before global publicati
   assert.equal(lecLeader.ratingUpdate.teamStableShare, 0.59)
   assert.ok(lckLeader.ratingComponents.teamStableOffset > lecLeader.ratingComponents.teamStableOffset)
   assert.ok(lckLeader.rating - lecLeader.rating > 55)
-  assert.equal(lecLeader.ratingUpdate.unavailableChannels.includes('domestic-relative-strength:global-transfer-shrunk'), true)
+  assert.equal(lecLeader.ratingUpdate.unavailableChannels?.includes('domestic-relative-strength:global-transfer-shrunk'), true)
 })
 
 test('published roster prior caps positive player signal for sustained losing records', () => {

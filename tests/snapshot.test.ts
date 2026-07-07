@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
+import { emptyRatingUpdateLedger } from '../src/lib/ratingCalculations.ts'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, compactStanding } from '../src/lib/publicArtifacts/schema.ts'
 import type { StaticRankingData } from '../src/lib/snapshot.ts'
-import type { LeagueStrengthHistoryPoint, MatchRecord, PlayerStanding, Role, Side, TeamProfile, TeamStanding } from '../src/types.ts'
+import type { LeagueStrengthHistoryPoint, MatchRecord, PlayerStanding, Region, Role, Side, TeamProfile, TeamStanding } from '../src/types.ts'
 import { rosters, sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 function sourcedPlayer(overrides: Partial<PlayerStanding> & Pick<PlayerStanding, 'id' | 'name' | 'team' | 'role' | 'rank'>): PlayerStanding {
@@ -34,7 +35,7 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
     code: 'GEN',
     region: 'LCK',
     league: 'LCK',
-  } as TeamStanding
+  } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
     model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
@@ -211,7 +212,7 @@ test('createPlayerDirectory groups recent player game rows into match series', (
     code: 'BLG',
     region: 'LPL',
     league: 'LPL',
-  } as TeamStanding
+  } as unknown as TeamStanding
   const appearance = {
     primaryTeam: 'Bilibili Gaming',
     primaryTeamGames: 100,
@@ -694,7 +695,7 @@ test('createPlayerDirectory credits season rows to the primary scoped team', () 
       minCurrentWindowGames: 6,
       windowDays: 90,
     },
-  } as TeamStanding
+  } as unknown as TeamStanding
   const blgStanding = {
     team: 'Bilibili Gaming',
     code: 'BLG',
@@ -707,7 +708,7 @@ test('createPlayerDirectory credits season rows to the primary scoped team', () 
       minCurrentWindowGames: 6,
       windowDays: 90,
     },
-  } as TeamStanding
+  } as unknown as TeamStanding
   const seasonKey = snapshotKey({ season: '2025', event: 'All', region: 'All' })
   const transferredPlayer = sourcedPlayer({
     id: 'viper-transfer',
@@ -771,7 +772,7 @@ test('createPlayerDirectory gates low-sample sourced players from ranked public 
     code: 'GEN',
     region: 'LCK',
     league: 'LCK',
-  } as TeamStanding
+  } as unknown as TeamStanding
   const seasonKey = snapshotKey({ season: '2026', event: 'All', region: 'All' })
   const players = [
     sourcedPlayer({ id: 'thin', name: 'Thin Sample', team: 'Gen.G', role: 'Jungle', rank: 1, games: 19, rating: 240 }),
@@ -817,7 +818,7 @@ test('createPlayerDirectory gates unanchored-league teams from ranked public pla
       minCurrentWindowGames: 6,
       windowDays: 90,
     },
-  } as TeamStanding
+  } as unknown as TeamStanding
   const emergingStanding = {
     team: 'Galions',
     code: 'GALI',
@@ -830,7 +831,7 @@ test('createPlayerDirectory gates unanchored-league teams from ranked public pla
       minCurrentWindowGames: 6,
       windowDays: 90,
     },
-  } as TeamStanding
+  } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
     model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
@@ -891,7 +892,7 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
         source: { provider: 'oracles-elixir', gameId: 'g2', fileName: 'fixture.csv' },
       },
     ],
-  } as TeamStanding
+  } as unknown as TeamStanding
   const omittedStanding = {
     team: 'Beta',
     code: 'BET',
@@ -899,7 +900,7 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
     history: [
       { date: '2026-01-01', rating: 1490, rank: 2 },
     ],
-  } as TeamStanding
+  } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
     model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
@@ -923,7 +924,7 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
   assert.ok(history.series[teamStandingKey(includedStanding)])
   assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.event, 'LCK Cup')
   assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.opponent, 'Gamma')
-  assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.delta, 10)
+  assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.delta, 33)
   assert.equal(history.series[teamStandingKey(includedStanding)].points[1][3]?.sourceProvider, 'oracles-elixir')
   assert.equal(history.series[teamStandingKey(omittedStanding)], undefined)
 })
@@ -1013,7 +1014,7 @@ test('createTeamHistory publishes match-level history points for multi-game seri
         },
       },
     ],
-  } as TeamStanding
+  } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
     model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
@@ -1032,13 +1033,13 @@ test('createTeamHistory publishes match-level history points for multi-game seri
 
   assert.equal(points.length, 2)
   assert.equal(history.pointCount, 2)
-  assert.equal(seriesPoint[1], 1611)
+  assert.equal(seriesPoint[1], 2161)
   assert.equal(seriesPoint[3]?.result, 'L')
   assert.equal(seriesPoint[3]?.wins, 1)
   assert.equal(seriesPoint[3]?.losses, 2)
   assert.equal(seriesPoint[3]?.games, 3)
   assert.equal(seriesPoint[3]?.bestOf, 3)
-  assert.equal(seriesPoint[3]?.delta, -14)
+  assert.equal(seriesPoint[3]?.delta, -45)
   assert.deepEqual(seriesPoint[3]?.sourceGameIds, ['hle-gen-game-1', 'hle-gen-game-2', 'hle-gen-game-3'])
 })
 
@@ -1098,7 +1099,7 @@ test('createTeamHistory preserves the final atomic delta for model-correct serie
         source: { provider: 'oracles-elixir', gameId, fileName: 'fixture.csv', bestOf: 5 },
       })),
     ],
-  } as TeamStanding
+  } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
     model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
@@ -1121,7 +1122,7 @@ test('createTeamHistory preserves the final atomic delta for model-correct serie
   assert.equal(seriesPoint[3]?.losses, 3)
   assert.equal(seriesPoint[3]?.games, 5)
   assert.equal(seriesPoint[3]?.bestOf, 5)
-  assert.equal(seriesPoint[3]?.delta, -9)
+  assert.equal(seriesPoint[3]?.delta, -29)
   assert.deepEqual(seriesPoint[3]?.model, {
     e: 0.43,
   })
@@ -1166,7 +1167,7 @@ test('createTeamHistory final point matches published standing rating', () => {
         source: { provider: 'oracles-elixir', gameId: 'blg-tes-game-3', fileName: 'fixture.csv', bestOf: 5 },
       },
     ],
-  } as TeamStanding
+  } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-28T00:00:00.000Z',
     model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
@@ -1185,14 +1186,14 @@ test('createTeamHistory final point matches published standing rating', () => {
   const latest = points.at(-1)
 
   assert.equal(points.length, 3)
-  assert.equal(matchPoint?.[1], 1704)
+  assert.equal(matchPoint?.[1], 2463)
   assert.equal(matchPoint?.[3]?.opponent, 'Top Esports')
   assert.equal(matchPoint?.[3]?.result, 'W')
-  assert.equal(latest?.[1], 1699)
+  assert.equal(latest?.[1], 2447)
   assert.equal(latest?.[2], 1)
   assert.equal(latest?.[3]?.kind, 'standing-adjustment')
   assert.equal(latest?.[3]?.event, 'Published standing adjustment')
-  assert.equal(latest?.[3]?.delta, -5)
+  assert.equal(latest?.[3]?.delta, -16)
 })
 
 test('createTeamHistory skips unresolved tied match groups', () => {
@@ -1210,8 +1211,16 @@ test('createTeamHistory skips unresolved tied match groups', () => {
     rating: 1600 + delta,
     baseRating: 1600,
     leagueAdjustment: 0,
-    ratingComponents: {},
-    ratingUpdate: {},
+    sideAdjustment: 0,
+    ratingComponents: {
+      leagueAnchor: 1500,
+      teamStableOffset: 100,
+      rosterPriorOffset: 0,
+      momentum: 0,
+      contextAdjustment: 0,
+      uncertainty: 50,
+    },
+    ratingUpdate: emptyRatingUpdateLedger(),
     rank: 1,
     delta,
     tier: 'regional-regular',
@@ -1229,7 +1238,7 @@ test('createTeamHistory skips unresolved tied match groups', () => {
       historyPoint('2026-05-27', 'Hanwha Life Esports', 'L', 'tied-2', 3, -9),
       historyPoint('2026-06-03', 'Dplus KIA', 'W', 'single-1', 1, 4),
     ],
-  } as TeamStanding
+  } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
     model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },

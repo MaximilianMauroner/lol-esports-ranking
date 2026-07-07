@@ -1,10 +1,13 @@
 import type {
+  DeservedStandingEligibilityLabel,
+  DeservedStandingLeaderboard,
   FactorBreakdown,
   LeagueStrength,
   PlayerAppearanceSummary,
   PlayerDiagnostics,
   PlayerIndividualResidual,
   PlayerStanding,
+  PublishedRatingScale,
   RatingComponents,
   RatingUpdateLedger,
   Region,
@@ -28,7 +31,7 @@ import type { WalkForwardMetrics } from '../predictionModel'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
-export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 17 as const
+export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 18 as const
 
 export type ArtifactMeta = {
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
@@ -84,6 +87,23 @@ export type PublicTeamStanding = {
   factors: FactorBreakdown
   recentEvents: string[]
   recentMatches: PublicRecentMatch[]
+  deservedStanding?: PublicDeservedStandingComparison
+}
+
+export type PublicDeservedStandingComparison = {
+  leaderboard: DeservedStandingLeaderboard
+  rank: number
+  score: number
+  rankDeltaFromPower: number
+  scoreDeltaFromPower: number
+  eligibility: DeservedStandingEligibilityLabel
+  rosterValidity: number
+  winsAboveExpectation: number
+  gameDifferentialAboveExpectation: number
+  resumePoints: number
+  scheduleStrengthPoints: number
+  stagePoints: number
+  incomingPlayerBridgeCredit: number
 }
 
 type PublicTeamStandingInput = Omit<PublicTeamStanding, 'recentMatches' | 'teamId' | 'leagueId'> & Partial<Pick<PublicTeamStanding, 'teamId' | 'leagueId'>> & {
@@ -94,6 +114,7 @@ type PublicTeamStandingInput = Omit<PublicTeamStanding, 'recentMatches' | 'teamI
 export type PublicRankingShard = {
   artifactKind: 'public-snapshot-shard'
   artifactMeta?: ArtifactMeta
+  ratingScale: PublishedRatingScale
   filter: SnapshotFilter
   modelVersion: string
   modelConfigHash: string
@@ -321,6 +342,7 @@ export type PublicTeamHistoryDirectory = {
   artifactKind: 'team-history'
   schemaVersion?: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   artifactMeta?: ArtifactMeta
+  ratingScale: PublishedRatingScale
   generatedAt: string
   modelVersion: string
   modelConfigHash: string
@@ -340,6 +362,7 @@ export type PublicTeamHistoryShard = {
   artifactKind: 'team-history-scope'
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   artifactMeta?: ArtifactMeta
+  ratingScale: PublishedRatingScale
   generatedAt: string
   modelVersion: string
   modelConfigHash: string
@@ -361,6 +384,7 @@ export type PublicTeamHistoryIndex = {
   artifactKind: 'team-history-index'
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   artifactMeta?: ArtifactMeta
+  ratingScale: PublishedRatingScale
   generatedAt: string
   modelVersion: string
   modelConfigHash: string
@@ -378,7 +402,7 @@ export type PublicRegionHistoryPointContext = {
   losses?: number
   winsOverExpected?: number
   opponentAdjustedWinRate?: number
-  source?: 'league-strength-history'
+  source?: 'league-strength-history' | 'published-region-score'
 }
 
 export type PublicRegionHistoryPoint = [string, number, number, PublicRegionHistoryPointContext?]
@@ -399,6 +423,7 @@ export type PublicRegionHistoryDirectory = {
   artifactKind: 'region-history'
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   artifactMeta?: ArtifactMeta
+  ratingScale: PublishedRatingScale
   generatedAt: string
   modelVersion: string
   modelConfigHash: string
@@ -410,6 +435,7 @@ export type PublicRankingManifest = {
   artifactKind: 'public-ranking-manifest'
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   artifactMeta?: ArtifactMeta
+  ratingScale: PublishedRatingScale
   generatedAt: string
   source: string
   sources: DataSourceInfo[]
@@ -592,6 +618,7 @@ export function compactStanding(
     factors: standing.factors,
     recentEvents: standing.recentEvents,
     recentMatches: includeRecentMatches ? matchRecord?.recentMatches ?? standing.recentMatches ?? [] : [],
+    ...(standing.deservedStanding ? { deservedStanding: standing.deservedStanding } : {}),
   }
 }
 
@@ -712,6 +739,7 @@ export function parsePublicRankingManifest(value: unknown): PublicRankingManifes
   assertSchemaVersion(value, 'ranking manifest')
   assertArtifactMeta(value.artifactMeta, 'ranking manifest artifactMeta')
   assertEqual(value.summaryMode, 'browser-summary', 'ranking manifest summaryMode')
+  assertPublishedRatingScale(value.ratingScale, 'ranking manifest ratingScale')
   assertString(value.generatedAt, 'ranking manifest generatedAt')
   assertString(value.defaultSnapshotKey, 'ranking manifest defaultSnapshotKey')
   assertObject(value.model, 'ranking manifest model')
@@ -758,6 +786,7 @@ export function parsePublicRankingShard(value: unknown): PublicRankingShard {
   assertObject(value, 'ranking shard')
   assertEqual(value.artifactKind, 'public-snapshot-shard', 'ranking shard artifactKind')
   assertArtifactMeta(value.artifactMeta, 'ranking shard artifactMeta')
+  assertPublishedRatingScale(value.ratingScale, 'ranking shard ratingScale')
   assertSnapshotFilter(value.filter, 'ranking shard filter')
   assertString(value.modelVersion, 'ranking shard modelVersion')
   assertString(value.modelConfigHash, 'ranking shard modelConfigHash')
@@ -810,6 +839,7 @@ export function parsePublicTeamHistory(value: unknown): PublicTeamHistoryDirecto
   assertEqual(value.artifactKind, 'team-history', 'team history artifactKind')
   assertSchemaVersion(value, 'team history')
   assertArtifactMeta(value.artifactMeta, 'team history artifactMeta')
+  assertPublishedRatingScale(value.ratingScale, 'team history ratingScale')
   assertString(value.generatedAt, 'team history generatedAt')
   assertString(value.modelVersion, 'team history modelVersion')
   assertString(value.modelConfigHash, 'team history modelConfigHash')
@@ -836,6 +866,7 @@ export function parsePublicTeamHistoryIndex(value: unknown): PublicTeamHistoryIn
   assertEqual(value.artifactKind, 'team-history-index', 'team history index artifactKind')
   assertSchemaVersion(value, 'team history index')
   assertArtifactMeta(value.artifactMeta, 'team history index artifactMeta')
+  assertPublishedRatingScale(value.ratingScale, 'team history index ratingScale')
   assertString(value.generatedAt, 'team history index generatedAt')
   assertString(value.modelVersion, 'team history index modelVersion')
   assertString(value.modelConfigHash, 'team history index modelConfigHash')
@@ -856,6 +887,7 @@ export function parsePublicTeamHistoryShard(value: unknown): PublicTeamHistorySh
   assertEqual(value.artifactKind, 'team-history-scope', 'team history shard artifactKind')
   assertSchemaVersion(value, 'team history shard')
   assertArtifactMeta(value.artifactMeta, 'team history shard artifactMeta')
+  assertPublishedRatingScale(value.ratingScale, 'team history shard ratingScale')
   assertString(value.generatedAt, 'team history shard generatedAt')
   assertString(value.modelVersion, 'team history shard modelVersion')
   assertString(value.modelConfigHash, 'team history shard modelConfigHash')
@@ -878,6 +910,7 @@ export function parsePublicRegionHistory(value: unknown): PublicRegionHistoryDir
   assertEqual(value.artifactKind, 'region-history', 'region history artifactKind')
   assertSchemaVersion(value, 'region history')
   assertArtifactMeta(value.artifactMeta, 'region history artifactMeta')
+  assertPublishedRatingScale(value.ratingScale, 'region history ratingScale')
   assertString(value.generatedAt, 'region history generatedAt')
   assertString(value.modelVersion, 'region history modelVersion')
   assertString(value.modelConfigHash, 'region history modelConfigHash')
@@ -1093,7 +1126,7 @@ function assertRegionHistoryPointContext(value: Record<string, unknown>, label: 
   assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
   assertOptionalNumber(value.winsOverExpected, `${label} winsOverExpected`)
   assertOptionalNumber(value.opponentAdjustedWinRate, `${label} opponentAdjustedWinRate`)
-  assertOptionalEnum(value.source, ['league-strength-history'], `${label} source`)
+  assertOptionalEnum(value.source, ['league-strength-history', 'published-region-score'], `${label} source`)
 }
 
 function assertSnapshotFilter(value: unknown, label: string): asserts value is SnapshotFilter {
@@ -1240,7 +1273,10 @@ function assertRegionStrength(value: unknown, label: string): asserts value is R
   assertString(value.region, `${label} region`)
   assertNumber(value.rank, `${label} rank`)
   assertNumber(value.score, `${label} score`)
+  if (value.deservedStanding !== undefined) assertRegionDeservedStanding(value.deservedStanding, `${label} deservedStanding`)
   assertNumber(value.topTeamRating, `${label} topTeamRating`)
+  assertNumber(value.topThreeTeamRating, `${label} topThreeTeamRating`)
+  assertNumber(value.totalTeamRating, `${label} totalTeamRating`)
   assertNonNegativeInteger(value.teamCount, `${label} teamCount`)
   assertNonNegativeInteger(value.ecosystemTeamCount, `${label} ecosystemTeamCount`)
   assertNonNegativeInteger(value.leagueCount, `${label} leagueCount`)
@@ -1260,12 +1296,45 @@ function assertRegionStrength(value: unknown, label: string): asserts value is R
   value.topTeams.forEach((team, index) => assertRegionTopTeam(team, `${label} topTeams[${index}]`))
 }
 
+function assertRegionDeservedStanding(value: unknown, label: string) {
+  assertObject(value, label)
+  assertNumber(value.rank, `${label} rank`)
+  assertNumber(value.score, `${label} score`)
+  assertNumber(value.rankDeltaFromPower, `${label} rankDeltaFromPower`)
+  assertNumber(value.scoreDeltaFromPower, `${label} scoreDeltaFromPower`)
+  assertNumber(value.internationalResumePoints, `${label} internationalResumePoints`)
+  assertNumber(value.seedPerformancePoints, `${label} seedPerformancePoints`)
+  assertNumber(value.stagePoints, `${label} stagePoints`)
+  assertNumber(value.seedPerformanceRate, `${label} seedPerformanceRate`)
+  assertNumber(value.internationalWinsAboveExpectation, `${label} internationalWinsAboveExpectation`)
+  assertNumber(value.connectivity, `${label} connectivity`)
+}
+
 function assertRegionTopTeam(value: unknown, label: string) {
   assertObject(value, label)
   assertString(value.team, `${label} team`)
   if (value.code !== undefined) assertString(value.code, `${label} code`)
   assertNumber(value.rating, `${label} rating`)
   if (value.rank !== undefined) assertNumber(value.rank, `${label} rank`)
+}
+
+function assertPublishedRatingScale(value: unknown, label: string): asserts value is PublishedRatingScale {
+  assertObject(value, label)
+  assertString(value.version, `${label} version`)
+  assertNumber(value.internalAnchor, `${label} internalAnchor`)
+  assertNumber(value.publishedAnchor, `${label} publishedAnchor`)
+  assertNumber(value.spreadMultiplier, `${label} spreadMultiplier`)
+  assertNumber(value.publishedMinimum, `${label} publishedMinimum`)
+  assertNumber(value.publishedMaximum, `${label} publishedMaximum`)
+  assertString(value.label, `${label} label`)
+  assertString(value.shortLabel, `${label} shortLabel`)
+  assertString(value.description, `${label} description`)
+  if (value.spreadMultiplier <= 0) {
+    throw new Error(`Invalid public artifact: ${label} spreadMultiplier must be positive`)
+  }
+  if (value.publishedMinimum >= value.publishedMaximum) {
+    throw new Error(`Invalid public artifact: ${label} minimum must be lower than maximum`)
+  }
 }
 
 function assertObject(value: unknown, label: string): asserts value is Record<string, unknown> {

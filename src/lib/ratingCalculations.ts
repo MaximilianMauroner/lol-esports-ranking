@@ -1,5 +1,5 @@
 import { eventTierConfig } from '../data/rankingConfig'
-import type { MatchRecord, RatingComponents, RatingUpdateLedger, RosterBasis } from '../types'
+import type { MatchRecord, PublishedRatingScale, RatingComponents, RatingUpdateLedger, RosterBasis } from '../types'
 import { normalizedBestOf } from './matchFormat'
 import {
   initialLeagueRating,
@@ -7,12 +7,11 @@ import {
   leagueEloWeight,
   maximumUncertainty,
   minimumUncertainty,
-  momentumExecutionKFactor,
-  momentumKFactor,
   momentumPatchRetention,
   momentumSplitRetention,
   normalUncertainty,
   publishedLeagueAnchorReliefConfig,
+  publishedRatingScale,
   publishedRosterPriorConfig,
   recencyDecayDays,
   recencyFloor,
@@ -67,6 +66,85 @@ export function normalize(value: number, min: number, max: number) {
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+export function toPublishedRating(internalRating: number, scale: PublishedRatingScale = publishedRatingScale) {
+  if (!Number.isFinite(internalRating)) return internalRating
+  return clamp(
+    scale.publishedAnchor + (internalRating - scale.internalAnchor) * scale.spreadMultiplier,
+    scale.publishedMinimum,
+    scale.publishedMaximum,
+  )
+}
+
+export function toInternalRating(publishedRating: number, scale: PublishedRatingScale = publishedRatingScale) {
+  if (!Number.isFinite(publishedRating)) return publishedRating
+  const clamped = clamp(publishedRating, scale.publishedMinimum, scale.publishedMaximum)
+  return scale.internalAnchor + (clamped - scale.publishedAnchor) / scale.spreadMultiplier
+}
+
+export function toPublishedRatingDelta(internalDelta: number, scale: PublishedRatingScale = publishedRatingScale) {
+  if (!Number.isFinite(internalDelta)) return internalDelta
+  return internalDelta * scale.spreadMultiplier
+}
+
+export function toInternalRatingDelta(publishedDelta: number, scale: PublishedRatingScale = publishedRatingScale) {
+  if (!Number.isFinite(publishedDelta)) return publishedDelta
+  return publishedDelta / scale.spreadMultiplier
+}
+
+export function toPublishedRatingComponents(
+  components: RatingComponents,
+  scale: PublishedRatingScale = publishedRatingScale,
+): RatingComponents {
+  return {
+    leagueAnchor: Math.round(toPublishedRating(components.leagueAnchor, scale)),
+    teamStableOffset: roundScaledDelta(components.teamStableOffset, scale),
+    rosterPriorOffset: roundScaledDelta(components.rosterPriorOffset, scale),
+    momentum: roundScaledDelta(components.momentum, scale),
+    contextAdjustment: roundScaledDelta(components.contextAdjustment, scale),
+    uncertainty: Math.round(toPublishedRatingDelta(components.uncertainty, scale)),
+  }
+}
+
+export function ratingScaleFromUnknown(value: unknown): PublishedRatingScale | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const candidate = value as Record<string, unknown>
+  if (
+    typeof candidate.version !== 'string'
+    || typeof candidate.internalAnchor !== 'number'
+    || typeof candidate.publishedAnchor !== 'number'
+    || typeof candidate.spreadMultiplier !== 'number'
+    || typeof candidate.publishedMinimum !== 'number'
+    || typeof candidate.publishedMaximum !== 'number'
+    || typeof candidate.label !== 'string'
+    || typeof candidate.shortLabel !== 'string'
+    || typeof candidate.description !== 'string'
+  ) {
+    return undefined
+  }
+  if (
+    !Number.isFinite(candidate.internalAnchor)
+    || !Number.isFinite(candidate.publishedAnchor)
+    || !Number.isFinite(candidate.spreadMultiplier)
+    || !Number.isFinite(candidate.publishedMinimum)
+    || !Number.isFinite(candidate.publishedMaximum)
+    || candidate.spreadMultiplier <= 0
+    || candidate.publishedMinimum >= candidate.publishedMaximum
+  ) {
+    return undefined
+  }
+  return {
+    version: candidate.version,
+    internalAnchor: candidate.internalAnchor,
+    publishedAnchor: candidate.publishedAnchor,
+    spreadMultiplier: candidate.spreadMultiplier,
+    publishedMinimum: candidate.publishedMinimum,
+    publishedMaximum: candidate.publishedMaximum,
+    label: candidate.label,
+    shortLabel: candidate.shortLabel,
+    description: candidate.description,
+  }
 }
 
 export function powerRating(teamRating: number, leagueRating: number) {
@@ -219,6 +297,10 @@ function roundOptional(value: number | undefined, digits: number) {
   return Number((value ?? 0).toFixed(digits))
 }
 
+function roundScaledDelta(value: number, scale: PublishedRatingScale) {
+  return Number(toPublishedRatingDelta(value, scale).toFixed(1))
+}
+
 export function leagueAdjustment(teamRating: number, leagueRating: number) {
   return Math.round(powerRating(teamRating, leagueRating) - teamRating)
 }
@@ -238,10 +320,6 @@ export function uncertaintyKMultiplier(sigma: number) {
 export function rosterVolatilityMultiplier(continuity?: number) {
   if (continuity === undefined) return 1
   return clamp(1 + (1 - continuity) * 0.5, 1, rosterVolatilityKCeiling)
-}
-
-export function momentumDelta(resultResidual: number, executionResidual: number) {
-  return momentumKFactor * resultResidual + momentumExecutionKFactor * executionResidual
 }
 
 export function isInternationalMatch(match: MatchRecord) {

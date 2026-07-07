@@ -133,7 +133,10 @@ export function TeamsView({
   const pageEnd = sorted.length === 0 ? 0 : pageStart + visible.length
   const resultSummary = `${formatNumber(sorted.length === 0 ? 0 : pageStart + 1)}-${formatNumber(pageEnd)} of ${formatNumber(filtered.length)}`
   const hasActiveFilters = search.trim() !== '' || region !== 'All' || eligibilityFilter !== 'ranked'
-  const [ratingMin, ratingMax] = useMemo(() => extent(filtered.map((team) => team.rating)), [filtered])
+  const [ratingMin, ratingMax] = useMemo(
+    () => extent(filtered.map((team) => teamScoreFor(team) ?? Number.NaN)),
+    [filtered],
+  )
 
   const detailTeam = useMemo(
     () => (detailKey ? standings.find((team) => teamKey(team) === detailKey) : undefined),
@@ -282,7 +285,7 @@ export function TeamsView({
                     <TableRow>
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
                       <TableHead>Team</TableHead>
-                      <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
+                      <SortHeader label="Team score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
                       <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" className="gpr-col-record" />
                       <TableHead className="center" aria-label="Add to comparison" />
                     </TableRow>
@@ -291,6 +294,7 @@ export function TeamsView({
                     {visible.map((team) => {
                       const key = teamKey(team)
                       const total = team.wins + team.losses
+                      const rank = teamRankFor(team)
                       return (
                         <TableRow
                           key={key}
@@ -298,10 +302,9 @@ export function TeamsView({
                         >
                           <TableCell>
                             <span className="gpr-rankcell">
-                              <span className={`gpr-rank${typeof team.rank === 'number' && team.rank <= 3 ? ' podium' : ''}`}>
-                                {team.rank ?? '—'}
+                              <span className={`gpr-rank${typeof rank === 'number' && rank <= 3 ? ' podium' : ''}`}>
+                                {rank ?? '—'}
                               </span>
-                              <Movement value={team.movement} rank={team.rank} previousRank={team.previousRank} />
                             </span>
                           </TableCell>
                           <TableCell>
@@ -320,7 +323,7 @@ export function TeamsView({
                             </Button>
                           </TableCell>
                           <TableCell className="right">
-                            <HeatChip value={team.rating} min={ratingMin} max={ratingMax} label={formatRating(team.rating)} />
+                            <TeamScoreCell team={team} min={ratingMin} max={ratingMax} />
                           </TableCell>
                           <TableCell className="right num gpr-col-record">
                             <b className="record-main">{formatRecord(team.wins, team.losses)}</b>{' '}
@@ -458,23 +461,53 @@ export function TeamsView({
   )
 }
 
-function Movement({ value, rank, previousRank }: { value?: number; rank?: number; previousRank?: number }) {
-  const label = rankMovementLabel({ value, rank, previousRank })
-  if (!value || !Number.isFinite(value)) return <span className="gpr-move flat" aria-label={label} title={label}>–</span>
-  if (value > 0) return <span className="gpr-move up" aria-label={label} title={label}>▲{value}</span>
-  return <span className="gpr-move down" aria-label={label} title={label}>▼{Math.abs(value)}</span>
+function TeamScoreCell({
+  team,
+  min,
+  max,
+}: {
+  team: RankingSummaryStanding
+  min: number
+  max: number
+}) {
+  const score = teamScoreFor(team)
+  return (
+    <>
+      {typeof score === 'number' ? (
+        <HeatChip value={score} min={min} max={max} label={formatRating(score)} />
+      ) : (
+        <span className="score-unavailable">—</span>
+      )}
+      <TeamScoreMeta team={team} />
+    </>
+  )
 }
 
-function formatRankMovement(team: Pick<RankingSummaryStanding, 'movement' | 'previousRank' | 'rank'>) {
-  if (!team.movement || !Number.isFinite(team.movement)) return 'Flat'
-  const amount = Math.abs(Math.round(team.movement))
-  if (amount === 0) return 'Flat'
-  const direction = team.movement > 0 ? '+' : '-'
-  const unit = amount === 1 ? 'rank' : 'ranks'
-  if (Number.isFinite(team.previousRank) && Number.isFinite(team.rank)) {
-    return `${direction}${formatNumber(amount)} ${unit} (#${team.previousRank} to #${team.rank})`
-  }
-  return `${direction}${formatNumber(amount)} ${unit}`
+function TeamScoreMeta({ team }: { team: RankingSummaryStanding }) {
+  const dss = team.deservedStanding
+  if (!dss) return null
+  if (dss.eligibility === 'Eligible') return null
+  return <span className="score-meta" title={teamScoreTitle(team)}>{dss.eligibility}</span>
+}
+
+function teamRankFor(team: RankingSummaryStanding) {
+  return team.rank
+}
+
+function teamScoreFor(team: RankingSummaryStanding) {
+  return team.rating
+}
+
+function teamScoreTitle(team: RankingSummaryStanding) {
+  const dss = team.deservedStanding
+  if (!dss) return `Team score ${formatRating(team.rating)}`
+  return [
+    `Team score ${formatRating(team.rating)}`,
+    `deserved check #${dss.rank} (${formatRating(dss.score)})`,
+    `WAE ${formatSigned(dss.winsAboveExpectation)}`,
+    `roster validity ${formatRatio(dss.rosterValidity)}`,
+    dss.eligibility,
+  ].join(' · ')
 }
 
 function formatRatingMovement(value?: number) {
@@ -487,21 +520,6 @@ function formatRatingMovement(value?: number) {
 function movementTone(value?: number) {
   if (typeof value !== 'number' || !Number.isFinite(value) || Math.round(value) === 0) return 'flat'
   return value > 0 ? 'up' : 'down'
-}
-
-function rankMovementLabel({
-  value,
-  rank,
-  previousRank,
-}: {
-  value?: number
-  rank?: number
-  previousRank?: number
-}) {
-  if (!value || !Number.isFinite(value)) return 'No rank change around latest team update'
-  const direction = value > 0 ? 'up' : 'down'
-  const range = Number.isFinite(previousRank) && Number.isFinite(rank) ? `, from #${previousRank} to #${rank}` : ''
-  return `Rank ${direction} ${Math.abs(value)} around latest team update${range}`
 }
 
 function teamSubtitle(team: RankingSummaryStanding) {
@@ -553,7 +571,7 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
           </div>
         ))}
       </div>
-      <p className="method-foot">Weighted by match volume and international results.</p>
+      <p className="method-foot">Regional score is the average of each region's top three eligible flagship teams.</p>
     </section>
   )
 }
@@ -688,6 +706,8 @@ function TeamDetailDrawer({
   const opponentFactor = Math.round((team.factors?.opponent ?? 0) * 100)
   const trendSummary = useMemo(() => summarizeTeamTrend(series), [series])
   const uncertainty = team.ratingComponents?.uncertainty
+  const score = teamScoreFor(team)
+  const rank = teamRankFor(team)
 
   return (
     <Sheet open onOpenChange={(nextOpen) => {
@@ -726,10 +746,10 @@ function TeamDetailDrawer({
         <div className="team-detail-sheet__body min-h-0 flex-1">
           <section className="team-detail-hero" aria-label={`${team.team} summary`}>
             <div className="team-detail-hero__score">
-              <span className="team-detail-hero__rank">#{team.rank}</span>
+              <span className="team-detail-hero__rank">#{rank ?? '—'}</span>
               <div>
-                <strong>{formatRating(team.rating)}</strong>
-                <small>Power score{typeof uncertainty === 'number' ? ` ±${formatRating(uncertainty)}` : ''}</small>
+                <strong>{formatRating(score)}</strong>
+                <small>Team score</small>
               </div>
             </div>
             <div className="team-detail-hero__facts">
@@ -743,14 +763,21 @@ function TeamDetailDrawer({
                 <TeamRatingSparkline series={series} summary={trendSummary} teamName={team.team} />
               </span>
               <span>
-                <small>Rank movement</small>
-                <b className={movementTone(team.movement)}>{formatRankMovement(team)}</b>
+                <small>Power rating</small>
+                <b>{formatRating(team.rating)}{typeof uncertainty === 'number' ? ` ±${formatRating(uncertainty)}` : ''}</b>
               </span>
               <span>
                 <small>Opponent factor</small>
                 <b>{opponentFactor}%</b>
                 <em>Schedule signal</em>
               </span>
+              {team.deservedStanding ? (
+                <span>
+                  <small>Score evidence</small>
+                  <b>{team.deservedStanding.eligibility}</b>
+                  <em>Roster {formatRatio(team.deservedStanding.rosterValidity)}</em>
+                </span>
+              ) : null}
             </div>
           </section>
 
@@ -1094,11 +1121,11 @@ function sortStandings(rows: RankingSummaryStanding[], key: SortKey) {
   const copy = [...rows]
   switch (key) {
     case 'rating':
-      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || (b.rating ?? 0) - (a.rating ?? 0) || compareRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || compareTeamScore(b, a) || compareTeamRank(a, b))
     case 'wins':
-      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || (b.wins ?? 0) - (a.wins ?? 0) || compareRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || (b.wins ?? 0) - (a.wins ?? 0) || compareTeamRank(a, b))
     default:
-      return copy.sort(compareRank)
+      return copy.sort((a, b) => compareTeamRank(a, b))
   }
 }
 
@@ -1106,8 +1133,13 @@ function compareRankedBoardEligibility(a: RankingSummaryStanding, b: RankingSumm
   return Number(b.eligibility?.eligible ?? true) - Number(a.eligibility?.eligible ?? true)
 }
 
-function compareRank(a: RankingSummaryStanding, b: RankingSummaryStanding) {
-  return (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
+function compareTeamRank(a: RankingSummaryStanding, b: RankingSummaryStanding) {
+  return (teamRankFor(a) ?? Number.MAX_SAFE_INTEGER) - (teamRankFor(b) ?? Number.MAX_SAFE_INTEGER)
+    || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
+}
+
+function compareTeamScore(a: RankingSummaryStanding, b: RankingSummaryStanding) {
+  return (teamScoreFor(a) ?? Number.NEGATIVE_INFINITY) - (teamScoreFor(b) ?? Number.NEGATIVE_INFINITY)
 }
 
 function playersForTeam(players: CompactPlayer[] | undefined, team: RankingSummaryStanding) {

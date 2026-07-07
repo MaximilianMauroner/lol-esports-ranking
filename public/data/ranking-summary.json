@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 17,
-  "generatedAt": "2026-07-06T17:36:46.038Z",
+  "schemaVersion": 18,
+  "generatedAt": "2026-07-07T16:16:14.713Z",
   "source": "Oracle's Elixir CSV import",
   "sources": [
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-07-06T17:36:40.598Z",
+      "retrievedAt": "2026-07-07T16:16:09.196Z",
       "coverageStart": "2025-01-12",
       "coverageEnd": "2025-12-29",
       "rowCount": 2354,
@@ -16,7 +16,7 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-07-06T17:36:45.469Z",
+      "retrievedAt": "2026-07-07T16:16:14.149Z",
       "coverageStart": "2026-01-14",
       "coverageEnd": "2026-07-06",
       "rowCount": 1839,
@@ -41,10 +41,32 @@
   "model": {
     "name": "Transparent GPR",
     "version": "transparent-gpr-v0.0.0",
-    "configHash": "fnv1a-4620532b",
+    "configHash": "fnv1a-6934ec8f",
+    "ratingScale": {
+      "version": "published-power-index-v1",
+      "internalAnchor": 1500,
+      "publishedAnchor": 1800,
+      "spreadMultiplier": 3.25,
+      "publishedMinimum": 1000,
+      "publishedMaximum": 3000,
+      "label": "Power Index",
+      "shortLabel": "Power",
+      "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
+    },
     "parameters": {
       "initialTeamRating": 1500,
       "initialLeagueRating": 1500,
+      "publishedRatingScale": {
+        "version": "published-power-index-v1",
+        "internalAnchor": 1500,
+        "publishedAnchor": 1800,
+        "spreadMultiplier": 3.25,
+        "publishedMinimum": 1000,
+        "publishedMaximum": 3000,
+        "label": "Power Index",
+        "shortLabel": "Power",
+        "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
+      },
       "leagueEloWeight": 1,
       "leagueAdjustmentPolicy": "seasonal-hierarchical-anchor",
       "publishedLeagueAnchorPolicy": "team-evidence-gated-anchor-relief-v1",
@@ -550,7 +572,7 @@
     "ratingProof": {
       "sourceProvider": "oracles-elixir",
       "modelVersion": "transparent-gpr-v0.0.0",
-      "modelConfigHash": "fnv1a-4620532b",
+      "modelConfigHash": "fnv1a-6934ec8f",
       "ratedPlayerCount": 491,
       "ratedTeamCount": 71,
       "sampleSize": 41930,
@@ -1004,7 +1026,7 @@
     "metrics": {
       "target": "published-game",
       "modelVersion": "transparent-gpr-v0.0.0",
-      "modelConfigHash": "fnv1a-4620532b",
+      "modelConfigHash": "fnv1a-6934ec8f",
       "predictionCount": 4193,
       "accuracy": 0.6361,
       "brierScore": 0.2308,
@@ -1484,17 +1506,28 @@
   "defaultSnapshotKey": "All__All__All",
   "artifactKind": "public-ranking-manifest",
   "artifactMeta": {
-    "schemaVersion": 17,
-    "runId": "run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
-    "generatedAt": "2026-07-06T17:36:46.038Z",
+    "schemaVersion": 18,
+    "runId": "run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
+    "generatedAt": "2026-07-07T16:16:14.713Z",
     "modelVersion": "transparent-gpr-v0.0.0",
-    "modelConfigHash": "fnv1a-4620532b"
+    "modelConfigHash": "fnv1a-6934ec8f"
+  },
+  "ratingScale": {
+    "version": "published-power-index-v1",
+    "internalAnchor": 1500,
+    "publishedAnchor": 1800,
+    "spreadMultiplier": 3.25,
+    "publishedMinimum": 1000,
+    "publishedMaximum": 3000,
+    "label": "Power Index",
+    "shortLabel": "Power",
+    "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
   },
   "summaryMode": "browser-summary",
-  "playerDirectoryUrl": "/data/entities/players.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
-  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
-  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
-  "regionHistoryUrl": "/data/history/region-series.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+  "playerDirectoryUrl": "/data/entities/players.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
+  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
+  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
+  "regionHistoryUrl": "/data/history/region-series.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
   "teamCount": 71,
   "snapshotIndex": {
     "All__All__All": {
@@ -1503,7 +1536,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/all.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/all.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 4193,
       "sourceBreakdown": [
         {
@@ -1522,7 +1555,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2025.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/season-2025.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 2287,
       "sourceBreakdown": [
         {
@@ -1542,7 +1575,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2025-split-1.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/season-2025-split-1.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 454,
       "sourceBreakdown": [
         {
@@ -1562,7 +1595,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2025-split-2.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/season-2025-split-2.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 932,
       "sourceBreakdown": [
         {
@@ -1582,7 +1615,7 @@
         "region": "All",
         "checkpoint": "split-3"
       },
-      "url": "/data/scopes/season-2025-split-3.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/season-2025-split-3.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 832,
       "sourceBreakdown": [
         {
@@ -1601,7 +1634,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2026.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/season-2026.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 1839,
       "sourceBreakdown": [
         {
@@ -1621,7 +1654,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2026-split-1.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/season-2026-split-1.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 737,
       "sourceBreakdown": [
         {
@@ -1641,7 +1674,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2026-split-2.json?v=run_20260706173646_transparent-gpr-v0-0-0_fnv1a-4620532b",
+      "url": "/data/scopes/season-2026-split-2.json?v=run_20260707161614_transparent-gpr-v0-0-0_fnv1a-6934ec8f",
       "matchCount": 1102,
       "sourceBreakdown": [
         {
