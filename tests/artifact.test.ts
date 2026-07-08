@@ -135,14 +135,15 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
   const giantx = standingFor(shard, 'GiantX')
 
   assert.equal(lyon.eligibility.eligible, true)
-  assert.deepEqual([lyon.wins, lyon.losses], [20, 9])
+  assert.deepEqual([lyon.wins, lyon.losses], [21, 9])
   assert.deepEqual([drx.wins, drx.losses], [9, 20])
   assert.deepEqual([giantx.wins, giantx.losses], [15, 14])
+  assert.equal(lyon.recentMatches.some((match) => match.opponent === 'Team Secret Whales' && match.result === 'W' && match.games === 3), true)
   assert.ok(lyon.rank < drx.rank)
   assert.ok(lyon.rank < giantx.rank)
 })
 
-test('generated 2026 scope reflects latest MSI results over the older T1 and Gen.G head-to-head', async () => {
+test('generated 2026 scope records T1 current MSI evidence after Gen.G', async () => {
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const entry = summary.snapshotIndex['2026__All__All']
   assert.ok(entry)
@@ -150,10 +151,11 @@ test('generated 2026 scope reflects latest MSI results over the older T1 and Gen
   const t1 = standingFor(shard, 'T1')
   const geng = standingFor(shard, 'Gen.G')
 
-  assert.deepEqual([t1.wins, t1.losses], [27, 8])
+  assert.deepEqual([t1.wins, t1.losses], [27, 9])
   assert.deepEqual([geng.wins, geng.losses], [25, 6])
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'Bilibili Gaming' && match.result === 'L' && match.games === 5), true)
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'FURIA' && match.result === 'W'), true)
+  assert.equal(t1.recentMatches.some((match) => match.opponent === 'G2 Esports' && match.result === 'L' && match.games === 4), true)
   assert.equal(geng.recentMatches.some((match) => match.opponent === 'T1' && match.result === 'L' && match.games === 5), true)
   assert.ok(geng.rank < t1.rank)
 })
@@ -236,7 +238,7 @@ test('generated public artifacts include season checkpoint scopes', async () => 
   const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
   const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
 
-  assert.equal(checkpoint.boundaryEvent, 'MSI 2026')
+  assert.match(checkpoint.boundaryEvent, /^(MSI 2026|2026 Mid-Season Invitational)$/)
   assert.equal(shard.filter.checkpoint, checkpoint.id)
   assert.equal(shard.matchCount > 0, true)
   assert.equal(shard.standings.some((standing) => standing.movement !== 0 || standing.delta !== 0), true)
@@ -340,7 +342,7 @@ test('generated public source coverage reconciles with default and shard snapsho
   const snapshotIndex = summary.snapshotIndex ?? {}
   const defaultEntry = summary.defaultSnapshotKey ? snapshotIndex[summary.defaultSnapshotKey] : undefined
   const defaultSnapshot = defaultEntry ? parsePublicRankingShard(await readJson(publicPathForDataUrl(defaultEntry.url))) : undefined
-  const measuredSources = (summary.sources ?? []).filter((source) => source.status === 'active' && typeof source.rowCount === 'number')
+  const measuredSources = (summary.sources ?? []).filter((source) => source.status === 'active' && typeof source.rowCount === 'number' && ['match-data', 'game-stats', 'seed'].includes(source.kind))
 
   assert.ok(summary.coverage)
   assert.ok(defaultEntry)

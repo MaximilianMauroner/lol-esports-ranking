@@ -5,9 +5,12 @@ import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   filterFromSnapshotKey,
   parsePublicRankingManifest,
+  parsePublicRankingShard,
   parsePublicRegionHistory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  type PublicRankingShard,
+  type PublicTeamStanding,
   type PublicTeamHistoryComponentSnapshot,
   snapshotKey,
   snapshotShardUrlPathForKey,
@@ -31,6 +34,33 @@ test('public ranking manifest parser validates nested filters and data URL paths
         sourceBreakdown: [],
       },
     },
+  })))
+  assert.doesNotThrow(() => parsePublicRankingManifest(manifest({
+    sources: [
+      {
+        name: 'Data Dragon static data',
+        kind: 'static-metadata',
+        description: 'Static metadata only',
+        status: 'reference-only',
+      },
+      {
+        name: 'Cito LoL API experiment',
+        kind: 'experimental-api',
+        description: 'Free-tier experiment only',
+        status: 'reference-only',
+      },
+      {
+        name: 'LoL Esports schedule API',
+        kind: 'official-reference',
+        description: 'Cached unsupported schedule reference',
+        status: 'active',
+        warnings: [{
+          kind: 'source-policy',
+          severity: 'warning',
+          message: 'Unsupported site endpoint',
+        }],
+      },
+    ],
   })))
 
   assert.throws(
@@ -59,6 +89,38 @@ test('public ranking manifest parser validates nested filters and data URL paths
       },
     })),
     /must match its filter/,
+  )
+})
+
+test('public ranking shard parser validates source, standing, and league rows', () => {
+  const standing = publicStanding()
+  const league = publicLeague()
+  const validShard = rankingShard({ standings: [standing], leagues: [league] })
+
+  assert.doesNotThrow(() => parsePublicRankingShard(validShard))
+
+  assert.throws(
+    () => parsePublicRankingShard({
+      ...validShard,
+      sourceBreakdown: [{ provider: 'oracles-elixir', matchCount: '1', completeness: [] }],
+    }),
+    /sourceBreakdown\[0\] matchCount/,
+  )
+
+  assert.throws(
+    () => parsePublicRankingShard({
+      ...validShard,
+      standings: [{ ...standing, rank: '1' }],
+    }),
+    /standings\[0\] rank/,
+  )
+
+  assert.throws(
+    () => parsePublicRankingShard({
+      ...validShard,
+      leagues: [{ ...league, score: '1500' }],
+    }),
+    /leagues\[0\] score/,
   )
 })
 
@@ -215,7 +277,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     generatedAt: '2026-06-28T00:00:00.000Z',
     source: 'test',
     sources: [],
-    model: { name: 'Transparent GPR', version: 'test-model', configHash: 'test-config', parameters: {} },
+    model: { name: 'Transparent Power Index', version: 'test-model', configHash: 'test-config', parameters: {} },
     ratingScale: publishedRatingScale,
     coverage: { matchCount: 0, sourceProviders: [], seededSample: false },
     dataQuality: {
@@ -261,6 +323,115 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
       },
     },
     ...overrides,
+  }
+}
+
+function rankingShard(overrides: Partial<PublicRankingShard> = {}): PublicRankingShard {
+  const filter = { season: 'All', event: 'All', region: 'All' } satisfies SnapshotFilter
+  return {
+    artifactKind: 'public-snapshot-shard',
+    artifactMeta: artifactMeta(),
+    ratingScale: publishedRatingScale,
+    filter,
+    modelVersion: 'test-model',
+    modelConfigHash: 'test-config',
+    matchCount: 1,
+    sourceBreakdown: [{ provider: 'oracles-elixir', matchCount: 1, completeness: ['complete'] }],
+    standings: [publicStanding()],
+    leagues: [publicLeague()],
+    regions: [{
+      region: 'LCK',
+      rank: 1,
+      score: 1500,
+      topTeamRating: 1500,
+      topThreeTeamRating: 1500,
+      totalTeamRating: 1500,
+      teamCount: 1,
+      ecosystemTeamCount: 1,
+      leagueCount: 1,
+      ecosystemLeagueCount: 1,
+      flagshipLeagues: ['LCK'],
+      connectivity: 1,
+      internationalWins: 1,
+      internationalLosses: 0,
+      topTeams: [{ team: 'Example', code: 'EX', rating: 1500, rank: 1 }],
+    }],
+    ...overrides,
+  }
+}
+
+function publicStanding(): PublicTeamStanding {
+  return {
+    teamId: 'team:ex:example',
+    leagueId: 'league:lck:lck',
+    team: 'Example',
+    code: 'EX',
+    region: 'LCK',
+    league: 'LCK',
+    rosterBasis: 'sourced',
+    baseRating: 1500,
+    leagueScore: 1500,
+    leagueAdjustment: 0,
+    leagueDelta: 0,
+    ratingComponents: {
+      leagueAnchor: 1500,
+      teamStableOffset: 0,
+      rosterPriorOffset: 0,
+      momentum: 0,
+      contextAdjustment: 0,
+      uncertainty: 0,
+    },
+    rating: 1500,
+    previousRating: 1490,
+    delta: 10,
+    rank: 1,
+    previousRank: 2,
+    movement: 1,
+    wins: 1,
+    losses: 0,
+    confidence: 0.8,
+    uncertainty: 10,
+    form: ['W'],
+    strongestFactor: 'league',
+    eligibility: { eligible: true, reasons: [] },
+    factors: {
+      context: 0,
+      recency: 0,
+      execution: 0,
+      opponent: 0,
+      league: 1,
+    },
+    recentEvents: ['Example Cup'],
+    recentMatches: [{
+      date: '2026-01-01',
+      event: 'Example Cup',
+      opponent: 'Opponent',
+      result: 'W',
+      rating: 1500,
+      delta: 10,
+      wins: 1,
+      losses: 0,
+      games: 1,
+      bestOf: 1,
+    }],
+  }
+}
+
+function publicLeague(): PublicRankingShard['leagues'][number] {
+  return {
+    league: 'LCK',
+    region: 'LCK',
+    tier: 'tier-one',
+    priorScore: 1500,
+    rawScore: 1500,
+    connectivity: 1,
+    score: 1500,
+    adjustment: 0,
+    delta: 0,
+    wins: 1,
+    losses: 0,
+    internationalMatches: 1,
+    form: ['W'],
   }
 }
 
@@ -320,6 +491,9 @@ function teamHistoryShard(overrides: Partial<PublicTeamHistoryShard> = {}): Publ
               bestOf: 1,
               sourceProvider: 'oracles-elixir',
               sourceGameIds: ['game-1'],
+              officialEventId: 'official-event-1',
+              officialMatchId: 'official-match-1',
+              officialGameId: 'official-game-1',
               model: { e: 0.5, a: [['s', 1]], c: [1500, 10, 5, 0, 0] },
             },
           ],

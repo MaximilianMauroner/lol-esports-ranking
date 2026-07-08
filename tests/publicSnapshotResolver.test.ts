@@ -107,7 +107,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     generatedAt: '2026-06-27T00:00:00.000Z',
     source: 'test',
     sources: [],
-    model: { name: 'Transparent GPR', version: 'test-model', configHash: 'test-config', parameters: {} },
+    model: { name: 'Transparent Power Index', version: 'test-model', configHash: 'test-config', parameters: {} },
     coverage: { matchCount: 10, sourceProviders: [], seededSample: false },
     dataQuality: {
       matchCount: 10,

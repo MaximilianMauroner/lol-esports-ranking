@@ -1,13 +1,16 @@
 import type { MatchRecord } from '../../types'
 import { eventTierRank } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor } from '../../data/teamIdentity'
+import type { LolEsportsReferenceEvent } from './lolEsports'
 
 export function mergeCommunityMatchSources({
   oracleMatches,
   leaguepediaMatches,
+  lolEsportsReferences = [],
 }: {
   oracleMatches: MatchRecord[]
   leaguepediaMatches: MatchRecord[]
+  lolEsportsReferences?: LolEsportsReferenceEvent[]
 }) {
   const merged: MatchRecord[] = []
   const seen = new Map<string, MatchRecord>()
@@ -47,7 +50,90 @@ export function mergeCommunityMatchSources({
     for (const key of matchKeys(match)) seen.set(key, match)
   }
 
+  enrichWithLolEsportsReferences(merged, lolEsportsReferences)
   return merged.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function enrichWithLolEsportsReferences(matches: MatchRecord[], references: LolEsportsReferenceEvent[]) {
+  if (references.length === 0 || matches.length === 0) return
+  const bo1ReferencesByOutcome = uniqueReferenceMap(references.filter((reference) => strategyCount(reference) <= 1), referenceOutcomeKeys)
+  const seriesReferencesByTeams = uniqueReferenceMap(references, referenceTeamKeys)
+
+  for (const match of matches) {
+    const bo1Reference = bo1ReferencesByOutcome.get(matchOutcomeKey(match))
+    if (bo1Reference) {
+      enrichWithLolEsportsReference(match, bo1Reference, { includeGameId: bo1Reference.gameIds.length === 1 })
+      continue
+    }
+
+    const seriesReference = seriesReferencesByTeams.get(matchTeamDateKey(match))
+    if (seriesReference && strategyCount(seriesReference) > 1) {
+      enrichWithLolEsportsReference(match, seriesReference, { includeGameId: false })
+    }
+  }
+}
+
+function enrichWithLolEsportsReference(
+  match: MatchRecord,
+  reference: LolEsportsReferenceEvent,
+  options: { includeGameId: boolean },
+) {
+  match.officialEventId = reference.matchId
+  match.officialMatchId = reference.matchId
+  match.officialScheduleState = reference.state
+  if (options.includeGameId) match.officialGameId = reference.gameIds[0]
+}
+
+function uniqueReferenceMap(
+  references: LolEsportsReferenceEvent[],
+  keysFor: (reference: LolEsportsReferenceEvent) => string[],
+) {
+  const referencesByKey = new Map<string, LolEsportsReferenceEvent | undefined>()
+  for (const reference of references) {
+    for (const key of keysFor(reference)) {
+      if (!key) continue
+      referencesByKey.set(key, referencesByKey.has(key) ? undefined : reference)
+    }
+  }
+  for (const [key, reference] of referencesByKey.entries()) {
+    if (!reference) referencesByKey.delete(key)
+  }
+  return referencesByKey as Map<string, LolEsportsReferenceEvent>
+}
+
+function referenceOutcomeKeys(reference: LolEsportsReferenceEvent) {
+  const winner = referenceWinner(reference)
+  if (!winner) return []
+  return referenceTeamKeys(reference).map((key) => `${key}::${normalizeTeamName(winner)}`)
+}
+
+function referenceTeamKeys(reference: LolEsportsReferenceEvent) {
+  if (!reference.date || reference.teams.length < 2) return []
+  const teams = reference.teams
+    .map((team) => normalizeTeamName(team.name))
+    .filter(Boolean)
+    .sort()
+    .join('::')
+  return teams ? [`${reference.date}::${teams}`] : []
+}
+
+function matchTeamDateKey(match: MatchRecord) {
+  const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
+  return `${match.date}::${teams}`
+}
+
+function referenceWinner(reference: LolEsportsReferenceEvent) {
+  const explicitWinner = reference.teams.find((team) => team.outcome === 'win')?.name
+  if (explicitWinner) return explicitWinner
+  const [leader, runnerUp] = reference.teams
+    .filter((team) => typeof team.gameWins === 'number')
+    .sort((left, right) => (right.gameWins ?? 0) - (left.gameWins ?? 0))
+  if (!leader || !runnerUp || leader.gameWins === runnerUp.gameWins) return undefined
+  return leader.name
+}
+
+function strategyCount(reference: LolEsportsReferenceEvent) {
+  return reference.strategy?.count ?? reference.gameIds.length
 }
 
 function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string) {
@@ -101,8 +187,7 @@ function matchKeys(match: MatchRecord) {
 }
 
 function matchOutcomeKey(match: MatchRecord) {
-  const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
-  return `${match.date}::${teams}::${normalizeTeamName(match.winner)}`
+  return `${matchTeamDateKey(match)}::${normalizeTeamName(match.winner)}`
 }
 
 function matchStatOutcomeKey(match: MatchRecord) {

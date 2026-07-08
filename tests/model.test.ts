@@ -3,7 +3,7 @@ import test from 'node:test'
 import { effectiveLeagueRating, leagueEffectiveRatingCapsByTier } from '../src/data/leagueTiers.ts'
 import { ensureLeague, updateLeagueStrengthForSeries } from '../src/lib/leagueRatings.ts'
 import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
-import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset } from '../src/lib/ratingCalculations.ts'
+import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, publishedTeamStableOffset } from '../src/lib/ratingCalculations.ts'
 import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/types.ts'
 
 const teams: Record<string, TeamProfile> = {
@@ -141,6 +141,62 @@ test('interleaved same-date series rows still publish one atomic team update', (
   assert.ok((alphaHistory.at(-1)?.delta ?? 0) < 0)
 })
 
+test('official match ids keep independent same-day team-pair matches separate', () => {
+  const model = buildRankingModel([
+    matchFixture({
+      id: 'same-day-official-1',
+      sourceProvider: 'oracles-elixir',
+      officialMatchId: 'official-series-1',
+      date: '2026-02-01',
+      event: 'LCK Same Day Fixture',
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Alpha',
+    }),
+    matchFixture({
+      id: 'same-day-official-2',
+      sourceProvider: 'oracles-elixir',
+      officialMatchId: 'official-series-2',
+      date: '2026-02-01',
+      event: 'LCK Same Day Fixture',
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Beta',
+    }),
+  ], { ...teams })
+  const alphaHistory = standingFor(model, 'Alpha').history.filter((point) => point.event === 'LCK Same Day Fixture')
+
+  assert.deepEqual(alphaHistory.map((point) => point.ratingUpdate.updateUnit), ['series-atomic', 'series-atomic'])
+  assert.notEqual(alphaHistory[0]?.delta, 0)
+  assert.notEqual(alphaHistory[1]?.delta, 0)
+})
+
+test('team history points use global ranks instead of match-local ranks', () => {
+  const model = buildRankingModel([
+    ...Array.from({ length: 24 }, (_, index) => matchFixture({
+      id: `gamma-setup-${index}`,
+      date: dateInJanuary(index + 1),
+      teamA: 'Gamma',
+      teamB: 'Beta',
+      winner: 'Gamma',
+    })),
+    matchFixture({
+      id: 'alpha-history-rank',
+      sourceGameId: 'alpha-history-rank',
+      date: '2026-02-01',
+      teamA: 'Alpha',
+      teamB: 'Beta',
+      winner: 'Alpha',
+    }),
+  ], { ...teams })
+  const alpha = standingFor(model, 'Alpha')
+  const gamma = standingFor(model, 'Gamma')
+  const alphaPoint = alpha.history.find((point) => point.source.gameId === 'alpha-history-rank')
+
+  assert.ok(gamma.rating > alpha.rating)
+  assert.ok((alphaPoint?.rank ?? 0) > 1)
+})
+
 test('series expectation can value an elite win above an expected sweep', () => {
   const extendedTeams: Record<string, TeamProfile> = {
     Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },
@@ -267,6 +323,13 @@ test('published roster prior caps positive player signal for sustained losing re
   assert.equal(publishedRosterPriorOffset(24, 9, 21), 6)
   assert.equal(publishedRosterPriorOffset(24, 5, 7), 14)
   assert.equal(publishedRosterPriorOffset(-24, 9, 21), -24)
+})
+
+test('published team stable offset compresses only the elite positive tail', () => {
+  assert.equal(publishedTeamStableOffset(45), 45)
+  assert.equal(publishedTeamStableOffset(70), 70)
+  assert.equal(publishedTeamStableOffset(100), 79)
+  assert.equal(publishedTeamStableOffset(-40), -40)
 })
 
 test('league Elo only updates from international cross-league games with smaller K', () => {
@@ -424,6 +487,14 @@ test('published league anchor relief is gated by sourced team evidence', () => {
     uncertainty: 32,
     rosterBasis: 'sourced',
   }), -12.6)
+  assert.equal(publishedLeagueAnchorContextAdjustment({
+    leagueScore: 1540,
+    teamRating: 1480,
+    wins: 14,
+    losses: 20,
+    uncertainty: 30,
+    rosterBasis: 'sourced',
+  }), -14)
   assert.equal(publishedLeagueAnchorContextAdjustment({
     leagueScore: 1465,
     teamRating: 1506,
@@ -602,6 +673,8 @@ test('disconnected unknown-league teams stay provisional instead of topping the 
   assert.equal(isolated.eligibility.reasons.includes('unanchored-league'), true)
   assert.equal(eligible.some((standing) => standing.team === 'Alpha' || standing.team === 'Beta'), true)
   assert.equal(eligible.some((standing) => standing.team === 'Isolated Kings'), false)
+  assert.equal(model.standings.every((standing, index) => standing.rank === index + 1), true)
+  assert.equal(model.standings.every((standing) => standing.movement === standing.previousRank - standing.rank), true)
 })
 
 test('league priors separate unknown leagues from major leagues without international signal', () => {
@@ -795,6 +868,90 @@ test('sourced Oracle player diagnostics preserve missing optional stat fields', 
   assert.equal(residual.expectedNoWinStatScore.games, 1)
   assert.equal(residual.confidence, 1.7)
   assert.equal(Number.isFinite(residual.score), true)
+})
+
+test('same-day rating updates use match-local roster prior offsets', () => {
+  const model = buildRankingModel([
+    matchFixture({
+      id: 'player-history',
+      date: '2026-01-01',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'player-history',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', true, {
+        Bot: { kills: 18, deaths: 0, assists: 9, damageShare: 0.44, earnedGoldShare: 0.36 },
+      }),
+      teamBRoster: sourcedRosterFixture('beta', 'red', false, {
+        Bot: { kills: 0, deaths: 7, assists: 1, damageShare: 0.12, earnedGoldShare: 0.12 },
+      }),
+    }),
+    matchFixture({
+      id: 'same-day-no-roster',
+      date: '2026-01-02',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'same-day-no-roster',
+      winner: 'Alpha',
+    }),
+    matchFixture({
+      id: 'same-day-sourced-roster',
+      date: '2026-01-02',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'same-day-sourced-roster',
+      teamA: 'Alpha',
+      teamB: 'Gamma',
+      teamBHomeLeague: 'LPL',
+      teamBRegion: 'LPL',
+      winner: 'Alpha',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', true),
+      teamBRoster: sourcedRosterFixture('gamma', 'red', false),
+    }),
+  ], { ...teams })
+  const noRosterPrediction = model.predictions.find((prediction) => prediction.id === 'same-day-no-roster')
+  const sourcedRosterPrediction = model.predictions.find((prediction) => prediction.id === 'same-day-sourced-roster')
+  const noRosterPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'same-day-no-roster')
+  const sourcedRosterPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'same-day-sourced-roster')
+
+  assert.equal(noRosterPrediction?.teamAPlayerRatingAdjustment, 0)
+  assert.ok((sourcedRosterPrediction?.teamAPlayerRatingAdjustment ?? 0) > 0)
+  assert.equal(noRosterPoint?.ratingComponents.rosterPriorOffset, 0)
+  assert.ok((sourcedRosterPoint?.ratingComponents.rosterPriorOffset ?? 0) > 0)
+})
+
+test('matches missing roster snapshots carry the last known roster prior', () => {
+  const model = buildRankingModel([
+    matchFixture({
+      id: 'player-history',
+      date: '2026-01-01',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'player-history',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', true, {
+        Bot: { kills: 18, deaths: 0, assists: 9, damageShare: 0.44, earnedGoldShare: 0.36 },
+      }),
+      teamBRoster: sourcedRosterFixture('beta', 'red', false, {
+        Bot: { kills: 0, deaths: 7, assists: 1, damageShare: 0.12, earnedGoldShare: 0.12 },
+      }),
+    }),
+    matchFixture({
+      id: 'sourced-roster-prior',
+      date: '2026-01-02',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'sourced-roster-prior',
+      winner: 'Alpha',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', true),
+      teamBRoster: sourcedRosterFixture('beta', 'red', false),
+    }),
+    matchFixture({
+      id: 'missing-roster-gap-fill',
+      date: '2026-01-03',
+      sourceProvider: 'leaguepedia-cargo',
+      sourceGameId: 'missing-roster-gap-fill',
+      winner: 'Alpha',
+    }),
+  ], { ...teams })
+  const sourcedPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'sourced-roster-prior')
+  const missingRosterPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'missing-roster-gap-fill')
+
+  assert.ok((sourcedPoint?.ratingComponents.rosterPriorOffset ?? 0) > 0)
+  assert.equal(missingRosterPoint?.ratingComponents.rosterPriorOffset, sourcedPoint?.ratingComponents.rosterPriorOffset)
 })
 
 test('individual residual separates same-team players with identical team win rate', () => {

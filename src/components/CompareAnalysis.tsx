@@ -7,7 +7,7 @@ import type {
   PublicTeamHistoryShard,
   PublicTeamStanding as RankingSummaryStanding,
 } from '../lib/publicArtifacts/schema'
-import { formatDate, formatRating, teamKey } from '../lib/display'
+import { formatDate, formatModelVersion, formatRating, teamKey } from '../lib/display'
 import { isRegionPowerTeam, type RegionStrength } from '../lib/regionStrength'
 import type { CompareColumn } from './CompareDrawer'
 import {
@@ -238,7 +238,7 @@ function RegionTrendChart({
           </span>
         ) : history ? (
           <span className="compare-chart__meta">
-            Derived top-team average · Model {history.modelVersion} · {formatDate(history.generatedAt)}
+            Derived top-team average · Model {formatModelVersion(history.modelVersion)} · {formatDate(history.generatedAt)}
           </span>
         ) : null}
       </div>
@@ -486,7 +486,7 @@ function TeamCompareChart({
         </div>
         {history ? (
           <span className="compare-chart__meta">
-            Model {history.modelVersion} · {formatDate(history.generatedAt)}
+            Model {formatModelVersion(history.modelVersion)} · {formatDate(history.generatedAt)}
           </span>
         ) : null}
       </div>

@@ -91,15 +91,17 @@ export function processRatingSeriesForDate({
   state,
   sideAdjustments,
   lastDate,
+  pregamePlayerRatingEdges,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
   state: RatingRunState
   sideAdjustments: Map<string, number>
   lastDate: string
+  pregamePlayerRatingEdges: PregamePlayerRatingEdges
 }) {
   for (const series of ratingSeriesGroupsForDate(matches)) {
-    processRatingSeries({ series, teams, state, sideAdjustments, lastDate })
+    processRatingSeries({ series, teams, state, sideAdjustments, lastDate, pregamePlayerRatingEdges })
   }
 }
 
@@ -133,10 +135,7 @@ function pregamePredictionForMatch({
   const playerRatingEdge = pregamePlayerRatingEdges.get(match.id)
   const playerRatingAdjustmentA = playerRatingEdge?.teamAAdjustment ?? 0
   const playerRatingAdjustmentB = playerRatingEdge?.teamBAdjustment ?? 0
-  const rosterPriorOffsetA = playerRatingAdjustmentA * playerRatingPredictionWeight
-  const rosterPriorOffsetB = playerRatingAdjustmentB * playerRatingPredictionWeight
-  state.rosterPriorOffsets.set(match.teamA, rosterPriorOffsetA)
-  state.rosterPriorOffsets.set(match.teamB, rosterPriorOffsetB)
+  const { teamA: rosterPriorOffsetA, teamB: rosterPriorOffsetB } = rosterPriorOffsetsForMatch(match, pregamePlayerRatingEdges, state.rosterPriorOffsets)
   const momentumA = state.momentums.get(match.teamA) ?? 0
   const momentumB = state.momentums.get(match.teamB) ?? 0
   const noExecutionRatingA = powerRatingA + rosterPriorOffsetA + momentumA
@@ -247,18 +246,41 @@ function pregamePredictionForMatch({
   }
 }
 
+function rosterPriorOffsetsForMatch(
+  match: MatchRecord,
+  pregamePlayerRatingEdges: PregamePlayerRatingEdges,
+  previousRosterPriorOffsets: Map<string, number>,
+) {
+  const playerRatingEdge = pregamePlayerRatingEdges.get(match.id)
+  return {
+    teamA: rosterPriorOffsetForSide(match.teamARoster, playerRatingEdge?.teamAAdjustment, previousRosterPriorOffsets.get(match.teamA)),
+    teamB: rosterPriorOffsetForSide(match.teamBRoster, playerRatingEdge?.teamBAdjustment, previousRosterPriorOffsets.get(match.teamB)),
+  }
+}
+
+function rosterPriorOffsetForSide(
+  roster: MatchRecord['teamARoster'],
+  playerRatingAdjustment: number | undefined,
+  previousRosterPriorOffset: number | undefined,
+) {
+  if (!roster) return previousRosterPriorOffset ?? 0
+  return (playerRatingAdjustment ?? 0) * playerRatingPredictionWeight
+}
+
 function processRatingSeries({
   series,
   teams,
   state,
   sideAdjustments,
   lastDate,
+  pregamePlayerRatingEdges,
 }: {
   series: RatingSeriesGroup
   teams: Record<string, TeamProfile>
   state: RatingRunState
   sideAdjustments: Map<string, number>
   lastDate: string
+  pregamePlayerRatingEdges: PregamePlayerRatingEdges
 }) {
   const finalMatch = series.finalMatch
   const seriesLeagueA = homeLeagueForMatch(finalMatch, 'A', teams)
@@ -271,8 +293,7 @@ function processRatingSeries({
   const seriesLeagueScoreB = effectiveLeagueRating(seriesLeagueB, seriesRawLeagueScoreB, state.leagueMatchCounts.get(seriesLeagueB) ?? 0)
   const seriesPowerRatingA = powerRating(seriesRatingA, seriesLeagueScoreA)
   const seriesPowerRatingB = powerRating(seriesRatingB, seriesLeagueScoreB)
-  const seriesRosterPriorOffsetA = state.rosterPriorOffsets.get(series.teamA) ?? 0
-  const seriesRosterPriorOffsetB = state.rosterPriorOffsets.get(series.teamB) ?? 0
+  const { teamA: seriesRosterPriorOffsetA, teamB: seriesRosterPriorOffsetB } = rosterPriorOffsetsForMatch(finalMatch, pregamePlayerRatingEdges, state.rosterPriorOffsets)
   const seriesMomentumA = state.momentums.get(series.teamA) ?? 0
   const seriesMomentumB = state.momentums.get(series.teamB) ?? 0
   const seriesCurrentPowerRatingA = seriesPowerRatingA + seriesRosterPriorOffsetA + seriesMomentumA
@@ -339,6 +360,7 @@ function processRatingSeries({
       appliedTeamStableShareB,
       teamFormShare,
       leagueSignalShare,
+      pregamePlayerRatingEdges,
     })
   }
 }
@@ -362,6 +384,7 @@ function processSeriesMember({
   appliedTeamStableShareB,
   teamFormShare,
   leagueSignalShare,
+  pregamePlayerRatingEdges,
 }: {
   match: MatchRecord
   finalMatch: MatchRecord
@@ -381,6 +404,7 @@ function processSeriesMember({
   appliedTeamStableShareB: number
   teamFormShare: number
   leagueSignalShare: number
+  pregamePlayerRatingEdges: PregamePlayerRatingEdges
 }) {
   const ratingA = state.ratings.get(match.teamA) ?? initialTeamRating
   const ratingB = state.ratings.get(match.teamB) ?? initialTeamRating
@@ -398,8 +422,7 @@ function processSeriesMember({
   const executionPowerRatingB = powerRating(executionRatingB, leagueScoreB)
   const sideAdjustmentA = sideAdjustmentFor(match, 'A', sideAdjustments)
   const sideAdjustmentB = sideAdjustmentFor(match, 'B', sideAdjustments)
-  const rosterPriorOffsetA = state.rosterPriorOffsets.get(match.teamA) ?? 0
-  const rosterPriorOffsetB = state.rosterPriorOffsets.get(match.teamB) ?? 0
+  const { teamA: rosterPriorOffsetA, teamB: rosterPriorOffsetB } = rosterPriorOffsetsForMatch(match, pregamePlayerRatingEdges, state.rosterPriorOffsets)
   const currentWinsA = state.wins.get(match.teamA) ?? 0
   const currentLossesA = state.losses.get(match.teamA) ?? 0
   const currentWinsB = state.wins.get(match.teamB) ?? 0
@@ -445,6 +468,8 @@ function processSeriesMember({
   state.ratings.set(match.teamB, ratingB + deltaB)
   state.executionRatings.set(match.teamA, executionRatingA + executionDeltaA)
   state.executionRatings.set(match.teamB, executionRatingB + executionDeltaB)
+  state.rosterPriorOffsets.set(match.teamA, rosterPriorOffsetA)
+  state.rosterPriorOffsets.set(match.teamB, rosterPriorOffsetB)
   const uncertaintyA = state.uncertainties.get(match.teamA) ?? maximumUncertainty
   const uncertaintyB = state.uncertainties.get(match.teamB) ?? maximumUncertainty
   const nextUncertaintyA = isSeriesFinal ? nextUncertainty(uncertaintyA, match, leagueA, leagueB) : uncertaintyA
@@ -590,6 +615,7 @@ function processSeriesMember({
   const historyDeltaB = isSeriesFinal ? updatedPowerRatingB - currentPublishedPowerRatingB : 0
   updateRecord(match.teamA, aWon, state)
   updateRecord(match.teamB, !aWon, state)
+  const historyRanks = historyDisplayRankMap(state, teams)
   addFactors(match.teamA, {
     context: normalize(matchEventK, 12, 34),
     recency: factorRecency,
@@ -604,8 +630,8 @@ function processSeriesMember({
     opponent: normalize(effectiveRatingA, 1350, 1700),
     league: normalize(leagueScoreB + Math.max(0, leagueDelta.deltaB), 1440, 1560),
   }, state)
-  appendHistory(match, match.teamA, match.teamB, updatedPowerRatingA, ratingA + deltaA, updatedLeagueAdjustmentA, sideAdjustmentA, updatedComponentsA, updateLedgerA, historyDeltaA, aWon, state.histories)
-  appendHistory(match, match.teamB, match.teamA, updatedPowerRatingB, ratingB + deltaB, updatedLeagueAdjustmentB, sideAdjustmentB, updatedComponentsB, updateLedgerB, historyDeltaB, !aWon, state.histories)
+  appendHistory(match, match.teamA, match.teamB, updatedPowerRatingA, ratingA + deltaA, updatedLeagueAdjustmentA, sideAdjustmentA, updatedComponentsA, updateLedgerA, historyDeltaA, historyRanks.get(match.teamA) ?? 1, aWon, state.histories)
+  appendHistory(match, match.teamB, match.teamA, updatedPowerRatingB, ratingB + deltaB, updatedLeagueAdjustmentB, sideAdjustmentB, updatedComponentsB, updateLedgerB, historyDeltaB, historyRanks.get(match.teamB) ?? 1, !aWon, state.histories)
   recordSideAdjustmentSample(match, state.sideAdjustmentSamples)
   recordTeamContext(match, state.lastRosterByTeam, state.lastPatchByTeam, state.lastRosterFingerprintByTeam)
   trackMatchForPlacement(state.eventTrackers, match, teams)
@@ -778,13 +804,28 @@ function ratingSeriesGroupsForDate(matches: MatchRecord[]): RatingSeriesGroup[] 
 
 function ratingSeriesKey(match: MatchRecord) {
   const provider = match.sourceProvider ?? 'unknown'
+  if (match.officialMatchId) return ['official-match', match.officialMatchId].join('\u0000')
   if (match.sourceMatchId) return ['source-match', provider, sourceSeriesId(match.sourceMatchId)].join('\u0000')
+  const sourceGameSeriesId = sourceGameSeriesIdFor(match)
+  if (sourceGameSeriesId) return ['source-game-series', provider, sourceGameSeriesId].join('\u0000')
   const [left, right] = [match.teamA, match.teamB].sort((a, b) => a.localeCompare(b))
-  return ['inferred-series', match.date, provider, match.event, left, right].join('\u0000')
+  return ['inferred-series', match.date, provider, match.event, match.phase, normalizedBestOf(match.bestOf), left, right].join('\u0000')
 }
 
 function sourceSeriesId(sourceMatchId: string) {
   return sourceMatchId.replace(/_[1-5]$/, '')
+}
+
+function sourceGameSeriesIdFor(match: MatchRecord) {
+  if (!match.sourceGameId) return undefined
+  const explicitGameSuffix = /(?:[_-]game[_-][1-5])$/i
+  if (explicitGameSuffix.test(match.sourceGameId)) {
+    return match.sourceGameId.replace(explicitGameSuffix, '')
+  }
+  if (normalizedBestOf(match.bestOf) > 1 && /_[1-5]$/.test(match.sourceGameId)) {
+    return match.sourceGameId.replace(/_[1-5]$/, '')
+  }
+  return undefined
 }
 
 function inferredSeriesBestOf(matches: MatchRecord[], winsA: number, winsB: number): NormalizedBestOf {
@@ -846,10 +887,10 @@ function appendHistory(
   components: RatingComponents,
   update: RatingUpdateLedger,
   delta: number,
+  rank: number,
   won: boolean,
   histories: Map<string, TeamHistoryPoint[]>,
 ) {
-  const snapshotRanks = makeRankMap(new Map([[team, rating], [opponent, rating - delta]]))
   histories.set(team, [
     ...(histories.get(team) ?? []),
     {
@@ -862,7 +903,7 @@ function appendHistory(
       sideAdjustment,
       ratingComponents: components,
       ratingUpdate: update,
-      rank: snapshotRanks.get(team) ?? 1,
+      rank,
       delta: Math.round(delta),
       tier: match.tier,
       result: won ? 'W' : 'L',
@@ -871,4 +912,26 @@ function appendHistory(
       },
     },
   ])
+}
+
+function historyDisplayRankMap(state: RatingRunState, teams: Record<string, TeamProfile>) {
+  const displayRatings = new Map<string, number>()
+  for (const [team, rating] of state.ratings) {
+    const profile = teams[team] ?? { name: team, code: team.slice(0, 3).toUpperCase(), region: 'International' as Region, league: 'Unknown' }
+    const leagueScore = effectiveLeagueRating(profile.league, state.leagueScores.get(profile.league) ?? leaguePriorFor(profile.league), state.leagueMatchCounts.get(profile.league) ?? 0)
+    const components = ratingComponents({
+      teamRating: rating,
+      leagueScore,
+      rosterPriorOffset: publishedRosterPriorOffset(
+        state.rosterPriorOffsets.get(team) ?? 0,
+        state.wins.get(team) ?? 0,
+        state.losses.get(team) ?? 0,
+      ),
+      momentum: state.momentums.get(team) ?? 0,
+      contextAdjustment: 0,
+      uncertainty: state.uncertainties.get(team) ?? maximumUncertainty,
+    })
+    displayRatings.set(team, ratingFromComponents(components))
+  }
+  return makeRankMap(displayRatings)
 }

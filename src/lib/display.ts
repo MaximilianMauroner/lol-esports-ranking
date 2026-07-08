@@ -69,6 +69,11 @@ export function formatMultiplier(value?: number) {
   return typeof value === 'number' && Number.isFinite(value) ? twoDecimal.format(value) : '—'
 }
 
+export function formatModelVersion(value?: string) {
+  if (!value) return 'unknown'
+  return value.replaceAll('transparent-gpr', 'transparent-power-index')
+}
+
 /** Confidence-style values already on a 0-100 scale. */
 export function formatPercentValue(value?: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—'

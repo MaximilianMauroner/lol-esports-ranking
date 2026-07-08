@@ -2,25 +2,26 @@ import type { PublicTeamHistoryAttributionKey } from './publicArtifacts/schema'
 import type { TeamHistorySeries } from './snapshot'
 import type { ChartAttributionEntry, ChartModelDetail, ChartPoint, ChartPointDetail } from './chartPoints'
 import { groupEntriesByDate } from './timelineCompaction'
+import { POWER_COMPONENT_LABELS } from './ratingComponentLabels'
 
 type TeamHistoryPoint = TeamHistorySeries['points'][number]
 type TeamHistoryContext = NonNullable<TeamHistoryPoint[3]>
 type TeamHistoryModelContext = NonNullable<TeamHistoryContext['model']>
 
 const ATTRIBUTION_LABELS: Record<PublicTeamHistoryAttributionKey, Pick<ChartAttributionEntry, 'key' | 'label'>> = {
-  s: { key: 'stable', label: 'Stable' },
-  l: { key: 'league', label: 'League anchor' },
+  s: { key: 'stable', label: POWER_COMPONENT_LABELS.stable },
+  l: { key: 'league', label: POWER_COMPONENT_LABELS.league },
   p: { key: 'placement', label: 'Placement' },
-  f: { key: 'form', label: 'Form' },
-  r: { key: 'roster', label: 'Roster' },
+  f: { key: 'form', label: POWER_COMPONENT_LABELS.form },
+  r: { key: 'roster', label: POWER_COMPONENT_LABELS.roster },
   u: { key: 'uncertainty', label: 'Confidence' },
 }
 const COMPONENT_LABELS: Pick<ChartAttributionEntry, 'key' | 'label'>[] = [
-  { key: 'league', label: 'League anchor' },
-  { key: 'stable', label: 'Stable' },
-  { key: 'roster', label: 'Roster' },
-  { key: 'form', label: 'Form' },
-  { key: 'context', label: 'Context' },
+  { key: 'league', label: POWER_COMPONENT_LABELS.league },
+  { key: 'stable', label: POWER_COMPONENT_LABELS.stable },
+  { key: 'roster', label: POWER_COMPONENT_LABELS.roster },
+  { key: 'form', label: POWER_COMPONENT_LABELS.form },
+  { key: 'context', label: POWER_COMPONENT_LABELS.context },
 ]
 
 export function chartPointFromHistoryPoint(point: TeamHistoryPoint): ChartPoint {

@@ -37,7 +37,9 @@ const playerLeagueSignalMultiplierByTier: Record<LeagueTierName, number> = {
   unknown: 0.25,
 } as const
 const playerPregameEdgeCoefficient = 2.5
-const playerPregameEdgeCap = 40
+const playerPregameEdgeSoftCap = 40
+const playerPregameEdgeCap = 70
+const playerPregameEdgeOverflowMultiplier = 0.4
 const playerPregameMinCoverage = 0.6
 const playerPregameMinGames = 1
 const minimumRankedSourcedPlayerGames = 20
@@ -86,7 +88,9 @@ export const playerModelParameters = {
   playerLeagueBaselineBounds,
   playerLeagueSignalMultiplierByTier,
   playerPregameEdgeCoefficient,
+  playerPregameEdgeSoftCap,
   playerPregameEdgeCap,
+  playerPregameEdgeOverflowMultiplier,
   playerPregameMinCoverage,
   playerPregameMinGames,
   minimumRankedSourcedPlayerGames,
@@ -973,16 +977,21 @@ function playerEdgeForRoster(
   }
 
   const weightedMeanEdge = weightedRatingEdge / coverage
-  const adjustment = clamp(
-    playerPregameEdgeCoefficient * weightedMeanEdge * coverage,
-    -playerPregameEdgeCap,
-    playerPregameEdgeCap,
-  )
+  const adjustment = cappedPlayerPregameEdge(playerPregameEdgeCoefficient * weightedMeanEdge * coverage)
 
   return {
     adjustment: Number(adjustment.toFixed(1)),
     coverage: roundShare(coverage),
   }
+}
+
+function cappedPlayerPregameEdge(value: number) {
+  const magnitude = Math.abs(value)
+  if (magnitude <= playerPregameEdgeSoftCap) return value
+
+  const expandedMagnitude = playerPregameEdgeSoftCap
+    + (magnitude - playerPregameEdgeSoftCap) * playerPregameEdgeOverflowMultiplier
+  return Math.sign(value) * Math.min(expandedMagnitude, playerPregameEdgeCap)
 }
 
 function ensureSourcedPlayer(

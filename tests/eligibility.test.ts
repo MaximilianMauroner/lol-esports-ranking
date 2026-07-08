@@ -48,6 +48,50 @@ test('anchored major teams with only a short qualifier run stay in audit rows', 
   assert.equal(eligibility.totalGames, 11)
 })
 
+test('current rated leagues with international signal can clear scoped total-volume noise', () => {
+  const eligibility = evaluateTeamEligibility({
+    history: Array.from({ length: 11 }, (_, index) => historyPoint(`2026-06-${String(index + 1).padStart(2, '0')}`)),
+    lastDate: '2026-06-26',
+    uncertainty: 80,
+    league: 'LCP',
+    leagueTier: 'tier-two',
+    leagueInternationalMatches: 2,
+  })
+
+  assert.equal(eligibility.eligible, true)
+  assert.deepEqual(eligibility.reasons, [])
+  assert.equal(eligibility.totalGames, 11)
+  assert.equal(eligibility.currentWindowGames, 11)
+})
+
+test('rated-league total-volume waiver still requires current local activity', () => {
+  const eligibility = evaluateTeamEligibility({
+    history: Array.from({ length: 5 }, (_, index) => historyPoint(`2026-06-${String(index + 1).padStart(2, '0')}`)),
+    lastDate: '2026-06-26',
+    uncertainty: 80,
+    league: 'LCP',
+    leagueTier: 'tier-two',
+    leagueInternationalMatches: 2,
+  })
+
+  assert.equal(eligibility.eligible, false)
+  assert.deepEqual(eligibility.reasons, ['low-total-volume', 'low-current-volume'])
+})
+
+test('rated-league total-volume waiver requires international connectivity', () => {
+  const eligibility = evaluateTeamEligibility({
+    history: Array.from({ length: 11 }, (_, index) => historyPoint(`2026-06-${String(index + 1).padStart(2, '0')}`)),
+    lastDate: '2026-06-26',
+    uncertainty: 80,
+    league: 'LCP',
+    leagueTier: 'tier-two',
+    leagueInternationalMatches: 1,
+  })
+
+  assert.equal(eligibility.eligible, false)
+  assert.deepEqual(eligibility.reasons, ['low-total-volume'])
+})
+
 test('match-level eligibility history groups game rows from resolved series', () => {
   const rawHistory = Array.from({ length: 16 }).flatMap((_, index) => {
     const date = `2026-06-${String(index + 1).padStart(2, '0')}`

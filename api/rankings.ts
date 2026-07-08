@@ -93,7 +93,12 @@ async function readPublicJsonFromUrl(url: string) {
     if (!response.ok) throw new Error(`Artifact fetch failed with ${response.status}`)
     return response.json()
   }
-  return readPublicJson(url.slice('/data/'.length))
+  return readPublicJson(localDataRelativePath(url))
+}
+
+function localDataRelativePath(url: string) {
+  const path = url.split('?', 1)[0]
+  return path.slice('/data/'.length)
 }
 
 function firstQueryValue(value: string | string[] | undefined) {

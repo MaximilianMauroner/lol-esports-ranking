@@ -32,6 +32,7 @@ import type { WalkForwardMetrics } from '../predictionModel'
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
 export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 18 as const
+const PUBLIC_TEAM_RECENT_MATCH_LIMIT = 25
 
 export type ArtifactMeta = {
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
@@ -306,6 +307,9 @@ export type PublicTeamHistoryPointContext = {
   sourceProvider?: string
   sourceGameId?: string
   sourceMatchId?: string
+  officialEventId?: string
+  officialMatchId?: string
+  officialGameId?: string
   sourceGameIds?: string[]
   sourceFileName?: string
   sourceUrl?: string
@@ -653,7 +657,7 @@ function teamMatchRecord(history: TeamHistoryPoint[] = []) {
   const resolvedMatches = matches
     .map((match) => ({ match, result: teamMatchResult(match) }))
     .filter((record): record is { match: TeamMatchGroup; result: 'W' | 'L' } => Boolean(record.result))
-  const recentMatches = resolvedMatches.slice(-3).map(({ match, result }) => teamRecentMatch(match, result))
+  const recentMatches = resolvedMatches.slice(-PUBLIC_TEAM_RECENT_MATCH_LIMIT).map(({ match, result }) => teamRecentMatch(match, result))
   const wins = resolvedMatches.filter((match) => match.result === 'W').length
   const losses = resolvedMatches.length - wins
 
@@ -795,6 +799,9 @@ export function parsePublicRankingShard(value: unknown): PublicRankingShard {
   assertArray(value.standings, 'ranking shard standings')
   assertArray(value.leagues, 'ranking shard leagues')
   assertArray(value.regions, 'ranking shard regions')
+  value.sourceBreakdown.forEach((source, index) => assertSnapshotSourceBreakdown(source, `ranking shard sourceBreakdown[${index}]`))
+  value.standings.forEach((standing, index) => assertPublicTeamStanding(standing, `ranking shard standings[${index}]`))
+  value.leagues.forEach((league, index) => assertLeagueStrength(league, `ranking shard leagues[${index}]`))
   value.regions.forEach((region, index) => assertRegionStrength(region, `ranking shard regions[${index}]`))
   return value as PublicRankingShard
 }
@@ -936,12 +943,173 @@ function assertPublicSnapshotIndexEntry(key: string, value: unknown): asserts va
   if (isLocalDataUrl(url)) assertEqual(localDataUrlPath(url), snapshotShardUrlPathForKey(key), `ranking manifest snapshotIndex ${key} url`)
   assertNonNegativeInteger(value.matchCount, `ranking manifest snapshotIndex ${key} matchCount`)
   assertArray(value.sourceBreakdown, `ranking manifest snapshotIndex ${key} sourceBreakdown`)
+  value.sourceBreakdown.forEach((source, index) => assertSnapshotSourceBreakdown(source, `ranking manifest snapshotIndex ${key} sourceBreakdown[${index}]`))
+}
+
+function assertSnapshotSourceBreakdown(value: unknown, label: string): asserts value is SnapshotSourceBreakdown {
+  assertObject(value, label)
+  assertString(value.provider, `${label} provider`)
+  assertNonNegativeInteger(value.matchCount, `${label} matchCount`)
+  assertStringArray(value.completeness, `${label} completeness`)
+}
+
+function assertPublicTeamStanding(value: unknown, label: string): asserts value is PublicTeamStanding {
+  assertObject(value, label)
+  assertString(value.teamId, `${label} teamId`)
+  assertString(value.leagueId, `${label} leagueId`)
+  assertString(value.team, `${label} team`)
+  assertString(value.code, `${label} code`)
+  assertString(value.region, `${label} region`)
+  assertString(value.league, `${label} league`)
+  assertEnum(value.rosterBasis, ['sourced', 'assumed-continuous', 'unknown'], `${label} rosterBasis`)
+  assertOptionalNumber(value.rosterContinuity, `${label} rosterContinuity`)
+  assertNumber(value.baseRating, `${label} baseRating`)
+  assertNumber(value.leagueScore, `${label} leagueScore`)
+  assertNumber(value.leagueAdjustment, `${label} leagueAdjustment`)
+  assertNumber(value.leagueDelta, `${label} leagueDelta`)
+  assertRatingComponents(value.ratingComponents, `${label} ratingComponents`)
+  if (value.ratingUpdate !== undefined) assertRatingUpdate(value.ratingUpdate, `${label} ratingUpdate`)
+  assertNumber(value.rating, `${label} rating`)
+  assertNumber(value.previousRating, `${label} previousRating`)
+  assertNumber(value.delta, `${label} delta`)
+  assertNonNegativeInteger(value.rank, `${label} rank`)
+  assertNonNegativeInteger(value.previousRank, `${label} previousRank`)
+  assertNumber(value.movement, `${label} movement`)
+  assertNonNegativeInteger(value.wins, `${label} wins`)
+  assertNonNegativeInteger(value.losses, `${label} losses`)
+  assertNumber(value.confidence, `${label} confidence`)
+  assertNumber(value.uncertainty, `${label} uncertainty`)
+  assertStringArray(value.form, `${label} form`)
+  assertEnum(value.strongestFactor, ['context', 'recency', 'execution', 'opponent', 'league'], `${label} strongestFactor`)
+  assertTeamEligibility(value.eligibility, `${label} eligibility`)
+  assertFactorBreakdown(value.factors, `${label} factors`)
+  assertStringArray(value.recentEvents, `${label} recentEvents`)
+  assertArray(value.recentMatches, `${label} recentMatches`)
+  value.recentMatches.forEach((match, index) => assertPublicRecentMatch(match, `${label} recentMatches[${index}]`))
+  if (value.deservedStanding !== undefined) assertPublicDeservedStanding(value.deservedStanding, `${label} deservedStanding`)
+}
+
+function assertLeagueStrength(value: unknown, label: string): asserts value is LeagueStrength {
+  assertObject(value, label)
+  assertString(value.league, `${label} league`)
+  assertString(value.region, `${label} region`)
+  assertEnum(value.tier, ['tier-one', 'tier-two', 'tier-three', 'emerging', 'unknown'], `${label} tier`)
+  assertNumber(value.priorScore, `${label} priorScore`)
+  assertNumber(value.rawScore, `${label} rawScore`)
+  assertNumber(value.connectivity, `${label} connectivity`)
+  assertNumber(value.score, `${label} score`)
+  assertNumber(value.adjustment, `${label} adjustment`)
+  assertNumber(value.delta, `${label} delta`)
+  assertNonNegativeInteger(value.wins, `${label} wins`)
+  assertNonNegativeInteger(value.losses, `${label} losses`)
+  assertOptionalNumber(value.expectedWins, `${label} expectedWins`)
+  assertOptionalNumber(value.winsOverExpected, `${label} winsOverExpected`)
+  assertOptionalNumber(value.opponentAdjustedWinRate, `${label} opponentAdjustedWinRate`)
+  assertOptionalNumber(value.averageOpponentRating, `${label} averageOpponentRating`)
+  assertNonNegativeInteger(value.internationalMatches, `${label} internationalMatches`)
+  assertStringArray(value.form, `${label} form`)
+  assertOptionalString(value.lastEvent, `${label} lastEvent`)
+  assertOptionalString(value.lastUpdated, `${label} lastUpdated`)
+}
+
+function assertRatingComponents(value: unknown, label: string): asserts value is RatingComponents {
+  assertObject(value, label)
+  assertNumber(value.leagueAnchor, `${label} leagueAnchor`)
+  assertNumber(value.teamStableOffset, `${label} teamStableOffset`)
+  assertNumber(value.rosterPriorOffset, `${label} rosterPriorOffset`)
+  assertNumber(value.momentum, `${label} momentum`)
+  assertNumber(value.contextAdjustment, `${label} contextAdjustment`)
+  assertNumber(value.uncertainty, `${label} uncertainty`)
+}
+
+function assertRatingUpdate(value: unknown, label: string): asserts value is Partial<RatingUpdateLedger> {
+  assertObject(value, label)
+  for (const key of [
+    'teamStableDelta',
+    'leagueGameDelta',
+    'leaguePlacementDelta',
+    'momentumDelta',
+    'rosterPriorDelta',
+    'uncertaintyDelta',
+    'sideAdjustment',
+    'patchAdjustment',
+    'resultEvidence',
+    'neutralResultResidual',
+    'seriesStrengthSignal',
+    'teamStableShare',
+    'teamFormShare',
+    'playerSignalShare',
+    'lineupSignalShare',
+    'leagueSignalShare',
+    'directRegionSignalShare',
+    'playerSignalDelta',
+    'lineupSignalDelta',
+    'directRegionSignalDelta',
+  ]) {
+    assertOptionalNumber(value[key], `${label} ${key}`)
+  }
+  assertOptionalString(value.ratingTarget, `${label} ratingTarget`)
+  assertOptionalString(value.updateUnit, `${label} updateUnit`)
+  if (value.unavailableChannels !== undefined) assertStringArray(value.unavailableChannels, `${label} unavailableChannels`)
+}
+
+function assertTeamEligibility(value: unknown, label: string): asserts value is PublicTeamStanding['eligibility'] {
+  assertObject(value, label)
+  assertBoolean(value.eligible, `${label} eligible`)
+  assertStringArray(value.reasons, `${label} reasons`)
+  assertOptionalNonNegativeInteger(value.totalGames, `${label} totalGames`)
+  assertOptionalNonNegativeInteger(value.minTotalGames, `${label} minTotalGames`)
+  assertOptionalNonNegativeInteger(value.currentWindowGames, `${label} currentWindowGames`)
+  assertOptionalNonNegativeInteger(value.minCurrentWindowGames, `${label} minCurrentWindowGames`)
+  assertOptionalNonNegativeInteger(value.windowDays, `${label} windowDays`)
+  assertOptionalNonNegativeInteger(value.daysSinceLastMatch, `${label} daysSinceLastMatch`)
+  assertOptionalString(value.lastPlayed, `${label} lastPlayed`)
+}
+
+function assertFactorBreakdown(value: unknown, label: string): asserts value is FactorBreakdown {
+  assertObject(value, label)
+  assertNumber(value.context, `${label} context`)
+  assertNumber(value.recency, `${label} recency`)
+  assertNumber(value.execution, `${label} execution`)
+  assertNumber(value.opponent, `${label} opponent`)
+  assertNumber(value.league, `${label} league`)
+}
+
+function assertPublicRecentMatch(value: unknown, label: string): asserts value is PublicRecentMatch {
+  assertObject(value, label)
+  assertDateString(value.date, `${label} date`)
+  assertString(value.event, `${label} event`)
+  assertString(value.opponent, `${label} opponent`)
+  assertEnum(value.result, ['W', 'L'], `${label} result`)
+  assertNumber(value.rating, `${label} rating`)
+  assertNumber(value.delta, `${label} delta`)
+  assertOptionalNonNegativeInteger(value.wins, `${label} wins`)
+  assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
+  assertOptionalNonNegativeInteger(value.games, `${label} games`)
+  assertOptionalNonNegativeInteger(value.bestOf, `${label} bestOf`)
+}
+
+function assertPublicDeservedStanding(value: unknown, label: string): asserts value is PublicDeservedStandingComparison {
+  assertObject(value, label)
+  assertEnum(value.leaderboard, ['main-deserved-standings', 'conservative-deserved-standings', 'predictive-power'], `${label} leaderboard`)
+  assertNonNegativeInteger(value.rank, `${label} rank`)
+  assertNumber(value.score, `${label} score`)
+  assertNumber(value.rankDeltaFromPower, `${label} rankDeltaFromPower`)
+  assertNumber(value.scoreDeltaFromPower, `${label} scoreDeltaFromPower`)
+  assertString(value.eligibility, `${label} eligibility`)
+  assertNumber(value.rosterValidity, `${label} rosterValidity`)
+  assertNumber(value.winsAboveExpectation, `${label} winsAboveExpectation`)
+  assertNumber(value.gameDifferentialAboveExpectation, `${label} gameDifferentialAboveExpectation`)
+  assertNumber(value.resumePoints, `${label} resumePoints`)
+  assertNumber(value.scheduleStrengthPoints, `${label} scheduleStrengthPoints`)
+  assertNumber(value.stagePoints, `${label} stagePoints`)
+  assertNumber(value.incomingPlayerBridgeCredit, `${label} incomingPlayerBridgeCredit`)
 }
 
 function assertDataSourceInfo(value: unknown, label: string): asserts value is DataSourceInfo {
   assertObject(value, label)
   assertString(value.name, `${label} name`)
-  assertEnum(value.kind, ['match-data', 'game-stats', 'official-reference', 'seed'], `${label} kind`)
+  assertEnum(value.kind, ['match-data', 'game-stats', 'official-reference', 'static-metadata', 'experimental-api', 'seed'], `${label} kind`)
   assertString(value.description, `${label} description`)
   assertEnum(value.status, ['active', 'planned', 'reference-only'], `${label} status`)
   assertOptionalString(value.url, `${label} url`)
@@ -1083,6 +1251,9 @@ function assertTeamHistoryPointContext(value: Record<string, unknown>, label: st
   assertOptionalString(value.sourceProvider, `${label} sourceProvider`)
   assertOptionalString(value.sourceGameId, `${label} sourceGameId`)
   assertOptionalString(value.sourceMatchId, `${label} sourceMatchId`)
+  assertOptionalString(value.officialEventId, `${label} officialEventId`)
+  assertOptionalString(value.officialMatchId, `${label} officialMatchId`)
+  assertOptionalString(value.officialGameId, `${label} officialGameId`)
   assertOptionalString(value.sourceFileName, `${label} sourceFileName`)
   assertOptionalString(value.sourceUrl, `${label} sourceUrl`)
   if (value.sourceGameIds !== undefined) assertStringArray(value.sourceGameIds, `${label} sourceGameIds`)
@@ -1352,6 +1523,12 @@ function assertArray(value: unknown, label: string): asserts value is unknown[] 
 function assertString(value: unknown, label: string): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`Invalid public artifact: ${label} must be a non-empty string`)
+  }
+}
+
+function assertBoolean(value: unknown, label: string): asserts value is boolean {
+  if (typeof value !== 'boolean') {
+    throw new Error(`Invalid public artifact: ${label} must be a boolean`)
   }
 }
 

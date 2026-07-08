@@ -138,7 +138,7 @@ type RankingScope = {
 
 export type DataSourceInfo = {
   name: string
-  kind: 'match-data' | 'game-stats' | 'official-reference' | 'seed'
+  kind: 'match-data' | 'game-stats' | 'official-reference' | 'static-metadata' | 'experimental-api' | 'seed'
   url?: string
   description: string
   status: 'active' | 'planned' | 'reference-only'
@@ -611,9 +611,28 @@ function teamHistoryPublicMatchKey(point: TeamHistoryPoint) {
     point.event ?? '',
     point.opponent ?? '',
     point.source?.provider ?? '',
+    teamHistorySourceSeriesKey(point),
     point.source?.fileName ?? '',
     String(point.source?.bestOf ?? ''),
   ])
+}
+
+function teamHistorySourceSeriesKey(point: TeamHistoryPoint) {
+  const source = point.source
+  if (source?.officialMatchId) return `official-match:${source.officialMatchId}`
+  if (source?.matchId) return `source-match:${sourceSeriesId(source.matchId)}`
+  const sourceGameSeriesId = teamHistorySourceGameSeriesId(source?.gameId, source?.bestOf)
+  return sourceGameSeriesId ? `source-game-series:${sourceGameSeriesId}` : ''
+}
+
+function teamHistorySourceGameSeriesId(sourceGameId: string | undefined, bestOf: number | undefined) {
+  if (!sourceGameId) return undefined
+  const explicitGameSuffix = /(?:[_-]game[_-][1-5])$/i
+  if (explicitGameSuffix.test(sourceGameId)) return sourceGameId.replace(explicitGameSuffix, '')
+  if (typeof bestOf === 'number' && bestOf > 1 && /_[1-5]$/.test(sourceGameId)) {
+    return sourceGameId.replace(/_[1-5]$/, '')
+  }
+  return undefined
 }
 
 function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includeContext: boolean): TeamHistoryPointCompact {
@@ -941,6 +960,7 @@ export function createStaticRankingData({
   const resolvedDataMode = dataMode ?? (matches.length === 0 ? 'no-data' : 'seeded-sample')
   const hasOracleSource = matches.some((match) => match.sourceProvider === 'oracles-elixir')
   const hasLeaguepediaSource = matches.some((match) => match.sourceProvider === 'leaguepedia-cargo')
+  const hasExternalSource = (sourceName: string) => externalSources.some((source) => source.name.toLowerCase().includes(sourceName))
   const seasons = ['All', ...Array.from(new Set(matches.map(matchSeasonKey))).sort().reverse()]
   const events = ['All', ...Array.from(new Set(matches.map((match) => match.event))).sort()]
   const checkpointOptions = buildSeasonCheckpointOptions(matches)
@@ -1061,19 +1081,61 @@ export function createStaticRankingData({
             rowCount: seedMatches.length,
           }]
         : []),
+      ...(hasExternalSource('lol esports schedule api')
+        ? []
+        : [{
+            name: 'LoL Esports schedule API',
+            kind: 'official-reference' as const,
+            url: 'https://esports-api.lolesports.com/persisted/gw/getSchedule',
+            description: 'Planned cached reference layer for schedule windows, event states, series results, match IDs, game IDs, sides, and VOD references. It uses public LoL Esports site endpoints and must remain unsupported/reference-only.',
+            status: 'planned' as const,
+            warnings: [{
+              kind: 'source-policy' as const,
+              severity: 'warning' as const,
+              message: 'LoL Esports persisted APIs are public site endpoints, not a supported official data API; cache responses and keep them reference-only.',
+            }],
+          }]),
       {
         name: 'Leaguepedia Cargo API',
         kind: 'match-data',
         url: 'https://lol.fandom.com/wiki/Help:Leaguepedia_API',
-        description: 'Planned canonical source for broad historical events, teams, players, rosters, and match metadata.',
+        description: 'Throttled backup and audit source for broad historical events, team aliases, match metadata, and result gap-fill when Oracle stats are unavailable.',
         status: hasLeaguepediaSource ? 'active' : 'planned',
       },
       {
         name: "Oracle's Elixir CSVs",
         kind: 'game-stats',
         url: 'https://oracleselixir.com/tools/downloads',
-        description: 'Primary planned source for game-level and player-level stats from yearly CSV snapshots.',
+        description: 'Primary rich stats source for game-level and player-level model inputs from yearly CSV snapshots.',
         status: hasOracleSource ? 'active' : 'planned',
+      },
+      {
+        name: 'Data Dragon static data',
+        kind: 'static-metadata',
+        url: 'https://ddragon.leagueoflegends.com/api/versions.json',
+        description: 'Reference-only static Riot metadata and assets for champions, items, runes, spells, and patch-pinned images. Not an esports schedule/result source.',
+        status: 'reference-only',
+      },
+      {
+        name: 'CommunityDragon static data',
+        kind: 'static-metadata',
+        url: 'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/',
+        description: 'Reference-only supplemental static metadata/assets when Data Dragon does not expose the needed path. Not an esports schedule/result source.',
+        status: 'reference-only',
+      },
+      {
+        name: 'PandaScore LoL API experiment',
+        kind: 'experimental-api',
+        url: 'https://www.pandascore.co/pricing',
+        description: 'Limited free-tier vendor experiment for fixture/context coverage comparison only. Not part of default model provenance or raw ranking inputs.',
+        status: 'reference-only',
+      },
+      {
+        name: 'Cito LoL API experiment',
+        kind: 'experimental-api',
+        url: 'https://citoapi.com/lol-esports-api/',
+        description: 'Limited free-tier vendor experiment for endpoint ergonomics and low-volume coverage comparison only. Not part of default model provenance or raw ranking inputs.',
+        status: 'reference-only',
       },
     ],
     model: transparentGprModelMetadata,
@@ -1948,7 +2010,7 @@ function filteredStandings(
   const scopedProfiles = scopedTeamProfilesForMatches(matches, teams)
   const lastDate = datesFor(matches).at(-1) ?? new Date().toISOString().slice(0, 10)
   const leagueInternationalMatches = leagueInternationalMatchesFor(matches, teams)
-  return standings
+  const scopedStandings = standings
     .filter((standing) => teamNames.has(standing.team))
     .map((standing) => {
       const history = standing.history.filter((point) =>
@@ -1965,6 +2027,7 @@ function filteredStandings(
         history: eligibilityHistory,
         lastDate,
         uncertainty: standing.uncertainty,
+        league,
         leagueTier: leagueTierFor(league).tier,
         leagueInternationalMatches: leagueInternationalMatches.get(league) ?? 0,
         isDevelopmentalTeam: isDevelopmentalTeamName(standing.team),
@@ -1981,8 +2044,38 @@ function filteredStandings(
         eligibility: filter.checkpoint ? standing.eligibility : scopedEligibility,
       }
     })
-    .sort((left, right) => Number(right.eligibility.eligible) - Number(left.eligibility.eligible) || right.rating - left.rating)
-    .map((standing, index) => ({ ...standing, rank: index + 1 }))
+
+  return rankedScopedStandings(scopedStandings)
+}
+
+function rankedScopedStandings(standings: TeamStanding[]) {
+  const previousRankMap = scopedStandingRankMap(standings, (standing) => standing.previousRating)
+  return [...standings]
+    .sort(compareScopedStandingsByRating((standing) => standing.rating))
+    .map((standing, index) => {
+      const rank = index + 1
+      const previousRank = previousRankMap.get(standing.team) ?? rank
+      return {
+        ...standing,
+        rank,
+        previousRank,
+        movement: previousRank - rank,
+      }
+    })
+}
+
+function scopedStandingRankMap(standings: TeamStanding[], ratingFor: (standing: TeamStanding) => number) {
+  return new Map(
+    [...standings]
+      .sort(compareScopedStandingsByRating(ratingFor))
+      .map((standing, index) => [standing.team, index + 1]),
+  )
+}
+
+function compareScopedStandingsByRating(ratingFor: (standing: TeamStanding) => number) {
+  return (left: TeamStanding, right: TeamStanding) =>
+    Number(right.eligibility.eligible) - Number(left.eligibility.eligible)
+    || ratingFor(right) - ratingFor(left)
 }
 
 function teamProfilesForRankingScope(matches: MatchRecord[], teams: Record<string, TeamProfile>) {

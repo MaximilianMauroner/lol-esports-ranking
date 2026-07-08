@@ -15,14 +15,14 @@ import type { CompareColumn, CompareRow } from './CompareDrawer'
 import { ConfBar, FormDots, RegionBadge } from './ui'
 
 export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
-  { key: 'score', label: 'Top 3 score', cell: (r) => formatRating(r.score), score: (r) => r.score, better: 'high' },
+  { key: 'score', label: 'Region power', cell: (r) => formatRating(r.score), score: (r) => r.score, better: 'high' },
   { key: 'rank', label: 'Global rank', cell: (r) => `#${r.rank}`, score: (r) => r.rank, better: 'low' },
   { key: 'flagship', label: 'Flagship league', cell: (r) => r.flagshipLeague ?? 'Multiple leagues' },
   { key: 'tier', label: 'League tier', cell: (r) => formatTier(r.tier) },
   { key: 'teams', label: 'Flagship teams', cell: (r) => formatNumber(r.teamCount), score: (r) => r.teamCount, better: 'high' },
   { key: 'topteam', label: 'Top team power', cell: (r) => formatRating(r.topTeamRating), score: (r) => r.topTeamRating, better: 'high' },
-  { key: 'topthree', label: 'Top 3 power', cell: (r) => formatRating(r.topThreeTeamRating), score: (r) => r.topThreeTeamRating, better: 'high' },
-  { key: 'totalregion', label: 'Total region power', cell: (r) => formatRating(r.totalTeamRating), score: (r) => r.totalTeamRating, better: 'high' },
+  { key: 'topthree', label: 'Top-three average', cell: (r) => formatRating(r.topThreeTeamRating), score: (r) => r.topThreeTeamRating, better: 'high' },
+  { key: 'totalregion', label: 'Flagship-team average', cell: (r) => formatRating(r.totalTeamRating), score: (r) => r.totalTeamRating, better: 'high' },
   { key: 'record', label: 'International record', cell: (r) => formatRecord(r.internationalWins, r.internationalLosses) },
   {
     key: 'winrate',
@@ -83,10 +83,10 @@ export type CompareProfileMetric<E> = {
 }
 
 export const REGION_PROFILE_METRICS: CompareProfileMetric<RegionStrength>[] = [
-  { key: 'score', label: 'Top 3 score', value: (r) => r.score, format: formatRating },
+  { key: 'score', label: 'Region power', value: (r) => r.score, format: formatRating },
   { key: 'topteam', label: 'Top team power', value: (r) => r.topTeamRating, format: formatRating },
-  { key: 'topthree', label: 'Top 3 power', value: (r) => r.topThreeTeamRating, format: formatRating },
-  { key: 'totalregion', label: 'Total power', value: (r) => r.totalTeamRating, format: formatRating },
+  { key: 'topthree', label: 'Top-three avg', value: (r) => r.topThreeTeamRating, format: formatRating },
+  { key: 'totalregion', label: 'Flagship avg', value: (r) => r.totalTeamRating, format: formatRating },
   { key: 'adjusted', label: 'Adj. intl.', value: (r) => r.opponentAdjustedWinRate, format: formatRatio },
   { key: 'expected', label: 'Vs expected', value: (r) => r.winsOverExpected, format: formatSignedDecimal },
   { key: 'opponent', label: 'Opponent power', value: (r) => r.averageOpponentRating, format: formatRating },

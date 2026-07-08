@@ -28,7 +28,7 @@ export const publishedLeagueAnchorPolicy = 'team-evidence-gated-anchor-relief-v1
 export const publishedLeagueAnchorReliefConfig = {
   minimumGames: 20,
   maxUncertainty: 50,
-  minStableOffset: 25,
+  minStableOffset: 15,
   maxAdjustment: 20,
   leagueGapShare: 0.35,
 } as const
@@ -54,6 +54,10 @@ export const splitBreakMinimumGapDays = 21
 export const sideAdjustmentShrinkageGames = 24
 export const sideAdjustmentLearning = 'walk-forward-prior-only'
 export const publishedPredictionSideAdjustment = 'side-aware-prior-only'
+export const winProbabilityCalibrationPolicy = 'less-shrunk-favorite-calibration-v1'
+export const winProbabilityEloScale = 360
+export const winProbabilityUncertaintyScale = 620
+export const winProbabilityUncertaintyFloor = 0.45
 export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'state-gap-regression'
 export const ratingUpdateRecencyWeight = 1
@@ -81,6 +85,11 @@ export const domesticStableTransferWeightsByTier = {
   'tier-three': 0.38,
   emerging: 0.25,
   unknown: 0.15,
+} as const
+export const publishedTeamStableOffsetPolicy = 'elite-tail-compressed-stable-offset-v1'
+export const publishedTeamStableOffsetConfig = {
+  positiveSoftCap: 70,
+  positiveOverflowScale: 0.3,
 } as const
 export const publishedRosterPriorPolicy = 'current-record-capped-positive-player-prior-v1'
 export const publishedRosterPriorConfig = {
@@ -130,7 +139,7 @@ export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingP
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)
 // Before 1.0, the public model version intentionally stays stable; the
 // config hash carries exact provenance for breaking experimental iterations.
-export const transparentGprModelVersion = 'transparent-gpr-v0.0.0'
+export const transparentGprModelVersion = 'transparent-power-index-v0.0.0'
 export const transparentGprModelParameters = {
   initialTeamRating,
   initialLeagueRating,
@@ -153,6 +162,10 @@ export const transparentGprModelParameters = {
   sideAdjustmentShrinkageGames,
   sideAdjustmentLearning,
   publishedPredictionSideAdjustment,
+  winProbabilityCalibrationPolicy,
+  winProbabilityEloScale,
+  winProbabilityUncertaintyScale,
+  winProbabilityUncertaintyFloor,
   sameDayPredictionBatching,
   onlineRecencyDecay,
   ratingUpdateRecencyWeight,
@@ -168,6 +181,8 @@ export const transparentGprModelParameters = {
   latentStrengthResultBudgetShares,
   domesticStableTransferPolicy,
   domesticStableTransferWeightsByTier,
+  publishedTeamStableOffsetPolicy,
+  publishedTeamStableOffsetConfig,
   publishedRosterPriorPolicy,
   publishedRosterPriorConfig,
   rosterBasisSource,
@@ -209,7 +224,7 @@ export const transparentGprModelParameters = {
 } as const
 
 export const transparentGprModelMetadata = {
-  name: 'Transparent GPR',
+  name: 'Transparent Power Index',
   version: transparentGprModelVersion,
   configHash: stableHash(transparentGprModelParameters),
   ratingScale: publishedRatingScale,

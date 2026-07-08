@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, stat } from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import { dirname, extname, posix, relative, resolve, sep } from 'node:path'
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { manifestWithResolvedFiles } from './local-data-manifest.js'
 
 export function bucketConfigFromEnv(env = process.env) {
   const bucket = env.RANKING_BUCKET_NAME ?? env.S3_BUCKET ?? env.BUCKET
@@ -264,8 +265,8 @@ export async function uploadDirectory(client, config, dir, destinationPrefix) {
 export async function uploadRawSourceFiles(client, config, rawDir, manifestPath) {
   if (!manifestPath) return []
 
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   const root = resolve(rawDir)
+  const manifest = manifestWithResolvedFiles(JSON.parse(await readFile(manifestPath, 'utf8')), root)
   const rootWithSeparator = `${root}${sep}`
   const files = uniqueValues(Object.values(manifest?.files ?? {})
     .flatMap((entries) => Array.isArray(entries) ? entries : []))

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   PublicPlayerDirectory,
   PublicRankingManifest,
@@ -175,6 +175,62 @@ export function usePublicArtifacts(scope: string) {
     teamHistoryCacheRef.current = teamHistoryCache
   }, [teamHistoryCache])
 
+  const prefetchScope = useCallback((nextScope: string) => {
+    if (!data) return
+    const manifest = data
+    const prefetchFilter = scopeToFilter(normalizeScopeForData(nextScope, manifest))
+    const snapshotCacheKey = snapshotKey(prefetchFilter)
+    const snapshotEntry = snapshotCacheRef.current[snapshotCacheKey]
+    if (!snapshotEntry || (snapshotEntry.status !== 'ready' && snapshotEntry.status !== 'loading')) {
+      const expected = manifest.snapshotIndex?.[snapshotCacheKey]
+      if (expected) {
+        const loadingEntry: PublicSnapshotCacheEntry = { status: 'loading' }
+        snapshotCacheRef.current = { ...snapshotCacheRef.current, [snapshotCacheKey]: loadingEntry }
+        setSnapshotCache((current) => ({ ...current, [snapshotCacheKey]: loadingEntry }))
+        const url = resolveArtifactUrl(expected.url, DATA_URL)
+        void fetch(url, { headers: { Accept: 'application/json' } })
+          .then(async (response) => {
+            if (!response.ok) throw new Error(`Filter snapshot failed with ${response.status}`)
+            const next = parsePublicRankingShard(await response.json())
+            validatePublicSnapshotShard(snapshotCacheKey, expected, next, manifest)
+            const readyEntry: PublicSnapshotCacheEntry = { status: 'ready', snapshot: next }
+            snapshotCacheRef.current = { ...snapshotCacheRef.current, [snapshotCacheKey]: readyEntry }
+            setSnapshotCache((current) => ({ ...current, [snapshotCacheKey]: readyEntry }))
+          })
+          .catch((error: unknown) => {
+            const errorEntry: PublicSnapshotCacheEntry = { status: 'error', message: error instanceof Error ? error.message : 'Unable to load filtered snapshot' }
+            snapshotCacheRef.current = { ...snapshotCacheRef.current, [snapshotCacheKey]: errorEntry }
+            setSnapshotCache((current) => ({ ...current, [snapshotCacheKey]: errorEntry }))
+          })
+      }
+    }
+
+    if (teamHistoryRootState.status !== 'ready' || teamHistoryRootState.data.artifactKind !== 'team-history-index') return
+    const index = teamHistoryRootState.data
+    const historyEntry = teamHistoryCacheRef.current[snapshotCacheKey]
+    if (historyEntry?.status === 'ready' || historyEntry?.status === 'loading') return
+    const expectedHistory = index.scopeIndex[snapshotCacheKey]
+    if (!expectedHistory) return
+    const loadingHistoryEntry: TeamHistoryCacheEntry = { status: 'loading' }
+    teamHistoryCacheRef.current = { ...teamHistoryCacheRef.current, [snapshotCacheKey]: loadingHistoryEntry }
+    setTeamHistoryCache((current) => ({ ...current, [snapshotCacheKey]: loadingHistoryEntry }))
+    const historyUrl = resolveArtifactUrl(expectedHistory.url, DATA_URL)
+    void fetch(historyUrl, { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Team history failed with ${response.status}`)
+        const next = parsePublicTeamHistoryShard(await response.json())
+        validatePublicTeamHistoryShard(snapshotCacheKey, expectedHistory, next, index)
+        const readyHistoryEntry: TeamHistoryCacheEntry = { status: 'ready', shard: next }
+        teamHistoryCacheRef.current = { ...teamHistoryCacheRef.current, [snapshotCacheKey]: readyHistoryEntry }
+        setTeamHistoryCache((current) => ({ ...current, [snapshotCacheKey]: readyHistoryEntry }))
+      })
+      .catch((error: unknown) => {
+        const errorHistoryEntry: TeamHistoryCacheEntry = { status: 'error', message: error instanceof Error ? error.message : 'Unable to load team history' }
+        teamHistoryCacheRef.current = { ...teamHistoryCacheRef.current, [snapshotCacheKey]: errorHistoryEntry }
+        setTeamHistoryCache((current) => ({ ...current, [snapshotCacheKey]: errorHistoryEntry }))
+      })
+  }, [data, teamHistoryRootState])
+
   useEffect(() => {
     if (!data) return
     const manifest = data
@@ -258,6 +314,7 @@ export function usePublicArtifacts(scope: string) {
     playersState,
     teamHistoryState,
     regionHistoryState: scopedRegionHistoryState,
+    prefetchScope,
   }
 }
 

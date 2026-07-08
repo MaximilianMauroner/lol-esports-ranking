@@ -30,8 +30,8 @@ test('chart point conversion expands compact model context for tooltip display',
 
   assert.equal(point.detail?.model?.expectedWinProbability, 0.778)
   assert.equal(point.detail?.model?.residual, 0.222)
-  assert.equal(point.detail?.model?.attribution?.[0]?.label, 'Stable')
-  assert.equal(point.detail?.model?.attribution?.[1]?.label, 'League anchor')
+  assert.equal(point.detail?.model?.attribution?.[0]?.label, 'Team strength')
+  assert.equal(point.detail?.model?.attribution?.[1]?.label, 'League strength')
   assert.deepEqual(point.detail?.model?.attribution?.map((entry) => [entry.key, entry.value]), [
     ['stable', 4],
     ['league', 2],
@@ -45,7 +45,7 @@ test('chart point conversion expands compact model context for tooltip display',
     ['form', 1.1],
     ['context', 0],
   ])
-  assert.equal(point.detail?.model?.components?.[0]?.label, 'League anchor')
+  assert.equal(point.detail?.model?.components?.[0]?.label, 'League strength')
 })
 
 test('daily chart aggregation preserves same-day matches and reconciles visible movement', () => {
@@ -125,5 +125,5 @@ test('daily chart aggregation separates final standing adjustment from the match
     ['stable', 6],
     ['form', 4],
   ])
-  assert.equal(daily[1].detail?.model?.componentAttribution?.[0]?.label, 'League anchor')
+  assert.equal(daily[1].detail?.model?.componentAttribution?.[0]?.label, 'League strength')
 })

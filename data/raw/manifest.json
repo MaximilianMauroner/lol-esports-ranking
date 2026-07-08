@@ -1,16 +1,27 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-06T11:05:44.768Z",
+  "generatedAt": "2026-07-08T18:09:02Z",
   "start": "2025-01-01",
-  "end": "2026-07-06",
+  "end": "2026-07-08",
   "files": {
-    "leaguepediaJson": [],
+    "leaguepediaJson": [
+      "leaguepedia/scoreboard-games-2026-07-06_to_2026-07-08.json"
+    ],
     "oracleCsv": [
       "/app/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "/app/data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
+    ],
+    "lolEsportsJson": [
+      "lolesports/schedule-2026-07-06_to_2026-07-08.json"
     ]
   },
   "sources": {
+    "lolesports": {
+      "role": "schedule-results-reference",
+      "status": "downloaded",
+      "downloadedCount": 1,
+      "unsupportedApi": true
+    },
     "oracle": {
       "role": "primary",
       "status": "failed",
@@ -30,19 +41,19 @@
     },
     "leaguepedia": {
       "role": "backup-gap-fill",
-      "status": "skipped",
-      "downloadedCount": 0,
+      "status": "downloaded",
+      "downloadedCount": 1,
       "previousStatus": "skipped",
-      "latestStatus": "skipped"
+      "latestStatus": "downloaded"
     }
   },
   "warnings": [
-    "Leaguepedia backup download skipped by --leaguepedia false or --skip-leaguepedia.",
     "Oracle source 2026_LoL_esports_match_data_from_OraclesElixir.csv was not downloaded: download returned HTML (Google Drive - Quota exceeded)",
-    "No Oracle CSVs were downloaded. Leaguepedia remains available as the backup/gap-fill source if its download succeeded."
+    "No fresh Oracle CSV was downloaded for the 2026-07-06 through 2026-07-08 refresh window; existing Oracle baseline was preserved and Leaguepedia filled current scored rows.",
+    "LoL Esports persisted APIs are public site endpoints, not a supported official data API. Cache responses and use them as reference metadata only."
   ],
   "refreshWindow": {
-    "start": "2026-06-29",
-    "end": "2026-07-06"
+    "start": "2026-07-06",
+    "end": "2026-07-08"
   }
 }

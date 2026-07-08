@@ -1,5 +1,10 @@
 import type { TeamStanding } from '../types'
 import { normalizedDecisiveBestOf } from './matchFormat'
+import {
+  winProbabilityEloScale,
+  winProbabilityUncertaintyFloor,
+  winProbabilityUncertaintyScale,
+} from './modelConfig'
 
 export type ProbabilityTeam = Pick<TeamStanding, 'team' | 'rating' | 'uncertainty'>
 
@@ -45,12 +50,12 @@ export function seriesWinProbability(gameWinProbability: number, bestOf = 1) {
 }
 
 function expectedScore(ratingA: number, ratingB: number) {
-  return 1 / (1 + 10 ** ((ratingB - ratingA) / 400))
+  return 1 / (1 + 10 ** ((ratingB - ratingA) / winProbabilityEloScale))
 }
 
 function uncertaintyPenaltyFor(uncertaintyA: number, uncertaintyB: number) {
   const combined = Math.sqrt(uncertaintyA ** 2 + uncertaintyB ** 2)
-  return clamp(1 - combined / 420, 0.35, 1)
+  return clamp(1 - combined / winProbabilityUncertaintyScale, winProbabilityUncertaintyFloor, 1)
 }
 
 function binomial(n: number, k: number) {

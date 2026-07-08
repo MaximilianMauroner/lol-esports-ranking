@@ -13,8 +13,8 @@ test('derives deterministic S/A/B/C tiers from power-score bands', () => {
   const tiers = deriveTierLabels([
     standing({ team: 'Alpha', code: 'ALP', rank: 1, rating: 1800 }),
     standing({ team: 'Bravo', code: 'BRV', rank: 2, rating: 1745 }),
-    standing({ team: 'Charlie', code: 'CHR', rank: 3, rating: 1620 }),
-    standing({ team: 'Delta', code: 'DLT', rank: 4, rating: 1510 }),
+    standing({ team: 'Charlie', code: 'CHR', rank: 3, rating: 1500 }),
+    standing({ team: 'Delta', code: 'DLT', rank: 4, rating: 1350 }),
   ])
 
   assert.deepEqual(
@@ -22,8 +22,52 @@ test('derives deterministic S/A/B/C tiers from power-score bands', () => {
     [
       ['Alpha', 1800, 'S'],
       ['Bravo', 1745, 'A'],
-      ['Charlie', 1620, 'B'],
-      ['Delta', 1510, 'C'],
+      ['Charlie', 1500, 'B'],
+      ['Delta', 1350, 'C'],
+    ],
+  )
+})
+
+test('keeps close contenders in A tier after a tight S-tier leader pack', () => {
+  const tiers = deriveTierLabels([
+    standing({ team: 'Bilibili Gaming', code: 'BLG', rank: 1, rating: 2294 }),
+    standing({ team: 'Gen.G', code: 'GEN', rank: 2, rating: 2255 }),
+    standing({ team: 'T1', code: 'T1', rank: 3, rating: 2141 }),
+    standing({ team: 'G2 Esports', code: 'G2', rank: 4, rating: 2102 }),
+    standing({ team: "Anyone's Legend", code: 'AL', rank: 5, rating: 2080 }),
+    standing({ team: 'Dplus KIA', code: 'DK', rank: 6, rating: 2076 }),
+    standing({ team: 'JD Gaming', code: 'JDG', rank: 7, rating: 2041 }),
+  ])
+
+  assert.deepEqual(
+    tiers.map((tier) => [tier.code, tier.tier]),
+    [
+      ['BLG', 'S'],
+      ['GEN', 'S'],
+      ['T1', 'A'],
+      ['G2', 'A'],
+      ['AL', 'A'],
+      ['DK', 'A'],
+      ['JDG', 'B'],
+    ],
+  )
+})
+
+test('keeps championship-score teams in S tier even when the leader has separation', () => {
+  const tiers = deriveTierLabels([
+    standing({ team: 'Bilibili Gaming', code: 'BLG', rank: 1, rating: 2385 }),
+    standing({ team: 'Hanwha Life Esports', code: 'HLE', rank: 2, rating: 2268 }),
+    standing({ team: 'Gen.G', code: 'GEN', rank: 3, rating: 2239 }),
+    standing({ team: 'G2 Esports', code: 'G2', rank: 4, rating: 2216 }),
+  ])
+
+  assert.deepEqual(
+    tiers.map((tier) => [tier.code, tier.tier]),
+    [
+      ['BLG', 'S'],
+      ['HLE', 'S'],
+      ['GEN', 'A'],
+      ['G2', 'A'],
     ],
   )
 })

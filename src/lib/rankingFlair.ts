@@ -82,10 +82,11 @@ export type RankingFlair = {
 
 const tierDropThresholds: Array<{ label: RankingTierLabel; dropFromLeader: number }> = [
   { label: 'S', dropFromLeader: 50 },
-  { label: 'A', dropFromLeader: 125 },
-  { label: 'B', dropFromLeader: 225 },
+  { label: 'A', dropFromLeader: 225 },
+  { label: 'B', dropFromLeader: 400 },
   { label: 'C', dropFromLeader: Number.POSITIVE_INFINITY },
 ]
+const eliteTierPowerFloor = 2250
 
 export function powerScoreForStanding(standing: Pick<PublicTeamStanding, 'rating'>) {
   return Math.round(standing.rating)
@@ -190,6 +191,7 @@ export function deriveSpicyTakeConfidence(standing: PublicTeamStanding): SpicyTa
 
 export function tierForPowerScore(powerScore: number, leaderScore: number): RankingTierLabel {
   const dropFromLeader = Math.max(0, leaderScore - powerScore)
+  if (dropFromLeader <= tierDropThresholds[0].dropFromLeader || powerScore >= eliteTierPowerFloor) return 'S'
   return tierDropThresholds.find((tier) => dropFromLeader <= tier.dropFromLeader)?.label ?? 'C'
 }
 
@@ -202,9 +204,20 @@ function bandForTier(label: RankingTierLabel, leaderScore: number): RankingTierB
   const thresholdIndex = tierDropThresholds.findIndex((threshold) => threshold.label === label)
   const threshold = tierDropThresholds[thresholdIndex]
   const previousThreshold = tierDropThresholds[thresholdIndex - 1]
-  const previousDrop = previousThreshold?.dropFromLeader ?? -1
-  const floor = Number.isFinite(threshold.dropFromLeader) ? leaderScore - threshold.dropFromLeader : Number.NEGATIVE_INFINITY
-  const ceiling = leaderScore - previousDrop - 1
+  const sTierFloor = Math.min(leaderScore - tierDropThresholds[0].dropFromLeader, eliteTierPowerFloor)
+  const previousDrop = previousThreshold?.dropFromLeader
+  const floor = label === 'S'
+    ? sTierFloor
+    : Number.isFinite(threshold.dropFromLeader)
+      ? leaderScore - threshold.dropFromLeader
+      : Number.NEGATIVE_INFINITY
+  const ceiling = label === 'S'
+    ? leaderScore
+    : previousDrop === undefined
+      ? leaderScore
+      : previousThreshold?.label === 'S'
+        ? sTierFloor - 1
+        : leaderScore - previousDrop - 1
 
   return {
     label,

@@ -13,6 +13,7 @@ import {
   publishedLeagueAnchorReliefConfig,
   publishedRatingScale,
   publishedRosterPriorConfig,
+  publishedTeamStableOffsetConfig,
   recencyDecayDays,
   recencyFloor,
   recencyRange,
@@ -168,12 +169,20 @@ export function ratingComponents({
 }): RatingComponents {
   return {
     leagueAnchor: Math.round(leagueScore),
-    teamStableOffset: Math.round(teamRating - initialTeamRating),
+    teamStableOffset: Math.round(publishedTeamStableOffset(teamRating - initialTeamRating)),
     rosterPriorOffset: Number(rosterPriorOffset.toFixed(1)),
     momentum: Number(momentum.toFixed(1)),
     contextAdjustment: Number(contextAdjustment.toFixed(1)),
     uncertainty: Math.round(uncertainty),
   }
+}
+
+export function publishedTeamStableOffset(
+  rawOffset: number,
+  config = publishedTeamStableOffsetConfig,
+) {
+  if (rawOffset <= config.positiveSoftCap) return rawOffset
+  return config.positiveSoftCap + (rawOffset - config.positiveSoftCap) * config.positiveOverflowScale
 }
 
 export function publishedLeagueAnchorContextAdjustment(

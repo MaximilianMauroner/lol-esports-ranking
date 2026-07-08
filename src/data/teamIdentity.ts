@@ -20,6 +20,7 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
   'KT Rolster': { name: 'KT Rolster', code: 'KT', region: 'LCK', league: 'LCK' },
   'LNG Esports': { name: 'LNG Esports', code: 'LNG', region: 'LPL', league: 'LPL' },
   LOUD: { name: 'LOUD', code: 'LLL', region: 'CBLOL', league: 'CBLOL' },
+  LYON: { name: 'LYON', code: 'LYON', region: 'LCS', league: 'LCS' },
   T1: { name: 'T1', code: 'T1', region: 'LCK', league: 'LCK' },
   'Team Liquid': { name: 'Team Liquid', code: 'TL', region: 'LCS', league: 'LCS' },
   'Team Secret': { name: 'Team Secret', code: 'TS', region: 'LCP', league: 'LCP' },

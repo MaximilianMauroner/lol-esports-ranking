@@ -11,9 +11,11 @@ const end = args.end ?? new Date().toISOString().slice(0, 10)
 const outDir = resolve(args.outDir ?? 'data/raw')
 const manifestPath = resolve(args.manifest ?? `${outDir}/manifest.json`)
 const leaguepediaPath = resolve(args.leaguepediaOutput ?? `${outDir}/leaguepedia/scoreboard-games-${start}_to_${end}.json`)
+const lolEsportsPath = resolve(args.lolesportsOutput ?? `${outDir}/lolesports/schedule-${start}_to_${end}.json`)
 const skipOracle = isFalse(args.oracle) || args.skipOracle === true
 const skipOracleDrive = isFalse(args.oracleDrive) || args.skipOracleDrive === true
 const skipLeaguepedia = isFalse(args.leaguepedia) || args.skipLeaguepedia === true
+const skipLolEsports = isFalse(args.lolesports) || args.skipLolesports === true || args.skipLolEsports === true
 const oracleRequired = args.oracleRequired === true || args.oracleRequired === 'true'
 const oracleDriveFolderUrl = args.oracleDriveFolderUrl ?? defaultOracleDriveFolderUrl
 const oracleDriveFolderId = args.oracleDriveFolderId ?? folderIdFromUrl(oracleDriveFolderUrl) ?? defaultOracleDriveFolderId
@@ -22,6 +24,7 @@ const oracleCsvPaths = []
 const oracleFailures = []
 const discoveredOracleFiles = []
 const leaguepediaJsonPaths = []
+const lolEsportsJsonPaths = []
 const warnings = []
 
 if (!skipOracle) {
@@ -75,6 +78,27 @@ if (!skipLeaguepedia) {
   warnings.push('Leaguepedia backup download skipped by --leaguepedia false or --skip-leaguepedia.')
 }
 
+if (!skipLolEsports) {
+  await run('node', [
+    'scripts/fetch-lolesports-schedule.mjs',
+    '--start',
+    start,
+    '--end',
+    end,
+    '--output',
+    lolEsportsPath,
+    '--older-pages',
+    String(args.lolesportsOlderPages ?? args.lolesportsOlder ?? 4),
+    '--newer-pages',
+    String(args.lolesportsNewerPages ?? args.lolesportsNewer ?? 1),
+    '--detail-limit',
+    String(args.lolesportsDetailLimit ?? 250),
+  ])
+  lolEsportsJsonPaths.push(lolEsportsPath)
+} else {
+  warnings.push('LoL Esports schedule reference download skipped by --lolesports false or --skip-lolesports.')
+}
+
 if (args.riotGpr !== undefined || args.skipRiotGpr === true || args.riotGprOutput !== undefined) {
   warnings.push('Riot GPR is not part of the local data-source manifest. Use pnpm run fetch:riot-gpr explicitly for manual benchmark snapshots.')
 }
@@ -91,8 +115,15 @@ const manifest = {
   files: {
     leaguepediaJson: leaguepediaJsonPaths,
     oracleCsv: oracleCsvPaths,
+    lolEsportsJson: lolEsportsJsonPaths,
   },
   sources: {
+    lolesports: {
+      role: 'schedule-results-reference',
+      status: skipLolEsports ? 'skipped' : 'downloaded',
+      downloadedCount: lolEsportsJsonPaths.length,
+      unsupportedApi: true,
+    },
     oracle: {
       role: 'primary',
       status: oracleStatus({ skipOracle, downloaded: oracleCsvPaths, failures: oracleFailures }),

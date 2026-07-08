@@ -2,9 +2,11 @@ import { once } from 'node:events'
 import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
+import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
+import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
 import { createStaticRankingData, type DataSourceWarning } from '../src/lib/snapshot'
 import { createPublicArtifactWritePlan, publicScopeArtifactPath, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
@@ -14,13 +16,19 @@ import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/tea
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataDir = resolve(readArg('public-data-dir') ?? 'public/data')
 const manifestPath = readArg('manifest')
-const manifest = manifestPath ? JSON.parse(await readFile(resolve(manifestPath), 'utf8')) as LocalDataManifest : undefined
+const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
+const manifest = resolvedManifestPath
+  ? manifestWithResolvedFiles(JSON.parse(await readFile(resolvedManifestPath, 'utf8')) as LocalDataManifest, dirname(resolvedManifestPath)) as LocalDataManifest
+  : undefined
 const oracleCsvPaths = uniquePaths([...readArgList('oracle-csv'), ...(manifest?.files.oracleCsv ?? [])])
 const leaguepediaJsonPaths = uniquePaths([...readArgList('leaguepedia-json'), ...(manifest?.files.leaguepediaJson ?? [])])
+const lolEsportsJsonPaths = uniquePaths([...readArgList('lolesports-json'), ...(manifest?.files.lolEsportsJson ?? [])])
 const oracleImports = []
 const leaguepediaImports = []
+const lolEsportsImports = []
 const oracleWarnings = manifestSourceWarnings('oracle', manifest?.warnings)
 const leaguepediaWarnings = manifestSourceWarnings('leaguepedia', manifest?.warnings)
+const lolEsportsWarnings = manifestSourceWarnings('lolesports', manifest?.warnings)
 
 if (process.argv.includes('--seeded-sample')) {
   throw new Error('Seeded sample generation has been removed from the production build path. Provide public source files or use tests/fixtures/rankingFixtures.ts for unit fixtures.')
@@ -36,9 +44,15 @@ for (const jsonPath of leaguepediaJsonPaths) {
   leaguepediaImports.push(importLeaguepediaSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
 }
 
+for (const jsonPath of lolEsportsJsonPaths) {
+  const jsonText = await readFile(jsonPath, 'utf8')
+  lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
+}
+
 const importedMatches = mergeCommunityMatchSources({
   oracleMatches: oracleImports.flatMap((result) => result.matches),
   leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
+  lolEsportsReferences: lolEsportsImports.flatMap((result) => result.events),
 })
 const importedTeams = mergeTeamProfiles([...leaguepediaImports.map((result) => result.teams), ...oracleImports.map((result) => result.teams)])
 const mergedTeams = importedMatches.length > 0 ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities } : {}
@@ -54,6 +68,25 @@ const snapshot = createStaticRankingData({
     : importedMatches.length > 0 ? 'no rated public match data available for published team universe' : 'no public match data available',
   dataMode: matches.length > 0 ? 'scheduled-public-data' : 'no-data',
   externalSources: [
+    ...lolEsportsImports.map((result) => ({
+      name: result.source.fileName ? `LoL Esports schedule API: ${result.source.fileName}` : 'LoL Esports schedule API',
+      kind: 'official-reference' as const,
+      url: result.source.url,
+      retrievedAt: result.source.retrievedAt,
+      coverageStart: dateRange(result.events).start,
+      coverageEnd: dateRange(result.events).end,
+      rowCount: result.source.eventCount,
+      description: `${result.source.eventCount} schedule/result events and ${result.source.gameCount} game IDs cached from LoL Esports persisted APIs. Used only to attach official event/match/game IDs and audit schedule/results; not a rich stat source or standalone model input. ${result.source.attribution}`,
+      status: result.source.eventCount > 0 ? 'active' as const : 'reference-only' as const,
+      warnings: [
+        {
+          kind: 'source-policy' as const,
+          severity: 'warning' as const,
+          message: 'LoL Esports persisted APIs are public site endpoints, not a supported official data API; cache responses and keep them reference-only.',
+        },
+        ...lolEsportsWarnings,
+      ],
+    })),
     ...oracleImports.map((result) => {
       const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
       return {
@@ -147,11 +180,12 @@ type LocalDataManifest = {
   files: {
     oracleCsv?: string[]
     leaguepediaJson?: string[]
+    lolEsportsJson?: string[]
   }
   warnings?: string[]
 }
 
-function manifestSourceWarnings(provider: 'oracle' | 'leaguepedia', warnings: string[] | undefined): DataSourceWarning[] {
+function manifestSourceWarnings(provider: 'oracle' | 'leaguepedia' | 'lolesports', warnings: string[] | undefined): DataSourceWarning[] {
   return (warnings ?? [])
     .filter((warning) => warningMatchesProvider(provider, warning))
     .map((message) => ({
@@ -161,9 +195,10 @@ function manifestSourceWarnings(provider: 'oracle' | 'leaguepedia', warnings: st
     }))
 }
 
-function warningMatchesProvider(provider: 'oracle' | 'leaguepedia', warning: string) {
+function warningMatchesProvider(provider: 'oracle' | 'leaguepedia' | 'lolesports', warning: string) {
   const lower = warning.toLowerCase()
   if (provider === 'oracle') return lower.includes('oracle')
+  if (provider === 'lolesports') return lower.includes('lol esports') || lower.includes('lolesports')
   return lower.includes('leaguepedia') || lower.includes('cargo')
 }
 
@@ -188,7 +223,7 @@ function describeCommunitySource(oracleCount: number, leaguepediaCount: number) 
   return 'Leaguepedia Cargo import'
 }
 
-function dateRange(matches: { date: string }[]) {
+function dateRange(matches: { date?: string }[]) {
   const dates = matches.map((match) => match.date).filter(Boolean).sort()
   return {
     start: dates[0],

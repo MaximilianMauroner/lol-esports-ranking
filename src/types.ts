@@ -100,6 +100,9 @@ export type SourceTrace = {
   provider?: MatchRecord['sourceProvider']
   gameId?: string
   matchId?: string
+  officialEventId?: string
+  officialMatchId?: string
+  officialGameId?: string
   url?: string
   fileName?: string
   completeness?: string
@@ -210,6 +213,10 @@ export type MatchRecord = {
   sourceProvider?: 'oracles-elixir' | 'leaguepedia-cargo' | 'seed'
   sourceGameId?: string
   sourceMatchId?: string
+  officialEventId?: string
+  officialMatchId?: string
+  officialGameId?: string
+  officialScheduleState?: string
   sourceUrl?: string
   sourceFileName?: string
   dataCompleteness?: string

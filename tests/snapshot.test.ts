@@ -38,7 +38,7 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'key',
     teams: {},
     snapshots: {
@@ -203,7 +203,7 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
     latestObservedAt: '2026-06-26',
     latestObservedEvent: 'LCK 2026 Rounds 1-2',
   }])
-  assert.equal(directory.modelVersion, 'transparent-gpr-vT')
+  assert.equal(directory.modelVersion, 'transparent-power-index-vT')
 })
 
 test('createPlayerDirectory groups recent player game rows into match series', () => {
@@ -255,7 +255,7 @@ test('createPlayerDirectory groups recent player game rows into match series', (
   })
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'key',
     teams: {},
     snapshots: {
@@ -592,6 +592,55 @@ test('public team standing records infer match series when source rows say bo1',
   }])
 })
 
+test('public compact standings retain a paginatable recent match window', () => {
+  const history: TeamStanding['history'] = Array.from({ length: 30 }, (_, index) => {
+    const matchNumber = index + 1
+    const date = `2026-05-${String(matchNumber).padStart(2, '0')}`
+    return {
+      date,
+      event: 'LCK 2026',
+      opponent: `Opponent ${matchNumber}`,
+      rating: 1700 + matchNumber,
+      baseRating: 1650,
+      leagueAdjustment: 50,
+      sideAdjustment: 0,
+      ratingComponents: {
+        leagueAnchor: 1650,
+        teamStableOffset: 0,
+        rosterPriorOffset: 0,
+        momentum: 0,
+        contextAdjustment: 0,
+        uncertainty: 40,
+      },
+      ratingUpdate: emptyRatingUpdateLedger(),
+      rank: 1,
+      delta: 1,
+      tier: 'regional-regular',
+      result: matchNumber % 4 === 0 ? 'L' : 'W',
+      source: {
+        provider: 'oracles-elixir',
+        gameId: `lck-fixture-${matchNumber}`,
+        fileName: 'oracle-fixture.csv',
+        bestOf: 1,
+      },
+    }
+  })
+  const compact = compactStanding({
+    team: 'T1',
+    code: 'T1',
+    region: 'LCK',
+    league: 'LCK',
+    wins: 23,
+    losses: 7,
+    form: ['W', 'L', 'W', 'W', 'W'],
+    history,
+  } as unknown as Parameters<typeof compactStanding>[0])
+
+  assert.equal(compact.recentMatches.length, 25)
+  assert.equal(compact.recentMatches[0]?.opponent, 'Opponent 6')
+  assert.equal(compact.recentMatches.at(-1)?.opponent, 'Opponent 30')
+})
+
 test('event-scoped public standings keep same-day Bo-series siblings across source event labels', () => {
   const splitTeams: Record<string, TeamProfile> = {
     'Karmine Corp': { name: 'Karmine Corp', code: 'KC', region: 'LEC', league: 'LEC' },
@@ -738,7 +787,7 @@ test('createPlayerDirectory credits season rows to the primary scoped team', () 
   })
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'All__All__All',
     teams: {},
     snapshots: {
@@ -780,7 +829,7 @@ test('createPlayerDirectory gates low-sample sourced players from ranked public 
   ]
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'All__All__All',
     teams: {},
     snapshots: {
@@ -834,7 +883,7 @@ test('createPlayerDirectory gates unanchored-league teams from ranked public pla
   } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'All__All__All',
     teams: {},
     snapshots: {
@@ -903,7 +952,7 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
   } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'key',
     teams: {},
     snapshots: {
@@ -1017,7 +1066,7 @@ test('createTeamHistory publishes match-level history points for multi-game seri
   } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'key',
     teams: {},
     snapshots: {
@@ -1041,6 +1090,86 @@ test('createTeamHistory publishes match-level history points for multi-game seri
   assert.equal(seriesPoint[3]?.bestOf, 3)
   assert.equal(seriesPoint[3]?.delta, -45)
   assert.deepEqual(seriesPoint[3]?.sourceGameIds, ['hle-gen-game-1', 'hle-gen-game-2', 'hle-gen-game-3'])
+})
+
+test('createTeamHistory keeps independent official same-day matches separate', () => {
+  const historyPoint = (
+    gameId: string,
+    officialMatchId: string,
+    rating: number,
+    delta: number,
+  ): TeamStanding['history'][number] => ({
+    date: '2026-05-27',
+    event: 'LCK 2026 Rounds 1-2',
+    opponent: 'Gen.G',
+    rating,
+    baseRating: rating,
+    leagueAdjustment: 0,
+    sideAdjustment: 0,
+    ratingComponents: {
+      leagueAnchor: 1500,
+      teamStableOffset: rating - 1500,
+      rosterPriorOffset: 0,
+      momentum: 0,
+      contextAdjustment: 0,
+      uncertainty: 40,
+    },
+    ratingUpdate: emptyRatingUpdateLedger(),
+    rank: 1,
+    delta,
+    tier: 'regional-regular',
+    result: 'W',
+    source: {
+      provider: 'oracles-elixir',
+      gameId,
+      officialMatchId,
+      officialGameId: `${officialMatchId}-game-1`,
+      fileName: 'fixture.csv',
+      bestOf: 1,
+    },
+  })
+  const standing = {
+    team: 'T1',
+    code: 'T1',
+    region: 'LCK',
+    history: [
+      {
+        date: '2026-05-20',
+        event: 'LCK 2026 Rounds 1-2',
+        opponent: 'KT Rolster',
+        rating: 1600,
+        baseRating: 1600,
+        leagueAdjustment: 0,
+        ratingComponents: {},
+        ratingUpdate: {},
+        rank: 1,
+        delta: 5,
+        tier: 'regional-regular',
+        result: 'W',
+        source: { provider: 'oracles-elixir', gameId: 'warmup-game', fileName: 'fixture.csv', bestOf: 1 },
+      },
+      historyPoint('t1-gen-series-1', 'official-match-1', 1610, 10),
+      historyPoint('t1-gen-series-2', 'official-match-2', 1620, 10),
+    ],
+  } as unknown as TeamStanding
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'key',
+    teams: {},
+    snapshots: {
+      key: {
+        standings: [standing],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const history = createTeamHistory(data)
+  const points = history.series[teamStandingKey(standing)].points
+
+  assert.equal(points.length, 3)
+  assert.deepEqual(points.slice(1).map((point) => point[3]?.officialMatchId), ['official-match-1', 'official-match-2'])
+  assert.deepEqual(points.slice(1).map((point) => point[3]?.games), [1, 1])
 })
 
 test('createTeamHistory preserves the final atomic delta for model-correct series rows', () => {
@@ -1102,7 +1231,7 @@ test('createTeamHistory preserves the final atomic delta for model-correct serie
   } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'key',
     teams: {},
     snapshots: {
@@ -1170,7 +1299,7 @@ test('createTeamHistory final point matches published standing rating', () => {
   } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-28T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'key',
     teams: {},
     snapshots: {
@@ -1241,7 +1370,7 @@ test('createTeamHistory skips unresolved tied match groups', () => {
   } as unknown as TeamStanding
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-vT', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
     defaultSnapshotKey: 'key',
     teams: {},
     snapshots: {
@@ -1425,7 +1554,7 @@ test('createRegionHistory context only describes leagues used for region power s
   const key = snapshotKey(filter)
   const data = {
     generatedAt: '2026-06-26T00:00:00.000Z',
-    model: { version: 'transparent-gpr-test', configHash: 'fnv1a-test' },
+    model: { version: 'transparent-power-index-test', configHash: 'fnv1a-test' },
     defaultSnapshotKey: key,
     snapshots: {
       [key]: {
@@ -1483,7 +1612,7 @@ test('generated snapshots carry model and source provenance', () => {
   assert.equal(typeof data.dataQuality.rosterCoverage.missingRosterSides, 'number')
   assert.equal(Array.isArray(data.dataQuality.identityCoverage.unresolvedLeagueSummaries), true)
   assert.equal(data.sources.some((source) => source.kind === 'seed'), true)
-  assert.equal(data.model.version, 'transparent-gpr-v0.0.0')
+  assert.equal(data.model.version, 'transparent-power-index-v0.0.0')
   assert.match(data.model.configHash, /^fnv1a-/)
   assert.equal(data.snapshots[data.defaultSnapshotKey].artifactKind, 'full-ranking-snapshot')
   assert.equal(data.snapshots[data.defaultSnapshotKey].modelVersion, data.model.version)
@@ -1597,6 +1726,66 @@ test('region filters list teams from that region instead of their opponents', ()
   assert.equal(teamsInLecShard.has('Fnatic'), true)
   assert.equal(teamsInLecShard.has('Gen.G'), false)
   assert.equal(lecSnapshot.standings.every((standing) => standing.region === 'LEC'), true)
+})
+
+test('region filtered standings recompute movement against scoped ranks', () => {
+  const scopedTeams: Record<string, TeamProfile> = {
+    Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },
+    Beta: { name: 'Beta', code: 'BET', region: 'LCK', league: 'LCK' },
+    Gamma: { name: 'Gamma', code: 'GAM', region: 'LPL', league: 'LPL' },
+    Delta: { name: 'Delta', code: 'DEL', region: 'LPL', league: 'LPL' },
+  }
+  const scopedMatch = (
+    id: string,
+    date: string,
+    region: Region,
+    league: string,
+    teamA: string,
+    teamB: string,
+    winner: string,
+  ): MatchRecord => ({
+    id,
+    sourceProvider: 'seed',
+    dataCompleteness: 'complete',
+    date,
+    season: Number(date.slice(0, 4)),
+    event: `${league} 2026 Spring`,
+    phase: 'Regular season',
+    region,
+    league,
+    teamAHomeLeague: scopedTeams[teamA]?.league,
+    teamBHomeLeague: scopedTeams[teamB]?.league,
+    teamARegion: scopedTeams[teamA]?.region,
+    teamBRegion: scopedTeams[teamB]?.region,
+    patch: '26.1',
+    bestOf: 1,
+    tier: 'regional-regular',
+    teamA,
+    teamB,
+    winner,
+    teamAKills: winner === teamA ? 20 : 8,
+    teamBKills: winner === teamB ? 20 : 8,
+    teamAGold: winner === teamA ? 70000 : 54000,
+    teamBGold: winner === teamB ? 70000 : 54000,
+  })
+  const data = createStaticRankingData({
+    matches: [
+      scopedMatch('alpha-beta', '2026-01-01', 'LCK', 'LCK', 'Alpha', 'Beta', 'Alpha'),
+      scopedMatch('gamma-delta-1', '2026-01-02', 'LPL', 'LPL', 'Gamma', 'Delta', 'Gamma'),
+      scopedMatch('gamma-delta-2', '2026-01-09', 'LPL', 'LPL', 'Gamma', 'Delta', 'Gamma'),
+      scopedMatch('gamma-delta-3', '2026-01-16', 'LPL', 'LPL', 'Gamma', 'Delta', 'Gamma'),
+    ],
+    teams: scopedTeams,
+    rosters: {},
+    generatedAt: '2026-06-26T00:00:00.000Z',
+  })
+  const globalSnapshot = data.snapshots[data.defaultSnapshotKey]
+  const lckSnapshot = data.snapshots[snapshotKey({ season: 'All', event: 'All', region: 'LCK' })]
+
+  assert.ok(lckSnapshot.standings.some((standing) => (
+    globalSnapshot.standings.find((globalStanding) => globalStanding.team === standing.team)?.rank !== standing.rank
+  )))
+  assert.equal(lckSnapshot.standings.every((standing) => standing.movement === standing.previousRank - standing.rank), true)
 })
 
 test('published rating universe excludes APAC feeder league teams from rating scopes', () => {

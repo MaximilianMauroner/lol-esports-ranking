@@ -3,6 +3,7 @@ import test from 'node:test'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources.ts'
 import { canonicalTeamNameFor, teamCodeFor } from '../src/data/teamIdentity.ts'
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia.ts'
+import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports.ts'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { buildRankingModel } from '../src/lib/model.ts'
 import type { MatchRecord, TeamProfile } from '../src/types.ts'
@@ -241,6 +242,117 @@ test('community merge keeps same-day scored series games but drops incomplete Le
 
   assert.deepEqual(merged.map((match) => match.id), ['oe-1', 'lp-game-2'])
   assert.equal(buildRankingModel(merged, teams).standings.length, 2)
+})
+
+test('LoL Esports schedule import normalizes result references and game ids', () => {
+  const result = importLolEsportsScheduleSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-07-08T00:00:00.000Z',
+    events: [
+      {
+        startTime: '2026-07-08T12:00:00Z',
+        state: 'completed',
+        type: 'match',
+        blockName: 'Week 1',
+        league: { name: 'LCK', slug: 'lck' },
+        match: {
+          id: 'official-match-1',
+          teams: [
+            { name: 'T1', code: 'T1', result: { outcome: 'win', gameWins: 1 }, record: { wins: 1, losses: 0 } },
+            { name: 'Gen.G', code: 'GEN', result: { outcome: 'loss', gameWins: 0 }, record: { wins: 0, losses: 1 } },
+          ],
+          strategy: { type: 'bestOf', count: 1 },
+        },
+      },
+    ],
+    eventDetails: [
+      {
+        id: 'official-match-1',
+        event: {
+          id: 'official-match-1',
+          tournament: { id: 'official-tournament-1' },
+          league: { id: 'official-league-1', name: 'LCK', slug: 'lck' },
+          match: {
+            games: [
+              {
+                id: 'official-game-1',
+                number: 1,
+                state: 'completed',
+                teams: [
+                  { id: 'official-team-t1', side: 'blue' },
+                  { id: 'official-team-gen', side: 'red' },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    ],
+  })
+
+  assert.equal(result.source.unsupportedApi, true)
+  assert.equal(result.source.eventCount, 1)
+  assert.equal(result.source.gameCount, 1)
+  assert.equal(result.events[0]?.matchId, 'official-match-1')
+  assert.equal(result.events[0]?.leagueId, 'official-league-1')
+  assert.deepEqual(result.events[0]?.gameIds, ['official-game-1'])
+  assert.equal(result.events[0]?.teams[0]?.record?.wins, 1)
+})
+
+test('community merge enriches Oracle rows with unique LoL Esports official ids', () => {
+  const oracleMatch = matchFixture({
+    id: 'oe-official-ref',
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: 'oe-game-id',
+    sourceMatchId: undefined,
+    date: '2026-07-08',
+    teamA: 'T1',
+    teamB: 'Gen.G',
+    winner: 'T1',
+  })
+  const lolEsports = importLolEsportsScheduleSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-07-08T00:00:00.000Z',
+    events: [
+      {
+        startTime: '2026-07-08T12:00:00Z',
+        state: 'completed',
+        type: 'match',
+        match: {
+          id: 'official-match-1',
+          teams: [
+            { name: 'T1', result: { outcome: 'win', gameWins: 1 } },
+            { name: 'Gen.G', result: { outcome: 'loss', gameWins: 0 } },
+          ],
+          strategy: { type: 'bestOf', count: 1 },
+        },
+      },
+    ],
+    eventDetails: [
+      {
+        id: 'official-match-1',
+        event: {
+          id: 'official-match-1',
+          match: {
+            games: [{ id: 'official-game-1', number: 1, state: 'completed' }],
+          },
+        },
+      },
+    ],
+  })
+
+  const merged = mergeCommunityMatchSources({
+    oracleMatches: [oracleMatch],
+    leaguepediaMatches: [],
+    lolEsportsReferences: lolEsports.events,
+  })
+
+  assert.equal(merged[0]?.sourceProvider, 'oracles-elixir')
+  assert.equal(merged[0]?.sourceGameId, 'oe-game-id')
+  assert.equal(merged[0]?.officialEventId, 'official-match-1')
+  assert.equal(merged[0]?.officialMatchId, 'official-match-1')
+  assert.equal(merged[0]?.officialGameId, 'official-game-1')
+  assert.equal(merged[0]?.officialScheduleState, 'completed')
 })
 
 test('community merge drops exact scored Leaguepedia duplicates with different source ids after Oracle', () => {
@@ -510,6 +622,7 @@ test('team code cleanup uses known source abbreviations for major teams', () => 
     ['EDward Gaming', 'EDG'],
     ["Anyone's Legend", 'AL'],
     ['AG.AL', 'AL'],
+    ['LYON (2024 American Team)', 'LYON'],
     ['KT Rolster', 'KT'],
     ['BNK FEARX', 'BFX'],
     ['Dplus Kia', 'DK'],
@@ -519,6 +632,32 @@ test('team code cleanup uses known source abbreviations for major teams', () => 
   for (const [team, code] of identities) {
     assert.equal(teamCodeFor(team), code)
   }
+})
+
+test('Leaguepedia MSI rows resolve LYON alias to its published home league', () => {
+  const result = importLeaguepediaSnapshot({
+    source: 'fixture',
+    fetchedAt: '2026-07-08T00:00:00.000Z',
+    matches: [
+      {
+        id: 'lp-msi-lyon-alias',
+        date: '2026-07-08',
+        event: '2026 Mid-Season Invitational',
+        teamA: 'LYON (2024 American Team)',
+        teamB: 'Team Secret Whales',
+        winner: 'LYON (2024 American Team)',
+        bestOf: 5,
+      },
+    ],
+  })
+
+  const match = result.matches[0]
+  assert.equal(match.teamA, 'LYON')
+  assert.equal(match.winner, 'LYON')
+  assert.equal(match.teamAHomeLeague, 'LCS')
+  assert.equal(match.teamARegion, 'LCS')
+  assert.equal(result.teams.LYON.code, 'LYON')
+  assert.equal(result.teams.LYON.league, 'LCS')
 })
 
 test('community merge drops Leaguepedia alias duplicates after Oracle while keeping real second games', () => {

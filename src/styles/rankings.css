@@ -1,4 +1,4 @@
-/* ---------------- GPR rankings layout ---------------- */
+/* ---------------- Power Index rankings layout ---------------- */
 
 .view--snapshot-readout {
   padding-top: 0;
@@ -171,19 +171,57 @@
 }
 
 .ranking-showcase__tier {
-  flex: var(--tier-size) 1 48px;
+  flex: max(var(--tier-size), 1) 1 48px;
   min-width: 54px;
   padding: 10px 12px;
   border-left: 1px solid var(--line);
-  background: color-mix(in oklch, var(--rank-gold) 9%, var(--surface));
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: var(--surface-2);
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .ranking-showcase__tier:first-child {
   border-left: 0;
 }
 
+.ranking-showcase__tier.is-interactive {
+  cursor: pointer;
+}
+
+.ranking-showcase__tier.is-interactive:hover {
+  background: var(--surface-3);
+}
+
+.ranking-showcase__tier.is-interactive:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.ranking-showcase__tier.is-selected {
+  background: color-mix(in oklch, var(--accent) 16%, var(--surface-2));
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
 .ranking-showcase__tier.is-s {
   background: color-mix(in oklch, var(--rank-gold) 16%, var(--surface));
+}
+
+.ranking-showcase__tier.is-s.is-selected {
+  background: color-mix(in oklch, var(--accent) 18%, color-mix(in oklch, var(--rank-gold) 16%, var(--surface)));
+}
+
+.ranking-showcase__tier.is-empty {
+  background: var(--surface);
+}
+
+.ranking-showcase__tier.is-empty b {
+  color: var(--muted);
 }
 
 .ranking-showcase__tier span,
@@ -212,6 +250,14 @@
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ranking-showcase__tier small em {
+  display: inline;
+  margin-left: 6px;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 650;
 }
 
 .ranking-showcase__movement-grid {
@@ -362,6 +408,13 @@
   line-height: 1.35;
 }
 
+.score-scale-note {
+  max-width: 75ch;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .gpr-filterbar {
   display: flex;
   flex-wrap: wrap;
@@ -460,21 +513,25 @@
   white-space: nowrap;
 }
 
-/* GPR table refinements */
+/* Power Index table refinements */
 
 table.ranking-table.gpr-grid {
   table-layout: fixed;
   width: 100%;
-  min-width: 520px;
+  min-width: 660px;
 }
 
 table.ranking-table.gpr-grid .gpr-col-rank {
-  width: 88px;
+  width: 108px;
 }
 
 table.ranking-table.gpr-grid .gpr-col-score,
 table.ranking-table.gpr-grid .gpr-col-record {
   width: 128px;
+}
+
+table.ranking-table.gpr-grid .gpr-col-trend {
+  width: 136px;
 }
 
 table.ranking-table.gpr-grid .gpr-col-action {
@@ -513,6 +570,15 @@ tr.gpr-row:hover {
   background: var(--surface-2);
 }
 
+tr.gpr-row.is-tier-highlight {
+  background: color-mix(in oklch, var(--accent) 12%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+tr.gpr-row.is-tier-highlight:hover {
+  background: color-mix(in oklch, var(--accent) 16%, var(--surface-2));
+}
+
 tr.gpr-row:focus-visible {
   outline: 2px solid var(--focus);
 }
@@ -542,7 +608,7 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
 .gpr-rankcell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   white-space: nowrap;
 }
 
@@ -556,6 +622,126 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
 
 .gpr-rank.podium {
   color: var(--accent-strong);
+}
+
+.tier-badge {
+  --tier-color: var(--muted);
+  --tier-bg: color-mix(in oklch, var(--tier-color) 10%, transparent);
+  --tier-border: color-mix(in oklch, var(--tier-color) 34%, var(--line));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--tier-border);
+  border-radius: var(--r-sm);
+  background: var(--tier-bg);
+  color: var(--tier-color);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 820;
+  line-height: 1;
+}
+
+.tier-badge.is-s {
+  --tier-color: var(--rank-gold);
+  --tier-bg: color-mix(in oklch, var(--rank-gold) 13%, transparent);
+  --tier-border: color-mix(in oklch, var(--rank-gold) 48%, var(--line));
+}
+
+.tier-badge.is-a {
+  --tier-color: oklch(0.82 0.08 215);
+}
+
+.tier-badge.is-b {
+  --tier-color: oklch(0.77 0.12 138);
+}
+
+.tier-badge.is-c {
+  --tier-color: oklch(0.75 0.13 54);
+}
+
+.rank-trend-cell {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--rank-movement-color, var(--faint));
+}
+
+.rank-trend-cell--empty {
+  grid-template-columns: 1fr;
+}
+
+.rank-trend-cell__main {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  color: currentColor;
+}
+
+.rank-trend-cell__move {
+  display: inline-block;
+  min-width: 1.4em;
+  overflow: hidden;
+  color: currentColor;
+  font-size: 0.82rem;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-trend-cell__main svg {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.rank-trend-cell__sparkline {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  color: currentColor;
+  overflow: visible;
+}
+
+.rank-trend-cell__sparkline polyline {
+  fill: none;
+  opacity: 0.74;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.8;
+}
+
+.rank-trend-cell__sparkline circle {
+  fill: currentColor;
+  opacity: 0.9;
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.team-score-stack {
+  display: inline-grid;
+  justify-items: end;
+  gap: 3px;
+  min-width: 0;
+}
+
+.team-score-value {
+  display: inline-block;
+  min-width: 68px;
+  color: var(--text-strong);
+  font-family: var(--mono);
+  font-size: 0.94rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 .gpr-move {
@@ -579,6 +765,13 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
+}
+
+.score-meta span {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .score-unavailable {
@@ -648,11 +841,15 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   }
 
   table.ranking-table.gpr-grid .gpr-col-rank {
-    width: 52px;
+    width: 74px;
   }
 
   table.ranking-table.gpr-grid .gpr-col-score {
     width: 76px;
+  }
+
+  table.ranking-table.gpr-grid .gpr-col-trend {
+    width: 64px;
   }
 
   table.ranking-table.gpr-grid .gpr-col-action {
@@ -675,6 +872,20 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   table.ranking-table.gpr-grid thead th:nth-child(3) .sort-button {
     white-space: normal;
     line-height: 1.15;
+  }
+
+  .rank-trend-cell {
+    grid-template-columns: 1fr;
+    gap: 0;
+    justify-items: start;
+  }
+
+  .rank-trend-cell__sparkline {
+    display: none;
+  }
+
+  .rank-trend-cell__move {
+    font-size: 0.76rem;
   }
 
   table.ranking-table.gpr-grid thead th:first-child {
@@ -718,12 +929,19 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   }
 
   .gpr-rankcell {
-    gap: 4px;
+    gap: 5px;
   }
 
   .gpr-rank {
     min-width: 1.2em;
     font-size: 1rem;
+  }
+
+  .tier-badge {
+    min-width: 22px;
+    height: 22px;
+    padding-inline: 5px;
+    font-size: 0.74rem;
   }
 
   .gpr-move {
@@ -734,11 +952,15 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
 
 @media (max-width: 360px) {
   table.ranking-table.gpr-grid .gpr-col-rank {
-    width: 58px;
+    width: 70px;
   }
 
   table.ranking-table.gpr-grid .gpr-col-score {
     width: 76px;
+  }
+
+  table.ranking-table.gpr-grid .gpr-col-trend {
+    width: 58px;
   }
 
   table.ranking-table.gpr-grid .gpr-col-action {
@@ -1148,7 +1370,7 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ---------------- GPR dossier panels ---------------- */
+/* ---------------- Power Index dossier panels ---------------- */
 
 .team-dossier {
   display: grid;
@@ -1649,6 +1871,22 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   padding: 14px;
 }
 
+.recent-matches__pager {
+  --pager-control-h: 28px;
+
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in oklch, var(--detail-surface-2, var(--surface-2)) 64%, transparent);
+}
+
+.recent-matches__pager .pager__page {
+  justify-content: flex-start;
+  min-width: 0;
+  color: var(--faint);
+}
+
 .component-breakdown {
   padding: 18px 20px;
 }
@@ -2003,6 +2241,22 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   font-size: 1.2rem;
   font-weight: 760;
   font-variant-numeric: tabular-nums;
+}
+
+.trend-summary b.up {
+  color: var(--up);
+}
+
+.trend-summary b.down {
+  color: var(--down);
+}
+
+.trend-summary b.flat {
+  color: var(--faint);
+}
+
+.rank-trend-summary {
+  border-top: 1px solid var(--line);
 }
 
 .trend-summary em {

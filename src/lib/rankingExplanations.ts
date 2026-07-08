@@ -1,5 +1,6 @@
 import type { RosterBasis } from '../types'
 import type { WalkForwardMetrics } from './predictionModel'
+import { POWER_COMPONENT_LABELS } from './ratingComponentLabels'
 
 export type RankingExplanationTarget =
   | 'seasonal-anchoring'
@@ -21,8 +22,8 @@ export type RankingExplanation = {
 export const rankingTargetExplanations: RankingExplanation[] = [
   {
     target: 'seasonal-anchoring',
-    label: 'Seasonal Anchor',
-    description: 'Public team power is a context-neutral latent-strength estimate from league anchor, stable team offset, roster prior, form, context, and uncertainty.',
+    label: 'Power Score',
+    description: `Public team power combines ${POWER_COMPONENT_LABELS.league}, ${POWER_COMPONENT_LABELS.stable}, ${POWER_COMPONENT_LABELS.roster}, ${POWER_COMPONENT_LABELS.form}, ${POWER_COMPONENT_LABELS.context}, and uncertainty.`,
   },
   {
     target: 'team-result',
@@ -36,7 +37,7 @@ export const rankingTargetExplanations: RankingExplanation[] = [
   },
   {
     target: 'recent-form',
-    label: 'Momentum',
+    label: 'Recent Form',
     description: 'Recent overperformance adds a capped, fast-decaying form layer instead of becoming permanent team strength.',
   },
   {
@@ -46,7 +47,7 @@ export const rankingTargetExplanations: RankingExplanation[] = [
   },
   {
     target: 'roster-basis',
-    label: 'Roster Basis',
+    label: 'Roster Evidence',
     description: 'Oracle player rows mark roster provenance and drive value-weighted continuity adjustments.',
   },
   {

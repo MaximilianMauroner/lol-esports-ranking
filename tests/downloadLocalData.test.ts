@@ -36,6 +36,8 @@ test('local data download manifest records Oracle primary and Leaguepedia backup
       'false',
       '--leaguepedia',
       'false',
+      '--lolesports',
+      'false',
       '--riot-gpr',
       'false',
     ], { cwd: process.cwd(), maxBuffer: 1024 * 1024 })
@@ -45,8 +47,11 @@ test('local data download manifest records Oracle primary and Leaguepedia backup
     assert.equal(manifest.sources.oracle.status, 'downloaded')
     assert.equal(manifest.sources.leaguepedia.role, 'backup-gap-fill')
     assert.equal(manifest.sources.leaguepedia.status, 'skipped')
+    assert.equal(manifest.sources.lolesports.role, 'schedule-results-reference')
+    assert.equal(manifest.sources.lolesports.status, 'skipped')
     assert.equal(manifest.files.oracleCsv.length, 1)
     assert.deepEqual(manifest.files.leaguepediaJson, [])
+    assert.deepEqual(manifest.files.lolEsportsJson, [])
     assert.equal('riotGprJson' in manifest.files, false)
     assert.equal('riotGpr' in manifest.sources, false)
     assert.match(await readFile(manifest.files.oracleCsv[0], 'utf8'), /oe-test/)

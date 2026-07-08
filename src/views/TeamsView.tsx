@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, Users, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Search, Users, X } from 'lucide-react'
 import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type { PublicRecentMatch } from '../lib/publicArtifacts/schema'
 import type { RegionStrength } from '../lib/regionStrength'
-import { extent, formatDate, formatDateRange, formatDecimal, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
+import { extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { CountBadge, DataState, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
@@ -16,9 +16,12 @@ import { RankingShowcase, type RankingShowcaseProps } from '../components/Rankin
 import { type ChartSeries } from '../components/LineChart'
 import { TeamHistoryLineChart } from '../components/TeamHistoryLineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import type { RankingTierAssignment, RankingTierLabel } from '../lib/rankingFlair'
 import type { ChartPoint } from '../lib/chartPoints'
 import { dailyChartPointsFromHistoryPoints, deriveDailyRankSeries } from '../lib/teamHistoryChart'
 import type { TeamHistoryArtifactState } from '../hooks/usePublicArtifacts'
+import { publishedRatingScale, winProbabilityEloScale } from '../lib/modelConfig'
+import { POWER_COMPONENT_LABELS } from '../lib/ratingComponentLabels'
 
 type SortKey = 'rank' | 'rating' | 'wins'
 type TrajectoryMetric = 'rating' | 'rank'
@@ -31,6 +34,7 @@ type TeamDataSummary = {
   coverageStart?: string
   coverageEnd?: string
   latestMatchDate?: string
+  movementBaseline?: string
   seeded?: boolean
   sourceBreakdown?: { provider: string; matchCount: number }[]
   notes?: string[]
@@ -43,6 +47,7 @@ type TeamDataSummary = {
 const TEAM_RANK_AXIS_LIMIT = 60
 const TEAM_PAGE_SIZES = [15, 25, 50, 80] as const
 const DEFAULT_TEAM_PAGE_SIZE = 25
+const RECENT_MATCH_PAGE_SIZE = 5
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
 export function TeamsView({
@@ -58,6 +63,7 @@ export function TeamsView({
   regionsHref,
   dataSummary,
   onToggle,
+  tierAssignments,
 }: {
   standings: RankingSummaryStanding[]
   regions: RegionStrength[]
@@ -71,6 +77,7 @@ export function TeamsView({
   regionsHref?: string
   dataSummary?: TeamDataSummary
   onToggle: (team: RankingSummaryStanding) => void
+  tierAssignments?: RankingTierAssignment[]
 }) {
   const [region, setRegion] = useState('All')
   const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>('ranked')
@@ -79,9 +86,16 @@ export function TeamsView({
   const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
   const [detailKey, setDetailKey] = useState<string | null>(null)
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
+  const [selectedTier, setSelectedTier] = useState<string | null>(null)
+  const pendingTierScrollRef = useRef<string | null>(null)
+  const tableWrapRef = useRef<HTMLDivElement | null>(null)
   const history = historyState.status === 'ready' ? historyState.data.series : undefined
 
   const pickedKeys = useMemo(() => new Set(pickedTeams.map(teamKey)), [pickedTeams])
+  const tierByTeam = useMemo(
+    () => new Map((tierAssignments ?? []).map((tier) => [tier.team.toLocaleLowerCase('en'), tier.tier])),
+    [tierAssignments],
+  )
 
   const regionOptions = useMemo(
     () => ['All', ...Array.from(new Set(standings.map((team) => team.region).filter(Boolean))).sort()],
@@ -105,12 +119,13 @@ export function TeamsView({
     () => scopeFiltered.filter((team) => !team.eligibility?.eligible).length,
     [scopeFiltered],
   )
+  const movementBaseline = dataSummary?.movementBaseline ?? 'the previous rating update in this scope'
   const eligibilityNote = eligibilityFilter === 'ranked'
     ? hiddenFromRankedCount > 0
-      ? `${formatNumber(filtered.length)} eligible teams pass ranking checks. ${formatNumber(hiddenFromRankedCount)} review rows are hidden because they need more current, anchored evidence.`
+      ? `${formatNumber(filtered.length)} eligible teams pass ranking checks. ${formatNumber(hiddenFromRankedCount)} teams are hidden because they lack enough recent matches, have stale schedules, or play in leagues not yet connected to the global pool.`
       : 'Every team in this scope currently passes ranking eligibility.'
     : hiddenFromRankedCount > 0
-      ? `${formatNumber(filtered.length)} teams total, including ${formatNumber(hiddenFromRankedCount)} review rows kept out of the ranked board.`
+      ? `${formatNumber(filtered.length)} teams total, including ${formatNumber(hiddenFromRankedCount)} teams kept out of the ranked board for recency, sample-size, uncertainty, or league-connectivity reasons.`
       : 'Every team in this scope currently passes ranking eligibility.'
   const panelData = useMemo<TeamDataSummary | undefined>(() => dataSummary
     ? {
@@ -146,6 +161,18 @@ export function TeamsView({
     () => (detailTeam ? playersForTeam(players, detailTeam) : []),
     [detailTeam, players],
   )
+
+  useEffect(() => {
+    if (!selectedTier || pendingTierScrollRef.current !== selectedTier) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const row = tableWrapRef.current?.querySelector<HTMLElement>('tr.gpr-row.is-tier-highlight')
+      if (row && !isVerticallyInViewport(row)) {
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }
+      pendingTierScrollRef.current = null
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [selectedTier, visible])
 
   const focusTeams = pickedTeams.length > 0 ? pickedTeams : sorted.slice(0, 5)
   const dailyRankSeries = useMemo(
@@ -265,6 +292,7 @@ export function TeamsView({
                 <span className="gpr-filterbar__count">{resultSummary}</span>
               </div>
               <p className="eligibility-note">{eligibilityNote}</p>
+              <p className="score-scale-note">{scoreScaleNote()}</p>
             </div>
 
             {visible.length === 0 ? (
@@ -272,12 +300,13 @@ export function TeamsView({
                 Adjust the search, region, or eligibility filter to see teams.
               </DataState>
             ) : (
-              <div className="tablewrap">
+              <div className="tablewrap" ref={tableWrapRef}>
                 <Table className="ranking-table gpr-grid">
                   <colgroup>
                     <col className="gpr-col-rank" />
                     <col className="gpr-col-team" />
                     <col className="gpr-col-score" />
+                    <col className="gpr-col-trend" />
                     <col className="gpr-col-record" />
                     <col className="gpr-col-action" />
                   </colgroup>
@@ -286,6 +315,7 @@ export function TeamsView({
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
                       <TableHead>Team</TableHead>
                       <SortHeader label="Team score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
+                      <TableHead title={`Movement = rank change vs ${movementBaseline}.`}>Movement</TableHead>
                       <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" className="gpr-col-record" />
                       <TableHead className="center" aria-label="Add to comparison" />
                     </TableRow>
@@ -295,16 +325,20 @@ export function TeamsView({
                       const key = teamKey(team)
                       const total = team.wins + team.losses
                       const rank = teamRankFor(team)
+                      const historySeries = history?.[key]
+                      const tier = tierByTeam.get(team.team.toLocaleLowerCase('en'))
+                      const tierHighlighted = Boolean(selectedTier && tier === selectedTier)
                       return (
                         <TableRow
                           key={key}
-                          className={`gpr-row${pickedKeys.has(key) ? ' is-picked' : ''}`}
+                          className={`gpr-row${pickedKeys.has(key) ? ' is-picked' : ''}${tierHighlighted ? ' is-tier-highlight' : ''}`}
                         >
                           <TableCell>
                             <span className="gpr-rankcell">
                               <span className={`gpr-rank${typeof rank === 'number' && rank <= 3 ? ' podium' : ''}`}>
                                 {rank ?? '—'}
                               </span>
+                              {tier ? <TierBadge tier={tier} /> : null}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -324,6 +358,9 @@ export function TeamsView({
                           </TableCell>
                           <TableCell className="right">
                             <TeamScoreCell team={team} min={ratingMin} max={ratingMax} />
+                          </TableCell>
+                          <TableCell>
+                            <TeamRankTrendCell team={team} series={historySeries} movementBaseline={movementBaseline} />
                           </TableCell>
                           <TableCell className="right num gpr-col-record">
                             <b className="record-main">{formatRecord(team.wins, team.losses)}</b>{' '}
@@ -376,7 +413,20 @@ export function TeamsView({
 
         <aside className="gpr-sidebar">
           <RegionalStrengthTeaser regions={regions} href={regionsHref} />
-          {signals ? <RankingShowcase {...signals} variant="rail" /> : null}
+          {signals ? (
+            <RankingShowcase
+              {...signals}
+              variant="rail"
+              selectedTier={selectedTier}
+              onTierSelect={(tier) => {
+                setSelectedTier((current) => {
+                  const nextTier = current === tier ? null : tier
+                  pendingTierScrollRef.current = nextTier
+                  return nextTier
+                })
+              }}
+            />
+          ) : null}
           <DataSourcesDisclosure model={model} data={panelData} />
         </aside>
       </div>
@@ -463,8 +513,6 @@ export function TeamsView({
 
 function TeamScoreCell({
   team,
-  min,
-  max,
 }: {
   team: RankingSummaryStanding
   min: number
@@ -472,26 +520,110 @@ function TeamScoreCell({
 }) {
   const score = teamScoreFor(team)
   return (
-    <>
+    <span className="team-score-stack" title={teamScoreTitle(team)}>
       {typeof score === 'number' ? (
-        <HeatChip value={score} min={min} max={max} label={formatRating(score)} />
+        <span className="team-score-value">{formatRating(score)}</span>
       ) : (
         <span className="score-unavailable">—</span>
       )}
       <TeamScoreMeta team={team} />
-    </>
+    </span>
   )
 }
 
 function TeamScoreMeta({ team }: { team: RankingSummaryStanding }) {
   const dss = team.deservedStanding
-  if (!dss) return null
-  if (dss.eligibility === 'Eligible') return null
-  return <span className="score-meta" title={teamScoreTitle(team)}>{dss.eligibility}</span>
+  const items = [
+    ...(typeof team.uncertainty === 'number' && Number.isFinite(team.uncertainty)
+      ? [{ key: 'uncertainty', label: `±${formatRating(team.uncertainty)}`, title: 'Estimated score uncertainty. Smaller bands mean firmer placement.' }]
+      : []),
+    ...(team.eligibility?.eligible === false
+      ? [{ key: 'eligibility', label: eligibilitySummary(team), title: eligibilityReasonsTitle(team) }]
+      : []),
+    ...(dss && dss.eligibility !== 'Eligible'
+      ? [{ key: 'dss', label: dss.eligibility, title: teamScoreTitle(team) }]
+      : []),
+  ]
+  if (items.length === 0) return null
+  return (
+    <span className="score-meta">
+      {items.map((item) => <span key={item.key} title={item.title}>{item.label}</span>)}
+    </span>
+  )
+}
+
+function TierBadge({ tier }: { tier: RankingTierLabel }) {
+  return (
+    <span className={`tier-badge is-${tier.toLowerCase()}`} title={`${tier}-tier`} aria-label={`${tier}-tier`}>
+      {tier}
+    </span>
+  )
+}
+
+const RANK_SPARKLINE_WIDTH = 128
+const RANK_SPARKLINE_HEIGHT = 28
+
+function TeamRankTrendCell({
+  team,
+  series,
+  movementBaseline,
+}: {
+  team: RankingSummaryStanding
+  series?: TeamHistorySeries
+  movementBaseline: string
+}) {
+  const summary = summarizeRankTrend(team, series)
+  const sparkline = rankSparklineShape(rankValuesForSparkline(summary, series), RANK_SPARKLINE_WIDTH, RANK_SPARKLINE_HEIGHT)
+
+  if (!summary) {
+    return (
+      <span className="rank-trend-cell rank-trend-cell--empty">
+        <span className="rank-trend-cell__move flat">No history</span>
+      </span>
+    )
+  }
+
+  const tone = rankMovementTone(summary.recentMovement)
+  const title = rankTrendTitle(team.team, summary, movementBaseline)
+  return (
+    <span className="rank-trend-cell" title={title} aria-label={title} style={rankMovementStyle(summary.recentMovement)}>
+      <span
+        className={`rank-trend-cell__main ${tone}`}
+        aria-hidden="true"
+      >
+        <RankMovementIcon tone={tone} />
+        <b className={`rank-trend-cell__move ${tone}`}>{formatRankMovementCompact(summary.recentMovement)}</b>
+      </span>
+      {sparkline ? (
+        <svg
+          className="rank-trend-cell__sparkline"
+          viewBox={`0 0 ${RANK_SPARKLINE_WIDTH} ${RANK_SPARKLINE_HEIGHT}`}
+          aria-hidden="true"
+          focusable="false"
+        >
+          <polyline points={sparkline.points} />
+          <circle cx={sparkline.last.x} cy={sparkline.last.y} r="2.5" />
+        </svg>
+      ) : null}
+    </span>
+  )
+}
+
+function RankMovementIcon({ tone }: { tone: RankMovementTone }) {
+  const iconProps = { size: 14, strokeWidth: 2.4, 'aria-hidden': true } as const
+  if (tone === 'up') return <ArrowUp {...iconProps} />
+  if (tone === 'down') return <ArrowDown {...iconProps} />
+  return <Minus {...iconProps} />
 }
 
 function teamRankFor(team: RankingSummaryStanding) {
   return team.rank
+}
+
+function isVerticallyInViewport(element: HTMLElement) {
+  const rect = element.getBoundingClientRect()
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+  return rect.top >= 0 && rect.bottom <= viewportHeight
 }
 
 function teamScoreFor(team: RankingSummaryStanding) {
@@ -500,9 +632,15 @@ function teamScoreFor(team: RankingSummaryStanding) {
 
 function teamScoreTitle(team: RankingSummaryStanding) {
   const dss = team.deservedStanding
-  if (!dss) return `Team score ${formatRating(team.rating)}`
-  return [
+  const base = [
     `Team score ${formatRating(team.rating)}`,
+    scoreScaleNote(),
+    typeof team.uncertainty === 'number' ? `uncertainty ±${formatRating(team.uncertainty)}` : undefined,
+    team.eligibility?.eligible === false ? eligibilityReasonsTitle(team) : undefined,
+  ].filter(Boolean)
+  if (!dss) return base.join(' · ')
+  return [
+    ...base,
     `deserved check #${dss.rank} (${formatRating(dss.score)})`,
     `WAE ${formatSigned(dss.winsAboveExpectation)}`,
     `roster validity ${formatRatio(dss.rosterValidity)}`,
@@ -522,11 +660,248 @@ function movementTone(value?: number) {
   return value > 0 ? 'up' : 'down'
 }
 
-function teamSubtitle(team: RankingSummaryStanding) {
-  const reasons = team.eligibility?.eligible === false
-    ? team.eligibility.reasons.join(', ')
+type RankTrendPoint = {
+  date: string
+  rank: number
+}
+
+type RankTrendSummary = {
+  currentRank?: number
+  previousRank?: number
+  recentMovement?: number
+  startDate?: string
+  endDate?: string
+  startRank?: number
+  windowMovement?: number
+  bestRank?: number
+  worstRank?: number
+  pointCount: number
+}
+
+type RankMovementTone = 'up' | 'down' | 'flat'
+
+function summarizeRankTrend(team: RankingSummaryStanding, series?: TeamHistorySeries): RankTrendSummary | null {
+  const currentRank = positiveRank(team.rank)
+  const previousRank = positiveRank(team.previousRank)
+  const recentMovement = finiteRounded(team.movement)
+    ?? (typeof previousRank === 'number' && typeof currentRank === 'number' ? previousRank - currentRank : undefined)
+  const rankPoints = rankTrendPoints(series)
+  const first = rankPoints[0]
+  const last = rankPoints.at(-1)
+  const effectiveCurrentRank = currentRank ?? last?.rank
+  const startRank = first?.rank ?? previousRank ?? effectiveCurrentRank
+  const windowMovement = typeof startRank === 'number' && typeof effectiveCurrentRank === 'number'
+    ? startRank - effectiveCurrentRank
+    : recentMovement
+  const rankValues = [
+    ...rankPoints.map((point) => point.rank),
+    currentRank,
+    previousRank,
+  ].filter((rank): rank is number => typeof rank === 'number' && Number.isFinite(rank))
+
+  if (typeof effectiveCurrentRank !== 'number' && typeof recentMovement !== 'number' && rankValues.length === 0) {
+    return null
+  }
+
+  return {
+    currentRank: effectiveCurrentRank,
+    previousRank,
+    recentMovement,
+    startDate: first?.date,
+    endDate: last?.date,
+    startRank,
+    windowMovement,
+    bestRank: rankValues.length > 0 ? Math.min(...rankValues) : undefined,
+    worstRank: rankValues.length > 0 ? Math.max(...rankValues) : undefined,
+    pointCount: rankPoints.length,
+  }
+}
+
+function rankTrendPoints(series?: TeamHistorySeries): RankTrendPoint[] {
+  if (!series) return []
+  return series.points.flatMap((point) => {
+    const rank = positiveRank(point[2])
+    return typeof rank === 'number' ? [{ date: point[0], rank }] : []
+  })
+}
+
+function rankValuesForSparkline(summary: RankTrendSummary | null, series?: TeamHistorySeries) {
+  const fromHistory = rankTrendPoints(series).map((point) => point.rank).slice(-18)
+  if (fromHistory.length >= 2) return fromHistory
+  const fallback = [summary?.previousRank, summary?.currentRank]
+    .filter((rank): rank is number => typeof rank === 'number' && Number.isFinite(rank))
+  return fallback.length >= 2 ? fallback : []
+}
+
+function positiveRank(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) return undefined
+  return Math.round(value)
+}
+
+function finiteRounded(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.round(value)
+}
+
+function rankMovementTone(value?: number): RankMovementTone {
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.round(value) === 0) return 'flat'
+  return value > 0 ? 'up' : 'down'
+}
+
+function rankMovementStyle(value?: number): CSSProperties {
+  return { '--rank-movement-color': rankMovementColor(value) } as CSSProperties
+}
+
+function rankMovementColor(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.round(value) === 0) return 'var(--faint)'
+  const intensity = clampNumber(Math.abs(Math.round(value)) / 18, 0.28, 1)
+  if (value > 0) {
+    const lightness = interpolate(0.69, 0.76, intensity)
+    const chroma = interpolate(0.07, 0.18, intensity)
+    const hue = interpolate(165, 146, intensity)
+    return `oklch(${formatColorNumber(lightness)} ${formatColorNumber(chroma)} ${formatColorNumber(hue)})`
+  }
+  const lightness = interpolate(0.72, 0.66, intensity)
+  const chroma = interpolate(0.1, 0.21, intensity)
+  const hue = interpolate(30, 18, intensity)
+  return `oklch(${formatColorNumber(lightness)} ${formatColorNumber(chroma)} ${formatColorNumber(hue)})`
+}
+
+function interpolate(start: number, end: number, amount: number) {
+  return start + (end - start) * amount
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function formatColorNumber(value: number) {
+  return String(Math.round(value * 1000) / 1000)
+}
+
+function formatRankMovementCompact(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  const places = Math.abs(Math.round(value))
+  return places === 0 ? '0' : formatNumber(places)
+}
+
+function formatRankMovementLabel(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'No prior rank'
+  const places = Math.abs(Math.round(value))
+  if (places === 0) return 'No change'
+  return `${value > 0 ? 'Up' : 'Down'} ${formatNumber(places)} ${places === 1 ? 'place' : 'places'}`
+}
+
+function formatRankValue(rank?: number) {
+  return typeof rank === 'number' && Number.isFinite(rank) ? `#${formatNumber(Math.round(rank))}` : '—'
+}
+
+function formatRankTransition(previousRank?: number, currentRank?: number) {
+  if (typeof previousRank === 'number' && typeof currentRank === 'number') {
+    return `${formatRankValue(previousRank)} -> ${formatRankValue(currentRank)}`
+  }
+  if (typeof currentRank === 'number') return `Now ${formatRankValue(currentRank)}`
+  return 'Rank unavailable'
+}
+
+function rankTrendTitle(teamName: string, summary: RankTrendSummary, movementBaseline: string) {
+  const recent = formatRankMovementLabel(summary.recentMovement)
+  const transition = formatRankTransition(summary.previousRank, summary.currentRank)
+  const baseline = `Movement baseline: ${movementBaseline}`
+  const window = typeof summary.windowMovement === 'number' && summary.startDate
+    ? `${formatRankMovementLabel(summary.windowMovement)} since ${formatDate(summary.startDate)}`
     : undefined
+  const range = typeof summary.bestRank === 'number' && typeof summary.worstRank === 'number'
+    ? `Best ${formatRankValue(summary.bestRank)}, worst ${formatRankValue(summary.worstRank)}`
+    : undefined
+  return [teamName, recent, baseline, transition, window, range].filter(Boolean).join(' · ')
+}
+
+type RankSparklineShape = {
+  points: string
+  last: { x: number; y: number }
+}
+
+function rankSparklineShape(values: number[], width: number, height: number): RankSparklineShape | null {
+  const ranks = values.filter((value) => Number.isFinite(value) && value >= 1).map(Math.round)
+  if (ranks.length < 2) return null
+  const best = Math.min(...ranks)
+  const worst = Math.max(...ranks)
+  const range = worst - best
+  const inset = 3
+  const drawableWidth = width - inset * 2
+  const drawableHeight = height - inset * 2
+  const coords = ranks.map((rank, index) => {
+    const x = inset + (index / (ranks.length - 1)) * drawableWidth
+    const y = range === 0
+      ? height / 2
+      : inset + ((rank - best) / range) * drawableHeight
+    return { x: roundSparklineCoord(x), y: roundSparklineCoord(y) }
+  })
+  const stepped = coords.flatMap((point, index) => {
+    if (index === 0) return [point]
+    const previous = coords[index - 1]!
+    return [{ x: point.x, y: previous.y }, point]
+  })
+  const last = coords.at(-1)!
+  return {
+    points: stepped.map((point) => `${point.x},${point.y}`).join(' '),
+    last,
+  }
+}
+
+function teamSubtitle(team: RankingSummaryStanding) {
+  const reasons = team.eligibility?.eligible === false ? eligibilitySummary(team) : undefined
   return [formatCompetitionLeagueLabel(team.league ?? team.region), reasons].filter(Boolean).join(' · ')
+}
+
+function scoreScaleNote() {
+  return `Scale: +50 score is about a ${formatRatio(neutralGameWinProbabilityForScoreGap(50))} neutral single-game edge before uncertainty.`
+}
+
+function neutralGameWinProbabilityForScoreGap(scoreGap: number) {
+  const internalGap = scoreGap / publishedRatingScale.spreadMultiplier
+  return 1 / (1 + 10 ** (-internalGap / winProbabilityEloScale))
+}
+
+function eligibilitySummary(team: RankingSummaryStanding) {
+  const reasons = eligibilityReasonLabels(team)
+  if (reasons.length === 0) return 'not ranked'
+  return reasons.slice(0, 2).join('; ')
+}
+
+function eligibilityReasonsTitle(team: RankingSummaryStanding) {
+  const reasons = eligibilityReasonLabels(team)
+  if (reasons.length === 0) return 'Not ranked in the current board.'
+  return `Not ranked: ${reasons.join('; ')}.`
+}
+
+function eligibilityReasonLabels(team: RankingSummaryStanding) {
+  return (team.eligibility?.reasons ?? []).map((reason) => eligibilityReasonLabel(reason, team))
+}
+
+function eligibilityReasonLabel(reason: string, team: RankingSummaryStanding) {
+  const eligibility = team.eligibility
+  switch (reason) {
+    case 'low-total-volume':
+      return typeof eligibility?.totalGames === 'number' && typeof eligibility.minTotalGames === 'number'
+        ? `too few scored matches (${formatNumber(eligibility.totalGames)}/${formatNumber(eligibility.minTotalGames)})`
+        : 'too few scored matches'
+    case 'low-current-volume':
+      return typeof eligibility?.currentWindowGames === 'number' && typeof eligibility.minCurrentWindowGames === 'number'
+        ? `too few recent matches (${formatNumber(eligibility.currentWindowGames)}/${formatNumber(eligibility.minCurrentWindowGames)})`
+        : 'too few recent matches'
+    case 'stale':
+      return typeof eligibility?.daysSinceLastMatch === 'number'
+        ? `stale schedule: last match ${formatNumber(eligibility.daysSinceLastMatch)}d ago`
+        : 'stale schedule'
+    case 'high-uncertainty':
+      return 'rating uncertainty above the ranked-board cutoff'
+    case 'unanchored-league':
+      return 'league not yet connected to the global pool'
+    default:
+      return reason.replaceAll('-', ' ')
+  }
 }
 
 function rankAxisForSeries(series: ChartSeries[]) {
@@ -571,7 +946,7 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
           </div>
         ))}
       </div>
-      <p className="method-foot">Regional score is the average of each region's top three eligible flagship teams.</p>
+      <p className="method-foot">Region power is the average of each region's top three eligible flagship teams.</p>
     </section>
   )
 }
@@ -592,7 +967,7 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
       <div className="data-model-grid">
         <span>
           <small>Model</small>
-          <b>{model?.version ?? 'unknown'}</b>
+          <b>{formatModelVersion(model?.version)}</b>
         </span>
         <span>
           <small>Matches</small>
@@ -611,7 +986,7 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
           <b>{model?.configHash ?? 'unknown'}</b>
         </span>
         <span>
-          <small>Hidden review rows</small>
+          <small>Hidden from ranked board</small>
           <b>{formatNumber(data?.hiddenFromRankedCount)}</b>
         </span>
       </div>
@@ -705,6 +1080,7 @@ function TeamDetailDrawer({
   const totalGames = team.wins + team.losses
   const opponentFactor = Math.round((team.factors?.opponent ?? 0) * 100)
   const trendSummary = useMemo(() => summarizeTeamTrend(series), [series])
+  const rankTrend = useMemo(() => summarizeRankTrend(team, series), [team, series])
   const uncertainty = team.ratingComponents?.uncertainty
   const score = teamScoreFor(team)
   const rank = teamRankFor(team)
@@ -758,6 +1134,17 @@ function TeamDetailDrawer({
                 <b>{formatRecord(team.wins, team.losses)} ({formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})</b>
               </span>
               <span>
+                <small>Rank trend</small>
+                {rankTrend ? (
+                  <>
+                    <b className={rankMovementTone(rankTrend.recentMovement)}>{formatRankMovementLabel(rankTrend.recentMovement)}</b>
+                    <em>{formatRankTransition(rankTrend.previousRank, rankTrend.currentRank)}</em>
+                  </>
+                ) : (
+                  <b className="flat">No history</b>
+                )}
+              </span>
+              <span>
                 <small>Latest delta</small>
                 <b className={movementTone(team.delta)}>{formatRatingMovement(team.delta)}</b>
                 <TeamRatingSparkline series={series} summary={trendSummary} teamName={team.team} />
@@ -786,12 +1173,12 @@ function TeamDetailDrawer({
               <div className="match-evidence-card__head">
                 <div>
                   <h3>Match Results</h3>
-                  <p>Last five scored matches. Ratings show post-match team power.</p>
+                  <p>Scored matches in this scope. Ratings show post-match team power.</p>
                 </div>
                 <FormDots form={team.form} />
               </div>
 
-              <RecentMatches matches={team.recentMatches} />
+              <RecentMatches matches={team.recentMatches} series={series} />
             </div>
 
             <ComponentBreakdown team={team} />
@@ -816,6 +1203,24 @@ function TeamDetailDrawer({
                   value={formatRating(trendSummary.peak.value)}
                   detail={typeof trendSummary.bestRank === 'number' ? `Best #${trendSummary.bestRank}` : formatDate(trendSummary.peak.date)}
                 />
+              </div>
+            ) : null}
+            {rankTrend ? (
+              <div className="trend-summary rank-trend-summary" aria-label={`${team.team} rank movement summary`}>
+                <TrendSummaryCell label="Current rank" value={formatRankValue(rankTrend.currentRank)} detail={rankTrend.endDate ? formatDate(rankTrend.endDate) : 'Latest snapshot'} />
+                <TrendSummaryCell
+                  label="Last move"
+                  value={formatRankMovementLabel(rankTrend.recentMovement)}
+                  detail={formatRankTransition(rankTrend.previousRank, rankTrend.currentRank)}
+                  valueClassName={rankMovementTone(rankTrend.recentMovement)}
+                />
+                <TrendSummaryCell
+                  label="Window move"
+                  value={formatRankMovementLabel(rankTrend.windowMovement)}
+                  detail={rankTrend.startDate ? `Since ${formatDate(rankTrend.startDate)}` : `${formatNumber(rankTrend.pointCount)} rank points`}
+                  valueClassName={rankMovementTone(rankTrend.windowMovement)}
+                />
+                <TrendSummaryCell label="Best rank" value={formatRankValue(rankTrend.bestRank)} detail={`Worst ${formatRankValue(rankTrend.worstRank)}`} />
               </div>
             ) : null}
             {trendSeries.length > 0 ? (
@@ -902,8 +1307,36 @@ function roundSparklineCoord(value: number) {
   return Math.round(value * 10) / 10
 }
 
-function RecentMatches({ matches }: { matches?: PublicRecentMatch[] }) {
-  const recentMatches = (matches ?? []).slice(-5).toReversed()
+function RecentMatches({ matches, series }: { matches?: PublicRecentMatch[]; series?: TeamHistorySeries }) {
+  const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
+  const orderedMatches = useMemo(() => {
+    const historyMatches = recentMatchesFromHistorySeries(series)
+    const sourceMatches = historyMatches.length > (matches?.length ?? 0) ? historyMatches : matches ?? []
+    return sourceMatches.toReversed()
+  }, [matches, series])
+  const totalMatches = orderedMatches.length
+  const totalPages = Math.max(1, Math.ceil(totalMatches / RECENT_MATCH_PAGE_SIZE))
+  const newestMatch = orderedMatches[0]
+  const oldestMatch = orderedMatches.at(-1)
+  const matchScopeKey = [
+    series?.team ?? '',
+    series?.code ?? '',
+    orderedMatches.length,
+    newestMatch?.date ?? '',
+    newestMatch?.opponent ?? '',
+    oldestMatch?.date ?? '',
+    oldestMatch?.opponent ?? '',
+  ].join('\u0000')
+  const requestedPage = pageState.scopeKey === matchScopeKey ? pageState.page : 1
+  const currentPage = Math.min(requestedPage, totalPages)
+  const pageStart = (currentPage - 1) * RECENT_MATCH_PAGE_SIZE
+  const recentMatches = orderedMatches.slice(pageStart, pageStart + RECENT_MATCH_PAGE_SIZE)
+  const pageEnd = totalMatches === 0 ? 0 : pageStart + recentMatches.length
+  const resultSummary = `${formatNumber(totalMatches === 0 ? 0 : pageStart + 1)}-${formatNumber(pageEnd)} of ${formatNumber(totalMatches)}`
+
+  const updatePage = (nextPage: number) => {
+    setPageState({ scopeKey: matchScopeKey, page: Math.min(Math.max(1, nextPage), totalPages) })
+  }
 
   return (
     <section className="recent-matches" aria-label="Recent form matches">
@@ -931,8 +1364,50 @@ function RecentMatches({ matches }: { matches?: PublicRecentMatch[] }) {
       ) : (
         <p className="muted recent-matches__empty">No match-level recent form is available in this snapshot.</p>
       )}
+      {totalMatches > RECENT_MATCH_PAGE_SIZE ? (
+        <div className="recent-matches__pager pager" aria-label="Match results pagination">
+          <div className="pager__page">
+            {resultSummary}
+          </div>
+          <div className="pager__buttons">
+            <Button type="button" variant="outline" size="icon" className="pager__edge" onClick={() => updatePage(1)} disabled={currentPage === 1} aria-label="First match page">
+              <ChevronsLeft size={16} aria-hidden="true" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" onClick={() => updatePage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous match page">
+              <ChevronLeft size={16} aria-hidden="true" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" onClick={() => updatePage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next match page">
+              <ChevronRight size={16} aria-hidden="true" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" className="pager__edge" onClick={() => updatePage(totalPages)} disabled={currentPage === totalPages} aria-label="Last match page">
+              <ChevronsRight size={16} aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
+}
+
+function recentMatchesFromHistorySeries(series?: TeamHistorySeries): PublicRecentMatch[] {
+  if (!series) return []
+  return series.points
+    .map(([date, rating, , context]): PublicRecentMatch | null => {
+      if (!context?.event || !context.opponent || !context.result) return null
+      return {
+        date,
+        event: context.event,
+        opponent: context.opponent,
+        result: context.result,
+        rating,
+        delta: typeof context.delta === 'number' && Number.isFinite(context.delta) ? context.delta : 0,
+        ...(typeof context.wins === 'number' ? { wins: context.wins } : {}),
+        ...(typeof context.losses === 'number' ? { losses: context.losses } : {}),
+        ...(typeof context.games === 'number' ? { games: context.games } : {}),
+        ...(typeof context.bestOf === 'number' ? { bestOf: context.bestOf } : {}),
+      }
+    })
+    .filter((match): match is PublicRecentMatch => match !== null)
 }
 
 function formatTeamMatchMeta(match: PublicRecentMatch) {
@@ -999,11 +1474,21 @@ function summarizeTeamTrend(series?: TeamHistorySeries): TeamTrendSummary | null
   }
 }
 
-function TrendSummaryCell({ label, value, detail }: { label: string; value: string; detail: string }) {
+function TrendSummaryCell({
+  label,
+  value,
+  detail,
+  valueClassName,
+}: {
+  label: string
+  value: string
+  detail: string
+  valueClassName?: string
+}) {
   return (
     <span>
       <small>{label}</small>
-      <b>{value}</b>
+      <b className={valueClassName}>{value}</b>
       <em>{detail}</em>
     </span>
   )
@@ -1082,24 +1567,24 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
   const components = team.ratingComponents
   if (!components) return null
   const contributionRows = [
-    { label: 'Stable offset', value: components.teamStableOffset },
-    { label: 'Roster prior', value: components.rosterPriorOffset },
-    { label: 'Momentum', value: components.momentum },
-    { label: 'Context', value: components.contextAdjustment },
+    { label: POWER_COMPONENT_LABELS.stable, value: components.teamStableOffset },
+    { label: POWER_COMPONENT_LABELS.roster, value: components.rosterPriorOffset },
+    { label: POWER_COMPONENT_LABELS.form, value: components.momentum },
+    { label: POWER_COMPONENT_LABELS.context, value: components.contextAdjustment },
   ]
 
   return (
     <div className="gpr-card component-breakdown" aria-label={`${team.team} rating components`}>
       <div className="component-breakdown__head">
         <div>
-          <h3>Power Components</h3>
-          <p>Score ledger from league anchor to current rating.</p>
+          <h3>Power Score Breakdown</h3>
+          <p>How the model builds this team's Power score.</p>
         </div>
         <span>{formatRating(team.rating)} ±{formatRating(components.uncertainty)}</span>
       </div>
       <div className="component-ledger">
         <div className="component-ledger__row is-anchor">
-          <span>League anchor</span>
+          <span>{POWER_COMPONENT_LABELS.league}</span>
           <b>{formatRating(components.leagueAnchor)}</b>
         </div>
         {contributionRows.map((row) => (
@@ -1109,7 +1594,7 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
           </div>
         ))}
         <div className="component-ledger__row is-total">
-          <span>Total power score</span>
+          <span>Power score</span>
           <b>{formatRating(team.rating)}</b>
         </div>
       </div>

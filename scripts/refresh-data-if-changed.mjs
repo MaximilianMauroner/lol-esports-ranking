@@ -4,6 +4,7 @@ import { constants as fsConstants } from 'node:fs'
 import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, uploadRankingArtifacts } from './railway-bucket.mjs'
 
 const wrapperOnlyArgs = new Set([
@@ -49,12 +50,12 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     ...passThroughDownloadArgs(rawArgs),
     ...splitExtraArgs(process.env.RANKING_REFRESH_DOWNLOAD_ARGS),
   ]
-  const localManifest = await readJsonIfExists(manifestPath)
+  const localManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasUsableLocalRawBaseline = await manifestHasUsableSourceFiles(localManifest)
   const restoreResult = restoreRawEnabled && bucketConfig.enabled
     ? await restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config: bucketConfig })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
-  const previousManifest = await readJsonIfExists(manifestPath)
+  const previousManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasExistingRawBaseline = await manifestHasUsableSourceFiles(previousManifest)
   const window = refreshDateWindow({
     args,

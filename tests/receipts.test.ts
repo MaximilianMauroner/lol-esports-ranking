@@ -71,7 +71,7 @@ test('receipt share payload is stable and exposes staleness fields', () => {
   assert.equal(first.share.payload.modelVersion, 'fixture-model')
   assert.equal(first.share.payload.modelConfigHash, 'fixture-config')
   assert.equal(first.share.payload.generatedAt, '2026-06-28T00:00:00.000Z')
-  assert.equal(first.share.payload.tier, 'B')
+  assert.equal(first.share.payload.tier, 'A')
   assert.equal(first.staleness.generatedAt, '2026-06-28T00:00:00.000Z')
   assert.equal(first.staleness.asOf, '2026-07-07T00:00:00.000Z')
   assert.equal(first.staleness.ageDays, 9)
@@ -92,7 +92,7 @@ function manifest(): BuildManifest {
       },
     ],
     model: {
-      name: 'Fixture GPR',
+      name: 'Fixture Power Index',
       version: 'fixture-model',
       configHash: 'fixture-config',
       ratingScale: publishedRatingScale,

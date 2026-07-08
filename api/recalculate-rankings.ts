@@ -2,6 +2,7 @@ import { put } from '@vercel/blob'
 import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
 import { importLeaguepediaSnapshot, type LeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
+import { importLolEsportsScheduleSnapshot, type LolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
 import { createStaticRankingData } from '../src/lib/snapshot'
 import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
@@ -43,11 +44,14 @@ export default async function handler(request: JsonRequest, response: JsonRespon
 
   const oracleCsvUrl = process.env.ORACLES_ELIXIR_CSV_URL
   const leaguepediaJsonUrl = process.env.LEAGUEPEDIA_MATCHES_JSON_URL
+  const lolEsportsJsonUrl = process.env.LOLESPORTS_SCHEDULE_JSON_URL
   const oracleImport = oracleCsvUrl ? await fetchOracleCsv(oracleCsvUrl) : null
   const leaguepediaImport = leaguepediaJsonUrl ? await fetchLeaguepediaJson(leaguepediaJsonUrl) : null
+  const lolEsportsImport = lolEsportsJsonUrl ? await fetchLolEsportsJson(lolEsportsJsonUrl) : null
   const importedMatches = mergeCommunityMatchSources({
     oracleMatches: oracleImport?.matches ?? [],
     leaguepediaMatches: leaguepediaImport?.matches ?? [],
+    lolEsportsReferences: lolEsportsImport?.events ?? [],
   })
 
   const importedTeams = mergeTeamProfiles([leaguepediaImport?.teams ?? {}, oracleImport?.teams ?? {}])
@@ -67,6 +71,26 @@ export default async function handler(request: JsonRequest, response: JsonRespon
       : importedMatches.length ? 'no rated public match data available for published team universe' : 'no public match data available',
     dataMode,
     externalSources: [
+      ...(lolEsportsImport
+        ? [
+            {
+              name: 'LoL Esports schedule API',
+              kind: 'official-reference' as const,
+              url: lolEsportsJsonUrl,
+              retrievedAt: lolEsportsImport.source.retrievedAt,
+              coverageStart: dateRange(lolEsportsImport.events).start,
+              coverageEnd: dateRange(lolEsportsImport.events).end,
+              rowCount: lolEsportsImport.source.eventCount,
+              description: `${lolEsportsImport.source.eventCount} schedule/result events and ${lolEsportsImport.source.gameCount} game IDs cached from LoL Esports persisted APIs during scheduled recalculation. Used only to attach official event/match/game IDs and audit schedule/results; not a rich stat source or standalone model input. ${lolEsportsImport.source.attribution}`,
+              status: lolEsportsImport.source.eventCount > 0 ? 'active' as const : 'reference-only' as const,
+              warnings: [{
+                kind: 'source-policy' as const,
+                severity: 'warning' as const,
+                message: 'LoL Esports persisted APIs are public site endpoints, not a supported official data API; cache responses and keep them reference-only.',
+              }],
+            },
+          ]
+        : []),
       ...(oracleImport
         ? [
             {
@@ -255,13 +279,27 @@ async function fetchLeaguepediaJson(url: string) {
   return importLeaguepediaSnapshot((await jsonResponse.json()) as LeaguepediaSnapshot, { sourceUrl: url })
 }
 
+async function fetchLolEsportsJson(url: string) {
+  const jsonResponse = await fetch(url, {
+    headers: {
+      'user-agent': 'lol-esports-power-index-vercel-cron/0.1',
+    },
+  })
+
+  if (!jsonResponse.ok) {
+    throw new Error(`LoL Esports schedule JSON fetch failed with HTTP ${jsonResponse.status}`)
+  }
+
+  return importLolEsportsScheduleSnapshot((await jsonResponse.json()) as LolEsportsScheduleSnapshot, { sourceUrl: url })
+}
+
 function describeCommunitySource(hasOracle: boolean, hasLeaguepedia: boolean) {
   if (hasOracle && hasLeaguepedia) return "Oracle's Elixir primary with Leaguepedia Cargo gap-fill"
   if (hasOracle) return "Oracle's Elixir CSV scheduled import"
   return 'Leaguepedia Cargo scheduled import'
 }
 
-function dateRange(matches: Pick<MatchRecord, 'date'>[]) {
+function dateRange(matches: Array<Pick<MatchRecord, 'date'> | { date?: string }>) {
   const dates: string[] = []
   for (const match of matches) {
     if (match.date) dates.push(match.date)

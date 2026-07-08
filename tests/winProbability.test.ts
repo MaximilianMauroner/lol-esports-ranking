@@ -29,6 +29,16 @@ test('uncertainty shrinks a rating edge toward fifty percent', () => {
   assert.ok(highUncertainty.teamAGameWinProbability > 0.5)
 })
 
+test('normal public-board uncertainty keeps favorites meaningfully separated', () => {
+  const prediction = neutralWinProbability(
+    { team: 'Alpha', rating: 1600, uncertainty: 98 },
+    { team: 'Beta', rating: 1500, uncertainty: 98 },
+  )
+
+  assert.equal(prediction.uncertaintyPenalty, 0.7765)
+  assert.equal(prediction.teamAGameWinProbability, 0.6201)
+})
+
 test('series probability amplifies a single-game edge', () => {
   assert.ok(seriesWinProbability(0.6, 5) > seriesWinProbability(0.6, 1))
 })

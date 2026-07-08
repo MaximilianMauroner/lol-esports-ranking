@@ -2,7 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Flame, Gauge, Trophy } from 'lucide-react
 import type { CSSProperties } from 'react'
 import { Badge } from './ui/badge'
 import { cn } from '../lib/utils'
-import { formatPercentValue, formatRating, formatSigned } from '../lib/display'
+import { formatNumber, formatPercentValue, formatRating, formatSigned } from '../lib/display'
 
 export type RankingShowcaseTeam = {
   id?: string
@@ -74,10 +74,13 @@ export type RankingShowcaseProps = {
   upset?: RankingUpsetHeadline
   confidenceBand?: RankingConfidenceBand
   variant?: 'panel' | 'rail'
+  selectedTier?: string | null
+  onTierSelect?: (tier: string) => void
   className?: string
 }
 
 const DEFAULT_TIER_ORDER = ['S', 'A', 'B', 'C']
+const VISIBLE_TIER_TEAMS = 3
 
 export function RankingShowcase({
   title = 'Power ranking readout',
@@ -90,6 +93,8 @@ export function RankingShowcase({
   upset,
   confidenceBand,
   variant = 'panel',
+  selectedTier,
+  onTierSelect,
   className,
 }: RankingShowcaseProps) {
   const podiumTeams = podium.slice(0, 3)
@@ -139,15 +144,12 @@ export function RankingShowcase({
           {tiers.length > 0 ? (
             <div className="ranking-showcase__tier-strip">
               {tiers.map((tier) => (
-                <div
-                  className={`ranking-showcase__tier is-${tier.tier.toLowerCase()}`}
+                <TierCard
                   key={tier.tier}
-                  style={{ '--tier-size': tier.count } as CSSProperties}
-                >
-                  <span>{tier.label ?? tier.tier}</span>
-                  <b className="num">{tier.count}</b>
-                  {tier.teams?.length ? <small>{tier.teams.slice(0, 3).join(', ')}</small> : null}
-                </div>
+                  tier={tier}
+                  selected={selectedTier === tier.tier}
+                  onSelect={onTierSelect}
+                />
               ))}
             </div>
           ) : (
@@ -219,8 +221,11 @@ function MovementSpotlight({
 }
 
 function normalizeTiers(tiers?: readonly RankingTierCount[] | Record<string, number>) {
-  if (!tiers) return []
-  if (Array.isArray(tiers)) return tiers.filter((tier) => tier.count > 0)
+  if (!tiers) return DEFAULT_TIER_ORDER.map((tier) => ({ tier, label: `${tier}-tier`, count: 0 }))
+  if (Array.isArray(tiers)) {
+    const byTier = new Map(tiers.map((tier) => [tier.tier, tier]))
+    return DEFAULT_TIER_ORDER.map((tier) => byTier.get(tier) ?? { tier, label: `${tier}-tier`, count: 0 })
+  }
   const entries = Object.entries(tiers).map(([tier, count]) => ({ tier, count }))
   return entries.sort((left, right) => {
     const leftIndex = DEFAULT_TIER_ORDER.indexOf(left.tier)
@@ -230,6 +235,72 @@ function normalizeTiers(tiers?: readonly RankingTierCount[] | Record<string, num
     if (rightIndex === -1) return -1
     return leftIndex - rightIndex
   })
+}
+
+function TierCard({
+  tier,
+  selected,
+  onSelect,
+}: {
+  tier: RankingTierCount
+  selected: boolean
+  onSelect?: (tier: string) => void
+}) {
+  const className = cn(
+    'ranking-showcase__tier',
+    `is-${tier.tier.toLowerCase()}`,
+    tier.count === 0 && 'is-empty',
+    selected && 'is-selected',
+    onSelect && tier.count > 0 && 'is-interactive',
+  )
+  const style = { '--tier-size': tier.count } as CSSProperties
+  const content = (
+    <>
+      <span>{tier.label ?? tier.tier}</span>
+      <b className="num">{tier.count}</b>
+      <TierTeamList tier={tier} />
+    </>
+  )
+
+  if (!onSelect || tier.count === 0) {
+    return (
+      <div className={className} style={style}>
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      aria-pressed={selected}
+      title={`${selected ? 'Clear' : 'Highlight'} ${tier.label ?? tier.tier} teams in the ranking list`}
+      onClick={() => onSelect(tier.tier)}
+    >
+      {content}
+    </button>
+  )
+}
+
+function TierTeamList({ tier }: { tier: RankingTierCount }) {
+  const teams = (tier.teams ?? []).filter(Boolean)
+  const visibleTeams = teams.slice(0, VISIBLE_TIER_TEAMS)
+  if (visibleTeams.length === 0) return <small>No teams</small>
+
+  const availableCount = Math.max(tier.count, teams.length)
+  const hiddenCount = Math.max(availableCount - visibleTeams.length, 0)
+  const title = hiddenCount > 0
+    ? `${visibleTeams.join(', ')}; ${formatNumber(hiddenCount)} more ${hiddenCount === 1 ? 'team' : 'teams'} in ${tier.label ?? tier.tier}.`
+    : visibleTeams.join(', ')
+
+  return (
+    <small title={title}>
+      {visibleTeams.join(', ')}
+      {hiddenCount > 0 ? <em>+{formatNumber(hiddenCount)} more</em> : null}
+    </small>
+  )
 }
 
 function podiumClass(index: number) {

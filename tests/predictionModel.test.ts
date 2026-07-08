@@ -9,6 +9,8 @@ const teams: Record<string, TeamProfile> = {
   Gamma: { name: 'Gamma', code: 'GAM', region: 'LPL', league: 'LPL' },
 }
 
+type SourcedRosterStatOverrides = Partial<Record<Role, Partial<NonNullable<MatchRecord['teamARoster']>['players'][number]['stats']>>>
+
 test('walk-forward predictions are recorded before each match update', () => {
   const backtest = buildWalkForwardBacktest([
     matchFixture({ id: 'm1', date: '2026-01-01', winner: 'Alpha' }),
@@ -337,6 +339,37 @@ test('same-day player ratings are frozen before all same-day predictions', () =>
   assert.ok((nextDay?.teamAPlayerRatingAdjustment ?? 0) > 0)
 })
 
+test('elite player-rating priors can exceed the old roster-strength hard cap', () => {
+  const history = Array.from({ length: 20 }, (_, index) => matchFixture({
+    id: `elite-roster-history-${index}`,
+    date: `2026-01-${String(index + 1).padStart(2, '0')}`,
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: `elite-roster-history-${index}`,
+    winner: 'Alpha',
+    teamARoster: sourcedRosterFixture('alpha', 'blue', true, dominantRosterStatOverrides(true)),
+    teamBRoster: sourcedRosterFixture('beta', 'red', false, dominantRosterStatOverrides(false)),
+  }))
+  const prediction = buildWalkForwardBacktest([
+    ...history,
+    matchFixture({
+      id: 'elite-roster-prediction',
+      date: '2026-02-01',
+      sourceProvider: 'oracles-elixir',
+      sourceGameId: 'elite-roster-prediction',
+      winner: 'Alpha',
+      teamARoster: sourcedRosterFixture('alpha', 'blue', true, dominantRosterStatOverrides(true)),
+      teamBRoster: sourcedRosterFixture('beta', 'red', false, dominantRosterStatOverrides(false)),
+    }),
+  ], { ...teams }).predictions.at(-1)
+
+  assert.equal(prediction?.teamAPlayerRatingCoverage, 1)
+  assert.equal(prediction?.teamBPlayerRatingCoverage, 1)
+  assert.ok((prediction?.teamAPlayerRatingAdjustment ?? 0) > 40)
+  assert.ok((prediction?.teamAPlayerRatingAdjustment ?? 0) < 70)
+  assert.ok((prediction?.teamBPlayerRatingAdjustment ?? 0) < -40)
+  assert.ok((prediction?.teamBPlayerRatingAdjustment ?? 0) > -70)
+})
+
 test('current game execution stats do not affect their own pre-game execution shadow', () => {
   const base = buildWalkForwardBacktest([
     matchFixture({ id: 'execution-current', date: '2026-01-01', winner: 'Alpha', teamAKills: 5, teamBKills: 4, teamAGold: 50200, teamBGold: 49800 }),
@@ -596,7 +629,7 @@ test('current neutral predictor favors the stronger trained team without side co
   assert.equal(prediction.teamA, 'Alpha')
   assert.equal(prediction.teamB, 'Beta')
   assert.ok(prediction.teamASeriesWinProbability > 0.5)
-  assert.equal(prediction.modelVersion.startsWith('transparent-gpr-v'), true)
+  assert.equal(prediction.modelVersion.startsWith('transparent-power-index-v'), true)
 })
 
 function predictionComparable(prediction: ReturnType<typeof buildWalkForwardBacktest>['predictions'][number] | undefined) {
@@ -665,7 +698,7 @@ function sourcedRosterFixture(
   prefix: string,
   side: Side,
   won: boolean,
-  statOverrides: Partial<Record<Role, Partial<NonNullable<MatchRecord['teamARoster']>['players'][number]['stats']>>> = {},
+  statOverrides: SourcedRosterStatOverrides = {},
 ): NonNullable<MatchRecord['teamARoster']> {
   const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support'] as const satisfies readonly Role[]
   return {
@@ -690,6 +723,21 @@ function sourcedRosterFixture(
       },
     })),
   }
+}
+
+function dominantRosterStatOverrides(won: boolean): SourcedRosterStatOverrides {
+  const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support'] as const satisfies readonly Role[]
+  return Object.fromEntries(roles.map((role) => [
+    role,
+    {
+      kills: won ? 12 : 0,
+      deaths: won ? 0 : 8,
+      assists: won ? 14 : 1,
+      damageShare: won ? 0.32 : 0.1,
+      earnedGoldShare: won ? 0.29 : 0.1,
+      vspm: role === 'Support' ? (won ? 3.1 : 1.4) : (won ? 1.4 : 0.5),
+    },
+  ])) as SourcedRosterStatOverrides
 }
 
 function stripRosters(match: MatchRecord): MatchRecord {

@@ -20,10 +20,12 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "tsx --test tests/**/*.test.ts",
+    "benchmark:riot-gpr": "tsx scripts/compare-riot-gpr.ts",
     "release:check": "pnpm run data:crunch && pnpm test && pnpm run typecheck && pnpm run lint && pnpm run build",
     "preview": "vite preview",
     "railway:start": "node scripts/railway-server.mjs",
     "railway:refresh": "node scripts/refresh-data-if-changed.mjs",
+    "fetch:lolesports": "node scripts/fetch-lolesports-schedule.mjs",
     "fetch:leaguepedia": "node scripts/fetch-leaguepedia.mjs",
     "fetch:riot-gpr": "node scripts/fetch-riot-gpr-snapshot.mjs"
   },

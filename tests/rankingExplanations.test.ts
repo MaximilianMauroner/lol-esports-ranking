@@ -36,7 +36,7 @@ test('roster and uncertainty helpers describe compact standing fields', () => {
 test('walk-forward helper formats compact manifest metrics', () => {
   const description = formatWalkForwardMetrics({
     target: 'published-game',
-    modelVersion: 'transparent-gpr-v-test',
+    modelVersion: 'transparent-power-index-v-test',
     modelConfigHash: 'fnv1a-test',
     predictionCount: 1234,
     accuracy: 0.6123,
@@ -93,7 +93,7 @@ test('walk-forward helper formats compact manifest metrics', () => {
 test('walk-forward helper tolerates metrics without baseline comparisons', () => {
   const description = formatWalkForwardMetrics({
     target: 'published-game',
-    modelVersion: 'transparent-gpr-v-test',
+    modelVersion: 'transparent-power-index-v-test',
     modelConfigHash: 'fnv1a-test',
     predictionCount: 1234,
     accuracy: 0.6123,

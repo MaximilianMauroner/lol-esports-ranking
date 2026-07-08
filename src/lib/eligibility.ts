@@ -1,3 +1,4 @@
+import { isRatedTeamLeague } from '../data/regionTaxonomy'
 import { leagueTierDefinitions } from '../data/leagueTiers'
 import type { EligibilityReason, LeagueTierName, TeamEligibility, TeamHistoryPoint } from '../types'
 import {
@@ -20,6 +21,7 @@ export type EligibilityInput = {
   history: TeamHistoryPoint[]
   lastDate: string
   uncertainty: number
+  league?: string
   leagueTier: LeagueTierName
   leagueInternationalMatches: number
   isDevelopmentalTeam?: boolean
@@ -34,8 +36,14 @@ export function evaluateTeamEligibility(
   const daysSinceLastMatch = lastPlayed ? daysBetween(lastPlayed, input.lastDate) : undefined
   const currentWindowGames = input.history.filter((point) => daysBetween(point.date, input.lastDate) <= config.currentWindowDays).length
   const reasons: EligibilityReason[] = []
+  const hasCurrentRatedLeagueSignal = Boolean(
+    input.league
+    && isRatedTeamLeague(input.league)
+    && currentWindowGames >= config.minCurrentWindowGames
+    && input.leagueInternationalMatches >= config.minInternationalMatchesForUnanchoredLeague,
+  )
 
-  if (totalGames < config.minTotalGames) reasons.push('low-total-volume')
+  if (totalGames < config.minTotalGames && !hasCurrentRatedLeagueSignal) reasons.push('low-total-volume')
   if (currentWindowGames < config.minCurrentWindowGames) reasons.push('low-current-volume')
   if (daysSinceLastMatch === undefined || daysSinceLastMatch > config.currentWindowDays) reasons.push('stale')
   if (input.uncertainty > config.maxUncertainty) reasons.push('high-uncertainty')

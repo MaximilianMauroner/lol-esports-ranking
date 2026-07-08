@@ -44,6 +44,9 @@ import {
 } from './hooks/usePublicArtifacts'
 
 type Mode = 'rankings' | 'regions'
+type MovementBaseline = {
+  label: string
+}
 
 const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
@@ -55,7 +58,7 @@ const MODES: { id: Mode; label: string; tagline: string; icon: typeof BarChart3 
 
 const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
   regions: { eyebrow: 'Regional strength', title: 'Region power scores' },
-  rankings: { eyebrow: 'Tier 1 team strength', title: 'Global Power Rankings' },
+  rankings: { eyebrow: 'Tier 1 team strength', title: 'Team Power Index' },
 }
 
 function App() {
@@ -71,6 +74,7 @@ function App() {
     playersState,
     teamHistoryState,
     regionHistoryState,
+    prefetchScope,
   } = usePublicArtifacts(scope)
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
@@ -106,6 +110,21 @@ function App() {
   const regions = useMemo(() => snapshot?.regions ?? [], [snapshot])
   const rankingFlair = useMemo(() => deriveRankingFlair(standings), [standings])
   const activeRegionHistory = regionHistoryState.status === 'ready' ? regionHistoryState.data : undefined
+  const readyData = manifestState.status === 'ready' ? manifestState.data : undefined
+  const seasonTabs = useMemo(() => readyData ? [...seasonYears.slice(0, 4), 'All'] : [], [readyData, seasonYears])
+  const activeSeason = seasonFromScope(effectiveScope)
+  const activeCheckpoint = checkpointFromScope(effectiveScope)
+  const checkpointTabs = useMemo(
+    () => readyData && activeSeason && activeSeason !== 'All'
+      ? checkpointOptionsForSeason(readyData, activeSeason)
+      : [],
+    [activeSeason, readyData],
+  )
+  const preloadScopes = useMemo(
+    () => visiblePreloadScopes(seasonTabs, activeSeason, checkpointTabs, effectiveScope),
+    [activeSeason, checkpointTabs, effectiveScope, seasonTabs],
+  )
+  const preloadScopesKey = preloadScopes.join('\u0000')
 
   const activePlayers = useMemo(
     () => playersState.status === 'ready' ? playersForScope(playersState.data, filter) : [],
@@ -123,29 +142,35 @@ function App() {
     setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, standings, teamKey), team, teamKey))
   }
 
+  useEffect(() => {
+    if (preloadScopes.length === 0) return undefined
+    return scheduleIdleWork(() => {
+      for (const preloadScope of preloadScopes) prefetchScope(preloadScope)
+    })
+  }, [prefetchScope, preloadScopes, preloadScopesKey])
+
   if (manifestState.status === 'loading') return <BootScreen />
   if (manifestState.status !== 'ready') return <ErrorScreen message={manifestState.message} />
 
-  const readyData = manifestState.data
-  const seeded = readyData.dataMode === 'seeded-sample' || readyData.coverage?.seededSample === true
-  const matchCount = snapshot?.matchCount ?? readyData.coverage?.matchCount
+  const loadedData = manifestState.data
+  const seeded = loadedData.dataMode === 'seeded-sample' || loadedData.coverage?.seededSample === true
+  const matchCount = snapshot?.matchCount ?? loadedData.coverage?.matchCount
   const trayPicks = mode === 'regions' ? activeRegionPicks.length : activeTeamPicks.length
   const trayLabel = mode === 'regions' ? 'Region compare' : 'Team compare'
   const teamColumns = teamCompareColumns(activeTeamPicks)
   const regionColumns = regionCompareColumns(activeRegionPicks)
-  const seasonTabs = [...seasonYears.slice(0, 4), 'All']
-  const activeSeason = seasonFromScope(effectiveScope)
-  const activeCheckpoint = checkpointFromScope(effectiveScope)
-  const checkpointTabs = activeSeason && activeSeason !== 'All'
-    ? checkpointOptionsForSeason(readyData, activeSeason)
-    : []
-  const rankingSignals = rankingSignalsProps(rankingFlair)
+  const movementBaseline = movementBaselineFor(activeCheckpoint, checkpointTabs)
+  const rankingSignals = rankingSignalsProps(rankingFlair, movementBaseline)
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
   const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
   const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
     setMode('rankings')
     replaceHashForModeAndScope('rankings', effectiveScope)
+  }
+
+  function preloadOnIntent(nextScope: string) {
+    if (nextScope !== effectiveScope) prefetchScope(nextScope)
   }
 
   return (
@@ -200,7 +225,9 @@ function App() {
                 variant="ghost"
                 aria-pressed={activeSeason === season}
                 className={cn('season-tabs__button', activeSeason === season && 'is-active')}
-                onClick={() => setScope(season === 'All' ? 'all' : `season:${season}`)}
+                onClick={() => setScope(scopeForSeasonTab(season))}
+                onFocus={() => preloadOnIntent(scopeForSeasonTab(season))}
+                onPointerEnter={() => preloadOnIntent(scopeForSeasonTab(season))}
               >
                 {season}
               </Button>
@@ -215,6 +242,8 @@ function App() {
                 aria-pressed={!activeCheckpoint}
                 className={cn('checkpoint-tabs__button', !activeCheckpoint && 'is-active')}
                 onClick={() => setScope(`season:${activeSeason}`)}
+                onFocus={() => preloadOnIntent(`season:${activeSeason}`)}
+                onPointerEnter={() => preloadOnIntent(`season:${activeSeason}`)}
               >
                 <span>Full year</span>
               </Button>
@@ -230,6 +259,8 @@ function App() {
                     aria-label={`${checkpoint.label} through ${checkpoint.boundaryEvent}${ongoing ? ', ongoing' : ''}`}
                     className={cn('checkpoint-tabs__button', activeCheckpoint === checkpoint.id && 'is-active', ongoing && 'is-ongoing')}
                     onClick={() => setScope(checkpointScope(activeSeason, checkpoint.id))}
+                    onFocus={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
+                    onPointerEnter={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
                   >
                     <span>
                       {checkpoint.label}
@@ -273,25 +304,27 @@ function App() {
                 <TeamsView
                   standings={standings}
                   regions={regions}
-                  model={readyData.model}
+                  model={loadedData.model}
                   players={activePlayers}
                   search={teamSearch}
                   onSearchChange={setTeamSearch}
                   pickedTeams={activeTeamPicks}
                   historyState={teamHistoryState}
                   signals={rankingSignals}
+                  tierAssignments={rankingFlair.tiers}
                   regionsHref={hashForModeAndScope('regions', effectiveScope)}
                   dataSummary={{
-                    source: readyData.source,
-                    sources: readyData.sources,
+                    source: loadedData.source,
+                    sources: loadedData.sources,
                     scopeLabel: scopeLabel(effectiveScope),
                     matchCount,
-                    coverageStart: readyData.coverage?.coverageStart,
-                    coverageEnd: readyData.coverage?.coverageEnd,
-                    latestMatchDate: readyData.coverage?.latestMatchDate,
+                    coverageStart: loadedData.coverage?.coverageStart,
+                    coverageEnd: loadedData.coverage?.coverageEnd,
+                    latestMatchDate: loadedData.coverage?.latestMatchDate,
+                    movementBaseline: movementBaseline.label,
                     seeded,
                     sourceBreakdown: snapshot?.sourceBreakdown ?? [],
-                    notes: readyData.dataQuality?.notes,
+                    notes: loadedData.dataQuality?.notes,
                   }}
                   onToggle={toggleTeam}
                 />
@@ -394,6 +427,41 @@ function App() {
   )
 }
 
+function visiblePreloadScopes(
+  seasonTabs: string[],
+  activeSeason: string | undefined,
+  checkpoints: SnapshotCheckpointOption[],
+  effectiveScope: string,
+) {
+  const targets = [
+    ...seasonTabs.map(scopeForSeasonTab),
+    ...(activeSeason && activeSeason !== 'All'
+      ? [`season:${activeSeason}`, ...checkpoints.map((checkpoint) => checkpointScope(activeSeason, checkpoint.id))]
+      : []),
+  ]
+  return [...new Set(targets.filter((target) => target !== effectiveScope))]
+}
+
+function scopeForSeasonTab(season: string) {
+  return season === 'All' ? 'all' : `season:${season}`
+}
+
+type IdleWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+  cancelIdleCallback?: (handle: number) => void
+}
+
+function scheduleIdleWork(callback: () => void) {
+  if (typeof window === 'undefined') return () => undefined
+  const idleWindow = window as IdleWindow
+  if (idleWindow.requestIdleCallback) {
+    const handle = idleWindow.requestIdleCallback(callback, { timeout: 2500 })
+    return () => idleWindow.cancelIdleCallback?.(handle)
+  }
+  const handle = window.setTimeout(callback, 900)
+  return () => window.clearTimeout(handle)
+}
+
 function readModeFromHash(): Mode {
   const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
   const segment = hashModeSegment(hash)
@@ -459,14 +527,14 @@ function checkpointLabel(id: string) {
     .join(' ')
 }
 
-function rankingSignalsProps(flair: RankingFlair): RankingShowcaseProps {
+function rankingSignalsProps(flair: RankingFlair, movementBaseline: MovementBaseline): RankingShowcaseProps {
   const spicy = flair.spicyTakeConfidence[0]
   return {
     title: 'Snapshot signals',
     subtitle: 'Unique movement, tier, upset, and evidence context for this scope.',
     tierCounts: tierCountsFor(flair),
-    biggestRiser: movementSpotlight(flair.movement.biggestRiser),
-    biggestFaller: movementSpotlight(flair.movement.biggestFaller),
+    biggestRiser: movementSpotlight(flair.movement.biggestRiser, movementBaseline),
+    biggestFaller: movementSpotlight(flair.movement.biggestFaller, movementBaseline),
     upset: flair.upsetHeadline ? {
       headline: flair.upsetHeadline.headline,
       winner: flair.upsetHeadline.winner,
@@ -497,7 +565,7 @@ function tierCountsFor(flair: RankingFlair) {
   })
 }
 
-function movementSpotlight(pick: RankingMovementPick | null) {
+function movementSpotlight(pick: RankingMovementPick | null, movementBaseline: MovementBaseline) {
   if (!pick) return undefined
   return {
     team: pick.team,
@@ -506,8 +574,17 @@ function movementSpotlight(pick: RankingMovementPick | null) {
     fromRank: pick.previousRank,
     toRank: pick.rank,
     ratingDelta: pick.ratingDelta,
-    description: `${formatSigned(pick.ratingDelta)} rating over the previous snapshot.`,
+    description: `${formatSigned(pick.ratingDelta)} rating vs ${movementBaseline.label}.`,
   }
+}
+
+function movementBaselineFor(activeCheckpoint: string | undefined, checkpoints: SnapshotCheckpointOption[]): MovementBaseline {
+  const checkpoint = checkpoints.find((entry) => entry.id === activeCheckpoint)
+  if (!checkpoint) return { label: 'the previous rating update in this scope' }
+  if (checkpoint.previousEndDate) {
+    return { label: `the previous checkpoint ending ${formatDate(checkpoint.previousEndDate)}` }
+  }
+  return { label: `the pre-${checkpoint.label} baseline before ${formatDate(checkpoint.startDate)}` }
 }
 
 function currentYearScope() {

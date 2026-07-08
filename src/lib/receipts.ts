@@ -214,7 +214,7 @@ export function buildTeamReceipt(input: BuildTeamReceiptInput): TeamReceipt {
 }
 
 export function hashReceiptPayload(payload: TeamReceiptHashPayload) {
-  return `gpr-${fnv1a32(stableStringify(payload))}`
+  return `power-${fnv1a32(stableStringify(payload))}`
 }
 
 function tierForReceipt(standing: PublicTeamStanding, standings?: readonly PublicTeamStanding[]) {

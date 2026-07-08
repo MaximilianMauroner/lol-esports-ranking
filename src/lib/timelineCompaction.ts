@@ -4,6 +4,9 @@ export type TimelineSourceTrace = {
   provider?: string
   gameId?: string
   matchId?: string
+  officialEventId?: string
+  officialMatchId?: string
+  officialGameId?: string
   fileName?: string
   url?: string
   bestOf?: number
@@ -25,6 +28,9 @@ export type TimelineSourceSummary = {
   sourceProvider?: string
   sourceGameId?: string
   sourceMatchId?: string
+  officialEventId?: string
+  officialMatchId?: string
+  officialGameId?: string
   sourceFileName?: string
   sourceUrl?: string
   sourceGameIds?: string[]
@@ -124,6 +130,9 @@ export function timelineSourceSummary<T>(
     sourceProvider: latestSource?.provider,
     sourceGameId: sourceGameIds.at(-1),
     sourceMatchId: latestSource?.matchId,
+    officialEventId: latestSource?.officialEventId,
+    officialMatchId: latestSource?.officialMatchId,
+    officialGameId: latestSource?.officialGameId,
     sourceFileName: latestSource?.fileName,
     sourceUrl: latestSource?.url,
     ...(sourceGameIds.length > 1 ? { sourceGameIds } : {}),

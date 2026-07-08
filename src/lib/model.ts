@@ -171,6 +171,7 @@ export function buildRankingModel(
       state,
       sideAdjustments,
       lastDate,
+      pregamePlayerRatingEdges,
     })
   }
 
@@ -199,8 +200,6 @@ export function buildRankingModel(
     lastDate,
   })
   const displayRatings = makeDisplayRatings(ratings, teams, leagueScores, leagueMatchCounts, rosterPriorOffsets, momentums, uncertainties, wins, losses, teamRosterBasis, directHeadToHeadContextAdjustments)
-  const currentRanks = makeRankMap(displayRatings)
-  const previousRankMap = makeRankMap(previousDisplayRatings)
   const leagues = buildLeagueStrengths(
     teams,
     leagueScores,
@@ -216,7 +215,7 @@ export function buildRankingModel(
     { initialLeagueRating, leagueEloWeight },
   )
 
-  const standings = Array.from(displayRatings.entries())
+  const draftStandings = Array.from(displayRatings.entries())
     .map(([team, displayRating]) => {
       const profile = teams[team] ?? { name: team, code: team.slice(0, 3).toUpperCase(), region: 'International' as Region, league: 'Unknown' }
       const baseRating = ratings.get(team) ?? initialTeamRating
@@ -251,8 +250,6 @@ export function buildRankingModel(
       const history = histories.get(team) ?? []
       const recentEvents = Array.from(new Set(history.slice(-4).map((point) => point.event))).reverse()
       const eligibilityHistory = matchLevelEligibilityHistory(history)
-      const rank = currentRanks.get(team) ?? 999
-      const previousRank = previousRankMap.get(team) ?? rank
 
       return {
         team,
@@ -270,9 +267,9 @@ export function buildRankingModel(
         rating: Math.round(displayRating),
         previousRating: Math.round(priorDisplayRating),
         delta: Math.round(displayRating - priorDisplayRating),
-        rank,
-        previousRank,
-        movement: previousRank - rank,
+        rank: 0,
+        previousRank: 0,
+        movement: 0,
         wins: wins.get(team) ?? 0,
         losses: losses.get(team) ?? 0,
         confidence: confidenceFor(history, displayRating, standingsSpread(displayRatings)),
@@ -283,6 +280,7 @@ export function buildRankingModel(
           history: eligibilityHistory,
           lastDate,
           uncertainty,
+          league: profile.league,
           leagueTier: leagueTier.tier,
           leagueInternationalMatches: leagueMatchCounts.get(profile.league) ?? 0,
           isDevelopmentalTeam: isDevelopmentalTeamName(team),
@@ -292,8 +290,14 @@ export function buildRankingModel(
         recentEvents,
       }
     })
-    .sort((a, b) => Number(b.eligibility.eligible) - Number(a.eligibility.eligible) || b.rating - a.rating)
-    .map((standing, index) => ({ ...standing, rank: index + 1 }))
+  const previousRankMap = makeStandingRankMap(draftStandings, (standing) => standing.previousRating)
+  const standings = draftStandings
+    .sort((a, b) => compareStandingsByRating(a, b, (standing) => standing.rating))
+    .map((standing, index) => {
+      const rank = index + 1
+      const previousRank = previousRankMap.get(standing.team) ?? rank
+      return { ...standing, rank, previousRank, movement: previousRank - rank }
+    })
 
   return {
     standings,
@@ -317,6 +321,23 @@ function averageFactors(sum?: FactorBreakdown, count = 0): FactorBreakdown {
   }
 }
 
+function makeStandingRankMap(standings: TeamStanding[], ratingFor: (standing: TeamStanding) => number) {
+  return new Map(
+    [...standings]
+      .sort((a, b) => compareStandingsByRating(a, b, ratingFor))
+      .map((standing, index) => [standing.team, index + 1]),
+  )
+}
+
+function compareStandingsByRating(
+  a: TeamStanding,
+  b: TeamStanding,
+  ratingFor: (standing: TeamStanding) => number,
+) {
+  return Number(b.eligibility.eligible) - Number(a.eligibility.eligible)
+    || ratingFor(b) - ratingFor(a)
+}
+
 function strongestFactor(factors: FactorBreakdown): keyof FactorBreakdown {
   let strongest: keyof FactorBreakdown = 'context'
   let strongestValue = Number.NEGATIVE_INFINITY
@@ -327,14 +348,6 @@ function strongestFactor(factors: FactorBreakdown): keyof FactorBreakdown {
     }
   }
   return strongest
-}
-
-function makeRankMap(ratings: Map<string, number>) {
-  return new Map(
-    Array.from(ratings.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([team], index) => [team, index + 1]),
-  )
 }
 
 type DirectHeadToHeadContextInput = {

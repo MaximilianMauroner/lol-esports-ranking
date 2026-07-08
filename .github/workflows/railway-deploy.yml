@@ -1,9 +1,6 @@
-name: Deploy to Railway
+name: Manual Railway Deploy
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
@@ -15,6 +12,7 @@ permissions:
 
 env:
   NODE_VERSION: "22"
+  PNPM_VERSION: "9.15.9"
   RAILWAY_PROJECT_ID: "2bf26cbc-4cfa-4114-87c0-83b446f30816"
   RAILWAY_SERVICE_ID: "d01fe39e-81a4-4230-b997-f13fe8af351b"
   RAILWAY_ENVIRONMENT: production
@@ -22,7 +20,7 @@ env:
 
 jobs:
   deploy:
-    name: Test, build, and deploy
+    name: Test, build, and deploy manually
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: github.repository == 'MaximilianMauroner/lol-esports-ranking'
@@ -31,16 +29,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-
-      - name: Enable Corepack
-        run: |
-          corepack enable
-          pnpm --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
