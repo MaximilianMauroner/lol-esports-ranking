@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">LoL Esports Power Index model-versioned rankings method card</title>
+  <desc id="desc">A product-style Open Graph card with model provenance, ranking method facts, region scores, and an all-scope top teams standings table.</desc>
+  <defs>
+    <style>
+      text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+        letter-spacing: 0;
+      }
+      .mono {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      }
+      .page { fill: #eef2f5; }
+      .surface { fill: #ffffff; stroke: #d7dee6; stroke-width: 1; }
+      .left-pane { fill: #f7fafc; stroke: #dce3ea; stroke-width: 1; }
+      .muted { fill: #667382; }
+      .soft { fill: #8792a0; }
+      .text { fill: #18222f; }
+      .strong { fill: #0c1420; font-weight: 740; }
+      .label { fill: #5c6978; font-size: 14px; font-weight: 690; }
+      .value { fill: #111b27; font-size: 19px; font-weight: 710; }
+      .source-value { fill: #111b27; font-size: 16px; font-weight: 720; }
+      .mono-value { fill: #15202d; font-size: 17px; font-weight: 700; }
+      .line { stroke: #dce3ea; stroke-width: 1; }
+      .chip { fill: #edf5f7; stroke: #c9dce1; stroke-width: 1; }
+      .chip-text { fill: #24505b; font-size: 16px; font-weight: 720; }
+      .region-chip { fill: #eef4f8; stroke: #d7e2ea; stroke-width: 1; }
+      .region-text { fill: #36485a; font-size: 14px; font-weight: 760; }
+      .row { fill: #ffffff; stroke: #dce3ea; stroke-width: 1; }
+      .top-row { fill: #fffaf0; stroke: #e4c66c; stroke-width: 1.2; }
+      .table-head { fill: #6b7684; font-size: 13px; font-weight: 760; }
+      .rank { fill: #5e6b78; font-size: 20px; font-weight: 780; }
+      .team-code { fill: #0b1420; font-size: 28px; font-weight: 780; }
+      .team-name { fill: #6b7684; font-size: 15px; font-weight: 620; }
+      .score { fill: #111b27; font-size: 24px; font-weight: 760; }
+      .record { fill: #536171; font-size: 20px; font-weight: 690; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="630" class="page" />
+  <rect x="48" y="44" width="1104" height="542" rx="18" class="surface" />
+
+  <g transform="translate(82 76)">
+    <rect x="0" y="0" width="402" height="478" rx="14" class="left-pane" />
+
+    <g transform="translate(30 30)">
+      <rect x="0" y="0" width="44" height="44" rx="10" fill="#10202a" />
+      <path d="M13 31 22 9 31 31H25L22 23 19 31Z" fill="#ffffff" />
+      <text x="58" y="19" class="strong" font-size="19">LoL Esports</text>
+      <text x="58" y="41" class="muted" font-size="16" font-weight="660">Power Index</text>
+    </g>
+
+    <text x="30" y="135" class="strong" font-size="38">Model-versioned</text>
+    <text x="30" y="180" class="strong" font-size="38">team rankings</text>
+
+    <g transform="translate(30 218)">
+      <rect x="0" y="0" width="342" height="46" rx="10" class="chip" />
+      <text x="18" y="30" class="mono mono-value">transparent-gpr-v0.0.0</text>
+    </g>
+
+    <g transform="translate(30 285)">
+      <text x="0" y="0" class="label">RANKING TARGET</text>
+      <text x="0" y="30" class="value">context-neutral latent</text>
+      <text x="0" y="57" class="value">team strength</text>
+    </g>
+
+    <g transform="translate(30 365)">
+      <g>
+        <text x="0" y="0" class="label">SNAPSHOT</text>
+        <text x="0" y="29" class="mono mono-value">2026-07-08</text>
+      </g>
+      <g transform="translate(184 0)">
+        <text x="0" y="0" class="label">MATCHES</text>
+        <text x="0" y="29" class="mono mono-value">4,200</text>
+      </g>
+      <line x1="0" y1="50" x2="342" y2="50" class="line" />
+      <text x="0" y="76" class="label">SOURCES</text>
+      <text x="0" y="101" class="source-value">Oracle's Elixir + Leaguepedia Cargo</text>
+    </g>
+  </g>
+
+  <g transform="translate(520 76)">
+    <text x="0" y="14" class="muted" font-size="16" font-weight="720">ALL-SCOPE STANDINGS</text>
+    <text x="0" y="53" class="strong" font-size="32">Top teams by power score</text>
+
+    <g transform="translate(0 84)">
+      <rect x="0" y="0" width="600" height="316" rx="14" fill="#fbfcfd" stroke="#dce3ea" />
+      <text x="24" y="36" class="table-head">RANK</text>
+      <text x="89" y="36" class="table-head">TEAM</text>
+      <text x="345" y="36" class="table-head">REGION</text>
+      <text x="468" y="36" class="table-head" text-anchor="end">POWER</text>
+      <text x="570" y="36" class="table-head" text-anchor="end">RECORD</text>
+      <line x1="0" y1="53" x2="600" y2="53" class="line" />
+
+      <g transform="translate(16 70)">
+        <rect x="0" y="0" width="568" height="54" rx="9" class="top-row" />
+        <text x="18" y="35" class="rank">1</text>
+        <text x="72" y="33" class="team-code">BLG</text>
+        <text x="153" y="33" class="team-name">Bilibili Gaming</text>
+        <rect x="324" y="15" width="52" height="24" rx="12" class="region-chip" />
+        <text x="350" y="32" class="region-text" text-anchor="middle">LPL</text>
+        <text x="452" y="34" class="score mono" text-anchor="end">2314</text>
+        <text x="554" y="34" class="record mono" text-anchor="end">77-31</text>
+      </g>
+
+      <g transform="translate(16 135)">
+        <rect x="0" y="0" width="568" height="54" rx="9" class="row" />
+        <text x="18" y="35" class="rank">2</text>
+        <text x="72" y="33" class="team-code">HLE</text>
+        <text x="153" y="33" class="team-name">Hanwha Life Esports</text>
+        <rect x="324" y="15" width="52" height="24" rx="12" class="region-chip" />
+        <text x="350" y="32" class="region-text" text-anchor="middle">LCK</text>
+        <text x="452" y="34" class="score mono" text-anchor="end">2262</text>
+        <text x="554" y="34" class="record mono" text-anchor="end">69-26</text>
+      </g>
+
+      <g transform="translate(16 200)">
+        <rect x="0" y="0" width="568" height="54" rx="9" class="row" />
+        <text x="18" y="35" class="rank">3</text>
+        <text x="72" y="33" class="team-code">T1</text>
+        <text x="153" y="33" class="team-name">T1</text>
+        <rect x="324" y="15" width="52" height="24" rx="12" class="region-chip" />
+        <text x="350" y="32" class="region-text" text-anchor="middle">LCK</text>
+        <text x="452" y="34" class="score mono" text-anchor="end">2177</text>
+        <text x="554" y="34" class="record mono" text-anchor="end">73-29</text>
+      </g>
+
+      <g transform="translate(16 265)">
+        <rect x="0" y="0" width="568" height="34" rx="9" class="row" />
+        <text x="18" y="24" class="rank" font-size="18">4</text>
+        <text x="72" y="24" class="team-code" font-size="23">GEN</text>
+        <text x="153" y="24" class="team-name">Gen.G</text>
+        <rect x="324" y="6" width="52" height="22" rx="11" class="region-chip" />
+        <text x="350" y="22" class="region-text" text-anchor="middle">LCK</text>
+        <text x="452" y="24" class="score mono" font-size="22" text-anchor="end">2177</text>
+        <text x="554" y="24" class="record mono" font-size="18" text-anchor="end">74-17</text>
+      </g>
+    </g>
+
+    <g transform="translate(0 428)">
+      <text x="0" y="0" class="label">REGION SCORES</text>
+      <g transform="translate(0 18)">
+        <rect x="0" y="0" width="132" height="42" rx="10" class="region-chip" />
+        <text x="16" y="27" class="region-text">LCK</text>
+        <text x="116" y="27" class="mono mono-value" text-anchor="end" font-size="17">2205</text>
+      </g>
+      <g transform="translate(148 18)">
+        <rect x="0" y="0" width="132" height="42" rx="10" class="region-chip" />
+        <text x="16" y="27" class="region-text">LPL</text>
+        <text x="116" y="27" class="mono mono-value" text-anchor="end" font-size="17">2108</text>
+      </g>
+      <g transform="translate(296 18)">
+        <rect x="0" y="0" width="132" height="42" rx="10" class="region-chip" />
+        <text x="16" y="27" class="region-text">LEC</text>
+        <text x="116" y="27" class="mono mono-value" text-anchor="end" font-size="17">2005</text>
+      </g>
+      <g transform="translate(444 18)">
+        <rect x="0" y="0" width="132" height="42" rx="10" class="region-chip" />
+        <text x="16" y="27" class="region-text">LCS</text>
+        <text x="116" y="27" class="mono mono-value" text-anchor="end" font-size="17">1911</text>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">LoL Esports Power Index team and region power scores</title>
+  <desc id="desc">A dark product dashboard export showing LoL Esports team power scores, region power scores, and source provenance.</desc>
+  <defs>
+    <style>
+      text {
+        letter-spacing: 0;
+      }
+
+      .sans {
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      }
+
+      .mono {
+        font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+      }
+
+      .bg {
+        fill: #080b0e;
+      }
+
+      .app-header {
+        fill: #0c1014;
+        stroke: #1a2229;
+        stroke-width: 1;
+      }
+
+      .surface {
+        fill: #10151a;
+        stroke: #252d34;
+        stroke-width: 1;
+      }
+
+      .surface-low {
+        fill: #0d1115;
+        stroke: #20272e;
+        stroke-width: 1;
+      }
+
+      .surface-raised {
+        fill: #13191f;
+      }
+
+      .line {
+        stroke: #252d34;
+        stroke-width: 1;
+      }
+
+      .soft-line {
+        stroke: #1c242b;
+        stroke-width: 1;
+      }
+
+      .text {
+        fill: #d8dee2;
+      }
+
+      .strong {
+        fill: #eef2f4;
+        font-weight: 740;
+      }
+
+      .muted {
+        fill: #99a4ab;
+      }
+
+      .faint {
+        fill: #6e7a83;
+      }
+
+      .accent {
+        fill: #60c1d4;
+      }
+
+      .accent-stroke {
+        stroke: #60c1d4;
+      }
+
+      .gold {
+        fill: #d1ae58;
+      }
+
+      .gold-stroke {
+        stroke: #d1ae58;
+      }
+
+      .up {
+        fill: #7cc08d;
+      }
+
+      .down {
+        fill: #c9715f;
+      }
+
+      .chip {
+        fill: #0b1014;
+        stroke: #222b33;
+        stroke-width: 1;
+      }
+
+      .mark-shell {
+        fill: #12181e;
+        stroke: #2a343d;
+        stroke-width: 1;
+      }
+
+      .region-chip {
+        fill: #151b21;
+        stroke: #2a333c;
+        stroke-width: 1;
+      }
+
+      .bar-track {
+        fill: #1b2229;
+      }
+
+      .bar-fill {
+        fill: #4f9fb0;
+      }
+
+      .bar-fill-gold {
+        fill: #c5a24f;
+      }
+
+      .tabular {
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </defs>
+
+  <rect width="1200" height="630" class="bg" />
+  <rect x="0.5" y="0.5" width="1199" height="87" class="app-header" />
+
+  <g class="sans">
+    <g transform="translate(64 27)">
+      <rect x="0" y="0" width="34" height="34" rx="7" class="mark-shell" />
+      <rect x="9" y="19" width="4" height="8" rx="1" class="accent" opacity="0.78" />
+      <rect x="15" y="13" width="4" height="14" rx="1" class="accent" opacity="0.88" />
+      <rect x="21" y="8" width="4" height="19" rx="1" class="gold" opacity="0.9" />
+      <path d="M8 16.5L14 13L20 14.5L26 9.5" fill="none" class="gold-stroke" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.78" />
+
+      <text x="48" y="14" class="strong" font-size="15" font-weight="720">LoL Esports Power Index</text>
+      <text x="48" y="34" class="muted" font-size="13" font-weight="620">All seasons / Ranked teams</text>
+
+      <g transform="translate(548 1)" class="mono" font-size="12.5" font-weight="700">
+        <rect x="0" y="0" width="510" height="32" rx="6" class="chip" />
+        <text x="16" y="21" class="text">transparent-gpr-v0.0.0 | 4,200 matches | snapshot 2026-07-08</text>
+      </g>
+    </g>
+
+    <g transform="translate(64 116)">
+      <text x="0" y="27" class="strong" font-size="30" font-weight="760">Team and Region Power Scores</text>
+      <text x="0" y="53" class="muted" font-size="14" font-weight="620">Production ranking export</text>
+    </g>
+
+    <g transform="translate(64 178)">
+      <rect x="0" y="0" width="704" height="350" rx="8" class="surface" />
+      <rect x="0" y="0" width="704" height="50" rx="8" class="surface-raised" />
+      <line x1="0" y1="50" x2="704" y2="50" class="line" />
+      <text x="22" y="31" class="strong" font-size="19">Teams</text>
+      <text x="682" y="31" class="faint mono" font-size="12.5" font-weight="700" text-anchor="end">Score / record / movement</text>
+
+      <g class="mono" font-size="11.5" font-weight="760">
+        <text x="22" y="73" class="faint">RANK</text>
+        <text x="85" y="73" class="faint">TEAM</text>
+        <text x="345" y="73" class="faint">REGION</text>
+        <text x="434" y="73" class="faint">RECORD</text>
+        <text x="586" y="73" class="faint" text-anchor="end">SCORE</text>
+        <text x="658" y="73" class="faint" text-anchor="end">MOVE</text>
+      </g>
+
+      <g transform="translate(16 86)">
+        <rect x="0" y="0" width="672" height="58" rx="6" fill="#171612" stroke="#363123" />
+        <text x="16" y="36" class="gold mono tabular" font-size="20" font-weight="800">#1</text>
+        <text x="69" y="28" class="strong mono" font-size="26" font-weight="840">BLG</text>
+        <text x="69" y="48" class="muted" font-size="13.5" font-weight="620">Bilibili Gaming</text>
+        <rect x="327" y="17" width="54" height="24" rx="4" class="region-chip" />
+        <text x="354" y="33.5" class="text mono" font-size="12.5" font-weight="760" text-anchor="middle">LPL</text>
+        <text x="438" y="35" class="text mono tabular" font-size="17" font-weight="740">77-31</text>
+        <text x="586" y="36" class="gold mono tabular" font-size="26" font-weight="840" text-anchor="end">2314</text>
+        <text x="650" y="35" class="faint mono tabular" font-size="16.5" font-weight="760" text-anchor="end">0</text>
+      </g>
+
+      <g transform="translate(16 150)">
+        <rect x="0" y="0" width="672" height="54" rx="6" class="surface-low" />
+        <text x="16" y="34" class="accent mono tabular" font-size="19" font-weight="800">#2</text>
+        <text x="69" y="27" class="strong mono" font-size="24" font-weight="820">HLE</text>
+        <text x="69" y="46" class="muted" font-size="13.5" font-weight="620">Hanwha Life Esports</text>
+        <rect x="327" y="15" width="54" height="24" rx="4" class="region-chip" />
+        <text x="354" y="31.5" class="text mono" font-size="12.5" font-weight="760" text-anchor="middle">LCK</text>
+        <text x="438" y="33" class="text mono tabular" font-size="16.5" font-weight="740">69-26</text>
+        <text x="586" y="34" class="text mono tabular" font-size="23" font-weight="820" text-anchor="end">2262</text>
+        <text x="650" y="33" class="up mono tabular" font-size="16.5" font-weight="800" text-anchor="end">+1</text>
+      </g>
+
+      <g transform="translate(16 210)">
+        <rect x="0" y="0" width="672" height="54" rx="6" class="surface-low" />
+        <text x="16" y="34" class="accent mono tabular" font-size="19" font-weight="800">#3</text>
+        <text x="69" y="27" class="strong mono" font-size="24" font-weight="820">T1</text>
+        <text x="69" y="46" class="muted" font-size="13.5" font-weight="620">T1</text>
+        <rect x="327" y="15" width="54" height="24" rx="4" class="region-chip" />
+        <text x="354" y="31.5" class="text mono" font-size="12.5" font-weight="760" text-anchor="middle">LCK</text>
+        <text x="438" y="33" class="text mono tabular" font-size="16.5" font-weight="740">73-29</text>
+        <text x="586" y="34" class="text mono tabular" font-size="23" font-weight="820" text-anchor="end">2177</text>
+        <text x="650" y="33" class="down mono tabular" font-size="16.5" font-weight="800" text-anchor="end">-1</text>
+      </g>
+
+      <g transform="translate(16 270)">
+        <rect x="0" y="0" width="672" height="50" rx="6" class="surface-low" />
+        <text x="16" y="32" class="accent mono tabular" font-size="18.5" font-weight="800">#4</text>
+        <text x="69" y="30" class="strong mono" font-size="22" font-weight="820">GEN</text>
+        <text x="140" y="30" class="muted" font-size="13.5" font-weight="620">Gen.G</text>
+        <rect x="327" y="13" width="54" height="24" rx="4" class="region-chip" />
+        <text x="354" y="29.5" class="text mono" font-size="12.5" font-weight="760" text-anchor="middle">LCK</text>
+        <text x="438" y="31" class="text mono tabular" font-size="16.5" font-weight="740">74-17</text>
+        <text x="586" y="32" class="text mono tabular" font-size="22" font-weight="820" text-anchor="end">2177</text>
+        <text x="650" y="31" class="faint mono tabular" font-size="16" font-weight="760" text-anchor="end">0</text>
+      </g>
+    </g>
+
+    <g transform="translate(790 178)">
+      <rect x="0" y="0" width="346" height="350" rx="8" class="surface" />
+      <rect x="0" y="0" width="346" height="50" rx="8" class="surface-raised" />
+      <line x1="0" y1="50" x2="346" y2="50" class="line" />
+      <text x="22" y="31" class="strong" font-size="19">Regions</text>
+      <text x="324" y="31" class="faint mono" font-size="12.5" font-weight="700" text-anchor="end">Power score</text>
+
+      <g class="mono" font-size="17" font-weight="780">
+        <g transform="translate(22 75)">
+          <text x="0" y="19" class="gold">LCK</text>
+          <rect x="72" y="5" width="178" height="15" rx="4" class="bar-track" />
+          <rect x="72" y="5" width="178" height="15" rx="4" class="bar-fill-gold" />
+          <text x="302" y="20" class="gold tabular" text-anchor="end">2205</text>
+        </g>
+        <g transform="translate(22 116)">
+          <text x="0" y="19" class="text">LPL</text>
+          <rect x="72" y="5" width="178" height="15" rx="4" class="bar-track" />
+          <rect x="72" y="5" width="170" height="15" rx="4" class="bar-fill" />
+          <text x="302" y="20" class="text tabular" text-anchor="end">2108</text>
+        </g>
+        <g transform="translate(22 157)">
+          <text x="0" y="19" class="text">LEC</text>
+          <rect x="72" y="5" width="178" height="15" rx="4" class="bar-track" />
+          <rect x="72" y="5" width="162" height="15" rx="4" class="bar-fill" />
+          <text x="302" y="20" class="text tabular" text-anchor="end">2005</text>
+        </g>
+        <g transform="translate(22 198)">
+          <text x="0" y="19" class="text">LCS</text>
+          <rect x="72" y="5" width="178" height="15" rx="4" class="bar-track" />
+          <rect x="72" y="5" width="154" height="15" rx="4" class="bar-fill" />
+          <text x="302" y="20" class="text tabular" text-anchor="end">1911</text>
+        </g>
+        <g transform="translate(22 239)">
+          <text x="0" y="19" class="text">LCP</text>
+          <rect x="72" y="5" width="178" height="15" rx="4" class="bar-track" />
+          <rect x="72" y="5" width="134" height="15" rx="4" class="bar-fill" />
+          <text x="302" y="20" class="text tabular" text-anchor="end">1664</text>
+        </g>
+        <g transform="translate(22 280)">
+          <text x="0" y="19" class="text">CBLOL</text>
+          <rect x="72" y="5" width="178" height="15" rx="4" class="bar-track" />
+          <rect x="72" y="5" width="131" height="15" rx="4" class="bar-fill" />
+          <text x="302" y="20" class="text tabular" text-anchor="end">1627</text>
+        </g>
+      </g>
+    </g>
+
+    <g transform="translate(64 556)">
+      <rect x="0" y="0" width="1072" height="42" rx="8" class="surface-low" />
+      <text x="18" y="26" class="muted mono" font-size="13.5" font-weight="690">
+        Sources: Oracle's Elixir + Leaguepedia Cargo | Model: transparent-gpr-v0.0.0 | Snapshot: 2026-07-08 | Matches: 4,200
+      </text>
+    </g>
+  </g>
+</svg>
