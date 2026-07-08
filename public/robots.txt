@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lol-esports-power-index.up.railway.app/sitemap.xml

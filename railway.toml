@@ -1,6 +1,6 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "pnpm install --frozen-lockfile && pnpm run build"
+builder = "RAILPACK"
+buildCommand = "pnpm run build"
 
 [deploy]
 startCommand = "pnpm run railway:start"

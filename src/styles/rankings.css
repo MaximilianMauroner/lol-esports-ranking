@@ -246,7 +246,7 @@
 .ranking-showcase__tier small {
   margin-top: 3px;
   overflow: hidden;
-  color: var(--faint);
+  color: var(--muted);
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1016,7 +1016,7 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   margin-bottom: 10px;
 }
 
-.region-teaser .rail-card-head h3 {
+.region-teaser .rail-card-head h2 {
   margin-top: 2px;
   color: var(--text-strong);
   font-size: 0.95rem;

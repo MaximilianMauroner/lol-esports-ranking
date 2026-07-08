@@ -28,6 +28,7 @@ import {
 } from '../lib/publicArtifacts/resolver'
 
 export type PublicArtifactState<T> =
+  | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; data: T }
   | { status: 'missing'; message: string }
@@ -39,6 +40,11 @@ export type PlayerDirectoryState = PublicArtifactState<PublicPlayerDirectory>
 export type RegionHistoryScopeState = PublicArtifactState<PublicRegionHistoryScope>
 
 type TeamHistoryRoot = PublicTeamHistoryDirectory | PublicTeamHistoryIndex
+type PublicArtifactLoadOptions = {
+  loadPlayers?: boolean
+  loadTeamHistory?: boolean
+  loadRegionHistory?: boolean
+}
 
 type TeamHistoryCacheEntry =
   | { status: 'loading' }
@@ -51,13 +57,14 @@ const PLAYERS_URL = import.meta.env.VITE_PLAYER_DATA_URL || '/data/entities/play
 const TEAM_HISTORY_INDEX_URL = import.meta.env.VITE_TEAM_HISTORY_INDEX_URL || import.meta.env.VITE_TEAM_HISTORY_URL || '/data/history/team-series/index.json'
 const REGION_HISTORY_URL = import.meta.env.VITE_REGION_HISTORY_URL || '/data/history/region-series.json'
 
-export function usePublicArtifacts(scope: string) {
+export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOptions = {}) {
+  const { loadPlayers = false, loadTeamHistory = false, loadRegionHistory = false } = options
   const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>({ status: 'loading' })
-  const [playersState, setPlayersState] = useState<PlayerDirectoryState>({ status: 'loading' })
-  const [teamHistoryRootState, setTeamHistoryRootState] = useState<PublicArtifactState<TeamHistoryRoot>>({ status: 'loading' })
+  const [playersState, setPlayersState] = useState<PlayerDirectoryState>({ status: 'idle' })
+  const [teamHistoryRootState, setTeamHistoryRootState] = useState<PublicArtifactState<TeamHistoryRoot>>({ status: 'idle' })
   const [teamHistoryCache, setTeamHistoryCache] = useState<Record<string, TeamHistoryCacheEntry>>({})
   const teamHistoryCacheRef = useRef(teamHistoryCache)
-  const [regionHistoryState, setRegionHistoryState] = useState<PublicArtifactState<PublicRegionHistoryDirectory>>({ status: 'loading' })
+  const [regionHistoryState, setRegionHistoryState] = useState<PublicArtifactState<PublicRegionHistoryDirectory>>({ status: 'idle' })
   const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
   const snapshotCacheRef = useRef(snapshotCache)
 
@@ -96,7 +103,7 @@ export function usePublicArtifacts(scope: string) {
   }, [])
 
   useEffect(() => {
-    if (!data) return
+    if (!data || !loadPlayers) return
     const controller = new AbortController()
     const url = resolveArtifactUrl(data.playerDirectoryUrl ?? PLAYERS_URL, DATA_URL)
     setPlayersState({ status: 'loading' })
@@ -115,10 +122,10 @@ export function usePublicArtifacts(scope: string) {
     }
     void load()
     return () => controller.abort()
-  }, [data])
+  }, [data, loadPlayers])
 
   useEffect(() => {
-    if (!data) return
+    if (!data || !loadTeamHistory) return
     const controller = new AbortController()
     const url = resolveArtifactUrl(data.teamHistoryIndexUrl ?? data.teamHistoryUrl ?? TEAM_HISTORY_INDEX_URL, DATA_URL)
     setTeamHistoryRootState({ status: 'loading' })
@@ -143,10 +150,10 @@ export function usePublicArtifacts(scope: string) {
     }
     void load()
     return () => controller.abort()
-  }, [data])
+  }, [data, loadTeamHistory])
 
   useEffect(() => {
-    if (!data) return
+    if (!data || !loadRegionHistory) return
     const controller = new AbortController()
     const url = resolveArtifactUrl(data.regionHistoryUrl ?? REGION_HISTORY_URL, DATA_URL)
     setRegionHistoryState({ status: 'loading' })
@@ -165,7 +172,7 @@ export function usePublicArtifacts(scope: string) {
     }
     void load()
     return () => controller.abort()
-  }, [data])
+  }, [data, loadRegionHistory])
 
   useEffect(() => {
     snapshotCacheRef.current = snapshotCache
@@ -205,31 +212,7 @@ export function usePublicArtifacts(scope: string) {
       }
     }
 
-    if (teamHistoryRootState.status !== 'ready' || teamHistoryRootState.data.artifactKind !== 'team-history-index') return
-    const index = teamHistoryRootState.data
-    const historyEntry = teamHistoryCacheRef.current[snapshotCacheKey]
-    if (historyEntry?.status === 'ready' || historyEntry?.status === 'loading') return
-    const expectedHistory = index.scopeIndex[snapshotCacheKey]
-    if (!expectedHistory) return
-    const loadingHistoryEntry: TeamHistoryCacheEntry = { status: 'loading' }
-    teamHistoryCacheRef.current = { ...teamHistoryCacheRef.current, [snapshotCacheKey]: loadingHistoryEntry }
-    setTeamHistoryCache((current) => ({ ...current, [snapshotCacheKey]: loadingHistoryEntry }))
-    const historyUrl = resolveArtifactUrl(expectedHistory.url, DATA_URL)
-    void fetch(historyUrl, { headers: { Accept: 'application/json' } })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Team history failed with ${response.status}`)
-        const next = parsePublicTeamHistoryShard(await response.json())
-        validatePublicTeamHistoryShard(snapshotCacheKey, expectedHistory, next, index)
-        const readyHistoryEntry: TeamHistoryCacheEntry = { status: 'ready', shard: next }
-        teamHistoryCacheRef.current = { ...teamHistoryCacheRef.current, [snapshotCacheKey]: readyHistoryEntry }
-        setTeamHistoryCache((current) => ({ ...current, [snapshotCacheKey]: readyHistoryEntry }))
-      })
-      .catch((error: unknown) => {
-        const errorHistoryEntry: TeamHistoryCacheEntry = { status: 'error', message: error instanceof Error ? error.message : 'Unable to load team history' }
-        teamHistoryCacheRef.current = { ...teamHistoryCacheRef.current, [snapshotCacheKey]: errorHistoryEntry }
-        setTeamHistoryCache((current) => ({ ...current, [snapshotCacheKey]: errorHistoryEntry }))
-      })
-  }, [data, teamHistoryRootState])
+  }, [data])
 
   useEffect(() => {
     if (!data) return
@@ -268,7 +251,7 @@ export function usePublicArtifacts(scope: string) {
   }, [data, effectiveScope, filter])
 
   useEffect(() => {
-    if (teamHistoryRootState.status !== 'ready' || teamHistoryRootState.data.artifactKind !== 'team-history-index') return
+    if (!loadTeamHistory || teamHistoryRootState.status !== 'ready' || teamHistoryRootState.data.artifactKind !== 'team-history-index') return
     const index = teamHistoryRootState.data
     const key = snapshotKey(filter)
     const cacheEntry = teamHistoryCacheRef.current[key]
@@ -301,7 +284,7 @@ export function usePublicArtifacts(scope: string) {
     }
     void load()
     return () => controller.abort()
-  }, [effectiveScope, filter, teamHistoryRootState])
+  }, [effectiveScope, filter, loadTeamHistory, teamHistoryRootState])
 
   return {
     data,
@@ -398,6 +381,7 @@ function resolveTeamHistoryState(
   filter: SnapshotFilter,
   effectiveScope: string,
 ): TeamHistoryArtifactState {
+  if (rootState.status === 'idle') return { status: 'idle' }
   if (rootState.status === 'loading') return { status: 'loading' }
   if (rootState.status === 'missing') return { status: 'missing', message: rootState.message }
   if (rootState.status === 'error') return { status: 'error', message: rootState.message }
@@ -463,6 +447,7 @@ function resolveRegionHistoryState(
   filter: SnapshotFilter,
   effectiveScope: string,
 ): RegionHistoryScopeState {
+  if (state.status === 'idle') return { status: 'idle' }
   if (state.status === 'loading') return { status: 'loading' }
   if (state.status === 'missing') return { status: 'missing', message: state.message }
   if (state.status === 'error') return { status: 'error', message: state.message }

@@ -243,7 +243,11 @@ function RegionTrendChart({
         ) : null}
       </div>
       {fallbackNote ? <p className="compare-chart__note muted">{fallbackNote}</p> : null}
-      {!regionHistory && historyState.status === 'loading' ? (
+      {!regionHistory && regionHistoryState.status === 'loading' ? (
+        <p className="muted compare-chart__empty">Loading region history...</p>
+      ) : !regionHistory && historyState.status === 'idle' ? (
+        <p className="muted compare-chart__empty">History loads when comparison opens.</p>
+      ) : !regionHistory && historyState.status === 'loading' ? (
         <p className="muted compare-chart__empty">Loading history…</p>
       ) : !regionHistory && (historyState.status === 'missing' || historyState.status === 'error') ? (
         <p className="muted compare-chart__empty">{historyState.message}</p>
@@ -260,6 +264,7 @@ function RegionTrendChart({
 }
 
 function regionHistoryFallbackNote(state: RegionHistoryScopeState) {
+  if (state.status === 'idle') return 'Region history has not been requested yet; this chart is temporarily derived from the current top-team average.'
   if (state.status === 'loading') return 'Region history is still loading; this chart is temporarily derived from the current top-team average.'
   if (state.status === 'missing' || state.status === 'error') return `${state.message} Showing a derived top-team average instead.`
   return undefined
@@ -490,9 +495,11 @@ function TeamCompareChart({
           </span>
         ) : null}
       </div>
-      {historyState.status === 'loading' ? (
+      {historyState.status === 'idle' ? (
+        <p className="muted compare-chart__empty">History loads when comparison opens.</p>
+      ) : historyState.status === 'loading' ? (
         <p className="muted compare-chart__empty">Loading team history…</p>
-      ) : historyState.status !== 'ready' ? (
+      ) : historyState.status === 'missing' || historyState.status === 'error' ? (
         <p className="muted compare-chart__empty">{historyState.message}</p>
       ) : series.length > 0 ? (
         <TeamHistoryLineChart series={series} height={300} yLabel="Power score" yFormat={formatRating} />

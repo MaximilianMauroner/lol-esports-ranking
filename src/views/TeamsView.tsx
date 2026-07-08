@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Search, Users, X } from 'lucide-react'
 import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type { PublicRecentMatch } from '../lib/publicArtifacts/schema'
@@ -14,7 +14,6 @@ import { Select } from '../components/ui/select'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { RankingShowcase, type RankingShowcaseProps } from '../components/RankingShowcase'
 import { type ChartSeries } from '../components/LineChart'
-import { TeamHistoryLineChart } from '../components/TeamHistoryLineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import type { RankingTierAssignment, RankingTierLabel } from '../lib/rankingFlair'
 import type { ChartPoint } from '../lib/chartPoints'
@@ -50,6 +49,7 @@ const DEFAULT_TEAM_PAGE_SIZE = 25
 const RECENT_MATCH_PAGE_SIZE = 5
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
+const LazyTeamHistoryLineChart = lazy(() => import('../components/TeamHistoryLineChart').then((module) => ({ default: module.TeamHistoryLineChart })))
 export function TeamsView({
   standings,
   regions,
@@ -64,6 +64,8 @@ export function TeamsView({
   dataSummary,
   onToggle,
   tierAssignments,
+  onRequestPlayers,
+  onRequestTeamHistory,
 }: {
   standings: RankingSummaryStanding[]
   regions: RegionStrength[]
@@ -78,6 +80,8 @@ export function TeamsView({
   dataSummary?: TeamDataSummary
   onToggle: (team: RankingSummaryStanding) => void
   tierAssignments?: RankingTierAssignment[]
+  onRequestPlayers?: () => void
+  onRequestTeamHistory?: () => void
 }) {
   const [region, setRegion] = useState('All')
   const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>('ranked')
@@ -89,6 +93,7 @@ export function TeamsView({
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const pendingTierScrollRef = useRef<string | null>(null)
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
+  const trajectoryPanelRef = useRef<HTMLDivElement | null>(null)
   const history = historyState.status === 'ready' ? historyState.data.series : undefined
 
   const pickedKeys = useMemo(() => new Set(pickedTeams.map(teamKey)), [pickedTeams])
@@ -173,6 +178,27 @@ export function TeamsView({
     })
     return () => window.cancelAnimationFrame(frame)
   }, [selectedTier, visible])
+
+  useEffect(() => {
+    if (!onRequestTeamHistory) return undefined
+    const panel = trajectoryPanelRef.current
+    if (!panel) return undefined
+
+    const IntersectionObserverCtor = Reflect.get(window, 'IntersectionObserver') as typeof IntersectionObserver | undefined
+    if (!IntersectionObserverCtor) {
+      const handle = window.setTimeout(onRequestTeamHistory, 1200)
+      return () => window.clearTimeout(handle)
+    }
+
+    const observer = new IntersectionObserverCtor((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      onRequestTeamHistory()
+      observer.disconnect()
+    }, { rootMargin: '420px 0px' })
+
+    observer.observe(panel)
+    return () => observer.disconnect()
+  }, [onRequestTeamHistory])
 
   const focusTeams = pickedTeams.length > 0 ? pickedTeams : sorted.slice(0, 5)
   const dailyRankSeries = useMemo(
@@ -346,8 +372,14 @@ export function TeamsView({
                               type="button"
                               variant="ghost"
                               className="team-cell team-cell__button"
-                              onClick={() => setDetailKey(key)}
-                              aria-label={`View ${team.team} details`}
+                              onClick={() => {
+                                onRequestPlayers?.()
+                                onRequestTeamHistory?.()
+                                setDetailKey(key)
+                              }}
+                              onFocus={onRequestPlayers}
+                              onPointerEnter={onRequestPlayers}
+                              title={`View ${team.team} details`}
                             >
                               <span className="team-mark sm">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
                               <div className="ent">
@@ -381,7 +413,7 @@ export function TeamsView({
               <div className="pager" aria-label="Team table pagination">
                 <div className="pager__size">
                   <span>Rows per page</span>
-                  <Select value={String(pageSize)} onChange={(event) => updatePageSize(Number(event.target.value))}>
+                  <Select aria-label="Rows per page" value={String(pageSize)} onChange={(event) => updatePageSize(Number(event.target.value))}>
                     {TEAM_PAGE_SIZES.map((option) => (
                       <option key={option} value={option}>
                         {option}
@@ -431,7 +463,12 @@ export function TeamsView({
         </aside>
       </div>
 
-      <Card className="panel compact-panel trajectory-panel">
+      <Card
+        className="panel compact-panel trajectory-panel"
+        ref={trajectoryPanelRef}
+        onFocusCapture={onRequestTeamHistory}
+        onPointerEnter={onRequestTeamHistory}
+      >
         <div className="panel__head trajectory-panel__head">
           <div className="panel__title">
             <p className="eyebrow">Over time</p>
@@ -457,22 +494,26 @@ export function TeamsView({
             </CountBadge>
           </div>
         </div>
-        {historyState.status === 'loading' ? (
+        {historyState.status === 'idle' ? (
+          <p className="muted" style={{ padding: 20 }}>Rating history loads when this panel is viewed.</p>
+        ) : historyState.status === 'loading' ? (
           <p className="muted" style={{ padding: 20 }}>Loading rating history…</p>
         ) : historyState.status !== 'ready' ? (
           <p className="muted" style={{ padding: 20 }}>{historyState.message}</p>
         ) : (
-          <TeamHistoryLineChart
-            series={chartSeries}
-            height={300}
-            yLabel={metric === 'rank' ? 'Rank' : 'Power score'}
-            yFormat={metric === 'rank' ? (value) => `#${Math.round(value)}` : undefined}
-            yTickFormat={metric === 'rank' ? (value) => Math.round(value) === 1 ? '#1 best' : `#${Math.round(value)}` : undefined}
-            yDomain={rankAxis?.domain}
-            yTicks={rankAxis?.ticks}
-            yReverse={metric === 'rank'}
-            curve={metric === 'rank' ? 'step' : 'linear'}
-          />
+          <Suspense fallback={<p className="muted" style={{ padding: 20 }}>Loading chart...</p>}>
+            <LazyTeamHistoryLineChart
+              series={chartSeries}
+              height={300}
+              yLabel={metric === 'rank' ? 'Rank' : 'Power score'}
+              yFormat={metric === 'rank' ? (value) => `#${Math.round(value)}` : undefined}
+              yTickFormat={metric === 'rank' ? (value) => Math.round(value) === 1 ? '#1 best' : `#${Math.round(value)}` : undefined}
+              yDomain={rankAxis?.domain}
+              yTicks={rankAxis?.ticks}
+              yReverse={metric === 'rank'}
+              curve={metric === 'rank' ? 'step' : 'linear'}
+            />
+          </Suspense>
         )}
         {insights.length > 0 ? (
           <div className="trajectory-cards">
@@ -554,7 +595,7 @@ function TeamScoreMeta({ team }: { team: RankingSummaryStanding }) {
 
 function TierBadge({ tier }: { tier: RankingTierLabel }) {
   return (
-    <span className={`tier-badge is-${tier.toLowerCase()}`} title={`${tier}-tier`} aria-label={`${tier}-tier`}>
+    <span className={`tier-badge is-${tier.toLowerCase()}`} role="img" title={`${tier}-tier`} aria-label={`${tier}-tier`}>
       {tier}
     </span>
   )
@@ -586,7 +627,7 @@ function TeamRankTrendCell({
   const tone = rankMovementTone(summary.recentMovement)
   const title = rankTrendTitle(team.team, summary, movementBaseline)
   return (
-    <span className="rank-trend-cell" title={title} aria-label={title} style={rankMovementStyle(summary.recentMovement)}>
+    <span className="rank-trend-cell" role="img" title={title} aria-label={title} style={rankMovementStyle(summary.recentMovement)}>
       <span
         className={`rank-trend-cell__main ${tone}`}
         aria-hidden="true"
@@ -933,7 +974,7 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
       <div className="rail-card-head">
         <div>
           <p className="eyebrow">Regional strength</p>
-          <h3>All regions</h3>
+          <h2>All regions</h2>
         </div>
         {href ? <a href={href}>Details</a> : null}
       </div>
@@ -1225,7 +1266,9 @@ function TeamDetailDrawer({
             ) : null}
             {trendSeries.length > 0 ? (
               <div className="trend-card__plot">
-                <TeamHistoryLineChart series={trendSeries} height={340} yLabel="Power score" />
+                <Suspense fallback={<p className="muted" style={{ paddingTop: 16 }}>Loading chart...</p>}>
+                  <LazyTeamHistoryLineChart series={trendSeries} height={340} yLabel="Power score" />
+                </Suspense>
               </div>
             ) : (
               <p className="muted" style={{ paddingTop: 16 }}>Not enough history to chart this team yet.</p>

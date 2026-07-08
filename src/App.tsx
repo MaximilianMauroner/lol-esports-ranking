@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { AlertTriangle, BarChart3, Globe2, RefreshCw, X } from 'lucide-react'
 import type {
   PublicPlayerDirectory as PlayerDirectory,
@@ -17,7 +17,6 @@ import {
 import { deriveRankingFlair, type RankingFlair, type RankingMovementPick } from './lib/rankingFlair'
 import type { RegionStrength } from './lib/regionStrength'
 import { CompareDrawer } from './components/CompareDrawer'
-import { RegionCompareAnalysis, TeamCompareAnalysis } from './components/CompareAnalysis'
 import type { RankingShowcaseProps } from './components/RankingShowcase'
 import {
   REGION_COMPARE_ROWS,
@@ -26,7 +25,6 @@ import {
   regionKey,
   teamCompareColumns,
 } from './components/compareAnalysisData'
-import { RegionsView } from './views/RegionsView'
 import { TeamsView } from './views/TeamsView'
 import { RegionBadge } from './components/ui'
 import { Button } from './components/ui/button'
@@ -50,6 +48,9 @@ type MovementBaseline = {
 
 const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
+const RegionsView = lazy(() => import('./views/RegionsView').then((module) => ({ default: module.RegionsView })))
+const RegionCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.RegionCompareAnalysis })))
+const TeamCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.TeamCompareAnalysis })))
 
 const MODES: { id: Mode; label: string; tagline: string; icon: typeof BarChart3 }[] = [
   { id: 'rankings', label: 'Rankings', tagline: 'Board, tiers, podium', icon: BarChart3 },
@@ -64,6 +65,9 @@ const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
 function App() {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
   const [scope, setScope] = useState(() => readScopeFromHash() ?? currentYearScope())
+  const [loadPlayers, setLoadPlayers] = useState(false)
+  const [loadTeamHistory, setLoadTeamHistory] = useState(false)
+  const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
   const {
     manifestState,
     effectiveScope,
@@ -75,7 +79,7 @@ function App() {
     teamHistoryState,
     regionHistoryState,
     prefetchScope,
-  } = usePublicArtifacts(scope)
+  } = usePublicArtifacts(scope, { loadPlayers, loadTeamHistory, loadRegionHistory })
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [teamSearch, setTeamSearch] = useState('')
@@ -85,7 +89,9 @@ function App() {
 
   useEffect(() => {
     function onHashChange() {
-      setMode(readModeFromHash())
+      const nextMode = readModeFromHash()
+      setMode(nextMode)
+      if (nextMode === 'regions') setLoadRegionHistory(true)
       const nextScope = readScopeFromHash()
       if (nextScope) setScope(nextScope)
     }
@@ -125,6 +131,9 @@ function App() {
     [activeSeason, checkpointTabs, effectiveScope, seasonTabs],
   )
   const preloadScopesKey = preloadScopes.join('\u0000')
+  const requestPlayers = useCallback(() => setLoadPlayers(true), [])
+  const requestTeamHistory = useCallback(() => setLoadTeamHistory(true), [])
+  const requestRegionHistory = useCallback(() => setLoadRegionHistory(true), [])
 
   const activePlayers = useMemo(
     () => playersState.status === 'ready' ? playersForScope(playersState.data, filter) : [],
@@ -133,6 +142,7 @@ function App() {
   const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
   const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, standings, teamKey), [standings, teamPicks])
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
+  const trayPicks = mode === 'regions' ? activeRegionPicks.length : activeTeamPicks.length
 
   function toggleRegion(region: RegionStrength) {
     setRegionPicks((current) => toggleLimitedPick(reconcilePicks(current, regions, regionKey), region, regionKey))
@@ -150,12 +160,17 @@ function App() {
   }, [prefetchScope, preloadScopes, preloadScopesKey])
 
   if (manifestState.status === 'loading') return <BootScreen />
-  if (manifestState.status !== 'ready') return <ErrorScreen message={manifestState.message} />
+  if (manifestState.status !== 'ready') {
+    return (
+      <ErrorScreen
+        message={manifestState.status === 'idle' ? 'Ranking manifest has not been requested yet.' : manifestState.message}
+      />
+    )
+  }
 
   const loadedData = manifestState.data
   const seeded = loadedData.dataMode === 'seeded-sample' || loadedData.coverage?.seededSample === true
   const matchCount = snapshot?.matchCount ?? loadedData.coverage?.matchCount
-  const trayPicks = mode === 'regions' ? activeRegionPicks.length : activeTeamPicks.length
   const trayLabel = mode === 'regions' ? 'Region compare' : 'Team compare'
   const teamColumns = teamCompareColumns(activeTeamPicks)
   const regionColumns = regionCompareColumns(activeRegionPicks)
@@ -163,6 +178,23 @@ function App() {
   const rankingSignals = rankingSignalsProps(rankingFlair, movementBaseline)
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
   const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
+  const teamCompareAfter = drawerOpen && mode === 'rankings' ? (
+    <Suspense fallback={<p className="muted compare-chart__empty">Loading comparison...</p>}>
+      <TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />
+    </Suspense>
+  ) : null
+  const regionCompareAfter = drawerOpen && mode === 'regions' ? (
+    <Suspense fallback={<p className="muted compare-chart__empty">Loading comparison...</p>}>
+      <RegionCompareAnalysis
+        regions={activeRegionPicks}
+        columns={regionColumns}
+        standings={standings}
+        historyState={teamHistoryState}
+        regionHistoryState={regionHistoryState}
+        regionHistory={activeRegionHistory}
+      />
+    </Suspense>
+  ) : null
   const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
     setMode('rankings')
@@ -177,7 +209,7 @@ function App() {
     <div className="app">
       <a className="skip-link" href="#main-content">Skip to content</a>
         <nav className="rail" aria-label="Primary">
-          <a className="rail__brand" href={hashForModeAndScope('rankings', effectiveScope)} onClick={goHome} aria-label="Go to Rankings home">
+          <a className="rail__brand" href={hashForModeAndScope('rankings', effectiveScope)} onClick={goHome} title="Go to Rankings home">
             <span className="rail__mark">
               <img src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
             </span>
@@ -256,7 +288,6 @@ function App() {
                     variant="ghost"
                     title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
                     aria-pressed={activeCheckpoint === checkpoint.id}
-                    aria-label={`${checkpoint.label} through ${checkpoint.boundaryEvent}${ongoing ? ', ongoing' : ''}`}
                     className={cn('checkpoint-tabs__button', activeCheckpoint === checkpoint.id && 'is-active', ongoing && 'is-ongoing')}
                     onClick={() => setScope(checkpointScope(activeSeason, checkpoint.id))}
                     onFocus={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
@@ -274,7 +305,6 @@ function App() {
                 <div
                   className="checkpoint-tabs__button checkpoint-tabs__button--future"
                   aria-disabled="true"
-                  aria-label={`${pendingCheckpoint.label} has not started yet`}
                   title={`${pendingCheckpoint.label} has not started yet.`}
                 >
                   <span>{pendingCheckpoint.label}</span>
@@ -298,7 +328,18 @@ function App() {
           <ScopedSnapshotState state={snapshotState} scope={scopeLabel(effectiveScope)} />
         ) : (
           <>
-            {mode === 'regions' ? <RegionsView regions={regions} standings={standings} regionHistory={activeRegionHistory} pickedIds={regionPickIds} onToggle={toggleRegion} /> : null}
+            {mode === 'regions' ? (
+              <Suspense fallback={<ViewLoading label="Loading region view" />}>
+                <RegionsView
+                  regions={regions}
+                  standings={standings}
+                  regionHistory={activeRegionHistory}
+                  pickedIds={regionPickIds}
+                  onToggle={toggleRegion}
+                  onRequestRegionHistory={requestRegionHistory}
+                />
+              </Suspense>
+            ) : null}
             {mode === 'rankings' ? (
               <>
                 <TeamsView
@@ -327,6 +368,8 @@ function App() {
                     notes: loadedData.dataQuality?.notes,
                   }}
                   onToggle={toggleTeam}
+                  onRequestPlayers={requestPlayers}
+                  onRequestTeamHistory={requestTeamHistory}
                 />
               </>
             ) : null}
@@ -393,7 +436,15 @@ function App() {
                 variant="default"
                 size="sm"
                 className="tray__primary"
-                onClick={() => setDrawerOpen(true)}
+                onClick={() => {
+                  if (mode === 'regions') {
+                    requestRegionHistory()
+                    requestTeamHistory()
+                  } else {
+                    requestTeamHistory()
+                  }
+                  setDrawerOpen(true)
+                }}
                 disabled={trayPicks < 2}
               >
                 Compare {trayPicks}
@@ -409,7 +460,7 @@ function App() {
         entities={activeRegionPicks}
         columns={regionColumns}
         rows={REGION_COMPARE_ROWS}
-        after={<RegionCompareAnalysis regions={activeRegionPicks} columns={regionColumns} standings={standings} historyState={teamHistoryState} regionHistoryState={regionHistoryState} regionHistory={activeRegionHistory} />}
+        after={regionCompareAfter}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
       />
@@ -419,7 +470,7 @@ function App() {
         entities={activeTeamPicks}
         columns={teamColumns}
         rows={TEAM_COMPARE_ROWS}
-        after={<TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />}
+        after={teamCompareAfter}
         onClose={() => setDrawerOpen(false)}
         onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
       />
@@ -439,7 +490,7 @@ function visiblePreloadScopes(
       ? [`season:${activeSeason}`, ...checkpoints.map((checkpoint) => checkpointScope(activeSeason, checkpoint.id))]
       : []),
   ]
-  return [...new Set(targets.filter((target) => target !== effectiveScope))]
+  return [...new Set(targets.filter((target) => target !== effectiveScope))].slice(0, 3)
 }
 
 function scopeForSeasonTab(season: string) {
@@ -632,6 +683,24 @@ function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotSt
               <Skeleton className="short" />
             </div>
           ) : null}
+        </div>
+      </Card>
+    </section>
+  )
+}
+
+function ViewLoading({ label }: { label: string }) {
+  return (
+    <section className="view">
+      <Card className="panel">
+        <div className="state" aria-busy="true">
+          <RefreshCw size={26} aria-hidden="true" />
+          <h3>{label}</h3>
+          <div className="state__skeleton" aria-hidden="true">
+            <Skeleton className="wide" />
+            <Skeleton className="mid" />
+            <Skeleton className="short" />
+          </div>
         </div>
       </Card>
     </section>

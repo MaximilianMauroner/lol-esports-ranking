@@ -326,7 +326,14 @@ async function readableBody(body) {
 function cacheControlForPath(path) {
   if (path === 'index.html') return 'no-store'
   if (path.startsWith('assets/')) return 'public, max-age=31536000, immutable'
+  if (isImmutableStaticAssetPath(path)) return 'public, max-age=31536000, immutable'
   return 'public, max-age=3600'
+}
+
+function isImmutableStaticAssetPath(path) {
+  return path === 'site.webmanifest'
+    || path.startsWith('league-icons/')
+    || /^(?:apple-touch-icon|favicon|icons|logo|og-image)\.(?:ico|jpg|jpeg|png|svg|webp)$/.test(path)
 }
 
 function cacheControlForDataPath(path) {

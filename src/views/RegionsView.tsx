@@ -23,12 +23,14 @@ export function RegionsView({
   regionHistory,
   pickedIds,
   onToggle,
+  onRequestRegionHistory,
 }: {
   regions: RegionStrength[]
   standings: RegionStanding[]
   regionHistory?: PublicRegionHistoryScope
   pickedIds: Set<string>
   onToggle: (region: RegionStrength) => void
+  onRequestRegionHistory?: () => void
 }) {
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [min, max] = useMemo(() => extent(regions.map((region) => region.score)), [regions])
@@ -102,8 +104,13 @@ export function RegionsView({
                   type="button"
                   variant="ghost"
                   className="region-row__open"
-                  aria-label={`Open ${region.region} region detail`}
-                  onClick={() => setSelectedRegionId(region.region)}
+                  title={`Open ${region.region} region detail`}
+                  onClick={() => {
+                    onRequestRegionHistory?.()
+                    setSelectedRegionId(region.region)
+                  }}
+                  onFocus={onRequestRegionHistory}
+                  onPointerEnter={onRequestRegionHistory}
                 >
                   <span className="region-rank">{region.rank}</span>
                   <span className="region-id">
@@ -169,7 +176,7 @@ function RegionPowerMeter({ value, min, max, label }: { value: number; min: numb
   const pct = pctWithin(value, min, max)
 
   return (
-    <span className="region-power" aria-label={`${label} ${formatRating(value)}`}>
+    <span className="region-power" role="img" aria-label={`${label} ${formatRating(value)}`}>
       <span className="region-power__score">{formatRating(value)}</span>
       <span className="region-power__meter" aria-hidden="true">
         <span className="region-power__fill" style={{ width: `${pct}%` }} />
@@ -180,6 +187,7 @@ function RegionPowerMeter({ value, min, max, label }: { value: number; min: numb
 
 function RegionCompareButton({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
   const tooltip = picked ? `Remove ${label} from comparison` : `Compare ${label}`
+  const accessibleLabel = picked ? `Comparing ${label}, remove from comparison` : tooltip
 
   return (
     <Tooltip>
@@ -190,7 +198,7 @@ function RegionCompareButton({ picked, onToggle, label }: { picked: boolean; onT
           size="sm"
           className={`region-compare${picked ? ' is-picked' : ''}`}
           onClick={onToggle}
-          aria-label={tooltip}
+          aria-label={accessibleLabel}
           aria-pressed={picked}
         >
           {picked ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
