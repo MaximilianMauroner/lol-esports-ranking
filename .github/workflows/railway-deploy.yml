@@ -23,7 +23,7 @@ jobs:
     name: Test, build, and deploy manually
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    if: github.repository == 'MaximilianMauroner/lol-esports-ranking'
+    if: github.repository == 'MaximilianMauroner/lol-esports-ranking' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout

@@ -1,12 +1,13 @@
 import { createReadStream } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { normalize, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
 import { bucketConfigFromEnv, contentTypeForPath, getBucketObject } from './railway-bucket.mjs'
+import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
 
 const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
@@ -15,8 +16,11 @@ const publicDataDir = resolve(process.env.RANKING_PUBLIC_DATA_DIR ?? 'public/dat
 const refreshEnabled = process.env.RANKING_REFRESH_ENABLED === 'true'
 const refreshIntervalMinutes = Math.max(1, Number(process.env.RANKING_REFRESH_INTERVAL_MINUTES ?? 60))
 const refreshOnStart = process.env.RANKING_REFRESH_ON_START === 'true'
+const refreshScript = process.env.RANKING_REFRESH_SCRIPT ?? 'scripts/refresh-data-if-changed.mjs'
+const refreshStatePath = resolve(process.env.RANKING_REFRESH_STATE ?? 'data/raw/refresh-state.json')
 const dataCacheControl = process.env.RANKING_DATA_CACHE_CONTROL ?? 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800, stale-if-error=604800'
 const dataManifestCacheControl = process.env.RANKING_DATA_MANIFEST_CACHE_CONTROL ?? 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400'
+const htmlCacheControl = process.env.RANKING_HTML_CACHE_CONTROL ?? 'no-store'
 const gzipEnabled = process.env.RANKING_GZIP_ENABLED !== 'false'
 const cronSecret = process.env.CRON_SECRET
 const bucketConfig = bucketConfigFromEnv()
@@ -29,6 +33,7 @@ let lastRefresh = {
   reason: null,
   exitCode: null,
   error: null,
+  details: null,
 }
 
 const server = createServer(async (request, response) => {
@@ -46,6 +51,7 @@ const server = createServer(async (request, response) => {
         lastRefresh,
         dataCacheControl,
         dataManifestCacheControl,
+        htmlCacheControl,
         gzipEnabled,
       })
       return
@@ -82,6 +88,11 @@ const server = createServer(async (request, response) => {
 
     await serveAppFile(response, url.pathname, request.method === 'HEAD', request.headers)
   } catch (error) {
+    if (response.headersSent || response.writableEnded) {
+      console.error(error)
+      response.destroy(error instanceof Error ? error : undefined)
+      return
+    }
     sendJson(response, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
   }
 })
@@ -102,6 +113,15 @@ server.listen(port, host, () => {
 })
 
 async function serveAppFile(response, pathname, headOnly, requestHeaders) {
+  if (pathname === '/sitemap.xml') {
+    await serveLiveSitemap(response, headOnly, requestHeaders)
+    return
+  }
+  if (isKnownAppRoute(pathname)) {
+    await serveAppShell(response, headOnly, requestHeaders)
+    return
+  }
+
   const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1)
   const served = await tryServeFile(response, distDir, relativePath, {
     cacheControl: cacheControlForPath(relativePath),
@@ -110,16 +130,86 @@ async function serveAppFile(response, pathname, headOnly, requestHeaders) {
   })
   if (served) return
 
-  await serveFile(response, distDir, 'index.html', {
-    cacheControl: 'no-store',
+  sendNotFound(response, { headOnly, requestHeaders })
+}
+
+async function serveAppShell(response, headOnly, requestHeaders) {
+  const indexPath = resolveSafePath(distDir, 'index.html')
+  if (!indexPath) {
+    sendJson(response, 404, { ok: false, error: 'Not found' })
+    return
+  }
+
+  let html
+  try {
+    html = await readFile(indexPath, 'utf8')
+  } catch {
+    sendJson(response, 404, { ok: false, error: 'Not found' })
+    return
+  }
+
+  try {
+    const prerendered = await renderHomepagePrerenderFromDataDir(publicDataDir)
+    html = injectHomepagePrerender(html, prerendered)
+  } catch (error) {
+    console.warn(`Live homepage prerender fallback used: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  await sendHtml(response, html, { headOnly, requestHeaders })
+}
+
+async function sendHtml(response, html, { headOnly, requestHeaders }) {
+  await sendText(response, html, {
+    cacheControl: htmlCacheControl,
+    contentType: 'text/html; charset=utf-8',
     headOnly,
     requestHeaders,
   })
 }
 
-async function serveFile(response, rootDir, relativePath, options) {
-  const served = await tryServeFile(response, rootDir, relativePath, options)
-  if (!served) sendJson(response, 404, { ok: false, error: 'Not found' })
+async function serveLiveSitemap(response, headOnly, requestHeaders) {
+  const sitemapPath = resolveSafePath(distDir, 'sitemap.xml')
+  if (!sitemapPath) {
+    sendJson(response, 404, { ok: false, error: 'Not found' })
+    return
+  }
+  try {
+    const sitemap = await readFile(sitemapPath, 'utf8')
+    const rendered = await renderSitemapFromDataDir(publicDataDir, sitemap)
+    await sendText(response, rendered, {
+      cacheControl: cacheControlForPath('sitemap.xml'),
+      contentType: 'application/xml; charset=utf-8',
+      headOnly,
+      requestHeaders,
+    })
+  } catch {
+    const served = await tryServeFile(response, distDir, 'sitemap.xml', {
+      cacheControl: cacheControlForPath('sitemap.xml'),
+      headOnly,
+      requestHeaders,
+    })
+    if (!served) sendJson(response, 404, { ok: false, error: 'Not found' })
+  }
+}
+
+async function sendText(response, text, { cacheControl, contentType, headOnly, requestHeaders }) {
+  const body = Buffer.from(text)
+  const gzip = shouldGzip(requestHeaders, contentType, body.length, headOnly)
+  response.statusCode = 200
+  response.setHeader('Content-Type', contentType)
+  response.setHeader('Cache-Control', cacheControl)
+  response.setHeader('Vary', 'Accept-Encoding')
+  if (gzip) response.setHeader('Content-Encoding', 'gzip')
+  else response.setHeader('Content-Length', String(body.length))
+  if (headOnly) {
+    response.end()
+    return
+  }
+  if (gzip) {
+    await pipeBody(Readable.from([body]), response, { gzip: true })
+    return
+  }
+  response.end(body)
 }
 
 async function serveDataFile(response, relativePath, options) {
@@ -261,10 +351,11 @@ function runRefresh(reason) {
     reason,
     exitCode: null,
     error: null,
+    details: null,
   }
 
   refreshInFlight = new Promise((resolveRefresh) => {
-    const child = spawn(process.execPath, ['scripts/refresh-data-if-changed.mjs'], {
+    const child = spawn(process.execPath, [refreshScript], {
       env: process.env,
       stdio: 'inherit',
     })
@@ -275,32 +366,74 @@ function runRefresh(reason) {
         status: 'error',
         finishedAt: new Date().toISOString(),
         error: error.message,
+        details: null,
       }
       refreshInFlight = null
       resolveRefresh()
     })
 
     child.on('exit', (code) => {
-      lastRefresh = {
-        ...lastRefresh,
-        status: code === 0 ? 'ok' : 'error',
-        finishedAt: new Date().toISOString(),
-        exitCode: code,
-        error: code === 0 ? null : `refresh exited with ${code}`,
-      }
-      refreshInFlight = null
-      resolveRefresh()
+      void finishRefreshExit(code, resolveRefresh)
     })
   })
 
   return refreshInFlight
 }
 
+async function finishRefreshExit(code, resolveRefresh) {
+  const state = code === 0 ? await readRefreshState() : null
+  const staleSource = state?.status === 'stale-source'
+  lastRefresh = {
+    ...lastRefresh,
+    status: staleSource ? 'stale-source' : code === 0 ? 'ok' : 'error',
+    finishedAt: new Date().toISOString(),
+    exitCode: code,
+    error: staleSource ? state.reason ?? null : code === 0 ? null : `refresh exited with ${code}`,
+    details: staleSource
+      ? {
+          reason: state.reason ?? null,
+          downloadStart: state.downloadStart ?? null,
+          downloadEnd: state.downloadEnd ?? null,
+          coverageStart: state.coverageStart ?? null,
+          coverageEnd: state.coverageEnd ?? null,
+        }
+      : null,
+  }
+  refreshInFlight = null
+  resolveRefresh()
+}
+
+async function readRefreshState() {
+  try {
+    return JSON.parse(await readFile(refreshStatePath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 function sendJson(response, statusCode, value) {
   response.statusCode = statusCode
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
   response.setHeader('Cache-Control', 'no-store')
+  if (statusCode === 404) response.setHeader('X-Robots-Tag', 'noindex')
   response.end(`${JSON.stringify(value)}\n`)
+}
+
+function sendNotFound(response, { headOnly, requestHeaders }) {
+  const acceptsHtml = acceptsContentType(requestHeaders?.accept, 'text/html')
+  const body = acceptsHtml
+    ? '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Not found</title></head><body><h1>Not found</h1></body></html>\n'
+    : '{"ok":false,"error":"Not found"}\n'
+  response.statusCode = 404
+  response.setHeader('Content-Type', acceptsHtml ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8')
+  response.setHeader('Cache-Control', 'no-store')
+  response.setHeader('X-Robots-Tag', 'noindex')
+  response.setHeader('Content-Length', String(Buffer.byteLength(body)))
+  if (headOnly) {
+    response.end()
+    return
+  }
+  response.end(body)
 }
 
 async function pipeBody(body, response, { gzip = false } = {}) {
@@ -324,16 +457,33 @@ async function readableBody(body) {
 }
 
 function cacheControlForPath(path) {
-  if (path === 'index.html') return 'no-store'
+  if (path === 'index.html') return htmlCacheControl
+  if (isRevalidatingMetadataAssetPath(path)) return 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
   if (path.startsWith('assets/')) return 'public, max-age=31536000, immutable'
   if (isImmutableStaticAssetPath(path)) return 'public, max-age=31536000, immutable'
   return 'public, max-age=3600'
 }
 
-function isImmutableStaticAssetPath(path) {
+function isKnownAppRoute(pathname) {
+  const normalizedPathname = pathname !== '/' && pathname.endsWith('/')
+    ? pathname.slice(0, -1)
+    : pathname
+  return normalizedPathname === '/'
+    || normalizedPathname === '/rankings'
+    || normalizedPathname === '/teams'
+    || normalizedPathname === '/regions'
+}
+
+function isRevalidatingMetadataAssetPath(path) {
   return path === 'site.webmanifest'
-    || path.startsWith('league-icons/')
+    || path === 'robots.txt'
+    || path === 'sitemap.xml'
+    || path === 'llms.txt'
     || /^(?:apple-touch-icon|favicon|icons|logo|og-image)\.(?:ico|jpg|jpeg|png|svg|webp)$/.test(path)
+}
+
+function isImmutableStaticAssetPath(path) {
+  return path.startsWith('league-icons/')
 }
 
 function cacheControlForDataPath(path) {
@@ -350,6 +500,14 @@ function shouldGzip(requestHeaders, contentType, contentLength, headOnly) {
 function acceptsGzip(value) {
   if (!value) return false
   return /\bgzip\b/i.test(String(value)) && !/\bgzip\s*;\s*q=0(?:\.0+)?\b/i.test(String(value))
+}
+
+function acceptsContentType(value, contentType) {
+  if (!value) return true
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .some((entry) => entry === '*/*' || entry.startsWith(`${contentType};`) || entry === contentType)
 }
 
 function isCompressibleContentType(contentType) {

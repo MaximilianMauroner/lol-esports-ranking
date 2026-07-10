@@ -1,0 +1,14 @@
+# LoL Esports Power Index
+
+LoL Esports Power Index publishes model-versioned League of Legends esports team and region power rankings.
+
+The ranking data is generated from public artifacts that identify the model version, data source provenance, coverage window, and match counts used for each snapshot. The current source pipeline uses Oracle's Elixir as the primary rich game-stat source with Leaguepedia Cargo as gap-fill and audit metadata where needed.
+
+The public score is a power index for context-neutral team strength, not an official Riot ranking. Seeded sample data, when present, must not be treated as official LoL Esports data.
+
+Canonical site: [https://lol.lab4code.com/](https://lol.lab4code.com/)
+
+Primary crawl targets:
+- [Homepage](https://lol.lab4code.com/)
+- [Robots policy](https://lol.lab4code.com/robots.txt)
+- [Sitemap](https://lol.lab4code.com/sitemap.xml)
