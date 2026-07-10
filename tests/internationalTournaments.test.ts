@@ -116,8 +116,8 @@ test('derives ongoing lifecycle from future unstarted schedule rows without rati
 test('only claims completed when schedule coverage extends beyond the completed final', () => {
   const [completed] = deriveTournamentInstances({
     generatedAt: '2026-08-01T00:00:00.000Z',
-    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12' }],
-    scheduleReferences: [{ leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true }],
+    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12', officialMatchId: 'msi-final' }],
+    scheduleReferences: [{ matchId: 'msi-final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true }],
   })
   const [partial] = deriveTournamentInstances({
     generatedAt: '2026-07-10T00:00:00.000Z',
@@ -127,8 +127,24 @@ test('only claims completed when schedule coverage extends beyond the completed 
 
   assert.equal(completed?.status, 'completed')
   assert.equal(completed?.boundaryDate, '2026-07-12')
+  assert.equal(completed?.resultCoverageComplete, true)
   assert.equal(partial?.status, 'unknown')
   assert.equal(partial?.boundaryDate, '2026-07-09')
+})
+
+test('completed lifecycle requires retained official results for every completed schedule row', () => {
+  const [instance] = deriveTournamentInstances({
+    generatedAt: '2026-08-01T00:00:00.000Z',
+    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12', officialMatchId: 'msi-third-place' }],
+    scheduleReferences: [
+      { matchId: 'msi-third-place', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true },
+      { matchId: 'msi-final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true },
+    ],
+  })
+
+  assert.equal(instance?.status, 'completed')
+  assert.equal(instance?.dataLag, false)
+  assert.equal(instance?.resultCoverageComplete, false)
 })
 
 test('drops ambiguous qualifier rows that predate the main tournament schedule', () => {
@@ -178,7 +194,7 @@ test('rejects qualifier and regional-final evidence even when event aliases look
 test('uses the newest observation for overlapping official schedule matches', () => {
   const [instance] = deriveTournamentInstances({
     generatedAt: '2026-08-01T00:00:00.000Z',
-    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12' }],
+    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12', officialMatchId: 'final' }],
     scheduleReferences: [
       { matchId: 'final', leagueName: 'MSI', date: '2026-07-12', state: 'unstarted', retrievedAt: '2026-07-11T00:00:00Z', coverageStart: '2026-07-12', coverageEnd: '2026-07-12' },
       { matchId: 'final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', retrievedAt: '2026-08-01T00:00:00Z', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true },

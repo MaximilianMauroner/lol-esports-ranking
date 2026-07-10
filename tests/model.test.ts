@@ -810,6 +810,7 @@ test('same-region Worlds final skips league game delta while placement residual 
       boundaryDate: '2026-11-02',
       ratedThroughDate: '2026-11-02',
       dataLag: false,
+      resultCoverageComplete: true,
     }]]),
   }
   const pathOnly = buildRankingModel(pathMatches, { ...extendedTeams })
@@ -860,6 +861,37 @@ test('ongoing tournaments keep match movement but do not apply placement residua
       boundaryDate: '2026-10-20',
       ratedThroughDate: '2026-10-20',
       dataLag: false,
+      resultCoverageComplete: false,
+    }]]),
+  })
+
+  assert.notEqual(standingFor(model, 'Alpha').ratingUpdate.teamStableDelta, 0)
+  assert.equal(standingFor(model, 'Alpha').ratingUpdate.leaguePlacementDelta, 0)
+})
+
+test('completed tournaments wait for official result coverage before placement residuals', () => {
+  const match = matchFixture({
+    id: 'worlds-final-retained',
+    officialMatchId: 'worlds-bronze-match',
+    date: '2026-11-02',
+    event: 'Worlds 2026 Playoffs',
+    phase: 'Final',
+    region: 'International',
+    league: 'Worlds',
+    tier: 'worlds-playoffs',
+    teamA: 'Alpha',
+    teamB: 'Gamma',
+    teamBHomeLeague: 'LPL',
+    teamBRegion: 'LPL',
+    winner: 'Alpha',
+  })
+  const model = buildRankingModel([match], { ...teams }, {
+    tournamentLifecycles: new Map([['worlds:2026', {
+      status: 'completed',
+      boundaryDate: '2026-11-02',
+      ratedThroughDate: '2026-11-02',
+      dataLag: false,
+      resultCoverageComplete: false,
     }]]),
   })
 

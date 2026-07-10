@@ -36,6 +36,7 @@ export type TournamentRatedMatchReference = {
   event: string
   season: number
   date: string
+  officialMatchId?: string
   phase?: string
   tier?: EventTier
 }
@@ -51,6 +52,7 @@ export type NormalizedTournamentInstance = {
   ratedThroughDate: string
   scheduledEndDate?: string
   dataLag: boolean
+  resultCoverageComplete: boolean
 }
 
 type TournamentFamilyDefinition = {
@@ -156,6 +158,16 @@ export function deriveTournamentInstances({
         .sort()
         .at(-1)
       const allScheduleRowsCompleted = schedule.length > 0 && schedule.every((reference) => isCompletedScheduleState(reference.state))
+      const completedScheduleMatchIds = new Set(
+        schedule
+          .filter((reference) => isCompletedScheduleState(reference.state) && reference.matchId)
+          .map((reference) => reference.matchId!),
+      )
+      const ratedOfficialMatchIds = new Set(
+        reconciledMatches
+          .map((match) => match.officialMatchId)
+          .filter((matchId): matchId is string => Boolean(matchId)),
+      )
       const scheduleCoversTournament = Boolean(
         scheduledStartDate
         && scheduledEndDate
@@ -177,6 +189,9 @@ export function deriveTournamentInstances({
         : status === 'ongoing'
           ? generatedDate
           : ratedThroughDate
+      const resultCoverageComplete = allScheduleRowsCompleted
+        && completedScheduleMatchIds.size > 0
+        && [...completedScheduleMatchIds].every((matchId) => ratedOfficialMatchIds.has(matchId))
 
       return [{
         ...identity,
@@ -186,6 +201,7 @@ export function deriveTournamentInstances({
         ratedThroughDate,
         ...(scheduledEndDate ? { scheduledEndDate } : {}),
         dataLag: Boolean(completedScheduleDate && completedScheduleDate > ratedThroughDate),
+        resultCoverageComplete,
       }]
     })
     .sort((left, right) => right.startDate.localeCompare(left.startDate) || left.label.localeCompare(right.label))

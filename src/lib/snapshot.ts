@@ -1027,6 +1027,15 @@ function createTournamentMovementShards({
   scheduleReferences: TournamentScheduleReference[]
 }): Record<TournamentInstanceId, PublicTournamentMovementShard> {
   const instances = deriveTournamentInstances({ matches, scheduleReferences, generatedAt })
+  const rankingOptions = {
+    tournamentLifecycles: new Map(instances.map((instance) => [instance.id, {
+      status: instance.status,
+      boundaryDate: instance.boundaryDate,
+      ratedThroughDate: instance.ratedThroughDate,
+      dataLag: instance.dataLag,
+      resultCoverageComplete: instance.resultCoverageComplete,
+    }] as const)),
+  }
   const ratingScale = transparentGprModelMetadata.ratingScale ?? publishedRatingScale
   const artifactMeta = artifactMetaFor({
     generatedAt,
@@ -1043,8 +1052,8 @@ function createTournamentMovementShards({
     const entrantNames = new Set(instanceMatches.flatMap((match) => [match.teamA, match.teamB]))
     const baselineMatches = matches.filter((match) => match.date < instance.startDate && isCalendarAlignedSeasonMatch(match))
     const endpointMatches = matches.filter((match) => match.date <= instance.boundaryDate && isCalendarAlignedSeasonMatch(match))
-    const baseline = buildRankingModel(baselineMatches, teamProfilesForRankingScope(baselineMatches, teams))
-    const endpoint = buildRankingModel(endpointMatches, teamProfilesForRankingScope(endpointMatches, teams))
+    const baseline = buildRankingModel(baselineMatches, teamProfilesForRankingScope(baselineMatches, teams), rankingOptions)
+    const endpoint = buildRankingModel(endpointMatches, teamProfilesForRankingScope(endpointMatches, teams), rankingOptions)
     const baselineByTeam = new Map(baseline.standings.map((standing) => [standing.team, standing]))
     const endpointByTeam = new Map(endpoint.standings.map((standing) => [standing.team, standing]))
     const movementTeams = [...entrantNames]
@@ -1153,6 +1162,7 @@ export function createStaticRankingData({
         boundaryDate: instance.boundaryDate,
         ratedThroughDate: instance.ratedThroughDate,
         dataLag: instance.dataLag,
+        resultCoverageComplete: instance.resultCoverageComplete,
       }] as const),
   )
   const rankingOptions = { tournamentLifecycles }

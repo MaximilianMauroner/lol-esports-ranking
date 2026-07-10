@@ -42,6 +42,7 @@ export type PlacementTournamentLifecycle = {
   boundaryDate: string
   ratedThroughDate: string
   dataLag: boolean
+  resultCoverageComplete: boolean
 }
 
 export function buildEventTrackers(
@@ -145,7 +146,14 @@ export function applyCompletedPlacementResiduals({
     if (tracker.applied || !tracker.started || tracker.matches.length === 0) continue
     if (cutoffDate !== undefined && tracker.endDate >= cutoffDate) continue
     const lifecycle = tracker.lifecycle
-    if (!lifecycle || lifecycle.status !== 'completed' || lifecycle.dataLag || lifecycle.ratedThroughDate < lifecycle.boundaryDate || tracker.endDate < lifecycle.boundaryDate) continue
+    if (
+      !lifecycle
+      || lifecycle.status !== 'completed'
+      || lifecycle.dataLag
+      || !lifecycle.resultCoverageComplete
+      || lifecycle.ratedThroughDate < lifecycle.boundaryDate
+      || tracker.endDate < lifecycle.boundaryDate
+    ) continue
     const config = placementResidualConfigFor(tracker)
     if (!config) {
       tracker.applied = true
