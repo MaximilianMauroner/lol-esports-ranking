@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { deriveRegionStrength, isRegionPowerTeam } from '../src/lib/regionStrength.ts'
+import { deriveRegionStrength, displayRegionPowerScore, isRegionPowerTeam } from '../src/lib/regionStrength.ts'
 import type { LeagueStrength, Region } from '../src/types.ts'
 import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
 
@@ -147,6 +147,17 @@ test('deriveRegionStrength exposes top-three and total-region team averages with
   assert.equal(lck.totalTeamRating, 1640)
   assert.ok(lpl.topThreeTeamRating > lpl.totalTeamRating)
   assert.ok(lck.topThreeTeamRating > lpl.topThreeTeamRating)
+})
+
+test('displayRegionPowerScore rounds the visible top-three team average', () => {
+  assert.equal(displayRegionPowerScore({
+    score: 1716,
+    topTeams: [
+      { team: 'Team Secret Whales', code: 'TSW', rating: 1852, rank: 19 },
+      { team: 'Deep Cross Gaming', code: 'DCG', rating: 1699, rank: 32 },
+      { team: 'GAM Esports', code: 'GAM', rating: 1599, rank: 39 },
+    ],
+  }), 1717)
 })
 
 test('deriveRegionStrength includes international participant regions and ignores feeder ecosystems', () => {

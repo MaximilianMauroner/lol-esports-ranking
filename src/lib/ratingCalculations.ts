@@ -1,5 +1,5 @@
-import { eventTierConfig } from '../data/rankingConfig'
 import type { MatchRecord, PublishedRatingScale, RatingComponents, RatingUpdateLedger, RosterBasis } from '../types'
+import { eventKFactorForMatch, type EventWeightContext } from './eventWeighting'
 import { normalizedBestOf } from './matchFormat'
 import {
   initialLeagueRating,
@@ -55,8 +55,14 @@ export function applyMomentumBoundaryDecay(
   }
 }
 
-export function nextUncertainty(current: number, match: MatchRecord, league: string, opponentLeague: string) {
-  const contextSignal = normalize(eventTierConfig[match.tier].kFactor, 12, 34) * 8
+export function nextUncertainty(
+  current: number,
+  match: MatchRecord,
+  league: string,
+  opponentLeague: string,
+  eventWeightContext?: EventWeightContext,
+) {
+  const contextSignal = normalize(eventKFactorForMatch(match, eventWeightContext), 12, 34) * 8
   const crossLeagueSignal = league !== opponentLeague && isInternationalMatch(match) ? 7 : 0
   return clamp(current - 5 - contextSignal - crossLeagueSignal, minimumUncertainty, maximumUncertainty)
 }
@@ -286,6 +292,7 @@ export function roundedRatingUpdateLedger(update: RatingUpdateLedger): RatingUpd
     patchAdjustment: Number(update.patchAdjustment.toFixed(1)),
     ratingTarget: update.ratingTarget,
     updateUnit: update.updateUnit,
+    ...(update.eventWeight !== undefined ? { eventWeight: roundOptional(update.eventWeight, 3) } : {}),
     resultEvidence: roundOptional(update.resultEvidence, 1),
     neutralResultResidual: roundOptional(update.neutralResultResidual, 3),
     seriesStrengthSignal: roundOptional(update.seriesStrengthSignal, 3),
@@ -314,8 +321,8 @@ export function leagueAdjustment(teamRating: number, leagueRating: number) {
   return Math.round(powerRating(teamRating, leagueRating) - teamRating)
 }
 
-export function gameKFor(match: MatchRecord) {
-  return eventTierConfig[match.tier].kFactor / Math.sqrt(normalizedBestOf(match.bestOf))
+export function gameKFor(match: MatchRecord, eventWeightContext?: EventWeightContext) {
+  return eventKFactorForMatch(match, eventWeightContext) / Math.sqrt(normalizedBestOf(match.bestOf))
 }
 
 export function uncertaintyKMultiplier(sigma: number) {

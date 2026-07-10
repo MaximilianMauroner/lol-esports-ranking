@@ -14,6 +14,7 @@ import type {
   TeamStanding,
 } from '../types'
 import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibility'
+import { eventWeightContextForMatches } from './eventWeighting'
 import { ensureLeague } from './leagueRatings'
 import { homeLeagueForMatch, matchesByDate } from './matchContext'
 import { buildEventSummaries, buildLeagueStrengths, buildSeasonSummaries } from './modelSummaries'
@@ -71,9 +72,10 @@ export function buildRankingModel(
   predictions: PregamePrediction[]
 } {
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date))
-  const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sortedMatches, { teams })
+  const eventWeightContext = eventWeightContextForMatches(sortedMatches)
+  const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sortedMatches, { teams, eventWeightContext })
   const teamRosterBasis = rosterBasisByTeam(sortedMatches)
-  const state = createRatingRunState(sortedMatches, teams)
+  const state = createRatingRunState(sortedMatches, teams, eventWeightContext)
   const {
     ratings,
     previousDisplayRatings,

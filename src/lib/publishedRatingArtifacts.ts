@@ -72,22 +72,31 @@ export function toPublishedRegionStrength(
   region: RegionStrength,
   scale: PublishedRatingScale = publishedRatingScale,
 ): RegionStrength {
+  const topTeams = region.topTeams.map((team) => ({
+    ...team,
+    rating: publishedRating(team.rating, scale),
+  }))
+  const topThreeTeamRating = averagePublishedTeamRating(
+    topTeams.slice(0, 3),
+    publishedRating(region.topThreeTeamRating, scale),
+  )
+  const totalTeamRating = averagePublishedTeamRating(
+    topTeams,
+    publishedRating(region.totalTeamRating, scale),
+  )
   return {
     ...region,
-    score: publishedRating(region.score, scale),
-    topTeamRating: publishedRating(region.topTeamRating, scale),
-    topThreeTeamRating: publishedRating(region.topThreeTeamRating, scale),
-    totalTeamRating: publishedRating(region.totalTeamRating, scale),
+    score: topThreeTeamRating,
+    topTeamRating: topTeams[0]?.rating ?? publishedRating(region.topTeamRating, scale),
+    topThreeTeamRating,
+    totalTeamRating,
     ...(region.deservedStanding
-      ? { deservedStanding: toPublishedRegionDeservedStandingComparison(region.deservedStanding, region.score, scale) }
+      ? { deservedStanding: toPublishedRegionDeservedStandingComparison(region.deservedStanding, topThreeTeamRating, scale) }
       : {}),
     ...(region.averageOpponentRating !== undefined
       ? { averageOpponentRating: publishedRating(region.averageOpponentRating, scale) }
       : {}),
-    topTeams: region.topTeams.map((team) => ({
-      ...team,
-      rating: publishedRating(team.rating, scale),
-    })),
+    topTeams,
   }
 }
 
@@ -144,16 +153,15 @@ function toPublishedDeservedStandingComparison(
 
 function toPublishedRegionDeservedStandingComparison(
   comparison: RegionDeservedStandingComparison,
-  internalRegionScore: number,
+  publishedPowerScore: number,
   scale: PublishedRatingScale,
 ): RegionDeservedStandingComparison {
   const score = publishedRating(comparison.score, scale)
-  const powerScore = publishedRating(internalRegionScore, scale)
 
   return {
     ...comparison,
     score,
-    scoreDeltaFromPower: score - powerScore,
+    scoreDeltaFromPower: score - publishedPowerScore,
     internationalResumePoints: publishedDelta(comparison.internationalResumePoints, scale),
     seedPerformancePoints: publishedDelta(comparison.seedPerformancePoints, scale),
     stagePoints: publishedDelta(comparison.stagePoints, scale),
@@ -218,6 +226,12 @@ function optionalHistoryRatingComponents(point: TeamHistoryPoint) {
 
 function optionalHistoryRatingUpdate(point: TeamHistoryPoint) {
   return (point as { ratingUpdate?: RatingUpdateLedger }).ratingUpdate
+}
+
+function averagePublishedTeamRating(teams: readonly { rating: number }[], fallback: number) {
+  const values = teams.map((team) => team.rating).filter(finiteNumber)
+  if (values.length === 0) return fallback
+  return Math.round(values.reduce((total, rating) => total + rating, 0) / values.length)
 }
 
 function finiteNumber(value: unknown): value is number {

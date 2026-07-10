@@ -225,6 +225,8 @@ function standing(overrides: Partial<PublicTeamStanding> = {}): PublicTeamStandi
       },
     ],
     ...overrides,
+    recordBasis: overrides.recordBasis ?? 'grouped-match-record-from-scope-history',
+    scoreFamily: overrides.scoreFamily ?? 'power-index',
   }
 }
 

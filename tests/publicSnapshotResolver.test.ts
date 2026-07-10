@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { publishedRatingScale } from '../src/lib/modelConfig.ts'
 import { resolvePublicSnapshotState, validatePublicSnapshotShard, validatePublicTeamHistoryShard } from '../src/lib/publicArtifacts/resolver.ts'
-import { PUBLIC_ARTIFACT_SCHEMA_VERSION, snapshotKey, type PublicRankingManifest, type PublicRankingShard, type PublicTeamHistoryIndex, type PublicTeamHistoryShard } from '../src/lib/publicArtifacts/schema.ts'
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION, publicScoreFamilies, snapshotKey, type PublicRankingManifest, type PublicRankingShard, type PublicTeamHistoryIndex, type PublicTeamHistoryShard } from '../src/lib/publicArtifacts/schema.ts'
 
 test('non-default missing snapshot never falls back to embedded default snapshot', () => {
   const data = manifest()
@@ -223,6 +223,7 @@ function shard(overrides: Pick<PublicRankingShard, 'filter' | 'matchCount'>): Pu
     modelConfigHash: 'test-config',
     matchCount: overrides.matchCount,
     sourceBreakdown: [],
+    scoreFamilies: [...publicScoreFamilies],
     standings: [],
     leagues: [],
     regions: [],

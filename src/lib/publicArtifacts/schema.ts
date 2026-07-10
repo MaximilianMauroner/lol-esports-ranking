@@ -17,6 +17,7 @@ import type {
   TeamHistoryPoint,
 } from '../../types'
 import type { RegionStrength } from '../regionStrength'
+import { tournamentFamilyForEvent, type InternationalTournamentFamilyId } from '../internationalTournaments'
 import type {
   AwardSignalData,
   DataCoverage,
@@ -31,7 +32,7 @@ import type { WalkForwardMetrics } from '../predictionModel'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
-export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 18 as const
+export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 19 as const
 const PUBLIC_TEAM_RECENT_MATCH_LIMIT = 25
 
 export type ArtifactMeta = {
@@ -57,6 +58,13 @@ export type PublicRecentMatch = {
   bestOf?: number
 }
 
+export type PublicTournamentAppearance = {
+  family: InternationalTournamentFamilyId
+  event: string
+  lastDate: string
+  matchCount: number
+}
+
 export type PublicTeamStanding = {
   teamId: string
   leagueId: string
@@ -80,6 +88,8 @@ export type PublicTeamStanding = {
   movement: number
   wins: number
   losses: number
+  recordBasis: PublicRecordBasis
+  scoreFamily: PublicScoreFamilyId
   confidence: number
   uncertainty: number
   form: string[]
@@ -87,6 +97,7 @@ export type PublicTeamStanding = {
   eligibility: Pick<TeamEligibility, 'eligible' | 'reasons'> & Partial<TeamEligibility>
   factors: FactorBreakdown
   recentEvents: string[]
+  tournamentAppearances?: PublicTournamentAppearance[]
   recentMatches: PublicRecentMatch[]
   deservedStanding?: PublicDeservedStandingComparison
 }
@@ -107,7 +118,39 @@ export type PublicDeservedStandingComparison = {
   incomingPlayerBridgeCredit: number
 }
 
-type PublicTeamStandingInput = Omit<PublicTeamStanding, 'recentMatches' | 'teamId' | 'leagueId'> & Partial<Pick<PublicTeamStanding, 'teamId' | 'leagueId'>> & {
+export type PublicRecordBasis = 'standing-record-from-ranking-model' | 'grouped-match-record-from-scope-history'
+export type PublicScoreFamilyId = 'power-index' | 'deserved-standing'
+export type PublicScoreFamilyInfo = {
+  id: PublicScoreFamilyId
+  label: string
+  description: string
+  rankField: string
+  scoreField: string
+  target: string
+  recordBasis?: PublicRecordBasis
+}
+
+export const publicScoreFamilies = [
+  {
+    id: 'power-index',
+    label: 'Power Index',
+    description: 'Predictive latent team-strength score; records are evidence, not the rank target.',
+    rankField: 'rank',
+    scoreField: 'rating',
+    target: 'context-neutral-latent-team-strength',
+  },
+  {
+    id: 'deserved-standing',
+    label: 'Deserved Standing',
+    description: 'Resume check based on scoped results, opponent strength, schedule, event weight, and current-roster validity.',
+    rankField: 'deservedStanding.rank',
+    scoreField: 'deservedStanding.score',
+    target: 'current-scope-resume',
+    recordBasis: 'grouped-match-record-from-scope-history',
+  },
+] as const satisfies readonly PublicScoreFamilyInfo[]
+
+type PublicTeamStandingInput = Omit<PublicTeamStanding, 'recentMatches' | 'teamId' | 'leagueId' | 'recordBasis' | 'scoreFamily'> & Partial<Pick<PublicTeamStanding, 'teamId' | 'leagueId' | 'recordBasis' | 'scoreFamily'>> & {
   history?: TeamHistoryPoint[]
   recentMatches?: PublicRecentMatch[]
 }
@@ -121,6 +164,7 @@ export type PublicRankingShard = {
   modelConfigHash: string
   matchCount: number
   sourceBreakdown: SnapshotSourceBreakdown[]
+  scoreFamilies: PublicScoreFamilyInfo[]
   standings: PublicTeamStanding[]
   leagues: LeagueStrength[]
   regions: RegionStrength[]
@@ -318,13 +362,14 @@ export type PublicTeamHistoryPointContext = {
 
 // Compact browser-history model context. Short keys keep team-history.json inside
 // the public data budget: e=expected win probability, r=result residual,
-// v=result evidence, s=series strength signal, a=update attribution entries,
+// v=result evidence, s=series strength signal, w=applied event weight, a=update attribution entries,
 // c=current rating components [league, stable, roster, form, context].
 export type PublicTeamHistoryModelContext = {
   e?: number
   r?: number
   v?: number
   s?: number
+  w?: number
   a?: PublicTeamHistoryAttribution
   c?: PublicTeamHistoryComponentSnapshot
 }
@@ -591,6 +636,7 @@ export function compactStanding(
   }: PublicStandingCompactionOptions = {},
 ): PublicTeamStanding {
   const matchRecord = standing.history ? teamMatchRecord(standing.history) : undefined
+  const tournamentAppearances = matchRecord?.tournamentAppearances ?? standing.tournamentAppearances ?? []
   return {
     teamId: standing.teamId ?? teamIdFor(standing),
     leagueId: standing.leagueId ?? leagueIdFor(standing),
@@ -614,6 +660,8 @@ export function compactStanding(
     movement: standing.movement,
     wins: matchRecord?.wins ?? standing.wins,
     losses: matchRecord?.losses ?? standing.losses,
+    recordBasis: standing.recordBasis ?? (matchRecord ? 'grouped-match-record-from-scope-history' : 'standing-record-from-ranking-model'),
+    scoreFamily: standing.scoreFamily ?? 'power-index',
     confidence: standing.confidence,
     uncertainty: standing.uncertainty,
     form: matchRecord?.form ?? standing.form,
@@ -621,6 +669,7 @@ export function compactStanding(
     eligibility: compactEligibility(standing.eligibility),
     factors: standing.factors,
     recentEvents: standing.recentEvents,
+    ...(tournamentAppearances.length ? { tournamentAppearances } : {}),
     recentMatches: includeRecentMatches ? matchRecord?.recentMatches ?? standing.recentMatches ?? [] : [],
     ...(standing.deservedStanding ? { deservedStanding: standing.deservedStanding } : {}),
   }
@@ -665,8 +714,30 @@ function teamMatchRecord(history: TeamHistoryPoint[] = []) {
     wins,
     losses,
     form: resolvedMatches.slice(-5).map((match) => match.result),
+    tournamentAppearances: tournamentAppearancesForMatches(resolvedMatches.map((record) => record.match)),
     recentMatches,
   }
+}
+
+function tournamentAppearancesForMatches(matches: TeamMatchGroup[]): PublicTournamentAppearance[] {
+  const appearances = new Map<InternationalTournamentFamilyId, PublicTournamentAppearance>()
+
+  for (const match of matches) {
+    const latest = match.entries.at(-1)
+    if (!latest) continue
+    const family = tournamentFamilyForEvent(latest.event)
+    if (!family) continue
+
+    const current = appearances.get(family)
+    appearances.set(family, {
+      family,
+      event: !current || latest.date >= current.lastDate ? latest.event : current.event,
+      lastDate: !current || latest.date >= current.lastDate ? latest.date : current.lastDate,
+      matchCount: (current?.matchCount ?? 0) + 1,
+    })
+  }
+
+  return [...appearances.values()].sort((left, right) => right.lastDate.localeCompare(left.lastDate) || left.family.localeCompare(right.family))
 }
 
 type TeamMatchGroup = {
@@ -796,6 +867,8 @@ export function parsePublicRankingShard(value: unknown): PublicRankingShard {
   assertString(value.modelConfigHash, 'ranking shard modelConfigHash')
   assertNonNegativeInteger(value.matchCount, 'ranking shard matchCount')
   assertArray(value.sourceBreakdown, 'ranking shard sourceBreakdown')
+  assertArray(value.scoreFamilies, 'ranking shard scoreFamilies')
+  value.scoreFamilies.forEach((family, index) => assertPublicScoreFamily(family, `ranking shard scoreFamilies[${index}]`))
   assertArray(value.standings, 'ranking shard standings')
   assertArray(value.leagues, 'ranking shard leagues')
   assertArray(value.regions, 'ranking shard regions')
@@ -804,6 +877,19 @@ export function parsePublicRankingShard(value: unknown): PublicRankingShard {
   value.leagues.forEach((league, index) => assertLeagueStrength(league, `ranking shard leagues[${index}]`))
   value.regions.forEach((region, index) => assertRegionStrength(region, `ranking shard regions[${index}]`))
   return value as PublicRankingShard
+}
+
+function assertPublicScoreFamily(value: unknown, label: string): asserts value is PublicScoreFamilyInfo {
+  assertObject(value, label)
+  assertEnum(value.id, ['power-index', 'deserved-standing'], `${label} id`)
+  assertString(value.label, `${label} label`)
+  assertString(value.description, `${label} description`)
+  assertString(value.rankField, `${label} rankField`)
+  assertString(value.scoreField, `${label} scoreField`)
+  assertString(value.target, `${label} target`)
+  if (value.recordBasis !== undefined) {
+    assertEnum(value.recordBasis, ['standing-record-from-ranking-model', 'grouped-match-record-from-scope-history'], `${label} recordBasis`)
+  }
 }
 
 export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirectory {
@@ -977,6 +1063,8 @@ function assertPublicTeamStanding(value: unknown, label: string): asserts value 
   assertNumber(value.movement, `${label} movement`)
   assertNonNegativeInteger(value.wins, `${label} wins`)
   assertNonNegativeInteger(value.losses, `${label} losses`)
+  assertEnum(value.recordBasis, ['standing-record-from-ranking-model', 'grouped-match-record-from-scope-history'], `${label} recordBasis`)
+  assertEnum(value.scoreFamily, ['power-index', 'deserved-standing'], `${label} scoreFamily`)
   assertNumber(value.confidence, `${label} confidence`)
   assertNumber(value.uncertainty, `${label} uncertainty`)
   assertStringArray(value.form, `${label} form`)
@@ -984,6 +1072,10 @@ function assertPublicTeamStanding(value: unknown, label: string): asserts value 
   assertTeamEligibility(value.eligibility, `${label} eligibility`)
   assertFactorBreakdown(value.factors, `${label} factors`)
   assertStringArray(value.recentEvents, `${label} recentEvents`)
+  if (value.tournamentAppearances !== undefined) {
+    assertArray(value.tournamentAppearances, `${label} tournamentAppearances`)
+    value.tournamentAppearances.forEach((appearance, index) => assertPublicTournamentAppearance(appearance, `${label} tournamentAppearances[${index}]`))
+  }
   assertArray(value.recentMatches, `${label} recentMatches`)
   value.recentMatches.forEach((match, index) => assertPublicRecentMatch(match, `${label} recentMatches[${index}]`))
   if (value.deservedStanding !== undefined) assertPublicDeservedStanding(value.deservedStanding, `${label} deservedStanding`)
@@ -1073,6 +1165,14 @@ function assertFactorBreakdown(value: unknown, label: string): asserts value is 
   assertNumber(value.execution, `${label} execution`)
   assertNumber(value.opponent, `${label} opponent`)
   assertNumber(value.league, `${label} league`)
+}
+
+function assertPublicTournamentAppearance(value: unknown, label: string): asserts value is PublicTournamentAppearance {
+  assertObject(value, label)
+  assertEnum(value.family, ['first-stand', 'msi', 'worlds', 'ewc'], `${label} family`)
+  assertString(value.event, `${label} event`)
+  assertDateString(value.lastDate, `${label} lastDate`)
+  assertNonNegativeInteger(value.matchCount, `${label} matchCount`)
 }
 
 function assertPublicRecentMatch(value: unknown, label: string): asserts value is PublicRecentMatch {
@@ -1266,6 +1366,7 @@ function assertTeamHistoryModelContext(value: unknown, label: string) {
   assertOptionalNumber(value.r, `${label} r`)
   assertOptionalNumber(value.v, `${label} v`)
   assertOptionalNumber(value.s, `${label} s`)
+  assertOptionalNumber(value.w, `${label} w`)
   if (value.a !== undefined) {
     assertArray(value.a, `${label} a`)
     for (const [index, entry] of value.a.entries()) {

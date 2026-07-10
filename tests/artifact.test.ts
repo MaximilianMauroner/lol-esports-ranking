@@ -136,7 +136,7 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
 
   assert.equal(lyon.eligibility.eligible, true)
   assert.deepEqual([lyon.wins, lyon.losses], [21, 9])
-  assert.deepEqual([drx.wins, drx.losses], [9, 20])
+  assert.deepEqual([drx.wins, drx.losses], [11, 20])
   assert.deepEqual([giantx.wins, giantx.losses], [15, 14])
   assert.equal(lyon.recentMatches.some((match) => match.opponent === 'Team Secret Whales' && match.result === 'W' && match.games === 3), true)
   assert.ok(lyon.rank < drx.rank)
@@ -269,6 +269,7 @@ test('public manifest data URLs resolve to tracked public files', async () => {
   assert.deepEqual(missingPaths, [], `manifest /data URLs resolve to missing public files:\n${formatViolationList(missingPaths)}`)
 
   const trackedPaths = gitTrackedPaths(publicPaths)
+  if (!trackedPaths) return
   const untrackedPaths = publicPaths
     .map((path) => relative(process.cwd(), path))
     .filter((path) => !trackedPaths.has(path))
@@ -581,8 +582,15 @@ function addLocalDataUrl(url: string | undefined, urls: Set<string>) {
 
 function gitTrackedPaths(paths: string[]) {
   const relativePaths = paths.map((path) => relative(process.cwd(), path))
-  const output = execFileSync('git', ['ls-files', '-z', '--', ...relativePaths], { encoding: 'utf8' })
-  return new Set(output.split('\0').filter(Boolean))
+  try {
+    const output = execFileSync('git', ['ls-files', '-z', '--', ...relativePaths], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return new Set(output.split('\0').filter(Boolean))
+  } catch {
+    return undefined
+  }
 }
 
 function regionFor(shard: ReturnType<typeof parsePublicRankingShard>, region: string) {

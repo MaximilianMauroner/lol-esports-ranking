@@ -161,6 +161,14 @@ export function regionPowerLeagueNames(region: Pick<RegionStrength, 'flagshipLea
   return region.flagshipLeague ? [region.flagshipLeague] : []
 }
 
+export function displayRegionPowerScore(region: Pick<RegionStrength, 'score' | 'topTeams'>) {
+  return representativeTeamAverage(region.topTeams.slice(0, 3), region.score)
+}
+
+export function displayRegionTotalTeamRating(region: Pick<RegionStrength, 'totalTeamRating' | 'topTeams'>) {
+  return representativeTeamAverage(region.topTeams, region.totalTeamRating)
+}
+
 export function isRegionPowerTeam(region: Pick<RegionStrength, 'region' | 'flagshipLeagues' | 'flagshipLeague' | 'topTeams'>, team: RegionPowerTeamInput) {
   const leagueNames = new Set(regionPowerLeagueNames(region))
   const teamRegion = regionPowerRegionFor(team.league, team.region)
@@ -203,6 +211,11 @@ function averageTeamRating(teams: RegionStanding[]) {
   return Number(mean(teams, ratingOf).toFixed(1))
 }
 
+function representativeTeamAverage(teams: readonly RegionTopTeam[], fallback: number) {
+  if (teams.length === 0) return fallback
+  return Math.round(mean(teams, (team) => team.rating))
+}
+
 function groupBy<T>(items: T[], key: (item: T) => string | undefined) {
   const map = new Map<string, T[]>()
   for (const item of items) {
@@ -219,7 +232,7 @@ function sum<T>(items: T[], value: (item: T) => number | undefined) {
   return items.reduce((total, item) => total + (value(item) ?? 0), 0)
 }
 
-function mean<T>(items: T[], value: (item: T) => number | undefined) {
+function mean<T>(items: readonly T[], value: (item: T) => number | undefined) {
   const values = items.map(value).filter((entry): entry is number => typeof entry === 'number' && Number.isFinite(entry))
   if (values.length === 0) return 0
   return values.reduce((total, entry) => total + entry, 0) / values.length

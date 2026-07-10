@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { preseasonEventWeightMultiplier } from '../src/data/rankingConfig.ts'
 import {
   deservedStandingModelParameters,
   dssConservativeScore,
@@ -66,6 +67,34 @@ test('DSS event weights and format multipliers produce PDF series weights', () =
   assert.equal(dssFormatMultiplier(5), 1.25)
   assert.equal(dssSeriesWeight('worlds-playoffs', 5), 45)
   near(dssSeriesWeight('regional-regular', 3), 13.44)
+})
+
+test('DSS discounts post-Worlds preseason series weight', () => {
+  const ledger = dssSeriesLedgerEntriesForMatches([
+    matchFixture({
+      id: 'worlds-final',
+      date: '2025-11-09',
+      season: 2025,
+      event: 'WLDs 2025',
+      league: 'WLDs',
+      region: 'International',
+      tier: 'worlds-main',
+      bestOf: 5,
+    }),
+    matchFixture({
+      id: 'demacia-cup',
+      date: '2025-12-20',
+      season: 2025,
+      event: 'DCup 2025',
+      league: 'DCup',
+      tier: 'regional-regular',
+      bestOf: 3,
+    }),
+  ])
+  const demaciaCup = ledger.find((entry) => entry.finalMatchId === 'demacia-cup')
+
+  assert.ok(demaciaCup)
+  near(demaciaCup.seriesWeight, dssSeriesWeight('regional-regular', 3) * preseasonEventWeightMultiplier)
 })
 
 test('DSS probability helpers implement the PDF logistic and series formulas', () => {

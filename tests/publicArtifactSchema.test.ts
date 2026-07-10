@@ -9,6 +9,7 @@ import {
   parsePublicRegionHistory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  publicScoreFamilies,
   type PublicRankingShard,
   type PublicTeamStanding,
   type PublicTeamHistoryComponentSnapshot,
@@ -95,9 +96,22 @@ test('public ranking manifest parser validates nested filters and data URL paths
 test('public ranking shard parser validates source, standing, and league rows', () => {
   const standing = publicStanding()
   const league = publicLeague()
-  const validShard = rankingShard({ standings: [standing], leagues: [league] })
+  const validShard = rankingShard({ standings: [standing], leagues: [league], scoreFamilies: [...publicScoreFamilies] })
 
   assert.doesNotThrow(() => parsePublicRankingShard(validShard))
+
+  assert.throws(
+    () => parsePublicRankingShard({ ...validShard, scoreFamilies: undefined }),
+    /scoreFamilies/,
+  )
+
+  assert.throws(
+    () => parsePublicRankingShard({
+      ...validShard,
+      standings: [{ ...standing, recordBasis: undefined }],
+    }),
+    /recordBasis/,
+  )
 
   assert.throws(
     () => parsePublicRankingShard({
@@ -113,6 +127,22 @@ test('public ranking shard parser validates source, standing, and league rows', 
       standings: [{ ...standing, rank: '1' }],
     }),
     /standings\[0\] rank/,
+  )
+
+  assert.throws(
+    () => parsePublicRankingShard({
+      ...validShard,
+      standings: [{ ...standing, recordBasis: 'raw-table-record' } as unknown as PublicTeamStanding],
+    }),
+    /standings\[0\] recordBasis/,
+  )
+
+  assert.throws(
+    () => parsePublicRankingShard({
+      ...validShard,
+      scoreFamilies: [{ ...publicScoreFamilies[0], scoreField: 1 }] as unknown as PublicRankingShard['scoreFamilies'],
+    }),
+    /scoreFamilies\[0\] scoreField/,
   )
 
   assert.throws(
@@ -337,6 +367,7 @@ function rankingShard(overrides: Partial<PublicRankingShard> = {}): PublicRankin
     modelConfigHash: 'test-config',
     matchCount: 1,
     sourceBreakdown: [{ provider: 'oracles-elixir', matchCount: 1, completeness: ['complete'] }],
+    scoreFamilies: [...publicScoreFamilies],
     standings: [publicStanding()],
     leagues: [publicLeague()],
     regions: [{
@@ -389,6 +420,8 @@ function publicStanding(): PublicTeamStanding {
     movement: 1,
     wins: 1,
     losses: 0,
+    recordBasis: 'grouped-match-record-from-scope-history',
+    scoreFamily: 'power-index',
     confidence: 0.8,
     uncertainty: 10,
     form: ['W'],

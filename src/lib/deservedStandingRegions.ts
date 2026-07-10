@@ -10,7 +10,6 @@ import {
   dssRegionScoreRaw,
   dssRegionSeedPerformancePoints,
   dssRegionStagePoints,
-  dssRegionWeightedSeriesValue,
   dssSeriesWinProbability,
   type DssSeriesLedgerEntry,
 } from './deservedStanding'
@@ -172,11 +171,7 @@ function regionLedgerEntryFor(
 
   const rosterValidity = options.rosterValidityFor?.(entry) ?? 1
   const regionRawSeriesValue = dssRegionRawSeriesValue(entry)
-  const regionWeightedSeriesValue = dssRegionWeightedSeriesValue({
-    ...entry,
-    eventTier: entry.tier,
-    rosterValidity,
-  })
+  const regionWeightedSeriesValue = regionRawSeriesValue * entry.seriesWeight * rosterValidity
   const seedExpectedSeriesResult = seedExpectedSeriesResultFor({
     entry,
     region,

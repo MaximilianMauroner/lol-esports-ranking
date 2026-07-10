@@ -44,6 +44,7 @@ import {
   artifactMetaFor,
   compactStanding as compactPublicStanding,
   leagueIdFor,
+  publicScoreFamilies,
   snapshotKey,
   snapshotShardUrlPathForKey,
   teamIdFor,
@@ -111,6 +112,8 @@ export const individualResidualComparisonMetric: PlayerComparisonMetricInfo = {
   teamResultSignal: 'reduced',
   independentSkillClaim: false,
 }
+
+const scopedPlayerDirectoryLimit = 60
 
 export type SnapshotFilter = {
   season: string
@@ -509,7 +512,7 @@ function alignFinalRegionHistoryPoints(
 
   for (const region of regions) {
     const target = series[region.region]
-    const finalScore = publishedRating(region.score, ratingScale)
+    const finalScore = toPublishedRegionStrength(region, ratingScale).score
     if (!target) continue
     const latest = target.points.at(-1)
     if (latest && latest[1] === finalScore && latest[2] === region.rank) continue
@@ -681,6 +684,7 @@ function compactTeamHistoryModelContext(
   const components = compactTeamHistoryComponents(entries.at(-1)?.ratingComponents)
   const context: PublicTeamHistoryModelContext = {
     e: roundOptional(expected, 3, { keepZero: true }),
+    w: roundOptional(update?.eventWeight, 3, { keepZero: true }),
     ...(components ? { c: components } : {}),
   }
   return omitUndefined(context)
@@ -750,7 +754,7 @@ function isSeasonHistoryScope(filter: SnapshotFilter | undefined) {
 }
 
 function isSeasonPlayerScope(filter: SnapshotFilter | undefined) {
-  return isSeasonHistoryScope(filter) && !filter?.checkpoint
+  return isSeasonHistoryScope(filter)
 }
 
 /** Mirrors the UI `teamKey` so history can be looked up from a summary standing. */
@@ -924,6 +928,7 @@ function compactSnapshot(
       modelConfigHash: summary.modelConfigHash,
     }),
     ratingScale,
+    scoreFamilies: [...publicScoreFamilies],
     leagues: leagues.map((league) => toPublishedLeagueStrength(league, ratingScale)),
     regions: regions.map((region) => toPublishedRegionStrength(region, ratingScale)),
     standings: standings.map((standing, index) => compactPublicStanding(toPublishedTeamStanding(standing, ratingScale), {
@@ -1279,7 +1284,8 @@ function compactPlayersForSnapshot(
         && creditedTeam.games >= playerModelParameters.minimumRankedSourcedPlayerGames
         && (player.appearance?.roleGames ?? player.games) >= playerModelParameters.minimumRankedSourcedPlayerGames
     })
-    .slice(0, detail === 'scope' ? 100 : Number.POSITIVE_INFINITY)
+  const compactPlayers = players
+    .slice(0, detail === 'scope' ? scopedPlayerDirectoryLimit : Number.POSITIVE_INFINITY)
     .map((player, index) => {
       const creditedTeam = creditedTeamForPlayer(player, snapshot?.filter)
       const meta = teamMeta.get(creditedTeam.team)
@@ -1316,7 +1322,7 @@ function compactPlayersForSnapshot(
       return compact
     })
 
-  return assignCompactPlayerResidualRanks(players)
+  return assignCompactPlayerResidualRanks(compactPlayers)
 }
 
 function assignCompactPlayerResidualRanks(players: CompactPlayer[]): CompactPlayer[] {

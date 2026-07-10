@@ -1,4 +1,9 @@
-import { eventTierConfig } from '../data/rankingConfig'
+import {
+  eventTierConfig,
+  preseasonEventWeightMultiplier,
+  preseasonEventWeightPolicy,
+  preseasonEventWeightWindow,
+} from '../data/rankingConfig'
 import { leagueTierModelParameters } from '../data/leagueTiers'
 import { currentRegionTaxonomyModelParameters, ratedTeamUniverseModelParameters } from '../data/regionTaxonomy'
 import type { FactorBreakdown, PublishedRatingScale } from '../types'
@@ -104,7 +109,7 @@ export const rosterChangeUncertaintyPenalty = 40
 export const rosterContinuityValueBasis = 'role-share'
 export const rosterContinuityMatch = 'player-id-by-role'
 export const rosterContinuityRequiresCompleteLineups = true
-export const minimumUncertainty = 30
+export const minimumUncertainty = 20
 export const maximumUncertainty = 140
 export const normalUncertainty = 50
 export const uncertaintyKMultiplierFloor = 0.75
@@ -212,6 +217,9 @@ export const transparentGprModelParameters = {
   playerRatingPredictionPolicy,
   playerRatingPredictionPublishedWeight: playerRatingPredictionWeight,
   playerRatingPredictionShadowWeight: playerRatingShadowWeight,
+  preseasonEventWeightPolicy,
+  preseasonEventWeightMultiplier,
+  preseasonEventWeightWindow,
   executionResidual: executionResidualModelParameters,
   playerModel: playerModelParameters,
   eligibility: defaultEligibilityConfig,
@@ -221,6 +229,7 @@ export const transparentGprModelParameters = {
   walkForwardSegments: walkForwardSegmentKeys,
   eventKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.kFactor])),
   leagueKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.leagueKFactor])),
+  eventWeights: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.weight])),
 } as const
 
 export const transparentGprModelMetadata = {

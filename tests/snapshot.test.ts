@@ -3,9 +3,12 @@ import test from 'node:test'
 import { createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
 import { emptyRatingUpdateLedger } from '../src/lib/ratingCalculations.ts'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, compactStanding } from '../src/lib/publicArtifacts/schema.ts'
+import { resolvePlayerScope } from '../src/lib/playerScopes.ts'
 import type { StaticRankingData } from '../src/lib/snapshot.ts'
 import type { LeagueStrengthHistoryPoint, MatchRecord, PlayerStanding, Region, Role, Side, TeamProfile, TeamStanding } from '../src/types.ts'
 import { rosters, sampleMatches, teams } from './fixtures/rankingFixtures.ts'
+
+const ROLE_ORDER: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 
 function sourcedPlayer(overrides: Partial<PlayerStanding> & Pick<PlayerStanding, 'id' | 'name' | 'team' | 'role' | 'rank'>): PlayerStanding {
   return {
@@ -406,6 +409,8 @@ test('public team standing records count matches instead of source game rows', (
 
   assert.equal(compact.wins, 1)
   assert.equal(compact.losses, 1)
+  assert.equal(compact.recordBasis, 'grouped-match-record-from-scope-history')
+  assert.equal(compact.scoreFamily, 'power-index')
   assert.deepEqual(compact.form, ['W', 'L'])
   assert.deepEqual(compact.recentMatches.map((match) => ({
     opponent: match.opponent,
@@ -598,7 +603,7 @@ test('public compact standings retain a paginatable recent match window', () => 
     const date = `2026-05-${String(matchNumber).padStart(2, '0')}`
     return {
       date,
-      event: 'LCK 2026',
+      event: matchNumber === 1 ? 'FST 2026' : 'LCK 2026',
       opponent: `Opponent ${matchNumber}`,
       rating: 1700 + matchNumber,
       baseRating: 1650,
@@ -639,6 +644,12 @@ test('public compact standings retain a paginatable recent match window', () => 
   assert.equal(compact.recentMatches.length, 25)
   assert.equal(compact.recentMatches[0]?.opponent, 'Opponent 6')
   assert.equal(compact.recentMatches.at(-1)?.opponent, 'Opponent 30')
+  assert.deepEqual(compact.tournamentAppearances, [{
+    family: 'first-stand',
+    event: 'FST 2026',
+    lastDate: '2026-05-01',
+    matchCount: 1,
+  }])
 })
 
 test('event-scoped public standings keep same-day Bo-series siblings across source event labels', () => {
@@ -813,6 +824,107 @@ test('createPlayerDirectory credits season rows to the primary scoped team', () 
   assert.equal(seasonViper?.region, 'LCK')
   assert.equal(seasonViper?.teamGames, 152)
   assert.equal(seasonViper?.teamShare, 0.944)
+})
+
+test('createPlayerDirectory publishes season checkpoint player rows', () => {
+  const standing = {
+    team: 'Gen.G',
+    code: 'GEN',
+    region: 'LCK',
+    league: 'LCK',
+    eligibility: {
+      eligible: true,
+      reasons: [],
+      currentWindowGames: 40,
+      minCurrentWindowGames: 6,
+      windowDays: 90,
+    },
+  } as unknown as TeamStanding
+  const checkpointKey = snapshotKey({ season: '2026', event: 'All', region: 'All', checkpoint: 'split-2' })
+  const checkpointPlayer = sourcedPlayer({
+    id: 'checkpoint-mid',
+    name: 'Checkpoint Mid',
+    team: 'Gen.G',
+    role: 'Mid',
+    rank: 1,
+    games: 35,
+    rating: 180,
+  })
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'All__All__All',
+    teams: {},
+    snapshots: {
+      All__All__All: {
+        filter: { season: 'All', event: 'All', region: 'All' },
+        standings: [standing],
+        players: [],
+      },
+      [checkpointKey]: {
+        filter: { season: '2026', event: 'All', region: 'All', checkpoint: 'split-2' },
+        standings: [standing],
+        players: [checkpointPlayer],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const directory = createPlayerDirectory(data)
+  const checkpointRows = directory.scopedPlayers?.[checkpointKey] ?? []
+
+  assert.deepEqual(checkpointRows.map((player) => player.name), ['Checkpoint Mid'])
+  assert.equal(checkpointRows[0]?.teamCode, 'GEN')
+  assert.equal(checkpointRows[0]?.rank, 1)
+})
+
+test('scoped player directories stay capped and resolve missing teams from the all-season directory', () => {
+  const seasonKey = snapshotKey({ season: '2026', event: 'All', region: 'All' })
+  const leadingPlayers = Array.from({ length: 65 }, (_, index) => sourcedPlayer({
+    id: `leader-${index}`,
+    name: `Leader ${index}`,
+    team: 'Alpha',
+    role: ROLE_ORDER[index % ROLE_ORDER.length],
+    rank: index + 1,
+    games: 30,
+    rating: 300 - index,
+  }))
+  const coveredRoster = ROLE_ORDER.map((role, index) => sourcedPlayer({
+    id: `covered-${role}`,
+    name: `Covered ${role}`,
+    team: 'Beta',
+    role,
+    rank: 66 + index,
+    games: 30,
+    rating: 200 - index,
+  }))
+  const standings = [
+    { team: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK', eligibility: { eligible: true, reasons: [] } },
+    { team: 'Beta', code: 'BET', region: 'LCK', league: 'LCK', eligibility: { eligible: true, reasons: [] } },
+  ] as unknown as TeamStanding[]
+  const data = {
+    generatedAt: '2026-06-26T00:00:00.000Z',
+    model: { version: 'transparent-power-index-vT', configHash: 'fnv1a-test' },
+    defaultSnapshotKey: 'All__All__All',
+    teams: {},
+    snapshots: {
+      All__All__All: { filter: { season: 'All', event: 'All', region: 'All' }, standings, players: coveredRoster },
+      [seasonKey]: {
+        filter: { season: '2026', event: 'All', region: 'All' },
+        standings,
+        players: [...leadingPlayers, ...coveredRoster],
+      },
+    },
+  } as unknown as StaticRankingData
+
+  const directory = createPlayerDirectory(data)
+  const scopedPlayers = directory.scopedPlayers?.[seasonKey] ?? []
+  const resolved = resolvePlayerScope(directory, { season: '2026', event: 'All', region: 'All' })
+  const betaPlayers = resolved.players.filter((player) => player.team === 'Beta')
+
+  assert.equal(scopedPlayers.length, 60)
+  assert.equal(scopedPlayers.some((player) => player.team === 'Beta'), false)
+  assert.deepEqual(betaPlayers.map((player) => player.role), ROLE_ORDER)
+  assert.match(resolved.label, /all-season sources/)
 })
 
 test('createPlayerDirectory gates low-sample sourced players from ranked public rows', () => {
@@ -1219,6 +1331,7 @@ test('createTeamHistory preserves the final atomic delta for model-correct serie
               resultEvidence: -8.8,
               neutralResultResidual: -0.43,
               seriesStrengthSignal: -1.12,
+              eventWeight: 0.35,
             }
           : { updateUnit },
         rank: 2,
@@ -1249,11 +1362,13 @@ test('createTeamHistory preserves the final atomic delta for model-correct serie
   assert.equal(seriesPoint[3]?.result, 'L')
   assert.equal(seriesPoint[3]?.wins, 2)
   assert.equal(seriesPoint[3]?.losses, 3)
+  assert.equal(seriesPoint[3]?.model?.w, 0.35)
   assert.equal(seriesPoint[3]?.games, 5)
   assert.equal(seriesPoint[3]?.bestOf, 5)
   assert.equal(seriesPoint[3]?.delta, -29)
   assert.deepEqual(seriesPoint[3]?.model, {
     e: 0.43,
+    w: 0.35,
   })
   assert.deepEqual(seriesPoint[3]?.sourceGameIds, [
     'LOLTMNT05_195683',

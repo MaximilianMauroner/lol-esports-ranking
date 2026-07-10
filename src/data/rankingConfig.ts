@@ -1,5 +1,9 @@
 import type { EventTier } from '../types'
 
+export const preseasonEventWeightPolicy = 'post-worlds-before-next-calendar-year-discount-v1'
+export const preseasonEventWeightMultiplier = 0.35
+export const preseasonEventWeightWindow = 'after latest Worlds match in a calendar year and before Jan 1 of the next calendar year'
+
 export const eventTierConfig: Record<
   EventTier,
   {
@@ -72,7 +76,7 @@ export const modelFactors = [
   {
     key: 'context',
     label: 'Context of play',
-    description: 'Worlds playoffs count more than MSI, playoffs, and regular season.',
+    description: 'Worlds playoffs count more than MSI, playoffs, and regular season; post-Worlds preseason games are discounted.',
   },
   {
     key: 'recency',

@@ -1,6 +1,6 @@
-import { eventTierConfig } from '../data/rankingConfig'
 import { leaguePriorFor } from '../data/leagueTiers'
 import type { MatchRecord } from '../types'
+import { leagueKFactorForMatch, type EventWeightContext } from './eventWeighting'
 import { isInternationalMatch } from './ratingCalculations'
 
 export function ensureLeague(
@@ -56,6 +56,7 @@ export type LeagueStrengthSeriesUpdate = LeagueStrengthUpdateBase & {
   observedOutcomeA: number
   observedOutcomeB: number
   strengthSignal: number
+  eventWeightContext?: EventWeightContext
 }
 
 export function updateLeagueStrengthForSeries({
@@ -71,6 +72,7 @@ export function updateLeagueStrengthForSeries({
   observedOutcomeA,
   observedOutcomeB,
   strengthSignal,
+  eventWeightContext,
   recency,
   leagueScores,
   previousLeagueScores,
@@ -95,7 +97,7 @@ export function updateLeagueStrengthForSeries({
     expectedOutcomeB,
     observedOutcomeA,
     observedOutcomeB,
-    kFactor: eventTierConfig[match.tier].leagueKFactor * strengthSignal,
+    kFactor: leagueKFactorForMatch(match, eventWeightContext) * strengthSignal,
     recency,
     leagueScores,
     previousLeagueScores,
@@ -141,8 +143,7 @@ function updateLeagueStrength({
   observedOutcomeB: number
   kFactor: number
 }) {
-  const leagueKFactor = eventTierConfig[match.tier].leagueKFactor
-  if (leagueA === leagueB || leagueA === 'Unknown' || leagueB === 'Unknown' || leagueKFactor === 0 || !isInternationalMatch(match)) {
+  if (leagueA === leagueB || leagueA === 'Unknown' || leagueB === 'Unknown' || kFactor === 0 || !isInternationalMatch(match)) {
     return { deltaA: 0, deltaB: 0 }
   }
 

@@ -1,4 +1,3 @@
-import { eventTierConfig } from '../data/rankingConfig'
 import { cappedLeagueRatingForTier, leaguePriorFor, leagueTierFor } from '../data/leagueTiers'
 import type {
   LeagueStrength,
@@ -18,6 +17,11 @@ import type {
   TeamProfile,
 } from '../types'
 import { executionIndexFromStats } from './executionResidual'
+import {
+  eventWeightContextForMatches,
+  eventWeightForMatch,
+  type EventWeightContext,
+} from './eventWeighting'
 import { homeLeagueForMatch } from './matchContext'
 
 const initialPlayerRating = 100
@@ -115,6 +119,7 @@ export type PregamePlayerRatingEdge = {
 type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
   leagueStrengths?: LeagueStrength[]
+  eventWeightContext?: EventWeightContext
 }
 
 export function buildPlayerModel(
@@ -122,16 +127,21 @@ export function buildPlayerModel(
   rosters: Record<string, PlayerProfile[]>,
   context: PlayerRatingContext = {},
 ): PlayerStanding[] {
+  const resolvedContext = {
+    ...context,
+    eventWeightContext: context.eventWeightContext ?? eventWeightContextForMatches(matches),
+  }
   if (hasObservedPlayerStats(matches)) {
-    return buildSourcedPlayerModel(matches, context)
+    return buildSourcedPlayerModel(matches, resolvedContext)
   }
 
-  return buildStaticRosterPlayerModel(matches, rosters)
+  return buildStaticRosterPlayerModel(matches, rosters, resolvedContext.eventWeightContext)
 }
 
 function buildStaticRosterPlayerModel(
   matches: MatchRecord[],
   rosters: Record<string, PlayerProfile[]>,
+  eventWeightContext: EventWeightContext,
 ): PlayerStanding[] {
   const ratings = new Map<string, number>()
   const profiles = new Map<string, PlayerProfile>()
@@ -162,7 +172,7 @@ function buildStaticRosterPlayerModel(
       const objectivesFor = teamObjectiveCount(match, isTeamA ? 'A' : 'B')
       const objectivesAgainst = teamObjectiveCount(match, isTeamA ? 'B' : 'A')
       const dominance = executionIndexFromStats(killsFor, killsAgainst, goldFor, goldAgainst, objectivesFor, objectivesAgainst)
-      const eventWeight = eventTierConfig[match.tier].weight
+      const eventWeight = eventWeightForMatch(match, eventWeightContext)
       const shares = playerSharesForRoster(roster, ratings, forms)
 
       for (const player of roster) {
@@ -328,9 +338,13 @@ export function buildPregamePlayerRatingEdges(
   matches: MatchRecord[],
   context: PlayerRatingContext = {},
 ): Map<string, PregamePlayerRatingEdge> {
+  const resolvedContext = {
+    ...context,
+    eventWeightContext: context.eventWeightContext ?? eventWeightContextForMatches(matches),
+  }
   const state = createSourcedPlayerState(false)
   const edges = new Map<string, PregamePlayerRatingEdge>()
-  const leagueRatings = leagueRatingsFor(context.leagueStrengths)
+  const leagueRatings = leagueRatingsFor(resolvedContext.leagueStrengths)
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
 
   for (const dateMatches of matchesByDate(sortedMatches)) {
@@ -342,14 +356,14 @@ export function buildPregamePlayerRatingEdges(
         match.teamARoster,
         dateStartRatings,
         dateStartGames,
-        leagueForSide(match, 'A', context),
+        leagueForSide(match, 'A', resolvedContext),
         leagueRatings,
       )
       const teamBEdge = playerEdgeForRoster(
         match.teamBRoster,
         dateStartRatings,
         dateStartGames,
-        leagueForSide(match, 'B', context),
+        leagueForSide(match, 'B', resolvedContext),
         leagueRatings,
       )
       edges.set(match.id, {
@@ -361,9 +375,9 @@ export function buildPregamePlayerRatingEdges(
     }
 
     for (const match of dateMatches) {
-      registerSourcedRosters(match, state, context, leagueRatings)
+      registerSourcedRosters(match, state, resolvedContext, leagueRatings)
     }
-    applySourcedPlayerUpdates(dateMatches, state, dateStartRatings, context, leagueRatings)
+    applySourcedPlayerUpdates(dateMatches, state, dateStartRatings, resolvedContext, leagueRatings)
   }
 
   return edges
@@ -511,7 +525,7 @@ function applySourcedPlayerUpdates(
         const opponentRating = preUpdateRatings.get(opponentPlayer.id) ?? opponentLeagueBaseline
         const expected = expectedPlayerScore(rating, opponentRating)
         const performance = playerPerformance(player, opponentPlayer)
-        const eventWeight = eventTierConfig[match.tier].weight
+        const eventWeight = eventWeightForMatch(match, context.eventWeightContext)
         const delta = Number((sourcedPlayerKFactor * eventWeight * (performance - expected)).toFixed(1))
         const currentRating = state.ratings.get(player.id) ?? rating
         const nextRating = Number((currentRating + delta).toFixed(1))

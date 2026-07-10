@@ -292,6 +292,7 @@ export type RatingUpdateLedger = {
   patchAdjustment: number
   ratingTarget?: string
   updateUnit?: string
+  eventWeight?: number
   resultEvidence?: number
   neutralResultResidual?: number
   seriesStrengthSignal?: number

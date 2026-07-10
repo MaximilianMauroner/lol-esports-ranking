@@ -46,6 +46,7 @@ export function buildDeservedStandingModel(
   const ledgerEntries = dssSeriesLedgerEntriesForMatches(matches, {
     referenceStrengthFor: options.referenceStrengthFor ?? defaultReferenceStrength,
     contextAdjustmentFor: options.contextAdjustmentFor,
+    eventWeightContext: options.eventWeightContext,
   })
   const entriesByTeam = groupBy(ledgerEntries, (entry) => entry.team)
   const teams = Array.from(entriesByTeam.entries())

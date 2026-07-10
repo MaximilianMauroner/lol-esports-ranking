@@ -7,6 +7,11 @@ import type {
   Region,
   Role,
 } from '../types'
+import {
+  eventWeightContextForMatches,
+  eventWeightMultiplierForMatch,
+  type EventWeightContext,
+} from './eventWeighting'
 import { normalizedBestOf, type NormalizedBestOf } from './matchFormat'
 import { clamp } from './ratingCalculations'
 
@@ -193,6 +198,7 @@ export type DssReferenceStrengthContext = {
 export type DssSeriesLedgerOptions = {
   referenceStrengthFor?: (context: DssReferenceStrengthContext) => number
   contextAdjustmentFor?: (context: DssReferenceStrengthContext) => number
+  eventWeightContext?: EventWeightContext
 }
 
 export type DssSeriesLedgerEntry = {
@@ -269,8 +275,14 @@ export function dssFormatMultiplier(bestOf: number) {
   return deservedStandingModelParameters.formatMultipliers.bo1
 }
 
-export function dssSeriesWeight(tier: EventTier, bestOf: number) {
-  return dssEventWeight(tier) * dssFormatMultiplier(bestOf)
+export function dssSeriesWeight(
+  tier: EventTier,
+  bestOf: number,
+  match?: MatchRecord,
+  eventWeightContext?: EventWeightContext,
+) {
+  const preseasonMultiplier = match ? eventWeightMultiplierForMatch(match, eventWeightContext) : 1
+  return dssEventWeight(tier) * dssFormatMultiplier(bestOf) * preseasonMultiplier
 }
 
 export function dssRawSeriesValue(input: DeservedStandingSeriesResumeInput) {
@@ -283,25 +295,33 @@ export function dssRawSeriesValue(input: DeservedStandingSeriesResumeInput) {
 export function dssWeightedSeriesValue(input: DeservedStandingSeriesResumeInput & {
   eventTier: EventTier
   bestOf: number
+  match?: MatchRecord
+  eventWeightContext?: EventWeightContext
 }) {
-  return dssRawSeriesValue(input) * dssSeriesWeight(input.eventTier, input.bestOf)
+  return dssRawSeriesValue(input) * dssSeriesWeight(input.eventTier, input.bestOf, input.match, input.eventWeightContext)
 }
 
 export function dssRegionWeightedSeriesValue(input: DeservedStandingSeriesResumeInput & {
   eventTier: EventTier
   bestOf: number
   rosterValidity?: number
+  match?: MatchRecord
+  eventWeightContext?: EventWeightContext
 }) {
-  return dssRegionRawSeriesValue(input) * dssSeriesWeight(input.eventTier, input.bestOf) * (input.rosterValidity ?? 1)
+  return dssRegionRawSeriesValue(input) * dssSeriesWeight(input.eventTier, input.bestOf, input.match, input.eventWeightContext) * (input.rosterValidity ?? 1)
 }
 
 export function dssSeriesLedgerEntriesForMatches(
   matches: MatchRecord[],
   options: DssSeriesLedgerOptions = {},
 ): DssSeriesLedgerEntry[] {
+  const resolvedOptions = {
+    ...options,
+    eventWeightContext: options.eventWeightContext ?? eventWeightContextForMatches(matches),
+  }
   const entries: DssSeriesLedgerEntry[] = []
   for (const group of dssSeriesGroupsForMatches(matches)) {
-    entries.push(...dssSeriesLedgerEntriesForGroup(group, options))
+    entries.push(...dssSeriesLedgerEntriesForGroup(group, resolvedOptions))
   }
   return entries
 }
@@ -660,7 +680,7 @@ function dssSeriesLedgerEntriesForGroup(
   })
   const expectedSeriesResultA = dssExpectedSeriesResult(gameProbabilityA, group.bestOf)
   const expectedSeriesResultB = dssExpectedSeriesResult(1 - gameProbabilityA, group.bestOf)
-  const seriesWeight = dssSeriesWeight(group.finalMatch.tier, group.bestOf)
+  const seriesWeight = dssSeriesWeight(group.finalMatch.tier, group.bestOf, group.finalMatch, options.eventWeightContext)
 
   return [
     dssSeriesLedgerEntry({

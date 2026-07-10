@@ -1,4 +1,3 @@
-import { eventTierConfig } from '../data/rankingConfig'
 import { effectiveLeagueRating, leaguePriorFor, leagueTierFor } from '../data/leagueTiers'
 import type {
   FactorBreakdown,
@@ -17,6 +16,7 @@ import {
   executionSoftOutcome,
   teamExecutionIndex,
 } from './executionResidual'
+import { eventKFactorForMatch, eventWeightForMatch, leagueKFactorForMatch } from './eventWeighting'
 import { updateLeagueStrengthForSeries } from './leagueRatings'
 import { normalizedBestOf, type NormalizedBestOf } from './matchFormat'
 import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
@@ -307,11 +307,11 @@ function processRatingSeries({
   )
   const expectedOutcomeA = seriesExpected.teamASeriesWinProbability
   const expectedOutcomeB = seriesExpected.teamBSeriesWinProbability
-  const eventK = eventTierConfig[finalMatch.tier].kFactor
+  const eventK = eventKFactorForMatch(finalMatch, state.eventWeightContext)
   const hasLeagueSignal = seriesLeagueA !== seriesLeagueB
     && seriesLeagueA !== 'Unknown'
     && seriesLeagueB !== 'Unknown'
-    && eventTierConfig[finalMatch.tier].leagueKFactor !== 0
+    && leagueKFactorForMatch(finalMatch, state.eventWeightContext) !== 0
     && isInternationalMatch(finalMatch)
   const leagueSignalShare = hasLeagueSignal ? latentStrengthResultBudgetShares.leagueAnchor : 0
   const teamStableShare = (1 - leagueSignalShare) * latentStrengthResultBudgetShares.teamStable
@@ -439,8 +439,9 @@ function processSeriesMember({
   const effectiveRatingB = currentPowerRatingB + sideAdjustmentB
   const executionEffectiveRatingA = executionPowerRatingA + rosterPriorOffsetA + momentumA + sideAdjustmentA
   const executionEffectiveRatingB = executionPowerRatingB + rosterPriorOffsetB + momentumB + sideAdjustmentB
-  const matchEventK = eventTierConfig[match.tier].kFactor
-  const gameK = gameKFor(match)
+  const matchEventK = eventKFactorForMatch(match, state.eventWeightContext)
+  const matchEventWeight = eventWeightForMatch(match, state.eventWeightContext)
+  const gameK = gameKFor(match, state.eventWeightContext)
   const factorRecency = recencyWeight(match.date, lastDate)
   const aWon = match.winner === match.teamA
   const isSeriesFinal = match.id === finalMatch.id
@@ -472,8 +473,8 @@ function processSeriesMember({
   state.rosterPriorOffsets.set(match.teamB, rosterPriorOffsetB)
   const uncertaintyA = state.uncertainties.get(match.teamA) ?? maximumUncertainty
   const uncertaintyB = state.uncertainties.get(match.teamB) ?? maximumUncertainty
-  const nextUncertaintyA = isSeriesFinal ? nextUncertainty(uncertaintyA, match, leagueA, leagueB) : uncertaintyA
-  const nextUncertaintyB = isSeriesFinal ? nextUncertainty(uncertaintyB, match, leagueB, leagueA) : uncertaintyB
+  const nextUncertaintyA = isSeriesFinal ? nextUncertainty(uncertaintyA, match, leagueA, leagueB, state.eventWeightContext) : uncertaintyA
+  const nextUncertaintyB = isSeriesFinal ? nextUncertainty(uncertaintyB, match, leagueB, leagueA, state.eventWeightContext) : uncertaintyB
   state.uncertainties.set(match.teamA, nextUncertaintyA)
   state.uncertainties.set(match.teamB, nextUncertaintyB)
   const leagueDelta = isSeriesFinal
@@ -491,6 +492,7 @@ function processSeriesMember({
       observedOutcomeB: seriesObservedByTeam.get(match.teamB) ?? 0,
       strengthSignal: series.strengthSignal,
       recency: ratingUpdateRecencyWeight,
+      eventWeightContext: state.eventWeightContext,
       leagueScores: state.leagueScores,
       previousLeagueScores: state.previousLeagueScores,
       leagueWins: state.leagueWins,
@@ -569,6 +571,7 @@ function processSeriesMember({
     patchAdjustment: 0,
     ratingTarget: 'context-neutral-latent-team-strength',
     updateUnit: isSeriesFinal ? 'series-atomic' : 'series-member-no-team-update',
+    eventWeight: matchEventWeight,
     resultEvidence: resultEvidenceA,
     neutralResultResidual: resultResidualA,
     seriesStrengthSignal,
@@ -594,6 +597,7 @@ function processSeriesMember({
     patchAdjustment: 0,
     ratingTarget: 'context-neutral-latent-team-strength',
     updateUnit: isSeriesFinal ? 'series-atomic' : 'series-member-no-team-update',
+    eventWeight: matchEventWeight,
     resultEvidence: resultEvidenceB,
     neutralResultResidual: resultResidualB,
     seriesStrengthSignal,

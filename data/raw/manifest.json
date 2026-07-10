@@ -1,18 +1,19 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-08T18:09:02Z",
+  "generatedAt": "2026-07-09T16:10:27.754Z",
   "start": "2025-01-01",
-  "end": "2026-07-08",
+  "end": "2026-07-09",
   "files": {
     "leaguepediaJson": [
+      "leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json",
       "leaguepedia/scoreboard-games-2026-07-06_to_2026-07-08.json"
     ],
     "oracleCsv": [
-      "/app/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
-      "/app/data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
+      "oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
+      "oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
     ],
     "lolEsportsJson": [
-      "lolesports/schedule-2026-07-06_to_2026-07-08.json"
+      "lolesports/schedule-2011-01-01_to_2026-07-09.json"
     ]
   },
   "sources": {
@@ -24,36 +25,28 @@
     },
     "oracle": {
       "role": "primary",
-      "status": "failed",
-      "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH",
-      "discoveredCount": 13,
+      "status": "reused-local",
       "downloadedCount": 0,
-      "failedCount": 1,
-      "failures": [
-        {
-          "source": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
-          "url": "https://drive.google.com/uc?export=download&id=1hnpbrUpBMS1TZI7IovfpKeZfWJH1Aptm",
-          "error": "download returned HTML (Google Drive - Quota exceeded)"
-        }
-      ],
-      "previousStatus": "downloaded",
-      "latestStatus": "failed"
+      "reusedCount": 2,
+      "failedCount": 13,
+      "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH"
     },
     "leaguepedia": {
       "role": "backup-gap-fill",
-      "status": "downloaded",
-      "downloadedCount": 1,
-      "previousStatus": "skipped",
-      "latestStatus": "downloaded"
+      "status": "reused-local",
+      "downloadedCount": 0,
+      "reusedCount": 2
     }
   },
   "warnings": [
-    "Oracle source 2026_LoL_esports_match_data_from_OraclesElixir.csv was not downloaded: download returned HTML (Google Drive - Quota exceeded)",
-    "No fresh Oracle CSV was downloaded for the 2026-07-06 through 2026-07-08 refresh window; existing Oracle baseline was preserved and Leaguepedia filled current scored rows.",
-    "LoL Esports persisted APIs are public site endpoints, not a supported official data API. Cache responses and use them as reference metadata only."
+    "Oracle CSV refresh was attempted on 2026-07-09, but Google Drive returned quota or HTML interstitial pages; existing local Oracle CSVs were reused.",
+    "Leaguepedia full refresh was attempted on 2026-07-09 but was rate-limited; existing local Leaguepedia snapshots were reused.",
+    "LoL Esports persisted APIs are public site endpoints, not a supported official data API. Cache responses and use them as reference metadata only.",
+    "LoL Esports event-detail fetch was limited to 250 of 367 schedule events.",
+    "LoL Esports schedule cache starts at 2026-05-21, after requested start 2011-01-01; increase --older-pages for a wider reference window."
   ],
   "refreshWindow": {
-    "start": "2026-07-06",
-    "end": "2026-07-08"
+    "start": "2026-07-09",
+    "end": "2026-07-09"
   }
 }

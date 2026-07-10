@@ -1,5 +1,6 @@
 import { effectiveLeagueRating, leaguePriorFor } from '../data/leagueTiers'
 import type { MatchRecord, RatingUpdateLedger, TeamProfile } from '../types'
+import { eventWeightMultiplierForMatch, type EventWeightContext } from './eventWeighting'
 import { homeLeagueForMatch } from './matchContext'
 import {
   initialTeamRating,
@@ -29,14 +30,19 @@ type PlacementEventTracker = {
   teamLeagues: Map<string, string>
   preEventPowers: Map<string, number>
   matches: MatchRecord[]
+  eventWeightMultiplier: number
   started: boolean
   applied: boolean
 }
 
-export function buildEventTrackers(matches: MatchRecord[]) {
+export function buildEventTrackers(
+  matches: MatchRecord[],
+  eventWeightContext?: EventWeightContext,
+) {
   const trackers = new Map<string, PlacementEventTracker>()
   for (const match of matches) {
     if (!placementResidualConfigFor(match)) continue
+    const eventWeightMultiplier = eventWeightMultiplierForMatch(match, eventWeightContext)
     const key = eventTrackerKey(match)
     const tracker = trackers.get(key) ?? {
       event: match.event,
@@ -48,6 +54,7 @@ export function buildEventTrackers(matches: MatchRecord[]) {
       teamLeagues: new Map<string, string>(),
       preEventPowers: new Map<string, number>(),
       matches: [],
+      eventWeightMultiplier,
       started: false,
       applied: false,
     }
@@ -56,6 +63,7 @@ export function buildEventTrackers(matches: MatchRecord[]) {
     tracker.participants.add(match.teamA)
     tracker.participants.add(match.teamB)
     tracker.tier = strongestPlacementTier(tracker.tier, match.tier)
+    tracker.eventWeightMultiplier = Math.min(tracker.eventWeightMultiplier, eventWeightMultiplier)
     trackers.set(key, tracker)
   }
   return trackers
@@ -140,7 +148,9 @@ export function applyCompletedPlacementResiduals({
       if (league === 'Unknown') continue
       const representativeCount = representatives.get(league) ?? 1
       const residual = (actual.get(league) ?? 0) - (expected.get(league) ?? 0)
-      const delta = Number(clamp(config.k * residual / Math.sqrt(Math.max(1, representativeCount)), -config.cap, config.cap).toFixed(1))
+      const k = config.k * tracker.eventWeightMultiplier
+      const cap = config.cap * tracker.eventWeightMultiplier
+      const delta = Number(clamp(k * residual / Math.sqrt(Math.max(1, representativeCount)), -cap, cap).toFixed(1))
       if (Math.abs(delta) < 0.05) continue
       const currentScore = leagueScores.get(league) ?? leaguePriorFor(league)
       previousLeagueScores.set(league, currentScore)
