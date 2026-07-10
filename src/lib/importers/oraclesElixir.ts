@@ -121,7 +121,9 @@ function normalizeGame(
     homeLeague: redHomeLeague,
     identityRegion: redIdentity?.region,
   })
-  const date = normalizeDate(value(first, 'date'))
+  const rawDate = value(first, 'date')
+  const date = normalizeDate(rawDate)
+  const format = bestOfForGame(first, playoffs)
 
   return {
     id: `oe-${gameId}`,
@@ -131,6 +133,7 @@ function normalizeGame(
     sourceFileName: options.sourceFileName,
     dataCompleteness: value(first, 'datacompleteness') || undefined,
     date,
+    datetimeUtc: normalizeDatetimeUtc(rawDate),
     season: year || new Date().getUTCFullYear(),
     event: event || league,
     phase: playoffs ? 'Playoffs' : 'Regular season',
@@ -145,7 +148,8 @@ function normalizeGame(
     teamARoster: rosterForSide(rows, 'blue', date),
     teamBRoster: rosterForSide(rows, 'red', date),
     patch,
-    bestOf: bestOfForGame(first, playoffs),
+    bestOf: format.bestOf,
+    bestOfBasis: format.basis,
     tier: inferEventTier({ league, event, playoffs }),
     teamA: blueTeam,
     teamB: redTeam,
@@ -396,6 +400,12 @@ function normalizeDate(valueToNormalize: string) {
   return valueToNormalize.slice(0, 10)
 }
 
+function normalizeDatetimeUtc(valueToNormalize: string) {
+  if (!/[T ]\d{2}:\d{2}/.test(valueToNormalize)) return undefined
+  const parsed = Date.parse(valueToNormalize)
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
+}
+
 function yearFromDate(date: string) {
   const parsed = Number(normalizeDate(date).slice(0, 4))
   return Number.isFinite(parsed) ? parsed : 0
@@ -403,8 +413,8 @@ function yearFromDate(date: string) {
 
 function bestOfForGame(row: CsvRecord, playoffs: boolean) {
   const explicit = numberValue(row, 'bestof') || numberValue(row, 'best_of') || numberValue(row, 'matchgames')
-  if ([1, 2, 3, 5].includes(explicit)) return explicit
-  return playoffs ? 5 : 1
+  if ([1, 2, 3, 5].includes(explicit)) return { bestOf: explicit, basis: 'provider' as const }
+  return { bestOf: playoffs ? 5 : 1, basis: 'fallback' as const }
 }
 
 function makeTeamCode(teamName: string) {

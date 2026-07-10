@@ -98,7 +98,8 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
   const teamB = canonicalTeamNameFor(text(game.teamB))
   const winner = canonicalTeamNameFor(text(game.winner))
   const event = text(game.event) || 'Leaguepedia event'
-  const date = normalizeDate(text(game.date) || text(game.datetimeUtc))
+  const rawDatetimeUtc = text(game.datetimeUtc)
+  const date = normalizeDate(text(game.date) || rawDatetimeUtc)
   if (!sourceGameId || !teamA || !teamB || !winner || !date) return null
 
   const league = inferLeague(event)
@@ -108,6 +109,7 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
   const teamBHomeLeague = teamHomeLeague(game, 'B', teamB, league)
   const teamARegion = teamRegion(game, 'A', teamAHomeLeague, league)
   const teamBRegion = teamRegion(game, 'B', teamBHomeLeague, league)
+  const format = bestOfForGame(game, phase)
 
   return {
     id: `leaguepedia-${sourceGameId}`,
@@ -117,6 +119,7 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
     sourceFileName: options.sourceFileName,
     dataCompleteness: hasScoreboardStats(game) ? 'scoreboard-game-stats' : 'match-result-only',
     date,
+    datetimeUtc: normalizeDatetimeUtc(rawDatetimeUtc),
     season,
     event,
     phase,
@@ -127,7 +130,8 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
     teamARegion,
     teamBRegion,
     patch: text(game.patch),
-    bestOf: bestOfForGame(game, phase),
+    bestOf: format.bestOf,
+    bestOfBasis: format.basis,
     tier: inferEventTier({ league, event, phase }),
     teamA,
     teamB,
@@ -183,6 +187,12 @@ function normalizeDate(valueToNormalize: string) {
   return valueToNormalize.slice(0, 10)
 }
 
+function normalizeDatetimeUtc(valueToNormalize: string) {
+  if (!valueToNormalize) return undefined
+  const parsed = Date.parse(valueToNormalize)
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
+}
+
 function yearFromDate(date: string) {
   const parsed = Number(date.slice(0, 4))
   return Number.isFinite(parsed) ? parsed : new Date().getUTCFullYear()
@@ -235,8 +245,8 @@ function inferPhase(event: string) {
 
 function bestOfForGame(game: LeaguepediaGame, phase: string) {
   const explicit = numberOrZero(game.bestOf) || numberOrZero(game.matchBestOf) || numberOrZero(game.gamesInMatch)
-  if ([1, 2, 3, 5].includes(explicit)) return explicit
-  return phase === 'Playoffs' ? 5 : 1
+  if ([1, 2, 3, 5].includes(explicit)) return { bestOf: explicit, basis: 'provider' as const }
+  return { bestOf: phase === 'Playoffs' ? 5 : 1, basis: 'fallback' as const }
 }
 
 function makeTeamCode(teamName: string) {

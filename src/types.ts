@@ -109,7 +109,15 @@ export type SourceTrace = {
   date?: string
   event?: string
   bestOf?: number
+  seriesId?: string
+  formatBasis?: SeriesFormatBasis
+  formatConfidence?: SeriesFormatConfidence
 }
+
+export type SeriesFormat = 1 | 2 | 3 | 5
+export type SeriesFormatBasis = 'official' | 'provider' | 'score-inferred' | 'fallback'
+export type SeriesFormatConfidence = 'high' | 'medium' | 'low'
+export type SeriesState = 'scheduled' | 'ongoing' | 'completed' | 'unknown'
 
 export type TeamProfile = {
   name: string
@@ -221,6 +229,8 @@ export type MatchRecord = {
   sourceFileName?: string
   dataCompleteness?: string
   date: string
+  datetimeUtc?: string
+  gameNumber?: number
   season: number
   event: string
   phase: string
@@ -238,6 +248,7 @@ export type MatchRecord = {
   teamBRoster?: MatchRosterSnapshot
   patch: string
   bestOf: number
+  bestOfBasis?: Extract<SeriesFormatBasis, 'official' | 'provider' | 'fallback'>
   tier: EventTier
   teamA: string
   teamB: string

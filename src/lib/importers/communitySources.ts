@@ -81,6 +81,12 @@ function enrichWithLolEsportsReference(
   match.officialEventId = reference.matchId
   match.officialMatchId = reference.matchId
   match.officialScheduleState = reference.state
+  match.datetimeUtc = reference.startTime ?? match.datetimeUtc
+  const officialBestOf = reference.strategy?.count
+  if (officialBestOf !== undefined && [1, 2, 3, 5].includes(officialBestOf)) {
+    match.bestOf = officialBestOf
+    match.bestOfBasis = 'official'
+  }
   if (options.includeGameId) match.officialGameId = reference.gameIds[0]
 }
 
@@ -143,6 +149,7 @@ function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string
 
 function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
   if (retainedMatch.sourceProvider !== 'oracles-elixir' || duplicateMatch.sourceProvider !== 'leaguepedia-cargo') return
+  mergeFormatProvenance(retainedMatch, duplicateMatch)
   if (
     (isQualifierMetadata(duplicateMatch) && retainedMatch.tier !== 'qualifier')
     || isRegionalFinalMislabel(retainedMatch, duplicateMatch)
@@ -157,8 +164,17 @@ function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: M
   if (!hasStrongerCompetitionMetadata(retainedMatch, duplicateMatch)) return
   retainedMatch.phase = duplicateMatch.phase
   retainedMatch.tier = duplicateMatch.tier
-  if (duplicateMatch.bestOf > retainedMatch.bestOf) retainedMatch.bestOf = duplicateMatch.bestOf
   retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
+}
+
+function mergeFormatProvenance(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
+  const basisRank = { fallback: 0, provider: 1, official: 2 } as const
+  const retainedRank = retainedMatch.bestOfBasis ? basisRank[retainedMatch.bestOfBasis] : 1
+  const duplicateRank = duplicateMatch.bestOfBasis ? basisRank[duplicateMatch.bestOfBasis] : 1
+  if (duplicateRank < retainedRank) return
+  if (duplicateRank === retainedRank && duplicateMatch.bestOf <= retainedMatch.bestOf) return
+  retainedMatch.bestOf = duplicateMatch.bestOf
+  retainedMatch.bestOfBasis = duplicateMatch.bestOfBasis
 }
 
 function isRegionalFinalMislabel(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
