@@ -287,6 +287,62 @@ test('official match ids keep independent same-day team-pair matches separate', 
   assert.notEqual(alphaHistory[1]?.delta, 0)
 })
 
+test('same-day series permutations produce identical rating artifacts', () => {
+  const extendedTeams: Record<string, TeamProfile> = {
+    ...teams,
+    Delta: { name: 'Delta', code: 'DEL', region: 'LCS', league: 'LCS' },
+  }
+  const sameDayMatches = [
+    matchFixture({
+      id: 'same-day-order-alpha-gamma',
+      officialMatchId: 'same-day-order-series-a',
+      date: '2026-03-01',
+      event: 'Worlds 2026 Swiss',
+      region: 'International',
+      league: 'Worlds',
+      tier: 'worlds-main',
+      teamA: 'Alpha',
+      teamB: 'Gamma',
+      teamBHomeLeague: 'LPL',
+      teamBRegion: 'LPL',
+      winner: 'Alpha',
+    }),
+    matchFixture({
+      id: 'same-day-order-beta-delta',
+      officialMatchId: 'same-day-order-series-b',
+      date: '2026-03-01',
+      event: 'Worlds 2026 Swiss',
+      region: 'International',
+      league: 'Worlds',
+      tier: 'worlds-main',
+      teamA: 'Beta',
+      teamB: 'Delta',
+      teamBHomeLeague: 'LCS',
+      teamBRegion: 'LCS',
+      winner: 'Beta',
+    }),
+    matchFixture({
+      id: 'same-day-order-alpha-delta',
+      officialMatchId: 'same-day-order-series-c',
+      date: '2026-03-01',
+      event: 'Worlds 2026 Swiss',
+      region: 'International',
+      league: 'Worlds',
+      tier: 'worlds-main',
+      teamA: 'Alpha',
+      teamB: 'Delta',
+      teamBHomeLeague: 'LCS',
+      teamBRegion: 'LCS',
+      winner: 'Delta',
+    }),
+  ]
+
+  const baseline = buildRankingModel(sameDayMatches, { ...extendedTeams })
+  const permuted = buildRankingModel([...sameDayMatches].reverse(), { ...extendedTeams })
+
+  assert.deepEqual(modelInvariantFingerprint(permuted), modelInvariantFingerprint(baseline))
+})
+
 test('team history points use global ranks instead of match-local ranks', () => {
   const model = buildRankingModel([
     ...Array.from({ length: 24 }, (_, index) => matchFixture({
@@ -1452,6 +1508,24 @@ function leagueFor(model: ReturnType<typeof buildRankingModel>, league: string) 
   const standing = model.leagues.find((candidate) => candidate.league === league)
   assert.ok(standing)
   return standing
+}
+
+function modelInvariantFingerprint(model: ReturnType<typeof buildRankingModel>) {
+  return {
+    standings: model.standings.map((standing) => ({
+      team: standing.team,
+      rating: standing.rating,
+      baseRating: standing.baseRating,
+      wins: standing.wins,
+      losses: standing.losses,
+      form: standing.form,
+      ratingUpdate: standing.ratingUpdate,
+      history: standing.history,
+    })),
+    leagues: model.leagues,
+    leagueHistory: model.leagueHistory,
+    predictions: model.predictions,
+  }
 }
 
 function rosterFixture(prefix: string, completeness: 'complete-five-role' | 'partial' = 'complete-five-role'): MatchRecord['teamARoster'] {
