@@ -32,40 +32,48 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 
 export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const args = parseArgs(rawArgs)
-  const rawDir = resolve(stringArg(args.rawDir ?? process.env.RANKING_RAW_DIR ?? 'data/raw'))
+  const env = options.env ?? process.env
+  const rawDir = resolve(stringArg(args.rawDir ?? env.RANKING_RAW_DIR ?? 'data/raw'))
   const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
-  const statePath = resolve(stringArg(args.state ?? process.env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
-  const output = resolve(stringArg(args.output ?? process.env.RANKING_DERIVED_OUTPUT ?? 'data/derived/ranking-snapshot.full.json'))
-  const publicDataDir = resolve(stringArg(args.publicDataDir ?? process.env.RANKING_PUBLIC_DATA_DIR ?? 'public/data'))
-  const end = stringArg(args.end ?? process.env.RANKING_REFRESH_END ?? today())
-  const force = booleanArg(args.force) || process.env.RANKING_FORCE_REFRESH === 'true'
-  const skipCrunch = booleanArg(args.skipCrunch) || process.env.RANKING_SKIP_CRUNCH === 'true'
-  const bucketUploadEnabled = !booleanArg(args.skipBucketUpload) && process.env.RANKING_BUCKET_UPLOAD_ENABLED !== 'false'
-  const bucketRequired = booleanArg(args.bucketRequired) || process.env.RANKING_BUCKET_REQUIRED === 'true'
-  const bucketConfig = bucketConfigFromEnv()
-  const restoreRawEnabled = process.env.RANKING_BUCKET_RESTORE_RAW !== 'false'
+  const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
+  const output = resolve(stringArg(args.output ?? env.RANKING_DERIVED_OUTPUT ?? 'data/derived/ranking-snapshot.full.json'))
+  const publicDataDir = resolve(stringArg(args.publicDataDir ?? env.RANKING_PUBLIC_DATA_DIR ?? 'public/data'))
+  const end = stringArg(args.end ?? env.RANKING_REFRESH_END ?? today())
+  const force = booleanArg(args.force) || env.RANKING_FORCE_REFRESH === 'true'
+  const skipCrunch = booleanArg(args.skipCrunch) || env.RANKING_SKIP_CRUNCH === 'true'
+  const bucketUploadEnabled = !booleanArg(args.skipBucketUpload) && env.RANKING_BUCKET_UPLOAD_ENABLED !== 'false'
+  const bucketRequired = booleanArg(args.bucketRequired) || env.RANKING_BUCKET_REQUIRED === 'true'
+  const bucketConfig = options.bucketConfig ?? bucketConfigFromEnv(env)
+  const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
   const stagingDir = resolve(stringArg(args.stagingDir ?? `data/.refresh-staging-${process.pid}-${Date.now()}`))
   const stagingManifestPath = resolve(stagingDir, 'manifest.json')
   const extraDownloadArgs = [
     ...passThroughDownloadArgs(rawArgs),
-    ...splitExtraArgs(process.env.RANKING_REFRESH_DOWNLOAD_ARGS),
+    ...splitExtraArgs(env.RANKING_REFRESH_DOWNLOAD_ARGS),
   ]
   const localManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasUsableLocalRawBaseline = await manifestHasUsableSourceFiles(localManifest)
   const restoreResult = restoreRawEnabled && bucketConfig.enabled
-    ? await restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config: bucketConfig })
+    ? await restoreRawFromBucketIfMissing({
+        rawDir,
+        manifestPath,
+        statePath,
+        hasUsableLocalRawBaseline,
+        config: bucketConfig,
+        client: options.bucketClient,
+      })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
   const previousManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasExistingRawBaseline = await manifestHasUsableSourceFiles(previousManifest)
   const window = refreshDateWindow({
     args,
-    env: process.env,
+    env,
     end,
     hasExistingRawBaseline,
   })
   const start = window.start
   const mergeExistingRaw = booleanArg(args.mergeExistingRaw)
-    || process.env.RANKING_REFRESH_MERGE_RAW === 'true'
+    || env.RANKING_REFRESH_MERGE_RAW === 'true'
     || (window.lookbackDays !== null && hasExistingRawBaseline)
 
   await rm(stagingDir, { recursive: true, force: true })
@@ -87,6 +95,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
 
     const stagingManifest = await readJson(stagingManifestPath)
     const previousState = await readJsonIfExists(statePath)
+    const healthFingerprint = createSourceHealthFingerprint(stagingManifest)
     if (!manifestHasCurrentMatchSourceFiles(stagingManifest)) {
       const state = createStaleSourceState({
         previousState,
@@ -97,6 +106,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         window,
         mergeExistingRaw,
         restoreResult,
+        healthFingerprint,
       })
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
@@ -105,6 +115,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         changed: false,
         status: 'stale-source',
         reason: 'no-current-match-source-data',
+        healthFingerprint,
         previousFingerprint: previousState?.fingerprint,
       }
     }
@@ -113,10 +124,32 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
 
     if (!changed) {
+      const state = {
+        ...(previousState ?? {}),
+        status: 'unchanged',
+        checkedAt: new Date().toISOString(),
+        fingerprint: fingerprint.fingerprint,
+        healthFingerprint: fingerprint.healthFingerprint,
+        downloadStart: start,
+        downloadEnd: end,
+        sources: stagingManifest?.sources ?? {},
+        warnings: arrayValue(stagingManifest?.warnings),
+        crunch: {
+          skipped: true,
+          reason: 'unchanged-source-data',
+        },
+        publish: {
+          skipped: true,
+          reason: 'unchanged-source-data',
+        },
+      }
+      await mkdir(dirname(statePath), { recursive: true })
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.log(`No source-data changes detected for ${start} through ${end}; skipping crunch.`)
       return {
         changed: false,
         fingerprint: fingerprint.fingerprint,
+        healthFingerprint: fingerprint.healthFingerprint,
         previousFingerprint: previousState?.fingerprint,
       }
     }
@@ -138,8 +171,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
 
     const state = {
       schemaVersion: 1,
+      status: 'refreshed',
       refreshedAt: new Date().toISOString(),
       fingerprint: fingerprint.fingerprint,
+      healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
       downloadStart: start,
       downloadEnd: end,
@@ -150,6 +185,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       mergeExistingRaw,
       restoredRaw: restoreResult,
       files: fingerprint.files,
+      sources: stagingManifest?.sources ?? {},
+      warnings: arrayValue(stagingManifest?.warnings),
       crunch: skipCrunch
         ? { skipped: true }
         : {
@@ -185,7 +222,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           enabled: false,
           missing: bucketConfig.missing,
         }
-        if (process.env.RANKING_BUCKET_UPLOAD_ENABLED === 'true') {
+        if (env.RANKING_BUCKET_UPLOAD_ENABLED === 'true') {
           console.warn(`Railway bucket upload skipped; missing ${bucketConfig.missing.join(', ')}.`)
         }
       } else {
@@ -197,12 +234,17 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           statePath,
           config: bucketConfig,
           client: options.bucketClient,
-          refreshStateForUpload: ({ bucket, prefix, uploadedCount, skipped }) => {
+          uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
+          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped }) => {
             state.bucket = {
               enabled: true,
               bucket,
               prefix,
+              artifactCount,
               uploadedCount,
+              uploadedBytes,
+              unchangedCount,
+              unchangedBytes,
               skipped,
             }
             return state
@@ -212,11 +254,15 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           enabled: true,
           bucket: bucketPublish.bucket,
           prefix: bucketPublish.prefix,
-          uploadedCount: bucketPublish.uploaded.length,
+          artifactCount: bucketPublish.artifactCount,
+          uploadedCount: bucketPublish.uploadedCount,
+          uploadedBytes: bucketPublish.uploadedBytes,
+          unchangedCount: bucketPublish.unchanged.length,
+          unchangedBytes: bucketPublish.unchangedBytes,
           skipped: bucketPublish.skipped,
         }
-        const skippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
-        console.log(`Uploaded ${bucketPublish.uploaded.length} ranking artifact(s) to Railway bucket prefix ${bucketPublish.prefix || '(root)'}${skippedMessage}.`)
+        const optionalSkippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
+        console.log(`Uploaded ${bucketPublish.uploadedCount} ranking artifact(s) (${bucketPublish.uploadedBytes} bytes); reused ${bucketPublish.unchangedCount} unchanged artifact(s) (${bucketPublish.unchangedBytes} bytes) in Railway bucket prefix ${bucketPublish.prefix || '(root)'}${optionalSkippedMessage}.`)
       }
     } else if (!skipCrunch) {
       state.bucket = {
@@ -230,6 +276,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     return {
       changed: true,
       fingerprint: fingerprint.fingerprint,
+      healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
     }
   } finally {
@@ -252,19 +299,24 @@ export async function createSourceFingerprint(manifest) {
 
   files.sort((left, right) => `${left.kind}:${left.name}`.localeCompare(`${right.kind}:${right.name}`))
 
-  const value = {
+  const content = {
     schemaVersion: manifest?.schemaVersion,
     start: manifest?.start,
     end: manifest?.end,
+    files,
+  }
+  return {
+    fingerprint: sha256(stableJson(content)),
+    healthFingerprint: createSourceHealthFingerprint(manifest),
+    files,
+  }
+}
+
+export function createSourceHealthFingerprint(manifest) {
+  return sha256(stableJson({
     sources: stripVolatileValues(manifest?.sources ?? {}),
     warnings: stripVolatileValues(manifest?.warnings ?? []),
-    files,
-  }
-
-  return {
-    fingerprint: sha256(stableJson(value)),
-    files,
-  }
+  }))
 }
 
 export function refreshDateWindow({
@@ -305,7 +357,7 @@ export function refreshDateWindow({
   }
 }
 
-async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config }) {
+async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config, client }) {
   if (hasUsableLocalRawBaseline) {
     return {
       restored: false,
@@ -317,6 +369,7 @@ async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, 
     destinationDir: rawDir,
     sourcePrefix: 'raw/files',
     config,
+    client,
   })
 
   if (!result.enabled) {
@@ -340,11 +393,13 @@ async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, 
     relativeKey: 'raw/manifest.json',
     destinationPath: manifestPath,
     config,
+    client,
   })
   const stateResult = await downloadBucketObject({
     relativeKey: 'raw/refresh-state.json',
     destinationPath: statePath,
     config,
+    client,
   })
 
   console.log(`Restored ${result.downloaded.length} raw baseline file(s) from Railway bucket prefix ${result.prefix || '(root)'}.`)
@@ -430,6 +485,7 @@ function createStaleSourceState({
   window,
   mergeExistingRaw,
   restoreResult,
+  healthFingerprint,
 }) {
   return {
     schemaVersion: 1,
@@ -437,6 +493,8 @@ function createStaleSourceState({
     reason: 'no-current-match-source-data',
     refreshedAt: new Date().toISOString(),
     previousFingerprint: previousState?.fingerprint,
+    fingerprint: previousState?.fingerprint,
+    healthFingerprint,
     downloadStart: start,
     downloadEnd: end,
     coverageStart: previousManifest?.start ?? previousState?.coverageStart,

@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, readFile, readdir, stat } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { pipeline } from 'node:stream/promises'
-import { dirname, extname, posix, relative, resolve, sep } from 'node:path'
-import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 
 export function bucketConfigFromEnv(env = process.env) {
@@ -67,15 +69,24 @@ export async function uploadRankingArtifacts({
       enabled: false,
       missing: config.missing,
       uploaded: [],
+      unchanged: [],
       skipped: [],
+      artifactCount: 0,
+      uploadedCount: 0,
+      uploadedBytes: 0,
+      unchangedCount: 0,
+      unchangedBytes: 0,
     }
   }
 
   const uploads = []
+  const unchanged = []
   const skipped = []
   uploads.push(...await uploadDirectory(client, config, publicDataDir, 'data'))
   if (rawDir) {
-    uploads.push(...await uploadRawSourceFiles(client, config, rawDir, manifestPath))
+    const rawSync = await uploadRawSourceFiles(client, config, rawDir, manifestPath)
+    uploads.push(...rawSync.uploaded)
+    unchanged.push(...rawSync.unchanged)
   }
 
   if (fullSnapshotPath && uploadFullSnapshot) {
@@ -91,23 +102,21 @@ export async function uploadRankingArtifacts({
   }
   if (statePath) {
     if (refreshStateForUpload) {
-      uploads.push(await uploadJson(client, config, 'raw/refresh-state.json', refreshStateForUpload({
-        bucket: config.bucket,
-        prefix: config.prefix,
-        uploadedCount: uploads.length + 1,
-        skipped,
-      })))
+      uploads.push(await uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped }))
     } else {
       uploads.push(await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
     }
   }
+  const publishedArtifacts = [...uploads]
+  const publishMetrics = publishMetricsFor(publishedArtifacts, unchanged)
 
   await uploadJson(client, config, 'latest-publish.json', {
     schemaVersion: 1,
     publishedAt: new Date().toISOString(),
     prefix: config.prefix,
-    artifactCount: uploads.length,
-    artifacts: uploads.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
+    ...publishMetrics,
+    artifacts: publishedArtifacts.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
+    unchanged: unchanged.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, digest })),
     skipped,
   })
 
@@ -116,7 +125,9 @@ export async function uploadRankingArtifacts({
     bucket: config.bucket,
     prefix: config.prefix,
     uploaded: uploads,
+    unchanged,
     skipped,
+    ...publishMetrics,
   }
 }
 
@@ -263,14 +274,15 @@ export async function uploadDirectory(client, config, dir, destinationPrefix) {
 }
 
 export async function uploadRawSourceFiles(client, config, rawDir, manifestPath) {
-  if (!manifestPath) return []
+  if (!manifestPath) return { uploaded: [], unchanged: [] }
 
   const root = resolve(rawDir)
   const manifest = manifestWithResolvedFiles(JSON.parse(await readFile(manifestPath, 'utf8')), root)
   const rootWithSeparator = `${root}${sep}`
   const files = uniqueValues(Object.values(manifest?.files ?? {})
     .flatMap((entries) => Array.isArray(entries) ? entries : []))
-  const uploads = []
+  const uploaded = []
+  const unchanged = []
 
   for (const file of files) {
     const filePath = resolve(file)
@@ -278,31 +290,84 @@ export async function uploadRawSourceFiles(client, config, rawDir, manifestPath)
       throw new Error(`Raw source file is outside rawDir: ${file}`)
     }
     const relativePath = relative(root, filePath).split(sep).join('/')
-    uploads.push(await uploadFile(client, config, filePath, `raw/files/${relativePath}`))
+    const result = await syncRawFile(client, config, filePath, `raw/files/${relativePath}`)
+    if (result.status === 'unchanged') unchanged.push(result)
+    else uploaded.push(result)
   }
 
-  return uploads
+  return { uploaded, unchanged }
 }
 
-export async function uploadFile(client, config, filePath, relativeKey) {
-  const fileStat = await stat(filePath)
+export async function syncRawFile(client, config, filePath, relativeKey) {
   const key = bucketKey(config, relativeKey)
+  const snapshotDir = await mkdtemp(join(tmpdir(), 'ranking-raw-upload-'))
+  const snapshotPath = join(snapshotDir, basename(filePath))
+
+  try {
+    const sourceBeforeCopy = await stat(filePath)
+    await copyFile(filePath, snapshotPath)
+    const sourceAfterCopy = await stat(filePath)
+    assertStableFile(sourceBeforeCopy, sourceAfterCopy, filePath)
+    const snapshotStat = await stat(snapshotPath)
+    const digest = await sha256File(snapshotPath)
+
+    try {
+      const remote = await client.send(new HeadObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+      }))
+      if (remote.ContentLength === snapshotStat.size && remote.Metadata?.sha256 === digest) {
+        return {
+          status: 'unchanged',
+          reason: 'unchanged-content',
+          key,
+          bytes: snapshotStat.size,
+          contentType: contentTypeForPath(filePath),
+          digest,
+        }
+      }
+    } catch {
+      // A missing object or unverifiable comparison must upload to preserve recovery correctness.
+    }
+
+    return await uploadFile(client, config, snapshotPath, relativeKey, {
+      metadata: { sha256: digest },
+      digest,
+      expectedStat: snapshotStat,
+      contentType: contentTypeForPath(filePath),
+    })
+  } finally {
+    await rm(snapshotDir, { recursive: true, force: true })
+  }
+}
+
+export async function uploadFile(client, config, filePath, relativeKey, { metadata, digest, expectedStat, contentType } = {}) {
+  const fileStat = await stat(filePath)
+  if (expectedStat) assertStableFile(expectedStat, fileStat, filePath)
+  const key = bucketKey(config, relativeKey)
+  const resolvedContentType = contentType ?? contentTypeForPath(filePath)
   await client.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: key,
     Body: createReadStream(filePath),
     ContentLength: fileStat.size,
-    ContentType: contentTypeForPath(filePath),
+    ContentType: resolvedContentType,
+    ...(metadata ? { Metadata: metadata } : {}),
   }))
   return {
+    status: 'uploaded',
     key,
     bytes: fileStat.size,
-    contentType: contentTypeForPath(filePath),
+    contentType: resolvedContentType,
+    ...(digest ? { digest } : {}),
   }
 }
 
 export async function uploadJson(client, config, relativeKey, value) {
-  const body = `${JSON.stringify(value, null, 2)}\n`
+  return uploadJsonBody(client, config, relativeKey, jsonBody(value))
+}
+
+async function uploadJsonBody(client, config, relativeKey, body) {
   const key = bucketKey(config, relativeKey)
   await client.send(new PutObjectCommand({
     Bucket: config.bucket,
@@ -315,6 +380,27 @@ export async function uploadJson(client, config, relativeKey, value) {
     bytes: Buffer.byteLength(body),
     contentType: 'application/json; charset=utf-8',
   }
+}
+
+async function uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped }) {
+  let stateBytes = 0
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const projectedState = {
+      key: bucketKey(config, 'raw/refresh-state.json'),
+      bytes: stateBytes,
+    }
+    const metrics = publishMetricsFor([...uploads, projectedState], unchanged)
+    const body = jsonBody(refreshStateForUpload({
+      bucket: config.bucket,
+      prefix: config.prefix,
+      ...metrics,
+      skipped,
+    }))
+    const nextBytes = Buffer.byteLength(body)
+    if (nextBytes === stateBytes) return uploadJsonBody(client, config, 'raw/refresh-state.json', body)
+    stateBytes = nextBytes
+  }
+  throw new Error('Refresh-state upload metrics did not stabilize')
 }
 
 export async function deleteObject(relativeKey, {
@@ -412,6 +498,39 @@ function parseBoolean(value) {
 
 function uniqueValues(values) {
   return Array.from(new Set(values.filter((value) => value !== undefined && value !== null)))
+}
+
+async function sha256File(filePath) {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk)
+  return hash.digest('hex')
+}
+
+function sumBytes(entries) {
+  return entries.reduce((total, entry) => total + (entry.bytes ?? 0), 0)
+}
+
+function publishMetricsFor(uploaded, unchanged) {
+  return {
+    artifactCount: uploaded.length + unchanged.length,
+    uploadedCount: uploaded.length,
+    uploadedBytes: sumBytes(uploaded),
+    unchangedCount: unchanged.length,
+    unchangedBytes: sumBytes(unchanged),
+  }
+}
+
+function jsonBody(value) {
+  return `${JSON.stringify(value, null, 2)}\n`
+}
+
+function assertStableFile(before, after, filePath) {
+  if (before.dev !== after.dev
+    || before.ino !== after.ino
+    || before.size !== after.size
+    || before.mtimeMs !== after.mtimeMs) {
+    throw new Error(`Raw source file changed while preparing upload: ${filePath}`)
+  }
 }
 
 function isMissingObjectError(error) {

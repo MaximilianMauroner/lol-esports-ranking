@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import test from 'node:test'
 
 type RefreshRun = (command: string, commandArgs: string[]) => Promise<void>
 type RefreshResult = {
   changed: boolean
   fingerprint?: string
+  healthFingerprint?: string
   previousFingerprint?: string
   status?: string
   reason?: string
@@ -20,10 +23,12 @@ type RefreshWindow = {
   mode: string
 }
 type RefreshModule = {
-  createSourceFingerprint: (manifest: unknown) => Promise<{ fingerprint: string }>
+  createSourceFingerprint: (manifest: unknown) => Promise<{ fingerprint: string; healthFingerprint: string }>
   refreshDataIfChanged: (rawArgs?: string[], options?: {
     run?: RefreshRun
     bucketClient?: BucketClient
+    bucketConfig?: BucketConfig
+    env?: Record<string, string | undefined>
   }) => Promise<RefreshResult>
   refreshDateWindow: (options?: {
     args?: Record<string, string | undefined>
@@ -41,7 +46,13 @@ type BucketUploadResult = {
   bucket?: string
   prefix?: string
   uploaded: Array<{ key: string; bytes?: number; contentType?: string }>
+  unchanged: Array<{ key: string; bytes?: number; contentType?: string; digest?: string }>
   skipped: Array<{ key: string; reason: string }>
+  artifactCount: number
+  uploadedCount: number
+  uploadedBytes: number
+  unchangedCount: number
+  unchangedBytes: number
 }
 type BucketModule = {
   bucketKey: (config: BucketConfig, path: string) => string
@@ -64,6 +75,10 @@ const refreshScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
 const bucketScriptPath: string = '../scripts/railway-bucket.mjs'
 const { createSourceFingerprint, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
 const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import(bucketScriptPath) as unknown as BucketModule
+const isolatedRefreshEnv = {
+  RANKING_BUCKET_RESTORE_RAW: 'false',
+  RANKING_BUCKET_UPLOAD_ENABLED: 'false',
+}
 
 test('source fingerprint ignores volatile fetch timestamps', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-fingerprint-'))
@@ -95,6 +110,32 @@ test('source fingerprint ignores volatile fetch timestamps', async () => {
   }
 })
 
+test('source fingerprint separates provider health noise from ranking content', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-health-fingerprint-'))
+  const sourcePath = join(tempDir, 'leaguepedia.json')
+
+  try {
+    await writeFile(sourcePath, JSON.stringify({ matches: [{ id: 'game-1', winner: 'Blue' }] }))
+    const healthyManifest = manifest(sourcePath)
+    const degradedManifest = {
+      ...healthyManifest,
+      sources: {
+        ...healthyManifest.sources,
+        oracle: { ...healthyManifest.sources.oracle, status: 'failed', failedCount: 1 },
+      },
+      warnings: ['Oracle download returned HTML (Google Drive - Quota exceeded).'],
+    }
+
+    const healthy = await createSourceFingerprint(healthyManifest)
+    const degraded = await createSourceFingerprint(degradedManifest)
+
+    assert.equal(healthy.fingerprint, degraded.fingerprint)
+    assert.notEqual(healthy.healthFingerprint, degraded.healthFingerprint)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('refresh wrapper skips crunch when staged source digest is unchanged', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-refresh-'))
   const rawDir = join(tempDir, 'raw')
@@ -109,14 +150,40 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       downloadCount += 1
       const outDir = valueAfter(commandArgs, '--out-dir')
       const nextManifestPath = valueAfter(commandArgs, '--manifest')
+      if (downloadCount === 4) {
+        await writeFile(nextManifestPath, `${JSON.stringify({
+          schemaVersion: 1,
+          start: '2026-01-01',
+          end: '2026-06-29',
+          files: { leaguepediaJson: [], oracleCsv: [], lolEsportsJson: [] },
+          sources: {
+            leaguepedia: { role: 'backup-gap-fill', status: 'failed', failedCount: 1 },
+            oracle: { role: 'primary', status: 'failed', failedCount: 1 },
+          },
+          warnings: ['All current match providers are unavailable.'],
+        })}\n`)
+        return
+      }
       const leaguepediaPath = join(outDir, 'leaguepedia', 'scoreboard-games.json')
       await mkdir(join(outDir, 'leaguepedia'), { recursive: true })
       await writeFile(leaguepediaPath, JSON.stringify({
         source: 'Leaguepedia Cargo ScoreboardGames',
         fetchedAt: `2026-06-29T0${downloadCount}:00:00.000Z`,
-        matches: [{ id: 'game-1', winner: 'Blue' }],
+        matches: [{ id: 'game-1', winner: downloadCount >= 3 ? 'Red' : 'Blue' }],
       }))
-      await writeFile(nextManifestPath, `${JSON.stringify(manifest(leaguepediaPath), null, 2)}\n`)
+      const nextManifest = {
+        ...manifest(leaguepediaPath),
+        warnings: [] as string[],
+      }
+      if (downloadCount === 2) {
+        nextManifest.sources.oracle = {
+          ...nextManifest.sources.oracle,
+          status: 'failed',
+          downloadedCount: 0,
+        }
+        nextManifest.warnings = ['Oracle provider health changed without changing ranking content.']
+      }
+      await writeFile(nextManifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`)
       return
     }
 
@@ -142,7 +209,9 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       join(tempDir, 'derived.json'),
       '--public-data-dir',
       join(tempDir, 'public-data'),
-    ], { run: fakeRun })
+      '--end',
+      '2026-06-29',
+    ], { run: fakeRun, env: isolatedRefreshEnv })
     const second = await refreshDataIfChanged([
       '--raw-dir',
       rawDir,
@@ -156,12 +225,63 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       join(tempDir, 'derived.json'),
       '--public-data-dir',
       join(tempDir, 'public-data'),
-    ], { run: fakeRun })
+      '--end',
+      '2026-06-29',
+    ], { run: fakeRun, env: isolatedRefreshEnv })
+    const unchangedState = JSON.parse(await readFile(statePath, 'utf8'))
+    const third = await refreshDataIfChanged([
+      '--raw-dir',
+      rawDir,
+      '--manifest',
+      manifestPath,
+      '--state',
+      statePath,
+      '--staging-dir',
+      stagingDir,
+      '--output',
+      join(tempDir, 'derived.json'),
+      '--public-data-dir',
+      join(tempDir, 'public-data'),
+      '--end',
+      '2026-06-29',
+    ], { run: fakeRun, env: isolatedRefreshEnv })
+    const fourth = await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', stagingDir,
+      '--output', join(tempDir, 'derived.json'),
+      '--public-data-dir', join(tempDir, 'public-data'),
+      '--end', '2026-06-29',
+    ], { run: fakeRun, env: isolatedRefreshEnv })
+    const outageState = JSON.parse(await readFile(statePath, 'utf8'))
+    const fifth = await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', stagingDir,
+      '--output', join(tempDir, 'derived.json'),
+      '--public-data-dir', join(tempDir, 'public-data'),
+      '--end', '2026-06-29',
+    ], { run: fakeRun, env: isolatedRefreshEnv })
 
     assert.equal(first.changed, true)
     assert.equal(second.changed, false)
-    assert.equal(crunchCount, 1)
+    assert.equal(third.changed, true)
+    assert.equal(fourth.status, 'stale-source')
+    assert.equal(fifth.changed, false)
+    assert.equal(typeof first.healthFingerprint, 'string')
+    assert.equal(typeof second.healthFingerprint, 'string')
+    assert.notEqual(first.healthFingerprint, second.healthFingerprint)
+    assert.notEqual(second.fingerprint, third.fingerprint)
+    assert.equal(crunchCount, 2)
+    assert.equal(outageState.fingerprint, third.fingerprint)
+    assert.equal(unchangedState.status, 'unchanged')
+    assert.deepEqual(unchangedState.warnings, ['Oracle provider health changed without changing ranking content.'])
+    assert.deepEqual(unchangedState.publish, { skipped: true, reason: 'unchanged-source-data' })
     assert.match(await readFile(manifestPath, 'utf8'), new RegExp(escapeRegExp(rawDir)))
+    const state = JSON.parse(await readFile(statePath, 'utf8'))
+    assert.equal(state.status, 'unchanged')
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
@@ -193,6 +313,90 @@ test('refresh date window bootstraps without raw baseline and then uses rolling 
     bootstrapStart: '2025-01-01',
     mode: 'lookback',
   })
+})
+
+test('refresh wrapper uses the injected bucket client when restoring a missing raw baseline', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-injected-restore-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const stagingDir = join(tempDir, 'staging')
+  const restoredOracle = 'gameid,result\nrestored,1\n'
+  const restoredManifest = JSON.stringify({
+    ...manifest('oracles-elixir/2025.csv'),
+    start: '2025-01-01',
+    end: '2026-06-21',
+    files: { leaguepediaJson: [], oracleCsv: ['oracles-elixir/2025.csv'] },
+  })
+  const calls: Array<Record<string, unknown>> = []
+  const client = {
+    async send(command: { input: Record<string, unknown> }) {
+      calls.push(command.input)
+      if (command.input.Prefix === 'rankings/raw/files/') {
+        return {
+          Contents: [{
+            Key: 'rankings/raw/files/oracles-elixir/2025.csv',
+            Size: Buffer.byteLength(restoredOracle),
+          }],
+        }
+      }
+      if (command.input.Key === 'rankings/raw/files/oracles-elixir/2025.csv') {
+        return { Body: Readable.from([restoredOracle]) }
+      }
+      if (command.input.Key === 'rankings/raw/manifest.json') {
+        return { Body: Readable.from([restoredManifest]), ContentLength: Buffer.byteLength(restoredManifest) }
+      }
+      if (command.input.Key === 'rankings/raw/refresh-state.json') {
+        return { Body: Readable.from(['{"fingerprint":"restored"}']), ContentLength: 26 }
+      }
+      throw new Error(`Unexpected bucket command: ${JSON.stringify(command.input)}`)
+    },
+  }
+  let downloadStart = ''
+
+  async function fakeRun(command: string, commandArgs: string[]) {
+    if (!commandArgs.includes('scripts/download-local-data.mjs')) {
+      throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
+    }
+    downloadStart = valueAfter(commandArgs, '--start')
+    const outDir = valueAfter(commandArgs, '--out-dir')
+    const nextManifestPath = valueAfter(commandArgs, '--manifest')
+    const nextOraclePath = join(outDir, 'oracles-elixir', '2026.csv')
+    await mkdir(join(outDir, 'oracles-elixir'), { recursive: true })
+    await writeFile(nextOraclePath, 'gameid,result\ncurrent,1\n')
+    await writeFile(nextManifestPath, `${JSON.stringify({
+      ...manifest(nextOraclePath),
+      start: '2026-06-22',
+      end: '2026-06-29',
+      files: { leaguepediaJson: [], oracleCsv: [nextOraclePath] },
+    })}\n`)
+  }
+
+  try {
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', stagingDir,
+      '--lookback-days', '7',
+      '--end', '2026-06-29',
+      '--skip-crunch',
+    ], {
+      run: fakeRun,
+      bucketClient: client,
+      bucketConfig: bucketConfig(),
+      env: {
+        RANKING_BUCKET_RESTORE_RAW: 'true',
+        RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01',
+      },
+    })
+
+    assert.equal(downloadStart, '2026-06-22')
+    assert.equal(await readFile(join(rawDir, 'oracles-elixir', '2025.csv'), 'utf8'), restoredOracle)
+    assert.equal(calls.some((input) => input.Prefix === 'rankings/raw/files/'), true)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
 })
 
 test('refresh wrapper merges rolling downloads into existing raw baseline', async () => {
@@ -279,7 +483,7 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
       '--end',
       '2026-06-29',
       '--skip-bucket-upload',
-    ], { run: fakeRun })
+    ], { run: fakeRun, env: isolatedRefreshEnv })
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const state = JSON.parse(await readFile(statePath, 'utf8'))
 
@@ -403,13 +607,14 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       '--end',
       '2026-07-09',
       '--skip-bucket-upload',
-    ], { run: fakeRun })
+    ], { run: fakeRun, env: isolatedRefreshEnv })
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const state = JSON.parse(await readFile(statePath, 'utf8'))
 
     assert.equal(result.changed, false)
     assert.equal(result.status, 'stale-source')
     assert.equal(result.reason, 'no-current-match-source-data')
+    assert.equal(typeof result.healthFingerprint, 'string')
     assert.equal(crunchCount, 0)
     assert.deepEqual(finalManifest.files.oracleCsv, [previousOraclePath])
     assert.equal(state.status, 'stale-source')
@@ -521,7 +726,7 @@ test('refresh wrapper warns when previous Oracle raw data is preserved for a fal
       '--end',
       '2026-07-09',
       '--skip-bucket-upload',
-    ], { run: fakeRun })
+    ], { run: fakeRun, env: isolatedRefreshEnv })
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
 
     assert.equal(result.changed, true)
@@ -541,7 +746,6 @@ test('refresh wrapper bootstraps when manifest exists but raw files are missing'
   const statePath = join(rawDir, 'refresh-state.json')
   const stagingDir = join(tempDir, 'staging')
   const missingOraclePath = join(rawDir, 'oracles-elixir', '2025.csv')
-  const previousBootstrapStart = process.env.RANKING_REFRESH_BOOTSTRAP_START
   let downloadStart = ''
 
   async function fakeRun(command: string, commandArgs: string[]) {
@@ -569,7 +773,6 @@ test('refresh wrapper bootstraps when manifest exists but raw files are missing'
   }
 
   try {
-    process.env.RANKING_REFRESH_BOOTSTRAP_START = '2025-01-01'
     await mkdir(rawDir, { recursive: true })
     await writeFile(manifestPath, `${JSON.stringify({
       ...manifest(missingOraclePath),
@@ -599,18 +802,19 @@ test('refresh wrapper bootstraps when manifest exists but raw files are missing'
       '--end',
       '2026-06-29',
       '--skip-bucket-upload',
-    ], { run: fakeRun })
+    ], {
+      run: fakeRun,
+      env: {
+        ...isolatedRefreshEnv,
+        RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01',
+      },
+    })
     const state = JSON.parse(await readFile(statePath, 'utf8'))
 
     assert.equal(downloadStart, '2025-01-01')
     assert.equal(state.mergeExistingRaw, false)
     assert.equal(state.coverageStart, '2025-01-01')
   } finally {
-    if (previousBootstrapStart === undefined) {
-      delete process.env.RANKING_REFRESH_BOOTSTRAP_START
-    } else {
-      process.env.RANKING_REFRESH_BOOTSTRAP_START = previousBootstrapStart
-    }
     await rm(tempDir, { recursive: true, force: true })
   }
 })
@@ -623,7 +827,6 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
   const stagingDir = join(tempDir, 'staging')
   const publicDataDir = join(tempDir, 'public-data')
   const output = join(tempDir, 'derived', 'ranking-snapshot.full.json')
-  const previousEnv = { ...process.env }
   const sent: Array<{ input: { Key: string; Bucket: string; Body?: unknown; ContentType?: string } }> = []
   const client = {
     async send(command: { input: { Key: string; Bucket: string; Body?: unknown; ContentType?: string } }) {
@@ -662,13 +865,6 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
   }
 
   try {
-    process.env.RANKING_BUCKET_NAME = 'bucket-123'
-    process.env.RANKING_BUCKET_ENDPOINT = 'https://storage.railway.app'
-    process.env.RANKING_BUCKET_ACCESS_KEY_ID = 'access-key'
-    process.env.RANKING_BUCKET_SECRET_ACCESS_KEY = 'secret-key'
-    process.env.RANKING_BUCKET_PREFIX = 'rankings'
-    process.env.RANKING_BUCKET_RESTORE_RAW = 'false'
-
     await refreshDataIfChanged([
       '--raw-dir',
       rawDir,
@@ -684,30 +880,46 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
       publicDataDir,
       '--end',
       '2026-06-29',
-    ], { run: fakeRun, bucketClient: client })
+    ], {
+      run: fakeRun,
+      bucketClient: client,
+      env: {
+        RANKING_BUCKET_NAME: 'bucket-123',
+        RANKING_BUCKET_ENDPOINT: 'https://storage.railway.app',
+        RANKING_BUCKET_ACCESS_KEY_ID: 'access-key',
+        RANKING_BUCKET_SECRET_ACCESS_KEY: 'secret-key',
+        RANKING_BUCKET_PREFIX: 'rankings',
+        RANKING_BUCKET_RESTORE_RAW: 'false',
+      },
+    })
 
     const uploadedStateBody = sent.find((entry) => entry.input.Key === 'rankings/raw/refresh-state.json')?.input.Body
     assert.equal(typeof uploadedStateBody, 'string')
     const uploadedState = JSON.parse(uploadedStateBody as string)
     const localState = JSON.parse(await readFile(statePath, 'utf8'))
 
-    assert.deepEqual(uploadedState.bucket, {
+    const { uploadedBytes, ...uploadedBucketWithoutBytes } = uploadedState.bucket
+    assert.deepEqual(uploadedBucketWithoutBytes, {
       enabled: true,
       bucket: 'bucket-123',
       prefix: 'rankings',
+      artifactCount: 5,
       uploadedCount: 5,
+      unchangedCount: 0,
+      unchangedBytes: 0,
       skipped: [{
         key: 'rankings/artifacts/latest-full.json',
         reason: 'full-snapshot-upload-disabled',
       }],
     })
+    assert.equal(typeof uploadedBytes, 'number')
+    assert.equal(uploadedBytes > 0, true)
     assert.deepEqual(localState.bucket, uploadedState.bucket)
 
     const publishBody = sent.find((entry) => entry.input.Key === 'rankings/latest-publish.json')?.input.Body
     assert.equal(typeof publishBody, 'string')
     assert.equal(JSON.parse(publishBody as string).artifactCount, uploadedState.bucket.uploadedCount)
   } finally {
-    process.env = previousEnv
     await rm(tempDir, { recursive: true, force: true })
   }
 })
@@ -719,9 +931,9 @@ test('bucket publisher skips full audit artifact upload by default', async () =>
   const manifestPath = join(tempDir, 'raw', 'manifest.json')
   const statePath = join(tempDir, 'raw', 'refresh-state.json')
   const rawOraclePath = join(tempDir, 'raw', 'oracles-elixir', '2026.csv')
-  const sent: Array<{ input: { Key: string; Bucket: string; ContentType?: string } }> = []
+  const sent: Array<{ input: { Key: string; Bucket: string; Body?: unknown; ContentType?: string } }> = []
   const client = {
-    async send(command: { input: { Key: string; Bucket: string; ContentType?: string } }) {
+    async send(command: { input: { Key: string; Bucket: string; Body?: unknown; ContentType?: string } }) {
       sent.push({ input: command.input })
       return {}
     },
@@ -753,10 +965,12 @@ test('bucket publisher skips full audit artifact upload by default', async () =>
       config,
       client,
     })
-    const keys = sent.map((entry) => entry.input.Key).sort()
+    const keys = sent.filter((entry) => entry.input.Body !== undefined).map((entry) => entry.input.Key).sort()
 
     assert.equal(result.enabled, true)
     assert.equal(result.uploaded.length, 5)
+    assert.equal(result.uploadedCount, result.uploaded.length)
+    assert.equal(result.uploadedBytes, result.uploaded.reduce((total, entry) => total + (entry.bytes ?? 0), 0))
     assert.deepEqual(result.skipped, [{
       key: 'rankings/artifacts/latest-full.json',
       reason: 'full-snapshot-upload-disabled',
@@ -816,6 +1030,88 @@ test('bucket publisher can opt in to full audit artifact upload', async () => {
   }
 })
 
+test('bucket publisher reuses a raw object when SHA-256 metadata and size match', async () => {
+  const sync = await runRawSyncCase('matching')
+
+  assert.equal(sync.result.unchanged.length, 1)
+  assert.equal(sync.result.unchangedCount, 1)
+  assert.equal(sync.result.unchangedBytes, sync.rawBytes)
+  assert.equal(sync.rawPut, undefined)
+  assert.equal(sync.result.unchanged[0]?.digest, sync.digest)
+})
+
+test('bucket publisher uploads same-size raw content when SHA-256 metadata differs', async () => {
+  const sync = await runRawSyncCase('mismatch')
+
+  assert.equal(sync.result.unchanged.length, 0)
+  assert.ok(sync.rawPut)
+  assert.equal(sync.rawPut.Metadata?.sha256, sync.digest)
+  assert.equal(sync.rawPut.ContentLength, sync.rawBytes)
+})
+
+test('bucket publisher uploads raw content when metadata cannot be verified', async () => {
+  const [legacy, failedHead] = await Promise.all([
+    runRawSyncCase('legacy'),
+    runRawSyncCase('error'),
+  ])
+
+  assert.ok(legacy.rawPut)
+  assert.ok(failedHead.rawPut)
+  assert.equal(legacy.rawPut.Metadata?.sha256, legacy.digest)
+  assert.equal(failedHead.rawPut.Metadata?.sha256, failedHead.digest)
+})
+
+test('bucket publisher uploads an immutable snapshot when the source changes during PUT', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-raw-mutation-'))
+  const publicDataDir = join(tempDir, 'public-data')
+  const rawDir = join(tempDir, 'raw')
+  const rawOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const rawKey = 'rankings/raw/files/oracles-elixir/2026.csv'
+  const originalContent = 'gameid,result\nnew,1\n'
+  let uploadedBody: Buffer | undefined
+  let uploadedDigest: string | undefined
+  const client = {
+    async send(command: { input: { Key: string; Body?: unknown; Metadata?: Record<string, string> } }) {
+      if (command.input.Key === rawKey && command.input.Body === undefined) {
+        return { ContentLength: 0, Metadata: {} }
+      }
+      if (command.input.Key === rawKey && command.input.Body) {
+        await writeFile(rawOraclePath, 'gameid,result\nmutated-record,1\n')
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        const chunks: Buffer[] = []
+        for await (const chunk of command.input.Body as AsyncIterable<Buffer | string>) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        }
+        uploadedBody = Buffer.concat(chunks)
+        uploadedDigest = command.input.Metadata?.sha256
+      }
+      return {}
+    },
+  }
+
+  try {
+    await mkdir(publicDataDir, { recursive: true })
+    await mkdir(join(rawDir, 'oracles-elixir'), { recursive: true })
+    await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+    await writeFile(rawOraclePath, originalContent)
+    await writeFile(manifestPath, `${JSON.stringify({ files: { oracleCsv: [rawOraclePath] } })}\n`)
+
+    await uploadRankingArtifacts({
+      publicDataDir,
+      rawDir,
+      manifestPath,
+      config: bucketConfig(),
+      client,
+    })
+
+    assert.equal(uploadedBody?.toString('utf8'), originalContent)
+    assert.equal(uploadedDigest, createHash('sha256').update(originalContent).digest('hex'))
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('bucket object lookup maps /data paths to the configured prefix', async () => {
   let requestedKey = ''
   const client = {
@@ -843,6 +1139,57 @@ test('bucket object lookup maps /data paths to the configured prefix', async () 
   assert.throws(() => safeRequestedObjectPath('scopes//all.json'), /Invalid bucket object path/)
   assert.throws(() => safeRequestedObjectPath('scopes%2Fall.json'), /Invalid bucket object path/)
 })
+
+async function runRawSyncCase(head: 'matching' | 'mismatch' | 'legacy' | 'error') {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-raw-sync-'))
+  const publicDataDir = join(tempDir, 'public-data')
+  const rawDir = join(tempDir, 'raw')
+  const rawOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const rawContent = 'gameid,result\nnew,1\n'
+  const rawBytes = Buffer.byteLength(rawContent)
+  const digest = createHash('sha256').update(rawContent).digest('hex')
+  const sent: Array<{ input: { Key: string; Body?: unknown; ContentLength?: number; Metadata?: Record<string, string> } }> = []
+  const rawKey = 'rankings/raw/files/oracles-elixir/2026.csv'
+  const client = {
+    async send(command: { input: { Key: string; Body?: unknown; ContentLength?: number; Metadata?: Record<string, string> } }) {
+      const input = command.input
+      sent.push({ input })
+      if (input.Key !== rawKey || input.Body !== undefined) return {}
+      if (head === 'error') throw new Error('HEAD unavailable')
+      if (head === 'legacy') return { ContentLength: rawBytes, Metadata: {} }
+      return {
+        ContentLength: rawBytes,
+        Metadata: { sha256: head === 'matching' ? digest : '0'.repeat(64) },
+      }
+    },
+  }
+
+  try {
+    await mkdir(publicDataDir, { recursive: true })
+    await mkdir(join(rawDir, 'oracles-elixir'), { recursive: true })
+    await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+    await writeFile(rawOraclePath, rawContent)
+    await writeFile(manifestPath, `${JSON.stringify({
+      files: {
+        oracleCsv: [rawOraclePath],
+        leaguepediaJson: [],
+      },
+    })}\n`)
+
+    const result = await uploadRankingArtifacts({
+      publicDataDir,
+      rawDir,
+      manifestPath,
+      config: bucketConfig(),
+      client,
+    })
+    const rawPut = sent.find((entry) => entry.input.Key === rawKey && entry.input.Body !== undefined)?.input
+    return { result, rawPut, rawBytes, digest }
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+}
 
 function manifest(leaguepediaPath: string, generatedAt = '2026-06-29T00:00:00.000Z') {
   return {
