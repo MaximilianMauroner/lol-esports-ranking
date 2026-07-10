@@ -339,8 +339,20 @@ test('same-day series permutations produce identical rating artifacts', () => {
 
   const baseline = buildRankingModel(sameDayMatches, { ...extendedTeams })
   const permuted = buildRankingModel([...sameDayMatches].reverse(), { ...extendedTeams })
+  const alpha = standingFor(baseline, 'Alpha')
+  const alphaSameDayHistory = alpha.history.filter((point) => point.event === 'Worlds 2026 Swiss')
+  const alphaStableDelta = alphaSameDayHistory.reduce((total, point) => total + point.ratingUpdate.teamStableDelta, 0)
+  const lastAlphaPoint = alphaSameDayHistory.at(-1)
 
   assert.deepEqual(modelInvariantFingerprint(permuted), modelInvariantFingerprint(baseline))
+  assert.equal(alpha.baseRating, 1500 + alphaStableDelta)
+  assert.equal(lastAlphaPoint?.baseRating, alpha.baseRating)
+  assert.equal(lastAlphaPoint?.ratingComponents.momentum, alpha.ratingComponents.momentum)
+  assert.equal(lastAlphaPoint?.ratingComponents.uncertainty, alpha.ratingComponents.uncertainty)
+  assert.equal(alphaSameDayHistory.length, 2)
+  assert.notEqual(alphaSameDayHistory[0]?.ratingUpdate.momentumDelta, 0)
+  assert.notEqual(alphaSameDayHistory[1]?.ratingUpdate.momentumDelta, 0)
+  assert.ok(alphaSameDayHistory.every((point) => point.ratingUpdate.uncertaintyDelta < 0))
 })
 
 test('team history points use global ranks instead of match-local ranks', () => {

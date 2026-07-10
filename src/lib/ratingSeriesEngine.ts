@@ -473,10 +473,18 @@ function processSeriesMember({
   const publishedRosterPriorOffsetB = publishedRosterPriorOffset(rosterPriorOffsetB, currentWinsB, currentLossesB)
   const momentumA = batch.momentums.get(match.teamA) ?? 0
   const momentumB = batch.momentums.get(match.teamB) ?? 0
+  const liveRatingBeforeA = state.ratings.get(match.teamA) ?? initialTeamRating
+  const liveRatingBeforeB = state.ratings.get(match.teamB) ?? initialTeamRating
+  const liveLeagueScoreBeforeA = effectiveLeagueRating(leagueA, state.leagueScores.get(leagueA) ?? leaguePriorFor(leagueA), state.leagueMatchCounts.get(leagueA) ?? 0)
+  const liveLeagueScoreBeforeB = effectiveLeagueRating(leagueB, state.leagueScores.get(leagueB) ?? leaguePriorFor(leagueB), state.leagueMatchCounts.get(leagueB) ?? 0)
+  const liveMomentumBeforeA = state.momentums.get(match.teamA) ?? 0
+  const liveMomentumBeforeB = state.momentums.get(match.teamB) ?? 0
+  const liveUncertaintyBeforeA = state.uncertainties.get(match.teamA) ?? maximumUncertainty
+  const liveUncertaintyBeforeB = state.uncertainties.get(match.teamB) ?? maximumUncertainty
+  const previousPublishedPowerRatingA = powerRating(liveRatingBeforeA, liveLeagueScoreBeforeA) + publishedRosterPriorOffsetA + liveMomentumBeforeA
+  const previousPublishedPowerRatingB = powerRating(liveRatingBeforeB, liveLeagueScoreBeforeB) + publishedRosterPriorOffsetB + liveMomentumBeforeB
   const currentPowerRatingA = powerRatingA + rosterPriorOffsetA + momentumA
   const currentPowerRatingB = powerRatingB + rosterPriorOffsetB + momentumB
-  const currentPublishedPowerRatingA = powerRatingA + publishedRosterPriorOffsetA + momentumA
-  const currentPublishedPowerRatingB = powerRatingB + publishedRosterPriorOffsetB + momentumB
   const effectiveRatingA = currentPowerRatingA + sideAdjustmentA
   const effectiveRatingB = currentPowerRatingB + sideAdjustmentB
   const executionEffectiveRatingA = executionPowerRatingA + rosterPriorOffsetA + momentumA + sideAdjustmentA
@@ -505,8 +513,8 @@ function processSeriesMember({
   const executionDeltaA = Math.round(gameK * ratingUpdateRecencyWeight * (executionOutcomeA - executionExpectedA))
   const executionDeltaB = Math.round(gameK * ratingUpdateRecencyWeight * (executionOutcomeB - executionExpectedB))
 
-  state.previousDisplayRatings.set(match.teamA, currentPublishedPowerRatingA)
-  state.previousDisplayRatings.set(match.teamB, currentPublishedPowerRatingB)
+  state.previousDisplayRatings.set(match.teamA, previousPublishedPowerRatingA)
+  state.previousDisplayRatings.set(match.teamB, previousPublishedPowerRatingB)
   addRatingDelta(state.ratings, match.teamA, deltaA)
   addRatingDelta(state.ratings, match.teamB, deltaB)
   seriesExecutionRatings.set(match.teamA, executionRatingA + executionDeltaA)
@@ -515,10 +523,8 @@ function processSeriesMember({
   addRatingDelta(state.executionRatings, match.teamB, executionDeltaB)
   state.rosterPriorOffsets.set(match.teamA, rosterPriorOffsetA)
   state.rosterPriorOffsets.set(match.teamB, rosterPriorOffsetB)
-  const uncertaintyA = batch.uncertainties.get(match.teamA) ?? maximumUncertainty
-  const uncertaintyB = batch.uncertainties.get(match.teamB) ?? maximumUncertainty
-  const nextUncertaintyA = isSeriesFinal ? nextUncertainty(uncertaintyA, match, leagueA, leagueB, state.eventWeightContext) : uncertaintyA
-  const nextUncertaintyB = isSeriesFinal ? nextUncertainty(uncertaintyB, match, leagueB, leagueA, state.eventWeightContext) : uncertaintyB
+  const nextUncertaintyA = isSeriesFinal ? nextUncertainty(liveUncertaintyBeforeA, match, leagueA, leagueB, state.eventWeightContext) : liveUncertaintyBeforeA
+  const nextUncertaintyB = isSeriesFinal ? nextUncertainty(liveUncertaintyBeforeB, match, leagueB, leagueA, state.eventWeightContext) : liveUncertaintyBeforeB
   state.uncertainties.set(match.teamA, nextUncertaintyA)
   state.uncertainties.set(match.teamB, nextUncertaintyB)
   const leagueDelta = isSeriesFinal
@@ -567,12 +573,14 @@ function processSeriesMember({
       state,
     })
   }
-  const updatedLeagueAdjustmentA = leagueAdjustment(ratingA + deltaA, updatedLeagueScoreA)
-  const updatedLeagueAdjustmentB = leagueAdjustment(ratingB + deltaB, updatedLeagueScoreB)
+  const liveRatingAfterA = state.ratings.get(match.teamA) ?? initialTeamRating
+  const liveRatingAfterB = state.ratings.get(match.teamB) ?? initialTeamRating
+  const updatedLeagueAdjustmentA = leagueAdjustment(liveRatingAfterA, updatedLeagueScoreA)
+  const updatedLeagueAdjustmentB = leagueAdjustment(liveRatingAfterB, updatedLeagueScoreB)
   const momentumDeltaA = resultEvidenceA * ledgerTeamFormShare
   const momentumDeltaB = resultEvidenceB * ledgerTeamFormShare
-  const updatedMomentumA = isSeriesFinal ? clamp(momentumA * momentumGameDecay + momentumDeltaA, -momentumCap, momentumCap) : momentumA
-  const updatedMomentumB = isSeriesFinal ? clamp(momentumB * momentumGameDecay + momentumDeltaB, -momentumCap, momentumCap) : momentumB
+  const updatedMomentumA = isSeriesFinal ? clamp(liveMomentumBeforeA * momentumGameDecay + momentumDeltaA, -momentumCap, momentumCap) : liveMomentumBeforeA
+  const updatedMomentumB = isSeriesFinal ? clamp(liveMomentumBeforeB * momentumGameDecay + momentumDeltaB, -momentumCap, momentumCap) : liveMomentumBeforeB
   state.momentums.set(match.teamA, updatedMomentumA)
   state.momentums.set(match.teamB, updatedMomentumB)
   const publishedRecordWinsA = isSeriesFinal ? currentWinsA + Number(aWon) : currentWinsA
@@ -582,7 +590,7 @@ function processSeriesMember({
   const updatedRosterPriorOffsetA = publishedRosterPriorOffset(rosterPriorOffsetA, publishedRecordWinsA, publishedRecordLossesA)
   const updatedRosterPriorOffsetB = publishedRosterPriorOffset(rosterPriorOffsetB, publishedRecordWinsB, publishedRecordLossesB)
   const updatedComponentsA = ratingComponents({
-    teamRating: ratingA + deltaA,
+    teamRating: liveRatingAfterA,
     leagueScore: updatedLeagueScoreA,
     rosterPriorOffset: updatedRosterPriorOffsetA,
     momentum: updatedMomentumA,
@@ -590,7 +598,7 @@ function processSeriesMember({
     uncertainty: nextUncertaintyA,
   })
   const updatedComponentsB = ratingComponents({
-    teamRating: ratingB + deltaB,
+    teamRating: liveRatingAfterB,
     leagueScore: updatedLeagueScoreB,
     rosterPriorOffset: updatedRosterPriorOffsetB,
     momentum: updatedMomentumB,
@@ -610,9 +618,9 @@ function processSeriesMember({
     teamStableDelta: deltaA,
     leagueGameDelta: leagueDelta.deltaA,
     leaguePlacementDelta: 0,
-    momentumDelta: updatedMomentumA - momentumA,
+    momentumDelta: updatedMomentumA - liveMomentumBeforeA,
     rosterPriorDelta: 0,
-    uncertaintyDelta: nextUncertaintyA - uncertaintyA,
+    uncertaintyDelta: nextUncertaintyA - liveUncertaintyBeforeA,
     sideAdjustment: sideAdjustmentA,
     patchAdjustment: 0,
     ratingTarget: 'context-neutral-latent-team-strength',
@@ -636,9 +644,9 @@ function processSeriesMember({
     teamStableDelta: deltaB,
     leagueGameDelta: leagueDelta.deltaB,
     leaguePlacementDelta: 0,
-    momentumDelta: updatedMomentumB - momentumB,
+    momentumDelta: updatedMomentumB - liveMomentumBeforeB,
     rosterPriorDelta: 0,
-    uncertaintyDelta: nextUncertaintyB - uncertaintyB,
+    uncertaintyDelta: nextUncertaintyB - liveUncertaintyBeforeB,
     sideAdjustment: sideAdjustmentB,
     patchAdjustment: 0,
     ratingTarget: 'context-neutral-latent-team-strength',
@@ -661,8 +669,8 @@ function processSeriesMember({
   state.latestRatingUpdates.set(match.teamA, updateLedgerA)
   state.latestRatingUpdates.set(match.teamB, updateLedgerB)
 
-  const historyDeltaA = isSeriesFinal ? updatedPowerRatingA - currentPublishedPowerRatingA : 0
-  const historyDeltaB = isSeriesFinal ? updatedPowerRatingB - currentPublishedPowerRatingB : 0
+  const historyDeltaA = isSeriesFinal ? updatedPowerRatingA - previousPublishedPowerRatingA : 0
+  const historyDeltaB = isSeriesFinal ? updatedPowerRatingB - previousPublishedPowerRatingB : 0
   updateRecord(match.teamA, aWon, state)
   updateRecord(match.teamB, !aWon, state)
   const historyRanks = historyDisplayRankMap(state, teams)
@@ -680,8 +688,8 @@ function processSeriesMember({
     opponent: normalize(effectiveRatingA, 1350, 1700),
     league: normalize(leagueScoreB + Math.max(0, leagueDelta.deltaB), 1440, 1560),
   }, state)
-  appendHistory(match, match.teamA, match.teamB, updatedPowerRatingA, ratingA + deltaA, updatedLeagueAdjustmentA, sideAdjustmentA, updatedComponentsA, updateLedgerA, historyDeltaA, historyRanks.get(match.teamA) ?? 1, aWon, state.histories, series)
-  appendHistory(match, match.teamB, match.teamA, updatedPowerRatingB, ratingB + deltaB, updatedLeagueAdjustmentB, sideAdjustmentB, updatedComponentsB, updateLedgerB, historyDeltaB, historyRanks.get(match.teamB) ?? 1, !aWon, state.histories, series)
+  appendHistory(match, match.teamA, match.teamB, updatedPowerRatingA, liveRatingAfterA, updatedLeagueAdjustmentA, sideAdjustmentA, updatedComponentsA, updateLedgerA, historyDeltaA, historyRanks.get(match.teamA) ?? 1, aWon, state.histories, series)
+  appendHistory(match, match.teamB, match.teamA, updatedPowerRatingB, liveRatingAfterB, updatedLeagueAdjustmentB, sideAdjustmentB, updatedComponentsB, updateLedgerB, historyDeltaB, historyRanks.get(match.teamB) ?? 1, !aWon, state.histories, series)
   recordSideAdjustmentSample(match, state.sideAdjustmentSamples)
   recordTeamContext(match, state.lastRosterByTeam, state.lastPatchByTeam, state.lastRosterFingerprintByTeam)
   trackMatchForPlacement(state.eventTrackers, match, teams)
