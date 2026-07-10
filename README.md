@@ -71,7 +71,7 @@ railway link
 railway up
 ```
 
-The Railway `web` service is connected to the `MaximilianMauroner/lol-esports-ranking` GitHub repository on the `main` branch, so Railway's native GitHub autodeploys rebuild and redeploy the service when new commits are pushed to `main`.
+The Railway `web` service is connected to the `MaximilianMauroner/lol-esports-ranking` GitHub repository on the `main` branch, so Railway's native GitHub autodeploys rebuild and redeploy the service when new commits are pushed to `main`. The Railway build command runs typecheck, lint, tests, and the production build before the service starts.
 
 This repository also includes `.github/workflows/railway-deploy.yml` as a manual fallback. The workflow runs typecheck, lint, tests, and build first, then runs:
 
@@ -141,6 +141,8 @@ Useful download flags:
 ```bash
 pnpm run data:download -- --start 2024-01-01 --end 2026-06-26
 pnpm run data:download -- --oracle-required true
+pnpm run data:download -- --leaguepedia-required true
+pnpm run data:download -- --lolesports-required true
 pnpm run data:download -- --lolesports false
 pnpm run data:download -- --oracle false
 pnpm run data:download -- --leaguepedia false
@@ -198,7 +200,7 @@ Official LoL Esports ranking snapshots can be compared against the generated bro
 pnpm run benchmark:riot-gpr -- --gpr data/raw/riot-gpr/riot-gpr-2026-current.json
 ```
 
-The comparison reads `public/data/ranking-summary.json` plus the default generated shard, writes `data/derived/riot-gpr-benchmark-report.json`, and exits nonzero when top teams differ by more than `--max-rank-delta` places. Use `--top`, `--max-rank-delta`, `--max-large-deltas`, and `--min-matched` to tune the check for a calibration pass. This report is a benchmark and guardrail only; official LoL Esports ranking exports remain outside `data/raw/manifest.json` and are not a model input.
+The comparison reads `public/data/ranking-summary.json` plus the default generated shard and writes `data/derived/riot-gpr-benchmark-report.json`. It is a sanity benchmark, not a formula-clone gate: broad top-board disagreements are reported, while the command exits nonzero only when elite teams are implausibly displaced, too many top-band outliers accumulate, or too few teams match. Use `--top`, `--max-rank-delta`, `--max-large-deltas`, `--elite-top`, `--max-elite-rank-delta`, and `--min-matched` to tune the check for a calibration pass. Official LoL Esports ranking exports remain outside `data/raw/manifest.json` and are not a model input.
 
 ## Optional Vercel Blob Recalculation
 
