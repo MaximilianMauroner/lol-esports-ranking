@@ -2,9 +2,10 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 
 const publicPersistedApiKey = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
-const persistedBaseUrl = 'https://esports-api.lolesports.com/persisted/gw'
+const defaultPersistedBaseUrl = 'https://esports-api.lolesports.com/persisted/gw'
 
 const args = parseArgs(process.argv.slice(2))
+const persistedBaseUrl = args.baseUrl ?? args['base-url'] ?? defaultPersistedBaseUrl
 const locale = args.locale ?? 'en-US'
 const start = args.start ?? offsetDate(-14)
 const end = args.end ?? offsetDate(30)

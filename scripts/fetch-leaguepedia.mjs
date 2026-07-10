@@ -9,6 +9,7 @@ const pageSize = Number(args.limit ?? 500)
 const maxRetries = Number(args.retries ?? 6)
 const retryDelayMs = Number(args.retryDelayMs ?? args.retryDelay ?? 60_000)
 const userAgent = args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)'
+const cargoBaseUrl = args.baseUrl ?? args['base-url'] ?? 'https://lol.fandom.com/api.php'
 
 const fields = [
   'OverviewPage',
@@ -58,7 +59,7 @@ await writeFile(
 console.log(`Wrote ${matches.length} matches to ${output}`)
 
 async function cargoQuery(params) {
-  const url = new URL('https://lol.fandom.com/api.php')
+  const url = new URL(cargoBaseUrl)
   url.searchParams.set('action', 'cargoquery')
   url.searchParams.set('format', 'json')
   for (const [key, value] of Object.entries(params)) {

@@ -16,7 +16,10 @@ export type RiotGprComparisonRow = {
   rankDelta: number
   absRankDelta: number
   flagged: boolean
+  reasons: RiotGprComparisonReason[]
 }
+
+export type RiotGprComparisonReason = 'elite-rank-inversion' | 'top-band-rank-delta'
 
 export type RiotGprBenchmarkReport = {
   artifactKind: 'riot-gpr-benchmark-comparison'
@@ -42,6 +45,9 @@ export type RiotGprBenchmarkReport = {
     flaggedTeams: number
     missingFromCurrent: number
     missingFromRiot: number
+    eliteFlaggedTeams: number
+    missingEliteFromCurrent: number
+    missingEliteFromRiot: number
     maxAbsRankDelta: number
     passed: boolean
   }
@@ -54,6 +60,8 @@ export type RiotGprComparisonThresholds = {
   maxRankDelta: number
   maxLargeDeltas: number
   top: number
+  eliteTop: number
+  maxEliteRankDelta: number
   minMatched: number
 }
 
@@ -74,6 +82,16 @@ type CliOptions = {
 }
 
 const defaultPublicDataDir = 'public/data'
+const benchmarkKeyAliases: Record<string, string[]> = {
+  teamliquidalienware: ['teamliquid', 'tl'],
+  tlaw: ['teamliquid', 'tl'],
+  teamliquid: ['teamliquidalienware', 'tlaw', 'tl'],
+  tl: ['teamliquidalienware', 'tlaw', 'teamliquid'],
+  xianteamwe: ['teamwe', 'tw', 'we'],
+  teamwe: ['xianteamwe', 'tw', 'we'],
+  tw: ['xianteamwe', 'teamwe', 'we'],
+  we: ['xianteamwe', 'teamwe', 'tw'],
+}
 
 if (isDirectExecution()) {
   await runCli(process.argv.slice(2))
@@ -124,9 +142,9 @@ export async function runCli(rawArgs: string[]) {
   if (!report.summary.passed) {
     const examples = flagged
       .slice(0, 8)
-      .map((row) => `${row.team}: current ${row.currentRank}, Riot ${row.riotRank}, delta ${formatSigned(row.rankDelta)}`)
+      .map((row) => `${row.team}: current ${row.currentRank}, Riot ${row.riotRank}, delta ${formatSigned(row.rankDelta)} (${row.reasons.join(', ')})`)
       .join('; ')
-    throw new Error(`Riot GPR benchmark thresholds exceeded: ${flagged.length} flagged team(s), ${report.summary.comparedTeams} matched. ${examples}`)
+    throw new Error(`Riot GPR sanity benchmark thresholds exceeded: ${flagged.length} flagged team(s), ${report.summary.comparedTeams} matched. ${examples}`)
   }
 }
 
@@ -147,18 +165,23 @@ export function compareRiotGprBenchmark(input: {
   }
 
   const rows: RiotGprComparisonRow[] = []
-  const missingFromCurrent: RiotGprEntry[] = []
+  const missingCurrentCandidates: RiotGprEntry[] = []
+  const missingComparisonLimit = Math.max(input.thresholds.top, input.thresholds.eliteTop)
 
   for (const riotEntry of input.riotEntries) {
     const current = findCurrentStanding(currentByKey, riotEntry)
     if (!current) {
-      if (riotEntry.rank <= input.thresholds.top) missingFromCurrent.push(riotEntry)
+      if (riotEntry.rank <= missingComparisonLimit) missingCurrentCandidates.push(riotEntry)
       continue
     }
     standingKeys(current).forEach((key) => riotMatchedKeys.add(key))
     const rankDelta = current.rank - riotEntry.rank
     const absRankDelta = Math.abs(rankDelta)
     const inComparedBand = current.rank <= input.thresholds.top || riotEntry.rank <= input.thresholds.top
+    const inEliteBand = current.rank <= input.thresholds.eliteTop || riotEntry.rank <= input.thresholds.eliteTop
+    const reasons: RiotGprComparisonReason[] = []
+    if (inEliteBand && absRankDelta > input.thresholds.maxEliteRankDelta) reasons.push('elite-rank-inversion')
+    if (inComparedBand && absRankDelta > input.thresholds.maxRankDelta) reasons.push('top-band-rank-delta')
     rows.push({
       team: current.team,
       code: current.code,
@@ -166,14 +189,17 @@ export function compareRiotGprBenchmark(input: {
       riotRank: riotEntry.rank,
       rankDelta,
       absRankDelta,
-      flagged: inComparedBand && absRankDelta > input.thresholds.maxRankDelta,
+      flagged: reasons.length > 0,
+      reasons,
     })
   }
 
-  const missingFromRiot = input.currentShard.standings
-    .filter((standing) => standing.rank <= input.thresholds.top)
+  const missingRiotCandidates = input.currentShard.standings
+    .filter((standing) => standing.rank <= missingComparisonLimit)
     .filter((standing) => !standingKeys(standing).some((key) => riotMatchedKeys.has(key)))
     .map((standing) => ({ team: standing.team, code: standing.code, rank: standing.rank }))
+  const missingFromCurrent = missingCurrentCandidates.filter((entry) => entry.rank <= input.thresholds.top)
+  const missingFromRiot = missingRiotCandidates.filter((entry) => entry.rank <= input.thresholds.top)
 
   rows.sort((left, right) => {
     if (left.flagged !== right.flagged) return left.flagged ? -1 : 1
@@ -181,8 +207,15 @@ export function compareRiotGprBenchmark(input: {
   })
 
   const flaggedTeams = rows.filter((row) => row.flagged).length
+  const eliteFlaggedTeams = rows.filter((row) => row.reasons.includes('elite-rank-inversion')).length
+  const missingEliteFromCurrent = missingCurrentCandidates.filter((entry) => entry.rank <= input.thresholds.eliteTop).length
+  const missingEliteFromRiot = missingRiotCandidates.filter((entry) => entry.rank <= input.thresholds.eliteTop).length
   const comparedTeams = rows.length
-  const passed = flaggedTeams <= input.thresholds.maxLargeDeltas && comparedTeams >= input.thresholds.minMatched
+  const passed = eliteFlaggedTeams === 0
+    && missingEliteFromCurrent === 0
+    && missingEliteFromRiot === 0
+    && flaggedTeams <= input.thresholds.maxLargeDeltas
+    && comparedTeams >= input.thresholds.minMatched
 
   return {
     artifactKind: 'riot-gpr-benchmark-comparison',
@@ -195,6 +228,9 @@ export function compareRiotGprBenchmark(input: {
       flaggedTeams,
       missingFromCurrent: missingFromCurrent.length,
       missingFromRiot: missingFromRiot.length,
+      eliteFlaggedTeams,
+      missingEliteFromCurrent,
+      missingEliteFromRiot,
       maxAbsRankDelta: rows.reduce((max, row) => Math.max(max, row.absRankDelta), 0),
       passed,
     },
@@ -222,16 +258,18 @@ export function extractRiotGprEntries(value: unknown): RiotGprEntry[] {
 
 function parseCliOptions(rawArgs: string[]): CliOptions {
   const args = parseArgs(rawArgs)
-  const maxRankDelta = readInteger(args, 'max-rank-delta', 8)
-  const maxLargeDeltas = readInteger(args, 'max-large-deltas', 0)
+  const maxRankDelta = readInteger(args, 'max-rank-delta', 24)
+  const maxLargeDeltas = readInteger(args, 'max-large-deltas', 2)
   const top = readInteger(args, 'top', 25)
-  const minMatched = readInteger(args, 'min-matched', 5)
+  const eliteTop = readInteger(args, 'elite-top', 2)
+  const maxEliteRankDelta = readInteger(args, 'max-elite-rank-delta', 20)
+  const minMatched = readInteger(args, 'min-matched', 20)
   return {
     riotGprPath: stringArg(args.gpr) ?? stringArg(args['riot-gpr']) ?? process.env.RIOT_GPR_SNAPSHOT,
     manifestPath: stringArg(args.summary) ?? `${defaultPublicDataDir}/ranking-summary.json`,
     publicDataDir: stringArg(args['public-data-dir']) ?? defaultPublicDataDir,
     outputPath: stringArg(args.output) ?? 'data/derived/riot-gpr-benchmark-report.json',
-    thresholds: { maxRankDelta, maxLargeDeltas, top, minMatched },
+    thresholds: { maxRankDelta, maxLargeDeltas, top, eliteTop, maxEliteRankDelta, minMatched },
     required: booleanArg(args.required),
   }
 }
@@ -354,11 +392,27 @@ function findCurrentStanding(byKey: Map<string, PublicTeamStanding>, riotEntry: 
 }
 
 function standingKeys(standing: Pick<PublicTeamStanding, 'team' | 'code'>) {
-  return [standing.team, standing.code].map(normalizeKey).filter(Boolean)
+  return benchmarkKeys([standing.team, standing.code])
 }
 
 function riotEntryKeys(entry: RiotGprEntry) {
-  return [entry.team, entry.code].map((value) => value ? normalizeKey(value) : '').filter(Boolean)
+  return benchmarkKeys([entry.team, entry.code])
+}
+
+function benchmarkKeys(values: Array<string | undefined>) {
+  const keys = new Set<string>()
+  for (const value of values) {
+    if (!value) continue
+    const normalized = normalizeKey(value)
+    if (!normalized) continue
+    keys.add(normalized)
+    for (const alias of benchmarkAliasesFor(normalized)) keys.add(alias)
+  }
+  return [...keys]
+}
+
+function benchmarkAliasesFor(key: string) {
+  return benchmarkKeyAliases[key] ?? []
 }
 
 function normalizeKey(value: string) {

@@ -17,11 +17,18 @@ const skipOracleDrive = isFalse(args.oracleDrive) || args.skipOracleDrive === tr
 const skipLeaguepedia = isFalse(args.leaguepedia) || args.skipLeaguepedia === true
 const skipLolEsports = isFalse(args.lolesports) || args.skipLolesports === true || args.skipLolEsports === true
 const oracleRequired = args.oracleRequired === true || args.oracleRequired === 'true'
+const leaguepediaRequired = args.leaguepediaRequired === true || args.leaguepediaRequired === 'true'
+const lolEsportsRequired = args.lolesportsRequired === true
+  || args.lolesportsRequired === 'true'
+  || args.lolEsportsRequired === true
+  || args.lolEsportsRequired === 'true'
 const oracleDriveFolderUrl = args.oracleDriveFolderUrl ?? defaultOracleDriveFolderUrl
 const oracleDriveFolderId = args.oracleDriveFolderId ?? folderIdFromUrl(oracleDriveFolderUrl) ?? defaultOracleDriveFolderId
 const oracleUrls = readList(args.oracleCsvUrl ?? process.env.ORACLES_ELIXIR_CSV_URL)
 const oracleCsvPaths = []
 const oracleFailures = []
+const leaguepediaFailures = []
+const lolEsportsFailures = []
 const discoveredOracleFiles = []
 const leaguepediaJsonPaths = []
 const lolEsportsJsonPaths = []
@@ -64,39 +71,61 @@ if (oracleFailures.length > 0 && oracleRequired) {
 }
 
 if (!skipLeaguepedia) {
-  await run('node', [
-    'scripts/fetch-leaguepedia.mjs',
-    '--start',
-    start,
-    '--end',
-    end,
-    '--output',
-    leaguepediaPath,
-  ])
-  leaguepediaJsonPaths.push(leaguepediaPath)
+  try {
+    await run('node', [
+      'scripts/fetch-leaguepedia.mjs',
+      '--start',
+      start,
+      '--end',
+      end,
+      '--output',
+      leaguepediaPath,
+      ...optionalArg('--base-url', args.leaguepediaBaseUrl ?? args.leaguepediaBase),
+    ])
+    leaguepediaJsonPaths.push(leaguepediaPath)
+  } catch (error) {
+    const message = errorMessage(error)
+    leaguepediaFailures.push({ source: 'Leaguepedia Cargo ScoreboardGames', error: message })
+    warnings.push(`Leaguepedia backup download was not completed: ${message}`)
+  }
 } else {
   warnings.push('Leaguepedia backup download skipped by --leaguepedia false or --skip-leaguepedia.')
 }
 
+if (leaguepediaFailures.length > 0 && leaguepediaRequired) {
+  throw new Error(`Leaguepedia backup download is required but failed: ${leaguepediaFailures[0].error}`)
+}
+
 if (!skipLolEsports) {
-  await run('node', [
-    'scripts/fetch-lolesports-schedule.mjs',
-    '--start',
-    start,
-    '--end',
-    end,
-    '--output',
-    lolEsportsPath,
-    '--older-pages',
-    String(args.lolesportsOlderPages ?? args.lolesportsOlder ?? 4),
-    '--newer-pages',
-    String(args.lolesportsNewerPages ?? args.lolesportsNewer ?? 1),
-    '--detail-limit',
-    String(args.lolesportsDetailLimit ?? 250),
-  ])
-  lolEsportsJsonPaths.push(lolEsportsPath)
+  try {
+    await run('node', [
+      'scripts/fetch-lolesports-schedule.mjs',
+      '--start',
+      start,
+      '--end',
+      end,
+      '--output',
+      lolEsportsPath,
+      '--older-pages',
+      String(args.lolesportsOlderPages ?? args.lolesportsOlder ?? 4),
+      '--newer-pages',
+      String(args.lolesportsNewerPages ?? args.lolesportsNewer ?? 1),
+      '--detail-limit',
+      String(args.lolesportsDetailLimit ?? 250),
+      ...optionalArg('--base-url', args.lolesportsBaseUrl ?? args.lolesportsBase),
+    ])
+    lolEsportsJsonPaths.push(lolEsportsPath)
+  } catch (error) {
+    const message = errorMessage(error)
+    lolEsportsFailures.push({ source: 'LoL Esports persisted schedule API', error: message })
+    warnings.push(`LoL Esports schedule reference was not downloaded: ${message}`)
+  }
 } else {
   warnings.push('LoL Esports schedule reference download skipped by --lolesports false or --skip-lolesports.')
+}
+
+if (lolEsportsFailures.length > 0 && lolEsportsRequired) {
+  throw new Error(`LoL Esports schedule reference download is required but failed: ${lolEsportsFailures[0].error}`)
 }
 
 if (args.riotGpr !== undefined || args.skipRiotGpr === true || args.riotGprOutput !== undefined) {
@@ -120,8 +149,14 @@ const manifest = {
   sources: {
     lolesports: {
       role: 'schedule-results-reference',
-      status: skipLolEsports ? 'skipped' : 'downloaded',
+      status: lolEsportsStatus({ skipLolEsports, downloaded: lolEsportsJsonPaths, failures: lolEsportsFailures }),
       downloadedCount: lolEsportsJsonPaths.length,
+      downloadedThisRun: lolEsportsJsonPaths.length,
+      failedCount: lolEsportsFailures.length,
+      failedThisRun: lolEsportsFailures.length,
+      failures: lolEsportsFailures,
+      skipped: skipLolEsports,
+      required: lolEsportsRequired,
       unsupportedApi: true,
     },
     oracle: {
@@ -130,13 +165,23 @@ const manifest = {
       folderUrl: oracleDriveFolderUrl,
       discoveredCount: discoveredOracleFiles.length,
       downloadedCount: oracleCsvPaths.length,
+      downloadedThisRun: oracleCsvPaths.length,
       failedCount: oracleFailures.length,
+      failedThisRun: oracleFailures.length,
       failures: oracleFailures,
+      skipped: skipOracle,
+      required: oracleRequired,
     },
     leaguepedia: {
       role: 'backup-gap-fill',
-      status: skipLeaguepedia ? 'skipped' : 'downloaded',
+      status: leaguepediaStatus({ skipLeaguepedia, downloaded: leaguepediaJsonPaths, failures: leaguepediaFailures }),
       downloadedCount: leaguepediaJsonPaths.length,
+      downloadedThisRun: leaguepediaJsonPaths.length,
+      failedCount: leaguepediaFailures.length,
+      failedThisRun: leaguepediaFailures.length,
+      failures: leaguepediaFailures,
+      skipped: skipLeaguepedia,
+      required: leaguepediaRequired,
     },
   },
   warnings,
@@ -259,6 +304,22 @@ function oracleStatus({ skipOracle, downloaded, failures }) {
   return 'unavailable'
 }
 
+function lolEsportsStatus({ skipLolEsports, downloaded, failures }) {
+  if (skipLolEsports) return 'skipped'
+  if (downloaded.length > 0 && failures.length > 0) return 'partial'
+  if (downloaded.length > 0) return 'downloaded'
+  if (failures.length > 0) return 'failed'
+  return 'unavailable'
+}
+
+function leaguepediaStatus({ skipLeaguepedia, downloaded, failures }) {
+  if (skipLeaguepedia) return 'skipped'
+  if (downloaded.length > 0 && failures.length > 0) return 'partial'
+  if (downloaded.length > 0) return 'downloaded'
+  if (failures.length > 0) return 'failed'
+  return 'unavailable'
+}
+
 function folderIdFromUrl(url) {
   return String(url).match(/\/folders\/([^/?#]+)/)?.[1]
 }
@@ -286,6 +347,11 @@ function readList(value) {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function optionalArg(name, value) {
+  if (value === undefined || value === null || value === true || value === '') return []
+  return [name, String(value)]
 }
 
 function parseArgs(rawArgs) {

@@ -86,8 +86,30 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     ])
 
     const stagingManifest = await readJson(stagingManifestPath)
-    const fingerprint = await createSourceFingerprint(stagingManifest)
     const previousState = await readJsonIfExists(statePath)
+    if (!manifestHasCurrentMatchSourceFiles(stagingManifest)) {
+      const state = createStaleSourceState({
+        previousState,
+        previousManifest,
+        stagingManifest,
+        start,
+        end,
+        window,
+        mergeExistingRaw,
+        restoreResult,
+      })
+      await mkdir(dirname(statePath), { recursive: true })
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+      console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; preserving existing ranking artifacts.`)
+      return {
+        changed: false,
+        status: 'stale-source',
+        reason: 'no-current-match-source-data',
+        previousFingerprint: previousState?.fingerprint,
+      }
+    }
+
+    const fingerprint = await createSourceFingerprint(stagingManifest)
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
 
     if (!changed) {
@@ -338,6 +360,7 @@ async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, 
 
 function mergeRawManifests(previousManifest, nextManifest) {
   if (!manifestHasSourceFiles(previousManifest)) return nextManifest
+  const preservedWarnings = preservedBaselineWarnings(previousManifest, nextManifest)
 
   return {
     ...nextManifest,
@@ -350,8 +373,8 @@ function mergeRawManifests(previousManifest, nextManifest) {
     files: mergeManifestFiles(previousManifest.files, nextManifest.files),
     sources: mergeManifestSources(previousManifest.sources, nextManifest.sources),
     warnings: uniqueValues([
-      ...arrayValue(previousManifest.warnings),
       ...arrayValue(nextManifest.warnings),
+      ...preservedWarnings,
     ]),
   }
 }
@@ -368,24 +391,77 @@ function mergeManifestFiles(previousFiles = {}, nextFiles = {}) {
 }
 
 function mergeManifestSources(previousSources = {}, nextSources = {}) {
-  const sources = {
-    ...previousSources,
-    ...nextSources,
-  }
-
-  for (const [sourceName, source] of Object.entries(sources)) {
-    if (!source || typeof source !== 'object') continue
+  const sources = {}
+  for (const sourceName of new Set([...Object.keys(previousSources), ...Object.keys(nextSources)])) {
     const previousSource = previousSources?.[sourceName]
     const nextSource = nextSources?.[sourceName]
+    if (!nextSource || typeof nextSource !== 'object') {
+      sources[sourceName] = previousSource
+      continue
+    }
     sources[sourceName] = {
-      ...previousSource,
       ...nextSource,
-      previousStatus: previousSource?.status,
+      ...(previousSource?.status ? { previousStatus: previousSource.status } : {}),
       latestStatus: nextSource?.status,
     }
   }
 
   return sources
+}
+
+function preservedBaselineWarnings(previousManifest, nextManifest) {
+  const warnings = []
+  const windowText = `${nextManifest?.start ?? 'unknown'} through ${nextManifest?.end ?? 'unknown'}`
+  if (arrayValue(previousManifest?.files?.oracleCsv).length > 0 && arrayValue(nextManifest?.files?.oracleCsv).length === 0) {
+    warnings.push(`Oracle source preserved from previous raw baseline because no Oracle CSVs were downloaded for refresh window ${windowText}.`)
+  }
+  if (arrayValue(previousManifest?.files?.leaguepediaJson).length > 0 && arrayValue(nextManifest?.files?.leaguepediaJson).length === 0) {
+    warnings.push(`Leaguepedia source preserved from previous raw baseline because no Leaguepedia files were downloaded for refresh window ${windowText}.`)
+  }
+  return warnings
+}
+
+function createStaleSourceState({
+  previousState,
+  previousManifest,
+  stagingManifest,
+  start,
+  end,
+  window,
+  mergeExistingRaw,
+  restoreResult,
+}) {
+  return {
+    schemaVersion: 1,
+    status: 'stale-source',
+    reason: 'no-current-match-source-data',
+    refreshedAt: new Date().toISOString(),
+    previousFingerprint: previousState?.fingerprint,
+    downloadStart: start,
+    downloadEnd: end,
+    coverageStart: previousManifest?.start ?? previousState?.coverageStart,
+    coverageEnd: previousManifest?.end ?? previousState?.coverageEnd,
+    lookbackDays: window.lookbackDays,
+    bootstrapStart: window.bootstrapStart,
+    mergeExistingRaw,
+    restoredRaw: restoreResult,
+    files: stagingManifest?.files ?? {},
+    sources: stagingManifest?.sources ?? {},
+    warnings: arrayValue(stagingManifest?.warnings),
+    crunch: {
+      skipped: true,
+      reason: 'no-current-match-source-data',
+    },
+    publish: {
+      skipped: true,
+      reason: 'no-current-match-source-data',
+    },
+  }
+}
+
+function manifestHasCurrentMatchSourceFiles(manifest) {
+  return arrayValue(manifest?.files?.oracleCsv).length > 0
+    || arrayValue(manifest?.files?.leaguepediaJson).length > 0
 }
 
 function manifestHasSourceFiles(manifest) {

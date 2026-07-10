@@ -9,6 +9,8 @@ type RefreshResult = {
   changed: boolean
   fingerprint?: string
   previousFingerprint?: string
+  status?: string
+  reason?: string
 }
 type RefreshWindow = {
   start: string
@@ -219,6 +221,13 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
           leaguepediaJson: [],
           oracleCsv: [nextOraclePath],
         },
+        sources: {
+          oracle: {
+            role: 'primary',
+            status: 'downloaded',
+            downloadedCount: 1,
+          },
+        },
       }, null, 2)}\n`)
       return
     }
@@ -242,6 +251,14 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
         leaguepediaJson: [],
         oracleCsv: [previousOraclePath],
       },
+      sources: {
+        oracle: {
+          role: 'primary',
+          status: 'failed',
+          failedCount: 1,
+        },
+      },
+      warnings: ['Oracle source 2026.csv failed during the previous refresh.'],
     }, null, 2)}\n`)
 
     const result = await refreshDataIfChanged([
@@ -271,6 +288,10 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
     assert.equal(crunchCount, 1)
     assert.equal(finalManifest.start, '2025-01-01')
     assert.equal(finalManifest.end, '2026-06-29')
+    assert.deepEqual(finalManifest.warnings, [])
+    assert.equal(finalManifest.sources.oracle.failedCount, undefined)
+    assert.equal(finalManifest.sources.oracle.previousStatus, 'failed')
+    assert.equal(finalManifest.sources.oracle.latestStatus, 'downloaded')
     assert.deepEqual(finalManifest.files.oracleCsv.sort(), [
       join(rawDir, 'oracles-elixir', '2025.csv'),
       join(rawDir, 'oracles-elixir', '2026.csv'),
@@ -279,6 +300,235 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
     assert.equal(state.downloadStart, '2026-06-22')
     assert.equal(state.coverageStart, '2025-01-01')
     assert.equal(state.mergeExistingRaw, true)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh wrapper preserves artifacts when current match sources are unavailable', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-stale-refresh-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const stagingDir = join(tempDir, 'staging')
+  const previousOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  let crunchCount = 0
+
+  async function fakeRun(command: string, commandArgs: string[]) {
+    if (commandArgs.includes('scripts/download-local-data.mjs')) {
+      const nextManifestPath = valueAfter(commandArgs, '--manifest')
+      await writeFile(nextManifestPath, `${JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-07-09T00:00:00.000Z',
+        start: '2026-07-02',
+        end: '2026-07-09',
+        files: {
+          leaguepediaJson: [],
+          oracleCsv: [],
+          lolEsportsJson: [],
+        },
+        sources: {
+          oracle: {
+            role: 'primary',
+            status: 'failed',
+            downloadedThisRun: 0,
+            failedThisRun: 1,
+          },
+          leaguepedia: {
+            role: 'backup-gap-fill',
+            status: 'failed',
+            downloadedThisRun: 0,
+            failedThisRun: 1,
+          },
+        },
+        warnings: [
+          'Oracle source 2026.csv was not downloaded: download returned HTML (Google Drive - Quota exceeded)',
+          'Leaguepedia backup download was not completed: HTTP 503 from Leaguepedia Cargo',
+        ],
+      }, null, 2)}\n`)
+      return
+    }
+
+    if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
+      crunchCount += 1
+      return
+    }
+
+    throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
+  }
+
+  try {
+    await mkdir(join(rawDir, 'oracles-elixir'), { recursive: true })
+    await writeFile(previousOraclePath, 'gameid,result\nold,1\n')
+    await writeFile(manifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-07-08T00:00:00.000Z',
+      start: '2026-01-01',
+      end: '2026-07-08',
+      files: {
+        leaguepediaJson: [],
+        oracleCsv: [previousOraclePath],
+      },
+      sources: {
+        oracle: {
+          role: 'primary',
+          status: 'downloaded',
+          downloadedCount: 1,
+        },
+      },
+      warnings: [],
+    }, null, 2)}\n`)
+    await writeFile(statePath, `${JSON.stringify({
+      schemaVersion: 1,
+      fingerprint: 'previous-fingerprint',
+      coverageStart: '2026-01-01',
+      coverageEnd: '2026-07-08',
+    }, null, 2)}\n`)
+
+    const result = await refreshDataIfChanged([
+      '--raw-dir',
+      rawDir,
+      '--manifest',
+      manifestPath,
+      '--state',
+      statePath,
+      '--staging-dir',
+      stagingDir,
+      '--output',
+      join(tempDir, 'derived.json'),
+      '--public-data-dir',
+      join(tempDir, 'public-data'),
+      '--lookback-days',
+      '7',
+      '--end',
+      '2026-07-09',
+      '--skip-bucket-upload',
+    ], { run: fakeRun })
+    const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    const state = JSON.parse(await readFile(statePath, 'utf8'))
+
+    assert.equal(result.changed, false)
+    assert.equal(result.status, 'stale-source')
+    assert.equal(result.reason, 'no-current-match-source-data')
+    assert.equal(crunchCount, 0)
+    assert.deepEqual(finalManifest.files.oracleCsv, [previousOraclePath])
+    assert.equal(state.status, 'stale-source')
+    assert.equal(state.reason, 'no-current-match-source-data')
+    assert.equal(state.coverageEnd, '2026-07-08')
+    assert.deepEqual(state.crunch, {
+      skipped: true,
+      reason: 'no-current-match-source-data',
+    })
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh wrapper warns when previous Oracle raw data is preserved for a fallback-only refresh', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-preserved-refresh-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const stagingDir = join(tempDir, 'staging')
+  const previousOraclePath = join(rawDir, 'oracles-elixir', '2025.csv')
+  let crunchCount = 0
+
+  async function fakeRun(command: string, commandArgs: string[]) {
+    if (commandArgs.includes('scripts/download-local-data.mjs')) {
+      const outDir = valueAfter(commandArgs, '--out-dir')
+      const nextManifestPath = valueAfter(commandArgs, '--manifest')
+      const leaguepediaPath = join(outDir, 'leaguepedia', 'scoreboard-games.json')
+      await mkdir(join(outDir, 'leaguepedia'), { recursive: true })
+      await writeFile(leaguepediaPath, JSON.stringify({
+        source: 'Leaguepedia Cargo ScoreboardGames',
+        fetchedAt: '2026-07-09T00:00:00.000Z',
+        matches: [{ id: 'leaguepedia-game-1', winner: 'Blue' }],
+      }))
+      await writeFile(nextManifestPath, `${JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-07-09T00:00:00.000Z',
+        start: '2026-07-02',
+        end: '2026-07-09',
+        files: {
+          leaguepediaJson: [leaguepediaPath],
+          oracleCsv: [],
+        },
+        sources: {
+          leaguepedia: {
+            role: 'backup-gap-fill',
+            status: 'downloaded',
+            downloadedCount: 1,
+          },
+          oracle: {
+            role: 'primary',
+            status: 'failed',
+            downloadedCount: 0,
+            failedCount: 1,
+          },
+        },
+        warnings: [
+          'Oracle source 2026.csv was not downloaded: download returned HTML (Google Drive - Quota exceeded)',
+        ],
+      }, null, 2)}\n`)
+      return
+    }
+
+    if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
+      crunchCount += 1
+      return
+    }
+
+    throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
+  }
+
+  try {
+    await mkdir(join(rawDir, 'oracles-elixir'), { recursive: true })
+    await writeFile(previousOraclePath, 'gameid,result\nold,1\n')
+    await writeFile(manifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-07-01T00:00:00.000Z',
+      start: '2025-01-01',
+      end: '2026-07-01',
+      files: {
+        leaguepediaJson: [],
+        oracleCsv: [previousOraclePath],
+      },
+      sources: {
+        oracle: {
+          role: 'primary',
+          status: 'downloaded',
+          downloadedCount: 1,
+        },
+      },
+      warnings: [],
+    }, null, 2)}\n`)
+
+    const result = await refreshDataIfChanged([
+      '--raw-dir',
+      rawDir,
+      '--manifest',
+      manifestPath,
+      '--state',
+      statePath,
+      '--staging-dir',
+      stagingDir,
+      '--output',
+      join(tempDir, 'derived.json'),
+      '--public-data-dir',
+      join(tempDir, 'public-data'),
+      '--lookback-days',
+      '7',
+      '--end',
+      '2026-07-09',
+      '--skip-bucket-upload',
+    ], { run: fakeRun })
+    const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+
+    assert.equal(result.changed, true)
+    assert.equal(crunchCount, 1)
+    assert.deepEqual(finalManifest.files.oracleCsv, [previousOraclePath])
+    assert.match(finalManifest.warnings.join('\n'), /Oracle source preserved from previous raw baseline/)
+    assert.match(finalManifest.warnings.join('\n'), /download returned HTML \(Google Drive - Quota exceeded\)/)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
