@@ -154,15 +154,15 @@ function updateLeagueStrength({
   previousLeagueScores.set(leagueB, leagueScoreB)
   leagueScores.set(leagueA, leagueScoreA + deltaA)
   leagueScores.set(leagueB, leagueScoreB + deltaB)
-  updateLeagueRecord(leagueA, observedOutcomeA > observedOutcomeB, expectedOutcomeA, leagueExpectedRatingB, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
-  updateLeagueRecord(leagueB, observedOutcomeB > observedOutcomeA, expectedOutcomeB, leagueExpectedRatingA, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
+  updateLeagueRecord(leagueA, observedOutcomeA, expectedOutcomeA, leagueExpectedRatingB, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
+  updateLeagueRecord(leagueB, observedOutcomeB, expectedOutcomeB, leagueExpectedRatingA, match, leagueWins, leagueLosses, leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts, leagueLastEvents, leagueLastUpdated)
 
   return { deltaA, deltaB }
 }
 
 function updateLeagueRecord(
   league: string,
-  won: boolean,
+  observedOutcome: number,
   expectedWin: number,
   opponentRating: number,
   match: MatchRecord,
@@ -175,11 +175,13 @@ function updateLeagueRecord(
   leagueLastEvents: Map<string, string>,
   leagueLastUpdated: Map<string, string>,
 ) {
-  if (won) leagueWins.set(league, (leagueWins.get(league) ?? 0) + 1)
-  else leagueLosses.set(league, (leagueLosses.get(league) ?? 0) + 1)
+  leagueWins.set(league, (leagueWins.get(league) ?? 0) + observedOutcome)
+  leagueLosses.set(league, (leagueLosses.get(league) ?? 0) + 1 - observedOutcome)
   leagueExpectedWins.set(league, (leagueExpectedWins.get(league) ?? 0) + expectedWin)
   leagueOpponentRatingSums.set(league, (leagueOpponentRatingSums.get(league) ?? 0) + opponentRating)
-  leagueForms.set(league, [...(leagueForms.get(league) ?? []), won ? 'W' : 'L'].slice(-6))
+  if (observedOutcome !== 0.5) {
+    leagueForms.set(league, [...(leagueForms.get(league) ?? []), observedOutcome > 0.5 ? 'W' : 'L'].slice(-6))
+  }
   leagueMatchCounts.set(league, (leagueMatchCounts.get(league) ?? 0) + 1)
   leagueLastEvents.set(league, match.event)
   leagueLastUpdated.set(league, match.date)

@@ -17,9 +17,10 @@ export function predictionSegmentsFor(
   teams: Record<string, TeamProfile>,
   lastPatchByTeam: Map<string, string>,
   lastRosterFingerprintByTeam: Map<string, string>,
+  resolvedBestOf = match.bestOf,
 ): WalkForwardSegmentKey[] {
   const segments: WalkForwardSegmentKey[] = []
-  const bestOf = normalizedBestOf(match.bestOf)
+  const bestOf = normalizedBestOf(resolvedBestOf)
   if (bestOf === 1) segments.push('bo1')
   if (bestOf >= 3) segments.push('bo3-bo5')
   if (isInternationalMatch(match)) segments.push('international')

@@ -35,10 +35,11 @@ test('team latent strength is result-only and allocates evidence across stable a
     teamAGold: 50100,
     teamBGold: 49900,
   })], { ...teams })
-  const bo5Win = buildRankingModel([matchFixture({
+  const bo5Win = buildRankingModel(seriesFixture({
     id: 'bo5-win',
     bestOf: 5,
-  })], { ...teams })
+    winners: ['Alpha', 'Alpha', 'Alpha'],
+  }), { ...teams })
 
   const dominantAlpha = standingFor(dominantWin, 'Alpha')
   const narrowAlpha = standingFor(narrowWin, 'Alpha')
@@ -46,7 +47,7 @@ test('team latent strength is result-only and allocates evidence across stable a
 
   assert.equal(dominantAlpha.baseRating, narrowAlpha.baseRating)
   assert.equal(dominantAlpha.rating, narrowAlpha.rating)
-  assert.equal(bo5Alpha.baseRating, dominantAlpha.baseRating)
+  assert.ok(bo5Alpha.baseRating > dominantAlpha.baseRating)
   assert.ok(bo5Alpha.baseRating > 1500)
   assert.equal(dominantAlpha.ratingUpdate.teamStableShare, 0.9)
   assert.equal(dominantAlpha.ratingUpdate.teamFormShare, 0.1)
@@ -87,6 +88,90 @@ test('series rows publish one atomic team and league strength update', () => {
   assert.ok((alphaHistory.at(-1)?.ratingUpdate.teamStableDelta ?? 0) > 0)
   assert.equal(leagueFor(model, 'LCK').internationalMatches, 1)
   assert.equal(leagueFor(model, 'LCS').internationalMatches, 1)
+})
+
+test('a completed Bo2 tie is neutral in ratings, provenance, and head-to-head context', () => {
+  const model = buildRankingModel(seriesFixture({
+    id: 'bo2-tie',
+    bestOf: 2,
+    bestOfBasis: 'provider',
+    winners: ['Alpha', 'Beta'],
+  }), { ...teams })
+  const alpha = standingFor(model, 'Alpha')
+  const beta = standingFor(model, 'Beta')
+  const alphaFinal = alpha.history.at(-1)
+
+  assert.equal(alpha.baseRating, 1500)
+  assert.equal(beta.baseRating, 1500)
+  assert.equal(alpha.rating, beta.rating)
+  assert.equal(alphaFinal?.ratingUpdate.updateUnit, 'series-atomic')
+  assert.equal(alphaFinal?.ratingUpdate.neutralResultResidual, 0)
+  assert.equal(alphaFinal?.source.seriesOutcome, 0.5)
+  assert.equal(alphaFinal?.source.bestOf, 2)
+  assert.equal(alphaFinal?.source.formatBasis, 'provider')
+  assert.equal(model.predictions.every((prediction) => prediction.seriesId === alphaFinal?.source.seriesId), true)
+  assert.equal(model.predictions.every((prediction) => prediction.bestOf === 2), true)
+})
+
+test('an ambiguous fallback 1-1 prefix stays incomplete and does not count for eligibility', () => {
+  const model = buildRankingModel([
+    matchFixture({ id: 'fallback-prefix-a', sourceGameId: 'opaque-prefix-a', bestOf: 1, bestOfBasis: 'fallback', winner: 'Alpha' }),
+    matchFixture({ id: 'fallback-prefix-b', sourceGameId: 'opaque-prefix-b', bestOf: 1, bestOfBasis: 'fallback', winner: 'Beta' }),
+  ], { ...teams })
+  const alpha = standingFor(model, 'Alpha')
+
+  assert.equal(alpha.baseRating, 1500)
+  assert.equal(alpha.eligibility.totalGames, 0)
+  assert.equal(alpha.history.every((point) => point.source.seriesState === 'unknown'), true)
+  assert.equal(alpha.history.every((point) => point.source.seriesOutcome === undefined), true)
+  assert.equal(alpha.history.every((point) => point.ratingUpdate.updateUnit === 'series-member-no-team-update'), true)
+})
+
+test('an unequal Bo3 prefix stays ongoing and does not count for eligibility', () => {
+  const model = buildRankingModel([
+    matchFixture({ id: 'bo3-prefix-1', sourceGameId: 'bo3-prefix-game-1', bestOf: 3, bestOfBasis: 'provider', winner: 'Alpha' }),
+  ], { ...teams })
+  const alpha = standingFor(model, 'Alpha')
+
+  assert.equal(alpha.baseRating, 1500)
+  assert.equal(alpha.eligibility.totalGames, 0)
+  assert.equal(alpha.history[0]?.source.seriesState, 'ongoing')
+  assert.equal(alpha.history[0]?.source.seriesOutcome, undefined)
+})
+
+test('an international Bo2 tie assigns half a league result without inventing league history wins', () => {
+  const setup = Array.from({ length: 8 }, (_, index) => matchFixture({
+    id: `bo2-league-setup-${index}`,
+    date: `2026-01-${String(index + 1).padStart(2, '0')}`,
+    winner: 'Alpha',
+  }))
+  const tie = seriesFixture({
+    id: 'international-bo2-tie',
+    date: '2026-02-01',
+    event: 'MSI Bo2 Fixture',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-bracket',
+    teamA: 'Alpha',
+    teamB: 'Gamma',
+    teamAHomeLeague: 'LCK',
+    teamBHomeLeague: 'LPL',
+    teamARegion: 'LCK',
+    teamBRegion: 'LPL',
+    bestOf: 2,
+    bestOfBasis: 'provider',
+    winners: ['Alpha', 'Gamma'],
+  })
+  const model = buildRankingModel([...setup, ...tie], { ...teams })
+  const lck = leagueFor(model, 'LCK')
+  const lpl = leagueFor(model, 'LPL')
+
+  assert.equal(lck.wins, 0.5)
+  assert.equal(lck.losses, 0.5)
+  assert.equal(lpl.wins, 0.5)
+  assert.equal(lpl.losses, 0.5)
+  assert.equal(Number(((lck.winsOverExpected ?? 0) + (lpl.winsOverExpected ?? 0)).toFixed(6)), 0)
+  assert.equal(model.leagueHistory.some((point) => point.event === 'MSI Bo2 Fixture'), false)
 })
 
 test('interleaved same-date series rows still publish one atomic team update', () => {

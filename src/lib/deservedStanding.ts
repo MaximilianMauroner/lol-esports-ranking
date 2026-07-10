@@ -12,8 +12,9 @@ import {
   eventWeightMultiplierForMatch,
   type EventWeightContext,
 } from './eventWeighting'
-import { normalizedBestOf, type NormalizedBestOf } from './matchFormat'
+import type { NormalizedBestOf } from './matchFormat'
 import { clamp } from './ratingCalculations'
+import { resolveCanonicalSeries } from './seriesResolver'
 
 export const deservedStandingModelParameters = {
   baseScore: 1500,
@@ -681,18 +682,20 @@ function dssSeriesLedgerEntriesForGroup(
   const expectedSeriesResultA = dssExpectedSeriesResult(gameProbabilityA, group.bestOf)
   const expectedSeriesResultB = dssExpectedSeriesResult(1 - gameProbabilityA, group.bestOf)
   const seriesWeight = dssSeriesWeight(group.finalMatch.tier, group.bestOf, group.finalMatch, options.eventWeightContext)
+  const contextA = matchContextForTeam(group.finalMatch, group.teamA)
+  const contextB = matchContextForTeam(group.finalMatch, group.teamB)
 
   return [
     dssSeriesLedgerEntry({
       group,
       team: group.teamA,
       opponent: group.teamB,
-      teamLeague: group.finalMatch.teamAHomeLeague ?? group.finalMatch.league,
-      opponentLeague: group.finalMatch.teamBHomeLeague ?? group.finalMatch.league,
-      teamRegion: group.finalMatch.teamARegion ?? group.finalMatch.region,
-      opponentRegion: group.finalMatch.teamBRegion ?? group.finalMatch.region,
-      teamSeed: group.finalMatch.teamASeed,
-      opponentSeed: group.finalMatch.teamBSeed,
+      teamLeague: contextA.league,
+      opponentLeague: contextB.league,
+      teamRegion: contextA.region,
+      opponentRegion: contextB.region,
+      teamSeed: contextA.seed,
+      opponentSeed: contextB.seed,
       gamesWon: group.winsA,
       gamesLost: group.winsB,
       observedSeriesResult: group.observedSeriesResultA,
@@ -707,12 +710,12 @@ function dssSeriesLedgerEntriesForGroup(
       group,
       team: group.teamB,
       opponent: group.teamA,
-      teamLeague: group.finalMatch.teamBHomeLeague ?? group.finalMatch.league,
-      opponentLeague: group.finalMatch.teamAHomeLeague ?? group.finalMatch.league,
-      teamRegion: group.finalMatch.teamBRegion ?? group.finalMatch.region,
-      opponentRegion: group.finalMatch.teamARegion ?? group.finalMatch.region,
-      teamSeed: group.finalMatch.teamBSeed,
-      opponentSeed: group.finalMatch.teamASeed,
+      teamLeague: contextB.league,
+      opponentLeague: contextA.league,
+      teamRegion: contextB.region,
+      opponentRegion: contextA.region,
+      teamSeed: contextB.seed,
+      opponentSeed: contextA.seed,
       gamesWon: group.winsB,
       gamesLost: group.winsA,
       observedSeriesResult: 1 - group.observedSeriesResultA,
@@ -805,59 +808,20 @@ function dssSeriesLedgerEntry({
 }
 
 function dssSeriesGroupsForMatches(matches: MatchRecord[]): DssSeriesGroup[] {
-  const groups = new Map<string, MatchRecord[]>()
-  for (const match of matches.toSorted(compareMatchesByDateAndId)) {
-    const key = dssSeriesGroupKey(match)
-    groups.set(key, [...(groups.get(key) ?? []), match])
-  }
-
-  return Array.from(groups.entries()).map(([seriesKey, group]) => {
-    const finalMatch = group.at(-1)
-    if (!finalMatch) throw new Error('Cannot build an empty DSS series group')
-    const teamA = finalMatch.teamA
-    const teamB = finalMatch.teamB
-    const winsA = group.filter((match) => match.winner === teamA).length
-    const winsB = group.filter((match) => match.winner === teamB).length
-    const gamesPlayed = Math.max(1, winsA + winsB)
-    const bestOf = inferredDssSeriesBestOf(group, winsA, winsB)
-    const observedSeriesResultA = winsA === winsB ? 0.5 : Number(winsA > winsB)
-
-    return {
-      seriesKey,
-      matches: group,
-      finalMatch,
-      teamA,
-      teamB,
-      winsA,
-      winsB,
-      gamesPlayed,
-      bestOf,
-      observedSeriesResultA,
-    }
-  })
-}
-
-function dssSeriesGroupKey(match: MatchRecord) {
-  const provider = match.sourceProvider ?? 'unknown'
-  if (match.sourceMatchId) return ['source-match', match.date, provider, sourceSeriesId(match.sourceMatchId)].join('\u0000')
-  const [left, right] = [match.teamA, match.teamB].sort((a, b) => a.localeCompare(b))
-  return ['inferred-series', match.date, provider, match.event, left, right].join('\u0000')
-}
-
-function sourceSeriesId(sourceMatchId: string) {
-  return sourceMatchId.replace(/_[1-5]$/, '')
-}
-
-function inferredDssSeriesBestOf(matches: MatchRecord[], winsA: number, winsB: number): NormalizedBestOf {
-  const gamesPlayed = Math.max(1, winsA + winsB)
-  const requiredWins = Math.max(winsA, winsB)
-  const inferred = winsA === winsB ? gamesPlayed : Math.max(gamesPlayed, requiredWins * 2 - 1)
-  const explicit = Math.max(...matches.map((match) => normalizedBestOf(match.bestOf)))
-  const bestOf = Math.max(explicit, inferred)
-  if (bestOf >= 5) return 5
-  if (bestOf >= 3) return 3
-  if (bestOf === 2) return 2
-  return 1
+  return resolveCanonicalSeries(matches)
+    .filter((series) => series.state === 'completed')
+    .map((series) => ({
+      seriesKey: series.id,
+      matches: series.games,
+      finalMatch: series.finalMatch,
+      teamA: series.teamA,
+      teamB: series.teamB,
+      winsA: series.winsA,
+      winsB: series.winsB,
+      gamesPlayed: series.games.length,
+      bestOf: series.format,
+      observedSeriesResultA: series.outcomeA,
+    }))
 }
 
 function referenceStrengthFor(context: DssReferenceStrengthContext, options: DssSeriesLedgerOptions) {
@@ -868,8 +832,13 @@ function contextAdjustmentFor(context: DssReferenceStrengthContext, options: Dss
   return options.contextAdjustmentFor?.(context) ?? 0
 }
 
-function compareMatchesByDateAndId(left: MatchRecord, right: MatchRecord) {
-  return left.date.localeCompare(right.date) || left.id.localeCompare(right.id)
+function matchContextForTeam(match: MatchRecord, team: string) {
+  const isTeamA = match.teamA === team
+  return {
+    league: (isTeamA ? match.teamAHomeLeague : match.teamBHomeLeague) ?? match.league,
+    region: (isTeamA ? match.teamARegion : match.teamBRegion) ?? match.region,
+    seed: isTeamA ? match.teamASeed : match.teamBSeed,
+  }
 }
 
 function binomial(n: number, k: number) {

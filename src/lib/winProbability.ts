@@ -1,5 +1,5 @@
 import type { TeamStanding } from '../types'
-import { normalizedDecisiveBestOf } from './matchFormat'
+import { normalizedBestOf } from './matchFormat'
 import {
   winProbabilityEloScale,
   winProbabilityUncertaintyFloor,
@@ -16,6 +16,8 @@ export type NeutralWinProbability = {
   teamBGameWinProbability: number
   teamASeriesWinProbability: number
   teamBSeriesWinProbability: number
+  teamAExpectedSeriesPoints: number
+  teamBExpectedSeriesPoints: number
   uncertaintyPenalty: number
 }
 
@@ -23,22 +25,27 @@ export function neutralWinProbability(teamA: ProbabilityTeam, teamB: Probability
   const rawGameProbability = expectedScore(teamA.rating, teamB.rating)
   const uncertaintyPenalty = uncertaintyPenaltyFor(teamA.uncertainty, teamB.uncertainty)
   const gameProbability = 0.5 + (rawGameProbability - 0.5) * uncertaintyPenalty
-  const seriesProbability = seriesWinProbability(gameProbability, bestOf)
+  const normalizedFormat = normalizedBestOf(bestOf)
+  const teamASeriesWinProbability = seriesWinProbability(gameProbability, normalizedFormat)
+  const teamBSeriesWinProbability = seriesWinProbability(1 - gameProbability, normalizedFormat)
+  const teamAExpectedSeriesPoints = expectedSeriesPoints(gameProbability, normalizedFormat)
 
   return {
     teamA: teamA.team,
     teamB: teamB.team,
-    bestOf: normalizedDecisiveBestOf(bestOf),
+    bestOf: normalizedFormat,
     teamAGameWinProbability: roundProbability(gameProbability),
     teamBGameWinProbability: roundProbability(1 - gameProbability),
-    teamASeriesWinProbability: roundProbability(seriesProbability),
-    teamBSeriesWinProbability: roundProbability(1 - seriesProbability),
+    teamASeriesWinProbability: roundProbability(teamASeriesWinProbability),
+    teamBSeriesWinProbability: roundProbability(teamBSeriesWinProbability),
+    teamAExpectedSeriesPoints: roundProbability(teamAExpectedSeriesPoints),
+    teamBExpectedSeriesPoints: roundProbability(1 - teamAExpectedSeriesPoints),
     uncertaintyPenalty: roundProbability(uncertaintyPenalty),
   }
 }
 
 export function seriesWinProbability(gameWinProbability: number, bestOf = 1) {
-  const games = normalizedDecisiveBestOf(bestOf)
+  const games = normalizedBestOf(bestOf)
   const winsNeeded = Math.floor(games / 2) + 1
   let probability = 0
 
@@ -47,6 +54,12 @@ export function seriesWinProbability(gameWinProbability: number, bestOf = 1) {
   }
 
   return probability
+}
+
+export function expectedSeriesPoints(gameWinProbability: number, bestOf = 1) {
+  const games = normalizedBestOf(bestOf)
+  if (games === 2) return gameWinProbability
+  return seriesWinProbability(gameWinProbability, games)
 }
 
 function expectedScore(ratingA: number, ratingB: number) {

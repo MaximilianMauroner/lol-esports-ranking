@@ -73,11 +73,16 @@ export function matchLevelEligibilityHistory(history: TeamHistoryPoint[]): TeamH
     history.filter((point) => Boolean(point.date) && Boolean(point.event) && Boolean(point.opponent)),
     teamEligibilityMatchKey,
   )
-    .filter((group) => isResolvedTimelineResult(summarizeTimelineResults(group.entries, (entry) => entry.result)))
+    .filter((group) => {
+      const hasCanonicalState = group.entries.some((entry) => entry.source.seriesState !== undefined)
+      if (hasCanonicalState) return group.entries.some((entry) => entry.source.seriesState === 'completed')
+      return isResolvedTimelineResult(summarizeTimelineResults(group.entries, (entry) => entry.result))
+    })
     .map((group) => group.entries.at(-1)!)
 }
 
 function teamEligibilityMatchKey(point: TeamHistoryPoint) {
+  if (point.source.seriesId) return timelineGroupKey(['canonical-series', point.source.seriesId])
   return timelineGroupKey([
     'series',
     point.date,

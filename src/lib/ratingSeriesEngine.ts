@@ -18,7 +18,6 @@ import {
 } from './executionResidual'
 import { eventKFactorForMatch, eventWeightForMatch, leagueKFactorForMatch } from './eventWeighting'
 import { updateLeagueStrengthForSeries } from './leagueRatings'
-import { normalizedBestOf, type NormalizedBestOf } from './matchFormat'
 import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
 import type { PregamePlayerRatingEdge } from './playerModel'
 import { trackMatchForPlacement } from './placementResiduals'
@@ -45,6 +44,7 @@ import type { RatingRunState } from './ratingRunState'
 import { makeRankMap } from './ratingRunState'
 import { roundedContinuity } from './rosterContinuityRating'
 import { recordSideAdjustmentSample, sideAdjustmentFor } from './sideAdjustments'
+import { resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
 import { neutralWinProbability } from './winProbability'
 import {
   domesticStableTransferWeightsByTier,
@@ -74,9 +74,15 @@ export function emitPregamePredictionsForDate({
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
   sideAdjustments: Map<string, number>
 }) {
+  const seriesByMatchId = new Map(
+    resolveCanonicalSeries(matches).flatMap((series) => series.games.map((match) => [match.id, series] as const)),
+  )
   for (const match of matches) {
+    const series = seriesByMatchId.get(match.id)
+    if (!series) throw new Error(`Missing canonical series for ${match.id}`)
     state.predictions.push(pregamePredictionForMatch({
       match,
+      series,
       teams,
       state,
       pregamePlayerRatingEdges,
@@ -107,12 +113,14 @@ export function processRatingSeriesForDate({
 
 function pregamePredictionForMatch({
   match,
+  series,
   teams,
   state,
   pregamePlayerRatingEdges,
   sideAdjustments,
 }: {
   match: MatchRecord
+  series: CanonicalSeries
   teams: Record<string, TeamProfile>
   state: RatingRunState
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
@@ -153,27 +161,27 @@ function pregamePredictionForMatch({
   const teamOnlyPrediction = neutralWinProbability(
     { team: match.teamA, rating: powerRatingA, uncertainty: state.uncertainties.get(match.teamA) ?? maximumUncertainty },
     { team: match.teamB, rating: powerRatingB, uncertainty: state.uncertainties.get(match.teamB) ?? maximumUncertainty },
-    match.bestOf,
+    series.format,
   )
   const executionBaselinePrediction = neutralWinProbability(
     { team: match.teamA, rating: noExecutionRatingA, uncertainty: state.uncertainties.get(match.teamA) ?? maximumUncertainty },
     { team: match.teamB, rating: noExecutionRatingB, uncertainty: state.uncertainties.get(match.teamB) ?? maximumUncertainty },
-    match.bestOf,
+    series.format,
   )
   const publishedPrediction = neutralWinProbability(
     { team: match.teamA, rating: publishedRatingA, uncertainty: state.uncertainties.get(match.teamA) ?? maximumUncertainty },
     { team: match.teamB, rating: publishedRatingB, uncertainty: state.uncertainties.get(match.teamB) ?? maximumUncertainty },
-    match.bestOf,
+    series.format,
   )
   const playerAdjustedPrediction = neutralWinProbability(
     { team: match.teamA, rating: playerAdjustedRatingA, uncertainty: state.uncertainties.get(match.teamA) ?? maximumUncertainty },
     { team: match.teamB, rating: playerAdjustedRatingB, uncertainty: state.uncertainties.get(match.teamB) ?? maximumUncertainty },
-    match.bestOf,
+    series.format,
   )
   const executionAdjustedPrediction = neutralWinProbability(
     { team: match.teamA, rating: executionAdjustedRatingA, uncertainty: state.uncertainties.get(match.teamA) ?? maximumUncertainty },
     { team: match.teamB, rating: executionAdjustedRatingB, uncertainty: state.uncertainties.get(match.teamB) ?? maximumUncertainty },
-    match.bestOf,
+    series.format,
   )
   const variants = {
     published: predictionVariantFromWinProbability(publishedPrediction, publishedRatingA, publishedRatingB),
@@ -185,10 +193,13 @@ function pregamePredictionForMatch({
 
   return {
     id: match.id,
+    seriesId: series.id,
     date: match.date,
     event: match.event,
     patch: match.patch,
     bestOf: publishedPrediction.bestOf,
+    formatBasis: series.formatBasis,
+    formatConfidence: series.formatConfidence,
     teamA: match.teamA,
     teamB: match.teamB,
     teamASide: match.teamASide,
@@ -199,6 +210,8 @@ function pregamePredictionForMatch({
     teamBGameWinProbability: publishedPrediction.teamBGameWinProbability,
     teamASeriesWinProbability: publishedPrediction.teamASeriesWinProbability,
     teamBSeriesWinProbability: publishedPrediction.teamBSeriesWinProbability,
+    teamAExpectedSeriesPoints: publishedPrediction.teamAExpectedSeriesPoints,
+    teamBExpectedSeriesPoints: publishedPrediction.teamBExpectedSeriesPoints,
     teamAGameWinProbabilityTeamOnly: teamOnlyPrediction.teamAGameWinProbability,
     teamBGameWinProbabilityTeamOnly: teamOnlyPrediction.teamBGameWinProbability,
     teamASeriesWinProbabilityTeamOnly: teamOnlyPrediction.teamASeriesWinProbability,
@@ -237,12 +250,12 @@ function pregamePredictionForMatch({
     teamBSeriesWinProbabilityExecutionAdjusted: executionAdjustedPrediction.teamBSeriesWinProbability,
     executionResidualPredictionWeight,
     variants,
-    segments: predictionSegmentsFor(match, teams, state.lastPatchByTeam, state.lastRosterFingerprintByTeam),
+    segments: predictionSegmentsFor(match, teams, state.lastPatchByTeam, state.lastRosterFingerprintByTeam, series.format),
     trainingMatchCount: state.processedMatchCount,
     dataCutoff: state.previousMatch?.date,
     modelVersion: transparentGprModelMetadata.version,
     modelConfigHash: transparentGprModelMetadata.configHash,
-    source: sourceTraceFor(match),
+    source: sourceTraceFor(match, series),
   }
 }
 
@@ -283,8 +296,8 @@ function processRatingSeries({
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
 }) {
   const finalMatch = series.finalMatch
-  const seriesLeagueA = homeLeagueForMatch(finalMatch, 'A', teams)
-  const seriesLeagueB = homeLeagueForMatch(finalMatch, 'B', teams)
+  const seriesLeagueA = homeLeagueForTeam(finalMatch, series.teamA, teams)
+  const seriesLeagueB = homeLeagueForTeam(finalMatch, series.teamB, teams)
   const seriesRatingA = state.ratings.get(series.teamA) ?? initialTeamRating
   const seriesRatingB = state.ratings.get(series.teamB) ?? initialTeamRating
   const seriesRawLeagueScoreA = state.leagueScores.get(seriesLeagueA) ?? leaguePriorFor(seriesLeagueA)
@@ -293,7 +306,9 @@ function processRatingSeries({
   const seriesLeagueScoreB = effectiveLeagueRating(seriesLeagueB, seriesRawLeagueScoreB, state.leagueMatchCounts.get(seriesLeagueB) ?? 0)
   const seriesPowerRatingA = powerRating(seriesRatingA, seriesLeagueScoreA)
   const seriesPowerRatingB = powerRating(seriesRatingB, seriesLeagueScoreB)
-  const { teamA: seriesRosterPriorOffsetA, teamB: seriesRosterPriorOffsetB } = rosterPriorOffsetsForMatch(finalMatch, pregamePlayerRatingEdges, state.rosterPriorOffsets)
+  const finalRosterPriorOffsets = rosterPriorOffsetsForMatch(finalMatch, pregamePlayerRatingEdges, state.rosterPriorOffsets)
+  const seriesRosterPriorOffsetA = finalMatch.teamA === series.teamA ? finalRosterPriorOffsets.teamA : finalRosterPriorOffsets.teamB
+  const seriesRosterPriorOffsetB = finalMatch.teamB === series.teamB ? finalRosterPriorOffsets.teamB : finalRosterPriorOffsets.teamA
   const seriesMomentumA = state.momentums.get(series.teamA) ?? 0
   const seriesMomentumB = state.momentums.get(series.teamB) ?? 0
   const seriesCurrentPowerRatingA = seriesPowerRatingA + seriesRosterPriorOffsetA + seriesMomentumA
@@ -305,8 +320,8 @@ function processRatingSeries({
     { team: series.teamB, rating: seriesCurrentPowerRatingB, uncertainty: seriesUncertaintyB },
     series.bestOf,
   )
-  const expectedOutcomeA = seriesExpected.teamASeriesWinProbability
-  const expectedOutcomeB = seriesExpected.teamBSeriesWinProbability
+  const expectedOutcomeA = seriesExpected.teamAExpectedSeriesPoints
+  const expectedOutcomeB = seriesExpected.teamBExpectedSeriesPoints
   const eventK = eventKFactorForMatch(finalMatch, state.eventWeightContext)
   const hasLeagueSignal = seriesLeagueA !== seriesLeagueB
     && seriesLeagueA !== 'Unknown'
@@ -441,10 +456,10 @@ function processSeriesMember({
   const executionEffectiveRatingB = executionPowerRatingB + rosterPriorOffsetB + momentumB + sideAdjustmentB
   const matchEventK = eventKFactorForMatch(match, state.eventWeightContext)
   const matchEventWeight = eventWeightForMatch(match, state.eventWeightContext)
-  const gameK = gameKFor(match, state.eventWeightContext)
+  const gameK = gameKFor(match, state.eventWeightContext, series.bestOf)
   const factorRecency = recencyWeight(match.date, lastDate)
   const aWon = match.winner === match.teamA
-  const isSeriesFinal = match.id === finalMatch.id
+  const isSeriesFinal = series.state === 'completed' && match.id === finalMatch.id
   const resultResidualA = isSeriesFinal ? (seriesResidualByTeam.get(match.teamA) ?? 0) : 0
   const resultResidualB = isSeriesFinal ? (seriesResidualByTeam.get(match.teamB) ?? 0) : 0
   const resultEvidenceA = isSeriesFinal ? (seriesEvidenceByTeam.get(match.teamA) ?? 0) : 0
@@ -507,7 +522,7 @@ function processSeriesMember({
     : { deltaA: 0, deltaB: 0 }
   const updatedLeagueScoreA = effectiveLeagueRating(leagueA, state.leagueScores.get(leagueA) ?? leaguePriorFor(leagueA), state.leagueMatchCounts.get(leagueA) ?? 0)
   const updatedLeagueScoreB = effectiveLeagueRating(leagueB, state.leagueScores.get(leagueB) ?? leaguePriorFor(leagueB), state.leagueMatchCounts.get(leagueB) ?? 0)
-  if (isSeriesFinal) {
+  if (isSeriesFinal && series.observedOutcomeA !== series.observedOutcomeB) {
     recordLeagueStrengthHistory({
       match,
       leagueA,
@@ -634,8 +649,8 @@ function processSeriesMember({
     opponent: normalize(effectiveRatingA, 1350, 1700),
     league: normalize(leagueScoreB + Math.max(0, leagueDelta.deltaB), 1440, 1560),
   }, state)
-  appendHistory(match, match.teamA, match.teamB, updatedPowerRatingA, ratingA + deltaA, updatedLeagueAdjustmentA, sideAdjustmentA, updatedComponentsA, updateLedgerA, historyDeltaA, historyRanks.get(match.teamA) ?? 1, aWon, state.histories)
-  appendHistory(match, match.teamB, match.teamA, updatedPowerRatingB, ratingB + deltaB, updatedLeagueAdjustmentB, sideAdjustmentB, updatedComponentsB, updateLedgerB, historyDeltaB, historyRanks.get(match.teamB) ?? 1, !aWon, state.histories)
+  appendHistory(match, match.teamA, match.teamB, updatedPowerRatingA, ratingA + deltaA, updatedLeagueAdjustmentA, sideAdjustmentA, updatedComponentsA, updateLedgerA, historyDeltaA, historyRanks.get(match.teamA) ?? 1, aWon, state.histories, series)
+  appendHistory(match, match.teamB, match.teamA, updatedPowerRatingB, ratingB + deltaB, updatedLeagueAdjustmentB, sideAdjustmentB, updatedComponentsB, updateLedgerB, historyDeltaB, historyRanks.get(match.teamB) ?? 1, !aWon, state.histories, series)
   recordSideAdjustmentSample(match, state.sideAdjustmentSamples)
   recordTeamContext(match, state.lastRosterByTeam, state.lastPatchByTeam, state.lastRosterFingerprintByTeam)
   trackMatchForPlacement(state.eventTrackers, match, teams)
@@ -752,6 +767,12 @@ function teamRegionForMatch(match: MatchRecord, side: 'A' | 'B', teams: Record<s
   return match.teamBRegion ?? teams[match.teamB]?.region ?? match.region
 }
 
+function homeLeagueForTeam(match: MatchRecord, team: string, teams: Record<string, TeamProfile>) {
+  if (match.teamA === team) return homeLeagueForMatch(match, 'A', teams)
+  if (match.teamB === team) return homeLeagueForMatch(match, 'B', teams)
+  return teams[team]?.league ?? 'Unknown'
+}
+
 type RatingSeriesGroup = {
   key: string
   matches: MatchRecord[]
@@ -761,90 +782,36 @@ type RatingSeriesGroup = {
   winsA: number
   winsB: number
   games: number
-  bestOf: NormalizedBestOf
+  bestOf: CanonicalSeries['format']
+  formatBasis: CanonicalSeries['formatBasis']
+  formatConfidence: CanonicalSeries['formatConfidence']
   observedOutcomeA: number
   observedOutcomeB: number
   strengthSignal: number
+  state: CanonicalSeries['state']
 }
 
 function ratingSeriesGroupsForDate(matches: MatchRecord[]): RatingSeriesGroup[] {
-  const groupsByKey = new Map<string, MatchRecord[]>()
-
-  for (const match of matches) {
-    const key = ratingSeriesKey(match)
-    groupsByKey.set(key, [...(groupsByKey.get(key) ?? []), match])
-  }
-
-  return Array.from(groupsByKey.values()).map((group) => {
-    const finalMatch = group.at(-1)
-    if (!finalMatch) throw new Error('Cannot build an empty rating series')
-    const teamA = finalMatch.teamA
-    const teamB = finalMatch.teamB
-    const winsA = group.filter((match) => match.winner === teamA).length
-    const winsB = group.filter((match) => match.winner === teamB).length
-    const games = Math.max(1, winsA + winsB)
-    const bestOf = inferredSeriesBestOf(group, winsA, winsB)
-    const aWon = winsA === winsB ? finalMatch.winner === teamA : winsA > winsB
-    const observedOutcomeA = aWon ? 1 : 0
-    const observedOutcomeB = aWon ? 0 : 1
-    const strengthSignal = seriesStrengthSignal(games, bestOf, winsA, winsB)
-
-    return {
-      key: ratingSeriesKey(finalMatch),
-      matches: group,
-      finalMatch,
-      teamA,
-      teamB,
-      winsA,
-      winsB,
-      games,
-      bestOf,
-      observedOutcomeA,
-      observedOutcomeB,
-      strengthSignal,
-    }
-  })
+  return resolveCanonicalSeries(matches).map((series) => ({
+    key: series.id,
+    matches: series.games,
+    finalMatch: series.finalMatch,
+    teamA: series.teamA,
+    teamB: series.teamB,
+    winsA: series.winsA,
+    winsB: series.winsB,
+    games: series.games.length,
+    bestOf: series.format,
+    formatBasis: series.formatBasis,
+    formatConfidence: series.formatConfidence,
+    observedOutcomeA: series.outcomeA,
+    observedOutcomeB: 1 - series.outcomeA,
+    strengthSignal: seriesStrengthSignal(series.games.length, series.format, series.winsA, series.winsB),
+    state: series.state,
+  }))
 }
 
-function ratingSeriesKey(match: MatchRecord) {
-  const provider = match.sourceProvider ?? 'unknown'
-  if (match.officialMatchId) return ['official-match', match.officialMatchId].join('\u0000')
-  if (match.sourceMatchId) return ['source-match', provider, sourceSeriesId(match.sourceMatchId)].join('\u0000')
-  const sourceGameSeriesId = sourceGameSeriesIdFor(match)
-  if (sourceGameSeriesId) return ['source-game-series', provider, sourceGameSeriesId].join('\u0000')
-  const [left, right] = [match.teamA, match.teamB].sort((a, b) => a.localeCompare(b))
-  return ['inferred-series', match.date, provider, match.event, match.phase, normalizedBestOf(match.bestOf), left, right].join('\u0000')
-}
-
-function sourceSeriesId(sourceMatchId: string) {
-  return sourceMatchId.replace(/_[1-5]$/, '')
-}
-
-function sourceGameSeriesIdFor(match: MatchRecord) {
-  if (!match.sourceGameId) return undefined
-  const explicitGameSuffix = /(?:[_-]game[_-][1-5])$/i
-  if (explicitGameSuffix.test(match.sourceGameId)) {
-    return match.sourceGameId.replace(explicitGameSuffix, '')
-  }
-  if (normalizedBestOf(match.bestOf) > 1 && /_[1-5]$/.test(match.sourceGameId)) {
-    return match.sourceGameId.replace(/_[1-5]$/, '')
-  }
-  return undefined
-}
-
-function inferredSeriesBestOf(matches: MatchRecord[], winsA: number, winsB: number): NormalizedBestOf {
-  const games = Math.max(1, winsA + winsB)
-  const requiredWins = Math.max(winsA, winsB)
-  const inferred = winsA === winsB ? games : Math.max(games, requiredWins * 2 - 1)
-  const explicit = Math.max(...matches.map((match) => normalizedBestOf(match.bestOf)))
-  const bestOf = Math.max(explicit, inferred)
-  if (bestOf >= 5) return 5
-  if (bestOf >= 3) return 3
-  if (bestOf === 2) return 2
-  return 1
-}
-
-function seriesStrengthSignal(games: number, bestOf: NormalizedBestOf, winsA: number, winsB: number) {
+function seriesStrengthSignal(games: number, bestOf: CanonicalSeries['format'], winsA: number, winsB: number) {
   const requiredWins = Math.max(winsA, winsB)
   const winsNeeded = Math.floor(bestOf / 2) + 1
   if (requiredWins < winsNeeded) return 1
@@ -894,6 +861,7 @@ function appendHistory(
   rank: number,
   won: boolean,
   histories: Map<string, TeamHistoryPoint[]>,
+  series: RatingSeriesGroup,
 ) {
   histories.set(team, [
     ...(histories.get(team) ?? []),
@@ -912,7 +880,18 @@ function appendHistory(
       tier: match.tier,
       result: won ? 'W' : 'L',
       source: {
-        ...sourceTraceFor(match),
+        ...sourceTraceFor(match, {
+          id: series.key,
+          format: series.bestOf,
+          formatBasis: series.formatBasis,
+          formatConfidence: series.formatConfidence,
+          state: series.state,
+        }),
+        ...(series.state === 'completed' ? {
+          seriesOutcome: team === series.teamA
+            ? series.observedOutcomeA as 0 | 0.5 | 1
+            : series.observedOutcomeB as 0 | 0.5 | 1,
+        } : {}),
       },
     },
   ])

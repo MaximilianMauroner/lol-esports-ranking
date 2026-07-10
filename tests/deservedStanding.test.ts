@@ -71,8 +71,9 @@ test('DSS event weights and format multipliers produce PDF series weights', () =
 
 test('DSS discounts post-Worlds preseason series weight', () => {
   const ledger = dssSeriesLedgerEntriesForMatches([
-    matchFixture({
+    ...seriesFixture({
       id: 'worlds-final',
+      winners: ['Alpha', 'Alpha', 'Alpha'],
       date: '2025-11-09',
       season: 2025,
       event: 'WLDs 2025',
@@ -81,8 +82,9 @@ test('DSS discounts post-Worlds preseason series weight', () => {
       tier: 'worlds-main',
       bestOf: 5,
     }),
-    matchFixture({
+    ...seriesFixture({
       id: 'demacia-cup',
+      winners: ['Alpha', 'Alpha'],
       date: '2025-12-20',
       season: 2025,
       event: 'DCup 2025',
@@ -91,7 +93,7 @@ test('DSS discounts post-Worlds preseason series weight', () => {
       bestOf: 3,
     }),
   ])
-  const demaciaCup = ledger.find((entry) => entry.finalMatchId === 'demacia-cup')
+  const demaciaCup = ledger.find((entry) => entry.finalMatchId === 'demacia-cup-game-2')
 
   assert.ok(demaciaCup)
   near(demaciaCup.seriesWeight, dssSeriesWeight('regional-regular', 3) * preseasonEventWeightMultiplier)
@@ -358,8 +360,8 @@ test('DSS series ledger groups source match rows and emits one entry per team', 
 
 test('DSS series ledger infers same-day series when source match ids are absent', () => {
   const ledger = dssSeriesLedgerEntriesForMatches([
-    matchFixture({ id: 'same-day-1', winner: 'Alpha' }),
-    matchFixture({ id: 'same-day-2', winner: 'Alpha' }),
+    matchFixture({ id: 'same-day-1', bestOf: 3, winner: 'Alpha' }),
+    matchFixture({ id: 'same-day-2', bestOf: 3, winner: 'Alpha' }),
   ])
   const alpha = ledger.find((entry) => entry.team === 'Alpha')
 

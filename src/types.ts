@@ -112,6 +112,8 @@ export type SourceTrace = {
   seriesId?: string
   formatBasis?: SeriesFormatBasis
   formatConfidence?: SeriesFormatConfidence
+  seriesState?: SeriesState
+  seriesOutcome?: 0 | 0.5 | 1
 }
 
 export type SeriesFormat = 1 | 2 | 3 | 5
@@ -371,10 +373,13 @@ export type LeagueStrengthHistoryPoint = {
 
 export type PregamePrediction = {
   id: string
+  seriesId?: string
   date: string
   event: string
   patch: string
   bestOf: number
+  formatBasis?: SeriesFormatBasis
+  formatConfidence?: SeriesFormatConfidence
   teamA: string
   teamB: string
   teamASide?: Side
@@ -385,6 +390,8 @@ export type PregamePrediction = {
   teamBGameWinProbability: number
   teamASeriesWinProbability: number
   teamBSeriesWinProbability: number
+  teamAExpectedSeriesPoints?: number
+  teamBExpectedSeriesPoints?: number
   teamAGameWinProbabilityTeamOnly?: number
   teamBGameWinProbabilityTeamOnly?: number
   teamASeriesWinProbabilityTeamOnly?: number

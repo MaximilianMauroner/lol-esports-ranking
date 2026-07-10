@@ -1,4 +1,5 @@
 import type { MatchRecord, TeamProfile } from '../types'
+import type { CanonicalSeries } from './seriesResolver'
 
 export function matchesByDate(matches: MatchRecord[]) {
   const groups: MatchRecord[][] = []
@@ -18,7 +19,10 @@ export function homeLeagueForMatch(match: MatchRecord, side: 'A' | 'B', teams: R
   return (side === 'A' ? match.teamAHomeLeague : match.teamBHomeLeague) ?? teams[teamName]?.league ?? 'Unknown'
 }
 
-export function sourceTraceFor(match: MatchRecord) {
+export function sourceTraceFor(
+  match: MatchRecord,
+  series?: Pick<CanonicalSeries, 'id' | 'format' | 'formatBasis' | 'formatConfidence' | 'state'>,
+) {
   return {
     provider: match.sourceProvider,
     gameId: match.sourceGameId,
@@ -31,6 +35,10 @@ export function sourceTraceFor(match: MatchRecord) {
     completeness: match.dataCompleteness,
     date: match.date,
     event: match.event,
-    bestOf: match.bestOf,
+    bestOf: series?.format ?? match.bestOf,
+    seriesId: series?.id,
+    formatBasis: series?.formatBasis,
+    formatConfidence: series?.formatConfidence,
+    seriesState: series?.state,
   }
 }

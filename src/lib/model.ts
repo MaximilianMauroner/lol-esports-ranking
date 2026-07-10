@@ -379,6 +379,7 @@ function makeDirectHeadToHeadContextAdjustments({
     for (const point of history) {
       if (point.result !== 'W') continue
       if (point.ratingUpdate.updateUnit !== 'series-atomic') continue
+      if (point.source.seriesOutcome !== 1) continue
       if ((point.source.bestOf ?? 1) < directHeadToHeadContextConfig.minimumBestOf) continue
       if (daysBetween(point.date, lastDate) > directHeadToHeadContextConfig.maxDays) continue
 

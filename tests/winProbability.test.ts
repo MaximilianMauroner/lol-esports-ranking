@@ -43,6 +43,19 @@ test('series probability amplifies a single-game edge', () => {
   assert.ok(seriesWinProbability(0.6, 5) > seriesWinProbability(0.6, 1))
 })
 
+test('Bo2 prediction separates decisive win probability from expected series points', () => {
+  const prediction = neutralWinProbability(
+    { team: 'Alpha', rating: 1600, uncertainty: 30 },
+    { team: 'Beta', rating: 1500, uncertainty: 30 },
+    2,
+  )
+
+  assert.equal(prediction.bestOf, 2)
+  assert.ok(prediction.teamASeriesWinProbability < prediction.teamAExpectedSeriesPoints)
+  assert.ok(prediction.teamASeriesWinProbability + prediction.teamBSeriesWinProbability < 1)
+  assert.equal(prediction.teamAExpectedSeriesPoints + prediction.teamBExpectedSeriesPoints, 1)
+})
+
 test('series swing states price current Bo3 and Bo5 scores', () => {
   const bo3Lead = seriesSwingStateProbability({
     bestOf: 3,

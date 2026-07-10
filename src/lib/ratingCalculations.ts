@@ -321,8 +321,8 @@ export function leagueAdjustment(teamRating: number, leagueRating: number) {
   return Math.round(powerRating(teamRating, leagueRating) - teamRating)
 }
 
-export function gameKFor(match: MatchRecord, eventWeightContext?: EventWeightContext) {
-  return eventKFactorForMatch(match, eventWeightContext) / Math.sqrt(normalizedBestOf(match.bestOf))
+export function gameKFor(match: MatchRecord, eventWeightContext?: EventWeightContext, resolvedBestOf = match.bestOf) {
+  return eventKFactorForMatch(match, eventWeightContext) / Math.sqrt(normalizedBestOf(resolvedBestOf))
 }
 
 export function uncertaintyKMultiplier(sigma: number) {
