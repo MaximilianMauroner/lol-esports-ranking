@@ -804,6 +804,14 @@ test('same-region Worlds final skips league game delta while placement residual 
       winner: 'Beta',
     }),
   ]
+  const completedWorlds = {
+    tournamentLifecycles: new Map([['worlds:2026', {
+      status: 'completed' as const,
+      boundaryDate: '2026-11-02',
+      ratedThroughDate: '2026-11-02',
+      dataLag: false,
+    }]]),
+  }
   const pathOnly = buildRankingModel(pathMatches, { ...extendedTeams })
   const withSameRegionFinal = buildRankingModel([
     ...pathMatches,
@@ -823,12 +831,40 @@ test('same-region Worlds final skips league game delta while placement residual 
       teamBRegion: 'LCK',
       winner: 'Alpha',
     }),
-  ], { ...extendedTeams })
+  ], { ...extendedTeams }, completedWorlds)
   const lck = leagueFor(withSameRegionFinal, 'LCK')
 
   assert.equal(lck.internationalMatches, 2)
   assert.ok(lck.score > leagueFor(pathOnly, 'LCK').score)
   assert.ok(standingFor(withSameRegionFinal, 'Alpha').ratingUpdate.leaguePlacementDelta > 0)
+})
+
+test('ongoing tournaments keep match movement but do not apply placement residuals', () => {
+  const match = matchFixture({
+    id: 'ongoing-worlds-match',
+    date: '2026-10-20',
+    event: 'Worlds 2026 Playoffs',
+    phase: 'Quarterfinals',
+    region: 'International',
+    league: 'Worlds',
+    tier: 'worlds-playoffs',
+    teamA: 'Alpha',
+    teamB: 'Gamma',
+    teamBHomeLeague: 'LPL',
+    teamBRegion: 'LPL',
+    winner: 'Alpha',
+  })
+  const model = buildRankingModel([match], { ...teams }, {
+    tournamentLifecycles: new Map([['worlds:2026', {
+      status: 'ongoing',
+      boundaryDate: '2026-10-20',
+      ratedThroughDate: '2026-10-20',
+      dataLag: false,
+    }]]),
+  })
+
+  assert.notEqual(standingFor(model, 'Alpha').ratingUpdate.teamStableDelta, 0)
+  assert.equal(standingFor(model, 'Alpha').ratingUpdate.leaguePlacementDelta, 0)
 })
 
 test('disconnected unknown-league teams stay provisional instead of topping the eligible board', () => {

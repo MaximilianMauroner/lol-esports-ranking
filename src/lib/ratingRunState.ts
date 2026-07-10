@@ -13,7 +13,7 @@ import {
   maximumUncertainty,
 } from './modelConfig'
 import { eventWeightContextForMatches, type EventWeightContext } from './eventWeighting'
-import { buildEventTrackers } from './placementResiduals'
+import { buildEventTrackers, type PlacementTournamentLifecycle } from './placementResiduals'
 import { emptyRatingUpdateLedger } from './ratingCalculations'
 import type { SideAdjustmentSamples } from './sideAdjustments'
 
@@ -59,6 +59,7 @@ export function createRatingRunState(
   sortedMatches: MatchRecord[],
   teams: Record<string, TeamProfile>,
   eventWeightContext: EventWeightContext = eventWeightContextForMatches(sortedMatches),
+  tournamentLifecycles: ReadonlyMap<string, PlacementTournamentLifecycle> = new Map(),
 ): RatingRunState {
   const state: RatingRunState = {
     ratings: new Map(),
@@ -92,7 +93,7 @@ export function createRatingRunState(
     currentRosterContinuity: new Map(),
     lastPatchByTeam: new Map(),
     lastRosterFingerprintByTeam: new Map(),
-    eventTrackers: buildEventTrackers(sortedMatches, eventWeightContext),
+    eventTrackers: buildEventTrackers(sortedMatches, eventWeightContext, tournamentLifecycles),
     eventWeightContext,
     processedMatchCount: 0,
   }

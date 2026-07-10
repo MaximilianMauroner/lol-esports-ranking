@@ -35,6 +35,7 @@ import {
   ratingFromComponents,
 } from './ratingCalculations'
 import { createRatingRunState, ensureMatchRunEntities } from './ratingRunState'
+import type { PlacementTournamentLifecycle } from './placementResiduals'
 import { emitPregamePredictionsForDate, processRatingSeriesForDate } from './ratingSeriesEngine'
 import { applyRosterContinuityForDate, roundedContinuity } from './rosterContinuityRating'
 import { rosterBasisByTeam } from './rosters'
@@ -62,6 +63,7 @@ export { factorLabel, transparentGprModelMetadata } from './modelConfig'
 export function buildRankingModel(
   matches: MatchRecord[],
   teams: Record<string, TeamProfile>,
+  { tournamentLifecycles = new Map() }: { tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle> } = {},
 ): {
   standings: TeamStanding[]
   leagues: LeagueStrength[]
@@ -75,7 +77,7 @@ export function buildRankingModel(
   const eventWeightContext = eventWeightContextForMatches(sortedMatches)
   const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sortedMatches, { teams, eventWeightContext })
   const teamRosterBasis = rosterBasisByTeam(sortedMatches)
-  const state = createRatingRunState(sortedMatches, teams, eventWeightContext)
+  const state = createRatingRunState(sortedMatches, teams, eventWeightContext, tournamentLifecycles)
   const {
     ratings,
     previousDisplayRatings,

@@ -1146,6 +1146,16 @@ export function createStaticRankingData({
   matches = ratingUniverse.matches
   teams = ratingUniverse.teams
   const resolvedDataMode = dataMode ?? (matches.length === 0 ? 'no-data' : 'seeded-sample')
+  const tournamentLifecycles = new Map(
+    deriveTournamentInstances({ matches, scheduleReferences: tournamentScheduleReferences, generatedAt })
+      .map((instance) => [instance.id, {
+        status: instance.status,
+        boundaryDate: instance.boundaryDate,
+        ratedThroughDate: instance.ratedThroughDate,
+        dataLag: instance.dataLag,
+      }] as const),
+  )
+  const rankingOptions = { tournamentLifecycles }
   const hasOracleSource = matches.some((match) => match.sourceProvider === 'oracles-elixir')
   const hasLeaguepediaSource = matches.some((match) => match.sourceProvider === 'leaguepedia-cargo')
   const hasExternalSource = (sourceName: string) => externalSources.some((source) => source.name.toLowerCase().includes(sourceName))
@@ -1164,7 +1174,7 @@ export function createStaticRankingData({
   )
   const regions = ['All', ...currentTopTierRegions.filter((region) => observedCurrentRegions.has(region))] as Array<Region | 'All'>
   const snapshots: Record<string, ComputedRankingSnapshot> = {}
-  const globalRanking = buildRankingModel(matches, teams)
+  const globalRanking = buildRankingModel(matches, teams, rankingOptions)
   const globalRankingScope: RankingScope = { ranking: globalRanking, teams }
   const seasonRankingCache = new Map<string, RankingScope>()
   const rankingScopeForFilter = (filter: SnapshotFilter): RankingScope => {
@@ -1176,7 +1186,7 @@ export function createStaticRankingData({
     const checkpoint = checkpointForFilter(filter, checkpointByFilterKey)
     const scopeMatches = checkpoint ? matchesThroughDate(matches, checkpoint.endDate) : matchesThroughSeason(matches, filter.season)
     const scopeTeams = teamProfilesForRankingScope(scopeMatches, teams)
-    const scope = { ranking: buildRankingModel(scopeMatches, scopeTeams), teams: scopeTeams }
+    const scope = { ranking: buildRankingModel(scopeMatches, scopeTeams, rankingOptions), teams: scopeTeams }
     seasonRankingCache.set(cacheKey, scope)
     return scope
   }
@@ -1204,7 +1214,7 @@ export function createStaticRankingData({
     const snapshotScope = rankingScopeForFilter(filter)
     const filteredTeamNames = teamNamesForFilter(filteredMatches, snapshotScope.teams, filter)
     const snapshotLeagues = snapshotScope.ranking.leagues.filter((league) => filter.region === 'All' || currentTopTierRegionForLeague(league.league, league.region) === filter.region)
-    const checkpointBaselineStandings = checkpoint ? baselineRankingForCheckpoint(checkpoint, matches, teams).standings : undefined
+    const checkpointBaselineStandings = checkpoint ? baselineRankingForCheckpoint(checkpoint, matches, teams, rankingOptions).standings : undefined
     const snapshotStandings = withCheckpointMovement(
       filteredStandings(snapshotScope.ranking.standings, filteredMatches, filteredTeamNames, filter, snapshotScope.teams),
       checkpointBaselineStandings,
@@ -2013,12 +2023,13 @@ function baselineRankingForCheckpoint(
   checkpoint: SnapshotCheckpointOption,
   matches: MatchRecord[],
   teams: Record<string, TeamProfile>,
+  rankingOptions: Parameters<typeof buildRankingModel>[2],
 ) {
   const baselineMatches = checkpoint.previousEndDate
     ? matchesThroughDate(matches, checkpoint.previousEndDate)
     : matches.filter((match) => match.date < checkpoint.startDate && isCalendarAlignedSeasonMatch(match))
   const baselineTeams = teamProfilesForRankingScope(baselineMatches, teams)
-  return buildRankingModel(baselineMatches, baselineTeams)
+  return buildRankingModel(baselineMatches, baselineTeams, rankingOptions)
 }
 
 function withCheckpointMovement(standings: TeamStanding[], baselineStandings: TeamStanding[] | undefined) {

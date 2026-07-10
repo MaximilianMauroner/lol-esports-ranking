@@ -2,6 +2,7 @@ import { effectiveLeagueRating, leaguePriorFor } from '../data/leagueTiers'
 import type { MatchRecord, RatingUpdateLedger, TeamProfile } from '../types'
 import { eventWeightMultiplierForMatch, type EventWeightContext } from './eventWeighting'
 import { homeLeagueForMatch } from './matchContext'
+import { tournamentInstanceForEvent, type TournamentLifecycleStatus } from './internationalTournaments'
 import {
   initialTeamRating,
   maximumUncertainty,
@@ -33,11 +34,20 @@ type PlacementEventTracker = {
   eventWeightMultiplier: number
   started: boolean
   applied: boolean
+  lifecycle?: PlacementTournamentLifecycle
+}
+
+export type PlacementTournamentLifecycle = {
+  status: TournamentLifecycleStatus
+  boundaryDate: string
+  ratedThroughDate: string
+  dataLag: boolean
 }
 
 export function buildEventTrackers(
   matches: MatchRecord[],
   eventWeightContext?: EventWeightContext,
+  tournamentLifecycles: ReadonlyMap<string, PlacementTournamentLifecycle> = new Map(),
 ) {
   const trackers = new Map<string, PlacementEventTracker>()
   for (const match of matches) {
@@ -57,6 +67,7 @@ export function buildEventTrackers(
       eventWeightMultiplier,
       started: false,
       applied: false,
+      lifecycle: tournamentLifecycles.get(key),
     }
     tracker.startDate = tracker.startDate < match.date ? tracker.startDate : match.date
     tracker.endDate = tracker.endDate > match.date ? tracker.endDate : match.date
@@ -133,6 +144,8 @@ export function applyCompletedPlacementResiduals({
   for (const tracker of eventTrackers.values()) {
     if (tracker.applied || !tracker.started || tracker.matches.length === 0) continue
     if (cutoffDate !== undefined && tracker.endDate >= cutoffDate) continue
+    const lifecycle = tracker.lifecycle
+    if (!lifecycle || lifecycle.status !== 'completed' || lifecycle.dataLag || lifecycle.ratedThroughDate < lifecycle.boundaryDate || tracker.endDate < lifecycle.boundaryDate) continue
     const config = placementResidualConfigFor(tracker)
     if (!config) {
       tracker.applied = true
@@ -173,7 +186,7 @@ export function applyCompletedPlacementResiduals({
 }
 
 function eventTrackerKey(match: MatchRecord) {
-  return `${match.season}\u0000${match.event}`
+  return tournamentInstanceForEvent(match.event, match.season)?.id ?? `${match.season}\u0000${match.event}`
 }
 
 function teamsForLeague(
