@@ -1,6 +1,11 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { Check, Globe2, Info, Plus, Swords, Trophy, X } from 'lucide-react'
-import { isRegionPowerTeam, type RegionStrength } from '../lib/regionStrength'
+import {
+  displayRegionPowerScore,
+  displayRegionTotalTeamRating,
+  isRegionPowerTeam,
+  type RegionStrength,
+} from '../lib/regionStrength'
 import type { PublicRegionHistoryScope, PublicRegionHistorySeries, PublicTeamStanding } from '../lib/publicArtifacts/schema'
 import {
   extent,
@@ -33,8 +38,11 @@ export function RegionsView({
   onRequestRegionHistory?: () => void
 }) {
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
-  const [min, max] = useMemo(() => extent(regions.map((region) => region.score)), [regions])
-  const strongest = regions[0]
+  const [min, max] = useMemo(() => extent(regions.map(displayRegionPowerScore)), [regions])
+  const strongest = useMemo(
+    () => [...regions].sort((a, b) => displayRegionPowerScore(b) - displayRegionPowerScore(a))[0],
+    [regions],
+  )
   const bestRecord = useMemo(
     () => [...regions].sort((a, b) => (b.opponentAdjustedWinRate ?? 0) - (a.opponentAdjustedWinRate ?? 0))[0],
     [regions],
@@ -68,7 +76,7 @@ export function RegionsView({
       </p>
 
       <div className="ribbon">
-        <RibbonCell icon={<Trophy size={18} />} label="Strongest region" value={strongest?.region ?? '—'} detail={`Region power ${formatRating(strongest?.score)}`} />
+        <RibbonCell icon={<Trophy size={18} />} label="Strongest region" value={strongest?.region ?? '—'} detail={`Region power ${formatRating(strongest ? displayRegionPowerScore(strongest) : undefined)}`} />
         <RibbonCell icon={<Globe2 size={18} />} label="Regions tracked" value={String(regions.length)} detail="Excludes international events" />
         <RibbonCell
           icon={<Swords size={18} />}
@@ -123,7 +131,7 @@ export function RegionsView({
                     </span>
                   </span>
                   <span className="region-score">
-                    <RegionPowerMeter value={region.score} min={min} max={max} label="Region power" />
+                    <RegionPowerMeter value={displayRegionPowerScore(region)} min={min} max={max} label="Region power" />
                     <span className="region-mobile-stat">{formatSignedDecimal(region.winsOverExpected)} vs expected</span>
                   </span>
                   <span className="region-intl">
@@ -331,7 +339,7 @@ function RegionDetailDrawer({
                 </p>
               </div>
               <strong>
-                {formatRating(region.score)}
+                {formatRating(displayRegionPowerScore(region))}
                 <span>Region power</span>
               </strong>
               <RegionPowerSparkline series={series} region={region.region} />
@@ -360,12 +368,12 @@ function RegionDetailDrawer({
               />
               <DetailStat
                 label="Region power"
-                value={formatRating(region.score)}
+                value={formatRating(displayRegionPowerScore(region))}
                 description="Headline regional score used for ranking regions: the average rating of the three strongest eligible flagship teams. If a region has fewer than three eligible teams, it averages the available teams."
               />
               <DetailStat
                 label="Flagship-team average"
-                value={formatRating(region.totalTeamRating)}
+                value={formatRating(displayRegionTotalTeamRating(region))}
                 description="Average rating across every eligible flagship team in the region. This is an average, not a sum, so larger leagues do not get automatic credit for team count."
               />
               <DetailStat

@@ -5,6 +5,8 @@ import { Button } from './ui/button'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from './ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
+import type { PublicTeamStanding as RankingSummaryStanding } from '../lib/publicArtifacts/schema'
+import type { RegionStrength } from '../lib/regionStrength'
 
 export type CompareColumn = {
   id: string
@@ -21,6 +23,17 @@ export type CompareRow<E> = {
   better?: 'high' | 'low'
 }
 
+export type CompareDrawerProps<E> = {
+  open: boolean
+  title: string
+  entities: E[]
+  columns: CompareColumn[]
+  rows: CompareRow<E>[]
+  after?: ReactNode
+  onClose: () => void
+  onRemove: (id: string) => void
+}
+
 export function CompareDrawer<E>({
   open,
   title,
@@ -30,16 +43,7 @@ export function CompareDrawer<E>({
   after,
   onClose,
   onRemove,
-}: {
-  open: boolean
-  title: string
-  entities: E[]
-  columns: CompareColumn[]
-  rows: CompareRow<E>[]
-  after?: ReactNode
-  onClose: () => void
-  onRemove: (id: string) => void
-}) {
+}: CompareDrawerProps<E>) {
   return (
     <Sheet open={open} onOpenChange={(nextOpen) => {
       if (!nextOpen) onClose()
@@ -128,6 +132,14 @@ export function CompareDrawer<E>({
       </SheetContent>
     </Sheet>
   )
+}
+
+export function RegionCompareDrawer(props: CompareDrawerProps<RegionStrength>) {
+  return <CompareDrawer {...props} />
+}
+
+export function TeamCompareDrawer(props: CompareDrawerProps<RankingSummaryStanding>) {
+  return <CompareDrawer {...props} />
 }
 
 function bestIds<E>(entities: E[], columns: CompareColumn[], row: CompareRow<E>) {

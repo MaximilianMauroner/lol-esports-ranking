@@ -1,23 +1,15 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { AlertTriangle, BarChart3, Globe2, RefreshCw, X } from 'lucide-react'
 import type {
-  PublicPlayerDirectory as PlayerDirectory,
   SnapshotCheckpointOption,
-  SnapshotFilter,
   PublicTeamStanding as RankingSummaryStanding,
 } from './lib/publicArtifacts/schema'
-import { snapshotKey } from './lib/publicArtifacts/schema'
 import type { PublicSnapshotState } from './lib/publicArtifacts/resolver'
 import {
   formatDate,
-  formatNumber,
-  formatSigned,
   teamKey,
 } from './lib/display'
-import { deriveRankingFlair, type RankingFlair, type RankingMovementPick } from './lib/rankingFlair'
 import type { RegionStrength } from './lib/regionStrength'
-import { CompareDrawer } from './components/CompareDrawer'
-import type { RankingShowcaseProps } from './components/RankingShowcase'
 import {
   REGION_COMPARE_ROWS,
   TEAM_COMPARE_ROWS,
@@ -25,12 +17,15 @@ import {
   regionKey,
   teamCompareColumns,
 } from './components/compareAnalysisData'
-import { TeamsView } from './views/TeamsView'
+import { TeamsView, type PlayerLoadState } from './views/TeamsView'
 import { RegionBadge } from './components/ui'
 import { Button } from './components/ui/button'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
 import { Skeleton } from './components/ui/skeleton'
+import { currentSeasonScope } from './lib/defaultScope'
+import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
+import { RIOT_PROJECT_NOTICE } from './lib/legal'
 import { cn } from './lib/utils'
 import {
   checkpointFromScope,
@@ -45,11 +40,12 @@ type Mode = 'rankings' | 'regions'
 type MovementBaseline = {
   label: string
 }
-
 const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 const RegionsView = lazy(() => import('./views/RegionsView').then((module) => ({ default: module.RegionsView })))
+const RegionCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.RegionCompareDrawer })))
 const RegionCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.RegionCompareAnalysis })))
+const TeamCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.TeamCompareDrawer })))
 const TeamCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.TeamCompareAnalysis })))
 
 const MODES: { id: Mode; label: string; tagline: string; icon: typeof BarChart3 }[] = [
@@ -64,7 +60,7 @@ const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
 
 function App() {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
-  const [scope, setScope] = useState(() => readScopeFromHash() ?? currentYearScope())
+  const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
   const [loadPlayers, setLoadPlayers] = useState(false)
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
@@ -114,7 +110,6 @@ function App() {
 
   const standings = useMemo(() => snapshot?.standings ?? [], [snapshot])
   const regions = useMemo(() => snapshot?.regions ?? [], [snapshot])
-  const rankingFlair = useMemo(() => deriveRankingFlair(standings), [standings])
   const activeRegionHistory = regionHistoryState.status === 'ready' ? regionHistoryState.data : undefined
   const readyData = manifestState.status === 'ready' ? manifestState.data : undefined
   const seasonTabs = useMemo(() => readyData ? [...seasonYears.slice(0, 4), 'All'] : [], [readyData, seasonYears])
@@ -135,10 +130,16 @@ function App() {
   const requestTeamHistory = useCallback(() => setLoadTeamHistory(true), [])
   const requestRegionHistory = useCallback(() => setLoadRegionHistory(true), [])
 
-  const activePlayers = useMemo(
-    () => playersState.status === 'ready' ? playersForScope(playersState.data, filter) : [],
+  const activePlayerScope = useMemo(
+    () => playersState.status === 'ready' ? resolvePlayerScope(playersState.data, filter) : emptyPlayerScope(filter),
     [filter, playersState],
   )
+  const activePlayers = activePlayerScope.players
+  const playerLoadState = useMemo<PlayerLoadState>(() => {
+    if (playersState.status === 'ready') return { status: 'ready' }
+    if (playersState.status === 'idle' || playersState.status === 'loading') return { status: playersState.status }
+    return { status: playersState.status, message: playersState.message }
+  }, [playersState])
   const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
   const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, standings, teamKey), [standings, teamPicks])
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
@@ -154,6 +155,7 @@ function App() {
 
   useEffect(() => {
     if (preloadScopes.length === 0) return undefined
+    if (!canUseBackgroundPrefetch()) return undefined
     return scheduleIdleWork(() => {
       for (const preloadScope of preloadScopes) prefetchScope(preloadScope)
     })
@@ -175,7 +177,6 @@ function App() {
   const teamColumns = teamCompareColumns(activeTeamPicks)
   const regionColumns = regionCompareColumns(activeRegionPicks)
   const movementBaseline = movementBaselineFor(activeCheckpoint, checkpointTabs)
-  const rankingSignals = rankingSignalsProps(rankingFlair, movementBaseline)
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
   const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
   const teamCompareAfter = drawerOpen && mode === 'rankings' ? (
@@ -347,12 +348,12 @@ function App() {
                   regions={regions}
                   model={loadedData.model}
                   players={activePlayers}
+                  playerLoadState={playerLoadState}
+                  playerScopeLabel={activePlayerScope.label}
                   search={teamSearch}
                   onSearchChange={setTeamSearch}
                   pickedTeams={activeTeamPicks}
                   historyState={teamHistoryState}
-                  signals={rankingSignals}
-                  tierAssignments={rankingFlair.tiers}
                   regionsHref={hashForModeAndScope('regions', effectiveScope)}
                   dataSummary={{
                     source: loadedData.source,
@@ -375,6 +376,9 @@ function App() {
             ) : null}
           </>
         )}
+        <footer className="site-footer" aria-label="Project disclaimer">
+          {RIOT_PROJECT_NOTICE}
+        </footer>
       </main>
 
       {trayPicks > 0 ? (
@@ -454,26 +458,34 @@ function App() {
         </div>
       ) : null}
 
-      <CompareDrawer
-        open={drawerOpen && mode === 'regions'}
-        title="Region comparison"
-        entities={activeRegionPicks}
-        columns={regionColumns}
-        rows={REGION_COMPARE_ROWS}
-        after={regionCompareAfter}
-        onClose={() => setDrawerOpen(false)}
-        onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
-      />
-      <CompareDrawer
-        open={drawerOpen && mode === 'rankings'}
-        title="Team comparison"
-        entities={activeTeamPicks}
-        columns={teamColumns}
-        rows={TEAM_COMPARE_ROWS}
-        after={teamCompareAfter}
-        onClose={() => setDrawerOpen(false)}
-        onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
-      />
+      {drawerOpen && mode === 'regions' ? (
+        <Suspense fallback={null}>
+          <RegionCompareDrawer
+            open
+            title="Region comparison"
+            entities={activeRegionPicks}
+            columns={regionColumns}
+            rows={REGION_COMPARE_ROWS}
+            after={regionCompareAfter}
+            onClose={() => setDrawerOpen(false)}
+            onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
+          />
+        </Suspense>
+      ) : null}
+      {drawerOpen && mode === 'rankings' ? (
+        <Suspense fallback={null}>
+          <TeamCompareDrawer
+            open
+            title="Team comparison"
+            entities={activeTeamPicks}
+            columns={teamColumns}
+            rows={TEAM_COMPARE_ROWS}
+            after={teamCompareAfter}
+            onClose={() => setDrawerOpen(false)}
+            onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
+          />
+        </Suspense>
+      ) : null}
     </div>
   )
 }
@@ -502,6 +514,24 @@ type IdleWindow = Window & {
   cancelIdleCallback?: (handle: number) => void
 }
 
+type NavigatorWithConnection = Navigator & {
+  connection?: {
+    saveData?: boolean
+    effectiveType?: string
+    downlink?: number
+  }
+}
+
+function canUseBackgroundPrefetch() {
+  if (typeof navigator === 'undefined') return false
+  const connection = (navigator as NavigatorWithConnection).connection
+  if (!connection) return true
+  if (connection.saveData) return false
+  if (connection.effectiveType && /(^|-)2g$/i.test(connection.effectiveType)) return false
+  if (typeof connection.downlink === 'number' && connection.downlink > 0 && connection.downlink < 1.5) return false
+  return true
+}
+
 function scheduleIdleWork(callback: () => void) {
   if (typeof window === 'undefined') return () => undefined
   const idleWindow = window as IdleWindow
@@ -517,12 +547,18 @@ function readModeFromHash(): Mode {
   const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
   const segment = hashModeSegment(hash)
   if (segment === 'teams') return 'rankings'
-  return isKnownMode(segment) ? segment : 'rankings'
+  if (isKnownMode(segment)) return segment
+
+  const pathSegment = typeof window !== 'undefined'
+    ? pathModeSegment(window.location.pathname)
+    : ''
+  if (pathSegment === 'teams') return 'rankings'
+  return isKnownMode(pathSegment) ? pathSegment : 'rankings'
 }
 
 function readScopeFromHash() {
   if (typeof window === 'undefined') return undefined
-  const query = window.location.hash.slice(1).split('?', 2)[1]
+  const query = window.location.hash.slice(1).split('?', 2)[1] ?? window.location.search.slice(1)
   if (!query) return undefined
   const scope = new URLSearchParams(query).get('scope')
   return isKnownScope(scope) ? scope : undefined
@@ -544,6 +580,10 @@ function hashForModeAndScope(mode: Mode, scope: string, currentHash = '') {
 
 function hashModeSegment(hash: string) {
   return hash.split(/[/?]/, 1)[0]
+}
+
+function pathModeSegment(pathname: string) {
+  return pathname.split('/').filter(Boolean)[0] ?? ''
 }
 
 function isKnownMode(value: string): value is Mode {
@@ -578,57 +618,6 @@ function checkpointLabel(id: string) {
     .join(' ')
 }
 
-function rankingSignalsProps(flair: RankingFlair, movementBaseline: MovementBaseline): RankingShowcaseProps {
-  const spicy = flair.spicyTakeConfidence[0]
-  return {
-    title: 'Snapshot signals',
-    subtitle: 'Unique movement, tier, upset, and evidence context for this scope.',
-    tierCounts: tierCountsFor(flair),
-    biggestRiser: movementSpotlight(flair.movement.biggestRiser, movementBaseline),
-    biggestFaller: movementSpotlight(flair.movement.biggestFaller, movementBaseline),
-    upset: flair.upsetHeadline ? {
-      headline: flair.upsetHeadline.headline,
-      winner: flair.upsetHeadline.winner,
-      loser: flair.upsetHeadline.opponent,
-      event: flair.upsetHeadline.event,
-      score: `${formatSigned(flair.upsetHeadline.matchDelta)} rating`,
-      date: flair.upsetHeadline.date,
-      description: `Upset score ${formatNumber(flair.upsetHeadline.score)} from match delta, rating gap, and rank gap.`,
-    } : undefined,
-    confidenceBand: spicy ? {
-      label: `${spicy.code}: evidence coverage`,
-      value: spicy.score,
-      tone: spicy.band === 'high' ? 'spicy' : spicy.band === 'medium' ? 'warm' : 'cool',
-      description: `${formatNumber(spicy.recentMatchCount)} recent scored matches, rating uncertainty +/-${formatNumber(spicy.uncertainty)}.`,
-    } : undefined,
-  }
-}
-
-function tierCountsFor(flair: RankingFlair) {
-  return (['S', 'A', 'B', 'C'] as const).map((tier) => {
-    const teams = flair.tiers.filter((entry) => entry.tier === tier)
-    return {
-      tier,
-      label: `${tier}-tier`,
-      count: teams.length,
-      teams: teams.slice(0, 4).map((entry) => entry.code),
-    }
-  })
-}
-
-function movementSpotlight(pick: RankingMovementPick | null, movementBaseline: MovementBaseline) {
-  if (!pick) return undefined
-  return {
-    team: pick.team,
-    code: pick.code,
-    movement: pick.movement,
-    fromRank: pick.previousRank,
-    toRank: pick.rank,
-    ratingDelta: pick.ratingDelta,
-    description: `${formatSigned(pick.ratingDelta)} rating vs ${movementBaseline.label}.`,
-  }
-}
-
 function movementBaselineFor(activeCheckpoint: string | undefined, checkpoints: SnapshotCheckpointOption[]): MovementBaseline {
   const checkpoint = checkpoints.find((entry) => entry.id === activeCheckpoint)
   if (!checkpoint) return { label: 'the previous rating update in this scope' }
@@ -636,17 +625,6 @@ function movementBaselineFor(activeCheckpoint: string | undefined, checkpoints: 
     return { label: `the previous checkpoint ending ${formatDate(checkpoint.previousEndDate)}` }
   }
   return { label: `the pre-${checkpoint.label} baseline before ${formatDate(checkpoint.startDate)}` }
-}
-
-function currentYearScope() {
-  return `season:${new Date().getFullYear()}`
-}
-
-function playersForScope(directory: PlayerDirectory | undefined, filter: SnapshotFilter) {
-  if (!directory) return []
-  if (filter.season === 'All' && filter.event === 'All' && filter.region === 'All') return directory.players
-  if (filter.season !== 'All' && filter.event === 'All' && filter.region === 'All') return directory.scopedPlayers?.[snapshotKey(filter)] ?? []
-  return []
 }
 
 function reconcilePicks<T>(current: T[], available: T[], keyFor: (item: T) => string) {

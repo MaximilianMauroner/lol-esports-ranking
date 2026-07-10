@@ -64,6 +64,7 @@ export type RankingConfidenceBand = {
 }
 
 export type RankingShowcaseProps = {
+  eyebrow?: string
   title?: string
   subtitle?: string
   podium?: readonly RankingShowcaseTeam[]
@@ -83,6 +84,7 @@ const DEFAULT_TIER_ORDER = ['S', 'A', 'B', 'C']
 const VISIBLE_TIER_TEAMS = 3
 
 export function RankingShowcase({
+  eyebrow = 'Snapshot readout',
   title = 'Power ranking readout',
   subtitle = 'Top table movement, tier density, and confidence context.',
   podium = [],
@@ -104,7 +106,7 @@ export function RankingShowcase({
     <section className={cn('ranking-showcase', variant === 'rail' && 'ranking-showcase--rail', className)} aria-label={title}>
       <div className="ranking-showcase__header">
         <div>
-          <p className="receipt-eyebrow">Snapshot readout</p>
+          <p className="receipt-eyebrow">{eyebrow}</p>
           <h2>{title}</h2>
           <p>{subtitle}</p>
         </div>

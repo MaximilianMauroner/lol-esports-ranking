@@ -80,6 +80,8 @@ export type RankingFlair = {
   spicyTakeConfidence: SpicyTakeConfidence[]
 }
 
+type RankingTierCandidate = Omit<RankingTierAssignment, 'band'>
+
 const tierDropThresholds: Array<{ label: RankingTierLabel; dropFromLeader: number }> = [
   { label: 'S', dropFromLeader: 50 },
   { label: 'A', dropFromLeader: 225 },
@@ -87,15 +89,27 @@ const tierDropThresholds: Array<{ label: RankingTierLabel; dropFromLeader: numbe
   { label: 'C', dropFromLeader: Number.POSITIVE_INFINITY },
 ]
 const eliteTierPowerFloor = 2250
+const minimumTierBoundaryGap = 35
+const tierOrder: Record<RankingTierLabel, number> = {
+  S: 0,
+  A: 1,
+  B: 2,
+  C: 3,
+}
 
 export function powerScoreForStanding(standing: Pick<PublicTeamStanding, 'rating'>) {
   return Math.round(standing.rating)
 }
 
-export function deriveRankingFlair(standings: readonly PublicTeamStanding[]): RankingFlair {
+export function deriveRankingFlair(
+  standings: readonly PublicTeamStanding[],
+  { tierUniverse = standings }: { tierUniverse?: readonly PublicTeamStanding[] } = {},
+): RankingFlair {
+  const canonicalTiers = deriveTierLabels(tierUniverse)
+  const visibleTeams = new Set(standings.map(standingKey))
   return {
-    tiers: deriveTierLabels(standings),
-    podium: deriveTopThreePodium(standings),
+    tiers: canonicalTiers.filter((assignment) => visibleTeams.has(standingKey(assignment))),
+    podium: deriveTopThreePodium(standings, canonicalTiers, leaderPowerScore(tierUniverse)),
     movement: deriveMovementPicks(standings),
     upsetHeadline: deriveUpsetHeadline(standings),
     spicyTakeConfidence: standingsByRank(standings).map((standing) => deriveSpicyTakeConfidence(standing)),
@@ -106,29 +120,46 @@ export function deriveTierLabels(standings: readonly PublicTeamStanding[]): Rank
   const leaderScore = leaderPowerScore(standings)
   if (leaderScore === undefined) return []
 
-  return standingsByRank(standings).map((standing) => {
+  const assignments: RankingTierCandidate[] = []
+  for (const standing of standingsByRank(standings)) {
     const powerScore = powerScoreForStanding(standing)
-    const tier = tierForPowerScore(powerScore, leaderScore)
-    return {
+    const rawTier = tierForPowerScore(powerScore, leaderScore)
+    const previous = assignments.at(-1)
+    const tier = previous && shouldKeepPreviousTier(previous, rawTier, powerScore)
+      ? previous.tier
+      : rawTier
+
+    assignments.push({
       team: standing.team,
       code: standing.code,
       rank: standing.rank,
       rating: standing.rating,
       powerScore,
       tier,
-      band: bandForTier(tier, leaderScore),
-    }
-  })
+    })
+  }
+  const bands = bandsForTierAssignments(assignments, leaderScore)
+
+  return assignments.map((assignment) => ({
+    ...assignment,
+    band: bands.get(assignment.tier) ?? bandForTier(assignment.tier, leaderScore),
+  }))
 }
 
-export function deriveTopThreePodium(standings: readonly PublicTeamStanding[]): RankingPodiumEntry[] {
-  const leaderScore = leaderPowerScore(standings)
+export function deriveTopThreePodium(
+  standings: readonly PublicTeamStanding[],
+  tierAssignments: readonly RankingTierAssignment[] = deriveTierLabels(standings),
+  canonicalLeaderScore = leaderPowerScore(standings),
+): RankingPodiumEntry[] {
+  const leaderScore = canonicalLeaderScore ?? leaderPowerScore(standings)
   if (leaderScore === undefined) return []
 
+  const tierByTeam = new Map(tierAssignments.map((assignment) => [standingKey(assignment), assignment.tier]))
   return standingsByRank(standings)
     .slice(0, 3)
     .map((standing, index) => {
       const powerScore = powerScoreForStanding(standing)
+      const tier = tierByTeam.get(standingKey(standing))
       return {
         place: (index + 1) as 1 | 2 | 3,
         team: standing.team,
@@ -138,9 +169,13 @@ export function deriveTopThreePodium(standings: readonly PublicTeamStanding[]): 
         rank: standing.rank,
         rating: standing.rating,
         powerScore,
-        tier: tierForPowerScore(powerScore, leaderScore),
+        tier: tier ?? tierForPowerScore(powerScore, leaderScore),
       }
     })
+}
+
+function standingKey(standing: Pick<PublicTeamStanding, 'team' | 'code'>) {
+  return `${standing.team}\u0000${standing.code}`
 }
 
 export function deriveMovementPicks(standings: readonly PublicTeamStanding[]): RankingMovementPicks {
@@ -195,9 +230,48 @@ export function tierForPowerScore(powerScore: number, leaderScore: number): Rank
   return tierDropThresholds.find((tier) => dropFromLeader <= tier.dropFromLeader)?.label ?? 'C'
 }
 
+export function firstPageForTier(
+  standings: readonly Pick<PublicTeamStanding, 'team' | 'code'>[],
+  assignments: readonly RankingTierAssignment[],
+  tier: RankingTierLabel,
+  pageSize: number,
+) {
+  const tiers = new Map(assignments.map((assignment) => [standingKey(assignment), assignment.tier]))
+  const index = standings.findIndex((standing) => tiers.get(standingKey(standing)) === tier)
+  return index < 0 ? undefined : Math.floor(index / Math.max(1, pageSize)) + 1
+}
+
+function shouldKeepPreviousTier(
+  previous: RankingTierCandidate | undefined,
+  rawTier: RankingTierLabel,
+  powerScore: number,
+) {
+  if (!previous) return false
+  if (tierOrder[rawTier] <= tierOrder[previous.tier]) return false
+  return Math.max(0, previous.powerScore - powerScore) < minimumTierBoundaryGap
+}
+
 function leaderPowerScore(standings: readonly PublicTeamStanding[]) {
   const scores = standings.map(powerScoreForStanding).filter(Number.isFinite)
   return scores.length > 0 ? Math.max(...scores) : undefined
+}
+
+function bandsForTierAssignments(assignments: readonly RankingTierCandidate[], leaderScore: number) {
+  const bands = new Map<RankingTierLabel, RankingTierBand>()
+  for (const label of ['S', 'A', 'B', 'C'] as const) {
+    const scores = assignments
+      .filter((assignment) => assignment.tier === label)
+      .map((assignment) => assignment.powerScore)
+    if (scores.length === 0) continue
+    const floor = Math.min(...scores)
+    bands.set(label, {
+      label,
+      floor,
+      ceiling: Math.max(...scores),
+      dropFromLeader: Math.max(0, leaderScore - floor),
+    })
+  }
+  return bands
 }
 
 function bandForTier(label: RankingTierLabel, leaderScore: number): RankingTierBand {

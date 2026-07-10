@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  deriveRankingFlair,
   deriveMovementPicks,
   deriveSpicyTakeConfidence,
   deriveTierLabels,
   deriveTopThreePodium,
   deriveUpsetHeadline,
+  firstPageForTier,
 } from '../src/lib/rankingFlair.ts'
 import type { PublicRecentMatch, PublicTeamStanding } from '../src/lib/publicArtifacts/schema.ts'
 
@@ -53,7 +55,63 @@ test('keeps close contenders in A tier after a tight S-tier leader pack', () => 
   )
 })
 
-test('keeps championship-score teams in S tier even when the leader has separation', () => {
+test('does not split tier badges across small adjacent rating gaps', () => {
+  const tiers = deriveTierLabels([
+    standing({ team: 'Bilibili Gaming', code: 'BLG', rank: 1, rating: 2301 }),
+    standing({ team: 'Gen.G', code: 'GEN', rank: 2, rating: 2271 }),
+    standing({ team: 'Hanwha Life Esports', code: 'HLE', rank: 3, rating: 2255 }),
+    standing({ team: 'T1', code: 'T1', rank: 4, rating: 2245 }),
+    standing({ team: 'G2 Esports', code: 'G2', rank: 5, rating: 2148 }),
+    standing({ team: 'Dplus KIA', code: 'DK', rank: 6, rating: 2083 }),
+    standing({ team: 'KT Rolster', code: 'KT', rank: 7, rating: 2070 }),
+    standing({ team: 'Top Esports', code: 'TES', rank: 8, rating: 2067 }),
+    standing({ team: "Anyone's Legend", code: 'AL', rank: 9, rating: 2047 }),
+    standing({ team: 'Karmine Corp', code: 'KC', rank: 10, rating: 1998 }),
+  ])
+
+  assert.deepEqual(
+    tiers.map((tier) => [tier.code, tier.tier]),
+    [
+      ['BLG', 'S'],
+      ['GEN', 'S'],
+      ['HLE', 'S'],
+      ['T1', 'S'],
+      ['G2', 'A'],
+      ['DK', 'A'],
+      ['KT', 'A'],
+      ['TES', 'A'],
+      ['AL', 'A'],
+      ['KC', 'B'],
+    ],
+  )
+})
+
+test('filtered ranking flair preserves tiers from the full ranked universe', () => {
+  const universe = [
+    standing({ team: 'Leader', code: 'LEAD', rank: 1, rating: 2300 }),
+    standing({ team: 'Middle', code: 'MID', rank: 20, rating: 1900 }),
+    standing({ team: 'Last', code: 'LAST', rank: 56, rating: 1500 }),
+  ]
+
+  const flair = deriveRankingFlair([universe[2]], { tierUniverse: universe })
+
+  assert.equal(flair.tiers[0]?.tier, 'C')
+  assert.equal(flair.podium[0]?.tier, 'C')
+})
+
+test('tier navigation resolves the first page containing that canonical tier', () => {
+  const standings = Array.from({ length: 30 }, (_, index) => standing({
+    team: `Team ${index + 1}`,
+    code: `T${index + 1}`,
+    rank: index + 1,
+    rating: index < 25 ? 2100 - index : 1500 - index,
+  }))
+  const tiers = deriveTierLabels(standings)
+
+  assert.equal(firstPageForTier(standings, tiers, 'C', 25), 2)
+})
+
+test('keeps championship-score clusters together when no visible boundary gap exists', () => {
   const tiers = deriveTierLabels([
     standing({ team: 'Bilibili Gaming', code: 'BLG', rank: 1, rating: 2385 }),
     standing({ team: 'Hanwha Life Esports', code: 'HLE', rank: 2, rating: 2268 }),
@@ -66,8 +124,8 @@ test('keeps championship-score teams in S tier even when the leader has separati
     [
       ['BLG', 'S'],
       ['HLE', 'S'],
-      ['GEN', 'A'],
-      ['G2', 'A'],
+      ['GEN', 'S'],
+      ['G2', 'S'],
     ],
   )
 })
@@ -237,5 +295,7 @@ function standing(overrides: Partial<PublicTeamStanding> = {}): PublicTeamStandi
     recentEvents: ['LCK 2026 Spring'],
     recentMatches: [],
     ...overrides,
+    recordBasis: overrides.recordBasis ?? 'grouped-match-record-from-scope-history',
+    scoreFamily: overrides.scoreFamily ?? 'power-index',
   }
 }

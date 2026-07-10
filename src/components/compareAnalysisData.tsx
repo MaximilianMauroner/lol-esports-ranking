@@ -10,19 +10,23 @@ import {
   formatRecord,
   teamKey,
 } from '../lib/display'
-import type { RegionStrength } from '../lib/regionStrength'
+import {
+  displayRegionPowerScore,
+  displayRegionTotalTeamRating,
+  type RegionStrength,
+} from '../lib/regionStrength'
 import type { CompareColumn, CompareRow } from './CompareDrawer'
 import { ConfBar, FormDots, RegionBadge } from './ui'
 
 export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
-  { key: 'score', label: 'Region power', cell: (r) => formatRating(r.score), score: (r) => r.score, better: 'high' },
+  { key: 'score', label: 'Region power', cell: (r) => formatRating(displayRegionPowerScore(r)), score: displayRegionPowerScore, better: 'high' },
   { key: 'rank', label: 'Global rank', cell: (r) => `#${r.rank}`, score: (r) => r.rank, better: 'low' },
   { key: 'flagship', label: 'Flagship league', cell: (r) => r.flagshipLeague ?? 'Multiple leagues' },
   { key: 'tier', label: 'League tier', cell: (r) => formatTier(r.tier) },
   { key: 'teams', label: 'Flagship teams', cell: (r) => formatNumber(r.teamCount), score: (r) => r.teamCount, better: 'high' },
   { key: 'topteam', label: 'Top team power', cell: (r) => formatRating(r.topTeamRating), score: (r) => r.topTeamRating, better: 'high' },
-  { key: 'topthree', label: 'Top-three average', cell: (r) => formatRating(r.topThreeTeamRating), score: (r) => r.topThreeTeamRating, better: 'high' },
-  { key: 'totalregion', label: 'Flagship-team average', cell: (r) => formatRating(r.totalTeamRating), score: (r) => r.totalTeamRating, better: 'high' },
+  { key: 'topthree', label: 'Top-three average', cell: (r) => formatRating(displayRegionPowerScore(r)), score: displayRegionPowerScore, better: 'high' },
+  { key: 'totalregion', label: 'Flagship-team average', cell: (r) => formatRating(displayRegionTotalTeamRating(r)), score: displayRegionTotalTeamRating, better: 'high' },
   { key: 'record', label: 'International record', cell: (r) => formatRecord(r.internationalWins, r.internationalLosses) },
   {
     key: 'winrate',
@@ -56,8 +60,22 @@ export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
 ]
 
 export const TEAM_COMPARE_ROWS: CompareRow<RankingSummaryStanding>[] = [
-  { key: 'rating', label: 'Team score', cell: (t) => formatRating(teamScore(t)), score: (t) => teamScore(t) ?? 0, better: 'high' },
+  { key: 'rating', label: 'Power score', cell: (t) => formatRating(teamScore(t)), score: (t) => teamScore(t) ?? 0, better: 'high' },
   { key: 'rank', label: 'Global rank', cell: (t) => `#${t.rank ?? '—'}`, score: (t) => t.rank ?? Infinity, better: 'low' },
+  {
+    key: 'deserved',
+    label: 'Deserved rank',
+    cell: (t) => formatDeservedRank(t),
+    score: (t) => t.deservedStanding?.rank ?? Infinity,
+    better: 'low',
+  },
+  {
+    key: 'resume-gap',
+    label: 'Power/resume gap',
+    cell: (t) => formatPowerResumeGap(t),
+    score: (t) => rankGapMagnitude(t) ?? Infinity,
+    better: 'low',
+  },
   { key: 'region', label: 'Region', cell: (t) => t.region ?? '—' },
   { key: 'league', label: 'League', cell: (t) => t.league ?? '—' },
   { key: 'record', label: 'Record', cell: (t) => formatRecord(t.wins, t.losses) },
@@ -83,10 +101,10 @@ export type CompareProfileMetric<E> = {
 }
 
 export const REGION_PROFILE_METRICS: CompareProfileMetric<RegionStrength>[] = [
-  { key: 'score', label: 'Region power', value: (r) => r.score, format: formatRating },
+  { key: 'score', label: 'Region power', value: displayRegionPowerScore, format: formatRating },
   { key: 'topteam', label: 'Top team power', value: (r) => r.topTeamRating, format: formatRating },
-  { key: 'topthree', label: 'Top-three avg', value: (r) => r.topThreeTeamRating, format: formatRating },
-  { key: 'totalregion', label: 'Flagship avg', value: (r) => r.totalTeamRating, format: formatRating },
+  { key: 'topthree', label: 'Top-three avg', value: displayRegionPowerScore, format: formatRating },
+  { key: 'totalregion', label: 'Flagship avg', value: displayRegionTotalTeamRating, format: formatRating },
   { key: 'adjusted', label: 'Adj. intl.', value: (r) => r.opponentAdjustedWinRate, format: formatRatio },
   { key: 'expected', label: 'Vs expected', value: (r) => r.winsOverExpected, format: formatSignedDecimal },
   { key: 'opponent', label: 'Opponent power', value: (r) => r.averageOpponentRating, format: formatRating },
@@ -94,8 +112,10 @@ export const REGION_PROFILE_METRICS: CompareProfileMetric<RegionStrength>[] = [
 ]
 
 export const TEAM_PROFILE_METRICS: CompareProfileMetric<RankingSummaryStanding>[] = [
-  { key: 'rating', label: 'Team score', value: teamScore, format: formatRating },
+  { key: 'rating', label: 'Power score', value: teamScore, format: formatRating },
   { key: 'rank', label: 'Rank', value: (t) => t.rank, format: (value) => (typeof value === 'number' ? `#${Math.round(value)}` : '—'), better: 'low' },
+  { key: 'deserved', label: 'Deserved rank', value: (t) => t.deservedStanding?.rank, format: (value) => (typeof value === 'number' ? `#${Math.round(value)}` : '—'), better: 'low' },
+  { key: 'resume-gap', label: 'Resume gap', value: rankGapMagnitude, format: formatRankGap, better: 'low' },
   { key: 'winrate', label: 'Win rate', value: (t) => winRate(t.wins, t.losses), format: formatRatio },
   { key: 'confidence', label: 'Confidence', value: (t) => t.confidence, format: formatPercentValue },
   { key: 'uncertainty', label: 'Uncertainty', value: (t) => t.uncertainty, format: formatRating, better: 'low' },
@@ -122,6 +142,31 @@ function winRate(wins?: number, losses?: number) {
   if (typeof wins !== 'number' || typeof losses !== 'number') return 0
   const total = wins + losses
   return total > 0 ? wins / total : 0
+}
+
+function formatDeservedRank(team: RankingSummaryStanding) {
+  const dss = team.deservedStanding
+  if (!dss) return '—'
+  return `#${formatNumber(dss.rank)} (${formatRating(dss.score)})`
+}
+
+function formatPowerResumeGap(team: RankingSummaryStanding) {
+  const gap = team.deservedStanding?.rankDeltaFromPower
+  if (typeof gap !== 'number') return '—'
+  if (gap === 0) return 'Aligned'
+  const absGap = formatNumber(Math.abs(gap))
+  return gap > 0 ? `Resume +${absGap}` : `Power +${absGap}`
+}
+
+function formatRankGap(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  if (value === 0) return 'Aligned'
+  return `${formatNumber(Math.round(value))} ranks`
+}
+
+function rankGapMagnitude(team: RankingSummaryStanding) {
+  const gap = team.deservedStanding?.rankDeltaFromPower
+  return typeof gap === 'number' ? Math.abs(gap) : undefined
 }
 
 function teamScore(team: RankingSummaryStanding) {

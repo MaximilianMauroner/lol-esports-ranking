@@ -1,11 +1,13 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Search, Users, X } from 'lucide-react'
 import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type { PublicRecentMatch } from '../lib/publicArtifacts/schema'
-import type { RegionStrength } from '../lib/regionStrength'
+import { displayRegionPowerScore, type RegionStrength } from '../lib/regionStrength'
+import type { EventTier } from '../types'
 import { extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
+import { eventTierConfig } from '../data/rankingConfig'
 import { CountBadge, DataState, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
@@ -15,12 +17,31 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../com
 import { RankingShowcase, type RankingShowcaseProps } from '../components/RankingShowcase'
 import { type ChartSeries } from '../components/LineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
-import type { RankingTierAssignment, RankingTierLabel } from '../lib/rankingFlair'
+import {
+  deriveRankingFlair,
+  firstPageForTier,
+  type RankingFlair,
+  type RankingMovementPick,
+  type RankingTierAssignment,
+  type RankingTierLabel,
+} from '../lib/rankingFlair'
 import type { ChartPoint } from '../lib/chartPoints'
 import { dailyChartPointsFromHistoryPoints, deriveDailyRankSeries } from '../lib/teamHistoryChart'
 import type { TeamHistoryArtifactState } from '../hooks/usePublicArtifacts'
 import { publishedRatingScale, winProbabilityEloScale } from '../lib/modelConfig'
 import { POWER_COMPONENT_LABELS } from '../lib/ratingComponentLabels'
+import {
+  teamMatchesTournamentFilter,
+  tournamentFilterOptionsForStandings,
+  type TournamentFilterValue,
+} from '../lib/internationalTournaments'
+
+export type PlayerLoadState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready' }
+  | { status: 'missing'; message: string }
+  | { status: 'error'; message: string }
 
 type SortKey = 'rank' | 'rating' | 'wins'
 type TrajectoryMetric = 'rating' | 'rank'
@@ -38,6 +59,7 @@ type TeamDataSummary = {
   sourceBreakdown?: { provider: string; matchCount: number }[]
   notes?: string[]
   regionFilter?: string
+  tournamentFilter?: string
   tableTeamCount?: number
   scopeTeamCount?: number
   hiddenFromRankedCount?: number
@@ -49,21 +71,23 @@ const DEFAULT_TEAM_PAGE_SIZE = 25
 const RECENT_MATCH_PAGE_SIZE = 5
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
+const LARGE_POWER_RESUME_RANK_GAP = 7
+const LARGE_POWER_RESUME_SCORE_GAP = 100
 const LazyTeamHistoryLineChart = lazy(() => import('../components/TeamHistoryLineChart').then((module) => ({ default: module.TeamHistoryLineChart })))
 export function TeamsView({
   standings,
   regions,
   model,
   players,
+  playerLoadState,
+  playerScopeLabel,
   search,
   onSearchChange,
   pickedTeams,
   historyState,
-  signals,
   regionsHref,
   dataSummary,
   onToggle,
-  tierAssignments,
   onRequestPlayers,
   onRequestTeamHistory,
 }: {
@@ -71,19 +95,20 @@ export function TeamsView({
   regions: RegionStrength[]
   model?: Pick<ModelInfo, 'version' | 'configHash'>
   players?: CompactPlayer[]
+  playerLoadState: PlayerLoadState
+  playerScopeLabel?: string
   search: string
   onSearchChange: (value: string) => void
   pickedTeams: RankingSummaryStanding[]
   historyState: TeamHistoryArtifactState
-  signals?: RankingShowcaseProps
   regionsHref?: string
   dataSummary?: TeamDataSummary
   onToggle: (team: RankingSummaryStanding) => void
-  tierAssignments?: RankingTierAssignment[]
   onRequestPlayers?: () => void
   onRequestTeamHistory?: () => void
 }) {
   const [region, setRegion] = useState('All')
+  const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>('All')
   const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>('ranked')
   const [sortKey, setSortKey] = useState<SortKey>('rank')
   const [pageSize, setPageSize] = useState<number>(DEFAULT_TEAM_PAGE_SIZE)
@@ -97,24 +122,26 @@ export function TeamsView({
   const history = historyState.status === 'ready' ? historyState.data.series : undefined
 
   const pickedKeys = useMemo(() => new Set(pickedTeams.map(teamKey)), [pickedTeams])
-  const tierByTeam = useMemo(
-    () => new Map((tierAssignments ?? []).map((tier) => [tier.team.toLocaleLowerCase('en'), tier.tier])),
-    [tierAssignments],
-  )
 
   const regionOptions = useMemo(
     () => ['All', ...Array.from(new Set(standings.map((team) => team.region).filter(Boolean))).sort()],
     [standings],
+  )
+  const tournamentOptions = useMemo(() => tournamentFilterOptionsForStandings(standings), [standings])
+  const activeTournamentFilter = useMemo<TournamentFilterValue>(
+    () => tournamentOptions.some((option) => option.value === tournamentFilter) ? tournamentFilter : 'All',
+    [tournamentOptions, tournamentFilter],
   )
 
   const scopeFiltered = useMemo(() => {
     const query = search.trim().toLowerCase()
     return standings.filter((team) => {
       if (region !== 'All' && team.region !== region) return false
+      if (!teamMatchesTournamentFilter(team, activeTournamentFilter)) return false
       if (!query) return true
       return [team.team, team.code, team.region, team.league].some((value) => value?.toLowerCase().includes(query))
     })
-  }, [standings, region, search])
+  }, [standings, region, search, activeTournamentFilter])
 
   const filtered = useMemo(
     () => eligibilityFilter === 'ranked' ? scopeFiltered.filter((team) => team.eligibility?.eligible) : scopeFiltered,
@@ -136,23 +163,45 @@ export function TeamsView({
     ? {
         ...dataSummary,
         regionFilter: region,
+        tournamentFilter: activeTournamentFilter,
         tableTeamCount: filtered.length,
         scopeTeamCount: standings.length,
         hiddenFromRankedCount,
       }
     : undefined,
-  [dataSummary, filtered.length, hiddenFromRankedCount, region, standings.length])
+  [dataSummary, filtered.length, hiddenFromRankedCount, region, standings.length, activeTournamentFilter])
 
+  const rankedTierUniverse = useMemo(
+    () => standings.filter((team) => team.eligibility?.eligible),
+    [standings],
+  )
+  const rankingFlair = useMemo<RankingFlair>(
+    () => deriveRankingFlair(filtered, { tierUniverse: rankedTierUniverse }),
+    [filtered, rankedTierUniverse],
+  )
+  const tierAssignments: RankingTierAssignment[] = rankingFlair.tiers
+  const rankingSignals = useMemo(
+    () => rankingSignalsProps(rankingFlair, movementBaseline),
+    [rankingFlair, movementBaseline],
+  )
+  const tierByTeam = useMemo(
+    () => new Map(tierAssignments.map((tier) => [tier.team.toLocaleLowerCase('en'), tier.tier])),
+    [tierAssignments],
+  )
+  const activeSelectedTier = selectedTier && tierAssignments.some((assignment) => assignment.tier === selectedTier)
+    ? selectedTier
+    : null
+  const rawScoreRankByTeam = useMemo(() => rawScoreRanks(scopeFiltered), [scopeFiltered])
   const sorted = useMemo(() => sortStandings(filtered, sortKey), [filtered, sortKey])
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageScopeKey = `${region}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${pageSize}`
+  const pageScopeKey = `${region}\u0000${activeTournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${pageSize}`
   const requestedPage = pageState.scopeKey === pageScopeKey ? pageState.page : 1
   const currentPage = Math.min(requestedPage, totalPages)
   const pageStart = (currentPage - 1) * pageSize
   const visible = sorted.slice(pageStart, pageStart + pageSize)
   const pageEnd = sorted.length === 0 ? 0 : pageStart + visible.length
   const resultSummary = `${formatNumber(sorted.length === 0 ? 0 : pageStart + 1)}-${formatNumber(pageEnd)} of ${formatNumber(filtered.length)}`
-  const hasActiveFilters = search.trim() !== '' || region !== 'All' || eligibilityFilter !== 'ranked'
+  const hasActiveFilters = search.trim() !== '' || region !== 'All' || activeTournamentFilter !== 'All' || eligibilityFilter !== 'ranked'
   const [ratingMin, ratingMax] = useMemo(
     () => extent(filtered.map((team) => teamScoreFor(team) ?? Number.NaN)),
     [filtered],
@@ -168,7 +217,7 @@ export function TeamsView({
   )
 
   useEffect(() => {
-    if (!selectedTier || pendingTierScrollRef.current !== selectedTier) return undefined
+    if (!activeSelectedTier || pendingTierScrollRef.current !== activeSelectedTier) return undefined
     const frame = window.requestAnimationFrame(() => {
       const row = tableWrapRef.current?.querySelector<HTMLElement>('tr.gpr-row.is-tier-highlight')
       if (row && !isVerticallyInViewport(row)) {
@@ -177,7 +226,7 @@ export function TeamsView({
       pendingTierScrollRef.current = null
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [selectedTier, visible])
+  }, [activeSelectedTier, visible])
 
   useEffect(() => {
     if (!onRequestTeamHistory) return undefined
@@ -268,6 +317,7 @@ export function TeamsView({
   function resetFilters() {
     onSearchChange('')
     setRegion('All')
+    setTournamentFilter('All')
     setEligibilityFilter('ranked')
     setPageState({ scopeKey: pageScopeKey, page: 1 })
   }
@@ -278,44 +328,60 @@ export function TeamsView({
         <div className="gpr-main">
           <Card className="panel">
             <div className="gpr-toolbar">
-              <div className="gpr-filterbar" aria-label="Team ranking filters">
-                <label className="gpr-filterbar__search">
-                  <Search size={16} aria-hidden="true" />
-                  <span className="sr-only">Search teams</span>
-                  <Input
-                    type="search"
-                    value={search}
-                    placeholder="Filter teams..."
-                    onChange={(event) => onSearchChange(event.target.value)}
+              <div className="gpr-filterbar" role="group" aria-label="Team ranking filters">
+                <div className="gpr-filterbar__primary">
+                  <label className="gpr-filterbar__search">
+                    <Search size={16} aria-hidden="true" />
+                    <span className="sr-only">Search teams</span>
+                    <Input
+                      type="search"
+                      value={search}
+                      placeholder="Filter teams..."
+                      onChange={(event) => onSearchChange(event.target.value)}
+                    />
+                  </label>
+                  <Segmented
+                    value={eligibilityFilter}
+                    options={[
+                      { value: 'ranked', label: 'Eligible only' },
+                      { value: 'all', label: 'All teams' },
+                    ]}
+                    onChange={setEligibilityFilter}
+                    ariaLabel="Team eligibility filter"
+                    className="gpr-filterbar__segmented"
                   />
-                </label>
-                <Segmented
-                  value={eligibilityFilter}
-                  options={[
-                    { value: 'ranked', label: 'Eligible only' },
-                    { value: 'all', label: 'All teams' },
-                  ]}
-                  onChange={setEligibilityFilter}
-                  ariaLabel="Team eligibility filter"
-                  className="gpr-filterbar__segmented"
-                />
-                <label className="gpr-filterbar__select">
-                  <span>Region</span>
-                  <Select value={region} onChange={(event) => setRegion(event.target.value)}>
-                    {regionOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {formatCompetitionRegionLabel(option)}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                {hasActiveFilters ? (
-                  <Button type="button" variant="ghost" size="sm" className="gpr-filterbar__reset" onClick={resetFilters}>
-                    Reset
-                    <X size={14} aria-hidden="true" />
-                  </Button>
-                ) : null}
-                <span className="gpr-filterbar__count">{resultSummary}</span>
+                  <span className="gpr-filterbar__count">{resultSummary}</span>
+                </div>
+                <div className="gpr-filterbar__scope">
+                  <label className="gpr-filterbar__select">
+                    <span>Region</span>
+                    <Select value={region} onChange={(event) => setRegion(event.target.value)}>
+                      {regionOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {formatCompetitionRegionLabel(option)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  {tournamentOptions.length > 1 ? (
+                    <label className="gpr-filterbar__select gpr-filterbar__select--tournament">
+                      <span>Tournament</span>
+                      <Select value={activeTournamentFilter} onChange={(event) => setTournamentFilter(event.target.value as TournamentFilterValue)}>
+                        {tournamentOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.value === 'All' ? option.label : `${option.label} (${formatNumber(option.count)})`}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                  ) : null}
+                  {hasActiveFilters ? (
+                    <Button type="button" variant="ghost" size="sm" className="gpr-filterbar__reset" onClick={resetFilters}>
+                      Reset
+                      <X size={14} aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               <p className="eligibility-note">{eligibilityNote}</p>
               <p className="score-scale-note">{scoreScaleNote()}</p>
@@ -323,7 +389,7 @@ export function TeamsView({
 
             {visible.length === 0 ? (
               <DataState icon={<Users size={26} aria-hidden="true" />} title="No teams match">
-                Adjust the search, region, or eligibility filter to see teams.
+                Adjust the search, region, tournament, or eligibility filter to see teams.
               </DataState>
             ) : (
               <div className="tablewrap" ref={tableWrapRef}>
@@ -340,7 +406,7 @@ export function TeamsView({
                     <TableRow>
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
                       <TableHead>Team</TableHead>
-                      <SortHeader label="Team score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
+                      <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
                       <TableHead title={`Movement = rank change vs ${movementBaseline}.`}>Movement</TableHead>
                       <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" className="gpr-col-record" />
                       <TableHead className="center" aria-label="Add to comparison" />
@@ -353,17 +419,27 @@ export function TeamsView({
                       const rank = teamRankFor(team)
                       const historySeries = history?.[key]
                       const tier = tierByTeam.get(team.team.toLocaleLowerCase('en'))
-                      const tierHighlighted = Boolean(selectedTier && tier === selectedTier)
+                      const tierHighlighted = Boolean(activeSelectedTier && tier === activeSelectedTier)
+                      const excludedFromRankedBoard = team.eligibility?.eligible === false
+                      const rawScoreRank = rawScoreRankByTeam.get(key)
+                      const openTeamDetail = () => {
+                        onRequestPlayers?.()
+                        onRequestTeamHistory?.()
+                        setDetailKey(key)
+                      }
                       return (
                         <TableRow
                           key={key}
-                          className={`gpr-row${pickedKeys.has(key) ? ' is-picked' : ''}${tierHighlighted ? ' is-tier-highlight' : ''}`}
+                          className={`gpr-row${pickedKeys.has(key) ? ' is-picked' : ''}${tierHighlighted ? ' is-tier-highlight' : ''}${excludedFromRankedBoard ? ' is-excluded' : ''}`}
+                          title={excludedFromRankedBoard ? eligibilityReasonsTitle(team) : undefined}
+                          onClick={(event) => {
+                            if (shouldIgnoreTeamRowClick(event)) return
+                            openTeamDetail()
+                          }}
                         >
                           <TableCell>
                             <span className="gpr-rankcell">
-                              <span className={`gpr-rank${typeof rank === 'number' && rank <= 3 ? ' podium' : ''}`}>
-                                {rank ?? '—'}
-                              </span>
+                              <TeamBoardRank team={team} rank={rank} rawScoreRank={rawScoreRank} />
                               {tier ? <TierBadge tier={tier} /> : null}
                             </span>
                           </TableCell>
@@ -372,13 +448,8 @@ export function TeamsView({
                               type="button"
                               variant="ghost"
                               className="team-cell team-cell__button"
-                              onClick={() => {
-                                onRequestPlayers?.()
-                                onRequestTeamHistory?.()
-                                setDetailKey(key)
-                              }}
+                              onClick={openTeamDetail}
                               onFocus={onRequestPlayers}
-                              onPointerEnter={onRequestPlayers}
                               title={`View ${team.team} details`}
                             >
                               <span className="team-mark sm">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
@@ -445,20 +516,21 @@ export function TeamsView({
 
         <aside className="gpr-sidebar">
           <RegionalStrengthTeaser regions={regions} href={regionsHref} />
-          {signals ? (
-            <RankingShowcase
-              {...signals}
-              variant="rail"
-              selectedTier={selectedTier}
-              onTierSelect={(tier) => {
-                setSelectedTier((current) => {
-                  const nextTier = current === tier ? null : tier
-                  pendingTierScrollRef.current = nextTier
-                  return nextTier
-                })
-              }}
-            />
-          ) : null}
+          <RankingShowcase
+            {...rankingSignals}
+            variant="rail"
+            selectedTier={activeSelectedTier}
+            onTierSelect={(tier) => {
+              if (!isRankingTierLabel(tier)) return
+              const nextTier = activeSelectedTier === tier ? null : tier
+              if (nextTier) {
+                const page = firstPageForTier(sorted, tierAssignments, nextTier, pageSize)
+                if (page) setPageState({ scopeKey: pageScopeKey, page })
+              }
+              pendingTierScrollRef.current = nextTier
+              setSelectedTier(nextTier)
+            }}
+          />
           <DataSourcesDisclosure model={model} data={panelData} />
         </aside>
       </div>
@@ -543,13 +615,37 @@ export function TeamsView({
       {detailTeam ? (
         <TeamDetailDrawer
           team={detailTeam}
+          standings={standings}
           series={history?.[teamKey(detailTeam)]}
+          historyState={historyState}
           players={detailPlayers}
+          playerLoadState={playerLoadState}
+          playerScopeLabel={playerScopeLabel}
+          seeded={Boolean(panelData?.seeded)}
           onClose={() => setDetailKey(null)}
         />
       ) : null}
     </div>
   )
+}
+
+const TEAM_ROW_CLICK_EXCLUDED_SELECTOR = [
+  'a[href]',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  'summary',
+  '[role="button"]',
+  '[role="link"]',
+  '[contenteditable="true"]',
+  '[data-row-click-exclude]',
+].join(',')
+
+function shouldIgnoreTeamRowClick(event: MouseEvent<HTMLTableRowElement>) {
+  if (event.defaultPrevented) return true
+  const target = event.target
+  return target instanceof Element && Boolean(target.closest(TEAM_ROW_CLICK_EXCLUDED_SELECTOR))
 }
 
 function TeamScoreCell({
@@ -572,17 +668,50 @@ function TeamScoreCell({
   )
 }
 
+function TeamBoardRank({
+  team,
+  rank,
+  rawScoreRank,
+}: {
+  team: RankingSummaryStanding
+  rank?: number
+  rawScoreRank?: number
+}) {
+  if (team.eligibility?.eligible === false) {
+    return (
+      <span className="gpr-rank-stack">
+        <span className="gpr-rank gpr-rank--excluded">Excluded</span>
+        {typeof rawScoreRank === 'number' ? (
+          <span className="rank-context-pill" title="Raw score order if eligibility gates were ignored.">
+            Score #{formatNumber(rawScoreRank)}
+          </span>
+        ) : null}
+      </span>
+    )
+  }
+
+  return (
+    <span className={`gpr-rank${typeof rank === 'number' && rank <= 3 ? ' podium' : ''}`}>
+      {rank ?? '—'}
+    </span>
+  )
+}
+
 function TeamScoreMeta({ team }: { team: RankingSummaryStanding }) {
   const dss = team.deservedStanding
+  const powerResumeGap = powerResumeGapSummary(team)
   const items = [
     ...(typeof team.uncertainty === 'number' && Number.isFinite(team.uncertainty)
-      ? [{ key: 'uncertainty', label: `±${formatRating(team.uncertainty)}`, title: 'Estimated score uncertainty. Smaller bands mean firmer placement.' }]
+      ? [{ key: 'uncertainty', label: formatUncertaintyBand(team.uncertainty), title: 'Estimated score uncertainty. Smaller bands mean firmer placement.' }]
       : []),
     ...(team.eligibility?.eligible === false
       ? [{ key: 'eligibility', label: eligibilitySummary(team), title: eligibilityReasonsTitle(team) }]
       : []),
     ...(dss && dss.eligibility !== 'Eligible'
       ? [{ key: 'dss', label: dss.eligibility, title: teamScoreTitle(team) }]
+      : []),
+    ...(powerResumeGap?.isLarge
+      ? [{ key: 'power-resume-gap', label: powerResumeGap.shortLabel, title: powerResumeGap.title }]
       : []),
   ]
   if (items.length === 0) return null
@@ -661,6 +790,11 @@ function teamRankFor(team: RankingSummaryStanding) {
   return team.rank
 }
 
+function teamBoardRankLabel(team: RankingSummaryStanding, rank?: number) {
+  if (team.eligibility?.eligible === false) return 'Excluded'
+  return typeof rank === 'number' ? `#${formatNumber(rank)}` : '#—'
+}
+
 function isVerticallyInViewport(element: HTMLElement) {
   const rect = element.getBoundingClientRect()
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight
@@ -671,12 +805,18 @@ function teamScoreFor(team: RankingSummaryStanding) {
   return team.rating
 }
 
+function formatUncertaintyBand(value: number) {
+  return `±${formatRating(value)}`
+}
+
 function teamScoreTitle(team: RankingSummaryStanding) {
   const dss = team.deservedStanding
   const base = [
-    `Team score ${formatRating(team.rating)}`,
+    `Power score ${formatRating(team.rating)}`,
     scoreScaleNote(),
-    typeof team.uncertainty === 'number' ? `uncertainty ±${formatRating(team.uncertainty)}` : undefined,
+    team.scoreFamily ? `score family ${scoreFamilyLabel(team.scoreFamily)}` : undefined,
+    team.recordBasis ? `record basis ${recordBasisLabel(team.recordBasis)}` : undefined,
+    typeof team.uncertainty === 'number' ? `uncertainty ${formatUncertaintyBand(team.uncertainty)}` : undefined,
     team.eligibility?.eligible === false ? eligibilityReasonsTitle(team) : undefined,
   ].filter(Boolean)
   if (!dss) return base.join(' · ')
@@ -687,6 +827,51 @@ function teamScoreTitle(team: RankingSummaryStanding) {
     `roster validity ${formatRatio(dss.rosterValidity)}`,
     dss.eligibility,
   ].join(' · ')
+}
+
+type PowerResumeGapSummary = {
+  shortLabel: string
+  label: string
+  detail: string
+  title: string
+  tone: 'overpowered' | 'underpowered' | 'aligned'
+  isLarge: boolean
+}
+
+function powerResumeGapSummary(team: RankingSummaryStanding): PowerResumeGapSummary | undefined {
+  const dss = team.deservedStanding
+  if (!dss) return undefined
+  const rankGap = dss.rankDeltaFromPower
+  const scoreGap = dss.scoreDeltaFromPower
+  const absRankGap = Math.abs(rankGap)
+  const absScoreGap = Math.abs(scoreGap)
+  const isLarge = absRankGap >= LARGE_POWER_RESUME_RANK_GAP || absScoreGap >= LARGE_POWER_RESUME_SCORE_GAP
+  const tone = rankGap > 0 ? 'underpowered' : rankGap < 0 ? 'overpowered' : 'aligned'
+  const rankPhrase = rankGap > 0
+    ? `resume is ${formatNumber(absRankGap)} ranks ahead`
+    : rankGap < 0
+      ? `Power is ${formatNumber(absRankGap)} ranks ahead`
+      : 'Power and resume ranks align'
+  const scorePhrase = scoreGap === 0 ? 'no score gap' : `${formatSigned(scoreGap)} resume score gap`
+  return {
+    shortLabel: tone === 'underpowered' ? `Resume #${formatNumber(dss.rank)}` : tone === 'overpowered' ? `Power +${formatNumber(absRankGap)}` : 'Aligned',
+    label: tone === 'underpowered' ? 'Resume ahead' : tone === 'overpowered' ? 'Power ahead' : 'Aligned',
+    detail: `${rankPhrase}; ${scorePhrase}`,
+    title: `Power rank #${formatNumber(team.rank)} vs deserved rank #${formatNumber(dss.rank)}. ${rankPhrase}; ${scorePhrase}.`,
+    tone,
+    isLarge,
+  }
+}
+
+function scoreFamilyLabel(scoreFamily: RankingSummaryStanding['scoreFamily']) {
+  if (scoreFamily === 'deserved-standing') return 'Deserved Standing'
+  return 'Power Index'
+}
+
+function recordBasisLabel(recordBasis: RankingSummaryStanding['recordBasis']) {
+  if (recordBasis === 'grouped-match-record-from-scope-history') return 'grouped match record in this scope'
+  if (recordBasis === 'standing-record-from-ranking-model') return 'ranking-model standing record'
+  return 'record basis unavailable'
 }
 
 function formatRatingMovement(value?: number) {
@@ -967,7 +1152,7 @@ function uniqueSorted(values: number[]) {
 }
 
 function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; href?: string }) {
-  const ranked = useMemo(() => [...regions].sort((a, b) => b.score - a.score), [regions])
+  const ranked = useMemo(() => [...regions].sort((a, b) => displayRegionPowerScore(b) - displayRegionPowerScore(a)), [regions])
   if (ranked.length === 0) return null
   return (
     <section className="method-panel region-teaser" aria-label="Region power scores">
@@ -983,7 +1168,7 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
           <div className="region-strength-cell" key={region.region}>
             <RegionBadge region={region.region} size="sm" />
             <span className="region-strength-name">{region.region}</span>
-            <strong>{formatRating(region.score)}</strong>
+            <strong>{formatRating(displayRegionPowerScore(region))}</strong>
           </div>
         ))}
       </div>
@@ -1097,15 +1282,87 @@ function uniqueSourceWarnings(warnings: NonNullable<DataSourceInfo['warnings']>)
   })
 }
 
+type RankConfidenceSummary = {
+  label: string
+  detail: string
+  title: string
+}
+
+function summarizeRankConfidence(team: RankingSummaryStanding, standings: RankingSummaryStanding[]): RankConfidenceSummary | null {
+  const score = teamScoreFor(team)
+  const uncertainty = team.ratingComponents?.uncertainty ?? team.uncertainty
+  if (typeof score !== 'number' || typeof uncertainty !== 'number' || !Number.isFinite(score) || !Number.isFinite(uncertainty)) {
+    return null
+  }
+
+  const teamKeyValue = teamKey(team)
+  const rankedRows = standings.filter((standing) => {
+    if (team.eligibility?.eligible !== false && standing.eligibility?.eligible === false) return false
+    return typeof teamScoreFor(standing) === 'number' && Number.isFinite(teamScoreFor(standing))
+  })
+  const high = score + Math.max(0, uncertainty)
+  const low = score - Math.max(0, uncertainty)
+  const bestRank = 1 + rankedRows.filter((standing) => teamKey(standing) !== teamKeyValue && (teamScoreFor(standing) ?? -Infinity) > high).length
+  const worstRank = Math.max(bestRank, 1 + rankedRows.filter((standing) => teamKey(standing) !== teamKeyValue && (teamScoreFor(standing) ?? -Infinity) > low).length)
+  const label = bestRank === worstRank
+    ? `Likely ${formatRankValue(bestRank)}`
+    : `Likely ${formatRankValue(bestRank)}-${formatRankValue(worstRank)}`
+  return {
+    label,
+    detail: `from ${formatUncertaintyBand(uncertainty)} band`,
+    title: `Power score interval ${formatRating(low)}-${formatRating(high)} compared against current ranked teams.`,
+  }
+}
+
+type MatchWeightSummary = {
+  label: string
+  detail: string
+  title: string
+}
+
+function summarizeTeamMatchWeights(series?: TeamHistorySeries): MatchWeightSummary | null {
+  const summaries = new Map<EventTier, { count: number; maximumWeight: number }>()
+  for (const point of series?.points ?? []) {
+    const tier = point[3]?.tier
+    if (!isEventTier(tier)) continue
+    const configuredWeight = eventTierConfig[tier].weight
+    const appliedWeight = point[3]?.model?.w
+    const current = summaries.get(tier) ?? { count: 0, maximumWeight: 0 }
+    summaries.set(tier, {
+      count: current.count + 1,
+      maximumWeight: Math.max(current.maximumWeight, typeof appliedWeight === 'number' ? appliedWeight : configuredWeight),
+    })
+  }
+  const entries = [...summaries.entries()]
+  if (entries.length === 0) return null
+  const [tier, summary] = entries.sort(([, left], [, right]) => right.maximumWeight - left.maximumWeight)[0]
+  const config = eventTierConfig[tier]
+  return {
+    label: `Up to ${formatEventWeight(summary.maximumWeight)}`,
+    detail: `${config.label} (${formatNumber(summary.count)} ${summary.count === 1 ? 'match' : 'matches'})`,
+    title: config.description,
+  }
+}
+
 function TeamDetailDrawer({
   team,
+  standings,
   series,
+  historyState,
   players,
+  playerLoadState,
+  playerScopeLabel,
+  seeded,
   onClose,
 }: {
   team: RankingSummaryStanding
+  standings: RankingSummaryStanding[]
   series?: TeamHistorySeries
+  historyState: TeamHistoryArtifactState
   players: CompactPlayer[]
+  playerLoadState: PlayerLoadState
+  playerScopeLabel?: string
+  seeded: boolean
   onClose: () => void
 }) {
   const trendSeries = useMemo<ChartSeries[]>(() => {
@@ -1122,9 +1379,12 @@ function TeamDetailDrawer({
   const opponentFactor = Math.round((team.factors?.opponent ?? 0) * 100)
   const trendSummary = useMemo(() => summarizeTeamTrend(series), [series])
   const rankTrend = useMemo(() => summarizeRankTrend(team, series), [team, series])
-  const uncertainty = team.ratingComponents?.uncertainty
+  const uncertainty = team.ratingComponents?.uncertainty ?? team.uncertainty
   const score = teamScoreFor(team)
   const rank = teamRankFor(team)
+  const rankConfidence = useMemo(() => summarizeRankConfidence(team, standings), [team, standings])
+  const weightSummary = useMemo(() => summarizeTeamMatchWeights(series), [series])
+  const powerResumeGap = powerResumeGapSummary(team)
 
   return (
     <Sheet open onOpenChange={(nextOpen) => {
@@ -1145,6 +1405,7 @@ function TeamDetailDrawer({
               <p>Team inspector</p>
               <div className="team-detail-title-row">
                 <SheetTitle>{team.team}</SheetTitle>
+                {seeded ? <span className="team-detail-title-badge">Sample data</span> : null}
                 <span className="team-dossier__league">
                   <LeagueSigil league={team.league} />
                   <b>{team.league}</b>
@@ -1163,27 +1424,27 @@ function TeamDetailDrawer({
         <div className="team-detail-sheet__body min-h-0 flex-1">
           <section className="team-detail-hero" aria-label={`${team.team} summary`}>
             <div className="team-detail-hero__score">
-              <span className="team-detail-hero__rank">#{rank ?? '—'}</span>
+              <span className="team-detail-hero__rank">{teamBoardRankLabel(team, rank)}</span>
               <div>
                 <strong>{formatRating(score)}</strong>
-                <small>Team score</small>
+                <small>Power score{typeof uncertainty === 'number' ? ` ${formatUncertaintyBand(uncertainty)}` : ''}</small>
               </div>
             </div>
             <div className="team-detail-hero__facts">
               <span>
                 <small>Match record</small>
                 <b>{formatRecord(team.wins, team.losses)} ({formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})</b>
+                <em>{recordBasisLabel(team.recordBasis)}</em>
+              </span>
+              <span title={powerResumeGap?.title}>
+                <small>Power vs resume</small>
+                <b>{powerResumeGap?.label ?? 'No resume check'}</b>
+                <em>{powerResumeGap?.detail ?? 'deserved standing unavailable'}</em>
               </span>
               <span>
-                <small>Rank trend</small>
-                {rankTrend ? (
-                  <>
-                    <b className={rankMovementTone(rankTrend.recentMovement)}>{formatRankMovementLabel(rankTrend.recentMovement)}</b>
-                    <em>{formatRankTransition(rankTrend.previousRank, rankTrend.currentRank)}</em>
-                  </>
-                ) : (
-                  <b className="flat">No history</b>
-                )}
+                <small>Likely rank range</small>
+                <b title={rankConfidence?.title}>{rankConfidence?.label ?? 'Unavailable'}</b>
+                <em>{rankConfidence?.detail ?? 'uncertainty missing'}</em>
               </span>
               <span>
                 <small>Latest delta</small>
@@ -1191,21 +1452,24 @@ function TeamDetailDrawer({
                 <TeamRatingSparkline series={series} summary={trendSummary} teamName={team.team} />
               </span>
               <span>
-                <small>Power rating</small>
-                <b>{formatRating(team.rating)}{typeof uncertainty === 'number' ? ` ±${formatRating(uncertainty)}` : ''}</b>
+                <small>Match weighting</small>
+                <b title={weightSummary?.title}>{weightSummary?.label ?? 'Tier pending'}</b>
+                <em>{weightSummary?.detail ?? 'history rows show weights'}</em>
+              </span>
+              <span title="Normalized opponent-strength signal from this team's scored schedule.">
+                <small>Schedule quality</small>
+                <b>{opponentFactor}%</b>
+                <em>opponent signal</em>
               </span>
               <span>
-                <small>Opponent factor</small>
-                <b>{opponentFactor}%</b>
-                <em>Schedule signal</em>
+                <small>Score evidence</small>
+                <b>{team.deservedStanding?.eligibility ?? (team.eligibility?.eligible === false ? 'Limited' : 'Eligible')}</b>
+                <em>
+                  {team.deservedStanding
+                    ? `Roster coverage ${formatRatio(team.deservedStanding.rosterValidity)}`
+                    : 'match-based rating'}
+                </em>
               </span>
-              {team.deservedStanding ? (
-                <span>
-                  <small>Score evidence</small>
-                  <b>{team.deservedStanding.eligibility}</b>
-                  <em>Roster {formatRatio(team.deservedStanding.rosterValidity)}</em>
-                </span>
-              ) : null}
             </div>
           </section>
 
@@ -1214,16 +1478,16 @@ function TeamDetailDrawer({
               <div className="match-evidence-card__head">
                 <div>
                   <h3>Match Results</h3>
-                  <p>Scored matches in this scope. Ratings show post-match team power.</p>
+                  <p>Scored matches in this scope. Ratings show post-match power; tier pills show model weight.</p>
                 </div>
                 <FormDots form={team.form} />
               </div>
 
-              <RecentMatches matches={team.recentMatches} series={series} />
+              <RecentMatches matches={team.recentMatches} series={series} standings={standings} historyState={historyState} />
             </div>
 
             <ComponentBreakdown team={team} />
-            <PlayerRankingCard team={team} players={players} />
+            <PlayerRankingCard team={team} players={players} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} />
           </div>
 
           <div className="gpr-card trend-card">
@@ -1266,10 +1530,14 @@ function TeamDetailDrawer({
             ) : null}
             {trendSeries.length > 0 ? (
               <div className="trend-card__plot">
-                <Suspense fallback={<p className="muted" style={{ paddingTop: 16 }}>Loading chart...</p>}>
+                <Suspense fallback={<TrendChartSkeleton />}>
                   <LazyTeamHistoryLineChart series={trendSeries} height={340} yLabel="Power score" />
                 </Suspense>
               </div>
+            ) : historyState.status === 'idle' || historyState.status === 'loading' ? (
+              <TrendChartSkeleton />
+            ) : historyState.status === 'missing' || historyState.status === 'error' ? (
+              <p className="muted" style={{ paddingTop: 16 }}>{historyState.message}</p>
             ) : (
               <p className="muted" style={{ paddingTop: 16 }}>Not enough history to chart this team yet.</p>
             )}
@@ -1350,13 +1618,58 @@ function roundSparklineCoord(value: number) {
   return Math.round(value * 10) / 10
 }
 
-function RecentMatches({ matches, series }: { matches?: PublicRecentMatch[]; series?: TeamHistorySeries }) {
+function TrendChartSkeleton() {
+  return (
+    <div className="trend-chart-skeleton" role="status" aria-live="polite" aria-label="Loading rating trajectory">
+      <div className="trend-chart-skeleton__status">Loading rating trajectory...</div>
+      <div className="trend-chart-skeleton__plot" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <i />
+      </div>
+    </div>
+  )
+}
+
+type RecentMatchSource = PublicRecentMatch & {
+  tier?: EventTier
+  expectedWinProbability?: number
+  eventWeight?: number
+}
+
+type RecentMatchListItem = RecentMatchSource & {
+  ratingMovement: number
+  modelDelta?: number
+}
+
+type OpponentContext = {
+  rank?: number
+  rating?: number
+  code?: string
+  league?: string
+}
+
+function RecentMatches({
+  matches,
+  series,
+  standings,
+  historyState,
+}: {
+  matches?: PublicRecentMatch[]
+  series?: TeamHistorySeries
+  standings: RankingSummaryStanding[]
+  historyState: TeamHistoryArtifactState
+}) {
   const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
+  const opponentLookup = useMemo(() => opponentContextLookup(standings), [standings])
+  const historyPending = !series && (historyState.status === 'idle' || historyState.status === 'loading')
   const orderedMatches = useMemo(() => {
+    if (historyPending) return matchesWithRatingMovement(matches ?? []).toReversed().slice(0, 1)
     const historyMatches = recentMatchesFromHistorySeries(series)
     const sourceMatches = historyMatches.length > (matches?.length ?? 0) ? historyMatches : matches ?? []
-    return sourceMatches.toReversed()
-  }, [matches, series])
+    return matchesWithRatingMovement(sourceMatches).toReversed()
+  }, [historyPending, matches, series])
   const totalMatches = orderedMatches.length
   const totalPages = Math.max(1, Math.ceil(totalMatches / RECENT_MATCH_PAGE_SIZE))
   const newestMatch = orderedMatches[0]
@@ -1390,23 +1703,58 @@ function RecentMatches({ matches, series }: { matches?: PublicRecentMatch[]; ser
       </div>
       {recentMatches.length > 0 ? (
         <div className="recent-match-list">
-          {recentMatches.map((match, index) => (
-            <div className="recent-match-row" key={`${match.date}-${match.event}-${match.opponent}-${index}`}>
-              <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`}>{match.result}</span>
-              <div className="recent-match-row__main">
-                <b>vs {match.opponent}</b>
-                <small title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
+          {recentMatches.map((match, index) => {
+            const opponent = opponentLookup.get(normalizeOpponentLookupKey(match.opponent))
+            const outcomeSignal = matchOutcomeSignal(match)
+            const tierChip = matchTierChip(match)
+            return (
+              <div
+                className={`recent-match-row${outcomeSignal ? ` is-${outcomeSignal.tone}` : ''}`}
+                key={`${match.date}-${match.event}-${match.opponent}-${index}`}
+              >
+                <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`}>{match.result}</span>
+                <div className="recent-match-row__main">
+                  <span className="recent-match-row__opponent">
+                    <b>vs {match.opponent}</b>
+                    {opponent ? <span title="Current opponent rank and power score in this scope">{formatOpponentContext(opponent)}</span> : null}
+                  </span>
+                  <small title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
+                  <span className="recent-match-row__chips" aria-label="Match context">
+                    {tierChip ? <span title={tierChip.title}>{tierChip.label}</span> : null}
+                    {typeof match.expectedWinProbability === 'number' ? (
+                      <span title="Pregame expected series win probability for this team">
+                        Expected {formatRatio(match.expectedWinProbability)}
+                      </span>
+                    ) : null}
+                    {outcomeSignal ? <span className={outcomeSignal.tone} title={outcomeSignal.title}>{outcomeSignal.label}</span> : null}
+                    {historyPending && !tierChip && typeof match.expectedWinProbability !== 'number' ? (
+                      <span>Loading context</span>
+                    ) : null}
+                  </span>
+                </div>
+                <div className="recent-match-row__rating">
+                  <strong>{formatRating(match.rating)}</strong>
+                  <small className={movementTone(match.ratingMovement)} title={formatRatingMovementTitle(match)}>
+                    {formatRatingMovement(match.ratingMovement)}
+                  </small>
+                </div>
               </div>
-              <div className="recent-match-row__rating">
-                <strong>{formatRating(match.rating)}</strong>
-                <small className={movementTone(match.delta)}>{formatRatingMovement(match.delta)}</small>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
-      ) : (
-        <p className="muted recent-matches__empty">No match-level recent form is available in this snapshot.</p>
-      )}
+      ) : null}
+      {historyPending ? (
+        <MatchHistorySkeleton rowCount={Math.max(0, RECENT_MATCH_PAGE_SIZE - recentMatches.length)} compact={recentMatches.length > 0} />
+      ) : recentMatches.length === 0 ? (
+        <p className="muted recent-matches__empty">
+          {historyState.status === 'missing' || historyState.status === 'error'
+            ? historyState.message
+            : 'No match-level recent form is available in this snapshot.'}
+        </p>
+      ) : null}
+      {(historyState.status === 'missing' || historyState.status === 'error') && recentMatches.length > 0 ? (
+        <p className="recent-matches__notice">{historyState.message}</p>
+      ) : null}
       {totalMatches > RECENT_MATCH_PAGE_SIZE ? (
         <div className="recent-matches__pager pager" aria-label="Match results pagination">
           <div className="pager__page">
@@ -1432,10 +1780,59 @@ function RecentMatches({ matches, series }: { matches?: PublicRecentMatch[]; ser
   )
 }
 
-function recentMatchesFromHistorySeries(series?: TeamHistorySeries): PublicRecentMatch[] {
+function MatchHistorySkeleton({
+  rowCount = RECENT_MATCH_PAGE_SIZE,
+  compact = false,
+}: {
+  rowCount?: number
+  compact?: boolean
+}) {
+  if (rowCount <= 0 && compact) return null
+  return (
+    <div className="recent-match-skeleton" role="status" aria-live="polite" aria-label="Loading detailed match history">
+      <p>{compact ? 'Loading remaining match context...' : 'Loading detailed match context...'}</p>
+      {Array.from({ length: rowCount }, (_, index) => (
+        <div className="recent-match-skeleton__row" key={index} aria-hidden="true">
+          <span className="detail-skeleton detail-skeleton--result" />
+          <span className="recent-match-skeleton__main">
+            <span className="detail-skeleton detail-skeleton--line is-wide" />
+            <span className="detail-skeleton detail-skeleton--line is-mid" />
+            <span className="recent-match-skeleton__chips">
+              <span className="detail-skeleton detail-skeleton--chip" />
+              <span className="detail-skeleton detail-skeleton--chip is-short" />
+            </span>
+          </span>
+          <span className="recent-match-skeleton__rating">
+            <span className="detail-skeleton detail-skeleton--line is-score" />
+            <span className="detail-skeleton detail-skeleton--line is-delta" />
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function matchesWithRatingMovement(matches: RecentMatchSource[]): RecentMatchListItem[] {
+  let previousRating: number | undefined
+  return matches.map((match) => {
+    const ratingMovement = typeof previousRating === 'number' && Number.isFinite(match.rating)
+      ? match.rating - previousRating
+      : match.delta
+    previousRating = Number.isFinite(match.rating) ? match.rating : previousRating
+    const roundedMovement = Math.round(ratingMovement)
+    const roundedModelDelta = Math.round(match.delta)
+    return {
+      ...match,
+      ratingMovement,
+      ...(roundedMovement !== roundedModelDelta ? { modelDelta: match.delta } : {}),
+    }
+  })
+}
+
+function recentMatchesFromHistorySeries(series?: TeamHistorySeries): RecentMatchSource[] {
   if (!series) return []
   return series.points
-    .map(([date, rating, , context]): PublicRecentMatch | null => {
+    .map(([date, rating, , context]): RecentMatchSource | null => {
       if (!context?.event || !context.opponent || !context.result) return null
       return {
         date,
@@ -1448,9 +1845,12 @@ function recentMatchesFromHistorySeries(series?: TeamHistorySeries): PublicRecen
         ...(typeof context.losses === 'number' ? { losses: context.losses } : {}),
         ...(typeof context.games === 'number' ? { games: context.games } : {}),
         ...(typeof context.bestOf === 'number' ? { bestOf: context.bestOf } : {}),
+        ...(isEventTier(context.tier) ? { tier: context.tier } : {}),
+        ...(typeof context.model?.e === 'number' && Number.isFinite(context.model.e) ? { expectedWinProbability: context.model.e } : {}),
+        ...(typeof context.model?.w === 'number' && Number.isFinite(context.model.w) ? { eventWeight: context.model.w } : {}),
       }
     })
-    .filter((match): match is PublicRecentMatch => match !== null)
+    .filter((match): match is RecentMatchSource => match !== null)
 }
 
 function formatTeamMatchMeta(match: PublicRecentMatch) {
@@ -1462,6 +1862,84 @@ function formatTeamMatchDetail(match: PublicRecentMatch) {
   const score = `${match.wins}-${match.losses}`
   const bestOf = typeof match.bestOf === 'number' && match.bestOf > 1 ? `Bo${match.bestOf}` : undefined
   return [formatTeamMatchMeta(match), score, bestOf].filter(Boolean).join(' · ')
+}
+
+function formatRatingMovementTitle(match: RecentMatchListItem) {
+  const movement = `Rating movement ${formatRatingMovement(match.ratingMovement)}`
+  return typeof match.modelDelta === 'number'
+    ? `${movement} · model match impact ${formatRatingMovement(match.modelDelta)}`
+    : movement
+}
+
+function opponentContextLookup(standings: RankingSummaryStanding[]) {
+  const lookup = new Map<string, OpponentContext>()
+  for (const standing of standings) {
+    const context: OpponentContext = {
+      rank: teamRankFor(standing),
+      rating: teamScoreFor(standing),
+      code: standing.code,
+      league: standing.league,
+    }
+    lookup.set(normalizeOpponentLookupKey(standing.team), context)
+    if (standing.code) lookup.set(normalizeOpponentLookupKey(standing.code), context)
+  }
+  return lookup
+}
+
+function normalizeOpponentLookupKey(value: string) {
+  return value.trim().toLocaleLowerCase('en')
+}
+
+function formatOpponentContext(opponent: OpponentContext) {
+  return [
+    typeof opponent.rank === 'number' ? formatRankValue(opponent.rank) : undefined,
+    typeof opponent.rating === 'number' ? formatRating(opponent.rating) : undefined,
+    opponent.league,
+  ].filter(Boolean).join(' · ')
+}
+
+function matchTierChip(match: RecentMatchSource) {
+  if (!match.tier) return undefined
+  const config = eventTierConfig[match.tier]
+  const weight = typeof match.eventWeight === 'number' ? match.eventWeight : config.weight
+  return {
+    label: `${config.label} ${formatEventWeight(weight)}`,
+    title: weight === config.weight
+      ? config.description
+      : `${config.description} Applied event weight ${formatEventWeight(weight)} after the preseason discount.`,
+  }
+}
+
+function matchOutcomeSignal(match: RecentMatchSource) {
+  const expected = match.expectedWinProbability
+  if (typeof expected !== 'number' || !Number.isFinite(expected)) return null
+  if (match.result === 'W' && expected < 0.4) {
+    return {
+      label: 'Upset',
+      tone: 'upset',
+      title: `Won with ${formatRatio(expected)} expected win probability.`,
+    }
+  }
+  if (match.result === 'L' && expected > 0.6) {
+    return {
+      label: 'Miss',
+      tone: 'miss',
+      title: `Lost with ${formatRatio(expected)} expected win probability.`,
+    }
+  }
+  return null
+}
+
+function isEventTier(value: string | undefined): value is EventTier {
+  return typeof value === 'string' && value in eventTierConfig
+}
+
+function isRankingTierLabel(value: string): value is RankingTierLabel {
+  return value === 'S' || value === 'A' || value === 'B' || value === 'C'
+}
+
+function formatEventWeight(weight: number) {
+  return `${formatDecimal(weight)}x`
 }
 
 function LeagueSigil({
@@ -1537,10 +2015,56 @@ function TrendSummaryCell({
   )
 }
 
-function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; players: CompactPlayer[] }) {
+function PlayerRankingCard({
+  team,
+  players,
+  loadState,
+  playerScopeLabel = 'the current scope',
+}: {
+  team: RankingSummaryStanding
+  players: CompactPlayer[]
+  loadState: PlayerLoadState
+  playerScopeLabel?: string
+}) {
   const [ratingMin, ratingMax] = useMemo(() => extent(players.map((player) => player.rating)), [players])
 
   if (players.length === 0) {
+    if (loadState.status === 'idle' || loadState.status === 'loading') {
+      return (
+        <aside className="gpr-card player-rank-card player-rank-card--empty" aria-label={`${team.team} player rankings`}>
+          <div className="player-rank-card__head">
+            <div>
+              <h3>
+                Player Rankings
+                <CountBadge>Loading</CountBadge>
+              </h3>
+              <p>Loading player-level sources for {team.code ?? team.team} in {playerScopeLabel}.</p>
+            </div>
+          </div>
+          <PlayerRankingSkeleton />
+        </aside>
+      )
+    }
+
+    if (loadState.status === 'missing' || loadState.status === 'error') {
+      return (
+        <aside className="gpr-card player-rank-card player-rank-card--empty" aria-label={`${team.team} player rankings`}>
+          <div className="player-rank-card__head">
+            <div>
+              <h3>
+                Player Rankings
+                <CountBadge>Unavailable</CountBadge>
+              </h3>
+              <p>{loadState.message}</p>
+            </div>
+          </div>
+          <p className="muted player-rank-card__empty">
+            Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
+          </p>
+        </aside>
+      )
+    }
+
     return (
       <aside className="gpr-card player-rank-card player-rank-card--empty" aria-label={`${team.team} player rankings`}>
         <div className="player-rank-card__head">
@@ -1549,11 +2073,11 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
               Player Rankings
               <CountBadge>Source gap</CountBadge>
             </h3>
-            <p>No player-level sources for {team.code ?? team.team} in this scope.</p>
+            <p>No player-level sources for {team.code ?? team.team} in {playerScopeLabel}.</p>
           </div>
         </div>
         <p className="muted player-rank-card__empty">
-          Team rating is backed by scored matches, opponent context, and model history.
+          Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
         </p>
       </aside>
     )
@@ -1564,7 +2088,7 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
       <div className="player-rank-card__head">
         <div>
           <h3>Player Rankings</h3>
-          <p>Individual rows for {team.code ?? team.team} in the current scope.</p>
+          <p>Individual rows for {team.code ?? team.team} in {playerScopeLabel}.</p>
         </div>
         <CountBadge>{players.length} players</CountBadge>
       </div>
@@ -1606,6 +2130,26 @@ function PlayerRankingCard({ team, players }: { team: RankingSummaryStanding; pl
   )
 }
 
+function PlayerRankingSkeleton() {
+  return (
+    <div className="player-rank-skeleton" role="status" aria-live="polite" aria-label="Loading player rankings">
+      {Array.from({ length: 5 }, (_, index) => (
+        <div className="player-rank-skeleton__row" key={index} aria-hidden="true">
+          <span className="detail-skeleton detail-skeleton--rank" />
+          <span className="player-rank-skeleton__main">
+            <span className="detail-skeleton detail-skeleton--line is-wide" />
+            <span className="detail-skeleton detail-skeleton--line is-short" />
+          </span>
+          <span className="detail-skeleton detail-skeleton--chip is-short" />
+          <span className="player-rank-skeleton__score">
+            <span className="detail-skeleton detail-skeleton--line is-score" />
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
   const components = team.ratingComponents
   if (!components) return null
@@ -1614,35 +2158,120 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
     { label: POWER_COMPONENT_LABELS.roster, value: components.rosterPriorOffset },
     { label: POWER_COMPONENT_LABELS.form, value: components.momentum },
     { label: POWER_COMPONENT_LABELS.context, value: components.contextAdjustment },
-  ]
+  ].filter((row) => Math.abs(row.value) >= 0.5)
+  const maxComponentMagnitude = Math.max(
+    Math.abs(components.leagueAnchor),
+    ...contributionRows.map((row) => Math.abs(row.value)),
+  )
 
   return (
     <div className="gpr-card component-breakdown" aria-label={`${team.team} rating components`}>
       <div className="component-breakdown__head">
         <div>
           <h3>Power Score Breakdown</h3>
-          <p>How the model builds this team's Power score.</p>
+          <p>How the model builds this team's Power score from the league anchor and team adjustments.</p>
         </div>
-        <span>{formatRating(team.rating)} ±{formatRating(components.uncertainty)}</span>
+        <span>{formatRating(team.rating)} {formatUncertaintyBand(components.uncertainty)}</span>
       </div>
       <div className="component-ledger">
-        <div className="component-ledger__row is-anchor">
-          <span>{POWER_COMPONENT_LABELS.league}</span>
+        <div className="component-ledger__row is-anchor" title="League anchor baseline before team-specific adjustments.">
+          <span className="component-ledger__label">{POWER_COMPONENT_LABELS.league}</span>
           <b>{formatRating(components.leagueAnchor)}</b>
+          <ComponentBar value={components.leagueAnchor} max={maxComponentMagnitude} />
         </div>
         {contributionRows.map((row) => (
           <div className="component-ledger__row" key={row.label}>
-            <span>{row.label}</span>
+            <span className="component-ledger__label">{row.label}</span>
             <b className={movementTone(row.value)}>{formatRatingMovement(row.value)}</b>
+            <ComponentBar value={row.value} max={maxComponentMagnitude} />
           </div>
         ))}
         <div className="component-ledger__row is-total">
-          <span>Power score</span>
+          <span className="component-ledger__label">Power score</span>
           <b>{formatRating(team.rating)}</b>
         </div>
       </div>
     </div>
   )
+}
+
+function ComponentBar({ value, max }: { value: number; max: number }) {
+  const width = max > 0 ? clampNumber((Math.abs(value) / max) * 100, 2, 100) : 0
+  return (
+    <span className={`component-ledger__bar ${value < 0 ? 'is-negative' : 'is-positive'}`} aria-hidden="true">
+      <span style={{ width: `${width}%` }} />
+    </span>
+  )
+}
+
+function rankingSignalsProps(flair: RankingFlair, movementBaseline: string): RankingShowcaseProps {
+  const spicy = flair.spicyTakeConfidence[0]
+  return {
+    eyebrow: 'Table readout',
+    title: 'Filtered signals',
+    subtitle: 'Movement, tier, upset, and evidence context from the current table rows.',
+    tierCounts: tierCountsFor(flair.tiers),
+    biggestRiser: movementSpotlight(flair.movement.biggestRiser, movementBaseline),
+    biggestFaller: movementSpotlight(flair.movement.biggestFaller, movementBaseline),
+    upset: flair.upsetHeadline ? {
+      headline: flair.upsetHeadline.headline,
+      winner: flair.upsetHeadline.winner,
+      loser: flair.upsetHeadline.opponent,
+      event: flair.upsetHeadline.event,
+      score: `${formatSigned(flair.upsetHeadline.matchDelta)} rating`,
+      date: flair.upsetHeadline.date,
+      description: `Upset score ${formatNumber(flair.upsetHeadline.score)} from match delta, rating gap, and rank gap.`,
+    } : undefined,
+    confidenceBand: spicy ? {
+      label: `${spicy.code}: evidence coverage`,
+      value: spicy.score,
+      tone: spicy.band === 'high' ? 'spicy' : spicy.band === 'medium' ? 'warm' : 'cool',
+      description: `${formatNumber(spicy.recentMatchCount)} recent scored matches, rating uncertainty +/-${formatNumber(spicy.uncertainty)}.`,
+    } : undefined,
+  }
+}
+
+function tierCountsFor(assignments: readonly RankingTierAssignment[]) {
+  return (['S', 'A', 'B', 'C'] as const).map((tier) => {
+    const teams = assignments.filter((entry) => entry.tier === tier)
+    return {
+      tier,
+      label: `${tier}-tier`,
+      count: teams.length,
+      teams: teams.slice(0, 4).map((entry) => entry.code),
+    }
+  })
+}
+
+function movementSpotlight(pick: RankingMovementPick | null, movementBaseline: string) {
+  if (!pick) return undefined
+  return {
+    team: pick.team,
+    code: pick.code,
+    movement: pick.movement,
+    fromRank: pick.previousRank,
+    toRank: pick.rank,
+    ratingDelta: pick.ratingDelta,
+    description: `${formatSigned(pick.ratingDelta)} rating vs ${movementBaseline}.`,
+  }
+}
+
+function rawScoreRanks(rows: RankingSummaryStanding[]) {
+  const ranks = new Map<string, number>()
+  let currentRank = 0
+  let previousScore: number | undefined
+  const orderedRows = [...rows].sort((a, b) => compareTeamScore(b, a) || compareTeamRank(a, b) || a.team.localeCompare(b.team))
+  orderedRows.forEach((team, index) => {
+    const score = teamScoreFor(team)
+    if (typeof score !== 'number' || !Number.isFinite(score)) return
+    const roundedScore = Math.round(score)
+    if (previousScore !== roundedScore) {
+      currentRank = index + 1
+      previousScore = roundedScore
+    }
+    ranks.set(teamKey(team), currentRank)
+  })
+  return ranks
 }
 
 function sortStandings(rows: RankingSummaryStanding[], key: SortKey) {
@@ -1653,7 +2282,7 @@ function sortStandings(rows: RankingSummaryStanding[], key: SortKey) {
     case 'wins':
       return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || (b.wins ?? 0) - (a.wins ?? 0) || compareTeamRank(a, b))
     default:
-      return copy.sort((a, b) => compareTeamRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || compareTeamRank(a, b))
   }
 }
 
