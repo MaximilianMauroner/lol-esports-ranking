@@ -12,6 +12,7 @@ import {
 import { ensureLeague, updateLeagueStrengthForSeries } from '../src/lib/leagueRatings.ts'
 import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
 import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, publishedTeamStableOffset } from '../src/lib/ratingCalculations.ts'
+import { compactPlayerRecentMatches } from '../src/lib/snapshot.ts'
 import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/types.ts'
 
 const teams: Record<string, TeamProfile> = {
@@ -111,6 +112,28 @@ test('a completed Bo2 tie is neutral in ratings, provenance, and head-to-head co
   assert.equal(alphaFinal?.source.formatBasis, 'provider')
   assert.equal(model.predictions.every((prediction) => prediction.seriesId === alphaFinal?.source.seriesId), true)
   assert.equal(model.predictions.every((prediction) => prediction.bestOf === 2), true)
+})
+
+test('sourced player histories retain a completed Bo2 tie through public compaction', () => {
+  const matches = seriesFixture({
+    id: 'player-bo2-tie',
+    bestOf: 2,
+    bestOfBasis: 'provider',
+    winners: ['Alpha', 'Beta'],
+  }).map((match, index) => ({
+    ...match,
+    teamARoster: sourcedRosterFixture('alpha', 'blue', index === 0),
+    teamBRoster: sourcedRosterFixture('beta', 'red', index === 1),
+  }))
+  const players = buildPlayerModel(matches, {})
+  const alphaMid = players.find((player) => player.id === 'alpha-Mid')
+
+  assert.ok(alphaMid)
+  const recent = compactPlayerRecentMatches(alphaMid)
+  assert.equal(recent?.length, 1)
+  assert.equal(recent?.[0]?.result, 'T')
+  assert.equal(recent?.[0]?.seriesId, alphaMid.history[0]?.source?.seriesId)
+  assert.equal(alphaMid.history.every((entry) => entry.source?.seriesOutcome === 0.5), true)
 })
 
 test('an ambiguous fallback 1-1 prefix stays incomplete and does not count for eligibility', () => {

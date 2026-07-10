@@ -22,7 +22,8 @@ import {
   eventWeightForMatch,
   type EventWeightContext,
 } from './eventWeighting'
-import { homeLeagueForMatch } from './matchContext'
+import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
+import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam } from './seriesResolver'
 
 const initialPlayerRating = 100
 const sourcedPlayerKFactor = 8
@@ -507,7 +508,10 @@ function applySourcedPlayerUpdates(
   latestRosterByTeam?: Map<string, PlayerProfile[]>,
   residualControlModel?: IndividualResidualControlModel,
 ) {
+  const seriesByMatchId = canonicalSeriesForMatches(matches)
   for (const match of matches) {
+    const series = seriesByMatchId.get(match.id)
+    if (!series) throw new Error(`Missing canonical series for player update ${match.id}`)
     for (const { side, team, opponent, roster, opponentRoster, opponentSide } of teamRosterEntries(match)) {
       if (!roster || !opponentRoster || !isCompleteSourcedMatchup(roster, opponentRoster)) continue
       latestRosterByTeam?.set(team, roster.players.map((player) => profileForAppearance(player, team)))
@@ -531,6 +535,14 @@ function applySourcedPlayerUpdates(
         const nextRating = Number((currentRating + delta).toFixed(1))
         const currentPublishedRating = publishedPlayerRating(currentRating, league, leagueRatings)
         const nextPublishedRating = publishedPlayerRating(nextRating, league, leagueRatings)
+        const playerSeriesOutcome = canonicalSeriesOutcomeForTeam(series, team)
+          ?? (match.teamA === team ? series.outcomeA : match.teamB === team ? oppositeSeriesOutcome(series.outcomeA) : undefined)
+        const playerSource = {
+          ...sourceTraceFor(match, series),
+          ...(series.state === 'completed' ? {
+            seriesOutcome: playerSeriesOutcome,
+          } : {}),
+        }
         state.ratings.set(player.id, nextRating)
         state.profiles.set(player.id, profile)
         state.games.set(player.id, (state.games.get(player.id) ?? 0) + 1)
@@ -543,15 +555,15 @@ function applySourcedPlayerUpdates(
             opponent,
             playerTeam: team,
             result: player.stats.won ? 'W' : 'L',
-            bestOf: match.bestOf,
+            bestOf: series.format,
             teamKills: side === 'A' ? match.teamAKills : match.teamBKills,
             opponentKills: side === 'A' ? match.teamBKills : match.teamAKills,
-            source: sourceTraceFor(match),
+            source: playerSource,
             rating: nextPublishedRating,
             delta: Number((nextPublishedRating - currentPublishedRating).toFixed(1)),
           },
         ])
-        state.sources?.set(player.id, sourceTraceFor(match))
+        state.sources?.set(player.id, playerSource)
         recordPlayerDiagnostics(player.id, player, opponentPlayer, state)
         recordIndividualResidual(
           player.id,
@@ -570,6 +582,12 @@ function applySourcedPlayerUpdates(
       }
     }
   }
+}
+
+function oppositeSeriesOutcome(outcome: 0 | 0.5 | 1) {
+  if (outcome === 0) return 1 as const
+  if (outcome === 1) return 0 as const
+  return 0.5 as const
 }
 
 function recordRatedAppearance(
@@ -1086,20 +1104,6 @@ function playerSignalMultiplierForLeague(league: string) {
 function statScore(value: number | undefined, baseline: number, spread: number) {
   if (value === undefined || !Number.isFinite(value)) return 0.5
   return clamp(0.5 + (value - baseline) / (2 * spread), 0.05, 0.95)
-}
-
-function sourceTraceFor(match: MatchRecord): SourceTrace {
-  return {
-    provider: match.sourceProvider,
-    gameId: match.sourceGameId,
-    matchId: match.sourceMatchId,
-    url: match.sourceUrl || undefined,
-    fileName: match.sourceFileName,
-    completeness: match.dataCompleteness,
-    date: match.date,
-    event: match.event,
-    bestOf: match.bestOf,
-  }
 }
 
 type PlayerShare = {

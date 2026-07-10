@@ -662,10 +662,13 @@ function groupTeamHistoryPointsIntoMatches(history: TeamHistoryPoint[]): TeamHis
 }
 
 function isResolvedTeamHistoryMatchGroup(group: TeamHistoryPublicMatchGroup) {
+  const canonicalState = group.entries.at(-1)?.source?.seriesState
+  if (canonicalState !== undefined) return canonicalState === 'completed'
   return isResolvedTimelineResult(summarizeTimelineResults(group.entries, (entry) => entry.result))
 }
 
 function teamHistoryPublicMatchKey(point: TeamHistoryPoint) {
+  if (point.source?.seriesId) return timelineGroupKey(['canonical-series', point.source.seriesId])
   return timelineGroupKey([
     'series',
     point.date,
@@ -702,12 +705,13 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
   if (!includeContext) return base
 
   const resultSummary = summarizeTimelineResults(group.entries, (entry) => entry.result)
+  const result = latest.source?.seriesOutcome === 0.5 ? 'T' : resultSummary.result
   const bestOf = inferBestOfForScore(resultSummary.wins, resultSummary.losses, latest.source?.bestOf)
   const sourceSummary = timelineSourceSummary(group.entries, (entry) => entry.source)
   const delta = group.entries.reduce((total, entry) => (
     typeof entry.delta === 'number' && Number.isFinite(entry.delta) ? total + entry.delta : total
   ), 0)
-  const modelContext = compactTeamHistoryModelContext(group.entries, resultSummary.result)
+  const modelContext = compactTeamHistoryModelContext(group.entries, result)
 
   return [
     latest.date,
@@ -718,7 +722,7 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
       opponent: latest.opponent,
       delta: Number(delta.toFixed(1)),
       tier: latest.tier,
-      result: resultSummary.result,
+      result,
       wins: resultSummary.wins,
       losses: resultSummary.losses,
       games: resultSummary.games,
@@ -731,11 +735,11 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
 
 function compactTeamHistoryModelContext(
   entries: TeamHistoryPoint[],
-  result: 'W' | 'L' | undefined,
+  result: 'W' | 'L' | 'T' | undefined,
 ): PublicTeamHistoryModelContext | undefined {
   const update = latestInformativeRatingUpdate(entries)
   const residual = finiteNumber(update?.neutralResultResidual)
-  const observed = result === 'W' ? 1 : result === 'L' ? 0 : undefined
+  const observed = result === 'W' ? 1 : result === 'L' ? 0 : result === 'T' ? 0.5 : undefined
   const expected = typeof observed === 'number' && typeof residual === 'number'
     ? clamp01(observed - residual)
     : undefined
@@ -1601,11 +1605,14 @@ type PlayerMatchGroup = {
   entries: PlayerHistoryEntry[]
 }
 
-function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['recentMatches'] {
+export function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['recentMatches'] {
   const recent = groupPlayerHistoryIntoMatches(player.history.filter((entry) => entry.result && entry.opponent))
     .filter(({ entries }) => {
+      const canonicalState = entries.at(-1)?.source?.seriesState
+      if (canonicalState !== undefined) return canonicalState === 'completed'
       return isResolvedTimelineResult(summarizeTimelineResults(entries, (entry) => entry.result))
     })
+    .filter(({ entries }) => Boolean(playerMatchResult(entries)))
     .slice(-2)
 
   if (recent.length === 0) return undefined
@@ -1613,7 +1620,8 @@ function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['rece
   return recent.map(({ entries }) => {
     const latest = entries.at(-1)!
     const resultSummary = summarizeTimelineResults(entries, (entry) => entry.result)
-    if (!resultSummary.result) throw new Error('Cannot compact unresolved player timeline match')
+    const result = playerMatchResult(entries)
+    if (!result) return undefined
     const bestOf = inferBestOfForScore(resultSummary.wins, resultSummary.losses, latest.bestOf ?? latest.source?.bestOf)
     return {
       date: latest.date,
@@ -1622,13 +1630,25 @@ function compactPlayerRecentMatches(player: PlayerStanding): CompactPlayer['rece
       opponentTeamCode: latest.opponentTeamCode,
       playerTeam: latest.playerTeam,
       playerTeamCode: latest.playerTeamCode,
-      result: resultSummary.result,
+      result,
       wins: resultSummary.wins,
       losses: resultSummary.losses,
       games: resultSummary.games,
       ...(typeof bestOf === 'number' ? { bestOf } : {}),
+      ...(latest.source?.seriesId ? { seriesId: latest.source.seriesId } : {}),
+      ...(latest.source?.formatBasis ? { formatBasis: latest.source.formatBasis } : {}),
     }
-  })
+  }).filter((match): match is NonNullable<typeof match> => Boolean(match))
+}
+
+function playerMatchResult(entries: PlayerHistoryEntry[]) {
+  const latest = entries.at(-1)
+  if (latest?.source?.seriesState === 'completed') {
+    if (latest.source.seriesOutcome === 0.5) return 'T' as const
+    if (latest.source.seriesOutcome === 1) return 'W' as const
+    if (latest.source.seriesOutcome === 0) return 'L' as const
+  }
+  return summarizeTimelineResults(entries, (entry) => entry.result).result
 }
 
 function groupPlayerHistoryIntoMatches(history: PlayerHistoryEntry[]): PlayerMatchGroup[] {
@@ -1636,6 +1656,7 @@ function groupPlayerHistoryIntoMatches(history: PlayerHistoryEntry[]): PlayerMat
 }
 
 function playerHistoryMatchKey(entry: PlayerHistoryEntry) {
+  if (entry.source?.seriesId) return timelineGroupKey(['canonical-series', entry.source.seriesId])
   return timelineGroupKey([
     'series',
     entry.date,

@@ -1,3 +1,5 @@
+import type { SeriesFormatBasis, SeriesFormatConfidence, SeriesState } from '../types'
+
 export type TimelineResult = 'W' | 'L'
 
 export type TimelineSourceTrace = {
@@ -10,6 +12,10 @@ export type TimelineSourceTrace = {
   fileName?: string
   url?: string
   bestOf?: number
+  seriesId?: string
+  formatBasis?: SeriesFormatBasis
+  formatConfidence?: SeriesFormatConfidence
+  seriesState?: SeriesState
 }
 
 export type TimelineGroup<T> = {
@@ -34,6 +40,10 @@ export type TimelineSourceSummary = {
   sourceFileName?: string
   sourceUrl?: string
   sourceGameIds?: string[]
+  seriesId?: string
+  formatBasis?: SeriesFormatBasis
+  formatConfidence?: SeriesFormatConfidence
+  seriesState?: SeriesState
 }
 
 export function timelineGroupKey(parts: Array<string | number | undefined | null>) {
@@ -135,6 +145,10 @@ export function timelineSourceSummary<T>(
     officialGameId: latestSource?.officialGameId,
     sourceFileName: latestSource?.fileName,
     sourceUrl: latestSource?.url,
+    seriesId: latestSource?.seriesId,
+    formatBasis: latestSource?.formatBasis,
+    formatConfidence: latestSource?.formatConfidence,
+    seriesState: latestSource?.seriesState,
     ...(sourceGameIds.length > 1 ? { sourceGameIds } : {}),
   }) ?? {}
 }

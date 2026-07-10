@@ -148,7 +148,7 @@ function chartPointDetailFromHistoryGroup(points: TeamHistoryPoint[]): ChartPoin
 
 function chartModelDetailFromHistoryPoint(
   model: TeamHistoryContext['model'],
-  result?: 'W' | 'L',
+  result?: 'W' | 'L' | 'T',
 ): ChartModelDetail | undefined {
   if (!model) return undefined
   const attribution = model.a
@@ -184,9 +184,10 @@ function chartComponentsFromHistoryPoint(components: TeamHistoryModelContext['c'
   return entries.length > 0 ? entries : undefined
 }
 
-function residualFromExpected(expected: number, result?: 'W' | 'L') {
+function residualFromExpected(expected: number, result?: 'W' | 'L' | 'T') {
   if (!Number.isFinite(expected) || !result) return undefined
-  return result === 'W' ? roundOptional(1 - expected, 3) : roundOptional(-expected, 3)
+  const observed = result === 'W' ? 1 : result === 'T' ? 0.5 : 0
+  return roundOptional(observed - expected, 3)
 }
 
 function aggregateChartModelDetails(details: ChartPointDetail[]): ChartModelDetail | undefined {

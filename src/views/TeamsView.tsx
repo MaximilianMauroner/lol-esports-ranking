@@ -1939,7 +1939,7 @@ function RecentMatches({
                 className={`recent-match-row${outcomeSignal ? ` is-${outcomeSignal.tone}` : ''}`}
                 key={`${match.date}-${match.event}-${match.opponent}-${index}`}
               >
-                <span className={`result-chip ${match.result === 'W' ? 'w' : 'l'}`}>{match.result}</span>
+                <span className={`result-chip ${match.result.toLowerCase()}`}>{match.result}</span>
                 <div className="recent-match-row__main">
                   <span className="recent-match-row__opponent">
                     <b>vs {match.opponent}</b>

@@ -13,6 +13,7 @@ import type {
   Region,
   Role,
   RosterBasis,
+  SourceTrace,
   TeamEligibility,
   TeamHistoryPoint,
 } from '../../types'
@@ -37,7 +38,7 @@ import type { WalkForwardMetrics } from '../predictionModel'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
-export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 20 as const
+export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 22 as const
 const PUBLIC_TEAM_RECENT_MATCH_LIMIT = 25
 
 export type ArtifactMeta = {
@@ -54,13 +55,16 @@ export type PublicRecentMatch = {
   date: string
   event: string
   opponent: string
-  result: 'W' | 'L'
+  result: 'W' | 'L' | 'T'
   rating: number
   delta: number
   wins?: number
   losses?: number
   games?: number
   bestOf?: number
+  seriesId?: string
+  formatBasis?: SourceTrace['formatBasis']
+  formatConfidence?: SourceTrace['formatConfidence']
 }
 
 export type PublicTournamentAppearance = {
@@ -272,11 +276,13 @@ export type CompactPlayer = {
     opponentTeamCode?: string
     playerTeam?: string
     playerTeamCode?: string
-    result: 'W' | 'L'
+    result: 'W' | 'L' | 'T'
     wins?: number
     losses?: number
     games?: number
     bestOf?: number
+    seriesId?: string
+    formatBasis?: SourceTrace['formatBasis']
     teamKills?: number
     opponentKills?: number
     sourceProvider?: string
@@ -353,6 +359,10 @@ export type PublicTeamHistoryPointContext = {
   losses?: number
   games?: number
   bestOf?: number
+  seriesId?: string
+  formatBasis?: SourceTrace['formatBasis']
+  formatConfidence?: SourceTrace['formatConfidence']
+  seriesState?: SourceTrace['seriesState']
   sourceProvider?: string
   sourceGameId?: string
   sourceMatchId?: string
@@ -783,10 +793,10 @@ function teamMatchRecord(history: TeamHistoryPoint[] = []) {
   const matches = groupTeamHistoryIntoMatches(history.filter((point) => Boolean(point.date) && Boolean(point.event) && Boolean(point.opponent)))
   const resolvedMatches = matches
     .map((match) => ({ match, result: teamMatchResult(match) }))
-    .filter((record): record is { match: TeamMatchGroup; result: 'W' | 'L' } => Boolean(record.result))
+    .filter((record): record is { match: TeamMatchGroup; result: 'W' | 'L' | 'T' } => Boolean(record.result))
   const recentMatches = resolvedMatches.slice(-PUBLIC_TEAM_RECENT_MATCH_LIMIT).map(({ match, result }) => teamRecentMatch(match, result))
   const wins = resolvedMatches.filter((match) => match.result === 'W').length
-  const losses = resolvedMatches.length - wins
+  const losses = resolvedMatches.filter((match) => match.result === 'L').length
 
   return {
     wins,
@@ -840,6 +850,7 @@ function groupTeamHistoryIntoMatches(history: TeamHistoryPoint[]): TeamMatchGrou
 }
 
 function teamHistoryMatchKey(point: TeamHistoryPoint) {
+  if (point.source?.seriesId) return ['canonical-series', point.source.seriesId].join('\u0000')
   return [
     'series',
     point.date,
@@ -847,7 +858,7 @@ function teamHistoryMatchKey(point: TeamHistoryPoint) {
   ].join('\u0000')
 }
 
-function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L'): PublicRecentMatch {
+function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T'): PublicRecentMatch {
   const latest = group.entries.at(-1)!
   const wins = group.entries.filter((entry) => entry.result === 'W').length
   const losses = group.entries.length - wins
@@ -864,10 +875,21 @@ function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L'): PublicRecent
     losses,
     games: group.entries.length,
     ...(typeof bestOf === 'number' ? { bestOf } : {}),
+    ...(latest.source.seriesId ? { seriesId: latest.source.seriesId } : {}),
+    ...(latest.source.formatBasis ? { formatBasis: latest.source.formatBasis } : {}),
+    ...(latest.source.formatConfidence ? { formatConfidence: latest.source.formatConfidence } : {}),
   }
 }
 
 function teamMatchResult(group: TeamMatchGroup) {
+  const latest = group.entries.at(-1)
+  if (latest?.source?.seriesState !== undefined) {
+    if (latest.source.seriesState !== 'completed') return undefined
+    if (latest.source.seriesOutcome === 0.5) return 'T'
+    if (latest.source.seriesOutcome === 1) return 'W'
+    if (latest.source.seriesOutcome === 0) return 'L'
+    return undefined
+  }
   const wins = group.entries.filter((entry) => entry.result === 'W').length
   const losses = group.entries.length - wins
   if (wins === losses) return undefined
@@ -1214,8 +1236,8 @@ function assertLeagueStrength(value: unknown, label: string): asserts value is L
   assertNumber(value.score, `${label} score`)
   assertNumber(value.adjustment, `${label} adjustment`)
   assertNumber(value.delta, `${label} delta`)
-  assertNonNegativeInteger(value.wins, `${label} wins`)
-  assertNonNegativeInteger(value.losses, `${label} losses`)
+  assertNonNegativeNumber(value.wins, `${label} wins`)
+  assertNonNegativeNumber(value.losses, `${label} losses`)
   assertOptionalNumber(value.expectedWins, `${label} expectedWins`)
   assertOptionalNumber(value.winsOverExpected, `${label} winsOverExpected`)
   assertOptionalNumber(value.opponentAdjustedWinRate, `${label} opponentAdjustedWinRate`)
@@ -1302,13 +1324,16 @@ function assertPublicRecentMatch(value: unknown, label: string): asserts value i
   assertDateString(value.date, `${label} date`)
   assertString(value.event, `${label} event`)
   assertString(value.opponent, `${label} opponent`)
-  assertEnum(value.result, ['W', 'L'], `${label} result`)
+  assertEnum(value.result, ['W', 'L', 'T'], `${label} result`)
   assertNumber(value.rating, `${label} rating`)
   assertNumber(value.delta, `${label} delta`)
   assertOptionalNonNegativeInteger(value.wins, `${label} wins`)
   assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
   assertOptionalNonNegativeInteger(value.games, `${label} games`)
   assertOptionalNonNegativeInteger(value.bestOf, `${label} bestOf`)
+  assertOptionalString(value.seriesId, `${label} seriesId`)
+  assertOptionalEnum(value.formatBasis, ['official', 'provider', 'score-inferred', 'fallback'], `${label} formatBasis`)
+  assertOptionalEnum(value.formatConfidence, ['high', 'medium', 'low'], `${label} formatConfidence`)
 }
 
 function assertPublicDeservedStanding(value: unknown, label: string): asserts value is PublicDeservedStandingComparison {
@@ -1524,6 +1549,10 @@ function assertTeamHistoryPointContext(value: Record<string, unknown>, label: st
   assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
   assertOptionalNonNegativeInteger(value.games, `${label} games`)
   assertOptionalNonNegativeInteger(value.bestOf, `${label} bestOf`)
+  assertOptionalString(value.seriesId, `${label} seriesId`)
+  assertOptionalEnum(value.formatBasis, ['official', 'provider', 'score-inferred', 'fallback'], `${label} formatBasis`)
+  assertOptionalEnum(value.formatConfidence, ['high', 'medium', 'low'], `${label} formatConfidence`)
+  assertOptionalEnum(value.seriesState, ['scheduled', 'ongoing', 'completed', 'unknown'], `${label} seriesState`)
   assertOptionalString(value.sourceProvider, `${label} sourceProvider`)
   assertOptionalString(value.sourceGameId, `${label} sourceGameId`)
   assertOptionalString(value.sourceMatchId, `${label} sourceMatchId`)
@@ -1843,6 +1872,12 @@ function assertNonNegativeInteger(value: unknown, label: string): asserts value 
   assertNumber(value, label)
   if (!Number.isInteger(value) || value < 0) {
     throw new Error(`Invalid public artifact: ${label} must be a non-negative integer`)
+  }
+}
+
+function assertNonNegativeNumber(value: unknown, label: string): asserts value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`Invalid public artifact: ${label} must be a non-negative number`)
   }
 }
 

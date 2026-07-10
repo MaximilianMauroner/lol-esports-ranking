@@ -19,7 +19,7 @@ export type ChartPointDetail = {
   adjustmentReason?: 'published-standing-reconciliation'
   event?: string
   opponent?: string
-  result?: 'W' | 'L'
+  result?: 'W' | 'L' | 'T'
   wins?: number
   losses?: number
   games?: number

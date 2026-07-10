@@ -124,10 +124,12 @@ export function FormDots({ form }: { form?: string[] }) {
   return (
     <span className="formdots" aria-label={`Recent form: ${recent.join(', ')}`}>
       {recent.map((result, index) => {
-        const win = result.toLowerCase() === 'w'
+        const normalized = result.toLowerCase()
+        const tone = normalized === 'w' ? 'w' : normalized === 't' ? 't' : 'l'
+        const label = tone.toUpperCase()
         return (
-          <i key={`${result}-${index}`} className={win ? 'w' : 'l'} aria-hidden="true">
-            {win ? 'W' : 'L'}
+          <i key={`${result}-${index}`} className={tone} aria-hidden="true">
+            {label}
           </i>
         )
       })}

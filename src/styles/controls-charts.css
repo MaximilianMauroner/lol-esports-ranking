@@ -376,6 +376,7 @@ table.ranking-table tbody tr.is-picked {
 
 .formdots i.w { background: var(--win-soft); color: var(--win); }
 .formdots i.l { background: var(--loss-soft); color: var(--loss); }
+.formdots i.t { background: var(--surface-3); color: var(--muted); }
 
 .form-trigger {
   display: inline-flex;
@@ -550,6 +551,11 @@ table.ranking-table tbody tr.is-picked {
 .result-chip.l {
   background: var(--loss-soft);
   color: var(--loss);
+}
+
+.result-chip.t {
+  background: var(--surface-3);
+  color: var(--muted);
 }
 
 .player-match__main {

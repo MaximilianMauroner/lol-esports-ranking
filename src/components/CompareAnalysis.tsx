@@ -35,7 +35,7 @@ type RegionTrendEvent = {
   opponent?: string
   event?: string
   tier?: string
-  result?: 'W' | 'L'
+  result?: 'W' | 'L' | 'T'
   wins?: number
   losses?: number
   games?: number

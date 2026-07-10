@@ -71,7 +71,7 @@ export const sampleMatches: MatchRecord[] = [
     teamAKills: 21,
     teamBKills: 14,
     tier: 'msi-bracket',
-    bestOf: 5,
+    bestOf: 1,
   }),
   seededMatch({
     id: 'fixture-seed-005',
@@ -86,7 +86,7 @@ export const sampleMatches: MatchRecord[] = [
     teamAKills: 13,
     teamBKills: 20,
     tier: 'msi-bracket',
-    bestOf: 5,
+    bestOf: 1,
   }),
 ]
 
