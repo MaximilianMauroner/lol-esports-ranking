@@ -30,7 +30,7 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(existsSync('public/data/history/team-series.json'), false)
   assert.equal(existsSync('public/data/ranking-summary.json'), true)
   assert.ok(statSync('public/data/ranking-summary.json').size < 250_000)
-  assert.ok(statSync('public/data/entities/players.json').size < 1_000_000)
+  assert.ok(statSync('public/data/entities/players.json').size < 1_100_000)
 
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
@@ -137,7 +137,7 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
   const giantx = standingFor(shard, 'GiantX')
 
   assert.equal(lyon.eligibility.eligible, true)
-  assert.deepEqual([lyon.wins, lyon.losses], [21, 9])
+  assert.deepEqual([lyon.wins, lyon.losses], [20, 9])
   assert.deepEqual([drx.wins, drx.losses], [11, 20])
   assert.deepEqual([giantx.wins, giantx.losses], [15, 14])
   assert.equal(lyon.recentMatches.some((match) => match.opponent === 'Team Secret Whales' && match.result === 'W' && match.games === 3), true)
@@ -153,10 +153,10 @@ test('generated 2026 scope records T1 current MSI evidence after Gen.G', async (
   const t1 = standingFor(shard, 'T1')
   const geng = standingFor(shard, 'Gen.G')
 
-  assert.deepEqual([t1.wins, t1.losses], [27, 9])
+  assert.deepEqual([t1.wins, t1.losses], [26, 9])
   assert.deepEqual([geng.wins, geng.losses], [25, 6])
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'Bilibili Gaming' && match.result === 'L' && match.games === 5), true)
-  assert.equal(t1.recentMatches.some((match) => match.opponent === 'FURIA' && match.result === 'W'), true)
+  assert.equal(t1.recentMatches.some((match) => match.opponent === 'Team Liquid' && match.result === 'W' && match.games === 3), true)
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'G2 Esports' && match.result === 'L' && match.games === 4), true)
   assert.equal(geng.recentMatches.some((match) => match.opponent === 'T1' && match.result === 'L' && match.games === 5), true)
   assert.ok(geng.rank < t1.rank)

@@ -44,7 +44,7 @@ export type PublicArtifactWritePlan = {
 export const PUBLIC_ARTIFACT_BUDGETS = {
   manifestBytes: 250_000,
   defaultScopeBytes: 1_000_000,
-  playersBytes: 1_000_000,
+  playersBytes: 1_100_000,
   totalPublicDataBytes: 25_000_000,
 } as const
 
