@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRi
 import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type {
   PublicRecentMatch,
+  PublicCurrentLineup,
   PublicTournamentMovementIndexEntry,
   PublicTournamentMovementShard,
   PublicTournamentMovementTeam,
@@ -92,6 +93,7 @@ export function TeamsView({
   regions,
   model,
   players,
+  currentLineups,
   playerLoadState,
   playerScopeLabel,
   search,
@@ -115,6 +117,7 @@ export function TeamsView({
   regions: RegionStrength[]
   model?: Pick<ModelInfo, 'version' | 'configHash'>
   players?: CompactPlayer[]
+  currentLineups?: Record<string, PublicCurrentLineup>
   playerLoadState: PlayerLoadState
   playerScopeLabel?: string
   search: string
@@ -180,11 +183,22 @@ export function TeamsView({
   const activeHistory = useMemo<Record<string, TeamHistorySeries> | undefined>(() => {
     if (!exactTournamentId) return history
     if (!activeTournament) return undefined
-    return Object.fromEntries(activeTournament.teams.map((team) => [team.teamId, {
-      team: team.team,
-      code: team.code,
-      points: team.points,
-    }]))
+    return Object.fromEntries(activeTournament.teams.map((team) => {
+      const endpoint = team.points.at(-1)
+      const lastMatch = team.points.toReversed().find((point) => (point[3]?.kind ?? 'match') === 'match') ?? endpoint
+      return [team.teamId, {
+        team: team.team,
+        code: team.code,
+        points: team.points,
+        currentStanding: {
+          asOf: activeTournament.boundaryDate,
+          rating: endpoint?.[1] ?? team.endRating,
+          rank: endpoint?.[2] ?? team.endRank,
+          lastMatchRating: lastMatch?.[1] ?? team.endRating,
+          adjustment: Number(((endpoint?.[1] ?? team.endRating) - (lastMatch?.[1] ?? team.endRating)).toFixed(1)),
+        },
+      }]
+    }))
   }, [activeTournament, exactTournamentId, history])
 
   const scopeFiltered = useMemo(() => {
@@ -271,6 +285,7 @@ export function TeamsView({
     () => (detailTeam ? playersForTeam(players, detailTeam) : []),
     [detailTeam, players],
   )
+  const detailLineup = detailTeam ? currentLineups?.[detailTeam.teamId] : undefined
 
   useEffect(() => {
     if (!activeSelectedTier || pendingTierScrollRef.current !== activeSelectedTier) return undefined
@@ -738,6 +753,7 @@ export function TeamsView({
           tournament={activeTournament}
           tournamentMovement={movementByTeamId.get(detailTeam.teamId)}
           players={detailPlayers}
+          currentLineup={detailLineup}
           playerLoadState={playerLoadState}
           playerScopeLabel={playerScopeLabel}
           seeded={Boolean(panelData?.seeded)}
@@ -1520,6 +1536,7 @@ function TeamDetailDrawer({
   tournament,
   tournamentMovement,
   players,
+  currentLineup,
   playerLoadState,
   playerScopeLabel,
   seeded,
@@ -1532,6 +1549,7 @@ function TeamDetailDrawer({
   tournament?: PublicTournamentMovementShard
   tournamentMovement?: PublicTournamentMovementTeam
   players: CompactPlayer[]
+  currentLineup?: PublicCurrentLineup
   playerLoadState: PlayerLoadState
   playerScopeLabel?: string
   seeded: boolean
@@ -1603,6 +1621,12 @@ function TeamDetailDrawer({
               </div>
             </div>
             <div className="team-detail-hero__facts">
+              {!tournament && series?.currentStanding ? (
+                <span title="Current published state is separate from match history and may include league-anchor, roster, and form components.">
+                  <small>Published state</small>
+                  <b>{formatDate(series.currentStanding.asOf)} · {formatRatingMovement(series.currentStanding.adjustment)} from last match</b>
+                </span>
+              ) : null}
               {tournament && tournamentMovement ? (
                 <>
                   <span>
@@ -1704,7 +1728,7 @@ function TeamDetailDrawer({
             {tournament ? (
               <p className="tournament-data-note">Component and uncertainty breakdowns are hidden here because the tournament shard publishes exact endpoint rank, score, eligibility, and match evidence only.</p>
             ) : <ComponentBreakdown team={team} />}
-            <PlayerRankingCard team={team} players={players} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} />
+            <PlayerRankingCard team={team} players={players} currentLineup={currentLineup} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} />
           </div>
 
           <div className="gpr-card trend-card">
@@ -2245,15 +2269,19 @@ function TrendSummaryCell({
 function PlayerRankingCard({
   team,
   players,
+  currentLineup,
   loadState,
   playerScopeLabel = 'the current scope',
 }: {
   team: RankingSummaryStanding
   players: CompactPlayer[]
+  currentLineup?: PublicCurrentLineup
   loadState: PlayerLoadState
   playerScopeLabel?: string
 }) {
   const [ratingMin, ratingMax] = useMemo(() => extent(players.map((player) => player.rating)), [players])
+  const starterIds = new Set(currentLineup?.starters.map((player) => player.playerId) ?? [])
+  const substituteIds = new Set(currentLineup?.substitutes.map((player) => player.playerId) ?? [])
 
   if (players.length === 0) {
     if (loadState.status === 'idle' || loadState.status === 'loading') {
@@ -2315,7 +2343,12 @@ function PlayerRankingCard({
       <div className="player-rank-card__head">
         <div>
           <h3>Player Rankings</h3>
-          <p>Individual rows for {team.code ?? team.team} in {playerScopeLabel}.</p>
+          <p>
+            {currentLineup
+              ? `Current sourced lineup observed ${formatDate(currentLineup.observedAt)}; older affiliations are labeled historical.`
+              : `Career player rows for ${team.code ?? team.team} in ${playerScopeLabel}; no complete current-lineup projection is available.`}
+          </p>
+          {currentLineup?.missingRoles.length ? <small>Missing roles: {currentLineup.missingRoles.join(', ')}</small> : null}
         </div>
         <CountBadge>{players.length} players</CountBadge>
       </div>
@@ -2338,7 +2371,13 @@ function PlayerRankingCard({
                 <TableCell>
                   <div className="ent">
                     <b>{player.name}</b>
-                    <small>impact ×{formatDecimal(player.impactMultiplier)}</small>
+                    <small>
+                      {starterIds.has(player.playerId ?? player.id)
+                        ? 'Current starter'
+                        : substituteIds.has(player.playerId ?? player.id)
+                          ? 'Current substitute'
+                          : 'Historical affiliation'} · impact ×{formatDecimal(player.impactMultiplier)}
+                    </small>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -2573,15 +2612,14 @@ function compareTeamScore(a: RankingSummaryStanding, b: RankingSummaryStanding) 
 
 function playersForTeam(players: CompactPlayer[] | undefined, team: RankingSummaryStanding) {
   const teamName = team.team.toLowerCase()
-  const teamCode = team.code?.toLowerCase()
   const teamRegion = team.region
 
   return [...(players ?? [])]
     .filter((player) => {
       if (player.region && teamRegion && player.region !== teamRegion) return false
+      if (player.teamId) return player.teamId === team.teamId
       const playerTeam = player.team.toLowerCase()
-      const playerCode = player.teamCode?.toLowerCase()
-      return playerTeam === teamName || (Boolean(teamCode) && playerCode === teamCode)
+      return playerTeam === teamName
     })
     .sort((a, b) => a.rank - b.rank || (ROLE_ORDER.get(a.role) ?? 99) - (ROLE_ORDER.get(b.role) ?? 99) || a.name.localeCompare(b.name))
 }

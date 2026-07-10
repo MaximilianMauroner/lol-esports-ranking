@@ -91,9 +91,7 @@ function TeamHistoryTooltip({
 function TooltipMatchList({ detail }: { detail?: ChartPointDetail }) {
   const matches = detail?.dayMatches
   if (!matches || matches.length <= 1) return null
-  const listedMatches = detail.kind === 'standing-adjustment' && detail.dayMatchCount === 1
-    ? matches.slice(0, -1)
-    : matches
+  const listedMatches = matches
   if (listedMatches.length === 0) return null
   const visibleMatches = listedMatches.slice(-4)
   const hiddenCount = listedMatches.length - visibleMatches.length
@@ -161,7 +159,7 @@ function dailyCloseNote(detail?: ChartPointDetail) {
 }
 
 function matchLedgerDelta(detail?: ChartPointDetail) {
-  const matches = (detail?.dayMatches ?? (detail && detail.kind !== 'standing-adjustment' ? [detail] : []))
+  const matches = (detail?.dayMatches ?? (detail ? [detail] : []))
     .filter(isMatchChartPointDetail)
   if (matches.length === 0) return undefined
 

@@ -233,6 +233,7 @@ test('team history shard parser validates point tuples and compact model context
           team: 'Example',
           region: 'LCK',
           points: [['2026-01-01', 1500] as unknown as PublicTeamHistoryShard['series'][string]['points'][number]],
+          currentStanding: currentStanding(),
         },
       },
       pointCount: 1,
@@ -254,6 +255,7 @@ test('team history shard parser validates point tuples and compact model context
               { model: { c: [1500, 10, 5, 0] as unknown as PublicTeamHistoryComponentSnapshot } },
             ],
           ],
+          currentStanding: currentStanding(),
         },
       },
       pointCount: 1,
@@ -285,8 +287,12 @@ test('region history parser validates scoped series and tuple context', () => {
         '2026__All__All': {
           filter: { season: 'All', event: 'All', region: 'All' },
           regionCount: 1,
-          pointCount: 1,
-          series: {
+          pointCount: 2,
+          metricDefinitions: regionMetricDefinitions(),
+          leagueStrengthSeries: {
+            LCK: { region: 'LCK', points: [['2026-01-01', 1500, 1]] },
+          },
+          regionPowerSeries: {
             LCK: { region: 'LCK', points: [['2026-01-01', 1500, 1]] },
           },
         },
@@ -301,12 +307,16 @@ test('region history parser validates scoped series and tuple context', () => {
         All__All__All: {
           filter: { season: 'All', event: 'All', region: 'All' },
           regionCount: 1,
-          pointCount: 1,
-          series: {
+          pointCount: 2,
+          metricDefinitions: regionMetricDefinitions(),
+          leagueStrengthSeries: {
             LCK: {
               region: 'LCK',
-              points: [['2026-01-01', 1500, 1, { source: 'manual' }] as unknown as PublicRegionHistoryDirectory['scopes'][string]['series'][string]['points'][number]],
+              points: [['2026-01-01', 1500, 1, { source: 'manual' }] as unknown as PublicRegionHistoryDirectory['scopes'][string]['leagueStrengthSeries'][string]['points'][number]],
             },
+          },
+          regionPowerSeries: {
+            LCK: { region: 'LCK', points: [['2026-01-01', 1500, 1]] },
           },
         },
       },
@@ -330,11 +340,12 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     coverage: { matchCount: 0, sourceProviders: [], seededSample: false },
     dataQuality: {
       matchCount: 0,
+      pipelineCounts: { importedMatchCount: 0, publishedMatchCount: 0, filteredMatchCount: 0 },
       sourceProviderCounts: {},
       dataCompletenessCounts: {},
       missing: { sourceProviderCount: 0, sourceGameIdCount: 0, patchCount: 0, sideCount: 0 },
       rosterCoverage: { rosterSides: 0, completeRosterSides: 0, partialRosterSides: 0, missingRosterSides: 0, playerStatRows: 0 },
-      identityCoverage: { teamProfileCount: 0, mappedTeamProfileCount: 0, unknownLeagueTeamCount: 0, internationalRegionTeamCount: 0, unresolvedLeagueSummaries: [] },
+      identityCoverage: { teamProfileCount: 0, mappedTeamProfileCount: 0, unknownLeagueTeamCount: 0, internationalRegionTeamCount: 0, unresolvedLeagueSummaries: [], duplicateTeamCodes: [], unresolvedLineages: [] },
       notes: [],
     },
     playerData: {
@@ -550,6 +561,7 @@ function teamHistoryShard(overrides: Partial<PublicTeamHistoryShard> = {}): Publ
             },
           ],
         ],
+        currentStanding: currentStanding(),
       },
     },
     ...overrides,
@@ -570,8 +582,9 @@ function regionHistory(overrides: Partial<PublicRegionHistoryDirectory> = {}): P
       All__All__All: {
         filter: { season: 'All', event: 'All', region: 'All' },
         regionCount: 1,
-        pointCount: 1,
-        series: {
+        pointCount: 2,
+        metricDefinitions: regionMetricDefinitions(),
+        leagueStrengthSeries: {
           LCK: {
             region: 'LCK',
             points: [
@@ -594,9 +607,32 @@ function regionHistory(overrides: Partial<PublicRegionHistoryDirectory> = {}): P
             ],
           },
         },
+        regionPowerSeries: {
+          LCK: {
+            region: 'LCK',
+            points: [['2026-01-01', 1500, 1, { event: 'Power checkpoint', source: 'region-power-history', contributingTeams: ['Example'] }]],
+          },
+        },
       },
     },
     ...overrides,
+  }
+}
+
+function currentStanding() {
+  return {
+    asOf: '2026-01-02T00:00:00.000Z',
+    rating: 1500,
+    rank: 1,
+    lastMatchRating: 1500,
+    adjustment: 0,
+  }
+}
+
+function regionMetricDefinitions() {
+  return {
+    leagueStrength: 'League strength fixture.',
+    regionPower: 'Region power fixture.',
   }
 }
 

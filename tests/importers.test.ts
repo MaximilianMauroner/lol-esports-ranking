@@ -642,6 +642,7 @@ test('team identity cleanup maps exact source display aliases only', () => {
   assert.equal(canonicalTeamNameFor('9Gaming Esports'), '9Gaming')
   assert.equal(canonicalTeamNameFor('AG.AL'), "Anyone's Legend")
   assert.equal(canonicalTeamNameFor('OKSavingsBank BRION'), 'HANJIN BRION')
+  assert.equal(canonicalTeamNameFor('BRION'), 'HANJIN BRION')
   assert.equal(canonicalTeamNameFor('DN Freecs'), 'DN SOOPers')
   assert.equal(canonicalTeamNameFor('DRX'), 'Kiwoom DRX')
   assert.equal(canonicalTeamNameFor('Dplus Kia'), 'Dplus KIA')
@@ -650,6 +651,27 @@ test('team identity cleanup maps exact source display aliases only', () => {
   assert.equal(canonicalTeamNameFor('Dplus KIA Youth'), 'Dplus Kia Youth')
   assert.equal(canonicalTeamNameFor('LYON Academy'), 'LYON Academy')
   assert.equal(canonicalTeamNameFor('The Secret Club'), 'The Secret Club')
+})
+
+test('community merge removes duplicate Oracle games across canonical tournament event labels', () => {
+  const first = matchFixture({
+    id: 'oe-msi-short-label',
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: 'oe-msi-short-label-id',
+    event: 'MSI 2026',
+    league: 'MSI',
+    region: 'International',
+  })
+  const duplicate = matchFixture({
+    ...first,
+    id: 'oe-msi-long-label',
+    sourceGameId: 'oe-msi-long-label-id',
+    event: '2026 Mid-Season Invitational',
+  })
+
+  const merged = mergeCommunityMatchSources({ oracleMatches: [first, duplicate], leaguepediaMatches: [] })
+
+  assert.deepEqual(merged.map((match) => match.id), ['oe-msi-short-label'])
 })
 
 test('team code cleanup uses known source abbreviations for major teams', () => {

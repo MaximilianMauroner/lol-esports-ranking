@@ -15,6 +15,7 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
   'GAM Esports': { name: 'GAM Esports', code: 'GAM', region: 'LCP', league: 'LCP' },
   'Gen.G': { name: 'Gen.G', code: 'GEN', region: 'LCK', league: 'LCK' },
   'Hanwha Life Esports': { name: 'Hanwha Life Esports', code: 'HLE', region: 'LCK', league: 'LCK' },
+  'HANJIN BRION': { name: 'HANJIN BRION', code: 'BRO', region: 'LCK', league: 'LCK' },
   'JD Gaming': { name: 'JD Gaming', code: 'JDG', region: 'LPL', league: 'LPL' },
   'Kiwoom DRX': { name: 'Kiwoom DRX', code: 'KRX', region: 'LCK', league: 'LCK' },
   'KT Rolster': { name: 'KT Rolster', code: 'KT', region: 'LCK', league: 'LCK' },
@@ -32,6 +33,7 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
 const exactTeamAliases: Record<string, string> = {
   '9Gaming Esports': '9Gaming',
   'AG.AL': "Anyone's Legend",
+  BRION: 'HANJIN BRION',
   'DN Freecs': 'DN SOOPers',
   DRX: 'Kiwoom DRX',
   'Dplus Kia': 'Dplus KIA',

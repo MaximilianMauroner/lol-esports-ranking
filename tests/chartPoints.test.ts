@@ -32,17 +32,6 @@ test('chart influence formatter describes aggregated day-close points', () => {
   )
 })
 
-test('chart influence formatter describes standing adjustments separately from matches', () => {
-  assert.equal(
-    formatChartInfluence({
-      kind: 'standing-adjustment',
-      event: 'Published standing adjustment',
-      delta: -4,
-    }),
-    'Published standing adjustment · -4',
-  )
-})
-
 test('chart helpers reconcile visible movement against model attribution', () => {
   assert.equal(formatProbability(0.764), '76%')
   assert.equal(

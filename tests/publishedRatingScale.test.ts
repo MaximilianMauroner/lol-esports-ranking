@@ -113,7 +113,7 @@ test('published region strength averages published top-three representative scor
   assert.equal(published.deservedStanding?.scoreDeltaFromPower, (published.deservedStanding?.score ?? 0) - published.score)
 })
 
-test('published team history final point reconciles to the published standing', () => {
+test('published team history exposes current standing separately from the final match point', () => {
   const data = rankingDataFixture()
   const { snapshots } = createStaticRankingSummaryData(data)
   const history = createTeamHistoryArtifacts(data)
@@ -123,12 +123,16 @@ test('published team history final point reconciles to the published standing', 
   assert.ok(standing)
   const series = history.shards[data.defaultSnapshotKey].series[standing.teamId]
   const finalPoint = series?.points.at(-1)
+  const currentStanding = series?.currentStanding
 
   assert.deepEqual(history.index.ratingScale, publishedRatingScale)
   assert.deepEqual(history.shards[data.defaultSnapshotKey].ratingScale, publishedRatingScale)
   assert.ok(finalPoint)
-  assert.equal(finalPoint[1], standing.rating)
-  assert.equal(finalPoint[2], standing.rank)
+  assert.ok(currentStanding)
+  assert.equal(currentStanding.rating, standing.rating)
+  assert.equal(currentStanding.rank, standing.rank)
+  assert.equal(currentStanding.lastMatchRating, finalPoint[1])
+  assert.equal(currentStanding.adjustment, standing.rating - finalPoint[1])
 })
 
 test('public matchup estimates invert ladder ratings before probability math', () => {

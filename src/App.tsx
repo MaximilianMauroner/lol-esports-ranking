@@ -372,6 +372,7 @@ function App() {
                   regions={regions}
                   model={loadedData.model}
                   players={activePlayers}
+                  currentLineups={activePlayerScope.currentLineups}
                   playerLoadState={playerLoadState}
                   playerScopeLabel={activePlayerScope.label}
                   search={teamSearch}

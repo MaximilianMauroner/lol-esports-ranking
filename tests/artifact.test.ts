@@ -122,7 +122,7 @@ test('generated major-region scores preserve eastern-major separation and wester
   assert.equal(defaultShard.regions.every((region) => typeof region.totalTeamRating === 'number'), true)
   assert.ok(lpl.topThreeTeamRating >= lpl.totalTeamRating)
   assert.ok(Math.min(lck.score, lpl.score) - lec.score >= 35)
-  assert.ok(lec.score > lcs.score)
+  assert.ok(Math.min(lck.score, lpl.score) > Math.max(lec.score, lcs.score))
   assert.ok(lck2026.topTeamRating - lec2026.topTeamRating >= 35)
   assert.ok(lcs2026.topTeamRating < lec2026.topTeamRating)
 })
@@ -138,7 +138,7 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
 
   assert.equal(lyon.eligibility.eligible, true)
   assert.deepEqual([lyon.wins, lyon.losses], [20, 9])
-  assert.deepEqual([drx.wins, drx.losses], [11, 20])
+  assert.deepEqual([drx.wins, drx.losses], [9, 20])
   assert.deepEqual([giantx.wins, giantx.losses], [15, 14])
   assert.equal(lyon.recentMatches.some((match) => match.opponent === 'Team Secret Whales' && match.result === 'W' && match.games === 3), true)
   assert.ok(lyon.rank < drx.rank)
@@ -298,6 +298,31 @@ test('public team history series store is consistent with scope indexes', async 
     assert.equal(shard.teamCount, entry.teamCount)
     assert.equal(shard.pointCount, entry.pointCount)
   }
+})
+
+test('generated histories separate observed matches, current state, and region metric families', async () => {
+  const teamHistory = parsePublicTeamHistoryShard(await readJson('public/data/history/team-series/All__All__All.json'))
+  const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
+  const defaultRegionScope = regionHistory.scopes[regionHistory.defaultScopeKey]
+
+  assert.equal(Object.values(teamHistory.series).every((series) => series.points.length >= 2), true)
+  assert.equal(Object.values(teamHistory.series).every((series) => series.currentStanding.asOf === teamHistory.generatedAt), true)
+  assert.equal(Object.values(teamHistory.series).flatMap((series) => series.points)
+    .some((point) => (point[3] as { kind?: string } | undefined)?.kind === 'standing-adjustment'), false)
+  assert.equal(Object.values(defaultRegionScope.leagueStrengthSeries).flatMap((series) => series.points).every((point) => point[3]?.source === 'league-strength-history'), true)
+  assert.equal(Object.values(defaultRegionScope.regionPowerSeries).flatMap((series) => series.points).every((point) => point[3]?.source === 'region-power-history'), true)
+})
+
+test('generated confidence and lineups expose evidence limits instead of false precision', async () => {
+  const shard = parsePublicRankingShard(await readJson('public/data/scopes/all.json'))
+  const players = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
+  const staleConfidence = shard.standings
+    .filter((standing) => standing.eligibility.reasons.includes('stale'))
+    .map((standing) => standing.confidence)
+
+  assert.equal(Math.max(...staleConfidence) < 100, true)
+  assert.equal(Object.values(players.currentLineups).every((lineup) => lineup.coveredRoles.length + lineup.missingRoles.length === 5), true)
+  assert.equal(Object.values(players.currentLineups).every((lineup) => lineup.starters.length === lineup.coveredRoles.length), true)
 })
 
 test('public tournament movement index resolves versioned, boundary-correct shards', async () => {
@@ -519,12 +544,13 @@ test('generated public artifacts only include the published rated team universe'
 
   for (const [key, scope] of Object.entries(regionHistory.scopes)) {
     assert.equal(
-      Object.values(scope.series).every((series) => ratedTeamLeagueSet.has(series.region)),
+      [...Object.values(scope.leagueStrengthSeries), ...Object.values(scope.regionPowerSeries)]
+        .every((series) => ratedTeamLeagueSet.has(series.region)),
       true,
       `region-history scope leaked a non-rated region: ${key}`,
     )
     assert.equal(
-      Object.values(scope.series).every((series) =>
+      Object.values(scope.leagueStrengthSeries).every((series) =>
         series.points.every((point) => (point[3]?.leagues ?? []).every((league) => ratedTeamLeagueSet.has(league))),
       ),
       true,

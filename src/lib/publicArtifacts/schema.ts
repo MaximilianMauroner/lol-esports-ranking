@@ -252,6 +252,27 @@ export type PlayerDirectoryDiagnostics = {
   scopedSameTeamTopFiveClustering?: Record<string, SameTeamTopFiveClusteringDiagnostic>
 }
 
+export type PublicCurrentLineupPlayer = {
+  playerId: string
+  name: string
+  role: Role
+  rating?: number
+  latestObservedAt?: string
+}
+
+export type PublicCurrentLineup = {
+  team: string
+  teamId: string
+  teamCode?: string
+  observedAt: string
+  sourceProvider: string
+  completeness: 'complete-five-role' | 'partial'
+  coveredRoles: Role[]
+  missingRoles: Role[]
+  starters: PublicCurrentLineupPlayer[]
+  substitutes: PublicCurrentLineupPlayer[]
+}
+
 export type CompactPlayer = {
   id: string
   playerId?: string
@@ -268,7 +289,7 @@ export type CompactPlayer = {
   rating: number
   games: number
   delta: number
-  form: string[]
+  form?: string[]
   recentMatches?: {
     date: string
     event: string
@@ -294,9 +315,9 @@ export type CompactPlayer = {
     sourceUrl?: string
   }[]
   impactMultiplier: number
-  availability: number
-  roleCertainty: number
-  impactDrivers: PlayerStanding['impactDrivers']
+  availability?: number
+  roleCertainty?: number
+  impactDrivers?: PlayerStanding['impactDrivers']
   diagnostics?: Partial<PlayerDiagnostics> & Pick<PlayerDiagnostics, 'sourceProvider' | 'scope' | 'sampleGames'>
   individualResidual?: Partial<PlayerIndividualResidual> & Pick<PlayerIndividualResidual, 'sourceProvider' | 'metricVersion' | 'scope' | 'score' | 'confidence' | 'sampleGames'>
   ratingBasis?: PlayerStanding['ratingBasis']
@@ -325,6 +346,7 @@ export type PublicPlayerDirectory = {
   roles: Role[]
   players: CompactPlayer[]
   scopedPlayers?: Record<string, CompactPlayer[]>
+  currentLineups: Record<string, PublicCurrentLineup>
 }
 
 export type PublicTeamEntity = {
@@ -335,6 +357,11 @@ export type PublicTeamEntity = {
   league: string
   leagueId: string
   providerAliases?: ProviderAliasMap
+  lineage?: {
+    status: 'unresolved'
+    relatedTeamNames: string[]
+    note: string
+  }
 }
 
 export type PublicTeamDirectory = {
@@ -349,13 +376,12 @@ export type PublicTeamDirectory = {
 }
 
 export type PublicTeamHistoryPointContext = {
-  kind?: 'match' | 'standing-adjustment' | 'tournament-start' | 'tournament-end' | 'tournament-today' | 'tournament-latest-data'
-  adjustmentReason?: 'published-standing-reconciliation'
+  kind?: 'match' | 'tournament-start' | 'tournament-end' | 'tournament-today' | 'tournament-latest-data'
   event?: string
   opponent?: string
   delta?: number
   tier?: string
-  result?: 'W' | 'L'
+  result?: 'W' | 'L' | 'T'
   wins?: number
   losses?: number
   games?: number
@@ -396,11 +422,21 @@ export type PublicTeamHistoryComponentSnapshot = [number, number, number, number
 
 export type PublicTeamHistoryPoint = [string, number, number, PublicTeamHistoryPointContext?]
 
+export type PublicTeamCurrentStanding = {
+  asOf: string
+  rating: number
+  rank: number
+  lastMatchRating: number
+  adjustment: number
+  model?: PublicTeamHistoryModelContext
+}
+
 export type PublicTeamHistorySeries = {
   team: string
   code?: string
   region?: Region
   points: PublicTeamHistoryPoint[]
+  currentStanding: PublicTeamCurrentStanding
 }
 
 export type PublicTeamHistoryDirectory = {
@@ -530,7 +566,8 @@ export type PublicRegionHistoryPointContext = {
   losses?: number
   winsOverExpected?: number
   opponentAdjustedWinRate?: number
-  source?: 'league-strength-history' | 'published-region-score'
+  source?: 'league-strength-history' | 'region-power-history'
+  contributingTeams?: string[]
 }
 
 export type PublicRegionHistoryPoint = [string, number, number, PublicRegionHistoryPointContext?]
@@ -544,7 +581,12 @@ export type PublicRegionHistoryScope = {
   filter: SnapshotFilter
   regionCount: number
   pointCount: number
-  series: Record<string, PublicRegionHistorySeries>
+  leagueStrengthSeries: Record<string, PublicRegionHistorySeries>
+  regionPowerSeries: Record<string, PublicRegionHistorySeries>
+  metricDefinitions: {
+    leagueStrength: string
+    regionPower: string
+  }
 }
 
 export type PublicRegionHistoryDirectory = {
@@ -1007,6 +1049,10 @@ export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirector
   if ('diagnostics' in value) assertObject(value.diagnostics, 'player directory diagnostics')
   assertArray(value.players, 'player directory players')
   if ('scopedPlayers' in value) assertObject(value.scopedPlayers, 'player directory scopedPlayers')
+  assertObject(value.currentLineups, 'player directory currentLineups')
+  for (const [teamId, lineup] of Object.entries(value.currentLineups)) {
+    assertCurrentLineup(lineup, `player directory currentLineups ${teamId}`)
+  }
   return value as PublicPlayerDirectory
 }
 
@@ -1369,6 +1415,16 @@ function assertDataSourceInfo(value: unknown, label: string): asserts value is D
     assertArray(value.warnings, `${label} warnings`)
     value.warnings.forEach((warning, index) => assertDataSourceWarning(warning, `${label} warnings[${index}]`))
   }
+  if (value.refreshReceipt !== undefined) {
+    assertObject(value.refreshReceipt, `${label} refreshReceipt`)
+    assertOptionalString(value.refreshReceipt.requestedStart, `${label} refreshReceipt requestedStart`)
+    assertOptionalString(value.refreshReceipt.requestedEnd, `${label} refreshReceipt requestedEnd`)
+    assertOptionalString(value.refreshReceipt.attemptedAt, `${label} refreshReceipt attemptedAt`)
+    assertString(value.refreshReceipt.status, `${label} refreshReceipt status`)
+    assertNonNegativeInteger(value.refreshReceipt.downloadedCount, `${label} refreshReceipt downloadedCount`)
+    assertNonNegativeInteger(value.refreshReceipt.reusedCount, `${label} refreshReceipt reusedCount`)
+    assertNonNegativeInteger(value.refreshReceipt.failedCount, `${label} refreshReceipt failedCount`)
+  }
 }
 
 function assertDataSourceWarning(value: unknown, label: string) {
@@ -1461,6 +1517,12 @@ function assertTeamEntity(value: unknown, label: string): asserts value is Publi
       assertStringArray(aliases, `${label} providerAliases ${provider}`)
     }
   }
+  if (value.lineage !== undefined) {
+    assertObject(value.lineage, `${label} lineage`)
+    assertEqual(value.lineage.status, 'unresolved', `${label} lineage status`)
+    assertStringArray(value.lineage.relatedTeamNames, `${label} lineage relatedTeamNames`)
+    assertString(value.lineage.note, `${label} lineage note`)
+  }
 }
 
 function assertRegionHistoryScope(key: string, value: unknown): asserts value is PublicRegionHistoryScope {
@@ -1471,12 +1533,16 @@ function assertRegionHistoryScope(key: string, value: unknown): asserts value is
   }
   assertNonNegativeInteger(value.regionCount, `region history scopes ${key} regionCount`)
   assertNonNegativeInteger(value.pointCount, `region history scopes ${key} pointCount`)
-  const seriesCounts = assertRegionHistorySeriesRecord(value.series, `region history scopes ${key} series`)
-  if (seriesCounts.seriesCount !== value.regionCount) {
-    throw new Error(`Invalid public artifact: region history scopes ${key} regionCount must match series count`)
+  assertObject(value.metricDefinitions, `region history scopes ${key} metricDefinitions`)
+  assertString(value.metricDefinitions.leagueStrength, `region history scopes ${key} metricDefinitions leagueStrength`)
+  assertString(value.metricDefinitions.regionPower, `region history scopes ${key} metricDefinitions regionPower`)
+  const leagueStrengthCounts = assertRegionHistorySeriesRecord(value.leagueStrengthSeries, `region history scopes ${key} leagueStrengthSeries`)
+  const regionPowerCounts = assertRegionHistorySeriesRecord(value.regionPowerSeries, `region history scopes ${key} regionPowerSeries`)
+  if (regionPowerCounts.seriesCount !== value.regionCount) {
+    throw new Error(`Invalid public artifact: region history scopes ${key} regionCount must match region power series count`)
   }
-  if (seriesCounts.pointCount !== value.pointCount) {
-    throw new Error(`Invalid public artifact: region history scopes ${key} pointCount must match series points`)
+  if (leagueStrengthCounts.pointCount + regionPowerCounts.pointCount !== value.pointCount) {
+    throw new Error(`Invalid public artifact: region history scopes ${key} pointCount must match both metric series points`)
   }
 }
 
@@ -1498,6 +1564,15 @@ function assertTeamHistorySeries(value: unknown, label: string): asserts value i
   assertArray(value.points, `${label} points`)
   for (const [index, point] of value.points.entries()) {
     assertHistoryPoint(point, `${label} points[${index}]`, assertTeamHistoryPointContext)
+  }
+  assertObject(value.currentStanding, `${label} currentStanding`)
+  assertString(value.currentStanding.asOf, `${label} currentStanding asOf`)
+  assertNumber(value.currentStanding.rating, `${label} currentStanding rating`)
+  assertNonNegativeInteger(value.currentStanding.rank, `${label} currentStanding rank`)
+  assertNumber(value.currentStanding.lastMatchRating, `${label} currentStanding lastMatchRating`)
+  assertNumber(value.currentStanding.adjustment, `${label} currentStanding adjustment`)
+  if (value.currentStanding.model !== undefined) {
+    assertTeamHistoryModelContext(value.currentStanding.model, `${label} currentStanding model`)
   }
 }
 
@@ -1539,13 +1614,12 @@ function assertHistoryPoint(
 }
 
 function assertTeamHistoryPointContext(value: Record<string, unknown>, label: string) {
-  assertOptionalEnum(value.kind, ['match', 'standing-adjustment', 'tournament-start', 'tournament-end', 'tournament-today', 'tournament-latest-data'], `${label} kind`)
-  assertOptionalEnum(value.adjustmentReason, ['published-standing-reconciliation'], `${label} adjustmentReason`)
+  assertOptionalEnum(value.kind, ['match', 'tournament-start', 'tournament-end', 'tournament-today', 'tournament-latest-data'], `${label} kind`)
   assertOptionalString(value.event, `${label} event`)
   assertOptionalString(value.opponent, `${label} opponent`)
   assertOptionalNumber(value.delta, `${label} delta`)
   assertOptionalString(value.tier, `${label} tier`)
-  assertOptionalEnum(value.result, ['W', 'L'], `${label} result`)
+  assertOptionalEnum(value.result, ['W', 'L', 'T'], `${label} result`)
   assertOptionalNonNegativeInteger(value.wins, `${label} wins`)
   assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
   assertOptionalNonNegativeInteger(value.games, `${label} games`)
@@ -1604,7 +1678,30 @@ function assertRegionHistoryPointContext(value: Record<string, unknown>, label: 
   assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
   assertOptionalNumber(value.winsOverExpected, `${label} winsOverExpected`)
   assertOptionalNumber(value.opponentAdjustedWinRate, `${label} opponentAdjustedWinRate`)
-  assertOptionalEnum(value.source, ['league-strength-history', 'published-region-score'], `${label} source`)
+  assertOptionalEnum(value.source, ['league-strength-history', 'region-power-history'], `${label} source`)
+  if (value.contributingTeams !== undefined) assertStringArray(value.contributingTeams, `${label} contributingTeams`)
+}
+
+function assertCurrentLineup(value: unknown, label: string) {
+  assertObject(value, label)
+  assertString(value.team, `${label} team`)
+  assertString(value.teamId, `${label} teamId`)
+  assertOptionalString(value.teamCode, `${label} teamCode`)
+  assertString(value.observedAt, `${label} observedAt`)
+  assertString(value.sourceProvider, `${label} sourceProvider`)
+  assertEnum(value.completeness, ['complete-five-role', 'partial'], `${label} completeness`)
+  assertStringArray(value.coveredRoles, `${label} coveredRoles`)
+  assertStringArray(value.missingRoles, `${label} missingRoles`)
+  assertArray(value.starters, `${label} starters`)
+  assertArray(value.substitutes, `${label} substitutes`)
+  for (const [index, player] of [...value.starters, ...value.substitutes].entries()) {
+    assertObject(player, `${label} players[${index}]`)
+    assertString(player.playerId, `${label} players[${index}] playerId`)
+    assertString(player.name, `${label} players[${index}] name`)
+    assertString(player.role, `${label} players[${index}] role`)
+    assertOptionalNumber(player.rating, `${label} players[${index}] rating`)
+    assertOptionalString(player.latestObservedAt, `${label} players[${index}] latestObservedAt`)
+  }
 }
 
 function assertSnapshotFilter(value: unknown, label: string): asserts value is SnapshotFilter {

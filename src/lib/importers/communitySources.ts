@@ -1,6 +1,7 @@
 import type { MatchRecord } from '../../types'
 import { eventTierRank } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor } from '../../data/teamIdentity'
+import { tournamentFamilyForEvent } from '../internationalTournaments'
 import type { LolEsportsReferenceEvent } from './lolEsports'
 
 export function mergeCommunityMatchSources({
@@ -16,9 +17,13 @@ export function mergeCommunityMatchSources({
   const seen = new Map<string, MatchRecord>()
   const oracleOutcomeMatches = new Map<string, MatchRecord[]>()
   const oracleStatOutcomeMatches = new Map<string, MatchRecord[]>()
+  const seenOracleGames = new Set<string>()
 
   for (const match of oracleMatches) {
     const retainedMatch = { ...match }
+    const duplicateKeys = oracleGameDuplicateKeys(retainedMatch)
+    if (duplicateKeys.some((key) => seenOracleGames.has(key))) continue
+    duplicateKeys.forEach((key) => seenOracleGames.add(key))
     merged.push(retainedMatch)
     for (const key of matchKeys(retainedMatch)) seen.set(key, retainedMatch)
     appendMatch(oracleOutcomeMatches, matchOutcomeKey(retainedMatch), retainedMatch)
@@ -202,12 +207,29 @@ function matchKeys(match: MatchRecord) {
   const keys = [
     match.sourceGameId ? `game:${normalizeText(match.sourceGameId)}` : '',
     match.sourceMatchId ? `${sourceProvider}:match:${normalizeText(match.sourceMatchId)}` : '',
-    `${match.date}::${normalizeText(match.event)}::${normalizeTeamName(match.winner)}::${normalizeText(match.patch)}::${teamStats}::${match.gameLengthSeconds ?? 'unknown-length'}`,
+    `${match.date}::${canonicalEventKey(match)}::${normalizeTeamName(match.winner)}::${normalizeText(match.patch)}::${teamStats}::${match.gameLengthSeconds ?? 'unknown-length'}`,
   ].filter(Boolean)
   if (sourceProvider !== 'leaguepedia-cargo' || isResultOnlyGapFill(match)) {
     keys.push(`${match.date}::${teams}::${normalizeTeamName(match.winner)}::result-only-gapfill`)
   }
   return keys
+}
+
+function oracleGameDuplicateKeys(match: MatchRecord) {
+  const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
+  const stats = [
+    teamStatKey(match.teamA, match.teamAKills, match.teamAGold),
+    teamStatKey(match.teamB, match.teamBKills, match.teamBGold),
+  ].sort().join('::')
+  return [
+    match.sourceGameId ? `source-game:${normalizeText(match.sourceGameId)}` : '',
+    `fingerprint:${match.date}::${canonicalEventKey(match)}::${teams}::${normalizeTeamName(match.winner)}::${stats}::${match.gameLengthSeconds ?? 'unknown-length'}::${normalizeText(match.patch)}`,
+  ].filter(Boolean)
+}
+
+function canonicalEventKey(match: MatchRecord) {
+  const family = tournamentFamilyForEvent(match.event)
+  return family ? `${family}:${match.season}` : normalizeText(match.event)
 }
 
 function matchOutcomeKey(match: MatchRecord) {

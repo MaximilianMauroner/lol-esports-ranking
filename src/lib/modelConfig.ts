@@ -30,6 +30,16 @@ export const publishedRatingScale = {
 export const leagueEloWeight = 1
 export const leagueAdjustmentPolicy = 'seasonal-hierarchical-anchor'
 export const publishedLeagueAnchorPolicy = 'team-evidence-gated-anchor-relief-v1'
+export const publishedLeagueAnchorShrinkagePolicy = 'match-evidence-weighted-league-anchor-v1'
+export const publishedLeagueAnchorShrinkageConfig = {
+  minimumReliability: 0.35,
+  fullReliabilityMatches: 12,
+} as const
+export const publishedSparseStandingPolicy = 'last-match-to-current-state-evidence-blend-v1'
+export const publishedSparseStandingConfig = {
+  minimumReliability: 0.35,
+  fullReliabilityMatches: 12,
+} as const
 export const publishedLeagueAnchorReliefConfig = {
   minimumGames: 20,
   maxUncertainty: 50,
@@ -152,6 +162,10 @@ export const transparentGprModelParameters = {
   leagueEloWeight,
   leagueAdjustmentPolicy,
   publishedLeagueAnchorPolicy,
+  publishedLeagueAnchorShrinkagePolicy,
+  publishedLeagueAnchorShrinkageConfig,
+  publishedSparseStandingPolicy,
+  publishedSparseStandingConfig,
   publishedLeagueAnchorReliefConfig,
   directHeadToHeadContextPolicy,
   directHeadToHeadContextConfig,

@@ -27,6 +27,8 @@ import { applyContextDecayToRatingChannels } from './ratingContext'
 import {
   applyMomentumBoundaryDecay,
   clamp,
+  evidenceWeightedPublishedLeagueAnchor,
+  evidenceWeightedPublishedStanding,
   emptyRatingUpdateLedger,
   leagueAdjustment,
   publishedLeagueAnchorContextAdjustment,
@@ -220,40 +222,67 @@ export function buildRankingModel(
   )
 
   const draftStandings = Array.from(displayRatings.entries())
-    .map(([team, displayRating]) => {
+    .map(([team]) => {
       const profile = teams[team] ?? { name: team, code: team.slice(0, 3).toUpperCase(), region: 'International' as Region, league: 'Unknown' }
       const baseRating = ratings.get(team) ?? initialTeamRating
       const leagueTier = leagueTierFor(profile.league)
       const leagueScore = effectiveLeagueRating(profile.league, leagueScores.get(profile.league) ?? leagueTier.priorRating, leagueMatchCounts.get(profile.league) ?? 0)
       const previousLeagueScore = effectiveLeagueRating(profile.league, previousLeagueScores.get(profile.league) ?? leagueTier.priorRating, leagueMatchCounts.get(profile.league) ?? 0)
-      const currentLeagueAdjustment = leagueAdjustment(baseRating, leagueScore)
+      const history = histories.get(team) ?? []
+      const eligibilityHistory = matchLevelEligibilityHistory(history)
+      const evidenceMatchCount = eligibilityHistory.length
+      const publishedLeagueScore = evidenceWeightedPublishedLeagueAnchor(leagueScore, evidenceMatchCount)
+      const currentLeagueAdjustment = leagueAdjustment(baseRating, publishedLeagueScore)
       const rosterPriorOffset = publishedRosterPriorOffset(
         rosterPriorOffsets.get(team) ?? 0,
         wins.get(team) ?? 0,
         losses.get(team) ?? 0,
       )
       const uncertainty = Math.round(uncertainties.get(team) ?? maximumUncertainty)
-      const contextAdjustment = publishedLeagueAnchorContextAdjustment({
-        leagueScore,
+      const baseContextAdjustment = publishedLeagueAnchorContextAdjustment({
+        leagueScore: publishedLeagueScore,
         teamRating: baseRating,
         wins: wins.get(team) ?? 0,
         losses: losses.get(team) ?? 0,
         uncertainty,
         rosterBasis: teamRosterBasis.get(team),
       }) + (directHeadToHeadContextAdjustments.get(team) ?? 0)
+      const rawCurrentRating = ratingFromComponents(ratingComponents({
+        teamRating: baseRating,
+        leagueScore: publishedLeagueScore,
+        rosterPriorOffset,
+        momentum: momentums.get(team) ?? 0,
+        contextAdjustment: baseContextAdjustment,
+        uncertainty,
+      }))
+      const evidenceWeightedStanding = evidenceWeightedPublishedStanding(
+        rawCurrentRating,
+        history.at(-1)?.rating,
+        evidenceMatchCount,
+      )
+      const sparseEvidenceAdjustment = evidenceWeightedStanding - rawCurrentRating
+      const contextAdjustment = baseContextAdjustment + sparseEvidenceAdjustment
       const components = ratingComponents({
         teamRating: baseRating,
-        leagueScore,
+        leagueScore: publishedLeagueScore,
         rosterPriorOffset,
         momentum: momentums.get(team) ?? 0,
         contextAdjustment,
         uncertainty,
       })
+      const publishedDisplayRating = ratingFromComponents(components)
       const priorDisplayRating = previousDisplayRatings.get(team) ?? initialTeamRating
       const factors = averageFactors(factorSums.get(team), factorCounts.get(team) ?? 0)
-      const history = histories.get(team) ?? []
       const recentEvents = Array.from(new Set(history.slice(-4).map((point) => point.event))).reverse()
-      const eligibilityHistory = matchLevelEligibilityHistory(history)
+      const eligibility = evaluateTeamEligibility({
+        history: eligibilityHistory,
+        lastDate,
+        uncertainty,
+        league: profile.league,
+        leagueTier: leagueTier.tier,
+        leagueInternationalMatches: leagueMatchCounts.get(profile.league) ?? 0,
+        isDevelopmentalTeam: isDevelopmentalTeamName(team),
+      })
 
       return {
         team,
@@ -268,27 +297,25 @@ export function buildRankingModel(
         leagueDelta: Math.round(leagueScore - previousLeagueScore),
         ratingComponents: components,
         ratingUpdate: latestRatingUpdates.get(team) ?? emptyRatingUpdateLedger(),
-        rating: Math.round(displayRating),
+        rating: Math.round(publishedDisplayRating),
         previousRating: Math.round(priorDisplayRating),
-        delta: Math.round(displayRating - priorDisplayRating),
+        delta: Math.round(publishedDisplayRating - priorDisplayRating),
         rank: 0,
         previousRank: 0,
         movement: 0,
         wins: wins.get(team) ?? 0,
         losses: losses.get(team) ?? 0,
-        confidence: confidenceFor(history, displayRating, standingsSpread(displayRatings)),
+        confidence: confidenceFor({
+          history: eligibilityHistory,
+          uncertainty,
+          eligibility,
+          rosterBasis: teamRosterBasis.get(team) ?? 'unknown',
+          lastDate,
+        }),
         uncertainty,
         form: forms.get(team) ?? [],
         strongestFactor: strongestFactor(factors),
-        eligibility: evaluateTeamEligibility({
-          history: eligibilityHistory,
-          lastDate,
-          uncertainty,
-          league: profile.league,
-          leagueTier: leagueTier.tier,
-          leagueInternationalMatches: leagueMatchCounts.get(profile.league) ?? 0,
-          isDevelopmentalTeam: isDevelopmentalTeamName(team),
-        }),
+        eligibility,
         factors,
         history,
         recentEvents,
@@ -465,9 +492,11 @@ function makeDisplayRatings(
       const league = teams[team]?.league ?? 'Unknown'
       const leagueScore = effectiveLeagueRating(league, leagueScores.get(league) ?? leaguePriorFor(league), leagueMatchCounts.get(league) ?? 0)
       const uncertainty = uncertainties.get(team) ?? maximumUncertainty
+      const matchCount = (wins.get(team) ?? 0) + (losses.get(team) ?? 0)
+      const publishedLeagueScore = evidenceWeightedPublishedLeagueAnchor(leagueScore, matchCount)
       return [team, ratingFromComponents(ratingComponents({
         teamRating: rating,
-        leagueScore,
+        leagueScore: publishedLeagueScore,
         rosterPriorOffset: publishedRosterPriorOffset(
           rosterPriorOffsets.get(team) ?? 0,
           wins.get(team) ?? 0,
@@ -475,7 +504,7 @@ function makeDisplayRatings(
         ),
         momentum: momentums.get(team) ?? 0,
         contextAdjustment: publishedLeagueAnchorContextAdjustment({
-          leagueScore,
+          leagueScore: publishedLeagueScore,
           teamRating: rating,
           wins: wins.get(team) ?? 0,
           losses: losses.get(team) ?? 0,
@@ -488,18 +517,29 @@ function makeDisplayRatings(
   )
 }
 
-function confidenceFor(history: TeamHistoryPoint[], rating: number, spread: number) {
-  const volume = clamp(history.length / 12, 0, 1)
-  const recent = history.slice(-5).length / 5
-  const separation = clamp(spread / Math.max(Math.abs(rating - 1500), 80), 0, 1)
-  return Math.round((0.45 * volume + 0.35 * recent + 0.2 * separation) * 100)
+function confidenceFor({
+  history,
+  uncertainty,
+  eligibility,
+  rosterBasis,
+  lastDate,
+}: {
+  history: TeamHistoryPoint[]
+  uncertainty: number
+  eligibility: TeamStanding['eligibility']
+  rosterBasis: RosterBasis
+  lastDate: string
+}) {
+  const volume = clamp(history.length / 20, 0, 1)
+  const daysSinceLastMatch = history.at(-1)?.date ? daysBetween(history.at(-1)!.date, lastDate) : 365
+  const recency = clamp(1 - daysSinceLastMatch / 120, 0, 1)
+  const uncertaintyEvidence = clamp((maximumUncertainty - uncertainty) / (maximumUncertainty - 35), 0, 1)
+  const rosterEvidence = rosterBasis === 'sourced' ? 1 : rosterBasis === 'assumed-continuous' ? 0.55 : 0.3
+  const base = 0.4 * volume + 0.25 * recency + 0.25 * uncertaintyEvidence + 0.1 * rosterEvidence
+  const eligibilityScale = eligibility.eligible ? 1 : eligibility.reasons.includes('stale') ? 0.55 : 0.72
+  return Math.min(99, Math.round(base * eligibilityScale * 100))
 }
 
 export function isDevelopmentalTeamName(team: string) {
   return /\b(?:academy|challengers?|youth)\b/i.test(team)
-}
-
-function standingsSpread(ratings: Map<string, number>) {
-  const values = Array.from(ratings.values())
-  return Math.max(...values) - Math.min(...values)
 }

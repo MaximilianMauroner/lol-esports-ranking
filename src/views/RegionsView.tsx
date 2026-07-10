@@ -164,7 +164,7 @@ export function RegionsView({
       <RegionDetailDrawer
         region={selectedRegion}
         teams={selectedRegionTeams}
-        series={selectedRegion ? regionHistory?.series[selectedRegion.region] : undefined}
+        series={selectedRegion ? regionHistory?.regionPowerSeries[selectedRegion.region] : undefined}
         onClose={closeRegionDetail}
       />
     </div>

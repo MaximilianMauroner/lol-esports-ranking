@@ -133,6 +133,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     coverage: { matchCount: 10, sourceProviders: [], seededSample: false },
     dataQuality: {
       matchCount: 10,
+      pipelineCounts: { importedMatchCount: 10, publishedMatchCount: 10, filteredMatchCount: 0 },
       sourceProviderCounts: {},
       dataCompletenessCounts: {},
       missing: { sourceProviderCount: 0, sourceGameIdCount: 0, patchCount: 0, sideCount: 0 },
@@ -143,6 +144,8 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
         unknownLeagueTeamCount: 0,
         internationalRegionTeamCount: 0,
         unresolvedLeagueSummaries: [],
+        duplicateTeamCodes: [],
+        unresolvedLineages: [],
       },
       notes: [],
     },

@@ -34,7 +34,20 @@ function standing(overrides: Partial<RankingSummaryStanding> = {}): RankingSumma
 }
 
 function series(points: [string, number, number][]): TeamHistorySeries {
-  return { team: 'Test', code: 'TST', region: 'LCK', points }
+  const latest = points.at(-1) ?? ['2025-01-01', 1500, 1]
+  return {
+    team: 'Test',
+    code: 'TST',
+    region: 'LCK',
+    points,
+    currentStanding: {
+      asOf: latest[0],
+      rating: latest[1],
+      rank: latest[2],
+      lastMatchRating: latest[1],
+      adjustment: 0,
+    },
+  }
 }
 
 test('returns null when there is not enough history to chart', () => {

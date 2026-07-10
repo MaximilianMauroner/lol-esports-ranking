@@ -11,7 +11,9 @@ import {
   momentumSplitRetention,
   normalUncertainty,
   publishedLeagueAnchorReliefConfig,
+  publishedLeagueAnchorShrinkageConfig,
   publishedRatingScale,
+  publishedSparseStandingConfig,
   publishedRosterPriorConfig,
   publishedTeamStableOffsetConfig,
   recencyDecayDays,
@@ -222,6 +224,28 @@ export function publishedLeagueAnchorContextAdjustment(
 
   const adjustment = Math.min(config.maxAdjustment, Math.abs(leagueGap) * config.leagueGapShare)
   return Number((Math.sign(stableOffset) * adjustment).toFixed(1))
+}
+
+export function evidenceWeightedPublishedLeagueAnchor(
+  leagueScore: number,
+  matches: number,
+  config = publishedLeagueAnchorShrinkageConfig,
+) {
+  const progress = clamp(matches / Math.max(1, config.fullReliabilityMatches), 0, 1)
+  const reliability = config.minimumReliability + (1 - config.minimumReliability) * progress
+  return initialLeagueRating + (leagueScore - initialLeagueRating) * reliability
+}
+
+export function evidenceWeightedPublishedStanding(
+  currentRating: number,
+  lastMatchRating: number | undefined,
+  matches: number,
+  config = publishedSparseStandingConfig,
+) {
+  if (typeof lastMatchRating !== 'number' || !Number.isFinite(lastMatchRating)) return currentRating
+  const progress = clamp(matches / Math.max(1, config.fullReliabilityMatches), 0, 1)
+  const reliability = config.minimumReliability + (1 - config.minimumReliability) * progress
+  return lastMatchRating + (currentRating - lastMatchRating) * reliability
 }
 
 export function ratingFromComponents(components: RatingComponents) {

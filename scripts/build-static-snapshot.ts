@@ -86,6 +86,7 @@ const snapshot = createStaticRankingData({
         },
         ...lolEsportsWarnings,
       ],
+      ...(sourceRefreshReceipt('lolesports', manifest) ? { refreshReceipt: sourceRefreshReceipt('lolesports', manifest) } : {}),
     })),
     ...oracleImports.map((result) => {
       const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
@@ -100,6 +101,7 @@ const snapshot = createStaticRankingData({
         description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after the published team-universe filter. ${result.source.attribution}`,
         status: ratedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
         ...(oracleWarnings.length > 0 ? { warnings: oracleWarnings } : {}),
+        ...(sourceRefreshReceipt('oracle', manifest) ? { refreshReceipt: sourceRefreshReceipt('oracle', manifest) } : {}),
       }
     }),
     ...leaguepediaImports.map((result) => {
@@ -115,6 +117,7 @@ const snapshot = createStaticRankingData({
         description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after the published team-universe filter. ${result.source.attribution}`,
         status: ratedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
         ...(leaguepediaWarnings.length > 0 ? { warnings: leaguepediaWarnings } : {}),
+        ...(sourceRefreshReceipt('leaguepedia', manifest) ? { refreshReceipt: sourceRefreshReceipt('leaguepedia', manifest) } : {}),
       }
     }),
   ],
@@ -134,6 +137,7 @@ const snapshot = createStaticRankingData({
       coverageEndComplete: result.source.coverageEndComplete,
     }))
   }),
+  pipelineAudit: { importedMatchCount: importedMatches.length },
 })
 
 await mkdir(dirname(output), { recursive: true })
@@ -194,12 +198,35 @@ function uniquePaths(paths: string[]) {
 }
 
 type LocalDataManifest = {
+  start?: string
+  end?: string
+  generatedAt?: string
   files: {
     oracleCsv?: string[]
     leaguepediaJson?: string[]
     lolEsportsJson?: string[]
   }
   warnings?: string[]
+  sources?: Partial<Record<'oracle' | 'leaguepedia' | 'lolesports', {
+    status?: string
+    downloadedCount?: number
+    reusedCount?: number
+    failedCount?: number
+  }>>
+}
+
+function sourceRefreshReceipt(provider: 'oracle' | 'leaguepedia' | 'lolesports', value: LocalDataManifest | undefined) {
+  const source = value?.sources?.[provider]
+  if (!source?.status) return undefined
+  return {
+    requestedStart: value?.start,
+    requestedEnd: value?.end,
+    attemptedAt: value?.generatedAt,
+    status: source.status,
+    downloadedCount: source.downloadedCount ?? 0,
+    reusedCount: source.reusedCount ?? 0,
+    failedCount: source.failedCount ?? 0,
+  }
 }
 
 function manifestSourceWarnings(provider: 'oracle' | 'leaguepedia' | 'lolesports', warnings: string[] | undefined): DataSourceWarning[] {

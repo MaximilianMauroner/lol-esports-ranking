@@ -200,6 +200,11 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   }])
   assert.equal(chovy.appearance?.latestTeamGames, 100)
   assert.equal(chovy.appearance?.roleGames, 100)
+  const lineup = directory.currentLineups[chovy.teamId!]
+  assert.equal(lineup.completeness, 'partial')
+  assert.deepEqual(lineup.coveredRoles, ['Mid'])
+  assert.deepEqual(lineup.missingRoles, ['Top', 'Jungle', 'Bot', 'Support'])
+  assert.deepEqual(lineup.starters.map((player) => player.name), ['Chovy'])
   assert.deepEqual(chovy.appearance?.teamHistory, [{
     team: 'Gen.G',
     games: 100,
@@ -827,7 +832,7 @@ test('createPlayerDirectory credits season rows to the primary scoped team', () 
   assert.equal(seasonViper?.teamShare, 0.944)
 })
 
-test('createPlayerDirectory publishes season checkpoint player rows', () => {
+test('createPlayerDirectory reuses full-season player rows for checkpoint views', () => {
   const standing = {
     team: 'Gen.G',
     code: 'GEN',
@@ -842,6 +847,7 @@ test('createPlayerDirectory publishes season checkpoint player rows', () => {
     },
   } as unknown as TeamStanding
   const checkpointKey = snapshotKey({ season: '2026', event: 'All', region: 'All', checkpoint: 'split-2' })
+  const seasonKey = snapshotKey({ season: '2026', event: 'All', region: 'All' })
   const checkpointPlayer = sourcedPlayer({
     id: 'checkpoint-mid',
     name: 'Checkpoint Mid',
@@ -867,18 +873,26 @@ test('createPlayerDirectory publishes season checkpoint player rows', () => {
         standings: [standing],
         players: [checkpointPlayer],
       },
+      [seasonKey]: {
+        filter: { season: '2026', event: 'All', region: 'All' },
+        standings: [standing],
+        players: [checkpointPlayer],
+      },
     },
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
   const checkpointRows = directory.scopedPlayers?.[checkpointKey] ?? []
+  const resolved = resolvePlayerScope(directory, { season: '2026', event: 'All', region: 'All', checkpoint: 'split-2' })
 
-  assert.deepEqual(checkpointRows.map((player) => player.name), ['Checkpoint Mid'])
-  assert.equal(checkpointRows[0]?.teamCode, 'GEN')
-  assert.equal(checkpointRows[0]?.rank, 1)
+  assert.deepEqual(checkpointRows, [])
+  assert.deepEqual(resolved.players.map((player) => player.name), ['Checkpoint Mid'])
+  assert.equal(resolved.players[0]?.teamCode, 'GEN')
+  assert.equal(resolved.players[0]?.rank, 1)
+  assert.match(resolved.label, /source season/)
 })
 
-test('scoped player directories stay capped and resolve missing teams from the all-season directory', () => {
+test('scoped player directories retain every rated team player without a global top-N cutoff', () => {
   const seasonKey = snapshotKey({ season: '2026', event: 'All', region: 'All' })
   const leadingPlayers = Array.from({ length: 65 }, (_, index) => sourcedPlayer({
     id: `leader-${index}`,
@@ -922,10 +936,10 @@ test('scoped player directories stay capped and resolve missing teams from the a
   const resolved = resolvePlayerScope(directory, { season: '2026', event: 'All', region: 'All' })
   const betaPlayers = resolved.players.filter((player) => player.team === 'Beta')
 
-  assert.equal(scopedPlayers.length, 60)
-  assert.equal(scopedPlayers.some((player) => player.team === 'Beta'), false)
+  assert.equal(scopedPlayers.length, 70)
+  assert.equal(scopedPlayers.some((player) => player.team === 'Beta'), true)
   assert.deepEqual(betaPlayers.map((player) => player.role), ROLE_ORDER)
-  assert.match(resolved.label, /all-season sources/)
+  assert.doesNotMatch(resolved.label, /all-season sources/)
 })
 
 test('createPlayerDirectory gates low-sample sourced players from ranked public rows', () => {
@@ -1426,19 +1440,18 @@ test('createTeamHistory final point matches published standing rating', () => {
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
-  const points = history.series[teamStandingKey(standing)].points
-  const matchPoint = points.at(-2)
+  const series = history.series[teamStandingKey(standing)]
+  const points = series.points
   const latest = points.at(-1)
 
-  assert.equal(points.length, 3)
-  assert.equal(matchPoint?.[1], 2463)
-  assert.equal(matchPoint?.[3]?.opponent, 'Top Esports')
-  assert.equal(matchPoint?.[3]?.result, 'W')
-  assert.equal(latest?.[1], 2447)
+  assert.equal(points.length, 2)
+  assert.equal(latest?.[1], 2463)
   assert.equal(latest?.[2], 1)
-  assert.equal(latest?.[3]?.kind, 'standing-adjustment')
-  assert.equal(latest?.[3]?.event, 'Published standing adjustment')
-  assert.equal(latest?.[3]?.delta, -16)
+  assert.equal(latest?.[3]?.opponent, 'Top Esports')
+  assert.equal(latest?.[3]?.result, 'W')
+  assert.equal(series.currentStanding.rating, 2447)
+  assert.equal(series.currentStanding.lastMatchRating, 2463)
+  assert.equal(series.currentStanding.adjustment, -16)
 })
 
 test('createTeamHistory skips unresolved tied match groups', () => {
@@ -1695,7 +1708,7 @@ test('createRegionHistory publishes first-class region timelines from league-str
   const history = createRegionHistory(data)
   const defaultScope = history.scopes[history.defaultScopeKey]
   const seasonScope = history.scopes[seasonKey]
-  const sourcePoints = Object.values(defaultScope?.series ?? {})
+  const sourcePoints = Object.values(defaultScope?.leagueStrengthSeries ?? {})
     .flatMap((series) => series.points)
     .filter((point) => point[3]?.source === 'league-strength-history')
 
@@ -1703,7 +1716,7 @@ test('createRegionHistory publishes first-class region timelines from league-str
   assert.equal(history.defaultScopeKey, data.defaultSnapshotKey)
   assert.ok(defaultScope)
   assert.ok(seasonScope)
-  assert.equal(defaultScope.regionCount, Object.keys(defaultScope.series).length)
+  assert.equal(defaultScope.regionCount, Object.keys(defaultScope.regionPowerSeries).length)
   assert.ok(defaultScope.pointCount > 0)
   assert.ok(sourcePoints.length > 0)
   assert.equal(sourcePoints.some((point) => (point[3]?.opponentRegions?.length ?? 0) > 0), true)
@@ -1747,7 +1760,7 @@ test('createRegionHistory context only describes leagues used for region power s
   } as unknown as StaticRankingData
 
   const history = createRegionHistory(data)
-  const context = history.scopes[key]?.series.LEC?.points.find((point) => point[3]?.source === 'league-strength-history')?.[3]
+  const context = history.scopes[key]?.leagueStrengthSeries.LEC?.points.find((point) => point[3]?.source === 'league-strength-history')?.[3]
 
   assert.deepEqual(context?.leagues, ['LEC'])
   assert.equal(context?.leagues?.includes('PRM'), false)
@@ -2359,7 +2372,7 @@ test('scheduled public snapshots publish sourced player rating proof without shi
   assert.equal(data.playerData.awardSignals.status, 'source-missing')
   assert.equal(data.playerData.awardSignals.awardResidualsApplied, false)
   assert.equal(fullDefaultSnapshot.players.every((player) => player.impactDrivers.awardResidualZ === 0), true)
-  assert.equal(playerDirectory.players.every((player) => player.impactDrivers.awardResidualZ === 0), true)
+  assert.equal(playerDirectory.players.every((player) => player.impactDrivers?.awardResidualZ === 0), true)
   assert.equal(seasonPlayers.length, 0)
   assert.equal(fullDefaultSnapshot.players.length, 10)
   assert.equal(Object.prototype.hasOwnProperty.call(summaryDefaultSnapshot, 'players'), false)

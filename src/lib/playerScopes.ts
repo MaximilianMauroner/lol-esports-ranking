@@ -5,11 +5,12 @@ export type PlayerScopeBasis = 'current' | 'season-fallback' | 'all-seasons-fall
 
 export type ResolvedPlayerScope = {
   players: PublicPlayerDirectory['players']
+  currentLineups: PublicPlayerDirectory['currentLineups']
   label: string
 }
 
 export function emptyPlayerScope(filter: SnapshotFilter): ResolvedPlayerScope {
-  return { players: [], label: playerScopeLabel(filter, 'current') }
+  return { players: [], currentLineups: {}, label: playerScopeLabel(filter, 'current') }
 }
 
 export function resolvePlayerScope(
@@ -19,7 +20,7 @@ export function resolvePlayerScope(
   const currentScope = emptyPlayerScope(filter)
   if (!directory) return currentScope
   if (filter.season === 'All' && filter.event === 'All' && filter.region === 'All') {
-    return { players: directory.players, label: currentScope.label }
+    return { players: directory.players, currentLineups: directory.currentLineups, label: currentScope.label }
   }
   if (filter.season !== 'All' && filter.event === 'All' && filter.region === 'All') {
     const exactPlayers = directory.scopedPlayers?.[snapshotKey(filter)]
@@ -35,6 +36,7 @@ export function resolvePlayerScope(
         : exactPlayers ? 'current' : 'season-fallback'
       return {
         players: [...scopedPlayers, ...fallbackPlayers],
+        currentLineups: directory.currentLineups,
         label: playerScopeLabel(filter, basis),
       }
     }

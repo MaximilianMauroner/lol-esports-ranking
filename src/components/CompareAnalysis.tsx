@@ -273,7 +273,7 @@ function regionHistoryFallbackNote(state: RegionHistoryScopeState) {
 function regionHistoryTrend(regions: RegionStrength[], history: PublicRegionHistoryScope) {
   return regions
     .map((region, index): { series: ChartSeries; events: RegionTrendEvent[] } | null => {
-      const regionSeries = history.series[region.region]
+      const regionSeries = history.regionPowerSeries[region.region]
       if (!regionSeries || regionSeries.points.length < 2) return null
       const color = COMPARE_SERIES_COLORS[index % COMPARE_SERIES_COLORS.length]
       return {

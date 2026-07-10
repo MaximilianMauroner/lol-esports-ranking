@@ -38,7 +38,6 @@ export function chartPointDetailFromHistoryPoint(point: TeamHistoryPoint): Chart
   const model = chartModelDetailFromHistoryPoint(context.model, context.result)
   return {
     kind: context.kind ?? 'match',
-    adjustmentReason: context.adjustmentReason,
     event: context.event,
     opponent: context.opponent,
     result: context.result,

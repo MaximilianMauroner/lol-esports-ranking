@@ -77,6 +77,7 @@ import type {
   PlayerMetricInfo,
   PlayerRatingProof,
   PublicPlayerDirectory,
+  PublicCurrentLineup,
   PublicRegionHistoryDirectory,
   PublicRegionHistoryPoint,
   PublicRegionHistoryPointContext,
@@ -123,8 +124,6 @@ export const individualResidualComparisonMetric: PlayerComparisonMetricInfo = {
   independentSkillClaim: false,
 }
 
-const scopedPlayerDirectoryLimit = 60
-
 export type SnapshotFilter = {
   season: string
   event: string
@@ -160,6 +159,15 @@ export type DataSourceInfo = {
   coverageEnd?: string
   rowCount?: number
   warnings?: DataSourceWarning[]
+  refreshReceipt?: {
+    requestedStart?: string
+    requestedEnd?: string
+    attemptedAt?: string
+    status: string
+    downloadedCount: number
+    reusedCount: number
+    failedCount: number
+  }
 }
 
 export type DataSourceWarning = {
@@ -197,6 +205,11 @@ export type DataQualityLeagueSummary = {
 
 export type DataQualityAudit = {
   matchCount: number
+  pipelineCounts: {
+    importedMatchCount: number
+    publishedMatchCount: number
+    filteredMatchCount: number
+  }
   sourceProviderCounts: Record<string, number>
   dataCompletenessCounts: Record<string, number>
   missing: {
@@ -218,6 +231,8 @@ export type DataQualityAudit = {
     unknownLeagueTeamCount: number
     internationalRegionTeamCount: number
     unresolvedLeagueSummaries: DataQualityLeagueSummary[]
+    duplicateTeamCodes: Array<{ code: string; teamNames: string[]; teamIds: string[] }>
+    unresolvedLineages: Array<{ teamNames: string[]; note: string }>
   }
   notes: string[]
 }
@@ -246,13 +261,13 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
   const defaultSnapshot = data.snapshots[data.defaultSnapshotKey]
   const minimumPointsPerSeries = 2
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
-  const defaultHistory = buildTeamHistorySeries(publishedTeamStandings(defaultSnapshot?.standings ?? [], ratingScale), minimumPointsPerSeries)
+  const defaultHistory = buildTeamHistorySeries(publishedTeamStandings(defaultSnapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf: data.generatedAt })
   const scopeIndex = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([, snapshot]) => isSeasonHistoryScope(snapshot.filter))
       .map(([key, snapshot]) => [
         key,
-        Object.keys(buildTeamHistorySeries(publishedTeamStandings(snapshot.standings, ratingScale), minimumPointsPerSeries, { includeContext: false }).series),
+        Object.keys(buildTeamHistorySeries(publishedTeamStandings(snapshot.standings, ratingScale), minimumPointsPerSeries, { includeContext: false, asOf: data.generatedAt }).series),
       ]),
   )
 
@@ -271,7 +286,7 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
     omissionPolicy: {
       minimumPointsPerSeries,
       omittedSeriesCount: defaultHistory.omittedSeriesCount,
-      reason: 'Standings with fewer than two resolved rating-history points are omitted because a trend line needs at least two points; unresolved tied match groups are skipped.',
+      reason: 'Standings with fewer than two resolved match series are omitted because a trend line needs at least two played series; current-standing state never counts toward this threshold.',
     },
     teamCount: Object.keys(defaultHistory.series).length,
     pointCount: defaultHistory.pointCount,
@@ -298,7 +313,7 @@ export function createTeamHistoryArtifacts(
   const omissionPolicy = defaultShard?.omissionPolicy ?? {
     minimumPointsPerSeries: 2,
     omittedSeriesCount: 0,
-    reason: 'Standings with fewer than two resolved rating-history points are omitted because a trend line needs at least two points; unresolved tied match groups are skipped.',
+    reason: 'Standings with fewer than two resolved match series are omitted because a trend line needs at least two played series; current-standing state never counts toward this threshold.',
   }
 
   return {
@@ -382,7 +397,7 @@ function createTeamHistoryShard(
   ratingScale: PublishedRatingScale = data.model.ratingScale ?? publishedRatingScale,
 ): PublicTeamHistoryShard {
   const minimumPointsPerSeries = 2
-  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries)
+  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf: data.generatedAt })
   return {
     artifactKind: 'team-history-scope',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
@@ -399,7 +414,7 @@ function createTeamHistoryShard(
     omissionPolicy: {
       minimumPointsPerSeries,
       omittedSeriesCount: history.omittedSeriesCount,
-      reason: 'Standings with fewer than two resolved rating-history points are omitted because a trend line needs at least two points; unresolved tied match groups are skipped.',
+      reason: 'Standings with fewer than two resolved match series are omitted because a trend line needs at least two played series; current-standing state never counts toward this threshold.',
     },
     teamCount: Object.keys(history.series).length,
     pointCount: history.pointCount,
@@ -444,10 +459,10 @@ function createRegionHistoryScope(
   snapshot: ComputedRankingSnapshot,
   ratingScale: PublishedRatingScale,
 ): PublicRegionHistoryScope {
-  const series: Record<string, PublicRegionHistorySeries> = Object.fromEntries(
+  const leagueStrengthSeries: Record<string, PublicRegionHistorySeries> = Object.fromEntries(
     snapshot.regions.map((region) => [region.region, { region: region.region, points: [] }]),
   )
-  const publishedRegions = new Set(Object.keys(series))
+  const publishedRegions = new Set(Object.keys(leagueStrengthSeries))
   const latestByLeague = new Map<string, LeagueStrengthHistoryPoint>()
   const pointsByDate = groupRegionLeagueHistoryByDate(snapshot.leagueHistory)
 
@@ -464,7 +479,7 @@ function createRegionHistoryScope(
     }
     for (const region of touchedRegions) {
       const row = rankedRegions.get(region)
-      const target = series[region]
+      const target = leagueStrengthSeries[region]
       if (!row || !target) continue
       const context = regionHistoryContext(region, points, row.flagshipLeagues)
       const point: PublicRegionHistoryPoint = context
@@ -476,12 +491,18 @@ function createRegionHistoryScope(
     }
   }
 
-  alignFinalRegionHistoryPoints(series, snapshot.regions, ratingScale)
+  const regionPowerSeries = buildRegionPowerHistorySeries(snapshot, ratingScale)
   return {
     filter: snapshot.filter,
-    regionCount: Object.keys(series).length,
-    pointCount: Object.values(series).reduce((total, entry) => total + entry.points.length, 0),
-    series,
+    regionCount: Object.keys(regionPowerSeries).length,
+    pointCount: [...Object.values(leagueStrengthSeries), ...Object.values(regionPowerSeries)]
+      .reduce((total, entry) => total + entry.points.length, 0),
+    leagueStrengthSeries,
+    regionPowerSeries,
+    metricDefinitions: {
+      leagueStrength: 'International evidence-weighted strength of the region flagship league layer.',
+      regionPower: 'Average published power of the top three currently eligible flagship teams at each observed checkpoint.',
+    },
   }
 }
 
@@ -557,49 +578,88 @@ function regionHistoryContext(region: string, points: LeagueStrengthHistoryPoint
   return omitUndefined(context)
 }
 
-function alignFinalRegionHistoryPoints(
-  series: Record<string, PublicRegionHistorySeries>,
-  regions: RegionStrength[],
+function buildRegionPowerHistorySeries(
+  snapshot: ComputedRankingSnapshot,
   ratingScale: PublishedRatingScale,
 ) {
-  const latestDate = Object.values(series)
-    .flatMap((entry) => entry.points.map((point) => point[0]))
-    .sort()
-    .at(-1)
-  if (!latestDate) return
+  const result: Record<string, PublicRegionHistorySeries> = Object.fromEntries(
+    snapshot.regions.map((region) => [region.region, { region: region.region, points: [] }]),
+  )
+  const standings = snapshot.standings ?? []
+  const standingByTeam = new Map(standings.map((standing) => [standing.team, standing]))
+  const history = buildTeamHistorySeries(publishedTeamStandings(standings, ratingScale), 1, { includeContext: false })
+  const updatesByDate = new Map<string, Array<{ region: string; team: string; rating: number }>>()
+  const candidateTeamsByRegion = new Map<string, string[]>()
 
-  for (const region of regions) {
-    const target = series[region.region]
-    const finalScore = toPublishedRegionStrength(region, ratingScale).score
-    if (!target) continue
-    const latest = target.points.at(-1)
-    if (latest && latest[1] === finalScore && latest[2] === region.rank) continue
-    target.points.push([
-      latestDate,
-      finalScore,
-      region.rank,
-      {
-        event: 'Published region score',
-        source: 'published-region-score',
-      },
-    ])
+  for (const region of snapshot.regions) {
+    const candidates = region.topTeams.map((team) => team.team)
+    candidateTeamsByRegion.set(region.region, candidates)
+    for (const team of candidates) {
+      const standing = standingByTeam.get(team)
+      if (!standing) continue
+      const teamSeries = history.series[teamStandingKey(standing)]
+      for (const point of teamSeries?.points ?? []) {
+        const updates = updatesByDate.get(point[0]) ?? []
+        updates.push({ region: region.region, team, rating: point[1] })
+        updatesByDate.set(point[0], updates)
+      }
+    }
   }
+
+  const latestRatings = new Map<string, number>()
+  for (const date of [...updatesByDate.keys()].sort()) {
+    const touchedRegions = new Set<string>()
+    for (const update of updatesByDate.get(date) ?? []) {
+      latestRatings.set(update.team, update.rating)
+      touchedRegions.add(update.region)
+    }
+    const rows = snapshot.regions
+      .map((region) => {
+        const contributors = (candidateTeamsByRegion.get(region.region) ?? [])
+          .map((team) => ({ team, rating: latestRatings.get(team) }))
+          .filter((entry): entry is { team: string; rating: number } => typeof entry.rating === 'number' && Number.isFinite(entry.rating))
+          .sort((left, right) => right.rating - left.rating || left.team.localeCompare(right.team))
+          .slice(0, 3)
+        const score = contributors.length > 0
+          ? Number((contributors.reduce((total, entry) => total + entry.rating, 0) / contributors.length).toFixed(1))
+          : undefined
+        return { region: region.region, contributors, score }
+      })
+      .filter((row): row is { region: string; contributors: Array<{ team: string; rating: number }>; score: number } => typeof row.score === 'number')
+      .sort((left, right) => right.score - left.score || left.region.localeCompare(right.region))
+
+    rows.forEach((row, index) => {
+      if (!touchedRegions.has(row.region)) return
+      result[row.region]?.points.push([
+        date,
+        row.score,
+        index + 1,
+        {
+          event: 'Eligible top-team power checkpoint',
+          source: 'region-power-history',
+          contributingTeams: row.contributors.map((entry) => entry.team),
+        },
+      ])
+    })
+  }
+  return result
 }
 
-function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSeries: number, { includeContext = true }: { includeContext?: boolean } = {}) {
+function buildTeamHistorySeries(
+  standings: TeamStanding[],
+  minimumPointsPerSeries: number,
+  { includeContext = true, asOf = '' }: { includeContext?: boolean; asOf?: string } = {},
+) {
   const series: Record<string, TeamHistorySeries> = {}
   let omittedSeriesCount = 0
   let pointCount = 0
 
   for (const standing of standings) {
     const validHistory = (standing.history ?? []).filter((point) => Boolean(point.date) && Number.isFinite(point.rating))
-    const points = alignFinalTeamHistoryPoint(
-      standing,
-      groupTeamHistoryPointsIntoMatches(validHistory)
-        .filter(isResolvedTeamHistoryMatchGroup)
-        .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext))
-        .sort((left, right) => left[0].localeCompare(right[0])),
-    )
+    const points = groupTeamHistoryPointsIntoMatches(validHistory)
+      .filter(isResolvedTeamHistoryMatchGroup)
+      .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext))
+      .sort((left, right) => left[0].localeCompare(right[0]))
     if (points.length < minimumPointsPerSeries) {
       omittedSeriesCount += 1
       continue
@@ -612,6 +672,7 @@ function buildTeamHistorySeries(standings: TeamStanding[], minimumPointsPerSerie
       code: standing.code,
       region: standing.region,
       points,
+      currentStanding: compactCurrentStanding(standing, points, asOf),
     }
   }
 
@@ -622,34 +683,23 @@ function publishedTeamStandings(standings: ComputedTeamStanding[], ratingScale: 
   return standings.map((standing) => toPublishedTeamStanding(standing, ratingScale))
 }
 
-function alignFinalTeamHistoryPoint(standing: TeamStanding, points: TeamHistoryPointCompact[]) {
-  const finalRating = Math.round(standing.rating)
-  const finalRank = standing.rank
-  if (points.length === 0 || !Number.isFinite(finalRating) || !Number.isFinite(finalRank)) return points
-
+function compactCurrentStanding(standing: TeamStanding, points: TeamHistoryPointCompact[], asOf: string) {
+  if (points.length === 0) {
+    throw new Error(`Cannot publish current standing without a resolved match history for ${standing.team}`)
+  }
   const latest = points.at(-1)!
-  if (latest[1] === finalRating && latest[2] === finalRank) return points
+  const finalRating = Number.isFinite(standing.rating) ? Math.round(standing.rating) : latest[1]
+  const finalRank = Number.isFinite(standing.rank) ? standing.rank : latest[2]
   const adjustment = finalRating - latest[1]
-  const context = compactStandingAdjustmentContext(standing, adjustment)
-  const aligned: TeamHistoryPointCompact = context
-    ? [latest[0], finalRating, finalRank, context]
-    : [latest[0], finalRating, finalRank]
-  return [...points, aligned]
-}
-
-function compactStandingAdjustmentContext(
-  standing: TeamStanding,
-  adjustment: number,
-): PublicTeamHistoryPointContext | undefined {
   const components = compactTeamHistoryComponents(standing.ratingComponents)
-  const context: PublicTeamHistoryPointContext = {
-    kind: 'standing-adjustment',
-    adjustmentReason: 'published-standing-reconciliation',
-    event: 'Published standing adjustment',
-    delta: Number(adjustment.toFixed(1)),
+  return {
+    asOf: asOf || latest[0],
+    rating: finalRating,
+    rank: finalRank,
+    lastMatchRating: latest[1],
+    adjustment: Number(adjustment.toFixed(1)),
     ...(components ? { model: { c: components } } : {}),
   }
-  return omitUndefined(context)
 }
 
 type TeamHistoryPublicMatchGroup = {
@@ -816,7 +866,7 @@ function isSeasonHistoryScope(filter: SnapshotFilter | undefined) {
 }
 
 function isSeasonPlayerScope(filter: SnapshotFilter | undefined) {
-  return isSeasonHistoryScope(filter)
+  return isSeasonHistoryScope(filter) && !filter?.checkpoint
 }
 
 /** Mirrors the UI `teamKey` so history can be looked up from a summary standing. */
@@ -1141,6 +1191,7 @@ export function createStaticRankingData({
   dataMode,
   externalSources = [],
   tournamentScheduleReferences = [],
+  pipelineAudit,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1150,6 +1201,7 @@ export function createStaticRankingData({
   dataMode?: StaticRankingData['dataMode']
   externalSources?: DataSourceInfo[]
   tournamentScheduleReferences?: TournamentScheduleReference[]
+  pipelineAudit?: { importedMatchCount: number }
 }): StaticRankingData {
   const ratingUniverse = filterPublishedRatingUniverseInput(matches, teams)
   matches = ratingUniverse.matches
@@ -1348,7 +1400,7 @@ export function createStaticRankingData({
     ],
     model: transparentGprModelMetadata,
     coverage: coverageFor(matches),
-    dataQuality: dataQualityFor(matches, teams),
+    dataQuality: dataQualityFor(matches, teams, pipelineAudit),
     playerData: {
       status: hasObservedGameRosters || playerRatingProof ? 'sourced-player-stats' : matches.length === 0 || !hasRosters ? 'no-data' : 'seeded-demo-rosters',
       description: playerRatingProof
@@ -1428,6 +1480,7 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
     roles: ROLE_ORDER.filter((role) => players.some((player) => player.role === role)),
     players,
     ...(Object.keys(scopedPlayers).length > 0 ? { scopedPlayers } : {}),
+    currentLineups: currentLineupsForPlayers(players),
   }
 }
 
@@ -1444,6 +1497,7 @@ export function createTeamDirectory(data: StaticRankingData): TeamDirectory {
         'oracles-elixir': uniqueValues([team.name, team.code].filter(Boolean)),
         'leaguepedia-cargo': uniqueValues([team.name, team.code].filter(Boolean)),
       },
+      ...teamLineageFor(team.name),
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
 
@@ -1461,6 +1515,28 @@ export function createTeamDirectory(data: StaticRankingData): TeamDirectory {
     teamCount: teams.length,
     teams,
   }
+}
+
+function teamLineageFor(teamName: string): Pick<PublicTeamDirectory['teams'][number], 'lineage'> | Record<string, never> {
+  if (teamName === 'MGN Vikings Esports') {
+    return {
+      lineage: {
+        status: 'unresolved',
+        relatedTeamNames: ['MVK Esports'],
+        note: 'Possible organizational continuity detected in source history; source identifiers are insufficient for an automatic merge.',
+      },
+    }
+  }
+  if (teamName === 'MVK Esports') {
+    return {
+      lineage: {
+        status: 'unresolved',
+        relatedTeamNames: ['MGN Vikings Esports'],
+        note: 'Possible organizational continuity detected in source history; source identifiers are insufficient for an automatic merge.',
+      },
+    }
+  }
+  return {}
 }
 
 function compactPlayersForSnapshot(
@@ -1494,7 +1570,6 @@ function compactPlayersForSnapshot(
         && (player.appearance?.roleGames ?? player.games) >= playerModelParameters.minimumRankedSourcedPlayerGames
     })
   const compactPlayers = players
-    .slice(0, detail === 'scope' ? scopedPlayerDirectoryLimit : Number.POSITIVE_INFINITY)
     .map((player, index) => {
       const creditedTeam = creditedTeamForPlayer(player, snapshot?.filter)
       const meta = teamMeta.get(creditedTeam.team)
@@ -1515,13 +1590,15 @@ function compactPlayersForSnapshot(
         rating: player.rating,
         games: player.games,
         delta: player.delta,
-        form: player.form,
+        ...(detail === 'default' ? {
+          form: player.form,
+          availability: player.availability,
+          roleCertainty: player.roleCertainty,
+          impactDrivers: player.impactDrivers,
+          individualResidual: compactPlayerResidual(player.individualResidual),
+        } : {}),
         ...(detail === 'default' ? { recentMatches: compactPlayerRecentMatches(player) } : {}),
         impactMultiplier: player.impactMultiplier,
-        availability: player.availability,
-        roleCertainty: player.roleCertainty,
-        impactDrivers: player.impactDrivers,
-        individualResidual: compactPlayerResidual(player.individualResidual),
         ratingBasis: player.ratingBasis,
         sourceProvider: player.source?.provider,
         latestObservedAt: player.source?.date,
@@ -1532,6 +1609,59 @@ function compactPlayersForSnapshot(
     })
 
   return assignCompactPlayerResidualRanks(compactPlayers)
+}
+
+function currentLineupsForPlayers(players: CompactPlayer[]): Record<string, PublicCurrentLineup> {
+  const byTeamId = new Map<string, CompactPlayer[]>()
+  for (const player of players) {
+    if (!player.teamId || !player.latestObservedAt) continue
+    const teamPlayers = byTeamId.get(player.teamId) ?? []
+    teamPlayers.push(player)
+    byTeamId.set(player.teamId, teamPlayers)
+  }
+
+  return Object.fromEntries([...byTeamId.entries()].map(([teamId, teamPlayers]) => {
+    const observedAt = teamPlayers.map((player) => player.latestObservedAt ?? '').sort().at(-1) ?? ''
+    const observedPlayers = teamPlayers
+      .filter((player) => player.latestObservedAt === observedAt)
+      .toSorted((left, right) => ROLE_ORDER.indexOf(left.role) - ROLE_ORDER.indexOf(right.role)
+        || (right.teamShare ?? 0) - (left.teamShare ?? 0)
+        || right.games - left.games
+        || left.name.localeCompare(right.name))
+    const starters: CompactPlayer[] = []
+    const substitutes: CompactPlayer[] = []
+    const occupiedRoles = new Set<Role>()
+    for (const player of observedPlayers) {
+      if (occupiedRoles.has(player.role)) substitutes.push(player)
+      else {
+        starters.push(player)
+        occupiedRoles.add(player.role)
+      }
+    }
+    const coveredRoles = ROLE_ORDER.filter((role) => occupiedRoles.has(role))
+    const missingRoles = ROLE_ORDER.filter((role) => !occupiedRoles.has(role))
+    const first = observedPlayers[0] ?? teamPlayers[0]
+    const compactLineupPlayer = (player: CompactPlayer) => ({
+      playerId: player.playerId ?? player.id,
+      name: player.name,
+      role: player.role,
+      rating: player.rating,
+      latestObservedAt: player.latestObservedAt,
+    })
+    const lineup: PublicCurrentLineup = {
+      team: first.team,
+      teamId,
+      teamCode: first.teamCode,
+      observedAt,
+      sourceProvider: first.sourceProvider ?? 'oracles-elixir',
+      completeness: missingRoles.length === 0 ? 'complete-five-role' : 'partial',
+      coveredRoles,
+      missingRoles,
+      starters: starters.map(compactLineupPlayer),
+      substitutes: substitutes.map(compactLineupPlayer),
+    }
+    return [teamId, lineup]
+  }))
 }
 
 function assignCompactPlayerResidualRanks(players: CompactPlayer[]): CompactPlayer[] {
@@ -1746,7 +1876,11 @@ function compactPlayerRating(player: PlayerStanding): CompactPlayerRating {
   }
 }
 
-function dataQualityFor(matches: MatchRecord[], teams: Record<string, TeamProfile>): DataQualityAudit {
+function dataQualityFor(
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  pipelineAudit?: { importedMatchCount: number },
+): DataQualityAudit {
   const rosterSides = matches.flatMap((match) => [match.teamARoster, match.teamBRoster])
   const sourceProviderCounts = countBy(matches, (match) => match.sourceProvider ?? 'unknown')
   const dataCompletenessCounts = countBy(matches, (match) => match.dataCompleteness ?? 'unspecified')
@@ -1758,9 +1892,16 @@ function dataQualityFor(matches: MatchRecord[], teams: Record<string, TeamProfil
   const missingSourceProviderCount = matches.filter((match) => !match.sourceProvider).length
   const missingSourceGameIdCount = matches.filter((match) => !match.sourceGameId).length
   const missingRosterSides = rosterSides.filter((roster) => !roster).length
+  const duplicateTeamCodes = duplicateTeamCodesFor(teams)
+  const unresolvedLineages = unresolvedTeamLineagesFor(teams)
 
   return {
     matchCount: matches.length,
+    pipelineCounts: {
+      importedMatchCount: pipelineAudit?.importedMatchCount ?? matches.length,
+      publishedMatchCount: matches.length,
+      filteredMatchCount: Math.max(0, (pipelineAudit?.importedMatchCount ?? matches.length) - matches.length),
+    },
     sourceProviderCounts,
     dataCompletenessCounts,
     missing: {
@@ -1782,6 +1923,8 @@ function dataQualityFor(matches: MatchRecord[], teams: Record<string, TeamProfil
       unknownLeagueTeamCount,
       internationalRegionTeamCount,
       unresolvedLeagueSummaries,
+      duplicateTeamCodes,
+      unresolvedLineages,
     },
     notes: dataQualityNotes({
       missingPatchCount,
@@ -1792,6 +1935,8 @@ function dataQualityFor(matches: MatchRecord[], teams: Record<string, TeamProfil
       unknownLeagueTeamCount,
       internationalRegionTeamCount,
       unresolvedLeagueSummaries,
+      duplicateTeamCodes,
+      unresolvedLineages,
     }),
   }
 }
@@ -1805,6 +1950,8 @@ function dataQualityNotes({
   unknownLeagueTeamCount,
   internationalRegionTeamCount,
   unresolvedLeagueSummaries,
+  duplicateTeamCodes,
+  unresolvedLineages,
 }: {
   missingPatchCount: number
   missingSideCount: number
@@ -1814,6 +1961,8 @@ function dataQualityNotes({
   unknownLeagueTeamCount: number
   internationalRegionTeamCount: number
   unresolvedLeagueSummaries: DataQualityLeagueSummary[]
+  duplicateTeamCodes: DataQualityAudit['identityCoverage']['duplicateTeamCodes']
+  unresolvedLineages: DataQualityAudit['identityCoverage']['unresolvedLineages']
 }) {
   const notes: string[] = []
   if (missingSourceProviderCount > 0) notes.push(`${missingSourceProviderCount} matches are missing source provider metadata.`)
@@ -1827,7 +1976,40 @@ function dataQualityNotes({
   if (unresolvedLeagueSummaries.length > 0) {
     notes.push('Unresolved league summaries list the largest remaining identity gaps by team count and match touches.')
   }
+  if (duplicateTeamCodes.length > 0) {
+    notes.push(`${duplicateTeamCodes.length} display code collisions are retained safely under distinct canonical team ids.`)
+  }
+  if (unresolvedLineages.length > 0) {
+    notes.push(`${unresolvedLineages.length} possible organizational lineages remain explicit and are not merged without source-id evidence.`)
+  }
   return notes
+}
+
+function duplicateTeamCodesFor(teams: Record<string, TeamProfile>) {
+  const teamsByCode = new Map<string, TeamProfile[]>()
+  for (const team of Object.values(teams)) {
+    const code = team.code.trim().toUpperCase()
+    if (!code) continue
+    const entries = teamsByCode.get(code) ?? []
+    entries.push(team)
+    teamsByCode.set(code, entries)
+  }
+  return [...teamsByCode.entries()]
+    .filter(([, entries]) => entries.length > 1)
+    .map(([code, entries]) => ({
+      code,
+      teamNames: entries.map((team) => team.name).sort(),
+      teamIds: entries.map((team) => teamIdFor({ team: team.name, region: team.region, code: team.code })).sort(),
+    }))
+    .sort((left, right) => left.code.localeCompare(right.code))
+}
+
+function unresolvedTeamLineagesFor(teams: Record<string, TeamProfile>) {
+  if (!teams['MGN Vikings Esports'] || !teams['MVK Esports']) return []
+  return [{
+    teamNames: ['MGN Vikings Esports', 'MVK Esports'],
+    note: 'Possible continuity requires source-id confirmation before histories can be merged.',
+  }]
 }
 
 function unresolvedLeagueSummariesFor(matches: MatchRecord[], teams: Record<string, TeamProfile>): DataQualityLeagueSummary[] {

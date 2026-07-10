@@ -89,7 +89,7 @@ test('daily chart aggregation preserves same-day matches and reconciles visible 
   ])
 })
 
-test('daily chart aggregation separates final standing adjustment from the match result', () => {
+test('daily chart aggregation contains match results only', () => {
   const points: HistoryPoint[] = [
     [
       '2026-06-01',
@@ -103,30 +103,16 @@ test('daily chart aggregation separates final standing adjustment from the match
       3,
       { event: 'MSI 2026', opponent: 'Team Liquid', result: 'W', wins: 3, losses: 0, delta: 6, model: { e: 0.778, c: [1500, 6, 40, 4, 0] } },
     ],
-    [
-      '2026-06-02',
-      1506,
-      3,
-      { kind: 'standing-adjustment', event: 'Published standing adjustment', delta: -4, model: { c: [1496, 6, 40, 4, 0] } },
-    ],
   ]
 
   const daily = dailyChartPointsFromHistoryPoints(points)
 
-  assert.equal(daily[1].y, 1506)
-  assert.equal(daily[1].detail?.visibleDelta, 6)
-  assert.equal(daily[1].detail?.kind, 'standing-adjustment')
-  assert.equal(daily[1].detail?.delta, -4)
-  assert.equal(daily[1].detail?.dayMatchCount, 1)
-  assert.equal(daily[1].detail?.dayMatches?.[0]?.opponent, 'Team Liquid')
-  assert.equal(daily[1].detail?.dayMatches?.[1]?.event, 'Published standing adjustment')
+  assert.equal(daily[1].y, 1510)
+  assert.equal(daily[1].detail?.visibleDelta, 10)
+  assert.equal(daily[1].detail?.kind, 'match')
+  assert.equal(daily[1].detail?.delta, 6)
+  assert.equal(daily[1].detail?.opponent, 'Team Liquid')
   assert.equal(daily[1].detail?.model?.expectedWinProbability, 0.778)
-  assert.deepEqual(daily[1].detail?.model?.componentAttribution?.map((entry) => [entry.key, entry.value]), [
-    ['league', -4],
-    ['stable', 6],
-    ['form', 4],
-  ])
-  assert.equal(daily[1].detail?.model?.componentAttribution?.[0]?.label, 'League strength')
 })
 
 test('tournament boundaries remain annotations instead of counted match results', () => {

@@ -15,8 +15,7 @@ export type ChartModelDetail = {
 }
 
 export type ChartPointDetail = {
-  kind?: 'match' | 'standing-adjustment' | 'tournament-start' | 'tournament-end' | 'tournament-today' | 'tournament-latest-data'
-  adjustmentReason?: 'published-standing-reconciliation'
+  kind?: 'match' | 'tournament-start' | 'tournament-end' | 'tournament-today' | 'tournament-latest-data'
   event?: string
   opponent?: string
   result?: 'W' | 'L' | 'T'
@@ -60,14 +59,6 @@ export function formatChartInfluence(detail?: ChartPointDetail) {
 
   if (detail.passive) return 'Passive rank movement'
   if (detail.kind && isTournamentBoundaryKind(detail.kind)) return detail.event ?? tournamentBoundaryKindLabel(detail.kind)
-  if (detail.kind === 'standing-adjustment') {
-    const parts = [
-      detail.event ?? 'Published standing adjustment',
-      typeof detail.delta === 'number' && Number.isFinite(detail.delta) ? formatSignedDelta(detail.delta) : undefined,
-    ].filter((part): part is string => Boolean(part))
-    return parts.join(' · ')
-  }
-
   const result = formatResult(detail)
   const parts = [
     detail.opponent ? [result, `vs ${detail.opponent}`].filter(Boolean).join(' ') : result,
