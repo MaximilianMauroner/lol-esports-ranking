@@ -1637,6 +1637,7 @@ export function compactPlayerRecentMatches(player: PlayerStanding): CompactPlaye
       ...(typeof bestOf === 'number' ? { bestOf } : {}),
       ...(latest.source?.seriesId ? { seriesId: latest.source.seriesId } : {}),
       ...(latest.source?.formatBasis ? { formatBasis: latest.source.formatBasis } : {}),
+      ...(latest.source?.formatConfidence ? { formatConfidence: latest.source.formatConfidence } : {}),
     }
   }).filter((match): match is NonNullable<typeof match> => Boolean(match))
 }

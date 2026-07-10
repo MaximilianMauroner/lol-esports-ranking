@@ -55,9 +55,10 @@ test('player recent matches retain canonical Bo2 ties and separate same-day seri
     games: match.games,
     seriesId: match.seriesId,
     formatBasis: match.formatBasis,
+    formatConfidence: match.formatConfidence,
   })), [
-    { result: 'T', games: 2, seriesId: 'tie-series', formatBasis: 'provider' },
-    { result: 'W', games: 1, seriesId: 'official-series-2', formatBasis: 'official' },
+    { result: 'T', games: 2, seriesId: 'tie-series', formatBasis: 'provider', formatConfidence: 'high' },
+    { result: 'W', games: 1, seriesId: 'official-series-2', formatBasis: 'official', formatConfidence: 'high' },
   ])
 })
 

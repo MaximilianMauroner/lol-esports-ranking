@@ -283,6 +283,7 @@ export type CompactPlayer = {
     bestOf?: number
     seriesId?: string
     formatBasis?: SourceTrace['formatBasis']
+    formatConfidence?: SourceTrace['formatConfidence']
     teamKills?: number
     opponentKills?: number
     sourceProvider?: string
