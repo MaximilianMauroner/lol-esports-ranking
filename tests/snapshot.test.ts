@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
+import { createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, createTournamentMovementArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
 import { emptyRatingUpdateLedger } from '../src/lib/ratingCalculations.ts'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, compactStanding } from '../src/lib/publicArtifacts/schema.ts'
 import { resolvePlayerScope } from '../src/lib/playerScopes.ts'
@@ -1529,6 +1529,50 @@ test('createTeamHistoryArtifacts slices default and season scopes into indexed s
   assert.equal(seasonEntry.teamCount, seasonShard.teamCount)
   assert.equal(seasonEntry.pointCount, seasonShard.pointCount)
   assert.equal(history.shards[data.defaultSnapshotKey].pointCount, defaultEntry.pointCount)
+})
+
+test('tournament movement artifacts merge aliases and preserve common global boundaries', () => {
+  const data = createStaticRankingData({
+    matches: [
+      checkpointMatch('baseline-1', '2026-01-10', 'LCK 2026 Spring', 'LCK', 'Gen.G', 'T1', 'Gen.G'),
+      checkpointMatch('baseline-2', '2026-01-11', 'LEC 2026 Winter', 'LEC', 'G2 Esports', 'Fnatic', 'G2 Esports'),
+      checkpointMatch('msi-1', '2026-07-01', 'MSI 2026', 'MSI', 'Gen.G', 'G2 Esports', 'Gen.G'),
+      checkpointMatch('msi-2', '2026-07-02', '2026 Mid-Season Invitational', 'MSI', 'T1', 'G2 Esports', 'T1'),
+      checkpointMatch('msi-3', '2026-07-03', 'MSI 2026', 'MSI', 'Gen.G', 'T1', 'T1'),
+      checkpointMatch('global-after-elimination', '2026-07-04', 'LCK 2026 Summer', 'LCK', 'Gen.G', 'T1', 'Gen.G'),
+    ],
+    teams,
+    rosters: {},
+    generatedAt: '2026-07-05T00:00:00.000Z',
+    tournamentScheduleReferences: [
+      { leagueName: 'MSI', date: '2026-07-01', state: 'completed', retrievedAt: '2026-07-05T00:00:00Z', coverageStart: '2026-07-01', coverageEnd: '2026-07-07' },
+      { leagueSlug: 'msi', date: '2026-07-07', state: 'unstarted', retrievedAt: '2026-07-05T00:00:00Z', coverageStart: '2026-07-01', coverageEnd: '2026-07-07' },
+    ],
+  })
+  const artifacts = createTournamentMovementArtifacts(data, {
+    tournamentMovementUrlForId: (id) => `/history/${id}.json`,
+  })
+  const shard = artifacts.shards['msi:2026']
+
+  assert.ok(shard)
+  assert.equal(shard.status, 'ongoing')
+  assert.equal(shard.startDate, '2026-07-01')
+  assert.equal(shard.boundaryDate, '2026-07-05')
+  assert.equal(shard.ratedThroughDate, '2026-07-03')
+  assert.equal(shard.scheduledEndDate, '2026-07-07')
+  assert.equal(shard.participantCount, 3)
+  assert.equal(artifacts.index.tournaments[0]?.url, '/history/msi:2026.json')
+  for (const team of shard.teams) {
+    assert.equal(team.points[0]?.[3]?.kind, 'tournament-start')
+    assert.equal(team.points.at(-1)?.[3]?.kind, 'tournament-today')
+    assert.equal(team.points.at(-1)?.[0], '2026-07-05')
+    assert.equal(team.rankMovement, team.startRank - team.endRank)
+    assert.equal(team.ratingDelta, team.endRating - team.startRating)
+  }
+  const g2 = shard.teams.find((team) => team.team === 'G2 Esports')
+  assert.ok(g2)
+  assert.equal(g2.points.filter((point) => point[3]?.result).length, 2)
+  assert.equal(g2.points.at(-1)?.[0], '2026-07-05')
 })
 
 test('season checkpoint scopes publish movement and companion history artifacts', () => {

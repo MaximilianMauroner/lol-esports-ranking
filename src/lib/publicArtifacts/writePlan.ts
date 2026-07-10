@@ -1,4 +1,11 @@
-import { createPlayerDirectory, createRegionHistory, createStaticRankingSummaryData, createTeamDirectory, createTeamHistoryArtifacts } from '../snapshot'
+import {
+  createPlayerDirectory,
+  createRegionHistory,
+  createStaticRankingSummaryData,
+  createTeamDirectory,
+  createTeamHistoryArtifacts,
+  createTournamentMovementArtifacts,
+} from '../snapshot'
 import {
   parsePublicPlayerDirectory,
   parsePublicRankingManifest,
@@ -7,10 +14,14 @@ import {
   parsePublicTeamDirectory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  parsePublicTournamentMovementIndex,
+  parsePublicTournamentMovementShard,
   runIdForArtifact,
   scopeArtifactFileNameForKey,
   teamHistoryShardFileName,
+  tournamentMovementShardFileName,
 } from './schema'
+import type { TournamentInstanceId } from '../internationalTournaments'
 
 type StaticRankingData = Parameters<typeof createStaticRankingSummaryData>[0]
 
@@ -45,6 +56,8 @@ export const PUBLIC_ARTIFACT_PATHS = {
   teamHistoryIndex: 'history/team-series/index.json',
   teamHistoryShardDir: 'history/team-series',
   regionHistory: 'history/region-series.json',
+  tournamentMovementIndex: 'history/tournament-moves/index.json',
+  tournamentMovementShardDir: 'history/tournament-moves',
   scopeDir: 'scopes',
 } as const
 
@@ -62,6 +75,10 @@ export function publicScopeArtifactPath(key: string) {
 
 export function publicTeamHistoryShardPath(key: string) {
   return `${PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir}/${encodeURIComponent(teamHistoryShardFileName(key))}`
+}
+
+export function publicTournamentMovementShardPath(id: TournamentInstanceId) {
+  return `${PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir}/${tournamentMovementShardFileName(id)}`
 }
 
 export function createPublicArtifactWritePlan(
@@ -86,12 +103,16 @@ export function createPublicArtifactWritePlan(
     teamHistoryUrlForKey: (key) => versionedUrlForPath(publicTeamHistoryShardPath(key)),
   })
   const regionHistory = createRegionHistory(data)
+  const tournamentMovements = createTournamentMovementArtifacts(data, {
+    tournamentMovementUrlForId: (id) => versionedUrlForPath(publicTournamentMovementShardPath(id)),
+  })
   const summary = createStaticRankingSummaryData(data, {
     fullSnapshotUrl,
     playerDirectoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.players),
     teamDirectoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.teams),
     teamHistoryIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex),
     regionHistoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.regionHistory),
+    tournamentMovementIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex),
     snapshotUrlForKey: (key) => versionedUrlForPath(publicScopeArtifactPath(key)),
   })
 
@@ -103,6 +124,10 @@ export function createPublicArtifactWritePlan(
       write('history', publicTeamHistoryShardPath(key), shard, parsePublicTeamHistoryShard)
     )),
     write('history', PUBLIC_ARTIFACT_PATHS.regionHistory, regionHistory, parsePublicRegionHistory),
+    write('history', PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex, tournamentMovements.index, parsePublicTournamentMovementIndex),
+    ...Object.entries(tournamentMovements.shards).map(([id, shard]) => (
+      write('history', publicTournamentMovementShardPath(id as TournamentInstanceId), shard, parsePublicTournamentMovementShard)
+    )),
     ...Object.entries(summary.snapshots).map(([key, snapshot]) => (
       write('scope', publicScopeArtifactPath(key), snapshot, parsePublicRankingShard)
     )),

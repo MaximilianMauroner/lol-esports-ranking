@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { chartPointFromHistoryPoint, dailyChartPointsFromHistoryPoints } from '../src/lib/teamHistoryChart.ts'
+import { formatChartInfluence } from '../src/lib/chartPoints.ts'
 import type { TeamHistorySeries } from '../src/lib/snapshot.ts'
 
 type HistoryPoint = TeamHistorySeries['points'][number]
@@ -126,4 +127,19 @@ test('daily chart aggregation separates final standing adjustment from the match
     ['form', 4],
   ])
   assert.equal(daily[1].detail?.model?.componentAttribution?.[0]?.label, 'League strength')
+})
+
+test('tournament boundaries remain annotations instead of counted match results', () => {
+  const points: HistoryPoint[] = [
+    ['2026-07-01', 1500, 4, { kind: 'tournament-start', event: 'MSI 2026 start' }],
+    ['2026-07-01', 1512, 3, { kind: 'match', event: 'MSI 2026', opponent: 'Alpha', result: 'W', delta: 12 }],
+    ['2026-07-10', 1520, 2, { kind: 'tournament-today', event: 'MSI 2026 today' }],
+  ]
+
+  const daily = dailyChartPointsFromHistoryPoints(points)
+
+  assert.equal(daily[0]?.detail?.dayMatchCount, 1)
+  assert.equal(daily[0]?.detail?.dayMatches?.[0]?.kind, 'tournament-start')
+  assert.equal(daily[1]?.detail?.kind, 'tournament-today')
+  assert.equal(formatChartInfluence(daily[1]?.detail), 'MSI 2026 today')
 })

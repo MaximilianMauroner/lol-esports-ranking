@@ -5,6 +5,7 @@ import {
   formatPreciseSignedDelta,
   formatProbability,
   isChartPointDetail,
+  isMatchChartPointDetail,
   nonMatchDeltaFor,
   type ChartPointDetail,
 } from '../lib/chartPoints'
@@ -161,7 +162,7 @@ function dailyCloseNote(detail?: ChartPointDetail) {
 
 function matchLedgerDelta(detail?: ChartPointDetail) {
   const matches = (detail?.dayMatches ?? (detail && detail.kind !== 'standing-adjustment' ? [detail] : []))
-    .filter((entry) => entry.kind !== 'standing-adjustment')
+    .filter(isMatchChartPointDetail)
   if (matches.length === 0) return undefined
 
   let total = 0

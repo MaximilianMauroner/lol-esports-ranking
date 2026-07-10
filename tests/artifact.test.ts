@@ -12,6 +12,8 @@ import {
   parsePublicTeamDirectory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  parsePublicTournamentMovementIndex,
+  parsePublicTournamentMovementShard,
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   snapshotKey,
   snapshotShardUrlPathForKey,
@@ -256,6 +258,7 @@ test('public manifest data URLs resolve to tracked public files', async () => {
   addLocalDataUrl(summary.teamHistoryIndexUrl, urls)
   addLocalDataUrl(summary.teamHistoryUrl, urls)
   addLocalDataUrl(summary.regionHistoryUrl, urls)
+  addLocalDataUrl(summary.tournamentMovementIndexUrl, urls)
 
   for (const entry of Object.values(summary.snapshotIndex ?? {})) {
     addLocalDataUrl(entry.url, urls)
@@ -297,11 +300,50 @@ test('public team history series store is consistent with scope indexes', async 
   }
 })
 
+test('public tournament movement index resolves versioned, boundary-correct shards', async () => {
+  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const index = parsePublicTournamentMovementIndex(await readJson(publicPathForDataUrl(summary.tournamentMovementIndexUrl)))
+  const ids = new Set<string>()
+  const indexedPaths = new Set<string>()
+  const shards = new Map<string, ReturnType<typeof parsePublicTournamentMovementShard>>()
+
+  assert.equal(dataUrlPath(summary.tournamentMovementIndexUrl), '/data/history/tournament-moves/index.json')
+  assert.ok(index.tournaments.length > 0)
+  for (const entry of index.tournaments) {
+    assert.equal(ids.has(entry.id), false, `duplicate tournament instance ${entry.id}`)
+    ids.add(entry.id)
+    const path = publicPathForDataUrl(entry.url)
+    indexedPaths.add(path)
+    assert.equal(existsSync(path), true, `missing tournament movement shard ${entry.url}`)
+    const shard = parsePublicTournamentMovementShard(await readJson(path))
+    shards.set(shard.id, shard)
+    assert.equal(shard.id, entry.id)
+    assert.equal(shard.participantCount, entry.participantCount)
+    assert.equal(shard.teams.length, entry.participantCount)
+    for (const team of shard.teams) {
+      assert.equal(team.points[0]?.[3]?.kind, 'tournament-start')
+      assert.equal(['tournament-end', 'tournament-today', 'tournament-latest-data'].includes(team.points.at(-1)?.[3]?.kind ?? ''), true)
+      assert.equal(team.points.at(-1)?.[0], entry.boundaryDate)
+      assert.equal(team.rankMovement, team.startRank - team.endRank)
+      assert.equal(team.ratingDelta, team.endRating - team.startRating)
+    }
+  }
+  assert.equal(shards.has('ewc:2026'), false, 'pre-event EWC qualifier rows must not create a main-event shard')
+  assert.equal(shards.get('worlds:2025')?.startDate, '2025-10-14', 'regional finals must not move the Worlds opening boundary')
+  assert.equal(shards.get('msi:2025')?.teams.some((team) => team.team === 'GAM Esports'), true)
+  assert.equal(shards.get('ewc:2025')?.teams.some((team) => team.team === 'GAM Esports'), true)
+  const unindexedShardFiles = (await listJsonFiles('public/data/history/tournament-moves'))
+    .filter((file) => !file.endsWith('/index.json') && !indexedPaths.has(file))
+    .map((file) => relative(process.cwd(), file))
+  assert.deepEqual(unindexedShardFiles, [], 'generated tournament movement shard files without index entries')
+})
+
 test('generated public artifacts share one model and generated-at provenance spine', async () => {
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const players = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
   const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
   const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
+  const tournamentMovementIndex = parsePublicTournamentMovementIndex(await readJson(publicPathForDataUrl(summary.tournamentMovementIndexUrl)))
   const snapshotIndex = summary.snapshotIndex ?? {}
   const defaultEntry = snapshotIndex[summary.defaultSnapshotKey]
   const defaultTeamHistoryEntry = teamHistoryIndex.scopeIndex[summary.defaultSnapshotKey]
@@ -325,10 +367,18 @@ test('generated public artifacts share one model and generated-at provenance spi
   assert.equal(defaultSnapshot?.modelConfigHash, summary.model.configHash)
 
   assert.ok(defaultTeamHistory)
-  for (const artifact of [players, teamHistoryIndex, defaultTeamHistory, regionHistory]) {
+  for (const artifact of [players, teamHistoryIndex, defaultTeamHistory, regionHistory, tournamentMovementIndex]) {
     assert.equal(artifact.generatedAt, summary.generatedAt, `${artifact.artifactKind} generatedAt differs from manifest`)
     assert.equal(artifact.modelVersion, summary.model.version, `${artifact.artifactKind} modelVersion differs from manifest`)
     assert.equal(artifact.modelConfigHash, summary.model.configHash, `${artifact.artifactKind} modelConfigHash differs from manifest`)
+  }
+
+
+  for (const entry of tournamentMovementIndex.tournaments) {
+    const shard = parsePublicTournamentMovementShard(await readJson(publicPathForDataUrl(entry.url)))
+    assert.equal(shard.generatedAt, summary.generatedAt, `tournament shard generatedAt differs from manifest: ${entry.id}`)
+    assert.equal(shard.modelVersion, summary.model.version, `tournament shard modelVersion differs from manifest: ${entry.id}`)
+    assert.equal(shard.modelConfigHash, summary.model.configHash, `tournament shard modelConfigHash differs from manifest: ${entry.id}`)
   }
 
   for (const entry of Object.values(snapshotIndex)) {

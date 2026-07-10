@@ -7,6 +7,9 @@ import type {
   PublicTeamHistoryDirectory,
   PublicTeamHistoryIndex,
   PublicTeamHistoryShard,
+  PublicTournamentMovementIndex,
+  PublicTournamentMovementIndexEntry,
+  PublicTournamentMovementShard,
   SnapshotCheckpointOption,
   SnapshotFilter,
 } from '../lib/publicArtifacts/schema'
@@ -18,14 +21,19 @@ import {
   parsePublicTeamHistory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  parsePublicTournamentMovementIndex,
+  parsePublicTournamentMovementShard,
   snapshotKey,
 } from '../lib/publicArtifacts/schema'
 import {
   resolvePublicSnapshotState,
   validatePublicSnapshotShard,
   validatePublicTeamHistoryShard,
+  validatePublicTournamentMovementIndex,
+  validatePublicTournamentMovementShard,
   type PublicSnapshotCacheEntry,
 } from '../lib/publicArtifacts/resolver'
+import { tournamentEntriesForScope, type TournamentInstanceId } from '../lib/internationalTournaments'
 
 export type PublicArtifactState<T> =
   | { status: 'idle' }
@@ -38,12 +46,16 @@ export type TeamHistoryArtifact = PublicTeamHistoryDirectory | PublicTeamHistory
 export type TeamHistoryArtifactState = PublicArtifactState<TeamHistoryArtifact>
 export type PlayerDirectoryState = PublicArtifactState<PublicPlayerDirectory>
 export type RegionHistoryScopeState = PublicArtifactState<PublicRegionHistoryScope>
+export type TournamentMovementIndexState = PublicArtifactState<PublicTournamentMovementIndex>
+export type TournamentMovementState = PublicArtifactState<PublicTournamentMovementShard>
 
 type TeamHistoryRoot = PublicTeamHistoryDirectory | PublicTeamHistoryIndex
 type PublicArtifactLoadOptions = {
   loadPlayers?: boolean
   loadTeamHistory?: boolean
   loadRegionHistory?: boolean
+  loadTournamentMovements?: boolean
+  tournamentId?: TournamentInstanceId
 }
 
 type TeamHistoryCacheEntry =
@@ -52,19 +64,36 @@ type TeamHistoryCacheEntry =
   | { status: 'missing'; message: string }
   | { status: 'error'; message: string }
 
+type TournamentMovementCacheEntry =
+  | { status: 'loading' }
+  | { status: 'ready'; shard: PublicTournamentMovementShard }
+  | { status: 'missing'; message: string }
+  | { status: 'error'; message: string }
+
 const DATA_URL = import.meta.env.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
 const PLAYERS_URL = import.meta.env.VITE_PLAYER_DATA_URL || '/data/entities/players.json'
 const TEAM_HISTORY_INDEX_URL = import.meta.env.VITE_TEAM_HISTORY_INDEX_URL || import.meta.env.VITE_TEAM_HISTORY_URL || '/data/history/team-series/index.json'
 const REGION_HISTORY_URL = import.meta.env.VITE_REGION_HISTORY_URL || '/data/history/region-series.json'
+const TOURNAMENT_MOVEMENT_INDEX_URL = import.meta.env.VITE_TOURNAMENT_MOVEMENT_INDEX_URL || '/data/history/tournament-moves/index.json'
 
 export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOptions = {}) {
-  const { loadPlayers = false, loadTeamHistory = false, loadRegionHistory = false } = options
+  const {
+    loadPlayers = false,
+    loadTeamHistory = false,
+    loadRegionHistory = false,
+    loadTournamentMovements = false,
+    tournamentId,
+  } = options
   const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>({ status: 'loading' })
   const [playersState, setPlayersState] = useState<PlayerDirectoryState>({ status: 'idle' })
   const [teamHistoryRootState, setTeamHistoryRootState] = useState<PublicArtifactState<TeamHistoryRoot>>({ status: 'idle' })
   const [teamHistoryCache, setTeamHistoryCache] = useState<Record<string, TeamHistoryCacheEntry>>({})
   const teamHistoryCacheRef = useRef(teamHistoryCache)
   const [regionHistoryState, setRegionHistoryState] = useState<PublicArtifactState<PublicRegionHistoryDirectory>>({ status: 'idle' })
+  const [tournamentMovementIndexState, setTournamentMovementIndexState] = useState<TournamentMovementIndexState>({ status: 'idle' })
+  const [tournamentMovementIndexAttempt, setTournamentMovementIndexAttempt] = useState(0)
+  const [tournamentMovementCache, setTournamentMovementCache] = useState<Record<string, TournamentMovementCacheEntry>>({})
+  const tournamentMovementCacheRef = useRef(tournamentMovementCache)
   const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
   const snapshotCacheRef = useRef(snapshotCache)
 
@@ -84,6 +113,16 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     [effectiveScope, filter, regionHistoryState],
   )
   const seasonYears = useMemo(() => (data ? orderedSeasonYears(data) : []), [data])
+  const tournamentMovementEntries = useMemo(
+    () => tournamentMovementIndexState.status === 'ready' && data
+      ? compatibleTournamentMovementEntries(tournamentMovementIndexState.data.tournaments, filter, data)
+      : [],
+    [data, filter, tournamentMovementIndexState],
+  )
+  const tournamentMovementState = useMemo<TournamentMovementState>(
+    () => resolveTournamentMovementState(tournamentMovementIndexState, tournamentMovementCache, tournamentId),
+    [tournamentId, tournamentMovementCache, tournamentMovementIndexState],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -175,12 +214,96 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   }, [data, loadRegionHistory])
 
   useEffect(() => {
+    if (!data || !loadTournamentMovements) return
+    const manifest = data
+    const controller = new AbortController()
+    const url = resolveArtifactUrl(manifest.tournamentMovementIndexUrl ?? TOURNAMENT_MOVEMENT_INDEX_URL, DATA_URL)
+    setTournamentMovementIndexState({ status: 'loading' })
+    setTournamentMovementCache({})
+    tournamentMovementCacheRef.current = {}
+    async function load() {
+      try {
+        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
+        if (!response.ok) {
+          setTournamentMovementIndexState({
+            status: response.status === 404 ? 'missing' : 'error',
+            message: `Tournament movement index failed with ${response.status}`,
+          })
+          return
+        }
+        const next = parsePublicTournamentMovementIndex(await response.json())
+        validatePublicTournamentMovementIndex(next, manifest)
+        setTournamentMovementIndexState({ status: 'ready', data: next })
+      } catch (error) {
+        if (isAbortError(error)) return
+        setTournamentMovementIndexState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load tournament movement index' })
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [data, loadTournamentMovements, tournamentMovementIndexAttempt])
+
+  useEffect(() => {
     snapshotCacheRef.current = snapshotCache
   }, [snapshotCache])
 
   useEffect(() => {
     teamHistoryCacheRef.current = teamHistoryCache
   }, [teamHistoryCache])
+
+  useEffect(() => {
+    tournamentMovementCacheRef.current = tournamentMovementCache
+  }, [tournamentMovementCache])
+
+  useEffect(() => {
+    if (!tournamentId || tournamentMovementIndexState.status !== 'ready') return
+    const selectedTournamentId = tournamentId
+    const index = tournamentMovementIndexState.data
+    const expected = index.tournaments.find((entry) => entry.id === selectedTournamentId)
+    const cached = tournamentMovementCacheRef.current[selectedTournamentId]
+    if (cached?.status === 'ready' || cached?.status === 'loading') return
+    if (!expected) {
+      setTournamentMovementCache((current) => ({
+        ...current,
+        [selectedTournamentId]: { status: 'missing', message: `No generated tournament movement exists for ${selectedTournamentId}.` },
+      }))
+      return
+    }
+    const expectedEntry = expected
+    const controller = new AbortController()
+    const loadingEntry: TournamentMovementCacheEntry = { status: 'loading' }
+    tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [selectedTournamentId]: loadingEntry }
+    setTournamentMovementCache((current) => ({ ...current, [selectedTournamentId]: loadingEntry }))
+    async function load() {
+      try {
+        const response = await fetch(resolveArtifactUrl(expectedEntry.url, DATA_URL), {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' },
+        })
+        if (!response.ok) throw new Error(`Tournament movement failed with ${response.status}`)
+        const shard = parsePublicTournamentMovementShard(await response.json())
+        validatePublicTournamentMovementShard(expectedEntry, shard, index)
+        const readyEntry: TournamentMovementCacheEntry = { status: 'ready', shard }
+        tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [selectedTournamentId]: readyEntry }
+        setTournamentMovementCache((current) => ({ ...current, [selectedTournamentId]: readyEntry }))
+      } catch (error) {
+        if (isAbortError(error)) {
+          if (tournamentMovementCacheRef.current[selectedTournamentId]?.status === 'loading') {
+            tournamentMovementCacheRef.current = omitCacheEntry(tournamentMovementCacheRef.current, selectedTournamentId)
+            setTournamentMovementCache((current) => current[selectedTournamentId]?.status === 'loading'
+              ? omitCacheEntry(current, selectedTournamentId)
+              : current)
+          }
+          return
+        }
+        const errorEntry: TournamentMovementCacheEntry = { status: 'error', message: error instanceof Error ? error.message : 'Unable to load tournament movement' }
+        tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [selectedTournamentId]: errorEntry }
+        setTournamentMovementCache((current) => ({ ...current, [selectedTournamentId]: errorEntry }))
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [tournamentId, tournamentMovementIndexState])
 
   const prefetchScope = useCallback((nextScope: string) => {
     if (!data) return
@@ -213,6 +336,38 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     }
 
   }, [data])
+
+  const prefetchTournament = useCallback((id: TournamentInstanceId) => {
+    if (tournamentMovementIndexState.status !== 'ready') return
+    const index = tournamentMovementIndexState.data
+    const expected = index.tournaments.find((entry) => entry.id === id)
+    const cached = tournamentMovementCacheRef.current[id]
+    if (!expected || cached?.status === 'ready' || cached?.status === 'loading') return
+    const loadingEntry: TournamentMovementCacheEntry = { status: 'loading' }
+    tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: loadingEntry }
+    setTournamentMovementCache((current) => ({ ...current, [id]: loadingEntry }))
+    void fetch(resolveArtifactUrl(expected.url, DATA_URL), { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Tournament movement failed with ${response.status}`)
+        const shard = parsePublicTournamentMovementShard(await response.json())
+        validatePublicTournamentMovementShard(expected, shard, index)
+        const readyEntry: TournamentMovementCacheEntry = { status: 'ready', shard }
+        tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: readyEntry }
+        setTournamentMovementCache((current) => ({ ...current, [id]: readyEntry }))
+      })
+      .catch((error: unknown) => {
+        const errorEntry: TournamentMovementCacheEntry = { status: 'error', message: error instanceof Error ? error.message : 'Unable to load tournament movement' }
+        tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: errorEntry }
+        setTournamentMovementCache((current) => ({ ...current, [id]: errorEntry }))
+      })
+  }, [tournamentMovementIndexState])
+
+  const retryTournamentMovements = useCallback(() => {
+    setTournamentMovementIndexState({ status: 'loading' })
+    setTournamentMovementCache({})
+    tournamentMovementCacheRef.current = {}
+    setTournamentMovementIndexAttempt((attempt) => attempt + 1)
+  }, [])
 
   useEffect(() => {
     if (!data) return
@@ -297,7 +452,12 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     playersState,
     teamHistoryState,
     regionHistoryState: scopedRegionHistoryState,
+    tournamentMovementIndexState,
+    tournamentMovementEntries,
+    tournamentMovementState,
+    retryTournamentMovements,
     prefetchScope,
+    prefetchTournament,
   }
 }
 
@@ -457,6 +617,36 @@ function resolveRegionHistoryState(
   return { status: 'ready', data: scoped }
 }
 
+function resolveTournamentMovementState(
+  indexState: TournamentMovementIndexState,
+  cache: Record<string, TournamentMovementCacheEntry>,
+  tournamentId: TournamentInstanceId | undefined,
+): TournamentMovementState {
+  if (!tournamentId) return { status: 'idle' }
+  if (indexState.status === 'idle') return { status: 'idle' }
+  if (indexState.status === 'loading') return { status: 'loading' }
+  if (indexState.status === 'missing' || indexState.status === 'error') return indexState
+  if (!indexState.data.tournaments.some((entry) => entry.id === tournamentId)) {
+    return { status: 'missing', message: `No generated tournament movement exists for ${tournamentId}.` }
+  }
+  const cached = cache[tournamentId]
+  if (!cached) return { status: 'loading' }
+  if (cached.status === 'ready') return { status: 'ready', data: cached.shard }
+  return cached.status === 'loading' ? { status: 'loading' } : cached
+}
+
+function compatibleTournamentMovementEntries(
+  entries: readonly PublicTournamentMovementIndexEntry[],
+  filter: SnapshotFilter,
+  data: PublicRankingManifest,
+) {
+  if (filter.season === 'All') return entries
+  if (!filter.checkpoint) return tournamentEntriesForScope(entries, filter.season)
+  const checkpoint = checkpointOptionsForSeason(data, filter.season).find((entry) => entry.id === filter.checkpoint)
+  if (!checkpoint) return []
+  return tournamentEntriesForScope(entries, filter.season, checkpoint)
+}
+
 function isSeasonYear(value: string) {
   return /^\d{4}$/.test(value)
 }
@@ -472,4 +662,10 @@ function resolveArtifactUrl(url: string, baseUrl: string) {
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function omitCacheEntry<T>(cache: Record<string, T>, key: string) {
+  const next = { ...cache }
+  delete next[key]
+  return next
 }

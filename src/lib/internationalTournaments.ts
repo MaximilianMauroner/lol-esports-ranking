@@ -1,12 +1,56 @@
-import type { PublicTeamStanding } from './publicArtifacts/schema'
+import type { EventTier } from '../types'
+import type {
+  PublicTeamStanding,
+  PublicTournamentMovementIndexEntry,
+  PublicTournamentMovementShard,
+} from './publicArtifacts/schema'
 
 export type InternationalTournamentFamilyId = 'first-stand' | 'msi' | 'worlds' | 'ewc'
-export type TournamentFilterValue = 'All' | 'international' | InternationalTournamentFamilyId
+export type TournamentInstanceId = `${InternationalTournamentFamilyId}:${string}`
+export type ExactTournamentFilterValue = `tournament:${TournamentInstanceId}`
+export type TournamentFilterValue = 'All' | 'international' | ExactTournamentFilterValue
+export type TournamentLifecycleStatus = 'ongoing' | 'completed' | 'unknown'
 
 export type TournamentFilterOption = {
   value: TournamentFilterValue
   label: string
   count: number
+  status?: TournamentLifecycleStatus
+}
+
+export type TournamentScheduleReference = {
+  matchId?: string
+  tournamentId?: string
+  leagueName?: string
+  leagueSlug?: string
+  startTime?: string
+  date?: string
+  state?: string
+  retrievedAt?: string
+  coverageStart?: string
+  coverageEnd?: string
+  coverageEndComplete?: boolean
+}
+
+export type TournamentRatedMatchReference = {
+  event: string
+  season: number
+  date: string
+  phase?: string
+  tier?: EventTier
+}
+
+export type NormalizedTournamentInstance = {
+  id: TournamentInstanceId
+  family: InternationalTournamentFamilyId
+  season: string
+  label: string
+  status: TournamentLifecycleStatus
+  startDate: string
+  boundaryDate: string
+  ratedThroughDate: string
+  scheduledEndDate?: string
+  dataLag: boolean
 }
 
 type TournamentFamilyDefinition = {
@@ -42,6 +86,111 @@ export function tournamentFamilyForEvent(event: string): InternationalTournament
   return tournamentFamilies.find((family) => family.matches(event))?.value
 }
 
+export function tournamentInstanceForEvent(
+  event: string,
+  fallbackSeason?: string | number,
+): Pick<NormalizedTournamentInstance, 'id' | 'family' | 'season' | 'label'> | undefined {
+  const family = tournamentFamilyForEvent(event)
+  const season = tournamentSeason(event, fallbackSeason)
+  if (!family || !season) return undefined
+  return {
+    id: `${family}:${season}`,
+    family,
+    season,
+    label: `${tournamentFamilyLabel(family)} ${season}`,
+  }
+}
+
+export function tournamentInstanceForSchedule(
+  reference: TournamentScheduleReference,
+): Pick<NormalizedTournamentInstance, 'id' | 'family' | 'season' | 'label'> | undefined {
+  const event = [reference.leagueName, reference.leagueSlug].filter(Boolean).join(' ')
+  return tournamentInstanceForEvent(event, reference.date?.slice(0, 4) ?? reference.startTime?.slice(0, 4))
+}
+
+export function deriveTournamentInstances({
+  matches,
+  scheduleReferences = [],
+  generatedAt,
+}: {
+  matches: readonly TournamentRatedMatchReference[]
+  scheduleReferences?: readonly TournamentScheduleReference[]
+  generatedAt: string
+}): NormalizedTournamentInstance[] {
+  const matchesByInstance = groupByInstance(
+    matches.filter(isMainTournamentEvidence),
+    (match) => tournamentInstanceForEvent(match.event, match.season),
+  )
+  const scheduleByInstance = groupByInstance(canonicalScheduleReferences(scheduleReferences), tournamentInstanceForSchedule)
+  const generatedDate = generatedAt.slice(0, 10)
+
+  return [...matchesByInstance.entries()]
+    .flatMap(([id, instanceMatches]): NormalizedTournamentInstance[] => {
+      const schedule = scheduleByInstance.get(id) ?? []
+      const scheduleDates = schedule.map(scheduleDate).filter((date): date is string => Boolean(date)).sort()
+      const scheduledStartDate = scheduleDates[0]
+      const scheduleOpeningIsCovered = Boolean(
+        scheduledStartDate
+        && coverageLeadDays(schedule.map((reference) => reference.coverageStart), scheduledStartDate) >= 7,
+      )
+      const reconciledMatches = scheduledStartDate && scheduleOpeningIsCovered
+        ? instanceMatches.filter((match) => match.date >= scheduledStartDate)
+        : instanceMatches
+      if (reconciledMatches.length === 0) return []
+      const identity = tournamentInstanceForEvent(reconciledMatches[0]!.event, reconciledMatches[0]!.season)!
+      const ratedDates = reconciledMatches.map((match) => match.date).filter(isDateString).sort()
+      if (ratedDates.length === 0) return []
+      const coverageEnds = schedule.map((reference) => reference.coverageEnd).filter((date): date is string => Boolean(date && isDateString(date))).sort()
+      const coverageStarts = schedule.map((reference) => reference.coverageStart).filter((date): date is string => Boolean(date && isDateString(date))).sort()
+      const retrievedDates = schedule.map((reference) => reference.retrievedAt?.slice(0, 10)).filter((date): date is string => Boolean(date && isDateString(date))).sort()
+      const startDate = ratedDates[0]!
+      const ratedThroughDate = ratedDates.at(-1)!
+      const scheduledEndDate = scheduleDates.at(-1)
+      const coverageEnd = coverageEnds.at(-1)
+      const coverageStart = coverageStarts[0]
+      const retrievedDate = retrievedDates.at(-1)
+      const completedScheduleDate = schedule
+        .filter((reference) => isCompletedScheduleState(reference.state))
+        .map(scheduleDate)
+        .filter((date): date is string => Boolean(date))
+        .sort()
+        .at(-1)
+      const allScheduleRowsCompleted = schedule.length > 0 && schedule.every((reference) => isCompletedScheduleState(reference.state))
+      const scheduleCoversTournament = Boolean(
+        scheduledStartDate
+        && scheduledEndDate
+        && coverageStart
+        && coverageEnd
+        && coverageStart <= scheduledStartDate
+        && coverageEnd >= scheduledEndDate
+        && schedule.some((reference) => reference.coverageEndComplete),
+      )
+      const scheduleIsCurrent = Boolean(coverageEnd && coverageEnd >= generatedDate && retrievedDate && daysBetween(retrievedDate, generatedDate) <= 3)
+      const hasOpenScheduleRow = schedule.some((reference) => !isCompletedScheduleState(reference.state))
+      const status: TournamentLifecycleStatus = allScheduleRowsCompleted && scheduleCoversTournament
+        ? 'completed'
+        : hasOpenScheduleRow && scheduleIsCurrent && Boolean(scheduledEndDate && scheduledEndDate >= generatedDate)
+          ? 'ongoing'
+          : 'unknown'
+      const boundaryDate = status === 'completed'
+        ? scheduledEndDate!
+        : status === 'ongoing'
+          ? generatedDate
+          : ratedThroughDate
+
+      return [{
+        ...identity,
+        status,
+        startDate,
+        boundaryDate,
+        ratedThroughDate,
+        ...(scheduledEndDate ? { scheduledEndDate } : {}),
+        dataLag: Boolean(completedScheduleDate && completedScheduleDate > ratedThroughDate),
+      }]
+    })
+    .sort((left, right) => right.startDate.localeCompare(left.startDate) || left.label.localeCompare(right.label))
+}
+
 export function tournamentFamiliesForStanding(
   standing: Pick<PublicTeamStanding, 'recentMatches' | 'tournamentAppearances'>,
 ): InternationalTournamentFamilyId[] {
@@ -57,37 +206,161 @@ export function tournamentFamiliesForStanding(
 }
 
 export function teamMatchesTournamentFilter(
-  standing: Pick<PublicTeamStanding, 'recentMatches' | 'tournamentAppearances'>,
+  standing: Pick<PublicTeamStanding, 'teamId' | 'recentMatches' | 'tournamentAppearances'>,
   filter: TournamentFilterValue,
+  exactParticipantTeamIds?: ReadonlySet<string>,
 ) {
   if (filter === 'All') return true
-  const families = tournamentFamiliesForStanding(standing)
-  if (filter === 'international') return families.length > 0
-  return families.includes(filter)
+  if (filter === 'international') return tournamentFamiliesForStanding(standing).length > 0
+  return exactParticipantTeamIds?.has(standing.teamId) ?? false
+}
+
+export function projectTournamentStandings(
+  standings: readonly PublicTeamStanding[],
+  tournament: PublicTournamentMovementShard,
+): PublicTeamStanding[] {
+  const standingById = new Map(standings.map((standing) => [standing.teamId, standing]))
+  return tournament.teams.flatMap((movement): PublicTeamStanding[] => {
+    const standing = standingById.get(movement.teamId)
+    if (!standing) return []
+    const matchContexts = movement.points.flatMap((point) => point[3]?.result ? [point[3]] : [])
+    const wins = matchContexts.filter((context) => context.result === 'W').length
+    const losses = matchContexts.filter((context) => context.result === 'L').length
+    return [{
+      ...standing,
+      rating: movement.endRating,
+      previousRating: movement.startRating,
+      delta: movement.ratingDelta,
+      rank: movement.endRank,
+      previousRank: movement.startRank,
+      movement: movement.rankMovement,
+      wins,
+      losses,
+      form: matchContexts.map((context) => context.result!),
+      eligibility: {
+        ...standing.eligibility,
+        eligible: movement.eligible,
+        reasons: movement.eligibilityReasons,
+      },
+      recentEvents: [tournament.label],
+      recentMatches: [],
+      deservedStanding: undefined,
+    }]
+  })
 }
 
 export function tournamentFilterOptionsForStandings(
   standings: readonly Pick<PublicTeamStanding, 'recentMatches' | 'tournamentAppearances'>[],
+  tournamentEntries: readonly PublicTournamentMovementIndexEntry[] = [],
 ): TournamentFilterOption[] {
-  const counts = new Map<InternationalTournamentFamilyId, number>()
-  let internationalCount = 0
-
-  for (const standing of standings) {
-    const families = tournamentFamiliesForStanding(standing)
-    if (families.length === 0) continue
-    internationalCount += 1
-    for (const family of families) {
-      counts.set(family, (counts.get(family) ?? 0) + 1)
-    }
-  }
+  const internationalCount = standings.filter((standing) => tournamentFamiliesForStanding(standing).length > 0).length
 
   return [
     { value: 'All', label: 'All', count: standings.length },
     ...(internationalCount > 0 ? [{ value: 'international' as const, label: 'International', count: internationalCount }] : []),
-    ...tournamentFamilies
-      .map((family) => ({ value: family.value, label: family.label, count: counts.get(family.value) ?? 0 }))
-      .filter((option) => option.count > 0),
+    ...tournamentEntries.map((entry) => ({
+      value: `tournament:${entry.id}` as ExactTournamentFilterValue,
+      label: `${entry.label} · ${tournamentStatusLabel(entry.status)}`,
+      count: entry.participantCount,
+      status: entry.status,
+    })),
   ]
+}
+
+export function tournamentEntriesForScope(
+  entries: readonly PublicTournamentMovementIndexEntry[],
+  season: string,
+  window?: { startDate: string; endDate: string },
+) {
+  if (season === 'All') return [...entries]
+  const seasonEntries = entries.filter((entry) => entry.season === season)
+  if (!window) return seasonEntries
+  return seasonEntries.filter((entry) => entry.startDate <= window.endDate && entry.ratedThroughDate >= window.startDate)
+}
+
+export function tournamentIdFromFilter(filter: TournamentFilterValue): TournamentInstanceId | undefined {
+  return filter.startsWith('tournament:') ? filter.slice('tournament:'.length) as TournamentInstanceId : undefined
+}
+
+export function tournamentStatusLabel(status: TournamentLifecycleStatus) {
+  if (status === 'completed') return 'Completed'
+  if (status === 'ongoing') return 'Ongoing'
+  return 'Latest data'
+}
+
+export function tournamentBoundaryLabel(status: TournamentLifecycleStatus) {
+  if (status === 'completed') return 'Final'
+  if (status === 'ongoing') return 'Today'
+  return 'Latest data'
+}
+
+function tournamentFamilyLabel(family: InternationalTournamentFamilyId) {
+  return tournamentFamilies.find((definition) => definition.value === family)?.label ?? family
+}
+
+function tournamentSeason(event: string, fallbackSeason?: string | number) {
+  const explicit = event.match(/\b(20\d{2})\b/)?.[1]
+  if (explicit) return explicit
+  const fallback = String(fallbackSeason ?? '')
+  return /^20\d{2}$/.test(fallback) ? fallback : undefined
+}
+
+function groupByInstance<T>(
+  values: readonly T[],
+  identify: (value: T) => Pick<NormalizedTournamentInstance, 'id'> | undefined,
+) {
+  const grouped = new Map<TournamentInstanceId, T[]>()
+  for (const value of values) {
+    const identity = identify(value)
+    if (!identity) continue
+    const entries = grouped.get(identity.id) ?? []
+    entries.push(value)
+    grouped.set(identity.id, entries)
+  }
+  return grouped
+}
+
+function scheduleDate(reference: TournamentScheduleReference) {
+  const date = reference.date ?? reference.startTime?.slice(0, 10)
+  return date && isDateString(date) ? date : undefined
+}
+
+function isMainTournamentEvidence(match: TournamentRatedMatchReference) {
+  if (match.tier === 'qualifier') return false
+  return !/\b(?:online\s+)?qualifiers?\b|\bregional finals?\b|\broad to\b/i.test(`${match.event} ${match.phase ?? ''}`)
+}
+
+function coverageLeadDays(values: Array<string | undefined>, scheduledStartDate: string) {
+  const coverageStart = values.filter((value): value is string => Boolean(value && isDateString(value))).sort()[0]
+  return coverageStart ? daysBetween(coverageStart, scheduledStartDate) : -1
+}
+
+function canonicalScheduleReferences(references: readonly TournamentScheduleReference[]) {
+  const latestByMatchId = new Map<string, TournamentScheduleReference>()
+  const withoutMatchId: TournamentScheduleReference[] = []
+  for (const reference of references) {
+    if (!reference.matchId) {
+      withoutMatchId.push(reference)
+      continue
+    }
+    const current = latestByMatchId.get(reference.matchId)
+    if (!current || (reference.retrievedAt ?? '').localeCompare(current.retrievedAt ?? '') > 0) {
+      latestByMatchId.set(reference.matchId, reference)
+    }
+  }
+  return [...withoutMatchId, ...latestByMatchId.values()]
+}
+
+function daysBetween(start: string, end: string) {
+  return Math.max(0, Math.floor((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000))
+}
+
+function isCompletedScheduleState(state: string | undefined) {
+  return /^(?:completed|complete)$/i.test(state ?? '')
+}
+
+function isDateString(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
 function uniqueTournamentFamilies(families: InternationalTournamentFamilyId[]) {

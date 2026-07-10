@@ -15,7 +15,7 @@ export type ChartModelDetail = {
 }
 
 export type ChartPointDetail = {
-  kind?: 'match' | 'standing-adjustment'
+  kind?: 'match' | 'standing-adjustment' | 'tournament-start' | 'tournament-end' | 'tournament-today' | 'tournament-latest-data'
   adjustmentReason?: 'published-standing-reconciliation'
   event?: string
   opponent?: string
@@ -59,6 +59,7 @@ export function formatChartInfluence(detail?: ChartPointDetail) {
   }
 
   if (detail.passive) return 'Passive rank movement'
+  if (detail.kind && isTournamentBoundaryKind(detail.kind)) return detail.event ?? tournamentBoundaryKindLabel(detail.kind)
   if (detail.kind === 'standing-adjustment') {
     const parts = [
       detail.event ?? 'Published standing adjustment',
@@ -75,6 +76,24 @@ export function formatChartInfluence(detail?: ChartPointDetail) {
   ].filter((part): part is string => Boolean(part))
 
   return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
+export function isMatchChartPointDetail(detail: ChartPointDetail) {
+  return detail.kind === undefined || detail.kind === 'match'
+}
+
+function isTournamentBoundaryKind(kind: NonNullable<ChartPointDetail['kind']>) {
+  return kind === 'tournament-start'
+    || kind === 'tournament-end'
+    || kind === 'tournament-today'
+    || kind === 'tournament-latest-data'
+}
+
+function tournamentBoundaryKindLabel(kind: NonNullable<ChartPointDetail['kind']>) {
+  if (kind === 'tournament-start') return 'Tournament start'
+  if (kind === 'tournament-end') return 'Tournament final'
+  if (kind === 'tournament-today') return 'Tournament today boundary'
+  return 'Tournament latest-data boundary'
 }
 
 export function formatSignedDelta(value: number) {

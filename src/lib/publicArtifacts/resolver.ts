@@ -1,5 +1,14 @@
 import { snapshotKey } from './schema'
-import type { PublicRankingManifest, PublicRankingShard, PublicTeamHistoryIndex, PublicTeamHistoryShard, SnapshotFilter } from './schema'
+import type {
+  PublicRankingManifest,
+  PublicRankingShard,
+  PublicTeamHistoryIndex,
+  PublicTeamHistoryShard,
+  PublicTournamentMovementIndex,
+  PublicTournamentMovementIndexEntry,
+  PublicTournamentMovementShard,
+  SnapshotFilter,
+} from './schema'
 
 export type PublicSnapshotCacheEntry =
   | { status: 'loading' }
@@ -83,5 +92,39 @@ export function validatePublicTeamHistoryShard(
   }
   if (JSON.stringify(shard.filter) !== JSON.stringify(expected.filter)) {
     throw new Error(`Team history shard filter mismatch for ${key}`)
+  }
+}
+
+export function validatePublicTournamentMovementIndex(
+  index: PublicTournamentMovementIndex,
+  manifest: PublicRankingManifest,
+) {
+  if (index.modelVersion !== manifest.model.version) {
+    throw new Error('Tournament movement index modelVersion mismatch')
+  }
+  if (index.modelConfigHash !== manifest.model.configHash) {
+    throw new Error('Tournament movement index modelConfigHash mismatch')
+  }
+  if (index.generatedAt !== manifest.generatedAt) {
+    throw new Error('Tournament movement index generatedAt mismatch')
+  }
+  if (manifest.artifactMeta && index.artifactMeta.runId !== manifest.artifactMeta.runId) {
+    throw new Error('Tournament movement index runId mismatch')
+  }
+}
+
+export function validatePublicTournamentMovementShard(
+  expected: PublicTournamentMovementIndexEntry,
+  shard: PublicTournamentMovementShard,
+  index: PublicTournamentMovementIndex,
+) {
+  if (shard.id !== expected.id) throw new Error(`Tournament movement shard id mismatch for ${expected.id}`)
+  if (shard.modelVersion !== index.modelVersion) throw new Error(`Tournament movement shard modelVersion mismatch for ${expected.id}`)
+  if (shard.modelConfigHash !== index.modelConfigHash) throw new Error(`Tournament movement shard modelConfigHash mismatch for ${expected.id}`)
+  if (shard.generatedAt !== index.generatedAt) throw new Error(`Tournament movement shard generatedAt mismatch for ${expected.id}`)
+  if (shard.artifactMeta.runId !== index.artifactMeta.runId) throw new Error(`Tournament movement shard runId mismatch for ${expected.id}`)
+  if (shard.participantCount !== expected.participantCount) throw new Error(`Tournament movement shard participantCount mismatch for ${expected.id}`)
+  for (const key of ['family', 'season', 'label', 'status', 'startDate', 'boundaryDate', 'ratedThroughDate', 'scheduledEndDate', 'dataLag'] as const) {
+    if (shard[key] !== expected[key]) throw new Error(`Tournament movement shard ${key} mismatch for ${expected.id}`)
   }
 }

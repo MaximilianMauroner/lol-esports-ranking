@@ -9,6 +9,7 @@ const data = JSON.parse(await readFile('data/derived/ranking-snapshot.full.json'
 const plan = createPublicArtifactWritePlan(data)
 
 await rm(resolve('public/data', PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir), { recursive: true, force: true })
+await rm(resolve('public/data', PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir), { recursive: true, force: true })
 await rm(resolve('public/data', PUBLIC_ARTIFACT_PATHS.teamHistory), { force: true })
 
 for (const entry of plan.writes) {

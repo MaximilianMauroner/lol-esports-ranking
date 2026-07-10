@@ -26,6 +26,7 @@ import { Skeleton } from './components/ui/skeleton'
 import { currentSeasonScope } from './lib/defaultScope'
 import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { RIOT_PROJECT_NOTICE } from './lib/legal'
+import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { cn } from './lib/utils'
 import {
   checkpointFromScope,
@@ -64,6 +65,8 @@ function App() {
   const [loadPlayers, setLoadPlayers] = useState(false)
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
+  const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>('All')
+  const tournamentId = tournamentIdFromFilter(tournamentFilter)
   const {
     manifestState,
     effectiveScope,
@@ -74,14 +77,29 @@ function App() {
     playersState,
     teamHistoryState,
     regionHistoryState,
+    tournamentMovementIndexState,
+    tournamentMovementEntries,
+    tournamentMovementState,
+    retryTournamentMovements,
     prefetchScope,
-  } = usePublicArtifacts(scope, { loadPlayers, loadTeamHistory, loadRegionHistory })
+    prefetchTournament,
+  } = usePublicArtifacts(scope, {
+    loadPlayers,
+    loadTeamHistory,
+    loadRegionHistory,
+    loadTournamentMovements: mode === 'rankings',
+    tournamentId,
+  })
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [teamSearch, setTeamSearch] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
+  const selectScope = useCallback((nextScope: string) => {
+    setTournamentFilter('All')
+    setScope(nextScope)
+  }, [])
 
   useEffect(() => {
     function onHashChange() {
@@ -89,11 +107,11 @@ function App() {
       setMode(nextMode)
       if (nextMode === 'regions') setLoadRegionHistory(true)
       const nextScope = readScopeFromHash()
-      if (nextScope) setScope(nextScope)
+      if (nextScope) selectScope(nextScope)
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
+  }, [selectScope])
 
   useEffect(() => {
     replaceHashForModeAndScope(mode, effectiveScope)
@@ -109,6 +127,12 @@ function App() {
   }, [mode])
 
   const standings = useMemo(() => snapshot?.standings ?? [], [snapshot])
+  const comparisonStandings = useMemo(
+    () => tournamentMovementState.status === 'ready' && tournamentMovementState.data.id === tournamentId
+      ? projectTournamentStandings(standings, tournamentMovementState.data)
+      : standings,
+    [standings, tournamentId, tournamentMovementState],
+  )
   const regions = useMemo(() => snapshot?.regions ?? [], [snapshot])
   const activeRegionHistory = regionHistoryState.status === 'ready' ? regionHistoryState.data : undefined
   const readyData = manifestState.status === 'ready' ? manifestState.data : undefined
@@ -141,7 +165,7 @@ function App() {
     return { status: playersState.status, message: playersState.message }
   }, [playersState])
   const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
-  const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, standings, teamKey), [standings, teamPicks])
+  const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, comparisonStandings, teamKey), [comparisonStandings, teamPicks])
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
   const trayPicks = mode === 'regions' ? activeRegionPicks.length : activeTeamPicks.length
 
@@ -150,7 +174,7 @@ function App() {
   }
 
   function toggleTeam(team: RankingSummaryStanding) {
-    setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, standings, teamKey), team, teamKey))
+    setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, comparisonStandings, teamKey), team, teamKey))
   }
 
   useEffect(() => {
@@ -258,7 +282,7 @@ function App() {
                 variant="ghost"
                 aria-pressed={activeSeason === season}
                 className={cn('season-tabs__button', activeSeason === season && 'is-active')}
-                onClick={() => setScope(scopeForSeasonTab(season))}
+                onClick={() => selectScope(scopeForSeasonTab(season))}
                 onFocus={() => preloadOnIntent(scopeForSeasonTab(season))}
                 onPointerEnter={() => preloadOnIntent(scopeForSeasonTab(season))}
               >
@@ -274,7 +298,7 @@ function App() {
                 variant="ghost"
                 aria-pressed={!activeCheckpoint}
                 className={cn('checkpoint-tabs__button', !activeCheckpoint && 'is-active')}
-                onClick={() => setScope(`season:${activeSeason}`)}
+                onClick={() => selectScope(`season:${activeSeason}`)}
                 onFocus={() => preloadOnIntent(`season:${activeSeason}`)}
                 onPointerEnter={() => preloadOnIntent(`season:${activeSeason}`)}
               >
@@ -290,7 +314,7 @@ function App() {
                     title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
                     aria-pressed={activeCheckpoint === checkpoint.id}
                     className={cn('checkpoint-tabs__button', activeCheckpoint === checkpoint.id && 'is-active', ongoing && 'is-ongoing')}
-                    onClick={() => setScope(checkpointScope(activeSeason, checkpoint.id))}
+                    onClick={() => selectScope(checkpointScope(activeSeason, checkpoint.id))}
                     onFocus={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
                     onPointerEnter={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
                   >
@@ -354,6 +378,11 @@ function App() {
                   onSearchChange={setTeamSearch}
                   pickedTeams={activeTeamPicks}
                   historyState={teamHistoryState}
+                  tournamentFilter={tournamentFilter}
+                  tournamentMovementEntries={tournamentMovementEntries}
+                  tournamentMovementIndexState={tournamentMovementIndexState}
+                  tournamentMovementState={tournamentMovementState}
+                  onRetryTournamentMovements={retryTournamentMovements}
                   regionsHref={hashForModeAndScope('regions', effectiveScope)}
                   dataSummary={{
                     source: loadedData.source,
@@ -371,6 +400,8 @@ function App() {
                   onToggle={toggleTeam}
                   onRequestPlayers={requestPlayers}
                   onRequestTeamHistory={requestTeamHistory}
+                  onTournamentFilterChange={setTournamentFilter}
+                  onPrefetchTournament={prefetchTournament}
                 />
               </>
             ) : null}

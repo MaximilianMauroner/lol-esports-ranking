@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 19,
-  "generatedAt": "2026-07-10T09:14:49.843Z",
+  "schemaVersion": 20,
+  "generatedAt": "2026-07-10T13:36:44.812Z",
   "source": "Oracle's Elixir primary with Leaguepedia Cargo gap-fill",
   "sources": [
     {
@@ -39,11 +39,11 @@
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-07-10T09:14:07.605Z",
+      "retrievedAt": "2026-07-10T13:36:24.255Z",
       "coverageStart": "2025-01-12",
       "coverageEnd": "2025-12-29",
-      "rowCount": 2354,
-      "description": "2354 rated games retained from 10038 Oracle's Elixir imports after the published team-universe filter. Aggregated by Oracle's Elixir / Tim Sevenhuysen. Subject to Riot game-data policies.",
+      "rowCount": 2375,
+      "description": "2375 rated games retained from 10038 Oracle's Elixir imports after the published team-universe filter. Aggregated by Oracle's Elixir / Tim Sevenhuysen. Subject to Riot game-data policies.",
       "status": "active",
       "warnings": [
         {
@@ -56,11 +56,11 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-07-10T09:14:29.638Z",
+      "retrievedAt": "2026-07-10T13:36:38.015Z",
       "coverageStart": "2026-01-14",
       "coverageEnd": "2026-07-06",
-      "rowCount": 1839,
-      "description": "1839 rated games retained from 6046 Oracle's Elixir imports after the published team-universe filter. Aggregated by Oracle's Elixir / Tim Sevenhuysen. Subject to Riot game-data policies.",
+      "rowCount": 1855,
+      "description": "1855 rated games retained from 6046 Oracle's Elixir imports after the published team-universe filter. Aggregated by Oracle's Elixir / Tim Sevenhuysen. Subject to Riot game-data policies.",
       "status": "active",
       "warnings": [
         {
@@ -76,8 +76,8 @@
       "retrievedAt": "2026-06-26T15:55:41.183Z",
       "coverageStart": "2025-01-12",
       "coverageEnd": "2026-06-14",
-      "rowCount": 3945,
-      "description": "3945 rated games retained from 20006 Leaguepedia Cargo imports for requested range 2025-01-01 to 2026-06-26 after the published team-universe filter. Sourced from Leaguepedia Cargo / Leaguepedia contributors under the wiki data terms.",
+      "rowCount": 3960,
+      "description": "3960 rated games retained from 20006 Leaguepedia Cargo imports for requested range 2025-01-01 to 2026-06-26 after the published team-universe filter. Sourced from Leaguepedia Cargo / Leaguepedia contributors under the wiki data terms.",
       "status": "active",
       "warnings": [
         {
@@ -639,7 +639,7 @@
     }
   },
   "coverage": {
-    "matchCount": 4416,
+    "matchCount": 4455,
     "coverageStart": "2025-01-12",
     "coverageEnd": "2026-07-08",
     "latestMatchDate": "2026-07-08",
@@ -650,39 +650,39 @@
     "seededSample": false
   },
   "dataQuality": {
-    "matchCount": 4416,
+    "matchCount": 4455,
     "sourceProviderCounts": {
-      "leaguepedia-cargo": 223,
-      "oracles-elixir": 4193
+      "leaguepedia-cargo": 225,
+      "oracles-elixir": 4230
     },
     "dataCompletenessCounts": {
-      "complete": 2923,
+      "complete": 2960,
       "partial": 1270,
-      "scoreboard-game-stats": 223
+      "scoreboard-game-stats": 225
     },
     "missing": {
       "sourceProviderCount": 0,
       "sourceGameIdCount": 0,
       "patchCount": 0,
-      "sideCount": 223
+      "sideCount": 225
     },
     "rosterCoverage": {
-      "rosterSides": 8832,
-      "completeRosterSides": 8386,
+      "rosterSides": 8910,
+      "completeRosterSides": 8460,
       "partialRosterSides": 0,
-      "missingRosterSides": 446,
-      "playerStatRows": 41930
+      "missingRosterSides": 450,
+      "playerStatRows": 42300
     },
     "identityCoverage": {
-      "teamProfileCount": 102,
-      "mappedTeamProfileCount": 102,
+      "teamProfileCount": 103,
+      "mappedTeamProfileCount": 103,
       "unknownLeagueTeamCount": 0,
       "internationalRegionTeamCount": 0,
       "unresolvedLeagueSummaries": []
     },
     "notes": [
-      "223 matches are missing side-selection metadata; these rows cannot train side priors.",
-      "446 team-sides have no sourced roster snapshot; roster continuity falls back to assumed/unknown basis."
+      "225 matches are missing side-selection metadata; these rows cannot train side priors.",
+      "450 team-sides have no sourced roster snapshot; roster continuity falls back to assumed/unknown basis."
     ]
   },
   "playerData": {
@@ -712,7 +712,7 @@
       "modelConfigHash": "fnv1a-1741009e",
       "ratedPlayerCount": 491,
       "ratedTeamCount": 71,
-      "sampleSize": 41930,
+      "sampleSize": 42300,
       "topPlayers": [
         {
           "id": "oe:player:9573154ad8bc9459b4c0d940315054f",
@@ -770,7 +770,7 @@
           "role": "Jungle",
           "rank": 2,
           "rating": 150.6,
-          "games": 275,
+          "games": 277,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
           "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
@@ -779,19 +779,19 @@
           "latestObservedEvent": "MSI 2026",
           "appearance": {
             "primaryTeam": "JD Gaming",
-            "primaryTeamGames": 149,
-            "primaryTeamShare": 0.542,
+            "primaryTeamGames": 151,
+            "primaryTeamShare": 0.545,
             "latestTeamGames": 126,
-            "latestTeamShare": 0.458,
-            "roleGames": 275,
+            "latestTeamShare": 0.455,
+            "roleGames": 277,
             "roleShare": 1,
             "teamsPlayed": 2,
             "rolesPlayed": 1,
             "teamHistory": [
               {
                 "team": "JD Gaming",
-                "games": 149,
-                "latestObservedAt": "2025-10-07",
+                "games": 151,
+                "latestObservedAt": "2025-10-08",
                 "latestObservedEvent": "ASI 2025"
               },
               {
@@ -804,7 +804,7 @@
             "roleHistory": [
               {
                 "role": "Jungle",
-                "games": 275
+                "games": 277
               }
             ],
             "flags": [
@@ -818,8 +818,8 @@
           "team": "Bilibili Gaming",
           "role": "Support",
           "rank": 3,
-          "rating": 148.3,
-          "games": 302,
+          "rating": 148.2,
+          "games": 305,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
           "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
@@ -828,18 +828,18 @@
           "latestObservedEvent": "MSI 2026",
           "appearance": {
             "primaryTeam": "Bilibili Gaming",
-            "primaryTeamGames": 302,
+            "primaryTeamGames": 305,
             "primaryTeamShare": 1,
-            "latestTeamGames": 302,
+            "latestTeamGames": 305,
             "latestTeamShare": 1,
-            "roleGames": 302,
+            "roleGames": 305,
             "roleShare": 1,
             "teamsPlayed": 1,
             "rolesPlayed": 1,
             "teamHistory": [
               {
                 "team": "Bilibili Gaming",
-                "games": 302,
+                "games": 305,
                 "latestObservedAt": "2026-07-06",
                 "latestObservedEvent": "MSI 2026"
               }
@@ -847,7 +847,7 @@
             "roleHistory": [
               {
                 "role": "Support",
-                "games": 302
+                "games": 305
               }
             ],
             "flags": []
@@ -859,7 +859,7 @@
           "team": "Hanwha Life Esports",
           "role": "Mid",
           "rank": 4,
-          "rating": 145.8,
+          "rating": 146,
           "games": 246,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -901,7 +901,7 @@
           "role": "Top",
           "rank": 5,
           "rating": 145.5,
-          "games": 302,
+          "games": 305,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
           "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
@@ -910,18 +910,18 @@
           "latestObservedEvent": "MSI 2026",
           "appearance": {
             "primaryTeam": "Bilibili Gaming",
-            "primaryTeamGames": 302,
+            "primaryTeamGames": 305,
             "primaryTeamShare": 1,
-            "latestTeamGames": 302,
+            "latestTeamGames": 305,
             "latestTeamShare": 1,
-            "roleGames": 302,
+            "roleGames": 305,
             "roleShare": 1,
             "teamsPlayed": 1,
             "rolesPlayed": 1,
             "teamHistory": [
               {
                 "team": "Bilibili Gaming",
-                "games": 302,
+                "games": 305,
                 "latestObservedAt": "2026-07-06",
                 "latestObservedEvent": "MSI 2026"
               }
@@ -929,48 +929,7 @@
             "roleHistory": [
               {
                 "role": "Top",
-                "games": 302
-              }
-            ],
-            "flags": []
-          }
-        },
-        {
-          "id": "oe:player:ed29043422e3c515e1cb292464b990b",
-          "name": "Knight",
-          "team": "Bilibili Gaming",
-          "role": "Mid",
-          "rank": 6,
-          "rating": 145.2,
-          "games": 293,
-          "ratingBasis": "sourced-player-stats",
-          "sourceProvider": "oracles-elixir",
-          "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
-          "sourceGameId": "LOLTMNT01_418707",
-          "latestObservedAt": "2026-07-06",
-          "latestObservedEvent": "MSI 2026",
-          "appearance": {
-            "primaryTeam": "Bilibili Gaming",
-            "primaryTeamGames": 293,
-            "primaryTeamShare": 1,
-            "latestTeamGames": 293,
-            "latestTeamShare": 1,
-            "roleGames": 293,
-            "roleShare": 1,
-            "teamsPlayed": 1,
-            "rolesPlayed": 1,
-            "teamHistory": [
-              {
-                "team": "Bilibili Gaming",
-                "games": 293,
-                "latestObservedAt": "2026-07-06",
-                "latestObservedEvent": "MSI 2026"
-              }
-            ],
-            "roleHistory": [
-              {
-                "role": "Mid",
-                "games": 293
+                "games": 305
               }
             ],
             "flags": []
@@ -981,8 +940,8 @@
           "name": "Gumayusi",
           "team": "Hanwha Life Esports",
           "role": "Bot",
-          "rank": 7,
-          "rating": 145.1,
+          "rank": 6,
+          "rating": 145.4,
           "games": 238,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1026,12 +985,53 @@
           }
         },
         {
+          "id": "oe:player:ed29043422e3c515e1cb292464b990b",
+          "name": "Knight",
+          "team": "Bilibili Gaming",
+          "role": "Mid",
+          "rank": 7,
+          "rating": 145.3,
+          "games": 296,
+          "ratingBasis": "sourced-player-stats",
+          "sourceProvider": "oracles-elixir",
+          "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
+          "sourceGameId": "LOLTMNT01_418707",
+          "latestObservedAt": "2026-07-06",
+          "latestObservedEvent": "MSI 2026",
+          "appearance": {
+            "primaryTeam": "Bilibili Gaming",
+            "primaryTeamGames": 296,
+            "primaryTeamShare": 1,
+            "latestTeamGames": 296,
+            "latestTeamShare": 1,
+            "roleGames": 296,
+            "roleShare": 1,
+            "teamsPlayed": 1,
+            "rolesPlayed": 1,
+            "teamHistory": [
+              {
+                "team": "Bilibili Gaming",
+                "games": 296,
+                "latestObservedAt": "2026-07-06",
+                "latestObservedEvent": "MSI 2026"
+              }
+            ],
+            "roleHistory": [
+              {
+                "role": "Mid",
+                "games": 296
+              }
+            ],
+            "flags": []
+          }
+        },
+        {
           "id": "oe:player:41deab55354f57a94135989133f9968",
           "name": "Kanavi",
           "team": "Hanwha Life Esports",
           "role": "Jungle",
           "rank": 8,
-          "rating": 144.9,
+          "rating": 145.3,
           "games": 277,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1080,7 +1080,7 @@
           "team": "Hanwha Life Esports",
           "role": "Support",
           "rank": 9,
-          "rating": 144,
+          "rating": 144.4,
           "games": 243,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1116,52 +1116,44 @@
           }
         },
         {
-          "id": "oe:player:5bbc2b92348d930ebd500cb9ce71bb7",
-          "name": "Peyz",
-          "team": "T1",
-          "role": "Bot",
+          "id": "oe:player:98dd15c330fb5abb4508347265a7f76",
+          "name": "Zeus",
+          "team": "Hanwha Life Esports",
+          "role": "Top",
           "rank": 10,
-          "rating": 139.9,
-          "games": 261,
+          "rating": 140.2,
+          "games": 246,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
           "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
-          "sourceGameId": "LOLTMNT01_417775",
-          "latestObservedAt": "2026-07-06",
+          "sourceGameId": "LOLTMNT01_418522",
+          "latestObservedAt": "2026-07-05",
           "latestObservedEvent": "MSI 2026",
           "appearance": {
-            "primaryTeam": "JD Gaming",
-            "primaryTeamGames": 149,
-            "primaryTeamShare": 0.571,
-            "latestTeamGames": 112,
-            "latestTeamShare": 0.429,
-            "roleGames": 261,
+            "primaryTeam": "Hanwha Life Esports",
+            "primaryTeamGames": 246,
+            "primaryTeamShare": 1,
+            "latestTeamGames": 246,
+            "latestTeamShare": 1,
+            "roleGames": 246,
             "roleShare": 1,
-            "teamsPlayed": 2,
+            "teamsPlayed": 1,
             "rolesPlayed": 1,
             "teamHistory": [
               {
-                "team": "JD Gaming",
-                "games": 149,
-                "latestObservedAt": "2025-10-07",
-                "latestObservedEvent": "ASI 2025"
-              },
-              {
-                "team": "T1",
-                "games": 112,
-                "latestObservedAt": "2026-07-06",
+                "team": "Hanwha Life Esports",
+                "games": 246,
+                "latestObservedAt": "2026-07-05",
                 "latestObservedEvent": "MSI 2026"
               }
             ],
             "roleHistory": [
               {
-                "role": "Bot",
-                "games": 261
+                "role": "Top",
+                "games": 246
               }
             ],
-            "flags": [
-              "multi-team-career"
-            ]
+            "flags": []
           }
         }
       ]
@@ -1172,85 +1164,85 @@
       "target": "published-game",
       "modelVersion": "transparent-power-index-v0.0.0",
       "modelConfigHash": "fnv1a-1741009e",
-      "predictionCount": 4416,
-      "accuracy": 0.632,
+      "predictionCount": 4455,
+      "accuracy": 0.6308,
       "brierScore": 0.23,
-      "logLoss": 0.6521,
+      "logLoss": 0.652,
       "calibration": [
         {
           "bucket": "50-60",
-          "count": 3143,
-          "meanPredicted": 0.5429,
-          "observedWinRate": 0.5937
+          "count": 3174,
+          "meanPredicted": 0.543,
+          "observedWinRate": 0.5917
         },
         {
           "bucket": "60-70",
-          "count": 1051,
-          "meanPredicted": 0.6391,
-          "observedWinRate": 0.7079
+          "count": 1060,
+          "meanPredicted": 0.6395,
+          "observedWinRate": 0.7085
         },
         {
           "bucket": "70-80",
-          "count": 213,
-          "meanPredicted": 0.733,
-          "observedWinRate": 0.8169
+          "count": 212,
+          "meanPredicted": 0.7324,
+          "observedWinRate": 0.8208
         },
         {
           "bucket": "80-90",
           "count": 9,
-          "meanPredicted": 0.8319,
+          "meanPredicted": 0.8283,
           "observedWinRate": 0.7778
         }
       ],
       "segments": [
         {
           "key": "bo1",
-          "predictionCount": 3421,
-          "accuracy": 0.6405,
+          "predictionCount": 3458,
+          "accuracy": 0.6385,
           "brierScore": 0.2279,
           "logLoss": 0.6477
         },
         {
           "key": "bo3-bo5",
-          "predictionCount": 995,
-          "accuracy": 0.603,
-          "brierScore": 0.2373,
-          "logLoss": 0.667
+          "predictionCount": 997,
+          "accuracy": 0.6038,
+          "brierScore": 0.2372,
+          "logLoss": 0.6669
         },
         {
           "key": "international",
-          "predictionCount": 593,
-          "accuracy": 0.6644,
-          "brierScore": 0.2221,
-          "logLoss": 0.6351
+          "predictionCount": 632,
+          "accuracy": 0.6582,
+          "brierScore": 0.2226,
+          "logLoss": 0.6362
         },
         {
           "key": "cross-region",
-          "predictionCount": 332,
-          "accuracy": 0.6777,
-          "brierScore": 0.2153,
-          "logLoss": 0.6202
+          "predictionCount": 352,
+          "accuracy": 0.6761,
+          "brierScore": 0.2158,
+          "logLoss": 0.6213
         },
         {
           "key": "side-known",
-          "predictionCount": 4193,
-          "accuracy": 0.6342,
-          "brierScore": 0.2293,
-          "logLoss": 0.6505
+          "predictionCount": 4230,
+          "accuracy": 0.6331,
+          "brierScore": 0.2292,
+          "logLoss": 0.6504
         },
         {
           "key": "patch-transition",
-          "predictionCount": 1595,
-          "accuracy": 0.627,
-          "brierScore": 0.2314,
-          "logLoss": 0.6551
+          "predictionCount": 1608,
+          "accuracy": 0.6269,
+          "brierScore": 0.2315,
+          "logLoss": 0.6553
         },
         {
           "key": "roster-change",
-          "predictionCount": 633,
-          "accuracy": 0.6619,
-          "brierScore": 0.2263,
-          "logLoss": 0.6446
+          "predictionCount": 640,
+          "accuracy": 0.6625,
+          "brierScore": 0.2257,
+          "logLoss": 0.6434
         }
       ],
       "baselineComparisons": [
@@ -1258,83 +1250,83 @@
           "key": "coin-flip",
           "label": "Coin flip",
           "description": "Always predicts 50 percent for team A; verifies the model clears a no-skill game-level baseline.",
-          "predictionCount": 4416,
-          "accuracy": 0.5346,
+          "predictionCount": 4455,
+          "accuracy": 0.534,
           "brierScore": 0.25,
           "logLoss": 0.6931,
-          "publishedAccuracyDelta": 0.0974,
+          "publishedAccuracyDelta": 0.0968,
           "publishedBrierDelta": 0.02,
-          "publishedLogLossDelta": 0.041,
+          "publishedLogLossDelta": 0.0411,
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 3421,
-              "accuracy": 0.532,
+              "predictionCount": 3458,
+              "accuracy": 0.5312,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1085,
+              "publishedAccuracyDelta": 0.1073,
               "publishedBrierDelta": 0.0221,
               "publishedLogLossDelta": 0.0454
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 995,
-              "accuracy": 0.5437,
+              "predictionCount": 997,
+              "accuracy": 0.5436,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.0593,
-              "publishedBrierDelta": 0.0127,
-              "publishedLogLossDelta": 0.0261
+              "publishedAccuracyDelta": 0.0602,
+              "publishedBrierDelta": 0.0128,
+              "publishedLogLossDelta": 0.0262
             },
             {
               "key": "international",
-              "predictionCount": 593,
-              "accuracy": 0.5481,
+              "predictionCount": 632,
+              "accuracy": 0.5427,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1163,
-              "publishedBrierDelta": 0.0279,
-              "publishedLogLossDelta": 0.058
+              "publishedAccuracyDelta": 0.1155,
+              "publishedBrierDelta": 0.0274,
+              "publishedLogLossDelta": 0.0569
             },
             {
               "key": "cross-region",
-              "predictionCount": 332,
-              "accuracy": 0.5693,
+              "predictionCount": 352,
+              "accuracy": 0.5625,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1084,
-              "publishedBrierDelta": 0.0347,
-              "publishedLogLossDelta": 0.0729
+              "publishedAccuracyDelta": 0.1136,
+              "publishedBrierDelta": 0.0342,
+              "publishedLogLossDelta": 0.0718
             },
             {
               "key": "side-known",
-              "predictionCount": 4193,
-              "accuracy": 0.5333,
+              "predictionCount": 4230,
+              "accuracy": 0.5324,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1009,
-              "publishedBrierDelta": 0.0207,
-              "publishedLogLossDelta": 0.0426
+              "publishedAccuracyDelta": 0.1007,
+              "publishedBrierDelta": 0.0208,
+              "publishedLogLossDelta": 0.0427
             },
             {
               "key": "patch-transition",
-              "predictionCount": 1595,
+              "predictionCount": 1608,
               "accuracy": 0.5429,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.0841,
-              "publishedBrierDelta": 0.0186,
-              "publishedLogLossDelta": 0.038
+              "publishedAccuracyDelta": 0.084,
+              "publishedBrierDelta": 0.0185,
+              "publishedLogLossDelta": 0.0378
             },
             {
               "key": "roster-change",
-              "predictionCount": 633,
-              "accuracy": 0.5245,
+              "predictionCount": 640,
+              "accuracy": 0.5188,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1374,
-              "publishedBrierDelta": 0.0237,
-              "publishedLogLossDelta": 0.0485
+              "publishedAccuracyDelta": 0.1437,
+              "publishedBrierDelta": 0.0243,
+              "publishedLogLossDelta": 0.0497
             }
           ]
         },
@@ -1342,83 +1334,83 @@
           "key": "pregame-win-rate",
           "label": "Pre-game win rate",
           "description": "Uses only each team cumulative pre-game record with Laplace smoothing; ignores opponent strength, league strength, side, roster, patch, and uncertainty.",
-          "predictionCount": 4416,
-          "accuracy": 0.6225,
-          "brierScore": 0.2324,
-          "logLoss": 0.6571,
-          "publishedAccuracyDelta": 0.0095,
-          "publishedBrierDelta": 0.0024,
-          "publishedLogLossDelta": 0.005,
+          "predictionCount": 4455,
+          "accuracy": 0.6231,
+          "brierScore": 0.2325,
+          "logLoss": 0.6572,
+          "publishedAccuracyDelta": 0.0077,
+          "publishedBrierDelta": 0.0025,
+          "publishedLogLossDelta": 0.0052,
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 3421,
+              "predictionCount": 3458,
               "accuracy": 0.6267,
-              "brierScore": 0.2299,
-              "logLoss": 0.6519,
-              "publishedAccuracyDelta": 0.0138,
-              "publishedBrierDelta": 0.002,
-              "publishedLogLossDelta": 0.0042
+              "brierScore": 0.2301,
+              "logLoss": 0.6522,
+              "publishedAccuracyDelta": 0.0118,
+              "publishedBrierDelta": 0.0022,
+              "publishedLogLossDelta": 0.0045
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 995,
-              "accuracy": 0.608,
-              "brierScore": 0.2409,
-              "logLoss": 0.6748,
-              "publishedAccuracyDelta": -0.005,
-              "publishedBrierDelta": 0.0036,
-              "publishedLogLossDelta": 0.0078
+              "predictionCount": 997,
+              "accuracy": 0.6108,
+              "brierScore": 0.2407,
+              "logLoss": 0.6743,
+              "publishedAccuracyDelta": -0.007,
+              "publishedBrierDelta": 0.0035,
+              "publishedLogLossDelta": 0.0074
             },
             {
               "key": "international",
-              "predictionCount": 593,
-              "accuracy": 0.5734,
-              "brierScore": 0.2405,
-              "logLoss": 0.6738,
-              "publishedAccuracyDelta": 0.091,
-              "publishedBrierDelta": 0.0184,
-              "publishedLogLossDelta": 0.0387
+              "predictionCount": 632,
+              "accuracy": 0.5823,
+              "brierScore": 0.2404,
+              "logLoss": 0.6735,
+              "publishedAccuracyDelta": 0.0759,
+              "publishedBrierDelta": 0.0178,
+              "publishedLogLossDelta": 0.0373
             },
             {
               "key": "cross-region",
-              "predictionCount": 332,
-              "accuracy": 0.5211,
-              "brierScore": 0.2478,
-              "logLoss": 0.6887,
-              "publishedAccuracyDelta": 0.1566,
-              "publishedBrierDelta": 0.0325,
-              "publishedLogLossDelta": 0.0685
+              "predictionCount": 352,
+              "accuracy": 0.5426,
+              "brierScore": 0.2474,
+              "logLoss": 0.6878,
+              "publishedAccuracyDelta": 0.1335,
+              "publishedBrierDelta": 0.0316,
+              "publishedLogLossDelta": 0.0665
             },
             {
               "key": "side-known",
-              "predictionCount": 4193,
-              "accuracy": 0.6229,
-              "brierScore": 0.2323,
-              "logLoss": 0.657,
-              "publishedAccuracyDelta": 0.0113,
-              "publishedBrierDelta": 0.003,
-              "publishedLogLossDelta": 0.0065
+              "predictionCount": 4230,
+              "accuracy": 0.6234,
+              "brierScore": 0.2324,
+              "logLoss": 0.6571,
+              "publishedAccuracyDelta": 0.0097,
+              "publishedBrierDelta": 0.0032,
+              "publishedLogLossDelta": 0.0067
             },
             {
               "key": "patch-transition",
-              "predictionCount": 1595,
-              "accuracy": 0.6295,
+              "predictionCount": 1608,
+              "accuracy": 0.63,
               "brierScore": 0.2303,
-              "logLoss": 0.6526,
-              "publishedAccuracyDelta": -0.0025,
-              "publishedBrierDelta": -0.0011,
-              "publishedLogLossDelta": -0.0025
+              "logLoss": 0.6525,
+              "publishedAccuracyDelta": -0.0031,
+              "publishedBrierDelta": -0.0012,
+              "publishedLogLossDelta": -0.0028
             },
             {
               "key": "roster-change",
-              "predictionCount": 633,
-              "accuracy": 0.6619,
-              "brierScore": 0.2255,
-              "logLoss": 0.6435,
-              "publishedAccuracyDelta": 0,
-              "publishedBrierDelta": -0.0008,
-              "publishedLogLossDelta": -0.0011
+              "predictionCount": 640,
+              "accuracy": 0.6656,
+              "brierScore": 0.2253,
+              "logLoss": 0.643,
+              "publishedAccuracyDelta": -0.0031,
+              "publishedBrierDelta": -0.0004,
+              "publishedLogLossDelta": -0.0004
             }
           ]
         },
@@ -1426,108 +1418,108 @@
           "key": "team-only",
           "label": "Team-only model",
           "description": "Uses the neutral team and league rating spine before player-rating, execution-residual, and side-context variants.",
-          "predictionCount": 4416,
-          "accuracy": 0.6243,
-          "brierScore": 0.2369,
-          "logLoss": 0.6666,
-          "publishedAccuracyDelta": 0.0077,
-          "publishedBrierDelta": 0.0069,
-          "publishedLogLossDelta": 0.0145,
+          "predictionCount": 4455,
+          "accuracy": 0.6236,
+          "brierScore": 0.2368,
+          "logLoss": 0.6664,
+          "publishedAccuracyDelta": 0.0072,
+          "publishedBrierDelta": 0.0068,
+          "publishedLogLossDelta": 0.0144,
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 3421,
-              "accuracy": 0.6291,
-              "brierScore": 0.236,
-              "logLoss": 0.6648,
-              "publishedAccuracyDelta": 0.0114,
-              "publishedBrierDelta": 0.0081,
-              "publishedLogLossDelta": 0.0171
+              "predictionCount": 3458,
+              "accuracy": 0.6264,
+              "brierScore": 0.2359,
+              "logLoss": 0.6646,
+              "publishedAccuracyDelta": 0.0121,
+              "publishedBrierDelta": 0.008,
+              "publishedLogLossDelta": 0.0169
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 995,
-              "accuracy": 0.608,
-              "brierScore": 0.24,
-              "logLoss": 0.6729,
-              "publishedAccuracyDelta": -0.005,
+              "predictionCount": 997,
+              "accuracy": 0.6138,
+              "brierScore": 0.2399,
+              "logLoss": 0.6727,
+              "publishedAccuracyDelta": -0.01,
               "publishedBrierDelta": 0.0027,
-              "publishedLogLossDelta": 0.0059
+              "publishedLogLossDelta": 0.0058
             },
             {
               "key": "international",
-              "predictionCount": 593,
-              "accuracy": 0.6408,
+              "predictionCount": 632,
+              "accuracy": 0.6329,
               "brierScore": 0.2297,
-              "logLoss": 0.6514,
-              "publishedAccuracyDelta": 0.0236,
-              "publishedBrierDelta": 0.0076,
-              "publishedLogLossDelta": 0.0163
+              "logLoss": 0.6515,
+              "publishedAccuracyDelta": 0.0253,
+              "publishedBrierDelta": 0.0071,
+              "publishedLogLossDelta": 0.0153
             },
             {
               "key": "cross-region",
-              "predictionCount": 332,
-              "accuracy": 0.6596,
-              "brierScore": 0.2218,
-              "logLoss": 0.6349,
-              "publishedAccuracyDelta": 0.0181,
-              "publishedBrierDelta": 0.0065,
-              "publishedLogLossDelta": 0.0147
+              "predictionCount": 352,
+              "accuracy": 0.6619,
+              "brierScore": 0.2214,
+              "logLoss": 0.6339,
+              "publishedAccuracyDelta": 0.0142,
+              "publishedBrierDelta": 0.0056,
+              "publishedLogLossDelta": 0.0126
             },
             {
               "key": "side-known",
-              "predictionCount": 4193,
-              "accuracy": 0.6258,
-              "brierScore": 0.2364,
-              "logLoss": 0.6656,
-              "publishedAccuracyDelta": 0.0084,
+              "predictionCount": 4230,
+              "accuracy": 0.6253,
+              "brierScore": 0.2363,
+              "logLoss": 0.6654,
+              "publishedAccuracyDelta": 0.0078,
               "publishedBrierDelta": 0.0071,
-              "publishedLogLossDelta": 0.0151
+              "publishedLogLossDelta": 0.015
             },
             {
               "key": "patch-transition",
-              "predictionCount": 1595,
-              "accuracy": 0.6213,
-              "brierScore": 0.2379,
-              "logLoss": 0.6686,
-              "publishedAccuracyDelta": 0.0057,
-              "publishedBrierDelta": 0.0065,
-              "publishedLogLossDelta": 0.0135
+              "predictionCount": 1608,
+              "accuracy": 0.6182,
+              "brierScore": 0.2378,
+              "logLoss": 0.6684,
+              "publishedAccuracyDelta": 0.0087,
+              "publishedBrierDelta": 0.0063,
+              "publishedLogLossDelta": 0.0131
             },
             {
               "key": "roster-change",
-              "predictionCount": 633,
-              "accuracy": 0.6367,
-              "brierScore": 0.2364,
-              "logLoss": 0.6655,
-              "publishedAccuracyDelta": 0.0252,
-              "publishedBrierDelta": 0.0101,
-              "publishedLogLossDelta": 0.0209
+              "predictionCount": 640,
+              "accuracy": 0.6406,
+              "brierScore": 0.2356,
+              "logLoss": 0.6641,
+              "publishedAccuracyDelta": 0.0219,
+              "publishedBrierDelta": 0.0099,
+              "publishedLogLossDelta": 0.0207
             }
           ]
         }
       ],
       "playerRatingShadow": {
         "enabled": true,
-        "predictionCount": 4416,
-        "accuracy": 0.6395,
-        "brierScore": 0.2305,
-        "logLoss": 0.6531,
+        "predictionCount": 4455,
+        "accuracy": 0.6393,
+        "brierScore": 0.2304,
+        "logLoss": 0.6529,
         "brierDelta": 0.0064,
         "logLossDelta": 0.0135,
-        "rosterChangeBrierDelta": 0.0093,
-        "patchTransitionBrierDelta": 0.007
+        "rosterChangeBrierDelta": 0.0094,
+        "patchTransitionBrierDelta": 0.0069
       },
       "executionResidualShadow": {
         "enabled": false,
-        "predictionCount": 4416,
-        "accuracy": 0.6334,
-        "brierScore": 0.2295,
-        "logLoss": 0.651,
+        "predictionCount": 4455,
+        "accuracy": 0.633,
+        "brierScore": 0.2293,
+        "logLoss": 0.6507,
         "brierDelta": 0.0009,
         "logLossDelta": 0.0019,
-        "crossRegionBrierDelta": -0.001,
-        "patchTransitionBrierDelta": 0.0008
+        "crossRegionBrierDelta": -0.0012,
+        "patchTransitionBrierDelta": 0.0007
       }
     }
   },
@@ -1591,6 +1583,7 @@
       "LPL 2025 Split 3",
       "LPL 2026 Split 1",
       "LPL 2026 Split 2",
+      "LPL/2025 Season/Regional Finals",
       "LTA 2025",
       "MSI 2025",
       "MSI 2026",
@@ -1668,9 +1661,9 @@
   "defaultSnapshotKey": "All__All__All",
   "artifactKind": "public-ranking-manifest",
   "artifactMeta": {
-    "schemaVersion": 19,
-    "runId": "run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-    "generatedAt": "2026-07-10T09:14:49.843Z",
+    "schemaVersion": 20,
+    "runId": "run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+    "generatedAt": "2026-07-10T13:36:44.812Z",
     "modelVersion": "transparent-power-index-v0.0.0",
     "modelConfigHash": "fnv1a-1741009e"
   },
@@ -1686,11 +1679,12 @@
     "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
   },
   "summaryMode": "browser-summary",
-  "playerDirectoryUrl": "/data/entities/players.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-  "regionHistoryUrl": "/data/history/region-series.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-  "teamCount": 102,
+  "playerDirectoryUrl": "/data/entities/players.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+  "regionHistoryUrl": "/data/history/region-series.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+  "tournamentMovementIndexUrl": "/data/history/tournament-moves/index.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+  "teamCount": 103,
   "snapshotIndex": {
     "All__All__All": {
       "filter": {
@@ -1698,19 +1692,19 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/all.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-      "matchCount": 4416,
+      "url": "/data/scopes/all.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "matchCount": 4455,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
-          "matchCount": 223,
+          "matchCount": 225,
           "completeness": [
             "scoreboard-game-stats"
           ]
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 4193,
+          "matchCount": 4230,
           "completeness": [
             "complete",
             "partial"
@@ -1724,8 +1718,8 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2025.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-      "matchCount": 2484,
+      "url": "/data/scopes/season-2025.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "matchCount": 2505,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
@@ -1736,7 +1730,7 @@
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 2287,
+          "matchCount": 2308,
           "completeness": [
             "complete",
             "partial"
@@ -1751,7 +1745,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2025-split-1.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "url": "/data/scopes/season-2025-split-1.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
       "matchCount": 486,
       "sourceBreakdown": [
         {
@@ -1778,8 +1772,8 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2025-split-2.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-      "matchCount": 963,
+      "url": "/data/scopes/season-2025-split-2.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "matchCount": 976,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
@@ -1790,7 +1784,7 @@
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 932,
+          "matchCount": 945,
           "completeness": [
             "complete",
             "partial"
@@ -1805,8 +1799,8 @@
         "region": "All",
         "checkpoint": "split-3"
       },
-      "url": "/data/scopes/season-2025-split-3.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-      "matchCount": 966,
+      "url": "/data/scopes/season-2025-split-3.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "matchCount": 974,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
@@ -1817,7 +1811,7 @@
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 832,
+          "matchCount": 840,
           "completeness": [
             "complete",
             "partial"
@@ -1831,19 +1825,19 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2026.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-      "matchCount": 1865,
+      "url": "/data/scopes/season-2026.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "matchCount": 1883,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
-          "matchCount": 26,
+          "matchCount": 28,
           "completeness": [
             "scoreboard-game-stats"
           ]
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 1839,
+          "matchCount": 1855,
           "completeness": [
             "complete",
             "partial"
@@ -1858,7 +1852,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2026-split-1.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "url": "/data/scopes/season-2026-split-1.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
       "matchCount": 756,
       "sourceBreakdown": [
         {
@@ -1885,19 +1879,19 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2026-split-2.json?v=run_20260710091449_transparent-power-index-v0-0-0_fnv1a-1741009e",
-      "matchCount": 1109,
+      "url": "/data/scopes/season-2026-split-2.json?v=run_20260710133644_transparent-power-index-v0-0-0_fnv1a-1741009e",
+      "matchCount": 1127,
       "sourceBreakdown": [
         {
           "provider": "leaguepedia-cargo",
-          "matchCount": 7,
+          "matchCount": 9,
           "completeness": [
             "scoreboard-game-stats"
           ]
         },
         {
           "provider": "oracles-elixir",
-          "matchCount": 1102,
+          "matchCount": 1118,
           "completeness": [
             "complete",
             "partial"

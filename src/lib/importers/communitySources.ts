@@ -143,7 +143,10 @@ function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string
 
 function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
   if (retainedMatch.sourceProvider !== 'oracles-elixir' || duplicateMatch.sourceProvider !== 'leaguepedia-cargo') return
-  if (isQualifierMetadata(duplicateMatch) && retainedMatch.tier !== 'qualifier') {
+  if (
+    (isQualifierMetadata(duplicateMatch) && retainedMatch.tier !== 'qualifier')
+    || isRegionalFinalMislabel(retainedMatch, duplicateMatch)
+  ) {
     retainedMatch.event = duplicateMatch.event
     retainedMatch.phase = duplicateMatch.phase
     retainedMatch.tier = duplicateMatch.tier
@@ -156,6 +159,11 @@ function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: M
   retainedMatch.tier = duplicateMatch.tier
   if (duplicateMatch.bestOf > retainedMatch.bestOf) retainedMatch.bestOf = duplicateMatch.bestOf
   retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
+}
+
+function isRegionalFinalMislabel(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
+  return /\b(?:wlds|worlds|world championship)\b/i.test(retainedMatch.event)
+    && /\bregional finals?\b/i.test(`${duplicateMatch.event} ${duplicateMatch.phase}`)
 }
 
 function isQualifierMetadata(match: MatchRecord) {

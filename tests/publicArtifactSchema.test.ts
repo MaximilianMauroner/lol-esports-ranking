@@ -9,6 +9,8 @@ import {
   parsePublicRegionHistory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
+  parsePublicTournamentMovementIndex,
+  parsePublicTournamentMovementShard,
   publicScoreFamilies,
   type PublicRankingShard,
   type PublicTeamStanding,
@@ -20,6 +22,8 @@ import {
   type PublicRegionHistoryDirectory,
   type PublicTeamHistoryIndex,
   type PublicTeamHistoryShard,
+  type PublicTournamentMovementIndex,
+  type PublicTournamentMovementShard,
   type SnapshotFilter,
 } from '../src/lib/publicArtifacts/schema.ts'
 
@@ -258,6 +262,20 @@ test('team history shard parser validates point tuples and compact model context
   )
 })
 
+test('tournament movement parsers require matching identities and explicit boundaries', () => {
+  assert.doesNotThrow(() => parsePublicTournamentMovementIndex(tournamentMovementIndex()))
+  assert.doesNotThrow(() => parsePublicTournamentMovementShard(tournamentMovementShard()))
+  assert.throws(() => parsePublicTournamentMovementIndex(tournamentMovementIndex({
+    tournaments: [{ ...tournamentMovementIndex().tournaments[0], id: 'msi:2025' }],
+  })), /id must match family and season/)
+  assert.throws(() => parsePublicTournamentMovementShard(tournamentMovementShard({
+    teams: [{
+      ...tournamentMovementShard().teams[0],
+      points: tournamentMovementShard().teams[0].points.slice(1),
+    }],
+  })), /start with a tournament-start boundary/)
+})
+
 test('region history parser validates scoped series and tuple context', () => {
   assert.doesNotThrow(() => parsePublicRegionHistory(regionHistory()))
 
@@ -343,6 +361,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     teamDirectoryUrl: '/data/entities/teams.json',
     teamHistoryUrl: '/data/history/team-series.json',
     regionHistoryUrl: '/data/history/region-series.json',
+    tournamentMovementIndexUrl: '/data/history/tournament-moves/index.json',
     teamCount: 0,
     snapshotIndex: {
       [key]: {
@@ -577,6 +596,75 @@ function regionHistory(overrides: Partial<PublicRegionHistoryDirectory> = {}): P
         },
       },
     },
+    ...overrides,
+  }
+}
+
+function tournamentMovementIndex(overrides: Partial<PublicTournamentMovementIndex> = {}): PublicTournamentMovementIndex {
+  return {
+    artifactKind: 'tournament-movement-index',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMeta(),
+    ratingScale: publishedRatingScale,
+    generatedAt: '2026-06-28T00:00:00.000Z',
+    modelVersion: 'test-model',
+    modelConfigHash: 'test-config',
+    tournaments: [{
+      id: 'msi:2026',
+      family: 'msi',
+      season: '2026',
+      label: 'MSI 2026',
+      status: 'ongoing',
+      startDate: '2026-06-28',
+      boundaryDate: '2026-07-10',
+      ratedThroughDate: '2026-07-08',
+      scheduledEndDate: '2026-07-12',
+      dataLag: false,
+      participantCount: 1,
+      url: '/data/history/tournament-moves/msi-2026.json',
+    }],
+    ...overrides,
+  }
+}
+
+function tournamentMovementShard(overrides: Partial<PublicTournamentMovementShard> = {}): PublicTournamentMovementShard {
+  return {
+    artifactKind: 'tournament-movement',
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+    artifactMeta: artifactMeta(),
+    ratingScale: publishedRatingScale,
+    generatedAt: '2026-06-28T00:00:00.000Z',
+    modelVersion: 'test-model',
+    modelConfigHash: 'test-config',
+    id: 'msi:2026',
+    family: 'msi',
+    season: '2026',
+    label: 'MSI 2026',
+    status: 'ongoing',
+    startDate: '2026-06-28',
+    boundaryDate: '2026-07-10',
+    ratedThroughDate: '2026-07-08',
+    scheduledEndDate: '2026-07-12',
+    dataLag: false,
+    participantCount: 1,
+    teams: [{
+      teamId: 'example__lck__ex',
+      team: 'Example',
+      code: 'EX',
+      eligible: true,
+      eligibilityReasons: [],
+      startRank: 4,
+      endRank: 2,
+      rankMovement: 2,
+      startRating: 1500,
+      endRating: 1540,
+      ratingDelta: 40,
+      points: [
+        ['2026-06-28', 1500, 4, { kind: 'tournament-start', event: 'MSI 2026 start' }],
+        ['2026-07-01', 1520, 3, { kind: 'match', event: 'MSI 2026', opponent: 'Opponent', result: 'W' }],
+        ['2026-07-10', 1540, 2, { kind: 'tournament-today', event: 'MSI 2026 today' }],
+      ],
+    }],
     ...overrides,
   }
 }

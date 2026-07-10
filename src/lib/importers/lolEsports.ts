@@ -68,6 +68,8 @@ export type LolEsportsReferenceImportResult = {
     attribution: string
     start?: string
     end?: string
+    coverageStartComplete: boolean
+    coverageEndComplete: boolean
     unsupportedApi: true
   }
 }
@@ -98,6 +100,8 @@ export function importLolEsportsScheduleSnapshot(
       attribution: 'Schedule, result, event, and game IDs from LoL Esports site persisted APIs. These endpoints are unsupported and must stay cached/reference-only.',
       start: snapshot.start,
       end: snapshot.end,
+      coverageStartComplete: !(snapshot.warnings ?? []).some((warning) => /schedule cache starts at/i.test(warning)),
+      coverageEndComplete: !(snapshot.warnings ?? []).some((warning) => /schedule cache ends at/i.test(warning)),
       unsupportedApi: true,
     },
   }

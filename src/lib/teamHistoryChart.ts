@@ -1,6 +1,6 @@
 import type { PublicTeamHistoryAttributionKey } from './publicArtifacts/schema'
 import type { TeamHistorySeries } from './snapshot'
-import type { ChartAttributionEntry, ChartModelDetail, ChartPoint, ChartPointDetail } from './chartPoints'
+import { isMatchChartPointDetail, type ChartAttributionEntry, type ChartModelDetail, type ChartPoint, type ChartPointDetail } from './chartPoints'
 import { groupEntriesByDate } from './timelineCompaction'
 import { POWER_COMPONENT_LABELS } from './ratingComponentLabels'
 
@@ -133,7 +133,7 @@ function chartPointDetailFromHistoryGroup(points: TeamHistoryPoint[]): ChartPoin
   if (!latest) return undefined
   if (details.length <= 1) return latest
 
-  const matchDetails = details.filter((detail) => detail.kind !== 'standing-adjustment')
+  const matchDetails = details.filter(isMatchChartPointDetail)
   const matchCount = matchDetails.length
   const ledgerDelta = roundOne(matchDetails.reduce((total, detail) => total + (finiteNumber(detail.delta) ?? 0), 0))
   const model = aggregateChartModelDetails(details)
@@ -193,7 +193,7 @@ function aggregateChartModelDetails(details: ChartPointDetail[]): ChartModelDeta
   const models = details.map((detail) => detail.model).filter((model): model is ChartModelDetail => Boolean(model))
   if (models.length === 0) return undefined
   const matchExpected = details
-    .filter((detail) => detail.kind !== 'standing-adjustment')
+    .filter(isMatchChartPointDetail)
     .map((detail) => detail.model?.expectedWinProbability)
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
 

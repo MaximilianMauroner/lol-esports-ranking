@@ -118,6 +118,22 @@ const snapshot = createStaticRankingData({
       }
     }),
   ],
+  tournamentScheduleReferences: lolEsportsImports.flatMap((result) => {
+    const coverage = dateRange(result.events)
+    return result.events.map((event) => ({
+      matchId: event.matchId,
+      tournamentId: event.tournamentId,
+      leagueName: event.leagueName,
+      leagueSlug: event.leagueSlug,
+      startTime: event.startTime,
+      date: event.date,
+      state: event.state,
+      retrievedAt: result.source.retrievedAt,
+      coverageStart: coverage.start,
+      coverageEnd: coverage.end,
+      coverageEndComplete: result.source.coverageEndComplete,
+    }))
+  }),
 })
 
 await mkdir(dirname(output), { recursive: true })
@@ -136,6 +152,7 @@ for (const write of publicWrites) {
 }
 
 await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir), { recursive: true, force: true })
+await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir), { recursive: true, force: true })
 await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.teamHistory), { force: true })
 
 for (const write of publicWrites) {

@@ -49,8 +49,15 @@ import {
   snapshotShardUrlPathForKey,
   teamIdFor,
   teamHistoryShardUrlPathForKey,
+  tournamentMovementShardUrlPathForId,
 } from './publicArtifacts/schema'
 import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
+import {
+  deriveTournamentInstances,
+  tournamentInstanceForEvent,
+  type TournamentInstanceId,
+  type TournamentScheduleReference,
+} from './internationalTournaments'
 import {
   groupAdjacentTimelineEntries,
   groupEntriesByDate,
@@ -85,6 +92,9 @@ import type {
   PublicTeamHistoryPointContext,
   PublicTeamHistorySeries,
   PublicTeamStanding,
+  PublicTournamentMovementIndex,
+  PublicTournamentMovementShard,
+  PublicTournamentMovementTeam,
   PublicSnapshotIndexEntry,
   PublicTeamDirectory,
   SameTeamTopFiveClusteringDiagnostic,
@@ -221,6 +231,10 @@ export type TeamHistoryArtifacts = {
   index: PublicTeamHistoryIndex
   shards: Record<string, PublicTeamHistoryShard>
 }
+export type TournamentMovementArtifacts = {
+  index: PublicTournamentMovementIndex
+  shards: Record<TournamentInstanceId, PublicTournamentMovementShard>
+}
 export type RegionHistoryDirectory = PublicRegionHistoryDirectory
 
 /**
@@ -313,6 +327,50 @@ export function createTeamHistoryArtifacts(
           },
         ]),
       ),
+    },
+    shards,
+  }
+}
+
+export function createTournamentMovementArtifacts(
+  data: StaticRankingData,
+  {
+    tournamentMovementUrlForId = tournamentMovementShardUrlPathForId,
+  }: {
+    tournamentMovementUrlForId?: (id: TournamentInstanceId) => string
+  } = {},
+): TournamentMovementArtifacts {
+  const ratingScale = data.model.ratingScale ?? publishedRatingScale
+  const shards = data.tournamentMovements
+  return {
+    index: {
+      artifactKind: 'tournament-movement-index',
+      schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+      artifactMeta: artifactMetaFor({
+        generatedAt: data.generatedAt,
+        modelVersion: data.model.version,
+        modelConfigHash: data.model.configHash,
+      }),
+      ratingScale,
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+      tournaments: Object.values(shards)
+        .map((shard) => ({
+          id: shard.id,
+          family: shard.family,
+          season: shard.season,
+          label: shard.label,
+          status: shard.status,
+          startDate: shard.startDate,
+          boundaryDate: shard.boundaryDate,
+          ratedThroughDate: shard.ratedThroughDate,
+          ...(shard.scheduledEndDate ? { scheduledEndDate: shard.scheduledEndDate } : {}),
+          dataLag: shard.dataLag,
+          participantCount: shard.participantCount,
+          url: tournamentMovementUrlForId(shard.id),
+        }))
+        .sort((left, right) => right.startDate.localeCompare(left.startDate) || left.label.localeCompare(right.label)),
     },
     shards,
   }
@@ -820,6 +878,7 @@ export type StaticRankingData = {
   defaultFilter: SnapshotFilter
   defaultSnapshotKey: string
   snapshots: Record<string, ComputedRankingSnapshot>
+  tournamentMovements: Record<TournamentInstanceId, PublicTournamentMovementShard>
   teams: Record<string, TeamProfile>
 }
 
@@ -837,6 +896,7 @@ export function createStaticRankingSummaryData(
     teamHistoryIndexUrl,
     teamHistoryUrl,
     regionHistoryUrl,
+    tournamentMovementIndexUrl = '/data/history/tournament-moves/index.json',
     snapshotUrlForKey = snapshotShardUrlPathForKey,
   }: {
     fullSnapshotUrl?: string
@@ -845,6 +905,7 @@ export function createStaticRankingSummaryData(
     teamHistoryIndexUrl?: string
     teamHistoryUrl?: string
     regionHistoryUrl?: string
+    tournamentMovementIndexUrl?: string
     snapshotUrlForKey?: (key: string) => string
   } = {},
 ): {
@@ -868,9 +929,16 @@ export function createStaticRankingSummaryData(
       },
     ]),
   )
-  const { artifactKind: _artifactKind, snapshots: _snapshots, teams: _teams, ...manifestBase } = data
+  const {
+    artifactKind: _artifactKind,
+    snapshots: _snapshots,
+    tournamentMovements: _tournamentMovements,
+    teams: _teams,
+    ...manifestBase
+  } = data
   void _artifactKind
   void _snapshots
+  void _tournamentMovements
   void _teams
 
   return {
@@ -890,6 +958,7 @@ export function createStaticRankingSummaryData(
       ...(teamHistoryIndexUrl ? { teamHistoryIndexUrl } : {}),
       ...(teamHistoryUrl ? { teamHistoryUrl } : {}),
       ...(regionHistoryUrl ? { regionHistoryUrl } : {}),
+      tournamentMovementIndexUrl,
       teamCount: Object.keys(data.teams).length,
       snapshotIndex,
     },
@@ -942,6 +1011,114 @@ function shouldPublishPublicScope(key: string, snapshot: ComputedRankingSnapshot
   return key === defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter)
 }
 
+function createTournamentMovementShards({
+  matches,
+  teams,
+  generatedAt,
+  scheduleReferences,
+}: {
+  matches: MatchRecord[]
+  teams: Record<string, TeamProfile>
+  generatedAt: string
+  scheduleReferences: TournamentScheduleReference[]
+}): Record<TournamentInstanceId, PublicTournamentMovementShard> {
+  const instances = deriveTournamentInstances({ matches, scheduleReferences, generatedAt })
+  const ratingScale = transparentGprModelMetadata.ratingScale ?? publishedRatingScale
+  const artifactMeta = artifactMetaFor({
+    generatedAt,
+    modelVersion: transparentGprModelMetadata.version,
+    modelConfigHash: transparentGprModelMetadata.configHash,
+  })
+
+  return Object.fromEntries(instances.map((instance) => {
+    const instanceMatches = matches.filter((match) => (
+      tournamentInstanceForEvent(match.event, match.season)?.id === instance.id
+      && match.date >= instance.startDate
+      && match.date <= instance.ratedThroughDate
+    ))
+    const entrantNames = new Set(instanceMatches.flatMap((match) => [match.teamA, match.teamB]))
+    const baselineMatches = matches.filter((match) => match.date < instance.startDate && isCalendarAlignedSeasonMatch(match))
+    const endpointMatches = matches.filter((match) => match.date <= instance.boundaryDate && isCalendarAlignedSeasonMatch(match))
+    const baseline = buildRankingModel(baselineMatches, teamProfilesForRankingScope(baselineMatches, teams))
+    const endpoint = buildRankingModel(endpointMatches, teamProfilesForRankingScope(endpointMatches, teams))
+    const baselineByTeam = new Map(baseline.standings.map((standing) => [standing.team, standing]))
+    const endpointByTeam = new Map(endpoint.standings.map((standing) => [standing.team, standing]))
+    const movementTeams = [...entrantNames]
+      .flatMap((teamName): PublicTournamentMovementTeam[] => {
+        const startStanding = baselineByTeam.get(teamName)
+        const endStanding = endpointByTeam.get(teamName)
+        if (!startStanding || !endStanding) return []
+        const publishedStart = toPublishedTeamStanding(startStanding, ratingScale)
+        const publishedEnd = toPublishedTeamStanding(endStanding, ratingScale)
+        const matchPoints = groupTeamHistoryPointsIntoMatches(
+          publishedEnd.history.filter((point) => (
+            tournamentInstanceForEvent(point.event, instance.season)?.id === instance.id
+            && point.date >= instance.startDate
+            && point.date <= instance.ratedThroughDate
+          )),
+        )
+          .filter(isResolvedTeamHistoryMatchGroup)
+          .map((group) => compactTeamHistoryMatchPoint(group, true))
+          .sort((left, right) => left[0].localeCompare(right[0]))
+        const endpointKind: NonNullable<PublicTeamHistoryPointContext['kind']> = instance.status === 'completed'
+          ? 'tournament-end'
+          : instance.status === 'ongoing'
+            ? 'tournament-today'
+            : 'tournament-latest-data'
+        const points: PublicTeamHistoryPoint[] = [
+          [
+            instance.startDate,
+            publishedStart.rating,
+            publishedStart.rank,
+            { kind: 'tournament-start', event: `${instance.label} start` },
+          ],
+          ...matchPoints,
+          [
+            instance.boundaryDate,
+            publishedEnd.rating,
+            publishedEnd.rank,
+            { kind: endpointKind, event: `${instance.label} ${tournamentEndpointLabel(instance.status)}` },
+          ],
+        ]
+        return [{
+          teamId: teamIdFor(publishedEnd),
+          team: publishedEnd.team,
+          code: publishedEnd.code,
+          eligible: publishedEnd.eligibility.eligible,
+          eligibilityReasons: publishedEnd.eligibility.reasons,
+          startRank: publishedStart.rank,
+          endRank: publishedEnd.rank,
+          rankMovement: publishedStart.rank - publishedEnd.rank,
+          startRating: publishedStart.rating,
+          endRating: publishedEnd.rating,
+          ratingDelta: publishedEnd.rating - publishedStart.rating,
+          points,
+        }]
+      })
+      .sort((left, right) => left.endRank - right.endRank || right.endRating - left.endRating || left.team.localeCompare(right.team))
+
+    const shard: PublicTournamentMovementShard = {
+      artifactKind: 'tournament-movement',
+      schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+      artifactMeta,
+      ratingScale,
+      generatedAt,
+      modelVersion: transparentGprModelMetadata.version,
+      modelConfigHash: transparentGprModelMetadata.configHash,
+      ...instance,
+      participantCount: movementTeams.length,
+      teams: movementTeams,
+    }
+    return [instance.id, shard]
+  })) as Record<TournamentInstanceId, PublicTournamentMovementShard>
+}
+
+function tournamentEndpointLabel(status: 'ongoing' | 'completed' | 'unknown') {
+  if (status === 'completed') return 'final'
+  if (status === 'ongoing') return 'today'
+  return 'latest data'
+}
+
 export function createStaticRankingData({
   matches,
   teams,
@@ -950,6 +1127,7 @@ export function createStaticRankingData({
   source = 'seeded sample data',
   dataMode,
   externalSources = [],
+  tournamentScheduleReferences = [],
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -958,6 +1136,7 @@ export function createStaticRankingData({
   source?: string
   dataMode?: StaticRankingData['dataMode']
   externalSources?: DataSourceInfo[]
+  tournamentScheduleReferences?: TournamentScheduleReference[]
 }): StaticRankingData {
   const ratingUniverse = filterPublishedRatingUniverseInput(matches, teams)
   matches = ratingUniverse.matches
@@ -1172,6 +1351,12 @@ export function createStaticRankingData({
     defaultFilter,
     defaultSnapshotKey: snapshotKey(defaultFilter),
     snapshots,
+    tournamentMovements: createTournamentMovementShards({
+      matches,
+      teams,
+      generatedAt,
+      scheduleReferences: tournamentScheduleReferences,
+    }),
     teams,
   }
 }

@@ -788,6 +788,52 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   stroke-width: 1.5;
 }
 
+.tournament-move-cell {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.tournament-move-cell__ranks,
+.tournament-move-cell__delta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tournament-move-cell__ranks b {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tournament-move-cell__ranks small,
+.tournament-move-cell > small {
+  color: var(--faint);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.tournament-move-cell__delta {
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.tournament-move-cell__delta svg {
+  flex: 0 0 auto;
+}
+
+.tournament-move-cell__delta.up,
+.tournament-move-cell > small.up { color: var(--up); }
+.tournament-move-cell__delta.down,
+.tournament-move-cell > small.down { color: var(--down); }
+.tournament-move-cell__delta.flat,
+.tournament-move-cell > small.flat { color: var(--faint); }
+
 .team-score-stack {
   display: grid;
   justify-items: end;
@@ -962,6 +1008,16 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   .rank-trend-cell__move {
     font-size: 0.76rem;
     min-width: 0;
+  }
+
+  .tournament-move-cell__ranks small,
+  .tournament-move-cell > small {
+    display: none;
+  }
+
+  .tournament-move-cell__ranks b,
+  .tournament-move-cell__delta {
+    font-size: 0.68rem;
   }
 
   table.ranking-table.gpr-grid thead th:first-child {
@@ -2621,6 +2677,15 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
 
 .trend-card__plot {
   padding: 18px 20px 20px;
+}
+
+.tournament-data-note {
+  margin: 0 20px 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .trend-card > .trend-chart-skeleton {

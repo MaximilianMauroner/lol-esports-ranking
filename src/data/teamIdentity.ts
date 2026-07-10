@@ -12,7 +12,7 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
   Fnatic: { name: 'Fnatic', code: 'FNC', region: 'LEC', league: 'LEC' },
   FlyQuest: { name: 'FlyQuest', code: 'FLY', region: 'LCS', league: 'LCS' },
   'G2 Esports': { name: 'G2 Esports', code: 'G2', region: 'LEC', league: 'LEC' },
-  'GAM Esports': { name: 'GAM Esports', code: 'GAM', region: 'VCS', league: 'VCS' },
+  'GAM Esports': { name: 'GAM Esports', code: 'GAM', region: 'LCP', league: 'LCP' },
   'Gen.G': { name: 'Gen.G', code: 'GEN', region: 'LCK', league: 'LCK' },
   'Hanwha Life Esports': { name: 'Hanwha Life Esports', code: 'HLE', region: 'LCK', league: 'LCK' },
   'JD Gaming': { name: 'JD Gaming', code: 'JDG', region: 'LPL', league: 'LPL' },

@@ -17,7 +17,12 @@ import type {
   TeamHistoryPoint,
 } from '../../types'
 import type { RegionStrength } from '../regionStrength'
-import { tournamentFamilyForEvent, type InternationalTournamentFamilyId } from '../internationalTournaments'
+import {
+  tournamentFamilyForEvent,
+  type InternationalTournamentFamilyId,
+  type TournamentInstanceId,
+  type TournamentLifecycleStatus,
+} from '../internationalTournaments'
 import type {
   AwardSignalData,
   DataCoverage,
@@ -32,7 +37,7 @@ import type { WalkForwardMetrics } from '../predictionModel'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
-export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 19 as const
+export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 20 as const
 const PUBLIC_TEAM_RECENT_MATCH_LIMIT = 25
 
 export type ArtifactMeta = {
@@ -337,7 +342,7 @@ export type PublicTeamDirectory = {
 }
 
 export type PublicTeamHistoryPointContext = {
-  kind?: 'match' | 'standing-adjustment'
+  kind?: 'match' | 'standing-adjustment' | 'tournament-start' | 'tournament-end' | 'tournament-today' | 'tournament-latest-data'
   adjustmentReason?: 'published-standing-reconciliation'
   event?: string
   opponent?: string
@@ -442,6 +447,69 @@ export type PublicTeamHistoryIndex = {
   scopeIndex: Record<string, PublicTeamHistoryIndexEntry>
 }
 
+export type PublicTournamentMovementIndexEntry = {
+  id: TournamentInstanceId
+  family: InternationalTournamentFamilyId
+  season: string
+  label: string
+  status: TournamentLifecycleStatus
+  startDate: string
+  boundaryDate: string
+  ratedThroughDate: string
+  scheduledEndDate?: string
+  dataLag: boolean
+  participantCount: number
+  url: string
+}
+
+export type PublicTournamentMovementTeam = {
+  teamId: string
+  team: string
+  code: string
+  eligible: boolean
+  eligibilityReasons: TeamEligibility['reasons']
+  startRank: number
+  endRank: number
+  rankMovement: number
+  startRating: number
+  endRating: number
+  ratingDelta: number
+  points: PublicTeamHistoryPoint[]
+}
+
+export type PublicTournamentMovementIndex = {
+  artifactKind: 'tournament-movement-index'
+  schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
+  artifactMeta: ArtifactMeta
+  ratingScale: PublishedRatingScale
+  generatedAt: string
+  modelVersion: string
+  modelConfigHash: string
+  tournaments: PublicTournamentMovementIndexEntry[]
+}
+
+export type PublicTournamentMovementShard = {
+  artifactKind: 'tournament-movement'
+  schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
+  artifactMeta: ArtifactMeta
+  ratingScale: PublishedRatingScale
+  generatedAt: string
+  modelVersion: string
+  modelConfigHash: string
+  id: TournamentInstanceId
+  family: InternationalTournamentFamilyId
+  season: string
+  label: string
+  status: TournamentLifecycleStatus
+  startDate: string
+  boundaryDate: string
+  ratedThroughDate: string
+  scheduledEndDate?: string
+  dataLag: boolean
+  participantCount: number
+  teams: PublicTournamentMovementTeam[]
+}
+
 export type PublicRegionHistoryPointContext = {
   event?: string
   tier?: string
@@ -517,6 +585,7 @@ export type PublicRankingManifest = {
   teamHistoryIndexUrl?: string
   teamHistoryUrl?: string
   regionHistoryUrl?: string
+  tournamentMovementIndexUrl: string
   teamCount: number
   snapshotIndex: Record<string, PublicSnapshotIndexEntry>
   snapshots?: Record<string, never>
@@ -563,6 +632,15 @@ export function teamHistoryShardFileName(key: string) {
 export function teamHistoryShardUrlPathForKey(key: string, basePath = '/data/history/team-series') {
   const normalizedBase = basePath.replace(/\/$/, '')
   return `${normalizedBase}/${encodeURIComponent(teamHistoryShardFileName(key))}`
+}
+
+export function tournamentMovementShardFileName(id: TournamentInstanceId) {
+  return `${id.replace(':', '-')}.json`
+}
+
+export function tournamentMovementShardUrlPathForId(id: TournamentInstanceId, basePath = '/data/history/tournament-moves') {
+  const normalizedBase = basePath.replace(/\/$/, '')
+  return `${normalizedBase}/${encodeURIComponent(tournamentMovementShardFileName(id))}`
 }
 
 export function artifactMetaFor({
@@ -840,6 +918,7 @@ export function parsePublicRankingManifest(value: unknown): PublicRankingManifes
   assertOptionalDataUrlPath(value.teamHistoryIndexUrl, 'ranking manifest teamHistoryIndexUrl', '/data/history')
   assertOptionalDataUrlPath(value.teamHistoryUrl, 'ranking manifest teamHistoryUrl', '/data/history')
   assertOptionalDataUrlPath(value.regionHistoryUrl, 'ranking manifest regionHistoryUrl', '/data/history')
+  assertArtifactUrl(value.tournamentMovementIndexUrl, 'ranking manifest tournamentMovementIndexUrl', '/data/history/tournament-moves')
   assertNonNegativeInteger(value.teamCount, 'ranking manifest teamCount')
   assertObject(value.snapshotIndex, 'ranking manifest snapshotIndex')
   if (value.snapshots !== undefined) {
@@ -996,6 +1075,49 @@ export function parsePublicTeamHistoryShard(value: unknown): PublicTeamHistorySh
     throw new Error('Invalid public artifact: team history shard pointCount must match series points')
   }
   return value as PublicTeamHistoryShard
+}
+
+export function parsePublicTournamentMovementIndex(value: unknown): PublicTournamentMovementIndex {
+  assertObject(value, 'tournament movement index')
+  assertEqual(value.artifactKind, 'tournament-movement-index', 'tournament movement index artifactKind')
+  assertSchemaVersion(value, 'tournament movement index')
+  assertArtifactMeta(value.artifactMeta, 'tournament movement index artifactMeta')
+  assertPublishedRatingScale(value.ratingScale, 'tournament movement index ratingScale')
+  assertString(value.generatedAt, 'tournament movement index generatedAt')
+  assertString(value.modelVersion, 'tournament movement index modelVersion')
+  assertString(value.modelConfigHash, 'tournament movement index modelConfigHash')
+  assertArray(value.tournaments, 'tournament movement index tournaments')
+  const ids = new Set<string>()
+  for (const [index, entry] of value.tournaments.entries()) {
+    assertTournamentMovementIndexEntry(entry, `tournament movement index tournaments[${index}]`)
+    if (ids.has(entry.id)) throw new Error(`Invalid public artifact: duplicate tournament movement id ${entry.id}`)
+    ids.add(entry.id)
+  }
+  return value as PublicTournamentMovementIndex
+}
+
+export function parsePublicTournamentMovementShard(value: unknown): PublicTournamentMovementShard {
+  assertObject(value, 'tournament movement shard')
+  assertEqual(value.artifactKind, 'tournament-movement', 'tournament movement shard artifactKind')
+  assertSchemaVersion(value, 'tournament movement shard')
+  assertArtifactMeta(value.artifactMeta, 'tournament movement shard artifactMeta')
+  assertPublishedRatingScale(value.ratingScale, 'tournament movement shard ratingScale')
+  assertString(value.generatedAt, 'tournament movement shard generatedAt')
+  assertString(value.modelVersion, 'tournament movement shard modelVersion')
+  assertString(value.modelConfigHash, 'tournament movement shard modelConfigHash')
+  assertTournamentIdentity(value, 'tournament movement shard')
+  assertDateString(value.startDate, 'tournament movement shard startDate')
+  assertDateString(value.boundaryDate, 'tournament movement shard boundaryDate')
+  assertDateString(value.ratedThroughDate, 'tournament movement shard ratedThroughDate')
+  if (value.scheduledEndDate !== undefined) assertDateString(value.scheduledEndDate, 'tournament movement shard scheduledEndDate')
+  assertBoolean(value.dataLag, 'tournament movement shard dataLag')
+  assertNonNegativeInteger(value.participantCount, 'tournament movement shard participantCount')
+  assertArray(value.teams, 'tournament movement shard teams')
+  value.teams.forEach((team, index) => assertTournamentMovementTeam(team, `tournament movement shard teams[${index}]`))
+  if (value.teams.length !== value.participantCount) {
+    throw new Error('Invalid public artifact: tournament movement shard participantCount must match teams length')
+  }
+  return value as PublicTournamentMovementShard
 }
 
 export function parsePublicRegionHistory(value: unknown): PublicRegionHistoryDirectory {
@@ -1244,6 +1366,60 @@ function assertTeamHistoryIndexEntry(key: string, value: unknown): asserts value
   assertNonNegativeInteger(value.pointCount, `team history index scopeIndex ${key} pointCount`)
 }
 
+function assertTournamentMovementIndexEntry(value: unknown, label: string): asserts value is PublicTournamentMovementIndexEntry {
+  assertObject(value, label)
+  assertTournamentIdentity(value, label)
+  assertDateString(value.startDate, `${label} startDate`)
+  assertDateString(value.boundaryDate, `${label} boundaryDate`)
+  assertDateString(value.ratedThroughDate, `${label} ratedThroughDate`)
+  if (value.scheduledEndDate !== undefined) assertDateString(value.scheduledEndDate, `${label} scheduledEndDate`)
+  assertBoolean(value.dataLag, `${label} dataLag`)
+  assertNonNegativeInteger(value.participantCount, `${label} participantCount`)
+  assertArtifactUrl(value.url, `${label} url`, '/data/history/tournament-moves')
+  if (isLocalDataUrl(value.url)) {
+    assertEqual(localDataUrlPath(value.url), tournamentMovementShardUrlPathForId(value.id as TournamentInstanceId), `${label} url`)
+  }
+}
+
+function assertTournamentIdentity(value: Record<string, unknown>, label: string) {
+  assertString(value.id, `${label} id`)
+  if (!/^(?:first-stand|msi|worlds|ewc):20\d{2}$/.test(value.id)) {
+    throw new Error(`Invalid public artifact: ${label} id must be a family:season identifier`)
+  }
+  assertEnum(value.family, ['first-stand', 'msi', 'worlds', 'ewc'], `${label} family`)
+  assertString(value.season, `${label} season`)
+  assertString(value.label, `${label} label`)
+  assertEnum(value.status, ['ongoing', 'completed', 'unknown'], `${label} status`)
+  if (value.id !== `${value.family}:${value.season}`) {
+    throw new Error(`Invalid public artifact: ${label} id must match family and season`)
+  }
+}
+
+function assertTournamentMovementTeam(value: unknown, label: string): asserts value is PublicTournamentMovementTeam {
+  assertObject(value, label)
+  assertString(value.teamId, `${label} teamId`)
+  assertString(value.team, `${label} team`)
+  assertString(value.code, `${label} code`)
+  assertBoolean(value.eligible, `${label} eligible`)
+  assertStringArray(value.eligibilityReasons, `${label} eligibilityReasons`)
+  assertNonNegativeInteger(value.startRank, `${label} startRank`)
+  assertNonNegativeInteger(value.endRank, `${label} endRank`)
+  assertNumber(value.rankMovement, `${label} rankMovement`)
+  assertNumber(value.startRating, `${label} startRating`)
+  assertNumber(value.endRating, `${label} endRating`)
+  assertNumber(value.ratingDelta, `${label} ratingDelta`)
+  assertArray(value.points, `${label} points`)
+  value.points.forEach((point, index) => assertHistoryPoint(point, `${label} points[${index}]`, assertTeamHistoryPointContext))
+  if (value.points.length < 2) throw new Error(`Invalid public artifact: ${label} must include start and endpoint boundaries`)
+  const points = value.points as PublicTeamHistoryPoint[]
+  const startKind = points[0]?.[3]?.kind
+  const endKind = points.at(-1)?.[3]?.kind
+  if (startKind !== 'tournament-start') throw new Error(`Invalid public artifact: ${label} must start with a tournament-start boundary`)
+  if (!['tournament-end', 'tournament-today', 'tournament-latest-data'].includes(endKind ?? '')) {
+    throw new Error(`Invalid public artifact: ${label} must end with a tournament boundary`)
+  }
+}
+
 function assertTeamEntity(value: unknown, label: string): asserts value is PublicTeamEntity {
   assertObject(value, label)
   assertString(value.teamId, `${label} teamId`)
@@ -1337,7 +1513,7 @@ function assertHistoryPoint(
 }
 
 function assertTeamHistoryPointContext(value: Record<string, unknown>, label: string) {
-  assertOptionalEnum(value.kind, ['match', 'standing-adjustment'], `${label} kind`)
+  assertOptionalEnum(value.kind, ['match', 'standing-adjustment', 'tournament-start', 'tournament-end', 'tournament-today', 'tournament-latest-data'], `${label} kind`)
   assertOptionalEnum(value.adjustmentReason, ['published-standing-reconciliation'], `${label} adjustmentReason`)
   assertOptionalString(value.event, `${label} event`)
   assertOptionalString(value.opponent, `${label} opponent`)

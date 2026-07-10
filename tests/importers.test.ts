@@ -441,6 +441,42 @@ test('community merge keeps Oracle stats but adopts Leaguepedia qualifier metada
   assert.equal(merged[0].teamAGold, 65000)
 })
 
+test('community merge corrects Oracle Worlds labels on regional finals', () => {
+  const oracleMatch: MatchRecord = matchFixture({
+    id: 'oe-worlds-regional-final',
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: 'oe-worlds-regional-final-id',
+    event: 'WLDs 2025',
+    tier: 'worlds-main',
+    teamAKills: 20,
+    teamBKills: 12,
+    teamAGold: 65000,
+    teamBGold: 59000,
+  })
+  const leaguepediaDuplicate: MatchRecord = matchFixture({
+    id: 'lp-worlds-regional-final',
+    sourceProvider: 'leaguepedia-cargo',
+    sourceGameId: 'lp-worlds-regional-final-id',
+    event: 'LPL/2025 Season/Regional Finals',
+    phase: 'Regional Finals',
+    tier: 'major-playoffs',
+    teamAKills: 20,
+    teamBKills: 12,
+    teamAGold: 65000,
+    teamBGold: 59000,
+    gameLengthSeconds: undefined,
+  })
+
+  const [merged] = mergeCommunityMatchSources({
+    oracleMatches: [oracleMatch],
+    leaguepediaMatches: [leaguepediaDuplicate],
+  })
+
+  assert.equal(merged?.event, 'LPL/2025 Season/Regional Finals')
+  assert.equal(merged?.tier, 'major-playoffs')
+  assert.equal(merged?.sourceProvider, 'oracles-elixir')
+})
+
 test('community merge upgrades Oracle duplicate tier and best-of from stronger Leaguepedia metadata', () => {
   const oracleMatch: MatchRecord = matchFixture({
     id: 'oe-msi-final-game',
