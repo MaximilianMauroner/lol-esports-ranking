@@ -25,7 +25,7 @@ test('Leaguepedia international rows use known team home leagues when explicit f
         teamBKills: 12,
         teamAGold: 62000,
         teamBGold: 59000,
-        bestOf: 5,
+        bestOf: 1,
       },
     ],
   })

@@ -24,23 +24,24 @@ test('buildDeservedStandingRegionModel ranks regions from cross-region resume le
 })
 
 test('buildDeservedStandingRegionModel applies roster validity, seed hooks, and stage caps', () => {
-  const model = buildDeservedStandingRegionModel([
-    matchFixture({
-      id: 'worlds-bo5',
-      event: 'Worlds 2026',
-      league: 'Worlds',
-      region: 'International',
-      tier: 'worlds-playoffs',
-      bestOf: 5,
-      teamA: 'Alpha',
-      teamB: 'Beta',
-      winner: 'Alpha',
-      teamARegion: 'LCK',
-      teamBRegion: 'LPL',
-      teamAHomeLeague: 'LCK',
-      teamBHomeLeague: 'LPL',
-    }),
-  ], teamProfiles(), {
+  const matches = Array.from({ length: 3 }, (_, index) => matchFixture({
+    id: `worlds-bo5-${index + 1}`,
+    sourceGameId: `worlds-bo5_${index + 1}`,
+    gameNumber: index + 1,
+    event: 'Worlds 2026',
+    league: 'Worlds',
+    region: 'International',
+    tier: 'worlds-playoffs',
+    bestOf: 5,
+    teamA: 'Alpha',
+    teamB: 'Beta',
+    winner: 'Alpha',
+    teamARegion: 'LCK',
+    teamBRegion: 'LPL',
+    teamAHomeLeague: 'LCK',
+    teamBHomeLeague: 'LPL',
+  }))
+  const model = buildDeservedStandingRegionModel(matches, teamProfiles(), {
     rosterValidityFor: (entry) => entry.team === 'Alpha' ? 0.5 : 1,
     seedExpectedSeriesResultFor: ({ entry }) => entry.team === 'Alpha' ? 0.25 : 0.75,
     regionStagePointsFor: (region) => region === 'LCK' ? 20 : 0,

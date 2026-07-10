@@ -153,15 +153,15 @@ test('public DSS comparison discounts prior results after sourced roster changes
 test('checkpoint DSS comparison uses previous rating as its base score', () => {
   const data = createStaticRankingData({
     matches: [
-      checkpointMatch('lck-opener', '2026-01-17', 'LCK 2026 Spring', 'LCK', 'Gen.G', 'T1', 'Gen.G'),
-      checkpointMatch('fst-final', '2026-03-22', 'FST 2026', 'FST', 'Gen.G', 'G2 Esports', 'Gen.G'),
-      checkpointMatch('ewc-match', '2026-05-14', 'EWC 2026', 'EWC', 'G2 Esports', 'T1', 'T1'),
-      checkpointMatch('msi-final', '2026-06-28', 'MSI 2026', 'MSI', 'T1', 'Gen.G', 'T1'),
-      checkpointMatch('worlds-final', '2026-11-08', 'WLDs 2026', 'WLDs', 'T1', 'Bilibili Gaming', 'T1'),
+      ...checkpointSeries('lck-opener', '2026-01-17', 'LCK 2026 Spring', 'LCK', 'Gen.G', 'T1', 'Gen.G'),
+      ...checkpointSeries('fst-final', '2026-03-22', 'FST 2026', 'FST', 'Gen.G', 'G2 Esports', 'Gen.G'),
+      ...checkpointSeries('ewc-match', '2026-05-14', 'EWC 2026', 'EWC', 'G2 Esports', 'T1', 'T1'),
+      ...checkpointSeries('msi-final', '2026-06-28', 'MSI 2026', 'MSI', 'T1', 'Gen.G', 'T1'),
+      ...checkpointSeries('worlds-final', '2026-11-08', 'WLDs 2026', 'WLDs', 'T1', 'Bilibili Gaming', 'T1'),
     ],
     teams,
     rosters: {},
-    generatedAt: '2026-06-26T00:00:00.000Z',
+    generatedAt: '2026-11-09T00:00:00.000Z',
   })
   const split2 = data.filterOptions.checkpoints?.['2026']?.[1]
   assert.ok(split2)
@@ -274,7 +274,7 @@ function internationalMatch(
   }
 }
 
-function checkpointMatch(
+function checkpointSeries(
   id: string,
   date: string,
   event: string,
@@ -282,10 +282,14 @@ function checkpointMatch(
   teamA: string,
   teamB: string,
   winner: string,
-): MatchRecord {
-  return {
-    id,
+): MatchRecord[] {
+  const bestOf = league === 'LCK' ? 1 : 5
+  const games = bestOf === 1 ? 1 : 3
+  return Array.from({ length: games }, (_, index) => ({
+    id: `${id}-${index + 1}`,
     sourceProvider: 'seed',
+    sourceGameId: `${id}_${index + 1}`,
+    gameNumber: index + 1,
     dataCompleteness: 'complete',
     season: Number(date.slice(0, 4)),
     date,
@@ -294,7 +298,7 @@ function checkpointMatch(
     region: league === 'LCK' ? 'LCK' : 'International',
     league,
     patch: '26.1',
-    bestOf: league === 'LCK' ? 1 : 5,
+    bestOf,
     tier: checkpointTier(league),
     teamA,
     teamB,
@@ -303,7 +307,7 @@ function checkpointMatch(
     teamBKills: winner === teamB ? 20 : 12,
     teamAGold: winner === teamA ? 70000 : 58000,
     teamBGold: winner === teamB ? 70000 : 58000,
-  }
+  }))
 }
 
 function checkpointTier(league: string): MatchRecord['tier'] {
