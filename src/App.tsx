@@ -426,6 +426,9 @@ function App() {
           <span>{RIOT_PROJECT_NOTICE}</span>
           <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_REPOSITORY_URL}>Source code</a>
           <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_FEEDBACK_URL}>Report feedback</a>
+          <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href="/legal">Legal notice</a>
+          <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href="/privacy">Privacy</a>
+          <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href="/licenses">Licenses</a>
         </footer>
       </main>
 

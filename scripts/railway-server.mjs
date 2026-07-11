@@ -472,6 +472,9 @@ function isKnownAppRoute(pathname) {
     || normalizedPathname === '/rankings'
     || normalizedPathname === '/teams'
     || normalizedPathname === '/regions'
+    || normalizedPathname === '/legal'
+    || normalizedPathname === '/privacy'
+    || normalizedPathname === '/licenses'
 }
 
 function isRevalidatingMetadataAssetPath(path) {
