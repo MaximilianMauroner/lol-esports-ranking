@@ -244,7 +244,7 @@ function App() {
         <nav className="sticky top-0 z-50 grid min-h-[var(--app-nav-h)] grid-cols-[minmax(158px,max-content)_minmax(0,1fr)] items-center gap-[clamp(10px,1.6vw,22px)] border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.96)] px-[var(--page-x)] py-2.5 backdrop-blur-[16px] max-[1040px]:gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)] max-[900px]:items-stretch max-[900px]:gap-x-3 max-[900px]:gap-y-2 max-[900px]:px-3 max-[900px]:pt-2 max-[900px]:pb-2.5" aria-label="Primary">
           <a className="flex min-w-0 items-center gap-[11px] rounded-[var(--r-sm)] text-left text-inherit no-underline transition-colors duration-160 hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)] max-[1040px]:min-w-auto max-[900px]:mr-auto max-[900px]:min-h-9 max-[900px]:justify-self-start [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" href={hashForModeAndScope('rankings', effectiveScope)} onClick={goHome} title="Go to Rankings home">
             <span className="grid size-[37px] shrink-0 place-items-center overflow-hidden rounded-[7px]">
-              <img className="block size-full" src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
+              <img className="block size-full" src="/logo.png" alt="" aria-hidden="true" width={37} height={37} />
             </span>
             <div className="min-w-0">
               <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.94rem] tracking-normal text-[var(--text-strong)]">Power Index</b>
