@@ -2,6 +2,8 @@
 
 An independent team-strength prototype for LoL esports. The app presents a Power Index rather than a static table: ranking controls, tournament weights, selected-team explanations, team timelines, player timelines, season summaries, event summaries, and methodology notes.
 
+Live site: [lol.lab4code.com](https://lol.lab4code.com/) · [Source code](https://github.com/MaximilianMauroner/lol-esports-ranking) · [Report feedback](https://github.com/MaximilianMauroner/lol-esports-ranking/issues/new?title=%5BFeedback%5D%20)
+
 ## Status
 
 For static deployments, the app serves the latest committed browser-safe snapshot from `public/data/`. On Railway, the same `/data/*` payload can be served from Railway Bucket storage after refresh. It is not an official Riot ranking, and each public ranking claim should stay tied to the data source manifest, model version, config hash, and coverage window that produced it. While the model is pre-1.0, `model.version` is intentionally stable; use `model.configHash` and `schemaVersion` for exact iteration provenance.

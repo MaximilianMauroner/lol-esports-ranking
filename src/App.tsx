@@ -25,7 +25,7 @@ import { Card } from './components/ui/card'
 import { Skeleton } from './components/ui/skeleton'
 import { currentSeasonScope } from './lib/defaultScope'
 import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
-import { RIOT_PROJECT_NOTICE } from './lib/legal'
+import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
 import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { cn } from './lib/utils'
 import {
@@ -422,8 +422,10 @@ function App() {
             ) : null}
           </>
         )}
-        <footer className="mx-[var(--page-x)] mt-[30px] border-t border-[var(--line)] pt-[15px] text-[0.72rem] leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
-          {RIOT_PROJECT_NOTICE}
+        <footer className="mx-[var(--page-x)] mt-[30px] flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--line)] pt-[15px] text-[0.72rem] leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
+          <span>{RIOT_PROJECT_NOTICE}</span>
+          <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_REPOSITORY_URL}>Source code</a>
+          <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_FEEDBACK_URL}>Report feedback</a>
         </footer>
       </main>
 

@@ -53,8 +53,10 @@ test('app shell includes the Riot project disclaimer footer', async () => {
   assert.match(RIOT_PROJECT_NOTICE, /created under Riot Games' "Legal Jibber Jabber" policy/)
   assert.match(RIOT_PROJECT_NOTICE, /Riot Games does not endorse or sponsor this project/)
   assert.match(legal, /export const RIOT_PROJECT_NOTICE/)
-  assert.match(app, /className="site-footer"/)
+  assert.match(app, /<footer\b[^>]*aria-label="Project disclaimer"/)
   assert.match(app, /RIOT_PROJECT_NOTICE/)
+  assert.match(app, /PROJECT_REPOSITORY_URL/)
+  assert.match(app, /PROJECT_FEEDBACK_URL/)
 })
 
 test('visible SVG logo is optimized separately from the install icon', async () => {
