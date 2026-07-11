@@ -9,12 +9,13 @@ import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
 import { createStaticRankingData, type DataSourceWarning } from '../src/lib/snapshot'
-import { createPublicArtifactWritePlan, publicScopeArtifactPath, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
+import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
 import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
-const publicDataDir = resolve(readArg('public-data-dir') ?? 'public/data')
+const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
+const publicDataDir = `${publicDataTargetDir}.next-${process.pid}`
 const manifestPath = readArg('manifest')
 const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
 const manifest = resolvedManifestPath
@@ -143,7 +144,7 @@ const snapshot = createStaticRankingData({
 await mkdir(dirname(output), { recursive: true })
 await writeJsonFile(output, snapshot)
 const publicPlan = createPublicArtifactWritePlan(snapshot)
-const summaryOutput = resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.manifest)
+const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)
 const publicWrites = publicPlan.writes.map((entry) => ({
   path: resolve(publicDataDir, entry.relativePath),
@@ -151,30 +152,26 @@ const publicWrites = publicPlan.writes.map((entry) => ({
   validate: entry.validate,
 }))
 
-for (const write of publicWrites) {
-  write.validate(JSON.parse(write.contents))
+await rm(publicDataDir, { recursive: true, force: true })
+try {
+  for (const write of publicWrites) {
+    write.validate(JSON.parse(write.contents))
+  }
+  for (const write of publicWrites) {
+    await atomicWriteFile(write.path, write.contents)
+  }
+
+  await replaceDirectory(publicDataDir, publicDataTargetDir)
+  const publicDataBytes = await directorySize(publicDataTargetDir)
+
+  console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)
+  console.log(`Wrote browser summary to ${summaryOutput}`)
+  console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
+  console.log(`Public data budget: ${publicDataBytes} bytes`)
+} catch (error) {
+  await rm(publicDataDir, { recursive: true, force: true })
+  throw error
 }
-
-await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir), { recursive: true, force: true })
-await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir), { recursive: true, force: true })
-await rm(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.teamHistory), { force: true })
-
-for (const write of publicWrites) {
-  await atomicWriteFile(write.path, write.contents)
-}
-await removeStaleShardFiles(resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.scopeDir), new Set(summarySnapshots.map(([key]) => publicScopeArtifactPath(key).split('/').at(-1)!)))
-await rm(resolve(publicDataDir, 'snapshots'), { recursive: true, force: true })
-await rm(resolve(publicDataDir, 'team-history'), { recursive: true, force: true })
-await rm(resolve(publicDataDir, 'players.json'), { force: true })
-await rm(resolve(publicDataDir, 'region-history.json'), { force: true })
-await rm(resolve(publicDataDir, 'team-history.json'), { force: true })
-
-const publicDataBytes = await directorySize(publicDataDir)
-
-console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)
-console.log(`Wrote browser summary to ${summaryOutput}`)
-console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
-console.log(`Public data budget: ${publicDataBytes} bytes`)
 
 function readArg(name: string) {
   const index = process.argv.indexOf(`--${name}`)
@@ -289,6 +286,28 @@ async function directorySize(dir: string): Promise<number> {
   return total
 }
 
+async function replaceDirectory(nextDir: string, targetDir: string) {
+  const previousDir = `${targetDir}.previous-${process.pid}`
+  await rm(previousDir, { recursive: true, force: true })
+  let hasPrevious = false
+
+  try {
+    await rename(targetDir, previousDir)
+    hasPrevious = true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+
+  try {
+    await rename(nextDir, targetDir)
+  } catch (error) {
+    if (hasPrevious) await rename(previousDir, targetDir)
+    throw error
+  }
+
+  if (hasPrevious) await rm(previousDir, { recursive: true, force: true })
+}
+
 async function atomicWriteFile(path: string, contents: string) {
   await mkdir(dirname(path), { recursive: true })
   const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`
@@ -355,12 +374,4 @@ async function writeJsonValue(
 
 function indent(depth: number) {
   return '  '.repeat(depth)
-}
-
-async function removeStaleShardFiles(directory: string, expectedFiles: Set<string>) {
-  const entries = await readdir(directory, { withFileTypes: true })
-  await Promise.all(entries.map(async (entry) => {
-    if (!entry.isFile() || !entry.name.endsWith('.json') || expectedFiles.has(entry.name)) return
-    await rm(resolve(directory, entry.name))
-  }))
 }

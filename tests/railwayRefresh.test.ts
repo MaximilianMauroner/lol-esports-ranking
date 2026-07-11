@@ -1005,6 +1005,13 @@ test('bucket publisher skips full audit artifact upload by default', async () =>
       key: 'rankings/artifacts/latest-full.json',
       reason: 'full-snapshot-upload-disabled',
     }])
+    const publicKeys = sent
+      .filter((entry) => entry.input.Key.startsWith('rankings/data/'))
+      .map((entry) => entry.input.Key)
+    assert.deepEqual(publicKeys, [
+      'rankings/data/scopes/all.json',
+      'rankings/data/ranking-summary.json',
+    ])
     assert.deepEqual(keys, [
       'rankings/data/ranking-summary.json',
       'rankings/data/scopes/all.json',

@@ -82,7 +82,7 @@ export async function uploadRankingArtifacts({
   const uploads = []
   const unchanged = []
   const skipped = []
-  uploads.push(...await uploadDirectory(client, config, publicDataDir, 'data'))
+  uploads.push(...await uploadDirectory(client, config, publicDataDir, 'data', 'ranking-summary.json'))
   if (rawDir) {
     const rawSync = await uploadRawSourceFiles(client, config, rawDir, manifestPath)
     uploads.push(...rawSync.uploaded)
@@ -262,9 +262,12 @@ export async function downloadBucketObject({
   }
 }
 
-export async function uploadDirectory(client, config, dir, destinationPrefix) {
+export async function uploadDirectory(client, config, dir, destinationPrefix, publishLast) {
   const root = resolve(dir)
   const files = await listFiles(root)
+  if (publishLast) {
+    files.sort((left, right) => Number(relative(root, left) === publishLast) - Number(relative(root, right) === publishLast))
+  }
   const uploads = []
   for (const file of files) {
     const relativePath = relative(root, file).split(sep).join('/')
