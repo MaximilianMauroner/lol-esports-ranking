@@ -104,40 +104,40 @@ export function renderHomepagePrerender(data: HomepagePrerenderData) {
   const sourceLabel = data.source ?? 'Oracle\'s Elixir primary with Leaguepedia Cargo gap-fill'
 
   return [
-    `<section class="seo-prerender" aria-label="Latest LoL Esports Power Index snapshot"${data.snapshotKey ? ` data-snapshot-key="${escapeHtml(data.snapshotKey)}"` : ''}>`,
-    '<div class="seo-prerender__inner">',
-    '<p class="seo-prerender__eyebrow">Latest model snapshot</p>',
+    `<section class="min-h-full px-[var(--page-x)] py-[clamp(28px,6vw,72px)]" aria-label="Latest LoL Esports Power Index snapshot"${data.snapshotKey ? ` data-snapshot-key="${escapeHtml(data.snapshotKey)}"` : ''}>`,
+    '<div class="mx-auto max-w-[1080px] [&>h1]:mt-2 [&>h1]:text-[3.4rem] [&>h1]:font-[720] [&>h1]:tracking-normal [&>h1]:text-[var(--text-strong)] max-[760px]:[&>h1]:text-[2.2rem]">',
+    '<p class="text-[0.72rem] font-[720] tracking-[0.16em] text-[var(--rank-gold)] uppercase">Latest model snapshot</p>',
     '<h1>LoL Esports Power Index</h1>',
-    '<p class="seo-prerender__lead">Model-versioned League of Legends esports team and region power rankings with source provenance, coverage windows, and score context.</p>',
+    '<p class="mt-3 max-w-[760px] text-base leading-[1.55] text-[var(--muted)]">Model-versioned League of Legends esports team and region power rankings with source provenance, coverage windows, and score context.</p>',
     data.seededSample
-      ? '<p class="seo-prerender__notice">Seeded sample data is loaded. These rows must not be treated as official LoL Esports rankings.</p>'
+      ? '<p class="mt-3.5 max-w-[760px] rounded-[var(--r-sm)] border border-[color-mix(in_oklch,var(--warn)_46%,var(--line))] bg-[var(--warn-soft)] px-3 py-2.5 text-[var(--text-strong)]">Seeded sample data is loaded. These rows must not be treated as official LoL Esports rankings.</p>'
       : '',
-    '<dl class="seo-prerender__stats">',
+    '<dl class="mt-7 grid grid-cols-4 gap-px overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--line)] max-[760px]:grid-cols-1">',
     statMarkup('Model', formatModelVersion(data.modelVersion)),
     statMarkup('Matches', formatNumber(data.matchCount)),
     statMarkup('Coverage', coverageLabel),
     statMarkup('Generated', generatedLabel),
     '</dl>',
-    teams.length > 0 ? '<div class="seo-prerender__grid">' : '',
+    teams.length > 0 ? '<div class="mt-7 grid grid-cols-2 gap-5 max-[760px]:grid-cols-1">' : '',
     teams.length > 0 ? [
       '<section>',
-      '<h2>Top teams</h2>',
-      '<ol class="seo-prerender__list">',
+      '<h2 class="text-base font-bold text-[var(--text-strong)]">Top teams</h2>',
+      '<ol class="mt-2.5 grid list-none gap-px overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--line)] p-0">',
       ...teams.map(teamMarkup),
       '</ol>',
       '</section>',
     ].join('') : '',
     regions.length > 0 ? [
       '<section>',
-      '<h2>Region power</h2>',
-      '<ol class="seo-prerender__list">',
+      '<h2 class="text-base font-bold text-[var(--text-strong)]">Region power</h2>',
+      '<ol class="mt-2.5 grid list-none gap-px overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--line)] p-0">',
       ...regions.map(regionMarkup),
       '</ol>',
       '</section>',
     ].join('') : '',
     teams.length > 0 ? '</div>' : '',
-    `<p class="seo-prerender__source">Source: ${escapeHtml(sourceLabel)}. Model config: ${escapeHtml(data.configHash ?? 'unknown')}. Latest match: ${escapeHtml(formatDate(data.latestMatchDate))}.</p>`,
-    `<p class="seo-prerender__legal">${escapeHtml(RIOT_PROJECT_NOTICE)}</p>`,
+    `<p class="mt-[18px] max-w-[880px] text-[0.78rem] leading-normal text-[var(--muted)]">Source: ${escapeHtml(sourceLabel)}. Model config: ${escapeHtml(data.configHash ?? 'unknown')}. Latest match: ${escapeHtml(formatDate(data.latestMatchDate))}.</p>`,
+    `<p class="mt-2.5 max-w-[880px] text-[0.78rem] leading-normal text-[var(--faint)]">${escapeHtml(RIOT_PROJECT_NOTICE)}</p>`,
     '</div>',
     '</section>',
   ].filter(Boolean).join('')
@@ -205,13 +205,13 @@ function teamMarkup(team: TeamSummary) {
     ? `${formatNumber(team.wins)}-${formatNumber(team.losses)}`
     : 'record unavailable'
   return [
-    '<li>',
-    `<span class="seo-prerender__rank">#${escapeHtml(formatNumber(team.rank))}</span>`,
-    '<span>',
-    `<strong>${escapeHtml(team.team)}</strong>`,
-    `<small>${escapeHtml([team.code, team.region, record].filter(Boolean).join(' / '))}</small>`,
+    '<li class="grid min-h-[58px] grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 bg-[var(--surface)] px-[13px] py-[11px]">',
+    `<span class="font-[760] text-[var(--rank-gold)] tabular-nums">#${escapeHtml(formatNumber(team.rank))}</span>`,
+    '<span class="min-w-0">',
+    `<strong class="block overflow-hidden text-ellipsis whitespace-nowrap text-[var(--text-strong)]">${escapeHtml(team.team)}</strong>`,
+    `<small class="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.78rem] text-[var(--muted)]">${escapeHtml([team.code, team.region, record].filter(Boolean).join(' / '))}</small>`,
     '</span>',
-    `<b>${escapeHtml(formatNumber(team.rating))}</b>`,
+    `<b class="text-[var(--accent-strong)] tabular-nums">${escapeHtml(formatNumber(team.rating))}</b>`,
     '</li>',
   ].join('')
 }
@@ -222,19 +222,19 @@ function regionMarkup(region: RegionSummary) {
     typeof region.teamCount === 'number' ? `${formatNumber(region.teamCount)} teams` : undefined,
   ].filter(Boolean).join(' / ')
   return [
-    '<li>',
-    `<span class="seo-prerender__rank">#${escapeHtml(formatNumber(region.rank))}</span>`,
-    '<span>',
-    `<strong>${escapeHtml(region.region)}</strong>`,
-    `<small>${escapeHtml(detail || 'region summary')}</small>`,
+    '<li class="grid min-h-[58px] grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 bg-[var(--surface)] px-[13px] py-[11px]">',
+    `<span class="font-[760] text-[var(--rank-gold)] tabular-nums">#${escapeHtml(formatNumber(region.rank))}</span>`,
+    '<span class="min-w-0">',
+    `<strong class="block overflow-hidden text-ellipsis whitespace-nowrap text-[var(--text-strong)]">${escapeHtml(region.region)}</strong>`,
+    `<small class="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.78rem] text-[var(--muted)]">${escapeHtml(detail || 'region summary')}</small>`,
     '</span>',
-    `<b>${escapeHtml(formatNumber(region.score))}</b>`,
+    `<b class="text-[var(--accent-strong)] tabular-nums">${escapeHtml(formatNumber(region.score))}</b>`,
     '</li>',
   ].join('')
 }
 
 function statMarkup(label: string, value: string) {
-  return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`
+  return `<div class="bg-[var(--surface)] px-3.5 py-[13px]"><dt class="text-[0.7rem] font-[680] text-[var(--faint)] uppercase">${escapeHtml(label)}</dt><dd class="mt-[5px] text-[0.92rem] font-[680] text-[var(--text-strong)]">${escapeHtml(value)}</dd></div>`
 }
 
 async function readJson(path: string): Promise<unknown> {

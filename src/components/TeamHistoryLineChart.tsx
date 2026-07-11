@@ -59,25 +59,25 @@ function TeamHistoryTooltip({
   if (rows.length === 0) return null
 
   return (
-    <div className="chart__tooltip chart__tooltip--rich">
-      <b>{formatChartTooltipTimestamp(payload)}</b>
-      <div className="chart__tooltip-list">
+    <div className="pointer-events-none static z-2 grid min-w-[260px] max-w-[min(420px,86vw)] gap-2 rounded-[var(--r)] border border-[var(--line-strong)] bg-[oklch(0.15_0.006_250/0.96)] px-[11px] py-[9px] text-[0.78rem] whitespace-normal shadow-[var(--shadow-2)]">
+      <b className="mb-0.5 text-[0.74rem] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
+      <div className="grid gap-2">
         {rows.map((row) => {
           const closeNote = dailyCloseNote(row.detail)
           return (
-            <div className="chart__tooltip-row" key={row.key}>
-              <div className="chart__tooltip-main">
-                <i style={{ background: row.color }} aria-hidden="true" />
-                <em>{row.label}</em>
-                <div className="chart__tooltip-value">
-                  <strong>{yFormat(row.value)}</strong>
+            <div className="grid gap-1" key={row.key}>
+              <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-[var(--muted)]">
+                <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
+                <em className="min-w-0 overflow-hidden text-ellipsis not-italic">{row.label}</em>
+                <div className="grid justify-items-end gap-px">
+                  <strong className="text-[var(--text)] tabular-nums">{yFormat(row.value)}</strong>
                   {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
-                    <b className="chart__tooltip-net">Close {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
+                    <b className="text-[0.66rem] font-semibold text-[var(--faint)] uppercase tabular-nums">Close {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
                   ) : null}
                 </div>
               </div>
-              {row.influence ? <small>{row.influence}</small> : null}
-              {closeNote ? <div className="chart__tooltip-note">{closeNote}</div> : null}
+              {row.influence ? <small className="ml-5 text-[0.72rem] leading-[1.35] text-[var(--faint)]">{row.influence}</small> : null}
+              {closeNote ? <div className="ml-5 text-[0.7rem] leading-[1.35] text-[var(--muted)] [overflow-wrap:anywhere]">{closeNote}</div> : null}
               <TooltipMatchList detail={row.detail} />
               <TooltipModelDetail detail={row.detail} />
             </div>
@@ -96,7 +96,7 @@ function TooltipMatchList({ detail }: { detail?: ChartPointDetail }) {
   const visibleMatches = listedMatches.slice(-4)
   const hiddenCount = listedMatches.length - visibleMatches.length
   return (
-    <div className="chart__tooltip-matches">
+    <div className="ml-5 grid gap-[5px] text-[0.7rem] leading-[1.35] text-[var(--muted)] [&>div]:[overflow-wrap:anywhere]">
       {visibleMatches.map((match, index) => {
         const label = formatChartInfluence(match)
         return label ? <div key={`${match.event ?? 'match'}-${match.opponent ?? index}-${index}`}>{label}</div> : null
@@ -122,23 +122,23 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
   if (!expected && !residual && attribution.length === 0 && typeof otherDelta !== 'number') return null
 
   return (
-    <div className="chart__tooltip-model">
+    <div className="ml-5 grid gap-[5px]">
       {expected || residual ? (
-        <div className="chart__tooltip-expectation">
+        <div className="text-[0.7rem] leading-[1.35] text-[var(--faint)]">
           {expected ? `Expected win ${expected}` : null}
           {expected && residual ? ' / ' : null}
           {residual ? `Residual ${residual}` : null}
         </div>
       ) : null}
       {attribution.length > 0 ? (
-        <div className="chart__tooltip-attribution">
+        <div className="flex flex-wrap gap-1">
           {attribution.map((entry) => (
-            <span className="chart__tooltip-chip" key={entry.key}>{formatChartAttribution(entry)}</span>
+            <span className="inline-flex w-fit items-center rounded-sm border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-[5px] py-0.5 text-[0.68rem] text-[var(--muted)] tabular-nums" key={entry.key}>{formatChartAttribution(entry)}</span>
           ))}
         </div>
       ) : null}
       {typeof otherDelta === 'number' ? (
-        <div className="chart__tooltip-expectation">Unattributed adjustment {formatPreciseSignedDelta(otherDelta)}</div>
+        <div className="text-[0.7rem] leading-[1.35] text-[var(--faint)]">Unattributed adjustment {formatPreciseSignedDelta(otherDelta)}</div>
       ) : null}
     </div>
   )

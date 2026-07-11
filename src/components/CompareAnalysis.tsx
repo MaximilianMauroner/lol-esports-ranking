@@ -20,9 +20,14 @@ import { LineChart, type ChartSeries } from './LineChart'
 import { TeamHistoryLineChart } from './TeamHistoryLineChart'
 import { dailyChartPointsFromHistoryPoints } from '../lib/teamHistoryChart'
 import type { RegionHistoryScopeState, TeamHistoryArtifactState } from '../hooks/usePublicArtifacts'
+import { cn } from '../lib/utils'
 
 const REGION_TREND_TEAM_LIMIT = 5
 const REGION_TREND_EVENT_LIMIT = 8
+const compareChartClassName = 'max-w-full min-w-0 min-h-[360px] overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[oklch(0.145_0.004_250)] [&_.chart]:px-3.5 [&_.chart_svg]:h-[300px] max-sm:min-h-0 max-sm:[&_.chart_svg]:h-[230px]'
+const compareChartHeadClassName = 'flex flex-wrap items-baseline justify-between gap-x-3.5 gap-y-2 px-[18px] pt-4 [&_.eyebrow]:text-[0.66rem] [&_.eyebrow]:tracking-[0.14em] [&_.eyebrow]:text-[var(--faint)] [&_.eyebrow]:uppercase [&_h3]:mt-0.5 [&_h3]:text-base [&_h3]:font-[660] [&_h3]:text-[var(--text-strong)]'
+const compareChartMetaClassName = 'text-[0.76rem] text-[var(--faint)] tabular-nums'
+const compareChartEmptyClassName = 'px-[18px] py-[22px] text-[var(--muted)]'
 const COMPARE_SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)']
 type TeamHistoryLike = TeamHistoryDirectory | PublicTeamHistoryShard
 
@@ -100,46 +105,46 @@ export function CompareProfileChart<E>({
 }) {
   if (entities.length < 2) {
     return (
-      <section className="compare-chart compare-profile" aria-label={title}>
-        <p className="muted compare-chart__empty">Add at least two entries to compare their profile.</p>
+      <section className={cn(compareChartClassName, 'min-h-0')} aria-label={title}>
+        <p className={compareChartEmptyClassName}>Add at least two entries to compare their profile.</p>
       </section>
     )
   }
 
   return (
-    <section className="compare-chart compare-profile" aria-label={title}>
-      <div className="compare-chart__head">
+    <section className={cn(compareChartClassName, 'min-h-0')} aria-label={title}>
+      <div className={compareChartHeadClassName}>
         <div>
           <p className="eyebrow">{eyebrow}</p>
           <h3>{title}</h3>
         </div>
-        <span className="compare-chart__meta">{entities.length} selected</span>
+        <span className={compareChartMetaClassName}>{entities.length} selected</span>
       </div>
-      <div className="profile-chart">
+      <div className="grid min-w-0 gap-[15px] px-[18px] pt-[15px] pb-[18px] max-sm:px-3.5 max-sm:py-3">
         {metrics.map((metric) => {
           const values = entities.map(metric.value)
           const best = bestProfileIds(values, columns, metric.better)
           return (
-            <div className="profile-row" key={metric.key}>
-              <div className="profile-row__label">
-                <span>{metric.label}</span>
+            <div className="grid grid-cols-[minmax(120px,150px)_minmax(0,1fr)] items-start gap-3.5 max-[900px]:grid-cols-1 max-[900px]:gap-2" key={metric.key}>
+              <div className="min-w-0 pt-[3px]">
+                <span className="block text-[0.72rem] font-[620] tracking-[0.08em] text-[var(--faint)] uppercase">{metric.label}</span>
               </div>
-              <div className="profile-bars">
+              <div className="grid min-w-0 gap-[7px]">
                 {entities.map((entity, index) => {
                   const value = metric.value(entity)
                   const color = COMPARE_SERIES_COLORS[index % COMPARE_SERIES_COLORS.length]
                   const percent = profilePercent(value, values, metric.better)
                   const isBest = best.has(columns[index].id)
                   return (
-                    <div className={`profile-bar${isBest ? ' is-best' : ''}`} key={columns[index].id}>
-                      <span className="profile-bar__name">
-                        <i style={{ background: color }} aria-hidden="true" />
+                    <div className={`grid min-w-0 grid-cols-[minmax(84px,0.8fr)_minmax(100px,2fr)_minmax(54px,auto)] items-center gap-2.5 text-[var(--muted)] max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-2.5 max-sm:gap-y-1.5${isBest ? ' text-[var(--text-strong)]' : ''}`} key={columns[index].id}>
+                      <span className="inline-flex min-w-0 items-center gap-[7px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.78rem] text-[var(--text)]">
+                        <i className="size-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden="true" />
                         {columns[index].name}
                       </span>
-                      <span className="profile-bar__track" aria-hidden="true">
-                        <span className="profile-bar__fill" style={{ width: `${percent}%`, background: color } as CSSProperties} />
+                      <span className="h-2 overflow-hidden rounded-full bg-[var(--surface-3)] shadow-[inset_0_0_0_1px_var(--line)] max-sm:col-span-full max-sm:col-start-1 max-sm:row-start-2" aria-hidden="true">
+                        <span className="block h-full min-w-[3px] rounded-full" style={{ width: `${percent}%`, background: color } as CSSProperties} />
                       </span>
-                      <strong>{metric.format(value)}</strong>
+                      <strong className="justify-self-end text-[0.78rem] font-[620] tabular-nums max-sm:col-start-2 max-sm:row-start-1">{metric.format(value)}</strong>
                     </div>
                   )
                 })}
@@ -226,38 +231,38 @@ function RegionTrendChart({
   )
 
   return (
-    <section className="compare-chart" aria-label="Compared region strength trend">
-      <div className="compare-chart__head">
+    <section className={compareChartClassName} aria-label="Compared region strength trend">
+      <div className={compareChartHeadClassName}>
         <div>
           <p className="eyebrow">Over time</p>
           <h3>Region power trend</h3>
         </div>
         {regionHistory ? (
-          <span className="compare-chart__meta">
+          <span className={compareChartMetaClassName}>
             International league-strength history · {regionHistory.regionCount} regions
           </span>
         ) : history ? (
-          <span className="compare-chart__meta">
+          <span className={compareChartMetaClassName}>
             Derived top-team average · Model {formatModelVersion(history.modelVersion)} · {formatDate(history.generatedAt)}
           </span>
         ) : null}
       </div>
-      {fallbackNote ? <p className="compare-chart__note muted">{fallbackNote}</p> : null}
+      {fallbackNote ? <p className="px-[18px] pt-2.5 text-[0.76rem] text-[var(--muted)]">{fallbackNote}</p> : null}
       {!regionHistory && regionHistoryState.status === 'loading' ? (
-        <p className="muted compare-chart__empty">Loading region history...</p>
+        <p className={compareChartEmptyClassName}>Loading region history...</p>
       ) : !regionHistory && historyState.status === 'idle' ? (
-        <p className="muted compare-chart__empty">History loads when comparison opens.</p>
+        <p className={compareChartEmptyClassName}>History loads when comparison opens.</p>
       ) : !regionHistory && historyState.status === 'loading' ? (
-        <p className="muted compare-chart__empty">Loading history…</p>
+        <p className={compareChartEmptyClassName}>Loading history…</p>
       ) : !regionHistory && (historyState.status === 'missing' || historyState.status === 'error') ? (
-        <p className="muted compare-chart__empty">{historyState.message}</p>
+        <p className={compareChartEmptyClassName}>{historyState.message}</p>
       ) : series.length > 0 ? (
         <>
           <LineChart series={series} height={300} yLabel={regionHistory ? 'Region power score' : 'Avg team power score'} yFormat={formatRating} />
           <RegionTrendEvents events={events} />
         </>
       ) : (
-        <p className="muted compare-chart__empty">Not enough tracked team history to plot the selected regions yet.</p>
+        <p className={compareChartEmptyClassName}>Not enough tracked team history to plot the selected regions yet.</p>
       )}
     </section>
   )
@@ -294,35 +299,35 @@ function regionHistoryTrend(regions: RegionStrength[], history: PublicRegionHist
 function RegionTrendEvents({ events }: { events: RegionTrendEvent[] }) {
   if (events.length === 0) {
     return (
-      <p className="muted region-events__empty">
+      <p className="m-0 border-t border-[var(--line)] px-[18px] pt-3.5 pb-[18px] text-[0.76rem] text-[var(--faint)]">
         Movement drivers are unavailable for this artifact. Regenerate team history to include event-level point metadata.
       </p>
     )
   }
 
   return (
-    <div className="region-events" aria-label="Largest derived region trend movement drivers">
-      <div className="region-events__head">
-        <span>Largest derived moves</span>
-        <small>Team-history points behind the regional average</small>
+    <div className="border-t border-[var(--line)] px-[18px] pt-3.5 pb-[18px] max-[900px]:px-3.5 max-[900px]:pt-3 max-[900px]:pb-3.5" aria-label="Largest derived region trend movement drivers">
+      <div className="mb-2.5 flex items-baseline justify-between gap-2.5 max-[900px]:grid max-[900px]:gap-[3px]">
+        <span className="text-[0.75rem] font-[680] tracking-[0.08em] text-[var(--text)] uppercase">Largest derived moves</span>
+        <small className="text-[0.76rem] text-[var(--faint)]">Team-history points behind the regional average</small>
       </div>
-      <div className="region-events__list">
+      <div className="grid grid-cols-2 gap-[9px] max-[900px]:grid-cols-1">
         {events.map((event) => (
-          <article className="region-event" key={event.id}>
-            <div className="region-event__top">
-              <span className="region-event__region">
-                <i style={{ background: event.regionColor }} aria-hidden="true" />
+          <article className="grid min-w-0 gap-[7px] rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface-2)] p-2.5" key={event.id}>
+            <div className="flex min-w-0 items-center gap-[9px]">
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-[0.76rem] font-[680] text-[var(--text)]">
+                <i className="size-2 shrink-0 rounded-full" style={{ background: event.regionColor }} aria-hidden="true" />
                 {event.region}
               </span>
-              <time dateTime={event.date}>{formatDate(event.date)}</time>
-              <strong className={`region-event__delta ${deltaClass(event.delta)}`}>{formatSignedRating(event.delta)}</strong>
+              <time className="text-[0.74rem] text-[var(--faint)] tabular-nums" dateTime={event.date}>{formatDate(event.date)}</time>
+              <strong className={`ml-auto font-mono text-[0.78rem] tabular-nums ${deltaClass(event.delta)}`}>{formatSignedRating(event.delta)}</strong>
             </div>
-            <div className="region-event__main">
-              <b>{event.team}</b>
-              {event.opponent ? <span>vs {event.opponent}</span> : null}
-              {formatRegionTrendMatchScore(event) ? <em>{formatRegionTrendMatchScore(event)}</em> : null}
+            <div className="flex min-w-0 items-center gap-[7px] text-[var(--text)] [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_span]:overflow-hidden [&_span]:text-ellipsis [&_span]:whitespace-nowrap">
+              <b className="text-[0.86rem] font-[680] text-[var(--text-strong)]">{event.team}</b>
+              {event.opponent ? <span className="text-[0.8rem] text-[var(--muted)]">vs {event.opponent}</span> : null}
+              {formatRegionTrendMatchScore(event) ? <em className="inline-grid size-[19px] shrink-0 place-items-center rounded-[5px] bg-[var(--surface-3)] text-[0.68rem] font-[760] text-[var(--muted)] not-italic">{formatRegionTrendMatchScore(event)}</em> : null}
             </div>
-            <div className="region-event__meta">
+            <div className="flex min-w-0 flex-wrap items-center gap-[5px] [&>span]:max-w-full [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:rounded-[var(--r-sm)] [&>span]:border [&>span]:border-[var(--line)] [&>span]:bg-[var(--surface)] [&>span]:px-1.5 [&>span]:py-0.5 [&>span]:text-[0.7rem] [&>span]:text-[var(--faint)]">
               <span>{event.event ?? 'Unknown event'}</span>
               {event.tier ? <span>{formatTierLabel(event.tier)}</span> : null}
               <span>{formatRating(event.rating)}</span>
@@ -483,28 +488,28 @@ function TeamCompareChart({
   }, [history, teams])
 
   return (
-    <section className="compare-chart" aria-label="Compared team power score trend">
-      <div className="compare-chart__head">
+    <section className={compareChartClassName} aria-label="Compared team power score trend">
+      <div className={compareChartHeadClassName}>
         <div>
           <p className="eyebrow">Over time</p>
           <h3>Power score trend</h3>
         </div>
         {history ? (
-          <span className="compare-chart__meta">
+          <span className={compareChartMetaClassName}>
             Model {formatModelVersion(history.modelVersion)} · {formatDate(history.generatedAt)}
           </span>
         ) : null}
       </div>
       {historyState.status === 'idle' ? (
-        <p className="muted compare-chart__empty">History loads when comparison opens.</p>
+        <p className={compareChartEmptyClassName}>History loads when comparison opens.</p>
       ) : historyState.status === 'loading' ? (
-        <p className="muted compare-chart__empty">Loading team history…</p>
+        <p className={compareChartEmptyClassName}>Loading team history…</p>
       ) : historyState.status === 'missing' || historyState.status === 'error' ? (
-        <p className="muted compare-chart__empty">{historyState.message}</p>
+        <p className={compareChartEmptyClassName}>{historyState.message}</p>
       ) : series.length > 0 ? (
         <TeamHistoryLineChart series={series} height={300} yLabel="Power score" yFormat={formatRating} />
       ) : (
-        <p className="muted compare-chart__empty">Not enough history to chart the selected teams yet.</p>
+        <p className={compareChartEmptyClassName}>Not enough history to chart the selected teams yet.</p>
       )}
     </section>
   )
@@ -517,8 +522,8 @@ function formatSignedRating(value?: number) {
 }
 
 function deltaClass(value?: number) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) < 0.05) return 'flat'
-  return value > 0 ? 'up' : 'down'
+  if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) < 0.05) return 'text-[var(--faint)]'
+  return value > 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'
 }
 
 function formatTierLabel(value: string) {

@@ -23,14 +23,6 @@ export function heatBin(value: number, min: number, max: number) {
   return Math.min(HEAT_BINS, Math.max(1, Math.ceil(t * HEAT_BINS)))
 }
 
-export function heatClass(value: number, min: number, max: number) {
-  return `heat-${heatBin(value, min, max)}`
-}
-
-export function fillClass(value: number, min: number, max: number) {
-  return `fill-${heatBin(value, min, max)}`
-}
-
 export function extent(values: number[]): [number, number] {
   let min = Infinity
   let max = -Infinity

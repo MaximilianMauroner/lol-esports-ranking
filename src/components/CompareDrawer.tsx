@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Plus, X } from 'lucide-react'
 import { DataState } from './ui'
 import { Button } from './ui/button'
+import { Badge } from './ui/badge'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from './ui/sheet'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 import type { PublicTeamStanding as RankingSummaryStanding } from '../lib/publicArtifacts/schema'
@@ -52,7 +53,7 @@ export function CompareDrawer<E>({
         showCloseButton={false}
         className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
       >
-        <SheetHeader className="drawer__head flex-row items-center p-[18px_22px] text-left">
+        <SheetHeader className="flex-row items-center gap-3 border-b border-[var(--line)] p-[18px_22px] text-left">
           <SheetTitle className="mr-auto text-[1.1rem] font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
           <SheetClose asChild>
             <Button type="button" variant="ghost">
@@ -61,22 +62,25 @@ export function CompareDrawer<E>({
             </Button>
           </SheetClose>
         </SheetHeader>
-        <div className="drawer__body min-h-0 flex-1 overflow-auto overscroll-contain">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain p-0">
           {entities.length === 0 ? (
             <DataState icon={<Plus size={26} aria-hidden="true" />} title="Nothing selected yet">
               Add rows from the ranking view to compare them here.
             </DataState>
           ) : (
             <>
-              <div className="drawer__table tablewrap">
-                <Table className="cmp" data-compare-count={columns.length}>
+                <Table
+                  containerClassName="max-w-full border-b border-[var(--line)] [contain:paint] [overscroll-behavior-x:contain] [scrollbar-gutter:stable]"
+                  className="w-full min-w-[620px] border-collapse [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:align-middle [&_td]:border-b [&_td]:border-[var(--line)] [&_td]:px-4 [&_td]:py-3 [&_td]:text-left [&_td]:align-middle [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-1 [&_thead_th]:bg-[var(--surface-2)] [&_thead_th_b]:text-[0.98rem] [&_th[scope=row]]:sticky [&_th[scope=row]]:left-0 [&_th[scope=row]]:whitespace-nowrap [&_th[scope=row]]:bg-[var(--surface)] [&_th[scope=row]]:text-[0.72rem] [&_th[scope=row]]:font-semibold [&_th[scope=row]]:tracking-[0.08em] [&_th[scope=row]]:text-[var(--faint)] [&_th[scope=row]]:uppercase [&_td]:text-[var(--text)] [&_td]:tabular-nums [&_td.best]:font-[680] [&_td.best]:text-[var(--text-strong)] max-sm:min-w-[520px] max-sm:[&_th]:px-3 max-sm:[&_th]:py-2.5 max-sm:[&_td]:px-3 max-sm:[&_td]:py-2.5 max-sm:[&_thead_th_b]:max-w-none max-sm:[&_thead_th_b]:overflow-visible max-sm:[&_thead_th_b]:text-clip max-sm:[&_thead_th_b]:whitespace-normal max-sm:[&_thead_th_b]:leading-[1.2] max-sm:[&_thead_th_b]:[overflow-wrap:anywhere] max-sm:data-[compare-count=2]:min-w-full max-sm:data-[compare-count=2]:table-fixed max-sm:data-[compare-count=2]:[&_th]:px-2 max-sm:data-[compare-count=2]:[&_td]:px-2 max-sm:data-[compare-count=2]:[&_thead_th:first-child]:w-[36%] max-sm:data-[compare-count=2]:[&_thead_th:not(:first-child)]:w-[32%] max-sm:data-[compare-count=2]:[&_th[scope=row]]:w-[36%] max-sm:data-[compare-count=2]:[&_th[scope=row]]:whitespace-normal max-sm:data-[compare-count=2]:[&_th[scope=row]]:text-[0.68rem] max-sm:data-[compare-count=2]:[&_th[scope=row]]:tracking-[0.06em] max-sm:data-[compare-count=2]:[&_th[scope=row]]:[overflow-wrap:anywhere]"
+                  data-compare-count={columns.length}
+                >
                   <TableHeader>
                     <TableRow>
                       <TableHead aria-label="Metric" />
                       {columns.map((column) => (
                         <TableHead key={column.id}>
-                          <div className="ent">
-                            <span className="ent__identity">
+                          <div className="flex flex-col gap-px [&_b]:font-[620] [&_b]:text-[var(--text-strong)] [&_small]:text-[0.74rem] [&_small]:text-[var(--faint)]">
+                            <span className="inline-flex min-w-0 items-center gap-[7px]">
                               {column.badge}
                               <b>{column.name}</b>
                             </span>
@@ -107,9 +111,9 @@ export function CompareDrawer<E>({
                             <TableCell key={columns[index].id} className={best.has(columns[index].id) ? 'best' : ''}>
                               {row.cell(entity)}
                               {best.has(columns[index].id) ? (
-                                <span className="cmp__best" aria-label={`Best ${row.label.toLowerCase()} value`}>
+                                <Badge variant="default" className="ml-2 px-1.5 text-[0.62rem] leading-[1.2] tracking-[0.06em] uppercase" aria-label={`Best ${row.label.toLowerCase()} value`}>
                                   Best
-                                </span>
+                                </Badge>
                               ) : null}
                             </TableCell>
                           ))}
@@ -118,8 +122,7 @@ export function CompareDrawer<E>({
                     })}
                   </TableBody>
                 </Table>
-              </div>
-              {after ? <div className="drawer__after">{after}</div> : null}
+              {after ? <div className="grid min-w-0 gap-4 px-[22px] pt-[18px] pb-6 max-sm:p-3.5">{after}</div> : null}
             </>
           )}
         </div>

@@ -212,12 +212,12 @@ function App() {
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
   const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
   const teamCompareAfter = drawerOpen && mode === 'rankings' ? (
-    <Suspense fallback={<p className="muted compare-chart__empty">Loading comparison...</p>}>
+    <Suspense fallback={<p className="px-[18px] py-[22px] text-[var(--muted)]">Loading comparison...</p>}>
       <TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />
     </Suspense>
   ) : null
   const regionCompareAfter = drawerOpen && mode === 'regions' ? (
-    <Suspense fallback={<p className="muted compare-chart__empty">Loading comparison...</p>}>
+    <Suspense fallback={<p className="px-[18px] py-[22px] text-[var(--muted)]">Loading comparison...</p>}>
       <RegionCompareAnalysis
         regions={activeRegionPicks}
         columns={regionColumns}
@@ -276,7 +276,7 @@ function App() {
         </div>
       </nav>
 
-      <main id="main-content" className="flex min-w-0 flex-col pb-[calc(var(--tray-h)+24px+env(safe-area-inset-bottom))]" tabIndex={-1} ref={mainRef}>
+      <main id="main-content" className="flex min-w-0 flex-col pb-[calc(var(--tray-h)+24px+env(safe-area-inset-bottom))] max-sm:pb-[calc(96px+24px+env(safe-area-inset-bottom))]" tabIndex={-1} ref={mainRef}>
         <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b border-[var(--line)] bg-[oklch(0.125_0.004_250/0.72)] px-[var(--page-x)] pt-[18px] pb-3.5">
           <div className="mr-auto min-w-0 flex-[1_1_320px]">
             <p className="text-[0.7rem] tracking-[0.16em] text-[var(--muted)] uppercase">{MODE_TITLES[mode].eyebrow}</p>
@@ -355,7 +355,7 @@ function App() {
         </div>
 
         {seeded ? (
-          <div className="view pb-0">
+          <div className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6 pb-0">
             <Alert className="flex items-center gap-2.5 rounded-[var(--r)] border-[var(--warn-soft)] bg-[var(--warn-soft)] px-3.5 py-[11px] text-[0.84rem] text-[var(--warn)]" role="status">
               <AlertTriangle size={17} aria-hidden="true" />
               Seeded sample data is loaded. These are not official LoL Esports rankings.
@@ -433,20 +433,20 @@ function App() {
       </main>
 
       {trayPicks > 0 ? (
-        <div className="tray is-shown">
-          <div className="tray__bar" role="region" aria-label={`${trayLabel}: ${trayPicks} selected`}>
-            <span className="tray__label">{trayLabel}</span>
-            <div className="tray__chips">
+        <div className="fixed right-0 bottom-0 left-[var(--rail-w)] z-40 grid min-h-[var(--tray-h)] items-center border-t border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_92%,var(--bg))] pt-2 pr-[max(var(--page-x),env(safe-area-inset-right))] pb-[calc(8px+env(safe-area-inset-bottom))] pl-[max(var(--page-x),env(safe-area-inset-left))] max-sm:pr-[max(12px,env(safe-area-inset-right))] max-sm:pl-[max(12px,env(safe-area-inset-left))]">
+          <div className="mx-auto grid min-h-10 w-full max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 max-sm:min-h-[76px] max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-2" role="region" aria-label={`${trayLabel}: ${trayPicks} selected`}>
+            <span className="whitespace-nowrap text-[0.8rem] font-[650] text-[var(--muted)]">{trayLabel}</span>
+            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-sm:col-span-full max-sm:col-start-1 max-sm:row-start-2 max-sm:w-full">
               {mode === 'regions'
                 ? activeRegionPicks.map((region) => (
-                    <span className="chip" key={regionKey(region)}>
+                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[0.78rem] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-[650]" key={regionKey(region)}>
                       <RegionBadge region={region.region} size="sm" />
                       <b>{region.region}</b>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        className="chip__remove"
+                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-sm)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
                         onClick={() => toggleRegion(region)}
                         aria-label={`Remove ${region.region}`}
                       >
@@ -457,13 +457,13 @@ function App() {
                 : null}
               {mode === 'rankings'
                 ? activeTeamPicks.map((team) => (
-                    <span className="chip" key={teamKey(team)}>
+                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[0.78rem] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-[650]" key={teamKey(team)}>
                       <b>{team.code ?? team.team}</b>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        className="chip__remove"
+                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-sm)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
                         onClick={() => toggleTeam(team)}
                         aria-label={`Remove ${team.team}`}
                       >
@@ -473,12 +473,12 @@ function App() {
                   ))
                 : null}
             </div>
-            <div className="tray__actions">
+            <div className="flex min-w-max items-center justify-end gap-2 max-sm:col-start-2 max-sm:row-start-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="tray__clear"
+                className="text-[var(--muted)]"
                 onClick={() => {
                   if (mode === 'regions') setRegionPicks([])
                   else setTeamPicks([])
@@ -490,7 +490,7 @@ function App() {
                 type="button"
                 variant="default"
                 size="sm"
-                className="tray__primary"
+                className="min-w-[92px]"
                 onClick={() => {
                   if (mode === 'regions') {
                     requestRegionHistory()
@@ -699,17 +699,17 @@ function toggleLimitedPick<T>(current: T[], item: T, keyFor: (item: T) => string
 function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string }) {
   const isLoading = state.status === 'loading'
   return (
-    <section className="view">
-      <Card className="panel">
-        <div className="state" aria-busy={isLoading}>
+    <section className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6">
+      <Card className="min-w-0 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)]">
+        <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[0.88rem] [&>svg]:text-[var(--faint)]" aria-busy={isLoading}>
           {isLoading ? <BarChart3 size={26} aria-hidden="true" /> : <AlertTriangle size={26} aria-hidden="true" />}
           <h3>{isLoading ? `Loading ${scope}` : `Snapshot unavailable for ${scope}`}</h3>
           <p>{isLoading ? 'Fetching the exact public shard for this scope.' : state.message}</p>
           {isLoading ? (
-            <div className="state__skeleton" aria-hidden="true">
-              <Skeleton className="wide" />
-              <Skeleton className="mid" />
-              <Skeleton className="short" />
+            <div className="mt-1 grid w-[min(280px,100%)] gap-2.5" aria-hidden="true">
+              <Skeleton className="h-3.5 w-full rounded-md" />
+              <Skeleton className="h-3.5 w-[70%] rounded-md" />
+              <Skeleton className="h-3.5 w-[40%] rounded-md" />
             </div>
           ) : null}
         </div>
@@ -720,15 +720,15 @@ function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotSt
 
 function ViewLoading({ label }: { label: string }) {
   return (
-    <section className="view">
-      <Card className="panel">
-        <div className="state" aria-busy="true">
+    <section className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6">
+      <Card className="min-w-0 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)]">
+        <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>svg]:text-[var(--faint)]" aria-busy="true">
           <RefreshCw size={26} aria-hidden="true" />
           <h3>{label}</h3>
-          <div className="state__skeleton" aria-hidden="true">
-            <Skeleton className="wide" />
-            <Skeleton className="mid" />
-            <Skeleton className="short" />
+          <div className="mt-1 grid w-[min(280px,100%)] gap-2.5" aria-hidden="true">
+            <Skeleton className="h-3.5 w-full rounded-md" />
+            <Skeleton className="h-3.5 w-[70%] rounded-md" />
+            <Skeleton className="h-3.5 w-[40%] rounded-md" />
           </div>
         </div>
       </Card>
@@ -738,15 +738,15 @@ function ViewLoading({ label }: { label: string }) {
 
 function BootScreen() {
   return (
-    <main className="bootscreen">
-      <Card className="bootcard" aria-busy="true">
-        <div className="bootcard__head">
+    <main className="grid min-h-screen place-items-center p-6">
+      <Card className="grid w-[min(440px,92vw)] gap-3.5 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] p-[26px] shadow-[var(--shadow-2)]" aria-busy="true">
+        <div className="flex items-center gap-[11px] font-semibold text-[var(--text-strong)]">
           <BarChart3 size={20} aria-hidden="true" />
           Loading power index
         </div>
-        <Skeleton className="wide" />
-        <Skeleton className="mid" />
-        <Skeleton className="short" />
+        <Skeleton className="h-3.5 w-full rounded-md" />
+        <Skeleton className="h-3.5 w-[70%] rounded-md" />
+        <Skeleton className="h-3.5 w-[40%] rounded-md" />
       </Card>
     </main>
   )
@@ -754,13 +754,13 @@ function BootScreen() {
 
 function ErrorScreen({ message }: { message: string }) {
   return (
-    <main className="bootscreen">
-      <Card className="bootcard error">
-        <div className="bootcard__head">
+    <main className="grid min-h-screen place-items-center p-6">
+      <Card className="grid w-[min(440px,92vw)] gap-3.5 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] p-[26px] shadow-[var(--shadow-2)]">
+        <div className="flex items-center gap-[11px] font-semibold text-[var(--text-strong)] [&>svg]:text-[var(--loss)]">
           <AlertTriangle size={20} aria-hidden="true" />
           Snapshot unavailable
         </div>
-        <p className="muted">{message}</p>
+        <p className="text-[var(--muted)]">{message}</p>
         <Button type="button" variant="default" onClick={() => window.location.reload()}>
           <RefreshCw size={15} aria-hidden="true" />
           Retry

@@ -167,3 +167,31 @@ input {
   white-space: nowrap;
   border: 0;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  button,
+  [role="button"],
+  [data-slot="button"],
+  [data-slot="toggle"],
+  [data-slot="toggle-group-item"],
+  .team-cell__button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  [data-slot="input"],
+  [data-slot="select"] {
+    min-height: 44px;
+  }
+}

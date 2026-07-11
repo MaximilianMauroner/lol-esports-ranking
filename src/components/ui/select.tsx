@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils'
 
 function Select({ className, children, ...props }: React.ComponentProps<'select'>) {
   return (
-    <span className="select-shell relative inline-flex min-w-0">
+    <span className="relative inline-flex min-w-0">
       <select
         data-slot="select"
         className={cn(
@@ -15,7 +15,7 @@ function Select({ className, children, ...props }: React.ComponentProps<'select'
       >
         {children}
       </select>
-      <ChevronDown className="select-shell__chevron pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
     </span>
   )
 }

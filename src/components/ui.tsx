@@ -2,10 +2,17 @@ import type { ReactNode } from 'react'
 import { Button } from './ui/button'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
-import { fillClass, heatClass } from '../lib/display'
+import { heatBin } from '../lib/display'
 
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
-  return <span className={`heat ${heatClass(value, min, max)}`}>{label}</span>
+  return (
+    <span
+      className="inline-flex items-baseline gap-1 rounded-full px-[9px] py-[3px] font-mono text-[0.84rem] font-semibold text-[var(--heat-ink)] tabular-nums"
+      style={{ background: `var(--heat-${heatBin(value, min, max)})` }}
+    >
+      {label}
+    </span>
+  )
 }
 
 const REGION_BADGE_KEYS = new Set(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL', 'PCS', 'VCS'])
@@ -119,15 +126,24 @@ function BadgeMotif({ region }: { region: string }) {
 
 export function FormDots({ form }: { form?: string[] }) {
   const recent = (form ?? []).slice(-5)
-  if (recent.length === 0) return <span className="muted">—</span>
+  if (recent.length === 0) return <span className="text-[var(--muted)]">—</span>
   return (
-    <span className="formdots" aria-label={`Recent form: ${recent.join(', ')}`}>
+    <span className="inline-flex gap-[3px]" aria-label={`Recent form: ${recent.join(', ')}`}>
       {recent.map((result, index) => {
         const normalized = result.toLowerCase()
         const tone = normalized === 'w' ? 'w' : normalized === 't' ? 't' : 'l'
         const label = tone.toUpperCase()
         return (
-          <i key={`${result}-${index}`} className={tone} aria-hidden="true">
+          <i
+            key={`${result}-${index}`}
+            className={cn(
+              'grid size-[17px] place-items-center rounded-[5px] text-[0.64rem] font-bold not-italic',
+              tone === 'w' && 'bg-[var(--win-soft)] text-[var(--win)]',
+              tone === 'l' && 'bg-[var(--loss-soft)] text-[var(--loss)]',
+              tone === 't' && 'bg-[var(--surface-3)] text-[var(--muted)]',
+            )}
+            aria-hidden="true"
+          >
             {label}
           </i>
         )
@@ -139,10 +155,13 @@ export function FormDots({ form }: { form?: string[] }) {
 export function ConfBar({ value }: { value?: number }) {
   const pct = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
   return (
-    <span className="confbar">
-      <span>{typeof value === 'number' ? `${Math.round(pct)}%` : '—'}</span>
-      <span className="heatbar" aria-hidden="true">
-        <span className={`heatbar__fill ${fillClass(pct, 0, 100)}`} style={{ width: `${pct}%` }} />
+    <span className="inline-grid min-w-[68px] gap-1">
+      <span className="text-[0.74rem] text-[var(--muted)] tabular-nums">{typeof value === 'number' ? `${Math.round(pct)}%` : '—'}</span>
+      <span className="relative h-[7px] overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden="true">
+        <span
+          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{ width: `${pct}%`, background: `var(--heat-${heatBin(pct, 0, 100)})` }}
+        />
       </span>
     </span>
   )
@@ -156,8 +175,8 @@ export function PickButton({ picked, onToggle, label }: { picked: boolean; onTog
       variant="secondary"
       size="icon"
       className={cn(
-        'pick-button text-[var(--muted)]',
-        picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]',
+        'pick-button border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-2)_74%,transparent)] text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--text-strong)] group-hover/gpr:border-[var(--line-strong)]',
+        picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] group-hover/gpr:border-[var(--accent)]',
       )}
       onClick={onToggle}
       aria-label={tooltip}
@@ -207,7 +226,7 @@ export function Segmented<T extends string>({
 
 export function DataState({ icon, title, children }: { icon: ReactNode; title: string; children?: ReactNode }) {
   return (
-    <div className="state grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)]">
+    <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[0.88rem] [&>svg]:text-[var(--faint)]">
       {icon}
       <h3>{title}</h3>
       {children ? <p>{children}</p> : null}
@@ -248,14 +267,24 @@ export function SortHeader({
   return (
     <th
       scope="col"
-      className={`sortable${active ? ' is-sorted' : ''}${align ? ` ${align}` : ''}${className ? ` ${className}` : ''}`}
+      className={cn(
+        'select-none p-0!',
+        active && 'text-[var(--accent-strong)]',
+        align === 'right' && 'text-right',
+        align === 'center' && 'text-center',
+        className,
+      )}
       aria-sort={active ? (descending ? 'descending' : 'ascending') : 'none'}
     >
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="sort-button"
+        className={cn(
+          'min-h-10 w-full cursor-pointer justify-start gap-1 border-0 bg-transparent px-3.5 py-[11px] font-[inherit] tracking-[inherit] text-[inherit] uppercase hover:bg-transparent hover:text-[var(--text)] focus-visible:rounded-none focus-visible:text-[var(--text)] focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--focus)] max-sm:px-[3px] max-sm:leading-[1.15] max-sm:whitespace-normal',
+          align === 'right' && 'justify-end',
+          align === 'center' && 'justify-center',
+        )}
         onClick={activateSort}
       >
         <span>{label}</span>
