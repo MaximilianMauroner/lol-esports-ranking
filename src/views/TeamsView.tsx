@@ -40,6 +40,7 @@ import type {
   TournamentMovementIndexState,
   TournamentMovementState,
 } from '../hooks/usePublicArtifacts'
+import { useHistoryDetail } from '../hooks/useHistoryDetail'
 import { publishedRatingScale, winProbabilityEloScale } from '../lib/modelConfig'
 import { POWER_COMPONENT_LABELS } from '../lib/ratingComponentLabels'
 import {
@@ -147,7 +148,7 @@ export function TeamsView({
   const [sortDirection, setSortDirection] = useState<SortDirection>('ascending')
   const [pageSize, setPageSize] = useState<number>(DEFAULT_TEAM_PAGE_SIZE)
   const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
-  const [detailKey, setDetailKey] = useState<string | null>(null)
+  const { value: detailKey, open: openDetail, close: closeDetail } = useHistoryDetail('teamDetail')
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const pendingTierScrollRef = useRef<string | null>(null)
@@ -554,7 +555,7 @@ export function TeamsView({
                       const openTeamDetail = () => {
                         onRequestPlayers?.()
                         onRequestTeamHistory?.()
-                        setDetailKey(key)
+                        openDetail(key)
                       }
                       return (
                         <TableRow
@@ -772,7 +773,7 @@ export function TeamsView({
           playerLoadState={playerLoadState}
           playerScopeLabel={playerScopeLabel}
           seeded={Boolean(panelData?.seeded)}
-          onClose={() => setDetailKey(null)}
+          onClose={closeDetail}
         />
       ) : null}
     </div>

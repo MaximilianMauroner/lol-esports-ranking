@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Check, Globe2, Info, Plus, Swords, Trophy, X } from 'lucide-react'
 import {
   displayRegionPowerScore,
@@ -7,6 +7,7 @@ import {
   type RegionStrength,
 } from '../lib/regionStrength'
 import type { PublicRegionHistoryScope, PublicRegionHistorySeries, PublicTeamStanding } from '../lib/publicArtifacts/schema'
+import { useHistoryDetail } from '../hooks/useHistoryDetail'
 import {
   extent,
   formatDate,
@@ -39,7 +40,7 @@ export function RegionsView({
   onToggle: (region: RegionStrength) => void
   onRequestRegionHistory?: () => void
 }) {
-  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const { value: selectedRegionId, open: openRegionDetail, close: closeRegionDetail } = useHistoryDetail('regionDetail')
   const [min, max] = useMemo(() => extent(regions.map(displayRegionPowerScore)), [regions])
   const strongest = useMemo(
     () => [...regions].sort((a, b) => displayRegionPowerScore(b) - displayRegionPowerScore(a))[0],
@@ -58,7 +59,6 @@ export function RegionsView({
     () => selectedRegion ? flagshipTeamsForRegion(selectedRegion, standings) : [],
     [selectedRegion, standings],
   )
-  const closeRegionDetail = useCallback(() => setSelectedRegionId(null), [])
 
   if (regions.length === 0) {
     return (
@@ -116,7 +116,7 @@ export function RegionsView({
                   title={`Open ${region.region} region detail`}
                   onClick={() => {
                     onRequestRegionHistory?.()
-                    setSelectedRegionId(region.region)
+                    openRegionDetail(region.region)
                   }}
                   onFocus={onRequestRegionHistory}
                   onPointerEnter={onRequestRegionHistory}
