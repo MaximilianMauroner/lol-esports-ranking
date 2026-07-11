@@ -83,9 +83,9 @@ export function importLolEsportsScheduleSnapshot(
   } = {},
 ): LolEsportsReferenceImportResult {
   const detailsByMatchId = eventDetailsByMatchId(snapshot)
-  const events = scheduleEvents(snapshot)
+  const events = uniqueEventsByMatchId(scheduleEvents(snapshot)
     .map((event) => normalizeEvent(event, detailsByMatchId))
-    .filter((event): event is LolEsportsReferenceEvent => Boolean(event))
+    .filter((event): event is LolEsportsReferenceEvent => Boolean(event)))
     .sort((left, right) => (left.startTime ?? '').localeCompare(right.startTime ?? '') || left.matchId.localeCompare(right.matchId))
 
   return {
@@ -105,6 +105,10 @@ export function importLolEsportsScheduleSnapshot(
       unsupportedApi: true,
     },
   }
+}
+
+function uniqueEventsByMatchId(events: LolEsportsReferenceEvent[]) {
+  return [...new Map(events.map((event) => [event.matchId, event])).values()]
 }
 
 function scheduleEvents(snapshot: LolEsportsScheduleSnapshot) {

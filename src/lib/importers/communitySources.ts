@@ -183,7 +183,9 @@ function uniqueReferenceMap(
   for (const reference of references) {
     for (const key of keysFor(reference)) {
       if (!key) continue
-      referencesByKey.set(key, referencesByKey.has(key) ? undefined : reference)
+      const existing = referencesByKey.get(key)
+      if (!referencesByKey.has(key)) referencesByKey.set(key, reference)
+      else if (existing?.matchId !== reference.matchId) referencesByKey.set(key, undefined)
     }
   }
   for (const [key, reference] of referencesByKey.entries()) {

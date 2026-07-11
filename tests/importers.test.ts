@@ -356,6 +356,82 @@ test('community merge enriches Oracle rows with unique LoL Esports official ids'
   assert.equal(merged[0]?.officialScheduleState, 'completed')
 })
 
+test('duplicate schedule pages preserve an in-progress official Bo5', () => {
+  const scheduleEvent = {
+    startTime: '2026-07-11T08:00:00Z',
+    state: 'inProgress',
+    type: 'match',
+    match: {
+      id: 'official-msi-bo5',
+      teams: [
+        { name: 'LYON', result: { outcome: null, gameWins: 2 } },
+        { name: 'Hanwha Life Esports', result: { outcome: null, gameWins: 1 } },
+      ],
+      strategy: { type: 'bestOf', count: 5 },
+    },
+  }
+  const lolEsports = importLolEsportsScheduleSnapshot({
+    events: [scheduleEvent],
+    schedulePages: [{ events: [scheduleEvent] }],
+  })
+  const leaguepediaMatches = [
+    matchFixture({
+      id: 'lp-msi-bo5-1',
+      sourceProvider: 'leaguepedia-cargo',
+      sourceGameId: 'msi_bo5_1',
+      date: '2026-07-11',
+      teamA: 'LYON',
+      teamB: 'Hanwha Life Esports',
+      winner: 'LYON',
+      bestOf: 5,
+      bestOfBasis: 'fallback',
+      teamAKills: 18,
+      teamAGold: 62000,
+    }),
+    matchFixture({
+      id: 'lp-msi-bo5-2',
+      sourceProvider: 'leaguepedia-cargo',
+      sourceGameId: 'msi_bo5_2',
+      date: '2026-07-11',
+      teamA: 'Hanwha Life Esports',
+      teamB: 'LYON',
+      winner: 'Hanwha Life Esports',
+      bestOf: 5,
+      bestOfBasis: 'fallback',
+      teamAKills: 15,
+      teamAGold: 61000,
+    }),
+    matchFixture({
+      id: 'lp-msi-bo5-3',
+      sourceProvider: 'leaguepedia-cargo',
+      sourceGameId: 'msi_bo5_3',
+      date: '2026-07-11',
+      teamA: 'LYON',
+      teamB: 'Hanwha Life Esports',
+      winner: 'LYON',
+      bestOf: 5,
+      bestOfBasis: 'fallback',
+      teamAKills: 22,
+      teamAGold: 68000,
+    }),
+  ]
+
+  assert.equal(lolEsports.events.length, 1)
+  const merged = mergeCommunityMatchSources({
+    oracleMatches: [],
+    leaguepediaMatches,
+    lolEsportsReferences: [...lolEsports.events, ...lolEsports.events],
+  })
+  const [series] = resolveCanonicalSeries(merged)
+
+  assert.equal(merged.every((match) => match.officialMatchId === 'official-msi-bo5'), true)
+  assert.equal(merged.every((match) => match.officialScheduleState === 'inProgress'), true)
+  assert.equal(merged.every((match) => match.bestOf === 5 && match.bestOfBasis === 'official'), true)
+  assert.equal(series.format, 5)
+  assert.equal(series.state, 'ongoing')
+  assert.deepEqual([series.winsA, series.winsB].sort(), [1, 2])
+})
+
 test('community merge drops exact scored Leaguepedia duplicates with different source ids after Oracle', () => {
   const oracleMatch: MatchRecord = matchFixture({
     id: 'oe-scored',
