@@ -64,7 +64,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
   const previousManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
+  const configuredBootstrapStart = env.RANKING_REFRESH_BOOTSTRAP_START ?? env.RANKING_REFRESH_START
+  const bootstrapStart = stringArg(configuredBootstrapStart ?? '2011-01-01')
   const hasExistingRawBaseline = await manifestHasUsableSourceFiles(previousManifest)
+    && (configuredBootstrapStart === undefined || manifestHasBootstrapCoverage(previousManifest, bootstrapStart))
   const window = refreshDateWindow({
     args,
     env,
@@ -535,6 +538,14 @@ async function manifestHasUsableSourceFiles(manifest) {
     if (!await pathExists(path)) return false
   }
   return true
+}
+
+export function manifestHasBootstrapCoverage(manifest, bootstrapStart) {
+  if (manifest?.sources?.leaguepedia?.status === 'skipped') return true
+  return arrayValue(manifest?.files?.leaguepediaJson).some((path) => {
+    const match = basename(path).match(/^scoreboard-games-(\d{4}-\d{2}-\d{2})_to_/)
+    return Boolean(match && match[1] <= bootstrapStart)
+  })
 }
 
 async function digestSourceFile(path) {

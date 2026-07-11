@@ -24,6 +24,7 @@ type RefreshWindow = {
 }
 type RefreshModule = {
   createSourceFingerprint: (manifest: unknown) => Promise<{ fingerprint: string; healthFingerprint: string }>
+  manifestHasBootstrapCoverage: (manifest: unknown, bootstrapStart: string) => boolean
   refreshDataIfChanged: (rawArgs?: string[], options?: {
     run?: RefreshRun
     bucketClient?: BucketClient
@@ -73,7 +74,7 @@ type BucketModule = {
 
 const refreshScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
 const bucketScriptPath: string = '../scripts/railway-bucket.mjs'
-const { createSourceFingerprint, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
+const { createSourceFingerprint, manifestHasBootstrapCoverage, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
 const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import(bucketScriptPath) as unknown as BucketModule
 const isolatedRefreshEnv = {
   RANKING_BUCKET_RESTORE_RAW: 'false',
@@ -108,6 +109,22 @@ test('source fingerprint ignores volatile fetch timestamps', async () => {
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
+})
+
+test('rolling refresh requires a Leaguepedia file covering the bootstrap start', () => {
+  const source = { sources: { leaguepedia: { status: 'downloaded' } } }
+  assert.equal(manifestHasBootstrapCoverage({
+    ...source,
+    files: { leaguepediaJson: ['leaguepedia/scoreboard-games-2026-07-04_to_2026-07-11.json'] },
+  }, '2025-01-01'), false)
+  assert.equal(manifestHasBootstrapCoverage({
+    ...source,
+    files: { leaguepediaJson: ['leaguepedia/scoreboard-games-2025-01-01_to_2026-07-11.json'] },
+  }, '2025-01-01'), true)
+  assert.equal(manifestHasBootstrapCoverage({
+    sources: { leaguepedia: { status: 'skipped' } },
+    files: { leaguepediaJson: [] },
+  }, '2025-01-01'), true)
 })
 
 test('source fingerprint separates provider health noise from ranking content', async () => {
@@ -322,11 +339,15 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
   const statePath = join(rawDir, 'refresh-state.json')
   const stagingDir = join(tempDir, 'staging')
   const restoredOracle = 'gameid,result\nrestored,1\n'
+  const restoredLeaguepedia = '{"matches":[]}\n'
   const restoredManifest = JSON.stringify({
     ...manifest('oracles-elixir/2025.csv'),
     start: '2025-01-01',
     end: '2026-06-21',
-    files: { leaguepediaJson: [], oracleCsv: ['oracles-elixir/2025.csv'] },
+    files: {
+      leaguepediaJson: ['leaguepedia/scoreboard-games-2025-01-01_to_2026-06-21.json'],
+      oracleCsv: ['oracles-elixir/2025.csv'],
+    },
   })
   const calls: Array<Record<string, unknown>> = []
   const client = {
@@ -334,14 +355,23 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
       calls.push(command.input)
       if (command.input.Prefix === 'rankings/raw/files/') {
         return {
-          Contents: [{
-            Key: 'rankings/raw/files/oracles-elixir/2025.csv',
-            Size: Buffer.byteLength(restoredOracle),
-          }],
+          Contents: [
+            {
+              Key: 'rankings/raw/files/oracles-elixir/2025.csv',
+              Size: Buffer.byteLength(restoredOracle),
+            },
+            {
+              Key: 'rankings/raw/files/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-21.json',
+              Size: Buffer.byteLength(restoredLeaguepedia),
+            },
+          ],
         }
       }
       if (command.input.Key === 'rankings/raw/files/oracles-elixir/2025.csv') {
         return { Body: Readable.from([restoredOracle]) }
+      }
+      if (command.input.Key === 'rankings/raw/files/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-21.json') {
+        return { Body: Readable.from([restoredLeaguepedia]) }
       }
       if (command.input.Key === 'rankings/raw/manifest.json') {
         return { Body: Readable.from([restoredManifest]), ContentLength: Buffer.byteLength(restoredManifest) }
