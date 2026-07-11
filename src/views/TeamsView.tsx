@@ -524,7 +524,7 @@ export function TeamsView({
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
                       <TableHead>Team</TableHead>
                       <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
-                      <TableHead title={`Movement = rank change vs ${movementBaseline}.`}>
+                      <TableHead className="gpr-col-trend" title={`Movement = rank change vs ${movementBaseline}.`}>
                         {activeTournament ? 'Tournament move' : 'Movement'}
                       </TableHead>
                       <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" className="gpr-col-record" />
@@ -556,7 +556,7 @@ export function TeamsView({
                             openTeamDetail()
                           }}
                         >
-                          <TableCell>
+                          <TableCell className="gpr-col-trend">
                             <span className="gpr-rankcell">
                               <TeamBoardRank team={team} rank={rank} rawScoreRank={rawScoreRank} />
                               {tier ? <TierBadge tier={tier} /> : null}
@@ -1585,7 +1585,7 @@ function TeamDetailDrawer({
         showCloseButton={false}
         overlayClassName="team-detail-sheet__overlay"
         aria-label={`${team.team} details`}
-        className="team-detail-sheet w-[min(820px,100vw)] max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(820px,94vw)]"
+        className="team-detail-sheet data-[side=right]:w-[min(820px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(820px,94vw)] data-[side=right]:sm:max-w-none"
       >
         <SheetHeader className="team-detail-sheet__head flex-row items-center text-left">
           <div className="team-dossier__identity">

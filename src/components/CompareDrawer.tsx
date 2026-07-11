@@ -3,7 +3,6 @@ import { Plus, X } from 'lucide-react'
 import { DataState } from './ui'
 import { Button } from './ui/button'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from './ui/sheet'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 import type { PublicTeamStanding as RankingSummaryStanding } from '../lib/publicArtifacts/schema'
 import type { RegionStrength } from '../lib/regionStrength'
@@ -51,7 +50,7 @@ export function CompareDrawer<E>({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="w-[min(980px,100vw)] max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(980px,94vw)]"
+        className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
       >
         <SheetHeader className="drawer__head flex-row items-center p-[18px_22px] text-left">
           <SheetTitle className="mr-auto text-[1.1rem] font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
@@ -83,21 +82,17 @@ export function CompareDrawer<E>({
                             </span>
                             {column.sub ? <small>{column.sub}</small> : null}
                           </div>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="mt-1 rounded-[var(--r-sm)]"
-                                onClick={() => onRemove(column.id)}
-                                aria-label={`Remove ${column.name} from comparison`}
-                              >
-                                <X size={14} aria-hidden="true" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Remove {column.name}</TooltipContent>
-                          </Tooltip>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="mt-1 rounded-[var(--r-sm)]"
+                            onClick={() => onRemove(column.id)}
+                            aria-label={`Remove ${column.name} from comparison`}
+                            title={`Remove ${column.name}`}
+                          >
+                            <X size={14} aria-hidden="true" />
+                          </Button>
                         </TableHead>
                       ))}
                     </TableRow>

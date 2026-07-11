@@ -198,23 +198,19 @@ function RegionCompareButton({ picked, onToggle, label }: { picked: boolean; onT
   const accessibleLabel = picked ? `Comparing ${label}, remove from comparison` : tooltip
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={`region-compare${picked ? ' is-picked' : ''}`}
-          onClick={onToggle}
-          aria-label={accessibleLabel}
-          aria-pressed={picked}
-        >
-          {picked ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
-          <span>{picked ? 'Comparing' : 'Compare'}</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      className={`region-compare${picked ? ' is-picked' : ''}`}
+      onClick={onToggle}
+      aria-label={accessibleLabel}
+      aria-pressed={picked}
+      title={tooltip}
+    >
+      {picked ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
+      <span>{picked ? 'Comparing' : 'Compare'}</span>
+    </Button>
   )
 }
 
@@ -313,7 +309,7 @@ function RegionDetailDrawer({
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="w-[min(980px,100vw)] max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(980px,94vw)]"
+          className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
         >
           <SheetHeader className="drawer__head flex-row items-center p-[18px_22px] text-left">
             <SheetTitle className="mr-auto text-[1.1rem] font-semibold text-[var(--text-strong)]">{region.region} region detail</SheetTitle>

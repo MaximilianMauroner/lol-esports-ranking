@@ -1113,6 +1113,10 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
 }
 
 @media (max-width: 360px) {
+  table.ranking-table.gpr-grid .gpr-col-trend {
+    display: none;
+  }
+
   table.ranking-table.gpr-grid .gpr-col-rank {
     width: 70px;
   }

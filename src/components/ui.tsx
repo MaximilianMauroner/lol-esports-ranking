@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Button } from './ui/button'
 import { cn } from '../lib/utils'
 import { Badge } from './ui/badge'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { fillClass, heatClass } from '../lib/display'
 
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
@@ -152,26 +151,21 @@ export function ConfBar({ value }: { value?: number }) {
 export function PickButton({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
   const tooltip = picked ? `Remove ${label} from comparison` : `Add ${label} to comparison`
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon"
-          className={cn(
-            'pick-button text-[var(--muted)]',
-            picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]',
-          )}
-          onClick={onToggle}
-          aria-label={tooltip}
-          aria-pressed={picked}
-          title={tooltip}
-        >
-          <span aria-hidden="true">{picked ? '✓' : '+'}</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
+    <Button
+      type="button"
+      variant="secondary"
+      size="icon"
+      className={cn(
+        'pick-button text-[var(--muted)]',
+        picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]',
+      )}
+      onClick={onToggle}
+      aria-label={tooltip}
+      aria-pressed={picked}
+      title={tooltip}
+    >
+      <span aria-hidden="true">{picked ? '✓' : '+'}</span>
+    </Button>
   )
 }
 
