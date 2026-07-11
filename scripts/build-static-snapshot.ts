@@ -3,6 +3,7 @@ import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
+import { replaceDirectory } from './replace-directory.ts'
 import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
@@ -161,7 +162,7 @@ try {
     await atomicWriteFile(write.path, write.contents)
   }
 
-  await replaceDirectory(publicDataDir, publicDataTargetDir)
+  await replaceDirectory(publicDataDir, publicDataTargetDir, { publishLast: PUBLIC_ARTIFACT_PATHS.manifest })
   const publicDataBytes = await directorySize(publicDataTargetDir)
 
   console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)
@@ -284,28 +285,6 @@ async function directorySize(dir: string): Promise<number> {
     }
   }
   return total
-}
-
-async function replaceDirectory(nextDir: string, targetDir: string) {
-  const previousDir = `${targetDir}.previous-${process.pid}`
-  await rm(previousDir, { recursive: true, force: true })
-  let hasPrevious = false
-
-  try {
-    await rename(targetDir, previousDir)
-    hasPrevious = true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  }
-
-  try {
-    await rename(nextDir, targetDir)
-  } catch (error) {
-    if (hasPrevious) await rename(previousDir, targetDir)
-    throw error
-  }
-
-  if (hasPrevious) await rm(previousDir, { recursive: true, force: true })
 }
 
 async function atomicWriteFile(path: string, contents: string) {

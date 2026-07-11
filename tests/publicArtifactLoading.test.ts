@@ -10,7 +10,7 @@ test('snapshot loading repairs a cached shard from an older publish', async () =
   const expected = manifest.snapshotIndex[key]
   const shard = parsePublicRankingShard(JSON.parse(await readFile('public/data/scopes/season-2026.json', 'utf8')))
   const staleShard = { ...shard, matchCount: shard.matchCount - 1 }
-  const requests: Array<{ url: string; cache?: RequestCache }> = []
+  const requests: Array<{ url: string; cache?: string }> = []
   const fetcher: typeof fetch = async (input, init) => {
     requests.push({ url: String(input), cache: init?.cache })
     return new Response(JSON.stringify(requests.length === 1 ? staleShard : shard))
