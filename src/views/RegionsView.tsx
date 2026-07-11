@@ -15,6 +15,7 @@ import {
   formatRating,
   formatRatio,
   formatRecord,
+  formatSigned,
   pctWithin,
 } from '../lib/display'
 import { DataState, RegionBadge } from '../components/ui'
@@ -72,8 +73,8 @@ export function RegionsView({
   return (
     <div className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6">
       <p className="max-w-[70ch] text-[0.9rem] leading-[1.55] text-[var(--muted)]">
-        Region power is the average rating of each region's top three eligible flagship teams, with whole-region depth shown alongside it.
-        Add regions to compare their profile in the shared drawer.
+        Region power uses the average Power Index of the three strongest ranked teams. Each row compares that with the average across all ranked teams:
+        a small gap means greater regional depth, while a large gap means the region is more top-heavy.
       </p>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-px overflow-hidden rounded-[var(--r-lg)] border border-[var(--line-strong)] bg-[var(--line-strong)]">
@@ -93,10 +94,9 @@ export function RegionsView({
             <p className="eyebrow">Compare regions</p>
             <h2>{pickedCount > 0 ? `${pickedCount} selected` : 'Add regions to compare'}</h2>
           </div>
-          <span className="inline-flex items-center gap-2 text-[0.72rem] text-[var(--faint)] [&_i]:relative [&_i]:inline-flex [&_i]:h-[7px] [&_i]:w-[84px] [&_i]:overflow-hidden [&_i]:rounded-full [&_i]:bg-[color-mix(in_oklch,var(--rank-gold)_18%,var(--surface-3))] [&_i]:after:block [&_i]:after:h-full [&_i]:after:w-[72%] [&_i]:after:rounded-[inherit] [&_i]:after:bg-[color-mix(in_oklch,var(--rank-gold)_82%,var(--surface-2))] [&_i]:after:content-[''] [&_strong]:font-[620] [&_strong]:text-[var(--text)]">
-            <span>Region power</span>
-            <i aria-hidden="true" />
-            <strong>Top-three avg</strong>
+          <span className="max-w-[430px] text-right text-[0.72rem] leading-[1.35] text-[var(--faint)] max-sm:text-left">
+            <strong className="font-[620] text-[var(--text)]">Range shown:</strong>{' '}
+            all-team average → top-three average · gap = difference
           </span>
         </div>
 
@@ -131,8 +131,8 @@ export function RegionsView({
                       </small>
                     </span>
                   </span>
-                  <span className="grid gap-1.5 max-[900px]:min-w-24 max-sm:col-start-2 max-sm:max-w-[156px] max-sm:min-w-0 max-sm:grid-cols-[auto_minmax(72px,1fr)] max-sm:items-center">
-                    <RegionPowerMeter value={displayRegionPowerScore(region)} min={min} max={max} label="Region power" />
+                  <span className="grid gap-1.5 max-[900px]:min-w-24 max-sm:col-start-2 max-sm:max-w-[220px] max-sm:min-w-0 max-sm:grid-cols-[minmax(0,1fr)_minmax(72px,auto)] max-sm:items-center">
+                    <RegionPowerMeter value={displayRegionPowerScore(region)} average={displayRegionTotalTeamRating(region)} min={min} max={max} />
                     <span className="hidden max-sm:inline max-sm:min-w-0 max-sm:overflow-hidden max-sm:text-ellipsis max-sm:whitespace-nowrap max-sm:text-[0.72rem] max-sm:leading-[1.2] max-sm:text-[var(--muted)]">{formatSignedDecimal(region.winsOverExpected)} vs expected</span>
                   </span>
                   <span className="grid min-w-0 gap-0.5 text-[0.84rem] text-[var(--muted)] tabular-nums [&_b]:font-[640] [&_b]:text-[var(--text)] [&_small]:block [&_small]:leading-[1.25] [&_small]:text-[var(--faint)] [&_span]:block max-[1180px]:hidden">
@@ -181,14 +181,21 @@ type RegionDrawerTeam = {
   rank?: number
 }
 
-function RegionPowerMeter({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
-  const pct = pctWithin(value, min, max)
+function RegionPowerMeter({ value, average, min, max }: { value: number; average: number; min: number; max: number }) {
+  const averagePct = pctWithin(average, min, max)
+  const topThreePct = pctWithin(value, min, max)
+  const rangeStart = Math.min(averagePct, topThreePct)
+  const rangeWidth = Math.max(2, Math.abs(topThreePct - averagePct))
+  const gap = value - average
 
   return (
-    <span className="grid w-[min(100%,190px)] min-w-0 justify-self-start gap-1.5 max-sm:w-[min(100%,220px)]" role="img" aria-label={`${label} ${formatRating(value)}`}>
-      <span className="justify-self-start rounded-[var(--r-sm)] border border-[color-mix(in_oklch,var(--rank-gold)_45%,transparent)] bg-[color-mix(in_oklch,var(--rank-gold)_12%,var(--region-surface-low))] px-[9px] py-[3px] font-mono text-[0.84rem] font-[680] text-[var(--text-strong)] tabular-nums">{formatRating(value)}</span>
+    <span className="grid w-[min(100%,210px)] min-w-0 justify-self-start gap-1.5 max-sm:w-full" role="img" aria-label={`Top-three average ${formatRating(value)}, all-team average ${formatRating(average)}, gap ${formatSigned(gap)}`}>
+      <span className="grid gap-px text-[0.68rem] leading-[1.25] tabular-nums">
+        <strong className="font-[680] text-[var(--text-strong)]">Top 3 avg {formatRating(value)}</strong>
+        <small className="text-[var(--faint)]">All teams avg {formatRating(average)} · Gap {formatSigned(gap)}</small>
+      </span>
       <span className="relative h-[7px] min-w-24 overflow-hidden rounded-full bg-[color-mix(in_oklch,var(--rank-gold)_14%,var(--region-surface-low))] max-sm:hidden" aria-hidden="true">
-        <span className="absolute inset-y-0 left-0 rounded-[inherit] bg-[color-mix(in_oklch,var(--rank-gold)_84%,var(--text-strong))] transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ width: `${pct}%` }} />
+        <span className="absolute inset-y-0 rounded-[inherit] bg-[color-mix(in_oklch,var(--rank-gold)_84%,var(--text-strong))] transition-[left,width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ left: `${rangeStart}%`, width: `${rangeWidth}%` }} />
       </span>
     </span>
   )

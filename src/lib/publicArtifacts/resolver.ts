@@ -1,4 +1,4 @@
-import { snapshotKey } from './schema'
+import { parsePublicRankingShard, snapshotKey } from './schema'
 import type {
   PublicRankingManifest,
   PublicRankingShard,
@@ -17,6 +17,45 @@ export type PublicSnapshotCacheEntry =
   | { status: 'error'; message: string }
 
 export type PublicSnapshotState = PublicSnapshotCacheEntry
+
+export async function fetchPublicSnapshotShard(
+  url: string,
+  key: string,
+  expected: PublicRankingManifest['snapshotIndex'][string],
+  manifest: PublicRankingManifest,
+  {
+    signal,
+    fetcher = fetch,
+  }: {
+    signal?: AbortSignal
+    fetcher?: typeof fetch
+  } = {},
+): Promise<PublicRankingShard> {
+  let validationError: unknown
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetcher(attempt === 0 ? url : cacheRepairUrl(url), {
+      signal,
+      headers: { Accept: 'application/json' },
+      ...(attempt === 1 ? { cache: 'reload' as const } : {}),
+    })
+    if (!response.ok) throw new Error(`Filter snapshot failed with ${response.status}`)
+
+    try {
+      const shard = parsePublicRankingShard(await response.json())
+      validatePublicSnapshotShard(key, expected, shard, manifest)
+      return shard
+    } catch (error) {
+      validationError = error
+    }
+  }
+
+  throw validationError
+}
+
+function cacheRepairUrl(url: string) {
+  return `${url}${url.includes('?') ? '&' : '?'}cache-repair=${Date.now()}`
+}
 
 export function resolvePublicSnapshotState(
   data: PublicRankingManifest | undefined,

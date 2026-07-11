@@ -72,7 +72,7 @@ function TeamHistoryTooltip({
                 <div className="grid justify-items-end gap-px">
                   <strong className="text-[var(--text)] tabular-nums">{yFormat(row.value)}</strong>
                   {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
-                    <b className="text-[0.66rem] font-semibold text-[var(--faint)] uppercase tabular-nums">Close {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
+                    <b className="text-[0.66rem] font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
                   ) : null}
                 </div>
               </div>
@@ -154,8 +154,8 @@ function dailyCloseNote(detail?: ChartPointDetail) {
   }
 
   const driver = strongestComponentDriver(detail)
-  const driverText = driver ? ` on ${driver.label} ${formatPreciseSignedDelta(driver.value)}` : ' after model recalibration'
-  return `Match ledger ${formatPreciseSignedDelta(matchDelta)}; daily close moved ${formatPreciseSignedDelta(visibleDelta)}${driverText}.`
+  const driverText = driver ? ` Largest component change: ${driver.label} ${formatPreciseSignedDelta(driver.value)}.` : ''
+  return `Match result effect: ${formatPreciseSignedDelta(matchDelta)}. Overall change from previous day: ${formatPreciseSignedDelta(visibleDelta)}.${driverText}`
 }
 
 function matchLedgerDelta(detail?: ChartPointDetail) {

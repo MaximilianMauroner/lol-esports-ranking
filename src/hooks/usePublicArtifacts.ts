@@ -16,7 +16,6 @@ import type {
 import {
   parsePublicPlayerDirectory,
   parsePublicRankingManifest,
-  parsePublicRankingShard,
   parsePublicRegionHistory,
   parsePublicTeamHistory,
   parsePublicTeamHistoryIndex,
@@ -26,8 +25,8 @@ import {
   snapshotKey,
 } from '../lib/publicArtifacts/schema'
 import {
+  fetchPublicSnapshotShard,
   resolvePublicSnapshotState,
-  validatePublicSnapshotShard,
   validatePublicTeamHistoryShard,
   validatePublicTournamentMovementIndex,
   validatePublicTournamentMovementShard,
@@ -318,11 +317,8 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
         snapshotCacheRef.current = { ...snapshotCacheRef.current, [snapshotCacheKey]: loadingEntry }
         setSnapshotCache((current) => ({ ...current, [snapshotCacheKey]: loadingEntry }))
         const url = resolveArtifactUrl(expected.url, DATA_URL)
-        void fetch(url, { headers: { Accept: 'application/json' } })
-          .then(async (response) => {
-            if (!response.ok) throw new Error(`Filter snapshot failed with ${response.status}`)
-            const next = parsePublicRankingShard(await response.json())
-            validatePublicSnapshotShard(snapshotCacheKey, expected, next, manifest)
+        void fetchPublicSnapshotShard(url, snapshotCacheKey, expected, manifest)
+          .then((next) => {
             const readyEntry: PublicSnapshotCacheEntry = { status: 'ready', snapshot: next }
             snapshotCacheRef.current = { ...snapshotCacheRef.current, [snapshotCacheKey]: readyEntry }
             setSnapshotCache((current) => ({ ...current, [snapshotCacheKey]: readyEntry }))
@@ -388,10 +384,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     setSnapshotCache((current) => ({ ...current, [key]: { status: 'loading' } }))
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) throw new Error(`Filter snapshot failed with ${response.status}`)
-        const next = parsePublicRankingShard(await response.json())
-        validatePublicSnapshotShard(key, expected, next, manifest)
+        const next = await fetchPublicSnapshotShard(url, key, expected, manifest, { signal: controller.signal })
         setSnapshotCache((current) => ({ ...current, [key]: { status: 'ready', snapshot: next } }))
       } catch (error) {
         if (isAbortError(error)) return
