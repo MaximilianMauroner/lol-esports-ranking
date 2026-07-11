@@ -60,6 +60,7 @@ export type PlayerLoadState =
   | { status: 'error'; message: string }
 
 type SortKey = 'rank' | 'rating' | 'wins'
+type SortDirection = 'ascending' | 'descending'
 type TrajectoryMetric = 'rating' | 'rank'
 type EligibilityFilter = 'ranked' | 'all'
 type TeamDataSummary = {
@@ -143,6 +144,7 @@ export function TeamsView({
   const [region, setRegion] = useState('All')
   const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>('ranked')
   const [sortKey, setSortKey] = useState<SortKey>('rank')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('ascending')
   const [pageSize, setPageSize] = useState<number>(DEFAULT_TEAM_PAGE_SIZE)
   const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
   const [detailKey, setDetailKey] = useState<string | null>(null)
@@ -265,9 +267,9 @@ export function TeamsView({
     ? selectedTier
     : null
   const rawScoreRankByTeam = useMemo(() => rawScoreRanks(scopeFiltered), [scopeFiltered])
-  const sorted = useMemo(() => sortStandings(filtered, sortKey), [filtered, sortKey])
+  const sorted = useMemo(() => sortStandings(filtered, sortKey, sortDirection), [filtered, sortDirection, sortKey])
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageScopeKey = `${region}\u0000${activeTournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${pageSize}`
+  const pageScopeKey = `${region}\u0000${activeTournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${sortDirection}\u0000${pageSize}`
   const requestedPage = pageState.scopeKey === pageScopeKey ? pageState.page : 1
   const currentPage = Math.min(requestedPage, totalPages)
   const pageStart = (currentPage - 1) * pageSize
@@ -396,7 +398,13 @@ export function TeamsView({
   )
 
   function onSort(key: string) {
-    setSortKey(key as SortKey)
+    const nextKey = key as SortKey
+    if (nextKey === sortKey) {
+      setSortDirection((direction) => direction === 'ascending' ? 'descending' : 'ascending')
+      return
+    }
+    setSortKey(nextKey)
+    setSortDirection(nextKey === 'rank' ? 'ascending' : 'descending')
   }
 
   function updatePage(nextPage: number) {
@@ -523,13 +531,13 @@ export function TeamsView({
                   </colgroup>
                   <TableHeader>
                     <TableRow>
-                      <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={false} onSort={onSort} />
+                      <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} />
                       <TableHead>Team</TableHead>
-                      <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending onSort={onSort} align="right" />
+                      <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" />
                       <TableHead className="gpr-col-trend" title={`Movement = rank change vs ${movementBaseline}.`}>
                         {activeTournament ? 'Tournament move' : 'Movement'}
                       </TableHead>
-                      <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending onSort={onSort} align="right" className="gpr-col-record" />
+                      <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" className="gpr-col-record" />
                       <TableHead className="center" aria-label="Add to comparison" />
                     </TableRow>
                   </TableHeader>
@@ -2608,15 +2616,16 @@ function tournamentTrajectoryInsight(
   return insight && exactTournament ? { ...insight, driver: undefined } : insight
 }
 
-function sortStandings(rows: RankingSummaryStanding[], key: SortKey) {
+function sortStandings(rows: RankingSummaryStanding[], key: SortKey, direction: SortDirection) {
   const copy = [...rows]
+  const directionFactor = direction === 'ascending' ? 1 : -1
   switch (key) {
     case 'rating':
-      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || compareTeamScore(b, a) || compareTeamRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareTeamScore(a, b) || compareTeamRank(a, b))
     case 'wins':
-      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || (b.wins ?? 0) - (a.wins ?? 0) || compareTeamRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * ((a.wins ?? 0) - (b.wins ?? 0)) || compareTeamRank(a, b))
     default:
-      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || compareTeamRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareTeamRank(a, b))
   }
 }
 

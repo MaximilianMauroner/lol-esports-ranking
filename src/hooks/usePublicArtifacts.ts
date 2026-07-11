@@ -127,7 +127,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     const controller = new AbortController()
     async function load() {
       try {
-        const response = await fetch(DATA_URL, { signal: controller.signal, headers: { Accept: 'application/json' } })
+        const response = await fetch(DATA_URL, { signal: controller.signal, cache: 'no-cache', headers: { Accept: 'application/json' } })
         if (!response.ok) throw new Error(`Snapshot request failed with ${response.status}`)
         const next = parsePublicRankingManifest(await response.json())
         setManifestState({ status: 'ready', data: next })
@@ -222,7 +222,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     tournamentMovementCacheRef.current = {}
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
+        const response = await fetch(url, { signal: controller.signal, cache: 'no-cache', headers: { Accept: 'application/json' } })
         if (!response.ok) {
           setTournamentMovementIndexState({
             status: response.status === 404 ? 'missing' : 'error',
