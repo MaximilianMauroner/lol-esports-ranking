@@ -7,6 +7,8 @@ import { basename, dirname, extname, join, posix, relative, resolve, sep } from 
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 
+let activeGenerationCache = { expiresAt: 0, value: null }
+
 export function bucketConfigFromEnv(env = process.env) {
   const bucket = env.RANKING_BUCKET_NAME ?? env.S3_BUCKET ?? env.BUCKET
   const endpoint = env.RANKING_BUCKET_ENDPOINT ?? env.S3_ENDPOINT ?? env.ENDPOINT
@@ -63,6 +65,8 @@ export async function uploadRankingArtifacts({
   client = createBucketClient(config),
   uploadFullSnapshot = parseBoolean(process.env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT),
   refreshStateForUpload,
+  generationId,
+  fencingToken,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -82,7 +86,8 @@ export async function uploadRankingArtifacts({
   const uploads = []
   const unchanged = []
   const skipped = []
-  uploads.push(...await uploadDirectory(client, config, publicDataDir, 'data', 'ranking-summary.json'))
+  const dataPrefix = generationId ? `generations/${safeObjectPath(generationId)}/data` : 'data'
+  uploads.push(...await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json'))
   if (rawDir) {
     const rawSync = await uploadRawSourceFiles(client, config, rawDir, manifestPath)
     uploads.push(...rawSync.uploaded)
@@ -110,15 +115,36 @@ export async function uploadRankingArtifacts({
   const publishedArtifacts = [...uploads]
   const publishMetrics = publishMetricsFor(publishedArtifacts, unchanged)
 
-  await uploadJson(client, config, 'latest-publish.json', {
+  const publishReceipt = {
     schemaVersion: 1,
     publishedAt: new Date().toISOString(),
     prefix: config.prefix,
+    ...(generationId ? { generationId } : {}),
     ...publishMetrics,
     artifacts: publishedArtifacts.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
     unchanged: unchanged.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, digest })),
     skipped,
-  })
+  }
+  await uploadJson(client, config, generationId ? `generations/${safeObjectPath(generationId)}/publish.json` : 'latest-publish.json', publishReceipt)
+  if (generationId) {
+    const active = await readBucketJson('active-generation.json', { config, client })
+    if (Number(active.value?.fencingToken ?? 0) > Number(fencingToken ?? 0)) {
+      throw new Error('Stale refresh worker cannot promote an active generation')
+    }
+    const promotion = await writeBucketJson('active-generation.json', {
+      schemaVersion: 1,
+      generationId,
+      fencingToken,
+      promotedAt: new Date().toISOString(),
+      manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
+    }, {
+      config,
+      client,
+      ...(active.found ? { ifMatch: active.etag } : { ifNoneMatch: '*' }),
+    })
+    if (!promotion.written) throw new Error('Active generation changed during promotion')
+    activeGenerationCache = { expiresAt: Date.now() + 30_000, value: generationId }
+  }
 
   return {
     enabled: true,
@@ -136,26 +162,128 @@ export async function getBucketObject(relativePath, {
   client = createBucketClient(config),
 } = {}) {
   if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
-  const key = bucketKey(config, `data/${safeRequestedObjectPath(relativePath)}`)
+  const safePath = safeRequestedObjectPath(relativePath)
+  const generation = await activeGeneration(config, client)
+  const keys = [
+    ...(generation ? [bucketKey(config, `generations/${safeObjectPath(generation)}/data/${safePath}`)] : []),
+    bucketKey(config, `data/${safePath}`),
+  ]
 
+  for (const key of keys) {
+    try {
+      const object = await client.send(new GetObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+      }))
+      return {
+        found: true,
+        key,
+        body: object.Body,
+        contentLength: object.ContentLength,
+        contentType: object.ContentType ?? contentTypeForPath(relativePath),
+        etag: object.ETag,
+        lastModified: object.LastModified,
+      }
+    } catch (error) {
+      if (!isMissingObjectError(error)) throw error
+    }
+  }
+  return { found: false, key: keys[0] }
+}
+
+export async function readBucketJson(relativeKey, {
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
+  const key = bucketKey(config, relativeKey)
   try {
-    const object = await client.send(new GetObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-    }))
+    const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
     return {
       found: true,
       key,
-      body: object.Body,
-      contentLength: object.ContentLength,
-      contentType: object.ContentType ?? contentTypeForPath(relativePath),
       etag: object.ETag,
-      lastModified: object.LastModified,
+      value: JSON.parse(await bodyText(object.Body)),
     }
   } catch (error) {
     if (isMissingObjectError(error)) return { found: false, key }
     throw error
   }
+}
+
+export async function writeBucketJson(relativeKey, value, {
+  ifMatch,
+  ifNoneMatch,
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!config.enabled || !client) return { written: false, missingConfig: config.missing ?? [] }
+  const key = bucketKey(config, relativeKey)
+  const body = jsonBody(value)
+  try {
+    const result = await client.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: body,
+      ContentType: 'application/json; charset=utf-8',
+      ...(ifMatch ? { IfMatch: ifMatch } : {}),
+      ...(ifNoneMatch ? { IfNoneMatch: ifNoneMatch } : {}),
+    }))
+    return { written: true, key, etag: result.ETag, bytes: Buffer.byteLength(body) }
+  } catch (error) {
+    if (isPreconditionError(error)) return { written: false, conflict: true, key }
+    throw error
+  }
+}
+
+export async function acquireBucketLease(relativeKey, {
+  owner,
+  ttlMs = 10 * 60_000,
+  now = new Date(),
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  const current = await readBucketJson(relativeKey, { config, client })
+  const nowMs = new Date(now).getTime()
+  if (current.found && new Date(current.value?.expiresAt).getTime() > nowMs && current.value?.owner !== owner) {
+    return { acquired: false, reason: 'active-lease', lease: current.value }
+  }
+  const lease = {
+    schemaVersion: 1,
+    owner,
+    fencingToken: Number(current.value?.fencingToken ?? 0) + 1,
+    acquiredAt: new Date(nowMs).toISOString(),
+    expiresAt: new Date(nowMs + ttlMs).toISOString(),
+  }
+  const write = await writeBucketJson(relativeKey, lease, {
+    config,
+    client,
+    ...(current.found ? { ifMatch: current.etag } : { ifNoneMatch: '*' }),
+  })
+  return write.written
+    ? { acquired: true, lease, etag: write.etag }
+    : { acquired: false, reason: write.conflict ? 'lease-race' : 'bucket-unavailable' }
+}
+
+export async function releaseBucketLease(relativeKey, lease, {
+  now = new Date(),
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!lease?.etag || !lease?.lease) return { released: false, reason: 'invalid-lease' }
+  const releasedAt = new Date(now).toISOString()
+  const write = await writeBucketJson(relativeKey, {
+    ...lease.lease,
+    expiresAt: releasedAt,
+    releasedAt,
+  }, {
+    config,
+    client,
+    ifMatch: lease.etag,
+  })
+  return write.written
+    ? { released: true, etag: write.etag }
+    : { released: false, reason: write.conflict ? 'lease-changed' : 'bucket-unavailable' }
 }
 
 export async function downloadBucketDirectory({
@@ -540,4 +668,35 @@ function isMissingObjectError(error) {
   return error?.name === 'NoSuchKey'
     || error?.name === 'NotFound'
     || error?.$metadata?.httpStatusCode === 404
+}
+
+async function activeGeneration(config, client) {
+  if (activeGenerationCache.expiresAt > Date.now()) return activeGenerationCache.value
+  try {
+    const object = await client.send(new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: bucketKey(config, 'active-generation.json'),
+    }))
+    const value = JSON.parse(await bodyText(object.Body))
+    activeGenerationCache = {
+      expiresAt: Date.now() + 30_000,
+      value: typeof value?.generationId === 'string' ? value.generationId : null,
+    }
+  } catch (error) {
+    if (!isMissingObjectError(error)) throw error
+    activeGenerationCache = { expiresAt: Date.now() + 30_000, value: null }
+  }
+  return activeGenerationCache.value
+}
+
+function isPreconditionError(error) {
+  return error?.name === 'PreconditionFailed' || error?.$metadata?.httpStatusCode === 412
+}
+
+async function bodyText(body) {
+  if (typeof body?.transformToString === 'function') return body.transformToString()
+  if (typeof body === 'string' || Buffer.isBuffer(body) || body instanceof Uint8Array) return Buffer.from(body).toString('utf8')
+  const chunks = []
+  for await (const chunk of body ?? []) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks).toString('utf8')
 }

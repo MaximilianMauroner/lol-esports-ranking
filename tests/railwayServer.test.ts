@@ -18,6 +18,21 @@ test('Railway server returns app shell only for known app routes', async () => {
 
   const server = await startRailwayServer(distDir, dataDir)
   try {
+    const live = await httpRequest(server.port, '/api/live')
+    assert.equal(live.statusCode, 200)
+    assert.equal(JSON.parse(live.body).ok, true)
+
+    const notReady = await httpRequest(server.port, '/api/ready')
+    assert.equal(notReady.statusCode, 503)
+    await writeFile(join(dataDir, 'ranking-summary.json'), '{}\n')
+    const ready = await httpRequest(server.port, '/api/ready')
+    assert.equal(ready.statusCode, 200)
+    assert.equal(JSON.parse(ready.body).data, 'local')
+
+    const scheduler = await httpRequest(server.port, '/api/scheduler')
+    assert.equal(scheduler.statusCode, 200)
+    assert.equal(JSON.parse(scheduler.body).ok, false)
+
     const root = await httpRequest(server.port, '/')
     assert.equal(root.statusCode, 200)
     assert.equal(root.headers['cache-control'], 'no-store')
@@ -212,7 +227,7 @@ async function waitForHealthy(port: number, child: ChildProcess, output: () => s
       throw new Error(`Railway server exited with ${child.exitCode}:\n${output()}`)
     }
     try {
-      const response = await httpRequest(port, '/api/health')
+      const response = await httpRequest(port, '/api/live')
       if (response.statusCode === 200) return
     } catch {
       await delay(50)

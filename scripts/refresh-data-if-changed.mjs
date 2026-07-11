@@ -37,6 +37,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
   const output = resolve(stringArg(args.output ?? env.RANKING_DERIVED_OUTPUT ?? 'data/derived/ranking-snapshot.full.json'))
+  const reconciliationOutput = resolve(stringArg(args.reconciliationOutput ?? env.RANKING_RECONCILIATION_OUTPUT ?? `${rawDir}/reconciliation.json`))
   const publicDataDir = resolve(stringArg(args.publicDataDir ?? env.RANKING_PUBLIC_DATA_DIR ?? 'public/data'))
   const end = stringArg(args.end ?? env.RANKING_REFRESH_END ?? today())
   const force = booleanArg(args.force) || env.RANKING_FORCE_REFRESH === 'true'
@@ -210,6 +211,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         publicDataDir,
         '--manifest',
         manifestPath,
+        '--reconciliation-output',
+        reconciliationOutput,
       ])
     }
 
@@ -229,6 +232,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           console.warn(`Railway bucket upload skipped; missing ${bucketConfig.missing.join(', ')}.`)
         }
       } else {
+        const browserManifest = await readJson(resolve(publicDataDir, 'ranking-summary.json'))
+        const generationId = env.RANKING_REFRESH_FENCING_TOKEN
+          ? stringArg(browserManifest?.artifactMeta?.runId)
+          : undefined
         const bucketPublish = await uploadRankingArtifacts({
           publicDataDir,
           rawDir,
@@ -238,6 +245,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           config: bucketConfig,
           client: options.bucketClient,
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
+          generationId,
+          fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
           refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped }) => {
             state.bucket = {
               enabled: true,
@@ -441,8 +450,8 @@ function mergeManifestFiles(previousFiles = {}, nextFiles = {}) {
   const merged = {}
   for (const key of new Set([...Object.keys(previousFiles), ...Object.keys(nextFiles)])) {
     merged[key] = uniqueValues([
-      ...arrayValue(previousFiles[key]),
       ...arrayValue(nextFiles[key]),
+      ...arrayValue(previousFiles[key]),
     ])
   }
   return merged

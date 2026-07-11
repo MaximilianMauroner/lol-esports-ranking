@@ -20,7 +20,7 @@ env:
 
 jobs:
   deploy:
-    name: Test, build, and deploy manually
+    name: Deploy manually
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: github.repository == 'MaximilianMauroner/lol-esports-ranking' && github.ref == 'refs/heads/main'
@@ -41,21 +41,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm run build
-
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -75,7 +60,9 @@ jobs:
       - name: Smoke check Railway health
         run: |
           for attempt in $(seq 1 30); do
-            if curl -fsS "${RAILWAY_PUBLIC_URL}/api/health"; then
+            if curl -fsS "${RAILWAY_PUBLIC_URL}/api/live" \
+              && curl -fsS "${RAILWAY_PUBLIC_URL}/api/ready" \
+              && curl -fsS "${RAILWAY_PUBLIC_URL}/data/ranking-summary.json" > /dev/null; then
               exit 0
             fi
 

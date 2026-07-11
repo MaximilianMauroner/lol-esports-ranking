@@ -75,7 +75,7 @@ railway up
 
 The Railway `web` service is connected to the `MaximilianMauroner/lol-esports-ranking` GitHub repository on the `main` branch, so Railway's native GitHub autodeploys rebuild and redeploy the service when new commits are pushed to `main`. The Railway build command runs typecheck, lint, tests, and the production build before the service starts.
 
-This repository also includes `.github/workflows/railway-deploy.yml` as a manual fallback. The workflow runs typecheck, lint, tests, and build first, then runs:
+This repository also includes `.github/workflows/railway-deploy.yml` as a manual fallback. Railway owns verification and bundling for that deployment, so the workflow does not duplicate the build before running:
 
 ```bash
 railway up --ci --project 2bf26cbc-4cfa-4114-87c0-83b446f30816 --service d01fe39e-81a4-4230-b997-f13fe8af351b --environment production
@@ -83,7 +83,7 @@ railway up --ci --project 2bf26cbc-4cfa-4114-87c0-83b446f30816 --service d01fe39
 
 To use the manual fallback, create a Railway project token for the `LoL Esports Power Index` project and save it as the GitHub Actions repository secret `RAILWAY_TOKEN`. The normal push-to-deploy path does not depend on that secret.
 
-The hourly refresh uses the same local pipeline as development:
+The legacy refresh uses the same local pipeline as development:
 
 ```bash
 pnpm run data:refresh
@@ -91,11 +91,20 @@ pnpm run data:refresh
 
 On each run, the wrapper downloads provider data into a staging directory, hashes the ranking inputs while ignoring volatile fetch timestamps, and compares the content fingerprint with the last successful refresh. Provider status and warnings have a separate health fingerprint, so a quota/status-only change remains visible in `data/raw/refresh-state.json` without forcing a new ranking run. If the content fingerprint is unchanged, the wrapper records the latest health check and skips the expensive crunch and publish steps. If source content changed, it promotes the staged raw files into `data/raw/`, writes `data/raw/manifest.json` plus `data/raw/refresh-state.json`, runs the same snapshot builder used by `pnpm run data:crunch`, and uploads the compact browser payload plus refresh provenance to the Railway Bucket.
 
+The event-aware one-shot worker is:
+
+```bash
+pnpm run railway:refresh-once
+```
+
+`RANKING_REFRESH_MODE=shadow` probes overlapping LoL Esports schedule pages, records strictly confirmed completed matches, and never calls Oracle or Leaguepedia. `RANKING_REFRESH_MODE=gated` calls scored providers only when a confirmed pending match is due for ingestion or an explicitly enabled correction audit is due. Trigger state and a fencing lease live in the Railway bucket, exact reconciliations acknowledge pending matches, and successful gated publishes use immutable `rankings/generations/<run-id>/data/**` objects before promoting `rankings/active-generation.json`. The default remains `legacy` until shadow metrics have been reviewed.
+
 For cost/speed-constrained production refreshes, set `RANKING_REFRESH_LOOKBACK_DAYS=7` and choose a practical `RANKING_REFRESH_BOOTSTRAP_START`, such as `2025-01-01`. With an existing raw baseline, each hourly run downloads only the rolling 7-day source window and merges those files into `data/raw` before crunching, so the ranking model still sees the restored baseline plus the current lookback window. If a fresh Railway container has no raw baseline, the refresh first restores `rankings/raw/files/**` from the Bucket; if no bucket baseline exists yet, it bootstraps once from `RANKING_REFRESH_BOOTSTRAP_START` through today and then subsequent hourly runs use the lookback window. Earlier bootstrap dates improve historical coverage at the cost of slower first runs and larger raw storage; later dates are faster and cheaper but intentionally narrow the ranking context.
 
 Use a Railway Storage Bucket for generated artifacts that should not live in Git. Railway Buckets are private S3-compatible storage, so the app proxies `/data/*` through the Railway server instead of exposing the bucket publicly. The refresh job uploads:
 
-- `rankings/data/**`: the browser manifest, shard, entity, and history artifacts normally served from `/data/*`.
+- `rankings/data/**`: legacy browser artifacts retained as a fallback.
+- `rankings/generations/<run-id>/data/**` and `rankings/active-generation.json`: immutable gated browser generations and their active pointer.
 - `rankings/raw/manifest.json`: the data-source manifest for provenance.
 - `rankings/raw/files/**`: the raw source baseline used to restore a fresh Railway container before lookback-only refreshes.
 - `rankings/raw/refresh-state.json` and `rankings/latest-publish.json`: refresh/publish audit metadata.
@@ -114,6 +123,11 @@ Recommended Railway variables:
 - `RANKING_BUCKET_REQUIRED`: set to `true` in production if refreshes should fail when bucket credentials are missing.
 - `RANKING_BUCKET_FORCE_PATH_STYLE`: set to `true` only if the Bucket credentials tab says this bucket needs path-style S3 URLs.
 - `RANKING_REFRESH_ENABLED`: set to `true` to enable the background scheduler. Defaults to disabled; manual `POST /api/refresh` still works when `CRON_SECRET` is configured.
+- `RANKING_REFRESH_MODE`: `legacy` (default), `shadow`, or `gated`. The web-process timer runs only in legacy mode; shadow/gated use the one-shot cron worker.
+- `RANKING_TRIGGER_STATE_KEY` and `RANKING_REFRESH_LEASE_KEY`: optional bucket keys for durable detector state and the fencing lease.
+- `RANKING_SCHEDULE_RECOVERY_HOURS`, `RANKING_SCHEDULE_MAX_OLDER_PAGES`, and `RANKING_SCHEDULE_REQUEST_TIMEOUT_MS`: bounded probe coverage and request deadline controls.
+- `RANKING_CORRECTION_AUDIT_ENABLED`: set to `true` only after gated rollout to permit declared scored-source correction audits for already-completed games.
+- `RANKING_ALERT_WEBHOOK_URL`: optional operational alert destination for probe failures, ingestion failures, and overdue pending matches.
 - `RANKING_REFRESH_INTERVAL_MINUTES`: refresh cadence. Defaults to `60`.
 - `RANKING_REFRESH_ON_START`: set to `true` to run a refresh immediately after the server starts. Defaults to disabled.
 - `RANKING_REFRESH_LOOKBACK_DAYS`: optional rolling source-download window for scheduled refreshes. Production uses `7`.
@@ -129,9 +143,9 @@ Recommended Railway variables:
 - `CRON_SECRET`: optional bearer token for manual `POST /api/refresh`.
 - `RANKING_RAW_DIR` and `RANKING_PUBLIC_DATA_DIR`: optional paths if you also mount a Railway volume for raw state or generated public data. Bucket storage is the durable default for deployable artifacts.
 
-The server endpoint `GET /api/health` reports whether a refresh is running, bucket configuration status, and the last refresh result. `POST /api/refresh` starts a manual refresh when `Authorization: Bearer $CRON_SECRET` matches.
+`GET /api/live` reports process liveness, `GET /api/ready` verifies app and ranking data availability, and `GET /api/scheduler` exposes non-sensitive detector counts and timing. The legacy `GET /api/health` remains available. `POST /api/refresh` starts a manual recovery refresh when `Authorization: Bearer $CRON_SECRET` matches.
 
-Railway's native cron service can run the one-shot command `pnpm run railway:refresh` on `0 * * * *`, but a separate cron service needs shared persistent storage or an external publish target if its output should update the web service. The default single web-service setup avoids that split by refreshing the files served by the same running process.
+Railway's dedicated cron service should run `pnpm run railway:refresh-once` every 10-15 minutes. The bucket is the shared durable state and publish target, so the cron container can exit after each invocation and the web service can serve the promoted generation independently.
 
 To override Oracle discovery with direct CSV URLs, include them in the download step:
 

@@ -1,12 +1,12 @@
 import { createReadStream } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { readFile, stat } from 'node:fs/promises'
+import { access, readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { normalize, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
-import { bucketConfigFromEnv, contentTypeForPath, getBucketObject } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, contentTypeForPath, getBucketObject, readBucketJson } from './railway-bucket.mjs'
 import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
 
 const port = Number(process.env.PORT ?? 4173)
@@ -14,6 +14,7 @@ const host = process.env.HOST ?? '0.0.0.0'
 const distDir = resolve(process.env.RAILWAY_DIST_DIR ?? 'dist')
 const publicDataDir = resolve(process.env.RANKING_PUBLIC_DATA_DIR ?? 'public/data')
 const refreshEnabled = process.env.RANKING_REFRESH_ENABLED === 'true'
+const refreshMode = ['shadow', 'gated'].includes(process.env.RANKING_REFRESH_MODE) ? process.env.RANKING_REFRESH_MODE : 'legacy'
 const refreshIntervalMinutes = Math.max(1, Number(process.env.RANKING_REFRESH_INTERVAL_MINUTES ?? 60))
 const refreshOnStart = process.env.RANKING_REFRESH_ON_START === 'true'
 const refreshScript = process.env.RANKING_REFRESH_SCRIPT ?? 'scripts/refresh-data-if-changed.mjs'
@@ -40,10 +41,27 @@ const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 
+    if (url.pathname === '/api/live') {
+      sendJson(response, 200, { ok: true, commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null })
+      return
+    }
+
+    if (url.pathname === '/api/ready') {
+      const readiness = await readinessStatus()
+      sendJson(response, readiness.ok ? 200 : 503, readiness)
+      return
+    }
+
+    if (url.pathname === '/api/scheduler') {
+      sendJson(response, 200, await schedulerStatus())
+      return
+    }
+
     if (url.pathname === '/api/health') {
       sendJson(response, 200, {
         ok: true,
         refreshEnabled,
+        refreshMode,
         refreshInFlight: Boolean(refreshInFlight),
         bucket: bucketConfig.enabled
           ? { enabled: true, bucket: bucketConfig.bucket, prefix: bucketConfig.prefix }
@@ -99,7 +117,7 @@ const server = createServer(async (request, response) => {
 
 server.listen(port, host, () => {
   console.log(`Railway server listening on ${host}:${port}`)
-  if (!refreshEnabled) return
+  if (!refreshEnabled || refreshMode !== 'legacy') return
 
   if (refreshOnStart) {
     setTimeout(() => {
@@ -111,6 +129,51 @@ server.listen(port, host, () => {
     void runRefresh('schedule')
   }, refreshIntervalMinutes * 60 * 1000).unref()
 })
+
+async function readinessStatus() {
+  try {
+    await access(resolve(distDir, 'index.html'))
+    try {
+      await access(resolve(publicDataDir, 'ranking-summary.json'))
+      return { ok: true, app: true, data: 'local' }
+    } catch {
+      const manifest = await getBucketObject('ranking-summary.json')
+      if (manifest.found) {
+        destroyBody(manifest.body)
+        return { ok: true, app: true, data: 'bucket' }
+      }
+      return { ok: false, app: true, data: 'missing' }
+    }
+  } catch (error) {
+    return { ok: false, app: false, data: 'unknown', error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function schedulerStatus() {
+  const remote = await readBucketJson(process.env.RANKING_TRIGGER_STATE_KEY ?? 'raw/refresh-trigger-state.json')
+  let state = remote.found ? remote.value : null
+  if (!state) {
+    try {
+      state = JSON.parse(await readFile(process.env.RANKING_TRIGGER_STATE ?? 'data/raw/refresh-trigger-state.json', 'utf8'))
+    } catch {
+      state = null
+    }
+  }
+  const pending = Object.values(state?.pending ?? {})
+  const oldestPendingAt = pending.map((entry) => entry?.detectedAt).filter(Boolean).sort()[0] ?? null
+  return {
+    ok: Boolean(state),
+    enabled: refreshEnabled,
+    mode: refreshMode,
+    phase: state?.lastProbe?.status === 'error' ? 'degraded' : pending.length > 0 ? 'waiting-for-source' : 'waiting-for-game',
+    checkedAt: state?.checkedAt ?? null,
+    observationWatermark: state?.observationWatermark ?? null,
+    pendingCount: pending.length,
+    oldestPendingAt,
+    lastProbe: state?.lastProbe ?? null,
+    metrics: state?.metrics ?? null,
+  }
+}
 
 async function serveAppFile(response, pathname, headOnly, requestHeaders) {
   if (pathname === '/sitemap.xml') {

@@ -12,10 +12,12 @@ import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
 import { createStaticRankingData, type DataSourceWarning } from '../src/lib/snapshot'
 import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
 import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
+import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
+const reconciliationOutput = readArg('reconciliation-output') ? resolve(readArg('reconciliation-output')!) : undefined
 const publicDataDir = `${publicDataTargetDir}.next-${process.pid}`
 const manifestPath = readArg('manifest')
 const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
@@ -144,6 +146,14 @@ const snapshot = createStaticRankingData({
 
 await mkdir(dirname(output), { recursive: true })
 await writeJsonFile(output, snapshot)
+if (reconciliationOutput) {
+  await mkdir(dirname(reconciliationOutput), { recursive: true })
+  await writeFile(reconciliationOutput, `${JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: snapshot.generatedAt,
+    matches: reconciliationEntries(importedMatches),
+  }, null, 2)}\n`)
+}
 const publicPlan = createPublicArtifactWritePlan(snapshot)
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)
@@ -193,6 +203,19 @@ function readArgList(name: string) {
 
 function uniquePaths(paths: string[]) {
   return Array.from(new Set(paths.filter(Boolean).map((path) => resolve(path))))
+}
+
+function reconciliationEntries(importedMatches: typeof matches) {
+  return resolveCanonicalSeries(importedMatches).flatMap((series) => {
+    const officialIds = [...new Set(series.games.map((game) => game.officialMatchId).filter((value): value is string => Boolean(value)))]
+    if (officialIds.length !== 1) return []
+    return [{
+      matchId: officialIds[0],
+      status: series.state === 'completed' ? 'exact' : 'unresolved',
+      canonicalSeriesId: series.id,
+      scoredGameIds: series.games.map((game) => game.officialGameId ?? game.sourceGameId ?? game.id),
+    }]
+  })
 }
 
 type LocalDataManifest = {
