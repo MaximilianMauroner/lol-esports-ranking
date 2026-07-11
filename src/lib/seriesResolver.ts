@@ -98,7 +98,11 @@ function buildCanonicalSeries(id: string, inputGames: MatchRecord[]): CanonicalS
 function canonicalSeriesId(match: MatchRecord) {
   const provider = match.sourceProvider ?? 'unknown'
   if (match.officialMatchId) return joinKey('official-match', match.officialMatchId)
-  if (match.sourceMatchId) return joinKey('source-match', provider, sourceSeriesId(match.sourceMatchId))
+  if (match.sourceMatchId) {
+    const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
+      .sort((left, right) => left.localeCompare(right))
+    return joinKey('source-match', match.date, sourceSeriesId(match.sourceMatchId), ...teams)
+  }
   const sourceGameSeriesId = sourceGameSeriesIdFor(match)
   if (sourceGameSeriesId) return joinKey('source-game-series', provider, sourceGameSeriesId)
 

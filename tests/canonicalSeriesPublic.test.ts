@@ -62,6 +62,25 @@ test('player recent matches retain canonical Bo2 ties and separate same-day seri
   ])
 })
 
+test('public match delta follows visible rating movement between series', () => {
+  const first = historyPoint({ id: 'first-series', game: 1, result: 'W', outcome: 1, state: 'completed' })
+  const second = historyPoint({ id: 'second-series', game: 1, result: 'W', outcome: 1, state: 'completed' })
+  first.rating = 1510
+  first.delta = -40
+  second.rating = 1525
+  second.delta = -55
+
+  const compact = compactStanding({
+    team: 'Alpha',
+    code: 'ALP',
+    region: 'LCK',
+    league: 'LCK',
+    history: [first, second],
+  } as unknown as TeamStanding)
+
+  assert.deepEqual(compact.recentMatches.map((match) => match.delta), [-40, 15])
+})
+
 function playerHistoryPoint(seriesId: string, game: number, result: 'W' | 'L', outcome: 0 | 0.5 | 1) {
   return {
     date: '2026-07-01',

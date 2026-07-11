@@ -34,12 +34,14 @@ export function mergeCommunityMatchSources({
     const oracleStatDuplicate = consumeOracleDuplicate(oracleStatOutcomeMatches, matchStatOutcomeKey(match))
     if (oracleStatDuplicate) {
       enrichRetainedOracleMatch(oracleStatDuplicate, match)
+      registerMatchKeys(seen, match, oracleStatDuplicate)
       continue
     }
 
     const seenDuplicate = matchKeys(match).map((key) => seen.get(key)).find((candidate): candidate is MatchRecord => Boolean(candidate))
     if (seenDuplicate) {
       enrichRetainedOracleMatch(seenDuplicate, match)
+      registerMatchKeys(seen, match, seenDuplicate)
       continue
     }
 
@@ -47,6 +49,7 @@ export function mergeCommunityMatchSources({
       const oracleOutcomeDuplicate = consumeOracleDuplicate(oracleOutcomeMatches, matchOutcomeKey(match))
       if (oracleOutcomeDuplicate) {
         enrichRetainedOracleMatch(oracleOutcomeDuplicate, match)
+        registerMatchKeys(seen, match, oracleOutcomeDuplicate)
         continue
       }
     }
@@ -55,8 +58,85 @@ export function mergeCommunityMatchSources({
     for (const key of matchKeys(match)) seen.set(key, match)
   }
 
-  enrichWithLolEsportsReferences(merged, lolEsportsReferences)
-  return merged.sort((a, b) => a.date.localeCompare(b.date))
+  const reconciled = reconcileSharedSeriesGames(merged)
+  enrichWithLolEsportsReferences(reconciled, lolEsportsReferences)
+  return reconciled.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function registerMatchKeys(seen: Map<string, MatchRecord>, match: MatchRecord, retained: MatchRecord) {
+  for (const key of matchKeys(match)) seen.set(key, retained)
+}
+
+function reconcileSharedSeriesGames(matches: MatchRecord[]) {
+  const groups = new Map<string, MatchRecord[]>()
+  const ungrouped: MatchRecord[] = []
+
+  for (const match of matches) {
+    const identity = sharedSeriesIdentity(match)
+    if (!identity) {
+      ungrouped.push(match)
+      continue
+    }
+    groups.set(identity.key, [...(groups.get(identity.key) ?? []), match])
+  }
+
+  const reconciled = [...ungrouped]
+  for (const group of groups.values()) {
+    if (new Set(group.map((match) => match.sourceProvider)).size < 2) {
+      reconciled.push(...group)
+      continue
+    }
+
+    const strongestBestOf = Math.max(...group.map((match) => match.bestOf))
+    const seriesReference = group.find((match) => match.sourceProvider === 'oracles-elixir') ?? group[0]
+    const byGame = new Map<number, MatchRecord>()
+    for (const match of group) {
+      const gameNumber = sharedSeriesIdentity(match)?.gameNumber
+      if (!gameNumber) {
+        reconciled.push(match)
+        continue
+      }
+      const current = byGame.get(gameNumber)
+      if (!current || richerMatch(match, current)) byGame.set(gameNumber, match)
+    }
+
+    for (const match of byGame.values()) {
+      const identity = sharedSeriesIdentity(match)
+      if (!identity) continue
+      reconciled.push({
+        ...match,
+        sourceMatchId: identity.seriesId,
+        event: seriesReference.event,
+        phase: seriesReference.phase,
+        region: seriesReference.region,
+        league: seriesReference.league,
+        tier: seriesReference.tier,
+        bestOf: strongestBestOf,
+        bestOfBasis: strongestBestOf > match.bestOf ? 'provider' : match.bestOfBasis,
+      })
+    }
+  }
+  return reconciled
+}
+
+function sharedSeriesIdentity(match: MatchRecord) {
+  for (const value of [match.sourceMatchId, match.sourceGameId]) {
+    if (!value) continue
+    const parsed = value.match(/^(.*?)[_-](?:game[_-]?)?([1-5])$/i)
+    if (!parsed?.[1] || !parsed[2]) continue
+    const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
+    return {
+      key: `${match.date}::${teams}::${normalizeText(parsed[1])}`,
+      seriesId: parsed[1],
+      gameNumber: Number(parsed[2]),
+    }
+  }
+  return undefined
+}
+
+function richerMatch(candidate: MatchRecord, current: MatchRecord) {
+  if (candidate.sourceProvider === current.sourceProvider) return false
+  return candidate.sourceProvider === 'oracles-elixir'
 }
 
 function enrichWithLolEsportsReferences(matches: MatchRecord[], references: LolEsportsReferenceEvent[]) {
@@ -155,6 +235,12 @@ function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string
 function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
   if (retainedMatch.sourceProvider !== 'oracles-elixir' || duplicateMatch.sourceProvider !== 'leaguepedia-cargo') return
   mergeFormatProvenance(retainedMatch, duplicateMatch)
+  if (!retainedMatch.sourceMatchId
+    && retainedMatch.region === 'International'
+    && duplicateMatch.region === 'International'
+    && sharedSeriesIdentity(duplicateMatch)) {
+    retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
+  }
   if (
     (isQualifierMetadata(duplicateMatch) && retainedMatch.tier !== 'qualifier')
     || isRegionalFinalMislabel(retainedMatch, duplicateMatch)

@@ -6,6 +6,7 @@ import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia.ts'
 import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports.ts'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { buildRankingModel } from '../src/lib/model.ts'
+import { resolveCanonicalSeries } from '../src/lib/seriesResolver.ts'
 import type { MatchRecord, TeamProfile } from '../src/types.ts'
 
 test('Leaguepedia international rows use known team home leagues when explicit fields are absent', () => {
@@ -672,6 +673,124 @@ test('community merge removes duplicate Oracle games across canonical tournament
   const merged = mergeCommunityMatchSources({ oracleMatches: [first, duplicate], leaguepediaMatches: [] })
 
   assert.deepEqual(merged.map((match) => match.id), ['oe-msi-short-label'])
+})
+
+test('community merge reconciles overlapping Oracle and Leaguepedia MSI series once', () => {
+  const confirmedSeries = [
+    ['2026-07-04', 'Bracket Round 1_4', 'Bilibili Gaming', 'T1', ['Bilibili Gaming', 'Bilibili Gaming', 'T1', 'Bilibili Gaming', 'T1']],
+    ['2026-07-05', 'Bracket Round 2_1', 'Hanwha Life Esports', 'G2 Esports', ['Hanwha Life Esports', 'Hanwha Life Esports', 'Hanwha Life Esports']],
+    ['2026-07-05', 'Bracket Round 1_5', 'Top Esports', 'Team Secret Whales', ['Team Secret Whales', 'Team Secret Whales', 'Top Esports', 'Team Secret Whales']],
+    ['2026-07-06', 'Bracket Round 2_2', 'Bilibili Gaming', 'LYON', ['Bilibili Gaming', 'Bilibili Gaming', 'Bilibili Gaming']],
+    ['2026-07-08', 'Bracket Round 2_3', 'LYON', 'Team Secret Whales', ['LYON', 'LYON', 'LYON']],
+    ['2026-07-08', 'Bracket Round 2_4', 'G2 Esports', 'T1', ['G2 Esports', 'G2 Esports', 'T1', 'G2 Esports']],
+    ['2026-07-09', 'Bracket Round 4_1', 'Bilibili Gaming', 'Hanwha Life Esports', ['Bilibili Gaming', 'Bilibili Gaming', 'Hanwha Life Esports', 'Bilibili Gaming']],
+  ] as const
+
+  const oracleMatches: MatchRecord[] = []
+  const leaguepediaMatches: MatchRecord[] = []
+  for (const [date, round, teamA, teamB, winners] of confirmedSeries) {
+    const seriesId = `2026 Mid-Season Invitational_${round}`
+    winners.forEach((winner, index) => {
+      const game = index + 1
+      const stats = { teamAKills: 20 + game, teamBKills: 10 + game, teamAGold: 60000 + game, teamBGold: 55000 + game }
+      oracleMatches.push(matchFixture({
+        id: `oe-${round}-${game}`,
+        sourceProvider: 'oracles-elixir',
+        sourceGameId: `oe-${round}-${game}`,
+        date,
+        event: 'MSI 2026',
+        league: 'MSI',
+        region: 'International',
+        phase: 'Playoffs',
+        tier: 'msi-bracket',
+        bestOf: 5,
+        teamA,
+        teamB,
+        winner,
+        ...stats,
+      }))
+      for (const snapshot of ['first', 'overlap']) {
+        leaguepediaMatches.push(matchFixture({
+          id: `lp-${snapshot}-${round}-${game}`,
+          sourceProvider: 'leaguepedia-cargo',
+          sourceGameId: `${seriesId}_${game}`,
+          date,
+          event: '2026 Mid-Season Invitational',
+          league: 'MSI',
+          region: 'International',
+          phase: 'Playoffs',
+          tier: 'msi-bracket',
+          bestOf: 5,
+          bestOfBasis: 'provider',
+          teamA,
+          teamB,
+          winner,
+          ...stats,
+        }))
+      }
+    })
+  }
+
+  const merged = mergeCommunityMatchSources({ oracleMatches, leaguepediaMatches })
+  const resolved = resolveCanonicalSeries(merged)
+  assert.equal(merged.length, oracleMatches.length)
+  assert.equal(resolved.length, confirmedSeries.length)
+  assert.equal(resolved.every((series) => series.state === 'completed'), true)
+  assert.equal(merged.every((match) => match.sourceProvider === 'oracles-elixir'), true)
+})
+
+test('community merge completes a partial Oracle series with the missing Leaguepedia game', () => {
+  const seriesId = '2026 Mid-Season Invitational_Bracket Round 3_1'
+  const oracleMatches = [1, 2].map((game) => matchFixture({
+    id: `oe-lyon-g2-${game}`,
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: `oe-lyon-g2-${game}`,
+    date: '2026-07-10',
+    event: 'MSI 2026',
+    phase: 'Playoffs',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-bracket',
+    bestOf: 3,
+    teamA: 'LYON',
+    teamB: 'G2 Esports',
+    winner: 'LYON',
+    teamAKills: 20 + game,
+    teamBKills: 10 + game,
+    teamAGold: 60000 + game,
+    teamBGold: 55000 + game,
+  }))
+  const leaguepediaMatches = [1, 2, 3].flatMap((game) => ['first', 'overlap'].map((snapshot) => matchFixture({
+    id: `lp-${snapshot}-lyon-g2-${game}`,
+    sourceProvider: 'leaguepedia-cargo',
+    sourceGameId: `${seriesId}_${game}`,
+    date: '2026-07-10',
+    event: '2026 Mid-Season Invitational',
+    phase: 'Playoffs',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-bracket',
+    bestOf: 5,
+    bestOfBasis: 'provider',
+    teamA: 'LYON',
+    teamB: 'G2 Esports',
+    winner: 'LYON',
+    teamAKills: 20 + game,
+    teamBKills: 10 + game,
+    teamAGold: 60000 + game,
+    teamBGold: 55000 + game,
+  })))
+
+  const merged = mergeCommunityMatchSources({ oracleMatches, leaguepediaMatches })
+  const [series] = resolveCanonicalSeries(merged)
+  assert.equal(merged.length, 3)
+  assert.deepEqual(merged.map((match) => match.sourceProvider).sort(), ['leaguepedia-cargo', 'oracles-elixir', 'oracles-elixir'])
+  assert.equal(merged.every((match) => match.event === 'MSI 2026'), true)
+  assert.equal(series.games.length, 3)
+  assert.equal(series.format, 5)
+  assert.equal(series.state, 'completed')
+  assert.equal(Math.max(series.winsA, series.winsB), 3)
+  assert.equal(Math.min(series.winsA, series.winsB), 0)
 })
 
 test('team code cleanup uses known source abbreviations for major teams', () => {

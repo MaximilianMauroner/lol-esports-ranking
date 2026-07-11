@@ -1,21 +1,23 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-10T16:26:07.934Z",
+  "generatedAt": "2026-07-11T09:45:26.594Z",
   "start": "2025-01-01",
-  "end": "2026-07-10",
+  "end": "2026-07-11",
   "files": {
     "leaguepediaJson": [
-      "leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json",
-      "leaguepedia/scoreboard-games-2026-07-06_to_2026-07-08.json",
-      "leaguepedia/scoreboard-games-2026-07-09_to_2026-07-10.json"
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-06_to_2026-07-08.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-09_to_2026-07-10.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-04_to_2026-07-11.json"
     ],
     "oracleCsv": [
-      "oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
-      "oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
+      "/home/codex/work/lol-esports-ranking/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
+      "/home/codex/work/lol-esports-ranking/data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv"
     ],
     "lolEsportsJson": [
-      "lolesports/schedule-2011-01-01_to_2026-07-09.json",
-      "lolesports/schedule-2026-07-09_to_2026-07-10.json"
+      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2011-01-01_to_2026-07-09.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-09_to_2026-07-10.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-04_to_2026-07-11.json"
     ]
   },
   "sources": {
@@ -23,38 +25,48 @@
       "role": "schedule-results-reference",
       "status": "downloaded",
       "downloadedCount": 1,
-      "latestStatus": "downloaded",
+      "downloadedThisRun": 1,
+      "failedCount": 0,
+      "failedThisRun": 0,
+      "failures": [],
+      "skipped": false,
+      "required": false,
+      "unsupportedApi": true,
       "previousStatus": "downloaded",
-      "unsupportedApi": true
+      "latestStatus": "downloaded"
     },
     "oracle": {
       "role": "primary",
-      "status": "failed",
-      "downloadedCount": 0,
-      "reusedCount": 2,
-      "failedCount": 1,
-      "latestStatus": "failed",
-      "previousStatus": "reused-local",
-      "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH"
+      "status": "downloaded",
+      "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH",
+      "discoveredCount": 13,
+      "downloadedCount": 1,
+      "downloadedThisRun": 1,
+      "failedCount": 0,
+      "failedThisRun": 0,
+      "failures": [],
+      "skipped": false,
+      "required": false,
+      "previousStatus": "failed",
+      "latestStatus": "downloaded"
     },
     "leaguepedia": {
       "role": "backup-gap-fill",
       "status": "downloaded",
       "downloadedCount": 1,
-      "reusedCount": 2,
-      "latestStatus": "downloaded",
-      "previousStatus": "reused-local"
+      "downloadedThisRun": 1,
+      "failedCount": 0,
+      "failedThisRun": 0,
+      "failures": [],
+      "skipped": false,
+      "required": false,
+      "previousStatus": "downloaded",
+      "latestStatus": "downloaded"
     }
   },
-  "warnings": [
-    "Oracle CSV refresh was attempted on 2026-07-10, but Google Drive returned a quota page; existing local Oracle CSVs were preserved.",
-    "Leaguepedia gap-fill downloaded 33 game rows for 2026-07-09 through 2026-07-10.",
-    "LoL Esports persisted APIs are public site endpoints, not a supported official data API. Cache responses and use them as reference metadata only.",
-    "LoL Esports event-detail fetch was limited to 250 of 367 schedule events.",
-    "LoL Esports schedule cache starts at 2026-05-21, after requested start 2011-01-01; increase --older-pages for a wider reference window."
-  ],
+  "warnings": [],
   "refreshWindow": {
-    "start": "2026-07-09",
-    "end": "2026-07-10"
+    "start": "2026-07-04",
+    "end": "2026-07-11"
   }
 }

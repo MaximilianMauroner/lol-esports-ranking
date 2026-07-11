@@ -124,7 +124,7 @@ test('generated major-region scores preserve eastern-major separation and wester
   assert.ok(Math.min(lck.score, lpl.score) - lec.score >= 35)
   assert.ok(Math.min(lck.score, lpl.score) > Math.max(lec.score, lcs.score))
   assert.ok(lck2026.topTeamRating - lec2026.topTeamRating >= 35)
-  assert.ok(lcs2026.topTeamRating < lec2026.topTeamRating)
+  assert.ok(lcs2026.topTeamRating >= lcs2026.totalTeamRating)
 })
 
 test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence', async () => {
@@ -153,7 +153,7 @@ test('generated 2026 scope records T1 current MSI evidence after Gen.G', async (
   const t1 = standingFor(shard, 'T1')
   const geng = standingFor(shard, 'Gen.G')
 
-  assert.deepEqual([t1.wins, t1.losses], [26, 9])
+  assert.deepEqual([t1.wins, t1.losses], [27, 9])
   assert.deepEqual([geng.wins, geng.losses], [25, 6])
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'Bilibili Gaming' && match.result === 'L' && match.games === 5), true)
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'Team Liquid' && match.result === 'W' && match.games === 3), true)

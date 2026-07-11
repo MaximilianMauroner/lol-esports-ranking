@@ -837,7 +837,9 @@ function teamMatchRecord(history: TeamHistoryPoint[] = []) {
   const resolvedMatches = matches
     .map((match) => ({ match, result: teamMatchResult(match) }))
     .filter((record): record is { match: TeamMatchGroup; result: 'W' | 'L' | 'T' } => Boolean(record.result))
-  const recentMatches = resolvedMatches.slice(-PUBLIC_TEAM_RECENT_MATCH_LIMIT).map(({ match, result }) => teamRecentMatch(match, result))
+  const recentMatches = resolvedMatches
+    .map(({ match, result }, index) => teamRecentMatch(match, result, resolvedMatches[index - 1]?.match))
+    .slice(-PUBLIC_TEAM_RECENT_MATCH_LIMIT)
   const wins = resolvedMatches.filter((match) => match.result === 'W').length
   const losses = resolvedMatches.filter((match) => match.result === 'L').length
 
@@ -901,8 +903,9 @@ function teamHistoryMatchKey(point: TeamHistoryPoint) {
   ].join('\u0000')
 }
 
-function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T'): PublicRecentMatch {
+function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T', previousGroup?: TeamMatchGroup): PublicRecentMatch {
   const latest = group.entries.at(-1)!
+  const previous = previousGroup?.entries.at(-1)
   const wins = group.entries.filter((entry) => entry.result === 'W').length
   const losses = group.entries.length - wins
   const bestOf = bestOfForScore(wins, losses, latest.source.bestOf)
@@ -913,7 +916,7 @@ function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T'): Public
     opponent: latest.opponent,
     result,
     rating: Math.round(latest.rating),
-    delta: group.entries.reduce((total, entry) => total + Math.round(entry.delta), 0),
+    delta: previous ? Math.round(latest.rating) - Math.round(previous.rating) : group.entries.reduce((total, entry) => total + Math.round(entry.delta), 0),
     wins,
     losses,
     games: group.entries.length,
