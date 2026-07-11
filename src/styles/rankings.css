@@ -474,7 +474,7 @@
 }
 
 .gpr-filterbar__segmented {
-  height: var(--gpr-control-h);
+  min-height: var(--gpr-control-h);
   flex-wrap: nowrap;
   border-color: var(--line-strong);
   border-radius: var(--r-sm);
@@ -1327,6 +1327,10 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   margin-bottom: 12px;
 }
 
+.rail-disclosure .method-foot {
+  overflow-wrap: anywhere;
+}
+
 .data-model-panel {
   padding-top: 18px;
   padding-bottom: 16px;
@@ -1401,6 +1405,19 @@ table.ranking-table.gpr-grid tr.gpr-row:hover .pick-button:not([aria-pressed="tr
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+
+.provider-list[aria-label="Source freshness"] .provider-row {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.provider-list[aria-label="Source freshness"] .provider-row span {
+  max-width: 100%;
+}
+
+.provider-list[aria-label="Source freshness"] .provider-row b {
+  white-space: normal;
 }
 
 /* ---------------- Trajectory insight cards ---------------- */

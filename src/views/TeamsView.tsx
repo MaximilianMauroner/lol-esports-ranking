@@ -695,17 +695,17 @@ export function TeamsView({
           </div>
         </div>
         {exactTournamentId && (tournamentMovementState.status === 'idle' || tournamentMovementState.status === 'loading') ? (
-          <p className="muted" style={{ padding: 20 }}>Loading tournament movement…</p>
+          <p className="muted p-5">Loading tournament movement…</p>
         ) : exactTournamentId && (tournamentMovementState.status === 'missing' || tournamentMovementState.status === 'error') ? (
-          <p className="muted" style={{ padding: 20 }}>{tournamentMovementState.message}</p>
+          <p className="muted p-5">{tournamentMovementState.message}</p>
         ) : !exactTournamentId && historyState.status === 'idle' ? (
-          <p className="muted" style={{ padding: 20 }}>Rating history loads when this panel is viewed.</p>
+          <p className="muted p-5">Rating history loads when this panel is viewed.</p>
         ) : !exactTournamentId && historyState.status === 'loading' ? (
-          <p className="muted" style={{ padding: 20 }}>Loading rating history…</p>
+          <p className="muted p-5">Loading rating history…</p>
         ) : !exactTournamentId && (historyState.status === 'missing' || historyState.status === 'error') ? (
-          <p className="muted" style={{ padding: 20 }}>{historyState.message}</p>
+          <p className="muted p-5">{historyState.message}</p>
         ) : (
-          <Suspense fallback={<p className="muted" style={{ padding: 20 }}>Loading chart...</p>}>
+          <Suspense fallback={<p className="muted p-5">Loading chart...</p>}>
             <LazyTeamHistoryLineChart
               series={chartSeries}
               height={300}
@@ -1585,8 +1585,7 @@ function TeamDetailDrawer({
         showCloseButton={false}
         overlayClassName="team-detail-sheet__overlay"
         aria-label={`${team.team} details`}
-        className="team-detail-sheet w-full max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(820px,94vw)] sm:max-w-none"
-        style={{ width: 'min(820px, 100vw)', maxWidth: 'none' }}
+        className="team-detail-sheet w-[min(820px,100vw)] max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] sm:w-[min(820px,94vw)]"
       >
         <SheetHeader className="team-detail-sheet__head flex-row items-center text-left">
           <div className="team-dossier__identity">
@@ -1778,9 +1777,9 @@ function TeamDetailDrawer({
             ) : historyState.status === 'idle' || historyState.status === 'loading' ? (
               <TrendChartSkeleton />
             ) : historyState.status === 'missing' || historyState.status === 'error' ? (
-              <p className="muted" style={{ paddingTop: 16 }}>{historyState.message}</p>
+              <p className="muted pt-4">{historyState.message}</p>
             ) : (
-              <p className="muted" style={{ paddingTop: 16 }}>Not enough history to chart this team yet.</p>
+              <p className="muted pt-4">Not enough history to chart this team yet.</p>
             )}
             {tournament ? (
               <p className="tournament-data-note">

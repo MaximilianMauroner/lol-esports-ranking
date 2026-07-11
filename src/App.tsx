@@ -59,6 +59,14 @@ const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
   rankings: { eyebrow: 'Tier 1 team strength', title: 'Team Power Index' },
 }
 
+function checkpointButtonClassName(active: boolean, ongoing = false) {
+  return cn(
+    'h-[38px] min-w-[86px] shrink-0 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 text-[var(--muted)] shadow-none hover:border-[var(--line-strong)] hover:text-[var(--text)] [&>small]:mt-0.5 [&>small]:block [&>small]:text-[0.68rem] [&>small]:font-[560] [&>small]:leading-[1.1] [&>small]:text-[var(--muted)] [&>span]:block [&>span]:text-[0.86rem] [&>span]:font-bold [&>span]:leading-[1.1]',
+    active && 'border-[color-mix(in_oklch,var(--accent),white_12%)] bg-[color-mix(in_oklch,var(--accent),transparent_86%)] text-[var(--text-strong)]',
+    ongoing && 'border-[color-mix(in_oklch,var(--win),var(--line)_55%)]',
+  )
+}
+
 function App() {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
   const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
@@ -231,27 +239,30 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <a className="skip-link" href="#main-content">Skip to content</a>
-        <nav className="rail" aria-label="Primary">
-          <a className="rail__brand" href={hashForModeAndScope('rankings', effectiveScope)} onClick={goHome} title="Go to Rankings home">
-            <span className="rail__mark">
-              <img src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
+    <div className="flex min-h-full flex-col">
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[0.84rem] font-[650] text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content">Skip to content</a>
+        <nav className="sticky top-0 z-50 grid min-h-[var(--app-nav-h)] grid-cols-[minmax(158px,max-content)_minmax(0,1fr)] items-center gap-[clamp(10px,1.6vw,22px)] border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.96)] px-[var(--page-x)] py-2.5 backdrop-blur-[16px] max-[1040px]:gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)] max-[900px]:items-stretch max-[900px]:gap-x-3 max-[900px]:gap-y-2 max-[900px]:px-3 max-[900px]:pt-2 max-[900px]:pb-2.5" aria-label="Primary">
+          <a className="flex min-w-0 items-center gap-[11px] rounded-[var(--r-sm)] text-left text-inherit no-underline transition-colors duration-160 hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)] max-[1040px]:min-w-auto max-[900px]:mr-auto max-[900px]:min-h-9 max-[900px]:justify-self-start [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" href={hashForModeAndScope('rankings', effectiveScope)} onClick={goHome} title="Go to Rankings home">
+            <span className="grid size-[37px] shrink-0 place-items-center overflow-hidden rounded-[7px]">
+              <img className="block size-full" src="/logo.svg" alt="" aria-hidden="true" width={37} height={37} />
             </span>
-            <div>
-              <b>Power Index</b>
-              <span>LoL Esports</span>
+            <div className="min-w-0">
+              <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.94rem] tracking-normal text-[var(--text-strong)]">Power Index</b>
+              <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] tracking-[0.13em] text-[var(--faint)] uppercase">LoL Esports</span>
             </div>
           </a>
-        <div className="rail__label">Compare</div>
-        <div className="rail__nav">
+        <div className="hidden">Compare</div>
+        <div className="-m-0.5 flex min-w-0 items-center justify-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:m-0 max-[900px]:w-full max-[900px]:justify-start max-[900px]:p-0">
           {MODES.map((entry) => {
             const Icon = entry.icon
             return (
               <a
                 key={entry.id}
                 href={hashForModeAndScope(entry.id, effectiveScope)}
-                className={`rail__mode${mode === entry.id ? ' is-active' : ''}`}
+                className={cn(
+                  'flex min-h-11 min-w-0 flex-[1_1_132px] max-w-[min(186px,100%)] cursor-pointer items-center gap-[9px] rounded-[var(--r-sm)] border border-transparent px-2.5 py-[7px] text-left text-[var(--muted)] no-underline transition-[background,color,border-color] duration-160 hover:bg-[var(--surface-2)] hover:text-[var(--text)] max-[900px]:min-h-10 max-[900px]:flex-[0_0_min(38vw,144px)] max-[900px]:justify-start max-[900px]:px-1.5 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [&>svg]:shrink-0 [&>span]:min-w-0 [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[0.88rem] [&_b]:font-semibold [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[0.72rem] [&_small]:text-[var(--faint)] max-[1040px]:[&_small]:hidden',
+                  mode === entry.id && 'border-[color-mix(in_oklch,var(--rank-gold),var(--line)_38%)] bg-[var(--surface-2)] text-[var(--text-strong)] shadow-[inset_0_-2px_0_var(--rank-gold)] [&_small]:text-[var(--rank-gold)]',
+                )}
                 aria-current={mode === entry.id ? 'page' : undefined}
               >
                 <Icon size={18} aria-hidden="true" />
@@ -265,23 +276,26 @@ function App() {
         </div>
       </nav>
 
-      <main id="main-content" className="main" tabIndex={-1} ref={mainRef}>
-        <header className="topbar">
-          <div className="topbar__title">
-            <p className="eyebrow">{MODE_TITLES[mode].eyebrow}</p>
-            <h1>{MODE_TITLES[mode].title}</h1>
+      <main id="main-content" className="flex min-w-0 flex-col pb-[calc(var(--tray-h)+24px+env(safe-area-inset-bottom))]" tabIndex={-1} ref={mainRef}>
+        <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b border-[var(--line)] bg-[oklch(0.125_0.004_250/0.72)] px-[var(--page-x)] pt-[18px] pb-3.5">
+          <div className="mr-auto min-w-0 flex-[1_1_320px]">
+            <p className="text-[0.7rem] tracking-[0.16em] text-[var(--muted)] uppercase">{MODE_TITLES[mode].eyebrow}</p>
+            <h1 className="text-[1.7rem] font-[640] tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
           </div>
         </header>
 
-        <div className="scope-tabs" aria-label="Snapshot scope controls">
-          <div className="season-tabs" role="group" aria-label="Season">
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2" aria-label="Snapshot scope controls">
+          <div className="flex min-h-[38px] items-stretch gap-1 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Season">
             {seasonTabs.map((season) => (
               <Button
                 key={season}
                 type="button"
                 variant="ghost"
                 aria-pressed={activeSeason === season}
-                className={cn('season-tabs__button', activeSeason === season && 'is-active')}
+                className={cn(
+                  'relative h-[38px] min-w-[62px] shrink-0 self-stretch rounded-md border border-transparent bg-[color-mix(in_oklch,var(--surface-2)_58%,transparent)] px-3 text-[0.86rem] font-[680] tracking-normal text-[var(--muted)] shadow-none hover:text-[var(--text)]',
+                  activeSeason === season && 'border-[color-mix(in_oklch,var(--accent),var(--line)_46%)] bg-[color-mix(in_oklch,var(--accent),transparent_88%)] text-[var(--text-strong)]',
+                )}
                 onClick={() => selectScope(scopeForSeasonTab(season))}
                 onFocus={() => preloadOnIntent(scopeForSeasonTab(season))}
                 onPointerEnter={() => preloadOnIntent(scopeForSeasonTab(season))}
@@ -292,12 +306,12 @@ function App() {
           </div>
 
           {activeSeason && activeSeason !== 'All' && checkpointTabs.length > 0 ? (
-            <div className="checkpoint-tabs" role="group" aria-label={`${activeSeason} checkpoints`}>
+            <div className="flex min-h-[38px] items-center gap-2 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label={`${activeSeason} checkpoints`}>
               <Button
                 type="button"
                 variant="ghost"
                 aria-pressed={!activeCheckpoint}
-                className={cn('checkpoint-tabs__button', !activeCheckpoint && 'is-active')}
+                className={checkpointButtonClassName(!activeCheckpoint)}
                 onClick={() => selectScope(`season:${activeSeason}`)}
                 onFocus={() => preloadOnIntent(`season:${activeSeason}`)}
                 onPointerEnter={() => preloadOnIntent(`season:${activeSeason}`)}
@@ -313,14 +327,14 @@ function App() {
                     variant="ghost"
                     title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
                     aria-pressed={activeCheckpoint === checkpoint.id}
-                    className={cn('checkpoint-tabs__button', activeCheckpoint === checkpoint.id && 'is-active', ongoing && 'is-ongoing')}
+                    className={checkpointButtonClassName(activeCheckpoint === checkpoint.id, ongoing)}
                     onClick={() => selectScope(checkpointScope(activeSeason, checkpoint.id))}
                     onFocus={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
                     onPointerEnter={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
                   >
                     <span>
                       {checkpoint.label}
-                      {ongoing ? <em>Ongoing</em> : null}
+                      {ongoing ? <em className="ml-[7px] inline-flex items-center rounded-full bg-[var(--win-soft)] px-[5px] pt-px pb-0.5 align-[1px] text-[0.6rem] font-[760] text-[var(--win)] not-italic uppercase">Ongoing</em> : null}
                     </span>
                     <small>{formatDate(checkpoint.endDate)}</small>
                   </Button>
@@ -328,7 +342,7 @@ function App() {
               })}
               {pendingCheckpoint ? (
                 <div
-                  className="checkpoint-tabs__button checkpoint-tabs__button--future"
+                  className="grid h-[38px] min-w-[86px] shrink-0 cursor-default place-content-center rounded-md border border-dashed border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-2),transparent_34%)] px-3 text-[var(--faint)] [&>small]:mt-0.5 [&>small]:block [&>small]:text-[0.68rem] [&>small]:leading-[1.1] [&>small]:text-[var(--faint)] [&>span]:block [&>span]:text-[0.86rem] [&>span]:font-bold [&>span]:leading-[1.1]"
                   aria-disabled="true"
                   title={`${pendingCheckpoint.label} has not started yet.`}
                 >
@@ -341,8 +355,8 @@ function App() {
         </div>
 
         {seeded ? (
-          <div className="view" style={{ paddingBottom: 0 }}>
-            <Alert className="notice" role="status">
+          <div className="view pb-0">
+            <Alert className="flex items-center gap-2.5 rounded-[var(--r)] border-[var(--warn-soft)] bg-[var(--warn-soft)] px-3.5 py-[11px] text-[0.84rem] text-[var(--warn)]" role="status">
               <AlertTriangle size={17} aria-hidden="true" />
               Seeded sample data is loaded. These are not official LoL Esports rankings.
             </Alert>
@@ -408,7 +422,7 @@ function App() {
             ) : null}
           </>
         )}
-        <footer className="site-footer" aria-label="Project disclaimer">
+        <footer className="mx-[var(--page-x)] mt-[30px] border-t border-[var(--line)] pt-[15px] text-[0.72rem] leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
           {RIOT_PROJECT_NOTICE}
         </footer>
       </main>

@@ -85,7 +85,7 @@ export function LineChart({
   )
 
   if (series.length === 0 || domain === null || data.length === 0) {
-    return <p className="muted" style={{ padding: 20 }}>No chart data available.</p>
+    return <p className="muted p-5">No chart data available.</p>
   }
 
   const { minT, maxT, minY, maxY } = domain

@@ -119,55 +119,7 @@
   }
 }
 
-@media (max-width: 1040px) {
-  .rail {
-    gap: 14px;
-  }
-  .rail__brand {
-    min-width: auto;
-  }
-  .rail__mode small {
-    display: none;
-  }
-}
-
 @media (max-width: 900px) {
-  .rail {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 8px 12px;
-    padding: 8px 12px 10px;
-  }
-  .rail__brand {
-    justify-self: start;
-    min-height: 36px;
-    margin-right: auto;
-  }
-  .rail__nav {
-    display: flex;
-    gap: 6px;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    overflow-x: auto;
-  }
-  .rail__mode {
-    flex: 0 0 min(38vw, 144px);
-    min-height: 40px;
-    min-width: 0;
-    justify-content: flex-start;
-    text-align: left;
-    padding: 7px 6px;
-  }
-  .rail__mode b {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .main {
-    padding-bottom: calc(var(--tray-h) + 24px + env(safe-area-inset-bottom));
-  }
   .tray {
     left: 0;
     bottom: 0;
@@ -317,20 +269,6 @@
 }
 
 @media (max-width: 640px) {
-  .topbar__title {
-    flex-basis: 100%;
-  }
-  .topbar__meta {
-    width: 100%;
-    justify-content: flex-start;
-    gap: 8px 14px;
-  }
-  .topbar__meta div {
-    min-width: min(108px, 45%);
-  }
-  .topbar__meta b {
-    max-width: 100%;
-  }
   .gpr-toolbar {
     display: grid;
     grid-template-columns: 1fr;
@@ -575,8 +513,6 @@
   [data-slot="button"],
   [data-slot="toggle"],
   [data-slot="toggle-group-item"],
-  .rail__brand,
-  .rail__mode,
   table.ranking-table .sort-button,
   .team-cell__button,
   .form-trigger {
