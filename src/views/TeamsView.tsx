@@ -226,13 +226,11 @@ export function TeamsView({
     [scopeFiltered],
   )
   const movementBaseline = activeTournament ? `${activeTournament.label} start` : dataSummary?.movementBaseline ?? 'the previous rating update in this scope'
-  const eligibilityNote = eligibilityFilter === 'ranked'
-    ? hiddenFromRankedCount > 0
-      ? `${formatNumber(filtered.length)} eligible teams pass ranking checks. ${formatNumber(hiddenFromRankedCount)} teams are hidden because they lack enough recent matches, have stale schedules, or play in leagues not yet connected to the global pool.`
-      : 'Every team in this scope currently passes ranking eligibility.'
-    : hiddenFromRankedCount > 0
-      ? `${formatNumber(filtered.length)} teams total, including ${formatNumber(hiddenFromRankedCount)} teams kept out of the ranked board for recency, sample-size, uncertainty, or league-connectivity reasons.`
-      : 'Every team in this scope currently passes ranking eligibility.'
+  const eligibilityNote = hiddenFromRankedCount > 0
+    ? eligibilityFilter === 'ranked'
+      ? `${formatNumber(hiddenFromRankedCount)} ineligible teams hidden`
+      : `${formatNumber(hiddenFromRankedCount)} teams aren't eligible for ranking`
+    : undefined
   const panelData = useMemo<TeamDataSummary | undefined>(() => dataSummary
     ? {
         ...dataSummary,
@@ -496,8 +494,7 @@ export function TeamsView({
                   ) : null}
                 </div>
               </div>
-              <p className="max-w-[75ch] text-[0.73rem] leading-[1.35] text-[var(--faint)]">{eligibilityNote}</p>
-              <p className="max-w-[75ch] text-[0.72rem] leading-[1.35] text-[var(--muted)]">{scoreScaleNote()}</p>
+              {eligibilityNote ? <p className="text-[0.73rem] leading-[1.35] text-[var(--faint)]">{eligibilityNote}</p> : null}
             </div>
 
             {tournamentMovementIndexState.status === 'missing' || tournamentMovementIndexState.status === 'error' ? (
