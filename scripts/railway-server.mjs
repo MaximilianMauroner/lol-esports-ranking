@@ -282,13 +282,17 @@ async function serveDataFile(response, relativePath, options) {
     return
   }
 
+  if (bucketConfig.enabled) {
+    try {
+      const servedBucket = await tryServeBucketFile(response, safePath, options)
+      if (servedBucket) return
+    } catch (error) {
+      console.warn(`Bucket data fallback used for ${safePath}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   const servedLocal = await tryServeFile(response, publicDataDir, safePath, options)
   if (servedLocal) return
-
-  if (bucketConfig.enabled) {
-    const servedBucket = await tryServeBucketFile(response, safePath, options)
-    if (servedBucket) return
-  }
 
   sendJson(response, 404, { ok: false, error: 'Not found' })
 }

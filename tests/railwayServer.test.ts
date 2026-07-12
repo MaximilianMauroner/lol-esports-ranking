@@ -69,6 +69,51 @@ test('Railway server returns app shell only for known app routes', async () => {
   }
 })
 
+test('Railway server prefers refreshed bucket data over its bundled snapshot', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(dataDir, { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
+  await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify({ source: 'bundled' }))
+
+  const bucket = createServer((request, response) => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+    if (pathname === '/test-bucket/rankings/active-generation.json') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ generationId: 'fresh' }))
+      return
+    }
+    if (pathname === '/test-bucket/rankings/generations/fresh/data/ranking-summary.json') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ source: 'bucket' }))
+      return
+    }
+    response.statusCode = 404
+    response.end()
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const bucketPort = (bucket.address() as AddressInfo).port
+
+  const server = await startRailwayServer(distDir, dataDir, {
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+  })
+  try {
+    const response = await httpRequest(server.port, '/data/ranking-summary.json')
+    assert.equal(response.statusCode, 200)
+    assert.equal(JSON.parse(response.body).source, 'bucket')
+  } finally {
+    await server.close()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('Railway server reports stale-source refresh status as healthy', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
   const distDir = join(tempDir, 'dist')
@@ -201,6 +246,10 @@ async function startRailwayServer(
       RAILWAY_DIST_DIR: distDir,
       RANKING_PUBLIC_DATA_DIR: dataDir,
       RANKING_REFRESH_ENABLED: 'false',
+      RANKING_BUCKET_NAME: '',
+      RANKING_BUCKET_ENDPOINT: '',
+      RANKING_BUCKET_ACCESS_KEY_ID: '',
+      RANKING_BUCKET_SECRET_ACCESS_KEY: '',
       ...env,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
