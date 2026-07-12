@@ -59,7 +59,7 @@ function TeamHistoryTooltip({
   if (rows.length === 0) return null
 
   return (
-    <div className="pointer-events-none static z-2 grid min-w-[260px] max-w-[min(420px,86vw)] gap-2 rounded-[var(--r)] border border-[var(--line-strong)] bg-[oklch(0.15_0.006_250/0.96)] px-[11px] py-[9px] text-[0.78rem] whitespace-normal shadow-[var(--shadow-2)]">
+    <div className="pointer-events-auto static z-2 grid max-h-[260px] min-w-[260px] max-w-[min(420px,86vw)] gap-2 overflow-y-auto overscroll-contain rounded-[var(--r)] border border-[var(--line-strong)] bg-[oklch(0.15_0.006_250/0.96)] px-[11px] py-[9px] text-[0.78rem] whitespace-normal shadow-[var(--shadow-2)]">
       <b className="mb-0.5 text-[0.74rem] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
       <div className="grid gap-2">
         {rows.map((row) => {
