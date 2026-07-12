@@ -1,4 +1,4 @@
-import { useId, useMemo, type ReactElement } from 'react'
+import { useId, useMemo, type CSSProperties, type ReactElement } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -49,6 +49,9 @@ export type LineChartProps = {
   yReverse?: boolean
   curve?: 'linear' | 'step'
   tooltipContent?: ReactElement
+  tooltipPortal?: HTMLElement | null
+  tooltipWrapperStyle?: CSSProperties
+  persistentTooltip?: boolean
 }
 
 const tickDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
@@ -65,6 +68,9 @@ export function LineChart({
   yReverse = false,
   curve = 'linear',
   tooltipContent,
+  tooltipPortal,
+  tooltipWrapperStyle,
+  persistentTooltip = false,
 }: LineChartProps) {
   const chartId = useId().replace(/:/g, '')
   const summaryId = `${chartId}-summary`
@@ -137,6 +143,10 @@ export function LineChart({
           <RechartsTooltip
             cursor={{ stroke: 'var(--line-strong)', strokeDasharray: '3 3' }}
             content={tooltipContent ?? <LineChartTooltip yFormat={yFormat} />}
+            portal={tooltipPortal}
+            wrapperStyle={tooltipWrapperStyle}
+            trigger={persistentTooltip ? 'click' : 'hover'}
+            defaultIndex={persistentTooltip ? data.length - 1 : undefined}
           />
           {meta.map(({ key, series: entry }) => (
             <Line

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { LineChart, type LineChartProps, type LineChartTooltipPayloadItem } from './LineChart'
 import {
   formatChartAttribution,
@@ -18,12 +19,19 @@ const chartDetailDataKey = (key: string) => `${key}Detail`
 
 export function TeamHistoryLineChart({ yFormat, ...props }: TeamHistoryLineChartProps) {
   const formatValue = yFormat ?? defaultValueFormat
+  const [detailsPortal, setDetailsPortal] = useState<HTMLDivElement | null>(null)
   return (
-    <LineChart
-      {...props}
-      yFormat={formatValue}
-      tooltipContent={<TeamHistoryTooltip yFormat={formatValue} />}
-    />
+    <div className="min-w-0">
+      <LineChart
+        {...props}
+        yFormat={formatValue}
+        tooltipContent={<TeamHistoryTooltip yFormat={formatValue} />}
+        tooltipPortal={detailsPortal}
+        tooltipWrapperStyle={{ position: 'static', width: '100%' }}
+        persistentTooltip
+      />
+      <div ref={setDetailsPortal} className="min-w-0 px-[18px] pb-3" role="region" aria-label="Selected chart point details" />
+    </div>
   )
 }
 
@@ -57,15 +65,14 @@ function TeamHistoryTooltip({
     .filter((row): row is NonNullable<typeof row> => row !== null)
 
   if (rows.length === 0) return null
-
   return (
-    <div className="pointer-events-auto static z-2 grid max-h-[260px] min-w-[260px] max-w-[min(420px,86vw)] gap-2 overflow-y-auto overscroll-contain rounded-[var(--r)] border border-[var(--line-strong)] bg-[oklch(0.15_0.006_250/0.96)] px-[11px] py-[9px] text-[0.78rem] whitespace-normal shadow-[var(--shadow-2)]">
+    <div className="grid min-w-0 gap-2 border-t border-[var(--line)] pt-3 text-[0.78rem] whitespace-normal">
       <b className="mb-0.5 text-[0.74rem] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
-      <div className="grid gap-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
         {rows.map((row) => {
           const closeNote = dailyCloseNote(row.detail)
           return (
-            <div className="grid gap-1" key={row.key}>
+            <div className="grid min-w-0 content-start gap-1" key={row.key}>
               <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-[var(--muted)]">
                 <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
                 <em className="min-w-0 overflow-hidden text-ellipsis not-italic">{row.label}</em>
@@ -91,17 +98,12 @@ function TeamHistoryTooltip({
 function TooltipMatchList({ detail }: { detail?: ChartPointDetail }) {
   const matches = detail?.dayMatches
   if (!matches || matches.length <= 1) return null
-  const listedMatches = matches
-  if (listedMatches.length === 0) return null
-  const visibleMatches = listedMatches.slice(-4)
-  const hiddenCount = listedMatches.length - visibleMatches.length
   return (
     <div className="ml-5 grid gap-[5px] text-[0.7rem] leading-[1.35] text-[var(--muted)] [&>div]:[overflow-wrap:anywhere]">
-      {visibleMatches.map((match, index) => {
+      {matches.map((match, index) => {
         const label = formatChartInfluence(match)
         return label ? <div key={`${match.event ?? 'match'}-${match.opponent ?? index}-${index}`}>{label}</div> : null
       })}
-      {hiddenCount > 0 ? <div>+{hiddenCount} earlier</div> : null}
     </div>
   )
 }
@@ -116,7 +118,6 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
     : undefined
   const attribution = (detail.model?.componentAttribution ?? detail.model?.attribution ?? [])
     .toSorted((left, right) => Math.abs(right.value) - Math.abs(left.value))
-    .slice(0, 4)
   const otherDelta = nonMatchDeltaFor(detail)
 
   if (!expected && !residual && attribution.length === 0 && typeof otherDelta !== 'number') return null
