@@ -248,7 +248,7 @@ function App() {
             </span>
             <div className="min-w-0">
               <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.94rem] tracking-normal text-[var(--text-strong)]">Power Index</b>
-              <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] tracking-[0.13em] text-[var(--faint)] uppercase">LoL Esports</span>
+              <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] tracking-[0.13em] text-[var(--faint)] uppercase">LoL Esports Rankings</span>
             </div>
           </a>
         <div className="hidden">Compare</div>
