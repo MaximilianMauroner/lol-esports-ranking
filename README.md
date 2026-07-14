@@ -99,7 +99,7 @@ pnpm run railway:refresh-once
 
 `RANKING_REFRESH_MODE=shadow` probes overlapping LoL Esports schedule pages, records strictly confirmed completed matches, and never calls Oracle or Leaguepedia. `RANKING_REFRESH_MODE=gated` calls scored providers only when a confirmed pending match is due for ingestion or an explicitly enabled correction audit is due. Trigger state and a fencing lease live in the Railway bucket, exact reconciliations acknowledge pending matches, and successful gated publishes use immutable `rankings/generations/<run-id>/data/**` objects before promoting `rankings/active-generation.json`. The default remains `legacy` until shadow metrics have been reviewed.
 
-For cost/speed-constrained production refreshes, set `RANKING_REFRESH_LOOKBACK_DAYS=7` and choose a practical `RANKING_REFRESH_BOOTSTRAP_START`, such as `2025-01-01`. With an existing raw baseline, each hourly run downloads only the rolling 7-day source window and merges those files into `data/raw` before crunching, so the ranking model still sees the restored baseline plus the current lookback window. If a fresh Railway container has no raw baseline, the refresh first restores `rankings/raw/files/**` from the Bucket; if no bucket baseline exists yet, it bootstraps once from `RANKING_REFRESH_BOOTSTRAP_START` through today and then subsequent hourly runs use the lookback window. Earlier bootstrap dates improve historical coverage at the cost of slower first runs and larger raw storage; later dates are faster and cheaper but intentionally narrow the ranking context.
+For cost/speed-constrained production refreshes, set `RANKING_REFRESH_LOOKBACK_DAYS=7` and choose a practical `RANKING_REFRESH_BOOTSTRAP_START`, such as `2025-01-01`. With an existing raw baseline, each scheduled run downloads only the rolling 7-day source window and merges those files into `data/raw` before crunching, so the ranking model still sees the restored baseline plus the current lookback window. If a fresh Railway container has no raw baseline, the refresh first restores `rankings/raw/files/**` from the Bucket; if no bucket baseline exists yet, it bootstraps once from `RANKING_REFRESH_BOOTSTRAP_START` through today and then subsequent scheduled runs use the lookback window. Earlier bootstrap dates improve historical coverage at the cost of slower first runs and larger raw storage; later dates are faster and cheaper but intentionally narrow the ranking context.
 
 Use a Railway Storage Bucket for generated artifacts that should not live in Git. Railway Buckets are private S3-compatible storage, so the app proxies `/data/*` through the Railway server instead of exposing the bucket publicly. The refresh job uploads:
 
@@ -145,7 +145,7 @@ Recommended Railway variables:
 
 `GET /api/live` reports process liveness, `GET /api/ready` verifies app and ranking data availability, and `GET /api/scheduler` exposes non-sensitive detector counts and timing. The legacy `GET /api/health` remains available. `POST /api/refresh` starts a manual recovery refresh when `Authorization: Bearer $CRON_SECRET` matches.
 
-Railway's dedicated cron service should run `pnpm run railway:refresh-once` every 10-15 minutes. The bucket is the shared durable state and publish target, so the cron container can exit after each invocation and the web service can serve the promoted generation independently.
+Railway's dedicated cron service should run `pnpm run railway:refresh-once` every 6 hours. The bucket is the shared durable state and publish target, so the cron container can exit after each invocation and the web service can serve the promoted generation independently.
 
 To override Oracle discovery with direct CSV URLs, include them in the download step:
 
@@ -290,7 +290,7 @@ See [docs/ideal-match-impact-model.md](/home/codex/work/lol-esports-ranking/docs
 - `src/lib/importers/oraclesElixir.ts`: Oracle's Elixir CSV parser and normalizer.
 - `src/data/rankingConfig.ts`: event-tier K values and factor labels.
 - `scripts/build-static-snapshot.ts`: writes the full derived artifact plus compact browser summary/shards.
-- `scripts/refresh-data-if-changed.mjs`: Railway/local wrapper that downloads staged raw data hourly and crunches only when source content changed.
+- `scripts/refresh-data-if-changed.mjs`: Railway/local wrapper that downloads staged raw data on each scheduled run and crunches only when source content changed.
 - `scripts/railway-bucket.mjs`: Railway Bucket S3 helper for publishing generated artifacts and proxying `/data/*`.
 - `scripts/railway-server.mjs`: Railway production server for `dist/`, live `/data` artifacts, health checks, and the background refresh loop.
 - `scripts/fetch-leaguepedia.mjs`: Leaguepedia Cargo match fetcher.
