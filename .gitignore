@@ -40,6 +40,8 @@ public/data/**
 !public/data/history/region-series.json
 !public/data/history/team-series/
 !public/data/history/team-series/*.json
+!public/data/history/tournament-moves/
+!public/data/history/tournament-moves/*.json
 !public/data/scopes/
 !public/data/scopes/*.json
 !public/data/matches/
