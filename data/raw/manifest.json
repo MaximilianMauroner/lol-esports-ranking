@@ -1,14 +1,15 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-11T09:45:26.594Z",
+  "generatedAt": "2026-07-16T14:21:35.498Z",
   "start": "2025-01-01",
-  "end": "2026-07-11",
+  "end": "2026-07-16",
   "files": {
     "leaguepediaJson": [
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json",
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-06_to_2026-07-08.json",
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-09_to_2026-07-10.json",
-      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-04_to_2026-07-11.json"
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-04_to_2026-07-11.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-12_to_2026-07-16.json"
     ],
     "oracleCsv": [
       "/home/codex/work/lol-esports-ranking/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
@@ -17,7 +18,8 @@
     "lolEsportsJson": [
       "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2011-01-01_to_2026-07-09.json",
       "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-09_to_2026-07-10.json",
-      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-04_to_2026-07-11.json"
+      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-04_to_2026-07-11.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2011-01-01_to_2026-07-16.json"
     ]
   },
   "sources": {
@@ -31,24 +33,20 @@
       "failures": [],
       "skipped": false,
       "required": false,
-      "unsupportedApi": true,
-      "previousStatus": "downloaded",
-      "latestStatus": "downloaded"
+      "unsupportedApi": true
     },
     "oracle": {
       "role": "primary",
-      "status": "downloaded",
+      "status": "reused",
       "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH",
       "discoveredCount": 13,
-      "downloadedCount": 1,
-      "downloadedThisRun": 1,
-      "failedCount": 0,
-      "failedThisRun": 0,
+      "downloadedCount": 0,
+      "downloadedThisRun": 0,
+      "failedCount": 13,
+      "failedThisRun": 13,
       "failures": [],
       "skipped": false,
-      "required": false,
-      "previousStatus": "failed",
-      "latestStatus": "downloaded"
+      "required": false
     },
     "leaguepedia": {
       "role": "backup-gap-fill",
@@ -59,14 +57,16 @@
       "failedThisRun": 0,
       "failures": [],
       "skipped": false,
-      "required": false,
-      "previousStatus": "downloaded",
-      "latestStatus": "downloaded"
+      "required": false
     }
   },
-  "warnings": [],
+  "warnings": [
+    "Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-12 through 2026-07-16 scored window successfully.",
+    "Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines.",
+    "LoL Esports schedule APIs are unsupported reference endpoints; the refreshed cache is reference-only."
+  ],
   "refreshWindow": {
-    "start": "2026-07-04",
-    "end": "2026-07-11"
+    "start": "2026-07-12",
+    "end": "2026-07-16"
   }
 }

@@ -100,6 +100,7 @@ const server = createServer(async (request, response) => {
         cacheControl: cacheControlForDataPath(relativeDataPath),
         headOnly: request.method === 'HEAD',
         requestHeaders: request.headers,
+        requestedGeneration: url.searchParams.get('v') || undefined,
       })
       return
     }
@@ -286,7 +287,16 @@ async function serveDataFile(response, relativePath, options) {
     try {
       const servedBucket = await tryServeBucketFile(response, safePath, options)
       if (servedBucket) return
+      if (options.requestedGeneration) {
+        sendJson(response, 404, { ok: false, error: 'Versioned data artifact not found' })
+        return
+      }
     } catch (error) {
+      if (options.requestedGeneration) {
+        console.warn(`Versioned bucket data failed for ${safePath}: ${error instanceof Error ? error.message : String(error)}`)
+        sendJson(response, 502, { ok: false, error: 'Versioned data artifact unavailable' })
+        return
+      }
       console.warn(`Bucket data fallback used for ${safePath}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
@@ -297,8 +307,8 @@ async function serveDataFile(response, relativePath, options) {
   sendJson(response, 404, { ok: false, error: 'Not found' })
 }
 
-async function tryServeBucketFile(response, relativePath, { cacheControl, headOnly, requestHeaders }) {
-  const object = await getBucketObject(relativePath, { config: bucketConfig })
+async function tryServeBucketFile(response, relativePath, { cacheControl, headOnly, requestHeaders, requestedGeneration }) {
+  const object = await getBucketObject(relativePath, { config: bucketConfig, generationId: requestedGeneration })
   if (!object.found) return false
 
   const contentType = object.contentType ?? contentTypeForPath(relativePath)

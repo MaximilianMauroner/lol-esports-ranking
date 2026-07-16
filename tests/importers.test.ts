@@ -718,6 +718,7 @@ test('team identity cleanup maps exact source display aliases only', () => {
   assert.equal(canonicalTeamNameFor('ZEN Esports (Vietnamese Team)'), 'ZEN Esports')
   assert.equal(canonicalTeamNameFor('9Gaming Esports'), '9Gaming')
   assert.equal(canonicalTeamNameFor('AG.AL'), "Anyone's Legend")
+  assert.equal(canonicalTeamNameFor('MIBR.LOS'), 'LØS')
   assert.equal(canonicalTeamNameFor('OKSavingsBank BRION'), 'HANJIN BRION')
   assert.equal(canonicalTeamNameFor('BRION'), 'HANJIN BRION')
   assert.equal(canonicalTeamNameFor('DN Freecs'), 'DN SOOPers')

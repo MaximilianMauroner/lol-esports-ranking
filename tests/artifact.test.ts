@@ -14,6 +14,9 @@ import {
   parsePublicTeamHistoryShard,
   parsePublicTournamentMovementIndex,
   parsePublicTournamentMovementShard,
+  parsePublicMatchHistoryIndex,
+  parsePublicMatchHistoryCatalog,
+  parsePublicMatchHistoryPage,
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   snapshotKey,
   snapshotShardUrlPathForKey,
@@ -31,9 +34,11 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(existsSync('public/data/ranking-summary.json'), true)
   assert.ok(statSync('public/data/ranking-summary.json').size < 250_000)
   assert.ok(statSync('public/data/entities/players.json').size < 1_100_000)
+  assert.equal(existsSync('public/data/matches/index.json'), true)
 
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
+  const matchHistoryIndex = parsePublicMatchHistoryIndex(await readJson('public/data/matches/index.json'))
   const defaultShardEntry = summary.snapshotIndex[summary.defaultSnapshotKey]
   const defaultShard = defaultShardEntry ? parsePublicRankingShard(await readJson(publicPathForDataUrl(defaultShardEntry.url))) : undefined
   const defaultSnapshot = defaultShard
@@ -42,6 +47,16 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(summary.artifactKind, 'public-ranking-manifest')
   assert.equal(summary.schemaVersion, PUBLIC_ARTIFACT_SCHEMA_VERSION)
   assert.equal(summary.summaryMode, 'browser-summary')
+  assert.equal(summary.matchHistoryIndexUrl?.startsWith('/data/matches/index.json?v='), true)
+  assert.equal(matchHistoryIndex.artifactMeta.runId, summary.artifactMeta?.runId)
+  const matchHistory2026 = parsePublicMatchHistoryCatalog(await readJson(publicPathForDataUrl(matchHistoryIndex.scopeIndex['2026__All__All'].url)))
+  const matchHistory2026Page = parsePublicMatchHistoryPage(await readJson(publicPathForDataUrl(matchHistory2026.pages[0].url)))
+  assert.equal(matchHistory2026.gameCount, summary.snapshotIndex['2026__All__All'].matchCount)
+  assert.equal(matchHistory2026.pages.length > 1, true)
+  assert.equal(matchHistory2026Page.seriesCount <= 25, true)
+  assert.equal(matchHistory2026Page.gameCount < matchHistory2026.gameCount, true)
+  assert.equal(matchHistory2026Page.matches.some((match) => match.impact.unit === 'series-applied' && typeof match.impact.teamA === 'number'), true)
+  assert.equal(matchHistory2026Page.matches.some((match) => match.impact.unit === 'held'), true)
   assert.equal(summary.snapshots, undefined)
   assert.ok(defaultSnapshot)
   assert.equal(defaultSnapshot.artifactKind, 'public-snapshot-shard')
@@ -137,7 +152,7 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
   const giantx = standingFor(shard, 'GiantX')
 
   assert.equal(lyon.eligibility.eligible, true)
-  assert.deepEqual([lyon.wins, lyon.losses], [20, 9])
+  assert.deepEqual([lyon.wins, lyon.losses], [20, 11])
   assert.deepEqual([drx.wins, drx.losses], [9, 20])
   assert.deepEqual([giantx.wins, giantx.losses], [15, 14])
   assert.equal(lyon.recentMatches.some((match) => match.opponent === 'Team Secret Whales' && match.result === 'W' && match.games === 3), true)
@@ -153,8 +168,8 @@ test('generated 2026 scope records T1 current MSI evidence after Gen.G', async (
   const t1 = standingFor(shard, 'T1')
   const geng = standingFor(shard, 'Gen.G')
 
-  assert.deepEqual([t1.wins, t1.losses], [27, 9])
-  assert.deepEqual([geng.wins, geng.losses], [25, 6])
+  assert.deepEqual([t1.wins, t1.losses], [29, 10])
+  assert.deepEqual([geng.wins, geng.losses], [27, 6])
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'Bilibili Gaming' && match.result === 'L' && match.games === 5), true)
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'Team Liquid' && match.result === 'W' && match.games === 3), true)
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'G2 Esports' && match.result === 'L' && match.games === 4), true)
@@ -353,7 +368,7 @@ test('public tournament movement index resolves versioned, boundary-correct shar
       assert.equal(team.ratingDelta, team.endRating - team.startRating)
     }
   }
-  assert.equal(shards.has('ewc:2026'), false, 'pre-event EWC qualifier rows must not create a main-event shard')
+  assert.equal(shards.get('ewc:2026')?.startDate, '2026-07-15', 'EWC qualifiers must not move the main-event opening boundary')
   assert.equal(shards.get('worlds:2025')?.startDate, '2025-10-14', 'regional finals must not move the Worlds opening boundary')
   assert.equal(shards.get('msi:2025')?.teams.some((team) => team.team === 'GAM Esports'), true)
   assert.equal(shards.get('ewc:2025')?.teams.some((team) => team.team === 'GAM Esports'), true)

@@ -42,6 +42,10 @@ public/data/**
 !public/data/history/team-series/*.json
 !public/data/scopes/
 !public/data/scopes/*.json
+!public/data/matches/
+!public/data/matches/*.json
+!public/data/matches/pages/
+!public/data/matches/pages/*.json
 
 # Do not ship/re-add full public snapshots; they can exceed GitHub limits.
 public/data/ranking-snapshot.json

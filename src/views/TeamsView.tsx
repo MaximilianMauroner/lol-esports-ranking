@@ -1393,7 +1393,7 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
   const notes = (data?.notes ?? []).filter(Boolean).slice(0, 2)
 
   return (
-    <details className="group w-[min(100%,720px)] self-end overflow-hidden rounded-[var(--r-lg)] border border-[var(--line)] bg-[oklch(0.155_0.004_250)]">
+    <details className="group w-full overflow-hidden rounded-[var(--r-lg)] border border-[var(--line)] bg-[oklch(0.155_0.004_250)]">
       <summary className="grid cursor-pointer list-none gap-[3px] px-4 py-[13px] text-[var(--text-strong)] after:col-start-2 after:row-span-2 after:row-start-1 after:self-center after:justify-self-end after:text-base after:leading-none after:text-[var(--muted)] after:content-['+'] group-open:border-b group-open:border-[var(--line)] group-open:after:content-['-'] [&::-webkit-details-marker]:hidden">
         <span className="text-[0.92rem] font-bold">Data &amp; sources</span>
         <small className="text-[0.74rem] text-[var(--faint)]">Coverage, config, providers</small>

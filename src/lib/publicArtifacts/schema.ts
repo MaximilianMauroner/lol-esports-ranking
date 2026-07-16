@@ -3,6 +3,7 @@ import type {
   DeservedStandingLeaderboard,
   FactorBreakdown,
   LeagueStrength,
+  MatchRecord,
   PlayerAppearanceSummary,
   PlayerDiagnostics,
   PlayerIndividualResidual,
@@ -14,6 +15,7 @@ import type {
   Role,
   RosterBasis,
   SourceTrace,
+  SeriesState,
   TeamEligibility,
   TeamHistoryPoint,
 } from '../../types'
@@ -601,6 +603,115 @@ export type PublicRegionHistoryDirectory = {
   scopes: Record<string, PublicRegionHistoryScope>
 }
 
+export type PublicMatchHistoryTeam = {
+  id: string
+  name: string
+  code: string
+}
+
+export type PublicMatchHistoryImpact = {
+  unit: 'held' | 'series-applied'
+  teamA?: number
+  teamB?: number
+  expectedTeamA?: number
+  eventWeight?: number
+}
+
+export type PublicMatchHistoryEntry = {
+  id: string
+  date: string
+  datetimeUtc?: string
+  event: string
+  phase: string
+  league: string
+  region: Region
+  patch: string
+  bestOf: number
+  gameNumber: number
+  seriesId: string
+  seriesState: SeriesState
+  seriesWinsA: number
+  seriesWinsB: number
+  teamA: PublicMatchHistoryTeam
+  teamB: PublicMatchHistoryTeam
+  winnerId: string
+  impact: PublicMatchHistoryImpact
+  source: {
+    provider: NonNullable<MatchRecord['sourceProvider']>
+    completeness?: string
+    gameId?: string
+    matchId?: string
+    officialGameId?: string
+    url?: string
+  }
+}
+
+export type PublicMatchHistoryScopeIndexEntry = {
+  filter: SnapshotFilter
+  url: string
+  gameCount: number
+  seriesCount: number
+  pageCount: number
+}
+
+export type PublicMatchHistoryIndex = {
+  artifactKind: 'match-history-index'
+  schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
+  artifactMeta: ArtifactMeta
+  generatedAt: string
+  modelVersion: string
+  modelConfigHash: string
+  defaultScopeKey: string
+  scopeIndex: Record<string, PublicMatchHistoryScopeIndexEntry>
+}
+
+export type PublicMatchHistorySeriesRef = {
+  id: string
+  date: string
+  datetimeUtc?: string
+  event: string
+  league: string
+  teamA: PublicMatchHistoryTeam
+  teamB: PublicMatchHistoryTeam
+  page: number
+  gameCount: number
+}
+
+export type PublicMatchHistoryPageRef = {
+  page: number
+  url: string
+  seriesCount: number
+  gameCount: number
+}
+
+export type PublicMatchHistoryCatalog = {
+  artifactKind: 'match-history-catalog'
+  schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
+  artifactMeta: ArtifactMeta
+  generatedAt: string
+  modelVersion: string
+  modelConfigHash: string
+  filter: SnapshotFilter
+  gameCount: number
+  seriesCount: number
+  pages: PublicMatchHistoryPageRef[]
+  series: PublicMatchHistorySeriesRef[]
+}
+
+export type PublicMatchHistoryPage = {
+  artifactKind: 'match-history-page'
+  schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
+  artifactMeta: ArtifactMeta
+  generatedAt: string
+  modelVersion: string
+  modelConfigHash: string
+  filter: SnapshotFilter
+  page: number
+  seriesCount: number
+  gameCount: number
+  matches: PublicMatchHistoryEntry[]
+}
+
 export type PublicRankingManifest = {
   artifactKind: 'public-ranking-manifest'
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
@@ -639,6 +750,7 @@ export type PublicRankingManifest = {
   teamHistoryUrl?: string
   regionHistoryUrl?: string
   tournamentMovementIndexUrl: string
+  matchHistoryIndexUrl?: string
   teamCount: number
   snapshotIndex: Record<string, PublicSnapshotIndexEntry>
   snapshots?: Record<string, never>
@@ -984,6 +1096,7 @@ export function parsePublicRankingManifest(value: unknown): PublicRankingManifes
   assertOptionalDataUrlPath(value.playerDirectoryUrl, 'ranking manifest playerDirectoryUrl')
   assertOptionalDataUrlPath(value.teamDirectoryUrl, 'ranking manifest teamDirectoryUrl')
   assertOptionalDataUrlPath(value.teamHistoryIndexUrl, 'ranking manifest teamHistoryIndexUrl', '/data/history')
+  assertOptionalDataUrlPath(value.matchHistoryIndexUrl, 'ranking manifest matchHistoryIndexUrl', '/data/matches')
   assertOptionalDataUrlPath(value.teamHistoryUrl, 'ranking manifest teamHistoryUrl', '/data/history')
   assertOptionalDataUrlPath(value.regionHistoryUrl, 'ranking manifest regionHistoryUrl', '/data/history')
   assertArtifactUrl(value.tournamentMovementIndexUrl, 'ranking manifest tournamentMovementIndexUrl', '/data/history/tournament-moves')
@@ -1210,6 +1323,118 @@ export function parsePublicRegionHistory(value: unknown): PublicRegionHistoryDir
     throw new Error('Invalid public artifact: region history defaultScopeKey must exist in scopes')
   }
   return value as PublicRegionHistoryDirectory
+}
+
+export function parsePublicMatchHistoryIndex(value: unknown): PublicMatchHistoryIndex {
+  assertObject(value, 'match history index')
+  assertEqual(value.artifactKind, 'match-history-index', 'match history index artifactKind')
+  assertSchemaVersion(value, 'match history index')
+  assertArtifactMeta(value.artifactMeta, 'match history index artifactMeta')
+  assertString(value.generatedAt, 'match history index generatedAt')
+  assertString(value.modelVersion, 'match history index modelVersion')
+  assertString(value.modelConfigHash, 'match history index modelConfigHash')
+  assertString(value.defaultScopeKey, 'match history index defaultScopeKey')
+  assertObject(value.scopeIndex, 'match history index scopeIndex')
+  for (const [key, entry] of Object.entries(value.scopeIndex)) {
+    assertObject(entry, `match history index scopeIndex ${key}`)
+    assertSnapshotFilter(entry.filter, `match history index scopeIndex ${key} filter`)
+    assertArtifactUrl(entry.url, `match history index scopeIndex ${key} url`, '/data/matches')
+    assertNonNegativeInteger(entry.gameCount, `match history index scopeIndex ${key} gameCount`)
+    assertNonNegativeInteger(entry.seriesCount, `match history index scopeIndex ${key} seriesCount`)
+    assertNonNegativeInteger(entry.pageCount, `match history index scopeIndex ${key} pageCount`)
+    if (snapshotKey(entry.filter as SnapshotFilter) !== key) throw new Error(`Invalid public artifact: match history index scopeIndex key ${key} must match its filter`)
+  }
+  if (!value.scopeIndex[value.defaultScopeKey as string]) throw new Error('Invalid public artifact: match history index defaultScopeKey must exist in scopeIndex')
+  return value as PublicMatchHistoryIndex
+}
+
+export function parsePublicMatchHistoryCatalog(value: unknown): PublicMatchHistoryCatalog {
+  assertObject(value, 'match history catalog')
+  assertEqual(value.artifactKind, 'match-history-catalog', 'match history catalog artifactKind')
+  assertMatchHistoryArtifactHeader(value, 'match history catalog')
+  assertNonNegativeInteger(value.gameCount, 'match history catalog gameCount')
+  assertNonNegativeInteger(value.seriesCount, 'match history catalog seriesCount')
+  assertArray(value.pages, 'match history catalog pages')
+  value.pages.forEach((page, index) => {
+    assertObject(page, `match history catalog pages[${index}]`)
+    assertNonNegativeInteger(page.page, `match history catalog pages[${index}] page`)
+    assertArtifactUrl(page.url, `match history catalog pages[${index}] url`, '/data/matches')
+    assertNonNegativeInteger(page.seriesCount, `match history catalog pages[${index}] seriesCount`)
+    assertNonNegativeInteger(page.gameCount, `match history catalog pages[${index}] gameCount`)
+  })
+  assertArray(value.series, 'match history catalog series')
+  value.series.forEach((entry, index) => assertPublicMatchHistorySeriesRef(entry, `match history catalog series[${index}]`))
+  if (value.series.length !== value.seriesCount) throw new Error('Invalid public artifact: match history catalog seriesCount must match series length')
+  return value as PublicMatchHistoryCatalog
+}
+
+export function parsePublicMatchHistoryPage(value: unknown): PublicMatchHistoryPage {
+  assertObject(value, 'match history page')
+  assertEqual(value.artifactKind, 'match-history-page', 'match history page artifactKind')
+  assertMatchHistoryArtifactHeader(value, 'match history page')
+  assertNonNegativeInteger(value.page, 'match history page page')
+  assertNonNegativeInteger(value.seriesCount, 'match history page seriesCount')
+  assertNonNegativeInteger(value.gameCount, 'match history page gameCount')
+  assertArray(value.matches, 'match history page matches')
+  value.matches.forEach((entry, index) => assertPublicMatchHistoryEntry(entry, `match history page matches[${index}]`))
+  if (value.matches.length !== value.gameCount) throw new Error('Invalid public artifact: match history page gameCount must match matches length')
+  if (new Set((value.matches as PublicMatchHistoryEntry[]).map((match) => match.seriesId)).size !== value.seriesCount) throw new Error('Invalid public artifact: match history page seriesCount must match distinct series')
+  return value as PublicMatchHistoryPage
+}
+
+function assertMatchHistoryArtifactHeader(value: Record<string, unknown>, label: string) {
+  assertSchemaVersion(value, label)
+  assertArtifactMeta(value.artifactMeta, `${label} artifactMeta`)
+  assertString(value.generatedAt, `${label} generatedAt`)
+  assertString(value.modelVersion, `${label} modelVersion`)
+  assertString(value.modelConfigHash, `${label} modelConfigHash`)
+  assertSnapshotFilter(value.filter, `${label} filter`)
+}
+
+function assertPublicMatchHistorySeriesRef(value: unknown, label: string) {
+  assertObject(value, label)
+  for (const key of ['id', 'date', 'event', 'league'] as const) assertString(value[key], `${label} ${key}`)
+  assertOptionalString(value.datetimeUtc, `${label} datetimeUtc`)
+  assertNonNegativeInteger(value.page, `${label} page`)
+  assertNonNegativeInteger(value.gameCount, `${label} gameCount`)
+  for (const teamKey of ['teamA', 'teamB'] as const) {
+    const team = value[teamKey]
+    assertObject(team, `${label} ${teamKey}`)
+    assertString(team.id, `${label} ${teamKey} id`)
+    assertString(team.name, `${label} ${teamKey} name`)
+    assertString(team.code, `${label} ${teamKey} code`)
+  }
+}
+
+function assertPublicMatchHistoryEntry(value: unknown, label: string) {
+  assertObject(value, label)
+  for (const key of ['id', 'date', 'event', 'phase', 'league', 'patch', 'seriesId', 'winnerId'] as const) assertString(value[key], `${label} ${key}`)
+  assertOptionalString(value.datetimeUtc, `${label} datetimeUtc`)
+  assertString(value.region, `${label} region`)
+  assertNonNegativeInteger(value.bestOf, `${label} bestOf`)
+  assertNonNegativeInteger(value.gameNumber, `${label} gameNumber`)
+  assertEnum(value.seriesState, ['scheduled', 'ongoing', 'completed', 'unknown'], `${label} seriesState`)
+  assertNonNegativeInteger(value.seriesWinsA, `${label} seriesWinsA`)
+  assertNonNegativeInteger(value.seriesWinsB, `${label} seriesWinsB`)
+  for (const teamKey of ['teamA', 'teamB'] as const) {
+    const team = value[teamKey]
+    assertObject(team, `${label} ${teamKey}`)
+    assertString(team.id, `${label} ${teamKey} id`)
+    assertString(team.name, `${label} ${teamKey} name`)
+    assertString(team.code, `${label} ${teamKey} code`)
+  }
+  const teamA = value.teamA as PublicMatchHistoryTeam
+  const teamB = value.teamB as PublicMatchHistoryTeam
+  if (value.winnerId !== teamA.id && value.winnerId !== teamB.id) throw new Error(`Invalid public artifact: ${label} winnerId must identify a team`)
+  assertObject(value.impact, `${label} impact`)
+  assertEnum(value.impact.unit, ['held', 'series-applied'], `${label} impact unit`)
+  assertOptionalNumber(value.impact.teamA, `${label} impact teamA`)
+  assertOptionalNumber(value.impact.teamB, `${label} impact teamB`)
+  assertOptionalNumber(value.impact.expectedTeamA, `${label} impact expectedTeamA`)
+  assertOptionalNumber(value.impact.eventWeight, `${label} impact eventWeight`)
+  assertObject(value.source, `${label} source`)
+  assertEnum(value.source.provider, ['oracles-elixir', 'leaguepedia-cargo', 'seed'], `${label} source provider`)
+  for (const key of ['completeness', 'gameId', 'matchId', 'officialGameId', 'url'] as const) assertOptionalString(value.source[key], `${label} source ${key}`)
 }
 
 function assertPublicSnapshotIndexEntry(key: string, value: unknown): asserts value is PublicSnapshotIndexEntry {

@@ -1,6 +1,7 @@
 import {
   createPlayerDirectory,
   createRegionHistory,
+  createMatchHistoryArtifacts,
   createStaticRankingSummaryData,
   createTeamDirectory,
   createTeamHistoryArtifacts,
@@ -11,6 +12,9 @@ import {
   parsePublicRankingManifest,
   parsePublicRankingShard,
   parsePublicRegionHistory,
+  parsePublicMatchHistoryCatalog,
+  parsePublicMatchHistoryIndex,
+  parsePublicMatchHistoryPage,
   parsePublicTeamDirectory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
@@ -58,6 +62,9 @@ export const PUBLIC_ARTIFACT_PATHS = {
   regionHistory: 'history/region-series.json',
   tournamentMovementIndex: 'history/tournament-moves/index.json',
   tournamentMovementShardDir: 'history/tournament-moves',
+  matchHistoryIndex: 'matches/index.json',
+  matchHistoryShardDir: 'matches',
+  matchHistoryPageDir: 'matches/pages',
   scopeDir: 'scopes',
 } as const
 
@@ -79,6 +86,14 @@ export function publicTeamHistoryShardPath(key: string) {
 
 export function publicTournamentMovementShardPath(id: TournamentInstanceId) {
   return `${PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir}/${tournamentMovementShardFileName(id)}`
+}
+
+export function publicMatchHistoryShardPath(key: string) {
+  return `${PUBLIC_ARTIFACT_PATHS.matchHistoryShardDir}/${scopeArtifactFileNameForKey(key)}`
+}
+
+export function publicMatchHistoryPagePath(key: string, page: number) {
+  return `${PUBLIC_ARTIFACT_PATHS.matchHistoryPageDir}/${scopeArtifactFileNameForKey(key).replace(/\.json$/, '')}-${page}.json`
 }
 
 export function createPublicArtifactWritePlan(
@@ -106,6 +121,10 @@ export function createPublicArtifactWritePlan(
   const tournamentMovements = createTournamentMovementArtifacts(data, {
     tournamentMovementUrlForId: (id) => versionedUrlForPath(publicTournamentMovementShardPath(id)),
   })
+  const matchHistory = createMatchHistoryArtifacts(data, {
+    matchHistoryCatalogUrlForKey: (key) => versionedUrlForPath(publicMatchHistoryShardPath(key)),
+    matchHistoryPageUrlForKey: (key, page) => versionedUrlForPath(publicMatchHistoryPagePath(key, page)),
+  })
   const summary = createStaticRankingSummaryData(data, {
     fullSnapshotUrl,
     playerDirectoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.players),
@@ -113,6 +132,7 @@ export function createPublicArtifactWritePlan(
     teamHistoryIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex),
     regionHistoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.regionHistory),
     tournamentMovementIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex),
+    matchHistoryIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex),
     snapshotUrlForKey: (key) => versionedUrlForPath(publicScopeArtifactPath(key)),
   })
 
@@ -128,6 +148,13 @@ export function createPublicArtifactWritePlan(
     ...Object.entries(tournamentMovements.shards).map(([id, shard]) => (
       write('history', publicTournamentMovementShardPath(id as TournamentInstanceId), shard, parsePublicTournamentMovementShard)
     )),
+    write('history', PUBLIC_ARTIFACT_PATHS.matchHistoryIndex, matchHistory.index, parsePublicMatchHistoryIndex),
+    ...Object.entries(matchHistory.catalogs).map(([key, catalog]) => (
+      write('history', publicMatchHistoryShardPath(key), catalog, parsePublicMatchHistoryCatalog)
+    )),
+    ...Object.entries(matchHistory.pages).flatMap(([key, pages]) => Object.entries(pages).map(([page, shard]) => (
+      write('history', publicMatchHistoryPagePath(key, Number(page)), shard, parsePublicMatchHistoryPage)
+    ))),
     ...Object.entries(summary.snapshots).map(([key, snapshot]) => (
       write('scope', publicScopeArtifactPath(key), snapshot, parsePublicRankingShard)
     )),

@@ -10,6 +10,9 @@ import type {
   PublicTournamentMovementIndex,
   PublicTournamentMovementIndexEntry,
   PublicTournamentMovementShard,
+  PublicMatchHistoryCatalog,
+  PublicMatchHistoryIndex,
+  PublicMatchHistoryPage,
   SnapshotCheckpointOption,
   SnapshotFilter,
 } from '../lib/publicArtifacts/schema'
@@ -22,6 +25,9 @@ import {
   parsePublicTeamHistoryShard,
   parsePublicTournamentMovementIndex,
   parsePublicTournamentMovementShard,
+  parsePublicMatchHistoryCatalog,
+  parsePublicMatchHistoryIndex,
+  parsePublicMatchHistoryPage,
   snapshotKey,
 } from '../lib/publicArtifacts/schema'
 import {
@@ -47,6 +53,11 @@ export type PlayerDirectoryState = PublicArtifactState<PublicPlayerDirectory>
 export type RegionHistoryScopeState = PublicArtifactState<PublicRegionHistoryScope>
 export type TournamentMovementIndexState = PublicArtifactState<PublicTournamentMovementIndex>
 export type TournamentMovementState = PublicArtifactState<PublicTournamentMovementShard>
+export type MatchHistoryPageState = PublicArtifactState<PublicMatchHistoryPage>
+export type MatchHistoryState = PublicArtifactState<{
+  catalog: PublicMatchHistoryCatalog
+  pages: Record<number, MatchHistoryPageState>
+}>
 
 type TeamHistoryRoot = PublicTeamHistoryDirectory | PublicTeamHistoryIndex
 type PublicArtifactLoadOptions = {
@@ -54,6 +65,7 @@ type PublicArtifactLoadOptions = {
   loadTeamHistory?: boolean
   loadRegionHistory?: boolean
   loadTournamentMovements?: boolean
+  loadMatchHistory?: boolean
   tournamentId?: TournamentInstanceId
 }
 
@@ -74,6 +86,7 @@ const PLAYERS_URL = import.meta.env.VITE_PLAYER_DATA_URL || '/data/entities/play
 const TEAM_HISTORY_INDEX_URL = import.meta.env.VITE_TEAM_HISTORY_INDEX_URL || import.meta.env.VITE_TEAM_HISTORY_URL || '/data/history/team-series/index.json'
 const REGION_HISTORY_URL = import.meta.env.VITE_REGION_HISTORY_URL || '/data/history/region-series.json'
 const TOURNAMENT_MOVEMENT_INDEX_URL = import.meta.env.VITE_TOURNAMENT_MOVEMENT_INDEX_URL || '/data/history/tournament-moves/index.json'
+const MATCH_HISTORY_INDEX_URL = import.meta.env.VITE_MATCH_HISTORY_INDEX_URL || '/data/matches/index.json'
 
 export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOptions = {}) {
   const {
@@ -81,6 +94,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     loadTeamHistory = false,
     loadRegionHistory = false,
     loadTournamentMovements = false,
+    loadMatchHistory = false,
     tournamentId,
   } = options
   const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>({ status: 'loading' })
@@ -94,6 +108,11 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   const [tournamentMovementCache, setTournamentMovementCache] = useState<Record<string, TournamentMovementCacheEntry>>({})
   const tournamentMovementCacheRef = useRef(tournamentMovementCache)
   const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
+  const [matchHistoryIndexState, setMatchHistoryIndexState] = useState<PublicArtifactState<PublicMatchHistoryIndex>>({ status: 'idle' })
+  const [matchHistoryCatalogState, setMatchHistoryCatalogState] = useState<PublicArtifactState<PublicMatchHistoryCatalog>>({ status: 'idle' })
+  const [matchHistoryPages, setMatchHistoryPages] = useState<Record<number, MatchHistoryPageState>>({})
+  const matchHistoryCatalogRef = useRef<PublicMatchHistoryCatalog | undefined>(undefined)
+  const matchHistoryPagesRef = useRef(matchHistoryPages)
   const snapshotCacheRef = useRef(snapshotCache)
 
   const data = manifestState.status === 'ready' ? manifestState.data : undefined
@@ -122,6 +141,11 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     () => resolveTournamentMovementState(tournamentMovementIndexState, tournamentMovementCache, tournamentId),
     [tournamentId, tournamentMovementCache, tournamentMovementIndexState],
   )
+  const matchHistoryState = useMemo<MatchHistoryState>(() => (
+    matchHistoryCatalogState.status === 'ready'
+      ? { status: 'ready', data: { catalog: matchHistoryCatalogState.data, pages: matchHistoryPages } }
+      : matchHistoryCatalogState
+  ), [matchHistoryCatalogState, matchHistoryPages])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -241,6 +265,91 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     void load()
     return () => controller.abort()
   }, [data, loadTournamentMovements, tournamentMovementIndexAttempt])
+
+  useEffect(() => {
+    if (!data || !loadMatchHistory) return
+    const manifest = data
+    const controller = new AbortController()
+    setMatchHistoryIndexState({ status: 'loading' })
+    async function load() {
+      try {
+        const response = await fetch(resolveArtifactUrl(manifest.matchHistoryIndexUrl ?? MATCH_HISTORY_INDEX_URL, DATA_URL), {
+          signal: controller.signal,
+          cache: 'no-cache',
+          headers: { Accept: 'application/json' },
+        })
+        if (!response.ok) {
+          setMatchHistoryIndexState({ status: response.status === 404 ? 'missing' : 'error', message: `Match history index failed with ${response.status}` })
+          return
+        }
+        const index = parsePublicMatchHistoryIndex(await response.json())
+        validateMatchHistoryRun(index, manifest)
+        setMatchHistoryIndexState({ status: 'ready', data: index })
+      } catch (error) {
+        if (isAbortError(error)) return
+        setMatchHistoryIndexState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load match history index' })
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [data, loadMatchHistory])
+
+  useEffect(() => {
+    if (!loadMatchHistory) return
+    if (matchHistoryIndexState.status !== 'ready') {
+      setMatchHistoryCatalogState(matchHistoryIndexState.status === 'idle' ? { status: 'idle' } : matchHistoryIndexState.status === 'loading' ? { status: 'loading' } : { status: matchHistoryIndexState.status, message: matchHistoryIndexState.message })
+      return
+    }
+    const index = matchHistoryIndexState.data
+    const key = snapshotKey(filter)
+    const expected = index.scopeIndex[key]
+    if (!expected) {
+      setMatchHistoryCatalogState({ status: 'missing', message: `No generated match history exists for ${scopeLabel(effectiveScope)}.` })
+      return
+    }
+    const controller = new AbortController()
+    setMatchHistoryCatalogState({ status: 'loading' })
+    setMatchHistoryPages({})
+    matchHistoryPagesRef.current = {}
+    matchHistoryCatalogRef.current = undefined
+    async function load() {
+      try {
+        const response = await fetch(resolveArtifactUrl(expected.url, DATA_URL), { signal: controller.signal, headers: { Accept: 'application/json' } })
+        if (!response.ok) throw new Error(`Match history failed with ${response.status}`)
+        const catalog = parsePublicMatchHistoryCatalog(await response.json())
+        validateMatchHistoryCatalog(key, expected, catalog, index)
+        matchHistoryCatalogRef.current = catalog
+        setMatchHistoryCatalogState({ status: 'ready', data: catalog })
+      } catch (error) {
+        if (isAbortError(error)) return
+        setMatchHistoryCatalogState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load match history' })
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [effectiveScope, filter, loadMatchHistory, matchHistoryIndexState])
+
+  useEffect(() => {
+    matchHistoryPagesRef.current = matchHistoryPages
+  }, [matchHistoryPages])
+
+  const requestMatchHistoryPages = useCallback((pageNumbers: number[]) => {
+    const catalog = matchHistoryCatalogRef.current
+    if (!catalog) return
+    for (const pageNumber of [...new Set(pageNumbers)]) {
+      const expected = catalog.pages.find((page) => page.page === pageNumber)
+      if (!expected || matchHistoryPagesRef.current[pageNumber]?.status === 'ready' || matchHistoryPagesRef.current[pageNumber]?.status === 'loading') continue
+      const loading: MatchHistoryPageState = { status: 'loading' }
+      matchHistoryPagesRef.current = { ...matchHistoryPagesRef.current, [pageNumber]: loading }
+      setMatchHistoryPages((current) => ({ ...current, [pageNumber]: loading }))
+      void loadMatchHistoryPage(catalog, expected, pageNumber).then((state) => {
+        const activeCatalog = matchHistoryCatalogRef.current
+        if (!activeCatalog || snapshotKey(activeCatalog.filter) !== snapshotKey(catalog.filter) || activeCatalog.artifactMeta.runId !== catalog.artifactMeta.runId) return
+        matchHistoryPagesRef.current = { ...matchHistoryPagesRef.current, [pageNumber]: state }
+        setMatchHistoryPages((current) => ({ ...current, [pageNumber]: state }))
+      })
+    }
+  }, [])
 
   useEffect(() => {
     snapshotCacheRef.current = snapshotCache
@@ -448,9 +557,44 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     tournamentMovementIndexState,
     tournamentMovementEntries,
     tournamentMovementState,
+    matchHistoryState,
+    requestMatchHistoryPages,
     retryTournamentMovements,
     prefetchScope,
     prefetchTournament,
+  }
+}
+
+function validateMatchHistoryRun(index: PublicMatchHistoryIndex, manifest: PublicRankingManifest) {
+  if (index.modelVersion !== manifest.model.version || index.modelConfigHash !== manifest.model.configHash || index.generatedAt !== manifest.generatedAt) {
+    throw new Error('Match history index does not match the active ranking run')
+  }
+  if (manifest.artifactMeta && index.artifactMeta.runId !== manifest.artifactMeta.runId) throw new Error('Match history index runId mismatch')
+}
+
+function validateMatchHistoryCatalog(key: string, expected: PublicMatchHistoryIndex['scopeIndex'][string], catalog: PublicMatchHistoryCatalog, index: PublicMatchHistoryIndex) {
+  if (snapshotKey(catalog.filter) !== key) throw new Error(`Match history catalog key mismatch for ${key}`)
+  if (catalog.gameCount !== expected.gameCount || catalog.seriesCount !== expected.seriesCount || catalog.pages.length !== expected.pageCount) throw new Error(`Match history catalog counts mismatch for ${key}`)
+  if (catalog.modelVersion !== index.modelVersion || catalog.modelConfigHash !== index.modelConfigHash || catalog.generatedAt !== index.generatedAt || catalog.artifactMeta.runId !== index.artifactMeta.runId) {
+    throw new Error(`Match history catalog run mismatch for ${key}`)
+  }
+}
+
+async function loadMatchHistoryPage(
+  catalog: PublicMatchHistoryCatalog,
+  expected: PublicMatchHistoryCatalog['pages'][number],
+  pageNumber: number,
+): Promise<MatchHistoryPageState> {
+  try {
+    const response = await fetch(resolveArtifactUrl(expected.url, DATA_URL), { headers: { Accept: 'application/json' } })
+    if (!response.ok) throw new Error(`Match history page ${pageNumber} failed with ${response.status}`)
+    const page = parsePublicMatchHistoryPage(await response.json())
+    if (snapshotKey(page.filter) !== snapshotKey(catalog.filter) || page.page !== pageNumber) throw new Error(`Match history page ${pageNumber} scope mismatch`)
+    if (page.seriesCount !== expected.seriesCount || page.gameCount !== expected.gameCount) throw new Error(`Match history page ${pageNumber} counts mismatch`)
+    if (page.modelVersion !== catalog.modelVersion || page.modelConfigHash !== catalog.modelConfigHash || page.generatedAt !== catalog.generatedAt || page.artifactMeta.runId !== catalog.artifactMeta.runId) throw new Error(`Match history page ${pageNumber} run mismatch`)
+    return { status: 'ready', data: page }
+  } catch (error) {
+    return { status: 'error', message: error instanceof Error ? error.message : `Unable to load match history page ${pageNumber}` }
   }
 }
 

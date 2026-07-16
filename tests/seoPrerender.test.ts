@@ -26,7 +26,7 @@ test('homepage prerender includes ranking snapshot content from public artifacts
   const topTeams = shard.standings.filter((standing) => standing.eligibility?.eligible !== false).slice(0, 5)
   let lastPosition = -1
   for (const team of topTeams) {
-    const position = html.indexOf(team.team)
+    const position = html.indexOf(escapeHtml(team.team))
     assert.ok(position > lastPosition, `${team.team} should appear in current-scope rank order`)
     lastPosition = position
   }
@@ -34,6 +34,15 @@ test('homepage prerender includes ranking snapshot content from public artifacts
 
 function escapedNotice() {
   return RIOT_PROJECT_NOTICE
+    .replace(/&/g, '&amp;')
+    .replace(/'/g, '&#39;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function escapeHtml(value: string) {
+  return value
     .replace(/&/g, '&amp;')
     .replace(/'/g, '&#39;')
     .replace(/"/g, '&quot;')

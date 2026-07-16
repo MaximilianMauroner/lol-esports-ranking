@@ -160,13 +160,16 @@ export async function uploadRankingArtifacts({
 export async function getBucketObject(relativePath, {
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
+  generationId,
 } = {}) {
   if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
   const safePath = safeRequestedObjectPath(relativePath)
-  const generation = await activeGeneration(config, client)
+  const generation = typeof generationId === 'string' && generationId.length > 0
+    ? generationId
+    : await activeGeneration(config, client)
   const keys = [
     ...(generation ? [bucketKey(config, `generations/${safeObjectPath(generation)}/data/${safePath}`)] : []),
-    bucketKey(config, `data/${safePath}`),
+    ...(generationId ? [] : [bucketKey(config, `data/${safePath}`)]),
   ]
 
   for (const key of keys) {

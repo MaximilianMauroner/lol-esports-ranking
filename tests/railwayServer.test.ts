@@ -114,6 +114,64 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
   }
 })
 
+test('Railway server serves versioned data from the requested bucket generation', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(join(dataDir, 'history', 'tournament-moves'), { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
+  await writeFile(join(dataDir, 'history', 'tournament-moves', 'index.json'), JSON.stringify({ source: 'bundled' }))
+
+  const bucket = createServer((request, response) => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+    if (pathname === '/test-bucket/rankings/active-generation.json') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ generationId: 'fresh' }))
+      return
+    }
+    if (pathname === '/test-bucket/rankings/generations/fresh/data/history/tournament-moves/index.json') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ source: 'fresh' }))
+      return
+    }
+    if (pathname === '/test-bucket/rankings/generations/stale/data/history/tournament-moves/index.json') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ source: 'stale' }))
+      return
+    }
+    response.statusCode = 404
+    response.end()
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const bucketPort = (bucket.address() as AddressInfo).port
+
+  const server = await startRailwayServer(distDir, dataDir, {
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+  })
+  try {
+    const active = await httpRequest(server.port, '/data/history/tournament-moves/index.json')
+    assert.equal(active.statusCode, 200)
+    assert.equal(JSON.parse(active.body).source, 'fresh')
+
+    const stale = await httpRequest(server.port, '/data/history/tournament-moves/index.json?v=stale')
+    assert.equal(stale.statusCode, 200)
+    assert.equal(JSON.parse(stale.body).source, 'stale')
+
+    const missing = await httpRequest(server.port, '/data/history/tournament-moves/index.json?v=missing')
+    assert.equal(missing.statusCode, 404)
+    assert.doesNotMatch(missing.body, /bundled/)
+  } finally {
+    await server.close()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('Railway server reports stale-source refresh status as healthy', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
   const distDir = join(tempDir, 'dist')

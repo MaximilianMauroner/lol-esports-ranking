@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { AlertTriangle, BarChart3, Globe2, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Globe2, History, RefreshCw, X } from 'lucide-react'
 import type {
   SnapshotCheckpointOption,
   PublicTeamStanding as RankingSummaryStanding,
@@ -37,13 +37,14 @@ import {
   usePublicArtifacts,
 } from './hooks/usePublicArtifacts'
 
-type Mode = 'rankings' | 'regions'
+type Mode = 'rankings' | 'regions' | 'matches'
 type MovementBaseline = {
   label: string
 }
 const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 const RegionsView = lazy(() => import('./views/RegionsView').then((module) => ({ default: module.RegionsView })))
+const MatchesView = lazy(() => import('./views/MatchesView').then((module) => ({ default: module.MatchesView })))
 const RegionCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.RegionCompareDrawer })))
 const RegionCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.RegionCompareAnalysis })))
 const TeamCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.TeamCompareDrawer })))
@@ -52,11 +53,13 @@ const TeamCompareAnalysis = lazy(() => import('./components/CompareAnalysis').th
 const MODES: { id: Mode; label: string; tagline: string; icon: typeof BarChart3 }[] = [
   { id: 'rankings', label: 'Rankings', tagline: 'Board, tiers, podium', icon: BarChart3 },
   { id: 'regions', label: 'Regions', tagline: 'Regional strength', icon: Globe2 },
+  { id: 'matches', label: 'Match history', tagline: 'Games and impact', icon: History },
 ]
 
 const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
   regions: { eyebrow: 'Regional strength', title: 'Region power scores' },
   rankings: { eyebrow: 'Tier 1 team strength', title: 'Team Power Index' },
+  matches: { eyebrow: 'Published game ledger', title: 'Match history' },
 }
 
 function checkpointButtonClassName(active: boolean, ongoing = false) {
@@ -88,6 +91,8 @@ function App() {
     tournamentMovementIndexState,
     tournamentMovementEntries,
     tournamentMovementState,
+    matchHistoryState,
+    requestMatchHistoryPages,
     retryTournamentMovements,
     prefetchScope,
     prefetchTournament,
@@ -96,6 +101,7 @@ function App() {
     loadTeamHistory,
     loadRegionHistory,
     loadTournamentMovements: mode === 'rankings',
+    loadMatchHistory: mode === 'matches' || mode === 'regions',
     tournamentId,
   })
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
@@ -175,7 +181,7 @@ function App() {
   const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
   const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, comparisonStandings, teamKey), [comparisonStandings, teamPicks])
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
-  const trayPicks = mode === 'regions' ? activeRegionPicks.length : activeTeamPicks.length
+  const trayPicks = mode === 'regions' ? activeRegionPicks.length : mode === 'rankings' ? activeTeamPicks.length : 0
 
   function toggleRegion(region: RegionStrength) {
     setRegionPicks((current) => toggleLimitedPick(reconcilePicks(current, regions, regionKey), region, regionKey))
@@ -373,6 +379,8 @@ function App() {
                   regions={regions}
                   standings={standings}
                   regionHistory={activeRegionHistory}
+                  matchHistoryState={matchHistoryState}
+                  onRequestMatchHistoryPages={requestMatchHistoryPages}
                   pickedIds={regionPickIds}
                   onToggle={toggleRegion}
                   onRequestRegionHistory={requestRegionHistory}
@@ -419,6 +427,11 @@ function App() {
                   onPrefetchTournament={prefetchTournament}
                 />
               </>
+            ) : null}
+            {mode === 'matches' ? (
+              <Suspense fallback={<ViewLoading label="Loading match history" />}>
+                <MatchesView state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
+              </Suspense>
             ) : null}
           </>
         )}
@@ -640,6 +653,7 @@ function pathModeSegment(pathname: string) {
 function isKnownMode(value: string): value is Mode {
   return value === 'rankings'
     || value === 'regions'
+    || value === 'matches'
 }
 
 function isKnownScope(value: string | null): value is string {

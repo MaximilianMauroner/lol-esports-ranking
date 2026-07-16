@@ -19,7 +19,7 @@ import type {
 } from '../types'
 import { leagueTierFor } from '../data/leagueTiers'
 import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../data/regionTaxonomy'
-import { regionForLeague } from '../data/teamIdentity'
+import { canonicalTeamNameFor, regionForLeague } from '../data/teamIdentity'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
 import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
 import { publishedRatingScale } from './modelConfig'
@@ -47,6 +47,7 @@ import {
   publicScoreFamilies,
   snapshotKey,
   snapshotShardUrlPathForKey,
+  scopeArtifactFileNameForKey,
   teamIdFor,
   teamHistoryShardUrlPathForKey,
   tournamentMovementShardUrlPathForId,
@@ -70,6 +71,7 @@ import {
   uniqueValues,
 } from './timelineCompaction'
 import { homeLeagueForMatch } from './matchContext'
+import { resolveCanonicalSeries } from './seriesResolver'
 import type {
   CompactPlayer,
   CompactPlayerRating,
@@ -98,6 +100,11 @@ import type {
   PublicTournamentMovementTeam,
   PublicSnapshotIndexEntry,
   PublicTeamDirectory,
+  PublicMatchHistoryCatalog,
+  PublicMatchHistoryIndex,
+  PublicMatchHistoryEntry,
+  PublicMatchHistoryPage,
+  PublicMatchHistorySeriesRef,
   SameTeamTopFiveClusteringDiagnostic,
 } from './publicArtifacts/schema'
 
@@ -934,6 +941,7 @@ export type StaticRankingData = {
   snapshots: Record<string, ComputedRankingSnapshot>
   tournamentMovements: Record<TournamentInstanceId, PublicTournamentMovementShard>
   teams: Record<string, TeamProfile>
+  matches: MatchRecord[]
 }
 
 export type RankingSummaryStanding = PublicTeamStanding
@@ -951,6 +959,7 @@ export function createStaticRankingSummaryData(
     teamHistoryUrl,
     regionHistoryUrl,
     tournamentMovementIndexUrl = '/data/history/tournament-moves/index.json',
+    matchHistoryIndexUrl,
     snapshotUrlForKey = snapshotShardUrlPathForKey,
   }: {
     fullSnapshotUrl?: string
@@ -960,6 +969,7 @@ export function createStaticRankingSummaryData(
     teamHistoryUrl?: string
     regionHistoryUrl?: string
     tournamentMovementIndexUrl?: string
+    matchHistoryIndexUrl?: string
     snapshotUrlForKey?: (key: string) => string
   } = {},
 ): {
@@ -988,12 +998,14 @@ export function createStaticRankingSummaryData(
     snapshots: _snapshots,
     tournamentMovements: _tournamentMovements,
     teams: _teams,
+    matches: _matches,
     ...manifestBase
   } = data
   void _artifactKind
   void _snapshots
   void _tournamentMovements
   void _teams
+  void _matches
 
   return {
     manifest: {
@@ -1013,6 +1025,7 @@ export function createStaticRankingSummaryData(
       ...(teamHistoryUrl ? { teamHistoryUrl } : {}),
       ...(regionHistoryUrl ? { regionHistoryUrl } : {}),
       tournamentMovementIndexUrl,
+      ...(matchHistoryIndexUrl ? { matchHistoryIndexUrl } : {}),
       teamCount: Object.keys(data.teams).length,
       snapshotIndex,
     },
@@ -1434,7 +1447,180 @@ export function createStaticRankingData({
       scheduleReferences: tournamentScheduleReferences,
     }),
     teams,
+    matches,
   }
+}
+
+export function createMatchHistoryArtifacts(
+  data: StaticRankingData,
+  {
+    matchHistoryCatalogUrlForKey = (key: string) => `/data/matches/${encodeURIComponent(scopeArtifactFileNameForKey(key))}`,
+    matchHistoryPageUrlForKey = (key: string, page: number) => `/data/matches/pages/${encodeURIComponent(scopeArtifactFileNameForKey(key).replace(/\.json$/, ''))}-${page}.json`,
+  }: {
+    matchHistoryCatalogUrlForKey?: (key: string) => string
+    matchHistoryPageUrlForKey?: (key: string, page: number) => string
+  } = {},
+): { index: PublicMatchHistoryIndex; catalogs: Record<string, PublicMatchHistoryCatalog>; pages: Record<string, Record<number, PublicMatchHistoryPage>> } {
+  const ratingScale = data.model.ratingScale ?? publishedRatingScale
+  const publishedScopes = Object.entries(data.snapshots)
+    .filter(([key, snapshot]) => shouldPublishPublicScope(key, snapshot, data.defaultSnapshotKey))
+  const artifacts = publishedScopes.map(([key, snapshot]) => {
+    const checkpoint = snapshot.filter.checkpoint
+      ? data.filterOptions.checkpoints?.[snapshot.filter.season]?.find((entry) => entry.id === snapshot.filter.checkpoint)
+      : undefined
+    const matches = filterMatches(data.matches, data.teams, snapshot.filter, checkpoint)
+    const standings = publishedTeamStandings(snapshot.standings, ratingScale)
+    const impact = matchImpactLookup(standings)
+    const entries = resolveCanonicalSeries(matches)
+      .flatMap((series) => series.games.map((match, index): PublicMatchHistoryEntry => {
+        const teamA = series.teamA
+        const teamB = series.teamB
+        const profileA = data.teams[teamA]
+        const profileB = data.teams[teamB]
+        const finalGame = match.id === series.finalMatch.id
+        const impactA = impact.get(`${teamA}\u0000${series.id}`)
+        const impactB = impact.get(`${teamB}\u0000${series.id}`)
+        return {
+          id: match.officialGameId ?? match.sourceGameId ?? match.id,
+          date: match.date,
+          ...(match.datetimeUtc ? { datetimeUtc: match.datetimeUtc } : {}),
+          event: match.event,
+          phase: match.phase,
+          league: match.league,
+          region: match.region,
+          patch: match.patch,
+          bestOf: series.format,
+          gameNumber: match.gameNumber ?? index + 1,
+          seriesId: series.id,
+          seriesState: series.state,
+          seriesWinsA: series.games.slice(0, index + 1).filter((game) => canonicalTeamNameFor(game.winner) === series.teamA).length,
+          seriesWinsB: series.games.slice(0, index + 1).filter((game) => canonicalTeamNameFor(game.winner) === series.teamB).length,
+          teamA: { id: teamIdFor({ team: teamA, region: profileA?.region, code: profileA?.code }), name: teamA, code: profileA?.code ?? teamA.slice(0, 4).toUpperCase() },
+          teamB: { id: teamIdFor({ team: teamB, region: profileB?.region, code: profileB?.code }), name: teamB, code: profileB?.code ?? teamB.slice(0, 4).toUpperCase() },
+          winnerId: teamIdFor({ team: canonicalTeamNameFor(match.winner), region: data.teams[canonicalTeamNameFor(match.winner)]?.region, code: data.teams[canonicalTeamNameFor(match.winner)]?.code }),
+          impact: finalGame && (impactA || impactB)
+            ? { unit: 'series-applied', ...(impactA ? { teamA: impactA.delta, expectedTeamA: impactA.expected, eventWeight: impactA.eventWeight } : {}), ...(impactB ? { teamB: impactB.delta } : {}) }
+            : { unit: 'held' },
+          source: {
+            provider: match.sourceProvider ?? 'seed',
+            ...(match.dataCompleteness ? { completeness: match.dataCompleteness } : {}),
+            ...(match.sourceGameId ? { gameId: match.sourceGameId } : {}),
+            ...(match.sourceMatchId ? { matchId: match.sourceMatchId } : {}),
+            ...(match.officialGameId ? { officialGameId: match.officialGameId } : {}),
+            ...(match.sourceUrl ? { url: match.sourceUrl } : {}),
+          },
+        }
+      }))
+      .sort((left, right) => (right.datetimeUtc ?? right.date).localeCompare(left.datetimeUtc ?? left.date) || right.gameNumber - left.gameNumber || right.id.localeCompare(left.id))
+    const gamesBySeries = new Map<string, PublicMatchHistoryEntry[]>()
+    for (const entry of entries) gamesBySeries.set(entry.seriesId, [...(gamesBySeries.get(entry.seriesId) ?? []), entry])
+    const series = [...gamesBySeries.entries()].map(([id, inputGames]) => {
+      const games = inputGames.toSorted((left, right) => left.gameNumber - right.gameNumber || left.id.localeCompare(right.id))
+      const summary = games.findLast((game) => game.impact.unit === 'series-applied') ?? games.at(-1)
+      if (!summary) throw new Error(`Cannot publish empty match history series ${id}`)
+      return { id, games, summary }
+    })
+    const pageGroups = chunk(series, 25)
+    const artifactMeta = artifactMetaFor({ generatedAt: data.generatedAt, modelVersion: data.model.version, modelConfigHash: data.model.configHash })
+    const pages: Record<number, PublicMatchHistoryPage> = Object.fromEntries(pageGroups.map((group, index) => {
+      const page = index + 1
+      const pageMatches = group.flatMap((entry) => entry.games)
+      return [page, {
+        artifactKind: 'match-history-page' as const,
+        schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+        artifactMeta,
+        generatedAt: data.generatedAt,
+        modelVersion: data.model.version,
+        modelConfigHash: data.model.configHash,
+        filter: snapshot.filter,
+        page,
+        seriesCount: group.length,
+        gameCount: pageMatches.length,
+        matches: pageMatches,
+      }]
+    }))
+    const catalogSeries: PublicMatchHistorySeriesRef[] = series.map((entry, index) => ({
+      id: entry.id,
+      date: entry.summary.date,
+      ...(entry.summary.datetimeUtc ? { datetimeUtc: entry.summary.datetimeUtc } : {}),
+      event: entry.summary.event,
+      league: entry.summary.league,
+      teamA: entry.summary.teamA,
+      teamB: entry.summary.teamB,
+      page: Math.floor(index / 25) + 1,
+      gameCount: entry.games.length,
+    }))
+    const catalog: PublicMatchHistoryCatalog = {
+      artifactKind: 'match-history-catalog',
+      schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+      artifactMeta,
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+      filter: snapshot.filter,
+      gameCount: entries.length,
+      seriesCount: series.length,
+      pages: Object.values(pages).map((page) => ({
+        page: page.page,
+        url: matchHistoryPageUrlForKey(key, page.page),
+        seriesCount: page.seriesCount,
+        gameCount: page.gameCount,
+      })),
+      series: catalogSeries,
+    }
+    return [key, { catalog, pages }] as const
+  })
+  const catalogs = Object.fromEntries(artifacts.map(([key, artifact]) => [key, artifact.catalog]))
+  const pages = Object.fromEntries(artifacts.map(([key, artifact]) => [key, artifact.pages]))
+  const scopeIndex = Object.fromEntries(Object.entries(catalogs).map(([key, catalog]) => [key, {
+    filter: catalog.filter,
+    url: matchHistoryCatalogUrlForKey(key),
+    gameCount: catalog.gameCount,
+    seriesCount: catalog.seriesCount,
+    pageCount: catalog.pages.length,
+  }]))
+  return {
+    index: {
+      artifactKind: 'match-history-index',
+      schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+      artifactMeta: artifactMetaFor({ generatedAt: data.generatedAt, modelVersion: data.model.version, modelConfigHash: data.model.configHash }),
+      generatedAt: data.generatedAt,
+      modelVersion: data.model.version,
+      modelConfigHash: data.model.configHash,
+      defaultScopeKey: data.defaultSnapshotKey,
+      scopeIndex,
+    },
+    catalogs,
+    pages,
+  }
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const groups: T[][] = []
+  for (let index = 0; index < items.length; index += size) groups.push(items.slice(index, index + size))
+  return groups
+}
+
+function matchImpactLookup(standings: TeamStanding[]) {
+  const lookup = new Map<string, { delta: number; expected?: number; eventWeight?: number }>()
+  for (const standing of standings) {
+    const groups = new Map<string, TeamHistoryPoint[]>()
+    for (const point of standing.history ?? []) {
+      if (!point.source.seriesId) continue
+      groups.set(point.source.seriesId, [...(groups.get(point.source.seriesId) ?? []), point])
+    }
+    for (const [seriesId, points] of groups) {
+      const update = latestInformativeRatingUpdate(points)
+      const observed = points.filter((point) => point.result === 'W').length > points.length / 2 ? 1 : 0
+      const residual = finiteNumber(update?.neutralResultResidual)
+      lookup.set(`${canonicalTeamNameFor(standing.team)}\u0000${seriesId}`, {
+        delta: Number(points.reduce((sum, point) => sum + (Number.isFinite(point.delta) ? point.delta : 0), 0).toFixed(1)),
+        ...(typeof residual === 'number' ? { expected: Number((observed - residual).toFixed(3)) } : {}),
+        ...(typeof update?.eventWeight === 'number' ? { eventWeight: Number(update.eventWeight.toFixed(3)) } : {}),
+      })
+    }
+  }
+  return lookup
 }
 
 const ROLE_ORDER: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']

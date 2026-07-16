@@ -1,12 +1,13 @@
-import { useMemo, type ReactNode } from 'react'
-import { Check, Globe2, Info, Plus, Swords, Trophy, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Globe2, Info, Plus, Swords, Trophy, X } from 'lucide-react'
 import {
   displayRegionPowerScore,
   displayRegionTotalTeamRating,
   isRegionPowerTeam,
   type RegionStrength,
 } from '../lib/regionStrength'
-import type { PublicRegionHistoryScope, PublicRegionHistorySeries, PublicTeamStanding } from '../lib/publicArtifacts/schema'
+import type { PublicMatchHistoryEntry, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicTeamStanding } from '../lib/publicArtifacts/schema'
+import type { MatchHistoryState } from '../hooks/usePublicArtifacts'
 import { useHistoryDetail } from '../hooks/useHistoryDetail'
 import {
   extent,
@@ -29,6 +30,8 @@ export function RegionsView({
   regions,
   standings,
   regionHistory,
+  matchHistoryState,
+  onRequestMatchHistoryPages,
   pickedIds,
   onToggle,
   onRequestRegionHistory,
@@ -36,6 +39,8 @@ export function RegionsView({
   regions: RegionStrength[]
   standings: RegionStanding[]
   regionHistory?: PublicRegionHistoryScope
+  matchHistoryState: MatchHistoryState
+  onRequestMatchHistoryPages: (pages: number[]) => void
   pickedIds: Set<string>
   onToggle: (region: RegionStrength) => void
   onRequestRegionHistory?: () => void
@@ -50,7 +55,6 @@ export function RegionsView({
     () => [...regions].sort((a, b) => (b.opponentAdjustedWinRate ?? 0) - (a.opponentAdjustedWinRate ?? 0))[0],
     [regions],
   )
-  const pickedCount = regions.filter((region) => pickedIds.has(region.region)).length
   const selectedRegion = useMemo(
     () => regions.find((region) => region.region === selectedRegionId) ?? null,
     [regions, selectedRegionId],
@@ -88,16 +92,12 @@ export function RegionsView({
         />
       </div>
 
-      <section className="min-w-0 overflow-hidden rounded-[var(--r-lg)] border border-[var(--region-line-strong)] bg-[var(--region-surface)] [--region-line-strong:oklch(0.48_0.055_78/0.55)] [--region-line:oklch(0.34_0.025_62/0.66)] [--region-surface-low:oklch(0.13_0.01_55)] [--region-surface-raised:oklch(0.2_0.012_55)] [--region-surface:oklch(0.16_0.012_55)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-[18px] py-4 max-sm:grid max-sm:items-start [&_.eyebrow]:text-[0.66rem] [&_.eyebrow]:tracking-[0.14em] [&_.eyebrow]:text-[var(--faint)] [&_.eyebrow]:uppercase [&_h2]:text-base [&_h2]:font-[640] [&_h2]:text-[var(--text-strong)]">
+      <section className="min-w-0 overflow-hidden rounded-[var(--r-lg)] border border-[var(--line-strong)] bg-[var(--surface)]">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] bg-[var(--surface-2)] px-[18px] py-4 max-sm:grid max-sm:items-start [&_.eyebrow]:text-[0.66rem] [&_.eyebrow]:tracking-[0.14em] [&_.eyebrow]:text-[var(--faint)] [&_.eyebrow]:uppercase [&_h2]:text-base [&_h2]:font-[660] [&_h2]:text-[var(--text-strong)]">
           <div>
-            <p className="eyebrow">Compare regions</p>
-            <h2>{pickedCount > 0 ? `${pickedCount} selected` : 'Add regions to compare'}</h2>
+            <p className="eyebrow">Regional standings</p>
+            <h2>Select a region to explore its history</h2>
           </div>
-          <span className="max-w-[430px] text-right text-[0.72rem] leading-[1.35] text-[var(--faint)] max-sm:text-left">
-            <strong className="font-[620] text-[var(--text)]">Range shown:</strong>{' '}
-            all-team average → top-three average · gap = difference
-          </span>
         </div>
 
         <div className="flex flex-col">
@@ -107,12 +107,12 @@ export function RegionsView({
             return (
               <div
                 key={region.region}
-                className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-center border-t border-[var(--region-line)] transition-[background] duration-150 first:border-t-0 hover:bg-[var(--region-surface-raised)] max-sm:grid-cols-[minmax(0,1fr)_62px]', picked && 'bg-[color-mix(in_oklch,var(--accent)_10%,var(--region-surface))] shadow-[inset_0_0_0_1px_var(--accent-line)] hover:bg-[color-mix(in_oklch,var(--accent)_10%,var(--region-surface))]')}
+                className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-center border-t border-[var(--line)] transition-[background] duration-150 first:border-t-0 hover:bg-[var(--surface-2)] max-sm:grid-cols-[minmax(0,1fr)_62px]', picked && 'bg-[var(--accent-soft)] shadow-[inset_3px_0_0_var(--accent)] hover:bg-[var(--accent-soft)]')}
               >
                 <Button
                   type="button"
                   variant="ghost"
-                  className="grid h-auto min-h-0 w-full min-w-0 grid-cols-[52px_minmax(150px,1.25fr)_minmax(150px,1fr)_minmax(150px,0.95fr)_minmax(160px,1.4fr)] items-center justify-stretch justify-items-stretch gap-[18px] rounded-none border-0 bg-transparent py-4 pr-0 pl-[18px] text-left font-[inherit] whitespace-normal text-[inherit] hover:bg-transparent focus-visible:bg-[var(--region-surface-raised)] focus-visible:shadow-[inset_0_0_0_1px_var(--focus)] max-[1180px]:grid-cols-[44px_minmax(120px,1.3fr)_minmax(120px,1fr)_minmax(150px,1.4fr)] max-[900px]:grid-cols-[40px_minmax(120px,1fr)_minmax(98px,auto)] max-[900px]:gap-3 max-sm:grid-cols-[34px_minmax(0,1fr)] max-sm:gap-2.5 max-sm:py-3.5 max-sm:pr-0 max-sm:pl-3"
+                  className="grid h-auto min-h-0 w-full min-w-0 grid-cols-[52px_minmax(150px,1.25fr)_minmax(150px,1fr)_minmax(150px,0.95fr)_minmax(160px,1.4fr)] items-center justify-stretch justify-items-stretch gap-[18px] rounded-none border-0 bg-transparent py-4 pr-0 pl-[18px] text-left font-[inherit] whitespace-normal text-[inherit] hover:bg-transparent focus-visible:bg-[var(--surface-2)] focus-visible:shadow-[inset_0_0_0_1px_var(--focus)] max-[1180px]:grid-cols-[44px_minmax(120px,1.3fr)_minmax(120px,1fr)_minmax(150px,1.4fr)] max-[900px]:grid-cols-[40px_minmax(120px,1fr)_minmax(98px,auto)] max-[900px]:gap-3 max-sm:grid-cols-[34px_minmax(0,1fr)] max-sm:gap-2.5 max-sm:py-3.5 max-sm:pr-0 max-sm:pl-3"
                   title={`Open ${region.region} region detail`}
                   onClick={() => {
                     onRequestRegionHistory?.()
@@ -166,6 +166,8 @@ export function RegionsView({
         region={selectedRegion}
         teams={selectedRegionTeams}
         series={selectedRegion ? regionHistory?.regionPowerSeries[selectedRegion.region] : undefined}
+        matchHistoryState={matchHistoryState}
+        onRequestMatchHistoryPages={onRequestMatchHistoryPages}
         onClose={closeRegionDetail}
       />
     </div>
@@ -194,8 +196,8 @@ function RegionPowerMeter({ value, average, min, max }: { value: number; average
         <strong className="font-[680] text-[var(--text-strong)]">Top 3 avg {formatRating(value)}</strong>
         <small className="text-[var(--faint)]">All teams avg {formatRating(average)} · Gap {formatSigned(gap)}</small>
       </span>
-      <span className="relative h-[7px] min-w-24 overflow-hidden rounded-full bg-[color-mix(in_oklch,var(--rank-gold)_14%,var(--region-surface-low))] max-sm:hidden" aria-hidden="true">
-        <span className="absolute inset-y-0 rounded-[inherit] bg-[color-mix(in_oklch,var(--rank-gold)_84%,var(--text-strong))] transition-[left,width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ left: `${rangeStart}%`, width: `${rangeWidth}%` }} />
+      <span className="relative h-[7px] min-w-24 overflow-hidden rounded-full bg-[var(--surface-3)] max-sm:hidden" aria-hidden="true">
+        <span className="absolute inset-y-0 rounded-[inherit] bg-[var(--accent)] transition-[left,width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ left: `${rangeStart}%`, width: `${rangeWidth}%` }} />
       </span>
     </span>
   )
@@ -210,7 +212,7 @@ function RegionCompareButton({ picked, onToggle, label }: { picked: boolean; onT
       type="button"
       variant="secondary"
       size="sm"
-      className={cn('min-w-[106px] border-[var(--region-line-strong)] bg-[var(--region-surface-low)] text-[var(--text)] hover:border-[var(--accent-line)] hover:bg-[color-mix(in_oklch,var(--accent)_9%,var(--region-surface-low))] hover:text-[var(--text-strong)] focus-visible:border-[var(--accent-line)] focus-visible:bg-[color-mix(in_oklch,var(--accent)_9%,var(--region-surface-low))] focus-visible:text-[var(--text-strong)] max-sm:w-full', picked && 'border-[var(--accent-line)] bg-[color-mix(in_oklch,var(--accent)_16%,var(--region-surface-low))] text-[var(--accent-strong)]')}
+      className={cn('min-w-[106px] border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--text)] hover:border-[var(--accent-line)] hover:bg-[var(--surface-3)] hover:text-[var(--text-strong)] focus-visible:border-[var(--accent-line)] focus-visible:text-[var(--text-strong)] max-sm:w-full', picked && 'border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent-strong)]')}
       onClick={onToggle}
       aria-label={accessibleLabel}
       aria-pressed={picked}
@@ -241,7 +243,7 @@ function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistory
 
   if (!shape || !first || !last) {
     return (
-      <div className="grid min-w-[180px] grid-cols-1 items-center gap-3 rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--region-detail-surface-low)] px-3 py-2.5 text-[var(--muted)] max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px]" aria-label={`${region} region trajectory unavailable`}>
+      <div className="grid min-w-[180px] grid-cols-1 items-center gap-3 rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 text-[var(--muted)] max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px]" aria-label={`${region} region trajectory unavailable`}>
         <small className="block text-[0.68rem] tracking-[0.08em] text-[var(--faint)] uppercase">Power trajectory</small>
         <b className="mt-[3px] block text-[var(--text-strong)] tabular-nums">History pending</b>
       </div>
@@ -250,7 +252,7 @@ function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistory
 
   return (
     <div
-      className="grid min-w-[260px] grid-cols-[minmax(92px,auto)_150px] items-center gap-3 rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--region-detail-surface-low)] px-3 py-2.5 max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px] max-[560px]:w-full max-[560px]:grid-cols-1 [&_circle]:fill-[var(--rank-gold)] [&_polyline]:fill-none [&_polyline]:stroke-[var(--rank-gold)] [&_polyline]:stroke-[2.2] [&_polyline]:[stroke-linecap:round] [&_polyline]:[stroke-linejoin:round] [&_svg]:h-[42px] [&_svg]:w-[150px] [&_svg]:overflow-visible max-[560px]:[&_svg]:w-full"
+      className="grid min-w-[260px] grid-cols-[minmax(92px,auto)_150px] items-center gap-3 rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px] max-[560px]:w-full max-[560px]:grid-cols-1 [&_circle]:fill-[var(--accent)] [&_polyline]:fill-none [&_polyline]:stroke-[var(--accent)] [&_polyline]:stroke-[2.2] [&_polyline]:[stroke-linecap:round] [&_polyline]:[stroke-linejoin:round] [&_svg]:h-[42px] [&_svg]:w-[150px] [&_svg]:overflow-visible max-[560px]:[&_svg]:w-full"
       aria-label={`${region} region power trajectory ${formatSignedDecimal(delta)} from ${formatDate(first[0])} to ${formatDate(last[0])}`}
     >
       <div>
@@ -300,11 +302,15 @@ function RegionDetailDrawer({
   region,
   teams,
   series,
+  matchHistoryState,
+  onRequestMatchHistoryPages,
   onClose,
 }: {
   region: RegionStrength | null
   teams: RegionDrawerTeam[]
   series?: PublicRegionHistorySeries
+  matchHistoryState: MatchHistoryState
+  onRequestMatchHistoryPages: (pages: number[]) => void
   onClose: () => void
 }) {
   const displayedTeams = teams.length > 0 ? teams : region?.topTeams ?? []
@@ -328,8 +334,8 @@ function RegionDetailDrawer({
               </Button>
             </SheetClose>
           </SheetHeader>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto overscroll-contain bg-[var(--region-detail-surface-low)] px-[22px] pt-[18px] pb-6 [--line:var(--region-detail-line)] [--line-strong:var(--region-detail-line-strong)] [--region-detail-line:oklch(0.34_0.025_62/0.66)] [--region-detail-line-strong:oklch(0.48_0.055_78/0.55)] [--region-detail-surface:oklch(0.16_0.012_55)] [--region-detail-surface-low:oklch(0.13_0.01_55)] [--region-detail-surface-raised:oklch(0.2_0.012_55)] [--surface:var(--region-detail-surface)] [--surface-2:var(--region-detail-surface-low)] [--surface-3:var(--region-detail-surface-raised)] [&>*]:shrink-0 max-[560px]:p-3">
-            <section className="flex items-end justify-between gap-[18px] rounded-[var(--r)] border border-[var(--line-strong)] bg-[var(--region-detail-surface)] p-[18px] max-[820px]:flex-wrap max-[820px]:items-start max-[820px]:[&>div:first-child]:basis-full max-[560px]:p-3" aria-label={`${region.region} summary`}>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto overscroll-contain bg-[var(--surface-2)] px-[22px] pt-[18px] pb-6 [&>*]:shrink-0 max-[560px]:p-3">
+            <section className="flex items-end justify-between gap-[18px] rounded-[var(--r)] border border-[var(--line-strong)] bg-[var(--surface)] p-[18px] max-[820px]:flex-wrap max-[820px]:items-start max-[820px]:[&>div:first-child]:basis-full max-[560px]:p-3" aria-label={`${region.region} summary`}>
               <div>
                 <p className="eyebrow">Region #{region.rank}</p>
                 <h3 className="mt-[3px] text-[2rem] leading-none font-[720] text-[var(--text-strong)]">{region.region}</h3>
@@ -391,7 +397,9 @@ function RegionDetailDrawer({
               />
             </section>
 
-            <section className="grid gap-3 rounded-[var(--r)] border border-[var(--line)] bg-[var(--region-detail-surface)] px-[18px] py-4 max-[560px]:p-3" aria-label={`${region.region} teams`}>
+            <RegionMatchHistory key={region.region} region={region} teams={displayedTeams} series={series} state={matchHistoryState} onRequestPages={onRequestMatchHistoryPages} />
+
+            <section className="grid gap-3 rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] px-[18px] py-4 max-[560px]:p-3" aria-label={`${region.region} teams`}>
               <div>
                 <p className="eyebrow">League teams</p>
                 <h3 className="mt-0.5 text-base font-[660] text-[var(--text-strong)]">All flagship representatives</h3>
@@ -418,6 +426,217 @@ function RegionDetailDrawer({
       ) : null}
     </Sheet>
   )
+}
+
+const REGION_MATCH_PAGE_SIZE = 15
+
+type RegionMatchSeries = {
+  id: string
+  games: PublicMatchHistoryEntry[]
+  summary: PublicMatchHistoryEntry
+}
+
+function RegionMatchHistory({
+  region,
+  teams,
+  series,
+  state,
+  onRequestPages,
+}: {
+  region: RegionStrength
+  teams: RegionDrawerTeam[]
+  series?: PublicRegionHistorySeries
+  state: MatchHistoryState
+  onRequestPages: (pages: number[]) => void
+}) {
+  const [page, setPage] = useState(1)
+  const teamNames = useMemo(() => new Set(teams.map((team) => team.team)), [teams])
+  const refs = useMemo(
+    () => state.status === 'ready' ? state.data.catalog.series.filter((match) => teamNames.has(match.teamA.name) || teamNames.has(match.teamB.name)) : [],
+    [state, teamNames],
+  )
+  const movements = useMemo(() => regionMovementsByDate(series), [series])
+  const pageCount = Math.max(1, Math.ceil(refs.length / REGION_MATCH_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pageStart = (currentPage - 1) * REGION_MATCH_PAGE_SIZE
+  const visibleRefs = refs.slice(pageStart, pageStart + REGION_MATCH_PAGE_SIZE)
+  const neededPages = useMemo(() => [...new Set(visibleRefs.map((entry) => entry.page))], [visibleRefs])
+  const neededPagesKey = neededPages.join(',')
+  const loadedMatches = useMemo(() => state.status === 'ready' ? neededPages.flatMap((pageNumber) => {
+    const pageState = state.data.pages[pageNumber]
+    return pageState?.status === 'ready' ? pageState.data.matches : []
+  }) : [], [neededPages, state])
+  const loadedSeries = useMemo(() => new Map(regionMatchSeries(loadedMatches, teamNames).map((entry) => [entry.id, entry])), [loadedMatches, teamNames])
+  const visibleMatches = visibleRefs.map((entry) => loadedSeries.get(entry.id)).filter((entry): entry is RegionMatchSeries => Boolean(entry))
+  const pageError = state.status === 'ready' ? neededPages.map((pageNumber) => state.data.pages[pageNumber]).find((entry) => entry?.status === 'error') : undefined
+  const pageLoading = state.status === 'ready' && neededPages.some((pageNumber) => state.data.pages[pageNumber]?.status !== 'ready')
+
+  useEffect(() => {
+    if (!neededPagesKey) return
+    onRequestPages(neededPagesKey.split(',').map(Number))
+  }, [neededPagesKey, onRequestPages])
+
+  return (
+    <section className="overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)]" aria-label={`${region.region} match and score history`}>
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] px-[18px] py-4 max-[560px]:p-3">
+        <div>
+          <p className="eyebrow">Match history</p>
+          <h3 className="mt-0.5 text-base font-[660] text-[var(--text-strong)]">Results and region score movement</h3>
+        </div>
+        <p className="max-w-[420px] text-right text-[0.72rem] leading-[1.4] text-[var(--faint)] max-[560px]:text-left">
+          Team power is applied per completed series. Region movement is the top-three average change at that day's checkpoint.
+        </p>
+      </div>
+
+      {state.status === 'idle' || state.status === 'loading' ? (
+        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">Loading scoped match history…</p>
+      ) : state.status === 'missing' || state.status === 'error' ? (
+        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">{state.message}</p>
+      ) : refs.length === 0 ? (
+        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">No matches are available for this region in the current scope.</p>
+      ) : pageError?.status === 'error' ? (
+        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--loss)]">{pageError.message}</p>
+      ) : pageLoading ? (
+        <div className="grid gap-2 p-3" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="h-16 animate-pulse rounded-[var(--r-sm)] bg-[var(--surface-2)]" key={index} />)}</div>
+      ) : (
+        <>
+          <div>
+            {visibleMatches.map((match) => (
+              <RegionMatchRow
+                key={match.id}
+                match={match}
+                teamNames={teamNames}
+                movement={movements.get(match.summary.date)}
+              />
+            ))}
+          </div>
+          {pageCount > 1 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] px-[18px] py-3 text-[0.78rem] text-[var(--muted)] max-[560px]:px-3" aria-label={`${region.region} match history pagination`}>
+              <span>{formatNumber(pageStart + 1)}–{formatNumber(pageStart + visibleRefs.length)} of {formatNumber(refs.length)}</span>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="icon" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} aria-label={`Previous ${region.region} match history page`}><ChevronLeft /></Button>
+                <span className="min-w-20 text-center font-semibold text-[var(--text)]">Page {currentPage} of {pageCount}</span>
+                <Button type="button" variant="outline" size="icon" onClick={() => setPage(Math.min(pageCount, currentPage + 1))} disabled={currentPage === pageCount} aria-label={`Next ${region.region} match history page`}><ChevronRight /></Button>
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
+    </section>
+  )
+}
+
+function RegionMatchRow({
+  match,
+  teamNames,
+  movement,
+}: {
+  match: RegionMatchSeries
+  teamNames: Set<string>
+  movement?: RegionDailyMovement
+}) {
+  const { summary } = match
+  const teamAIsRegional = teamNames.has(summary.teamA.name)
+  const teamBIsRegional = teamNames.has(summary.teamB.name)
+  const regionalClash = teamAIsRegional && teamBIsRegional
+  const regionWon = regionalClash
+    ? undefined
+    : teamAIsRegional
+      ? summary.seriesWinsA > summary.seriesWinsB
+      : summary.seriesWinsB > summary.seriesWinsA
+  const impactParts = [
+    teamAIsRegional && typeof summary.impact.teamA === 'number' ? `${summary.teamA.code} ${formatSigned(summary.impact.teamA)}` : undefined,
+    teamBIsRegional && typeof summary.impact.teamB === 'number' ? `${summary.teamB.code} ${formatSigned(summary.impact.teamB)}` : undefined,
+  ].filter((part): part is string => Boolean(part))
+  const contributors = movement?.context?.contributingTeams ?? []
+  const contributingTeam = [summary.teamA.name, summary.teamB.name].find((team) => teamNames.has(team) && contributors.includes(team))
+  const directRegionEffect = summary.impact.unit === 'series-applied' && contributors.length > 0
+    ? [
+        teamAIsRegional && contributors.includes(summary.teamA.name) ? summary.impact.teamA : undefined,
+        teamBIsRegional && contributors.includes(summary.teamB.name) ? summary.impact.teamB : undefined,
+      ].reduce<number>((total, impact) => total + (typeof impact === 'number' ? impact : 0), 0) / contributors.length
+    : undefined
+
+  return (
+    <article className="grid grid-cols-[108px_minmax(0,1.45fr)_minmax(150px,0.8fr)_minmax(170px,0.9fr)] items-center gap-4 border-t border-[var(--line)] px-[18px] py-3.5 first:border-t-0 max-[820px]:grid-cols-[90px_minmax(0,1fr)_minmax(140px,auto)] max-[820px]:[&>div:last-child]:col-start-2 max-[820px]:[&>div:last-child]:col-end-4 max-[560px]:grid-cols-1 max-[560px]:gap-2.5 max-[560px]:px-3 max-[560px]:[&>div:last-child]:col-start-1 max-[560px]:[&>div:last-child]:col-end-2">
+      <div className="text-[0.72rem] text-[var(--faint)]">
+        <span className="block">{formatDate(summary.datetimeUtc ?? summary.date)}</span>
+        <span className="mt-1 block">Bo{summary.bestOf} · {match.games.length} {match.games.length === 1 ? 'game' : 'games'}</span>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[0.72rem] text-[var(--muted)]" title={summary.event}>{summary.event}</p>
+        <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[0.86rem]">
+          <strong className={cn('truncate', teamAIsRegional && 'text-[var(--text-strong)]')}>{summary.teamA.name}</strong>
+          <span className="shrink-0 font-extrabold text-[var(--text-strong)] tabular-nums">{summary.seriesWinsA}–{summary.seriesWinsB}</span>
+          <strong className={cn('truncate', teamBIsRegional && 'text-[var(--text-strong)]')}>{summary.teamB.name}</strong>
+        </div>
+      </div>
+      <div>
+        <span className={cn(
+          'inline-flex items-center rounded-full px-2 py-1 text-[0.68rem] font-bold',
+          regionalClash ? 'bg-[var(--surface-3)] text-[var(--muted)]' : regionWon ? 'bg-[var(--win-soft)] text-[var(--win)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]',
+        )}>
+          {regionalClash ? 'Regional matchup' : regionWon ? 'Region win' : 'Region loss'}
+        </span>
+        <p className="mt-1.5 text-[0.72rem] text-[var(--muted)] tabular-nums">
+          {impactParts.length > 0 ? `Team power ${impactParts.join(' · ')}` : 'Team power held'}
+        </p>
+      </div>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-[var(--line)] pl-4 max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:pt-2.5 max-[820px]:pl-0">
+        <ArrowRight className="size-4 text-[var(--faint)]" aria-hidden="true" />
+        <div>
+          <strong className={cn('block text-[0.8rem] tabular-nums', typeof directRegionEffect === 'number' && directRegionEffect > 0 ? 'text-[var(--up)]' : typeof directRegionEffect === 'number' && directRegionEffect < 0 ? 'text-[var(--down)]' : 'text-[var(--text)]')}>
+            {typeof directRegionEffect === 'number' && directRegionEffect !== 0
+              ? `≈ ${formatSignedDecimal(directRegionEffect)} direct region effect`
+              : contributingTeam
+                ? 'Region effect held'
+                : 'Outside the top three'}
+          </strong>
+          <small className="mt-0.5 block text-[0.68rem] text-[var(--faint)]">
+            {movement
+              ? `Daily checkpoint ${formatSignedDecimal(movement.delta)} → ${formatRating(movement.score)}${contributingTeam ? ` · ${contributingTeam} contributed` : ''}`
+              : 'No score checkpoint was published for this date'}
+          </small>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+type RegionDailyMovement = {
+  score: number
+  delta: number
+  context?: PublicRegionHistorySeries['points'][number][3]
+}
+
+function regionMovementsByDate(series?: PublicRegionHistorySeries) {
+  const movements = new Map<string, RegionDailyMovement>()
+  const points = [...(series?.points ?? [])].sort((left, right) => left[0].localeCompare(right[0]))
+  points.forEach((point, index) => {
+    const previous = points[index - 1]
+    movements.set(point[0], {
+      score: point[1],
+      delta: previous ? Number((point[1] - previous[1]).toFixed(1)) : 0,
+      context: point[3],
+    })
+  })
+  return movements
+}
+
+function regionMatchSeries(matches: PublicMatchHistoryEntry[], teamNames: Set<string>): RegionMatchSeries[] {
+  const groups = new Map<string, PublicMatchHistoryEntry[]>()
+  for (const match of matches) {
+    if (!teamNames.has(match.teamA.name) && !teamNames.has(match.teamB.name)) continue
+    groups.set(match.seriesId, [...(groups.get(match.seriesId) ?? []), match])
+  }
+  return [...groups.entries()]
+    .map(([id, games]) => {
+      const sortedGames = games.toSorted((left, right) => left.gameNumber - right.gameNumber || left.id.localeCompare(right.id))
+      const summary = sortedGames.findLast((game) => game.impact.unit === 'series-applied') ?? sortedGames.at(-1)
+      if (!summary) throw new Error(`Cannot display empty regional match series ${id}`)
+      return { id, games: sortedGames, summary }
+    })
+    .sort((left, right) => (right.summary.datetimeUtc ?? right.summary.date).localeCompare(left.summary.datetimeUtc ?? left.summary.date) || right.id.localeCompare(left.id))
 }
 
 function flagshipTeamsForRegion(region: RegionStrength, standings: RegionStanding[]): RegionDrawerTeam[] {
