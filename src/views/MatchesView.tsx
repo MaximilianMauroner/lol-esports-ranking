@@ -9,7 +9,7 @@ import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Select } from '../components/ui/select'
-import { Skeleton } from '../components/ui/skeleton'
+import { LoadingState } from '../components/ui/loading'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { cn } from '../lib/utils'
 
@@ -55,7 +55,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
   }) : [], [neededPages, state])
   const loadedSeries = useMemo(() => new Map(groupMatchSeries(loadedMatches).map((entry) => [entry.id, entry])), [loadedMatches])
   const visible = visibleRefs.map((entry) => loadedSeries.get(entry.id)).filter((entry): entry is MatchSeries => Boolean(entry))
-  const pageError = state.status === 'ready' ? neededPages.map((pageNumber) => state.data.pages[pageNumber]).find((entry) => entry?.status === 'error') : undefined
+  const pageFailure = state.status === 'ready' ? neededPages.map((pageNumber) => state.data.pages[pageNumber]).find((entry) => entry?.status === 'error' || entry?.status === 'missing') : undefined
   const pageLoading = state.status === 'ready' && neededPages.some((pageNumber) => state.data.pages[pageNumber]?.status !== 'ready')
 
   useEffect(() => {
@@ -88,7 +88,10 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
     })
   }
 
-  if (state.status === 'idle' || state.status === 'loading') return <MatchHistoryLoading />
+  if (state.status === 'idle') {
+    return <section className="px-[var(--page-x)] pt-6"><Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]">Match history has not been requested.</Alert></section>
+  }
+  if (state.status === 'loading') return <LoadingState presentation="page" label="Loading match history" description="Fetching the selected match ledger." />
   if (state.status === 'missing' || state.status === 'error') {
     return <section className="px-[var(--page-x)] pt-6"><Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]">{state.message}</Alert></section>
   }
@@ -119,19 +122,22 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
 
       {visibleRefs.length === 0 ? (
         <Card className="grid min-h-44 place-items-center rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] p-6 text-center"><div><History className="mx-auto mb-3 text-[var(--faint)]" aria-hidden="true" /><h2 className="font-bold text-[var(--text-strong)]">No matches fit these filters</h2><p className="mt-1 text-sm text-[var(--muted)]">Try another team, league, or event.</p></div></Card>
-      ) : pageError?.status === 'error' ? (
-        <Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]">{pageError.message}</Alert>
-      ) : pageLoading ? (
-        <MatchHistoryLoading contained label="Loading matches" />
+      ) : pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
+        <Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]">{pageFailure.message}</Alert>
       ) : (
         <>
-          <Card className="hidden overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] md:block">
-            <Table containerClassName="overflow-x-auto">
-              <TableHeader><TableRow className="border-[var(--line)] bg-[var(--surface-2)] hover:bg-[var(--surface-2)]"><TableHead>Date</TableHead><TableHead>Competition</TableHead><TableHead>Outcome</TableHead><TableHead>Score</TableHead><TableHead>Power impact</TableHead><TableHead>Context</TableHead><TableHead>Source</TableHead></TableRow></TableHeader>
-              <TableBody>{visible.map((entry) => <DesktopSeriesRows series={entry} expanded={expanded.has(entry.id)} onToggle={() => toggleSeries(entry.id)} key={entry.id} />)}</TableBody>
-            </Table>
-          </Card>
-          <div className="grid gap-2 md:hidden">{visible.map((entry) => <MobileSeriesCard series={entry} expanded={expanded.has(entry.id)} onToggle={() => toggleSeries(entry.id)} key={entry.id} />)}</div>
+          {visible.length > 0 ? (
+            <>
+              <Card className="hidden overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] md:block">
+                <Table containerClassName="overflow-x-auto">
+                  <TableHeader><TableRow className="border-[var(--line)] bg-[var(--surface-2)] hover:bg-[var(--surface-2)]"><TableHead>Date</TableHead><TableHead>Competition</TableHead><TableHead>Outcome</TableHead><TableHead>Score</TableHead><TableHead>Power impact</TableHead><TableHead>Context</TableHead><TableHead>Source</TableHead></TableRow></TableHeader>
+                  <TableBody>{visible.map((entry) => <DesktopSeriesRows series={entry} expanded={expanded.has(entry.id)} onToggle={() => toggleSeries(entry.id)} key={entry.id} />)}</TableBody>
+                </Table>
+              </Card>
+              <div className="grid gap-2 md:hidden">{visible.map((entry) => <MobileSeriesCard series={entry} expanded={expanded.has(entry.id)} onToggle={() => toggleSeries(entry.id)} key={entry.id} />)}</div>
+            </>
+          ) : null}
+          {pageLoading ? <LoadingState presentation="rows" label="Loading matches" description="Fetching the missing rows for this page." /> : null}
         </>
       )}
 
@@ -171,25 +177,6 @@ function Impact({ match }: { match: PublicMatchHistoryEntry }) {
   return <div className="tabular-nums"><b className={cn('mr-2', impactTone(match.impact.teamA))}>{match.teamA.code} {formatImpact(match.impact.teamA)}</b><b className={impactTone(match.impact.teamB)}>{match.teamB.code} {formatImpact(match.impact.teamB)}</b><small className="block text-[0.68rem] text-[var(--faint)]" title={context || undefined}>Series impact applied{context ? ` · ${context}` : ''}</small></div>
 }
 
-function MatchHistoryLoading({ contained = false, label = 'Loading match history' }: { contained?: boolean; label?: string } = {}) {
-  const loading = (
-    <Card className="rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] p-4" role="status" aria-live="polite" aria-busy="true">
-      <div className="flex items-center gap-3">
-        <History className="size-5 shrink-0 text-[var(--accent)]" aria-hidden="true" />
-        <div>
-          <h2 className="text-sm font-bold text-[var(--text-strong)]">{label}</h2>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">Fetching the selected match ledger.</p>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-2" aria-hidden="true">
-        <Skeleton className="h-9 w-full rounded-md" />
-        <Skeleton className="h-9 w-full rounded-md" />
-        <Skeleton className="h-9 w-[72%] rounded-md" />
-      </div>
-    </Card>
-  )
-  return contained ? loading : <section className="px-[var(--page-x)] pt-6">{loading}</section>
-}
 function groupMatchSeries(matches: PublicMatchHistoryEntry[]): MatchSeries[] {
   const groups = new Map<string, PublicMatchHistoryEntry[]>()
   for (const match of matches) groups.set(match.seriesId, [...(groups.get(match.seriesId) ?? []), match])

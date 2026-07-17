@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
+import { shouldHoldPrerenderForManifest } from '../src/lib/bootstrap.ts'
 
 test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
   const html = await renderHomepagePrerenderFromPublicData()
@@ -30,6 +31,19 @@ test('homepage prerender includes ranking snapshot content from public artifacts
     assert.ok(position > lastPosition, `${team.team} should appear in current-scope rank order`)
     lastPosition = position
   }
+})
+
+test('Tailwind scans the source file that owns prerender-only classes', async () => {
+  const stylesheet = await readFile('src/index.css', 'utf8')
+  assert.match(stylesheet, /@source\s+["']\.\.\/scripts\/seo-prerender\.ts["']/)
+})
+
+test('only ranking startup holds the prerender while the manifest loads', () => {
+  assert.equal(shouldHoldPrerenderForManifest('', false), true)
+  assert.equal(shouldHoldPrerenderForManifest('#rankings?scope=season%3A2026', false), true)
+  assert.equal(shouldHoldPrerenderForManifest('#matches', false), false)
+  assert.equal(shouldHoldPrerenderForManifest('#regions', false), false)
+  assert.equal(shouldHoldPrerenderForManifest('', true), false)
 })
 
 function escapedNotice() {
