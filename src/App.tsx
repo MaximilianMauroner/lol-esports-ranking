@@ -29,6 +29,7 @@ import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
 import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { cn } from './lib/utils'
+import { initialModeFromLocation, type AppMode } from './lib/bootstrap'
 import {
   checkpointFromScope,
   checkpointOptionsForSeason,
@@ -38,7 +39,7 @@ import {
   usePublicArtifacts,
 } from './hooks/usePublicArtifacts'
 
-type Mode = 'rankings' | 'regions' | 'matches'
+type Mode = AppMode
 type MovementBaseline = {
   label: string
 }
@@ -613,16 +614,9 @@ function scheduleIdleWork(callback: () => void) {
 }
 
 function readModeFromHash(): Mode {
-  const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
-  const segment = hashModeSegment(hash)
-  if (segment === 'teams') return 'rankings'
-  if (isKnownMode(segment)) return segment
-
-  const pathSegment = typeof window !== 'undefined'
-    ? pathModeSegment(window.location.pathname)
-    : ''
-  if (pathSegment === 'teams') return 'rankings'
-  return isKnownMode(pathSegment) ? pathSegment : 'rankings'
+  return typeof window === 'undefined'
+    ? 'rankings'
+    : initialModeFromLocation(window.location.hash, window.location.pathname)
 }
 
 function readScopeFromHash() {
@@ -645,20 +639,6 @@ function hashForModeAndScope(mode: Mode, scope: string, currentHash = '') {
   query.set('scope', scope)
   const queryString = query.toString()
   return `#${mode}${queryString ? `?${queryString}` : ''}`
-}
-
-function hashModeSegment(hash: string) {
-  return hash.split(/[/?]/, 1)[0]
-}
-
-function pathModeSegment(pathname: string) {
-  return pathname.split('/').filter(Boolean)[0] ?? ''
-}
-
-function isKnownMode(value: string): value is Mode {
-  return value === 'rankings'
-    || value === 'regions'
-    || value === 'matches'
 }
 
 function isKnownScope(value: string | null): value is string {

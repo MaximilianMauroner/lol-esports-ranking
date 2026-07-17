@@ -16,7 +16,7 @@ if (!rootElement) {
 }
 
 const legalPage = legalPageFromPath(window.location.pathname)
-const rankingRoot = shouldHoldPrerenderForManifest(window.location.hash, Boolean(legalPage))
+const rankingRoot = shouldHoldPrerenderForManifest(window.location.hash, window.location.pathname, Boolean(legalPage))
 
 let initialManifest: PublicRankingManifest | undefined
 let initialManifestError: string | undefined
