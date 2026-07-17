@@ -10,6 +10,10 @@ export function shouldHoldPrerenderForManifest(hash: string, pathname: string, l
   return !legalPage && initialModeFromLocation(hash, pathname) === 'rankings'
 }
 
+export function showsManifestErrorInAppShell(mode: AppMode) {
+  return mode !== 'rankings'
+}
+
 function modeFromSegment(segment: string): AppMode | undefined {
   if (segment === 'teams') return 'rankings'
   if (segment === 'rankings' || segment === 'regions' || segment === 'matches') return segment

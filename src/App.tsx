@@ -29,7 +29,7 @@ import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
 import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { cn } from './lib/utils'
-import { initialModeFromLocation, type AppMode } from './lib/bootstrap'
+import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './lib/bootstrap'
 import {
   checkpointFromScope,
   checkpointOptionsForSeason,
@@ -213,7 +213,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   }
   if (manifestState.status !== 'ready') {
     const message = manifestState.status === 'idle' ? 'Ranking manifest has not been requested yet.' : manifestState.message
-    if (mode !== 'rankings') return <ManifestRouteShell mode={mode} scope={effectiveScope} onGoHome={goHome} error={message} />
+    if (showsManifestErrorInAppShell(mode)) return <ManifestRouteShell mode={mode} scope={effectiveScope} onGoHome={goHome} error={message} />
     return (
       <ErrorScreen message={message} />
     )
@@ -558,7 +558,13 @@ function ManifestRouteShell({
         </div>
         {error ? (
           <section className="px-[var(--page-x)] pt-6">
-            <Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]" role="alert">{error}</Alert>
+            <Alert className="grid gap-4 rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]" role="alert">
+              <p>{error}</p>
+              <Button type="button" variant="default" className="w-fit" onClick={() => window.location.reload()}>
+                <RefreshCw size={15} aria-hidden="true" />
+                Retry
+              </Button>
+            </Alert>
           </section>
         ) : (
           <LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} description="Fetching the published ranking manifest." />

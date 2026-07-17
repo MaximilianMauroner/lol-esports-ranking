@@ -4,7 +4,7 @@ import test from 'node:test'
 import { createServer } from 'vite'
 import { renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
-import { shouldHoldPrerenderForManifest } from '../src/lib/bootstrap.ts'
+import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
 
 test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
   const html = await renderHomepagePrerenderFromPublicData()
@@ -62,6 +62,12 @@ test('only ranking startup holds the prerender while the manifest loads', () => 
   assert.equal(shouldHoldPrerenderForManifest('', '/matches', false), false)
   assert.equal(shouldHoldPrerenderForManifest('', '/teams', false), true)
   assert.equal(shouldHoldPrerenderForManifest('', '/', true), false)
+})
+
+test('non-ranking manifest errors stay in the app shell', () => {
+  assert.equal(showsManifestErrorInAppShell('matches'), true)
+  assert.equal(showsManifestErrorInAppShell('regions'), true)
+  assert.equal(showsManifestErrorInAppShell('rankings'), false)
 })
 
 function escapedNotice() {
