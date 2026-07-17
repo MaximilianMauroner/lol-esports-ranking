@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../scripts/seo-prerender.ts";
 @import "tw-animate-css";
 
 @import './styles/base.css';

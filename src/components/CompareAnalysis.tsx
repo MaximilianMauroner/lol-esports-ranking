@@ -21,6 +21,7 @@ import { TeamHistoryLineChart } from './TeamHistoryLineChart'
 import { dailyChartPointsFromHistoryPoints } from '../lib/teamHistoryChart'
 import type { RegionHistoryScopeState, TeamHistoryArtifactState } from '../hooks/usePublicArtifacts'
 import { cn } from '../lib/utils'
+import { LoadingState } from './ui/loading'
 
 const REGION_TREND_TEAM_LIMIT = 5
 const REGION_TREND_EVENT_LIMIT = 8
@@ -249,11 +250,11 @@ function RegionTrendChart({
       </div>
       {fallbackNote ? <p className="px-[18px] pt-2.5 text-[0.76rem] text-[var(--muted)]">{fallbackNote}</p> : null}
       {!regionHistory && regionHistoryState.status === 'loading' ? (
-        <p className={compareChartEmptyClassName}>Loading region history...</p>
+        <LoadingState presentation="chart" className="m-[18px]" label="Loading region history" />
       ) : !regionHistory && historyState.status === 'idle' ? (
         <p className={compareChartEmptyClassName}>History loads when comparison opens.</p>
       ) : !regionHistory && historyState.status === 'loading' ? (
-        <p className={compareChartEmptyClassName}>Loading history…</p>
+        <LoadingState presentation="chart" className="m-[18px]" label="Loading team history" />
       ) : !regionHistory && (historyState.status === 'missing' || historyState.status === 'error') ? (
         <p className={compareChartEmptyClassName}>{historyState.message}</p>
       ) : series.length > 0 ? (
@@ -503,7 +504,7 @@ function TeamCompareChart({
       {historyState.status === 'idle' ? (
         <p className={compareChartEmptyClassName}>History loads when comparison opens.</p>
       ) : historyState.status === 'loading' ? (
-        <p className={compareChartEmptyClassName}>Loading team history…</p>
+        <LoadingState presentation="chart" className="m-[18px]" label="Loading team history" />
       ) : historyState.status === 'missing' || historyState.status === 'error' ? (
         <p className={compareChartEmptyClassName}>{historyState.message}</p>
       ) : series.length > 0 ? (

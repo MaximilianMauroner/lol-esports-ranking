@@ -3,6 +3,24 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
 import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
+import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
+
+test('manifest loader deduplicates concurrent bootstrap and hook requests', async () => {
+  const manifestJson = await readFile('public/data/ranking-summary.json', 'utf8')
+  let requests = 0
+  const loader = createPublicRankingManifestLoader('/data/ranking-summary.json', async () => {
+    requests += 1
+    return new Response(manifestJson)
+  })
+
+  const bootstrapRequest = loader()
+  const hookRequest = loader()
+  assert.equal(bootstrapRequest, hookRequest)
+  const [bootstrapManifest, hookManifest] = await Promise.all([bootstrapRequest, hookRequest])
+
+  assert.equal(requests, 1)
+  assert.equal(bootstrapManifest, hookManifest)
+})
 
 test('snapshot loading repairs a cached shard from an older publish', async () => {
   const manifest = parsePublicRankingManifest(JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8')))

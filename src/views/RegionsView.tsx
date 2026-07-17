@@ -21,6 +21,7 @@ import {
   pctWithin,
 } from '../lib/display'
 import { DataState, RegionBadge } from '../components/ui'
+import { LoadingState } from '../components/ui/loading'
 import { Button } from '../components/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
@@ -468,7 +469,7 @@ function RegionMatchHistory({
   }) : [], [neededPages, state])
   const loadedSeries = useMemo(() => new Map(regionMatchSeries(loadedMatches, teamNames).map((entry) => [entry.id, entry])), [loadedMatches, teamNames])
   const visibleMatches = visibleRefs.map((entry) => loadedSeries.get(entry.id)).filter((entry): entry is RegionMatchSeries => Boolean(entry))
-  const pageError = state.status === 'ready' ? neededPages.map((pageNumber) => state.data.pages[pageNumber]).find((entry) => entry?.status === 'error') : undefined
+  const pageFailure = state.status === 'ready' ? neededPages.map((pageNumber) => state.data.pages[pageNumber]).find((entry) => entry?.status === 'error' || entry?.status === 'missing') : undefined
   const pageLoading = state.status === 'ready' && neededPages.some((pageNumber) => state.data.pages[pageNumber]?.status !== 'ready')
 
   useEffect(() => {
@@ -488,28 +489,31 @@ function RegionMatchHistory({
         </p>
       </div>
 
-      {state.status === 'idle' || state.status === 'loading' ? (
-        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">Loading scoped match history…</p>
+      {state.status === 'idle' ? (
+        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">Match history loads when this region is opened.</p>
+      ) : state.status === 'loading' ? (
+        <LoadingState presentation="rows" className="m-3" label={`Loading ${region.region} match history`} description="Fetching the scoped match ledger." />
       ) : state.status === 'missing' || state.status === 'error' ? (
         <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">{state.message}</p>
       ) : refs.length === 0 ? (
         <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">No matches are available for this region in the current scope.</p>
-      ) : pageError?.status === 'error' ? (
-        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--loss)]">{pageError.message}</p>
-      ) : pageLoading ? (
-        <div className="grid gap-2 p-3" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="h-16 animate-pulse rounded-[var(--r-sm)] bg-[var(--surface-2)]" key={index} />)}</div>
+      ) : pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
+        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--loss)]">{pageFailure.message}</p>
       ) : (
         <>
-          <div>
-            {visibleMatches.map((match) => (
-              <RegionMatchRow
-                key={match.id}
-                match={match}
-                teamNames={teamNames}
-                movement={movements.get(match.summary.date)}
-              />
-            ))}
-          </div>
+          {visibleMatches.length > 0 ? (
+            <div>
+              {visibleMatches.map((match) => (
+                <RegionMatchRow
+                  key={match.id}
+                  match={match}
+                  teamNames={teamNames}
+                  movement={movements.get(match.summary.date)}
+                />
+              ))}
+            </div>
+          ) : null}
+          {pageLoading ? <LoadingState presentation="rows" className="m-3" rowCount={6} label={`Loading ${region.region} matches`} description="Fetching the missing rows for this page." /> : null}
           {pageCount > 1 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] px-[18px] py-3 text-[0.78rem] text-[var(--muted)] max-[560px]:px-3" aria-label={`${region.region} match history pagination`}>
               <span>{formatNumber(pageStart + 1)}–{formatNumber(pageStart + visibleRefs.length)} of {formatNumber(refs.length)}</span>

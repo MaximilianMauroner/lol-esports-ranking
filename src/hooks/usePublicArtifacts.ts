@@ -18,7 +18,6 @@ import type {
 } from '../lib/publicArtifacts/schema'
 import {
   parsePublicPlayerDirectory,
-  parsePublicRankingManifest,
   parsePublicRegionHistory,
   parsePublicTeamHistory,
   parsePublicTeamHistoryIndex,
@@ -39,6 +38,7 @@ import {
   type PublicSnapshotCacheEntry,
 } from '../lib/publicArtifacts/resolver'
 import { tournamentEntriesForScope, type TournamentInstanceId } from '../lib/internationalTournaments'
+import { createPublicRankingManifestLoader } from '../lib/publicArtifacts/manifestLoader'
 
 export type PublicArtifactState<T> =
   | { status: 'idle' }
@@ -61,6 +61,8 @@ export type MatchHistoryState = PublicArtifactState<{
 
 type TeamHistoryRoot = PublicTeamHistoryDirectory | PublicTeamHistoryIndex
 type PublicArtifactLoadOptions = {
+  initialManifest?: PublicRankingManifest
+  initialManifestError?: string
   loadPlayers?: boolean
   loadTeamHistory?: boolean
   loadRegionHistory?: boolean
@@ -88,8 +90,12 @@ const REGION_HISTORY_URL = import.meta.env.VITE_REGION_HISTORY_URL || '/data/his
 const TOURNAMENT_MOVEMENT_INDEX_URL = import.meta.env.VITE_TOURNAMENT_MOVEMENT_INDEX_URL || '/data/history/tournament-moves/index.json'
 const MATCH_HISTORY_INDEX_URL = import.meta.env.VITE_MATCH_HISTORY_INDEX_URL || '/data/matches/index.json'
 
+export const loadPublicRankingManifest = createPublicRankingManifestLoader(DATA_URL)
+
 export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOptions = {}) {
   const {
+    initialManifest,
+    initialManifestError,
     loadPlayers = false,
     loadTeamHistory = false,
     loadRegionHistory = false,
@@ -97,7 +103,13 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     loadMatchHistory = false,
     tournamentId,
   } = options
-  const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>({ status: 'loading' })
+  const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>(
+    initialManifest
+      ? { status: 'ready', data: initialManifest }
+      : initialManifestError
+        ? { status: 'error', message: initialManifestError }
+        : { status: 'loading' },
+  )
   const [playersState, setPlayersState] = useState<PlayerDirectoryState>({ status: 'idle' })
   const [teamHistoryRootState, setTeamHistoryRootState] = useState<PublicArtifactState<TeamHistoryRoot>>({ status: 'idle' })
   const [teamHistoryCache, setTeamHistoryCache] = useState<Record<string, TeamHistoryCacheEntry>>({})
@@ -123,12 +135,12 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     [data, filter, snapshotCache],
   )
   const teamHistoryState = useMemo(
-    () => resolveTeamHistoryState(teamHistoryRootState, teamHistoryCache, filter, effectiveScope),
-    [effectiveScope, filter, teamHistoryCache, teamHistoryRootState],
+    () => requestedState(loadTeamHistory, resolveTeamHistoryState(teamHistoryRootState, teamHistoryCache, filter, effectiveScope)),
+    [effectiveScope, filter, loadTeamHistory, teamHistoryCache, teamHistoryRootState],
   )
   const scopedRegionHistoryState = useMemo(
-    () => resolveRegionHistoryState(regionHistoryState, filter, effectiveScope),
-    [effectiveScope, filter, regionHistoryState],
+    () => requestedState(loadRegionHistory, resolveRegionHistoryState(regionHistoryState, filter, effectiveScope)),
+    [effectiveScope, filter, loadRegionHistory, regionHistoryState],
   )
   const seasonYears = useMemo(() => (data ? orderedSeasonYears(data) : []), [data])
   const tournamentMovementEntries = useMemo(
@@ -144,25 +156,25 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   const matchHistoryState = useMemo<MatchHistoryState>(() => (
     matchHistoryCatalogState.status === 'ready'
       ? { status: 'ready', data: { catalog: matchHistoryCatalogState.data, pages: matchHistoryPages } }
-      : matchHistoryCatalogState
-  ), [matchHistoryCatalogState, matchHistoryPages])
+      : requestedState(loadMatchHistory, matchHistoryCatalogState)
+  ), [loadMatchHistory, matchHistoryCatalogState, matchHistoryPages])
 
   useEffect(() => {
-    const controller = new AbortController()
+    if (initialManifest || initialManifestError) return
+    let active = true
     async function load() {
       try {
-        const response = await fetch(DATA_URL, { signal: controller.signal, cache: 'no-cache', headers: { Accept: 'application/json' } })
-        if (!response.ok) throw new Error(`Snapshot request failed with ${response.status}`)
-        const next = parsePublicRankingManifest(await response.json())
+        const next = await loadPublicRankingManifest()
+        if (!active) return
         setManifestState({ status: 'ready', data: next })
       } catch (error) {
-        if (isAbortError(error)) return
+        if (!active) return
         setManifestState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load snapshot' })
       }
     }
     void load()
-    return () => controller.abort()
-  }, [])
+    return () => { active = false }
+  }, [initialManifest, initialManifestError])
 
   useEffect(() => {
     if (!data || !loadPlayers) return
@@ -551,10 +563,10 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     seasonYears,
     snapshotState,
     snapshot: snapshotState.status === 'ready' ? snapshotState.snapshot : undefined,
-    playersState,
+    playersState: requestedState(loadPlayers, playersState),
     teamHistoryState,
     regionHistoryState: scopedRegionHistoryState,
-    tournamentMovementIndexState,
+    tournamentMovementIndexState: requestedState(loadTournamentMovements, tournamentMovementIndexState),
     tournamentMovementEntries,
     tournamentMovementState,
     matchHistoryState,
@@ -563,6 +575,10 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     prefetchScope,
     prefetchTournament,
   }
+}
+
+function requestedState<T>(requested: boolean, state: PublicArtifactState<T>): PublicArtifactState<T> {
+  return requested && state.status === 'idle' ? { status: 'loading' } : state
 }
 
 function validateMatchHistoryRun(index: PublicMatchHistoryIndex, manifest: PublicRankingManifest) {

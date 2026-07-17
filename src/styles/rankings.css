@@ -229,11 +229,6 @@ table.ranking-table.gpr-grid thead th {
 
 }
 
-@keyframes detail-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
 .region-badge {
   --badge-hue: 205;
   --badge-accent: oklch(0.76 0.12 var(--badge-hue));
@@ -387,14 +382,6 @@ table.ranking-table.gpr-grid thead th {
   display: block;
   overflow: hidden;
   border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in oklch, var(--detail-surface-3, var(--surface-3)) 70%, transparent),
-    color-mix(in oklch, var(--line-strong) 72%, var(--detail-surface-3, var(--surface-3))),
-    color-mix(in oklch, var(--detail-surface-3, var(--surface-3)) 70%, transparent)
-  );
-  background-size: 200% 100%;
-  animation: detail-shimmer 1.25s ease-in-out infinite;
 }
 
 .detail-skeleton--result {
@@ -616,55 +603,6 @@ table.ranking-table.gpr-grid thead th {
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--detail-surface, var(--surface));
-}
-
-.trend-chart-skeleton__status {
-  color: var(--muted);
-  font-size: 0.76rem;
-  line-height: 1.4;
-}
-
-.trend-chart-skeleton__plot {
-  position: relative;
-  min-height: 260px;
-  overflow: hidden;
-  border-radius: var(--r-sm);
-  background:
-    linear-gradient(to bottom, transparent 0 24%, color-mix(in oklch, var(--line) 58%, transparent) 24% 24.4%, transparent 24.4% 49%, color-mix(in oklch, var(--line) 58%, transparent) 49% 49.4%, transparent 49.4% 74%, color-mix(in oklch, var(--line) 58%, transparent) 74% 74.4%, transparent 74.4%),
-    var(--detail-surface-2, var(--surface-2));
-}
-
-.trend-chart-skeleton__plot span {
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  height: 3px;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--line-strong) 58%, transparent);
-}
-
-.trend-chart-skeleton__plot span:nth-child(1) {
-  top: 24%;
-}
-
-.trend-chart-skeleton__plot span:nth-child(2) {
-  top: 49%;
-}
-
-.trend-chart-skeleton__plot span:nth-child(3) {
-  top: 74%;
-}
-
-.trend-chart-skeleton__plot i {
-  position: absolute;
-  left: 9%;
-  bottom: 24%;
-  width: 78%;
-  height: 44%;
-  border-top: 3px solid color-mix(in oklch, var(--accent-strong) 42%, var(--line-strong));
-  border-radius: 48% 52% 0 0;
-  opacity: 0.72;
-  transform: skewX(-12deg);
 }
 
 @media (max-width: 560px) {

@@ -20,6 +20,7 @@ import { Badge } from '../components/ui/badge'
 import { Card } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Select } from '../components/ui/select'
+import { LoadingState } from '../components/ui/loading'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { RankingShowcase, type RankingShowcaseProps } from '../components/RankingShowcase'
 import { type ChartSeries } from '../components/LineChart'
@@ -504,9 +505,11 @@ export function TeamsView({
               </DataState>
             ) : null}
 
-            {exactTournamentId && (tournamentMovementState.status === 'idle' || tournamentMovementState.status === 'loading') ? (
-              <DataState icon={<Users size={26} aria-hidden="true" />} title="Loading tournament movement">
-                Loading the shared start and endpoint ranks for this exact tournament.
+            {exactTournamentId && tournamentMovementState.status === 'loading' ? (
+              <LoadingState label="Loading tournament movement" description="Loading the shared start and endpoint ranks for this exact tournament." />
+            ) : exactTournamentId && tournamentMovementState.status === 'idle' ? (
+              <DataState icon={<Users size={26} aria-hidden="true" />} title="Tournament movement not requested">
+                Choose an exact tournament to load its shared start and endpoint ranks.
               </DataState>
             ) : exactTournamentId && (tournamentMovementState.status === 'missing' || tournamentMovementState.status === 'error') ? (
               <DataState icon={<Users size={26} aria-hidden="true" />} title="Tournament movement unavailable">
@@ -705,18 +708,20 @@ export function TeamsView({
             </CountBadge>
           </div>
         </div>
-        {exactTournamentId && (tournamentMovementState.status === 'idle' || tournamentMovementState.status === 'loading') ? (
-          <p className="text-[var(--muted)] p-5">Loading tournament movement…</p>
+        {exactTournamentId && tournamentMovementState.status === 'loading' ? (
+          <LoadingState presentation="chart" className="m-5" label="Loading tournament movement" />
+        ) : exactTournamentId && tournamentMovementState.status === 'idle' ? (
+          <p className="text-[var(--muted)] p-5">Tournament movement has not been requested.</p>
         ) : exactTournamentId && (tournamentMovementState.status === 'missing' || tournamentMovementState.status === 'error') ? (
           <p className="text-[var(--muted)] p-5">{tournamentMovementState.message}</p>
         ) : !exactTournamentId && historyState.status === 'idle' ? (
           <p className="text-[var(--muted)] p-5">Rating history loads when this panel is viewed.</p>
         ) : !exactTournamentId && historyState.status === 'loading' ? (
-          <p className="text-[var(--muted)] p-5">Loading rating history…</p>
+          <LoadingState presentation="chart" className="m-5" label="Loading rating history" />
         ) : !exactTournamentId && (historyState.status === 'missing' || historyState.status === 'error') ? (
           <p className="text-[var(--muted)] p-5">{historyState.message}</p>
         ) : (
-          <Suspense fallback={<p className="text-[var(--muted)] p-5">Loading chart...</p>}>
+          <Suspense fallback={<LoadingState presentation="chart" className="m-5" label="Loading trajectory chart" />}>
             <LazyTeamHistoryLineChart
               series={chartSeries}
               height={300}
@@ -1801,8 +1806,10 @@ function TeamDetailDrawer({
                   <LazyTeamHistoryLineChart series={trendSeries} height={340} yLabel="Power score" />
                 </Suspense>
               </div>
-            ) : historyState.status === 'idle' || historyState.status === 'loading' ? (
+            ) : historyState.status === 'loading' ? (
               <TrendChartSkeleton />
+            ) : historyState.status === 'idle' ? (
+              <p className="text-[var(--muted)] pt-4">Rating history loads when this panel is viewed.</p>
             ) : historyState.status === 'missing' || historyState.status === 'error' ? (
               <p className="text-[var(--muted)] pt-4">{historyState.message}</p>
             ) : (
@@ -1894,17 +1901,7 @@ function roundSparklineCoord(value: number) {
 }
 
 function TrendChartSkeleton() {
-  return (
-    <div className="trend-chart-skeleton" role="status" aria-live="polite" aria-label="Loading rating trajectory">
-      <div className="trend-chart-skeleton__status">Loading rating trajectory...</div>
-      <div className="trend-chart-skeleton__plot" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-        <i />
-      </div>
-    </div>
-  )
+  return <LoadingState presentation="chart" className="trend-chart-skeleton" label="Loading rating trajectory" />
 }
 
 type RecentMatchSource = PublicRecentMatch & {
@@ -1940,7 +1937,7 @@ function RecentMatches({
 }) {
   const [pageState, setPageState] = useState({ scopeKey: '', page: 1 })
   const opponentLookup = useMemo(() => opponentContextLookup(standings), [standings])
-  const historyPending = !series && (historyState.status === 'idle' || historyState.status === 'loading')
+  const historyPending = !series && historyState.status === 'loading'
   const orderedMatches = useMemo(() => {
     if (historyPending) return matchesWithRatingMovement(matches ?? []).toReversed().slice(0, 1)
     const historyMatches = recentMatchesFromHistorySeries(series)
@@ -2315,7 +2312,7 @@ function PlayerRankingCard({
   const substituteIds = new Set(currentLineup?.substitutes.map((player) => player.playerId) ?? [])
 
   if (players.length === 0) {
-    if (loadState.status === 'idle' || loadState.status === 'loading') {
+    if (loadState.status === 'loading') {
       return (
         <aside className={emptyPlayerRankCardClassName} aria-label={`${team.team} player rankings`}>
           <div className={playerRankCardHeadClassName}>
@@ -2328,6 +2325,16 @@ function PlayerRankingCard({
             </div>
           </div>
           <PlayerRankingSkeleton />
+        </aside>
+      )
+    }
+
+    if (loadState.status === 'idle') {
+      return (
+        <aside className={emptyPlayerRankCardClassName} aria-label={`${team.team} player rankings`}>
+          <div className={playerRankCardHeadClassName}>
+            <div><h3>Player Rankings</h3><p>Player sources load when this team detail is opened.</p></div>
+          </div>
         </aside>
       )
     }

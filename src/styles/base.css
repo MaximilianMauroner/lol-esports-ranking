@@ -195,3 +195,29 @@ input {
     min-height: 44px;
   }
 }
+@keyframes loading-sheen {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+
+.loading-skeleton,
+.detail-skeleton,
+.loading-dot {
+  background-image: linear-gradient(100deg, var(--surface-2) 20%, var(--surface-3) 46%, var(--surface-2) 72%);
+  background-size: 220% 100%;
+  animation: loading-sheen 1.6s ease-in-out infinite;
+}
+
+.loading-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-skeleton,
+  .detail-skeleton,
+  .loading-dot {
+    animation: none;
+  }
+}

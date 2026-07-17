@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { AlertTriangle, BarChart3, Globe2, History, RefreshCw, X } from 'lucide-react'
 import type {
+  PublicRankingManifest,
   SnapshotCheckpointOption,
   PublicTeamStanding as RankingSummaryStanding,
 } from './lib/publicArtifacts/schema'
@@ -22,7 +23,7 @@ import { RegionBadge } from './components/ui'
 import { Button } from './components/ui/button'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
-import { Skeleton } from './components/ui/skeleton'
+import { LoadingState } from './components/ui/loading'
 import { currentSeasonScope } from './lib/defaultScope'
 import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
@@ -70,7 +71,7 @@ function checkpointButtonClassName(active: boolean, ongoing = false) {
   )
 }
 
-function App() {
+function App({ initialManifest, initialManifestError }: { initialManifest?: PublicRankingManifest; initialManifestError?: string }) {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
   const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
   const [loadPlayers, setLoadPlayers] = useState(false)
@@ -97,6 +98,8 @@ function App() {
     prefetchScope,
     prefetchTournament,
   } = usePublicArtifacts(scope, {
+    initialManifest,
+    initialManifestError,
     loadPlayers,
     loadTeamHistory,
     loadRegionHistory,
@@ -199,7 +202,9 @@ function App() {
     })
   }, [prefetchScope, preloadScopes, preloadScopesKey])
 
-  if (manifestState.status === 'loading') return <BootScreen />
+  if (manifestState.status === 'loading') {
+    return <main className="grid min-h-screen place-items-center"><LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} description="Fetching the published ranking manifest." /></main>
+  }
   if (manifestState.status !== 'ready') {
     return (
       <ErrorScreen
@@ -218,12 +223,12 @@ function App() {
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
   const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
   const teamCompareAfter = drawerOpen && mode === 'rankings' ? (
-    <Suspense fallback={<p className="px-[18px] py-[22px] text-[var(--muted)]">Loading comparison...</p>}>
+    <Suspense fallback={<LoadingState label="Loading team comparison" description="Preparing the selected team analysis." />}>
       <TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />
     </Suspense>
   ) : null
   const regionCompareAfter = drawerOpen && mode === 'regions' ? (
-    <Suspense fallback={<p className="px-[18px] py-[22px] text-[var(--muted)]">Loading comparison...</p>}>
+    <Suspense fallback={<LoadingState label="Loading region comparison" description="Preparing the selected region analysis." />}>
       <RegionCompareAnalysis
         regions={activeRegionPicks}
         columns={regionColumns}
@@ -374,7 +379,7 @@ function App() {
         ) : (
           <>
             {mode === 'regions' ? (
-              <Suspense fallback={<ViewLoading label="Loading region view" />}>
+              <Suspense fallback={<LoadingState presentation="page" label="Loading region view" />}>
                 <RegionsView
                   regions={regions}
                   standings={standings}
@@ -429,7 +434,7 @@ function App() {
               </>
             ) : null}
             {mode === 'matches' ? (
-              <Suspense fallback={<ViewLoading label="Loading match history" />}>
+              <Suspense fallback={<LoadingState presentation="page" label="Loading match history" />}>
                 <MatchesView state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
               </Suspense>
             ) : null}
@@ -523,7 +528,7 @@ function App() {
       ) : null}
 
       {drawerOpen && mode === 'regions' ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6"><LoadingState label="Opening region comparison" /></div>}>
           <RegionCompareDrawer
             open
             title="Region comparison"
@@ -537,7 +542,7 @@ function App() {
         </Suspense>
       ) : null}
       {drawerOpen && mode === 'rankings' ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6"><LoadingState label="Opening team comparison" /></div>}>
           <TeamCompareDrawer
             open
             title="Team comparison"
@@ -711,58 +716,19 @@ function toggleLimitedPick<T>(current: T[], item: T, keyFor: (item: T) => string
 }
 
 function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string }) {
-  const isLoading = state.status === 'loading'
+  if (state.status === 'loading') {
+    return <LoadingState presentation="page" label={`Loading ${scope}`} description="Fetching the exact public shard for this scope." />
+  }
   return (
     <section className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6">
       <Card className="min-w-0 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)]">
-        <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[0.88rem] [&>svg]:text-[var(--faint)]" aria-busy={isLoading}>
-          {isLoading ? <BarChart3 size={26} aria-hidden="true" /> : <AlertTriangle size={26} aria-hidden="true" />}
-          <h3>{isLoading ? `Loading ${scope}` : `Snapshot unavailable for ${scope}`}</h3>
-          <p>{isLoading ? 'Fetching the exact public shard for this scope.' : state.message}</p>
-          {isLoading ? (
-            <div className="mt-1 grid w-[min(280px,100%)] gap-2.5" aria-hidden="true">
-              <Skeleton className="h-3.5 w-full rounded-md" />
-              <Skeleton className="h-3.5 w-[70%] rounded-md" />
-              <Skeleton className="h-3.5 w-[40%] rounded-md" />
-            </div>
-          ) : null}
+        <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[0.88rem] [&>svg]:text-[var(--faint)]">
+          <AlertTriangle size={26} aria-hidden="true" />
+          <h3>{`Snapshot unavailable for ${scope}`}</h3>
+          <p>{state.message}</p>
         </div>
       </Card>
     </section>
-  )
-}
-
-function ViewLoading({ label }: { label: string }) {
-  return (
-    <section className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6">
-      <Card className="min-w-0 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)]">
-        <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>svg]:text-[var(--faint)]" aria-busy="true">
-          <RefreshCw size={26} aria-hidden="true" />
-          <h3>{label}</h3>
-          <div className="mt-1 grid w-[min(280px,100%)] gap-2.5" aria-hidden="true">
-            <Skeleton className="h-3.5 w-full rounded-md" />
-            <Skeleton className="h-3.5 w-[70%] rounded-md" />
-            <Skeleton className="h-3.5 w-[40%] rounded-md" />
-          </div>
-        </div>
-      </Card>
-    </section>
-  )
-}
-
-function BootScreen() {
-  return (
-    <main className="grid min-h-screen place-items-center p-6">
-      <Card className="grid w-[min(440px,92vw)] gap-3.5 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] p-[26px] shadow-[var(--shadow-2)]" aria-busy="true">
-        <div className="flex items-center gap-[11px] font-semibold text-[var(--text-strong)]">
-          <BarChart3 size={20} aria-hidden="true" />
-          Loading power index
-        </div>
-        <Skeleton className="h-3.5 w-full rounded-md" />
-        <Skeleton className="h-3.5 w-[70%] rounded-md" />
-        <Skeleton className="h-3.5 w-[40%] rounded-md" />
-      </Card>
-    </main>
   )
 }
 
