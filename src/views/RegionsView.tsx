@@ -470,7 +470,10 @@ function RegionMatchHistory({
   const loadedSeries = useMemo(() => new Map(regionMatchSeries(loadedMatches, teamNames).map((entry) => [entry.id, entry])), [loadedMatches, teamNames])
   const visibleMatches = visibleRefs.map((entry) => loadedSeries.get(entry.id)).filter((entry): entry is RegionMatchSeries => Boolean(entry))
   const pageFailure = state.status === 'ready' ? neededPages.map((pageNumber) => state.data.pages[pageNumber]).find((entry) => entry?.status === 'error' || entry?.status === 'missing') : undefined
-  const pageLoading = state.status === 'ready' && neededPages.some((pageNumber) => state.data.pages[pageNumber]?.status !== 'ready')
+  const pageLoading = state.status === 'ready' && neededPages.some((pageNumber) => {
+    const pageState = state.data.pages[pageNumber]
+    return !pageState || pageState.status === 'idle' || pageState.status === 'loading'
+  })
 
   useEffect(() => {
     if (!neededPagesKey) return
@@ -497,8 +500,6 @@ function RegionMatchHistory({
         <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">{state.message}</p>
       ) : refs.length === 0 ? (
         <p className="px-[18px] py-5 text-[0.82rem] text-[var(--muted)]">No matches are available for this region in the current scope.</p>
-      ) : pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
-        <p className="px-[18px] py-5 text-[0.82rem] text-[var(--loss)]">{pageFailure.message}</p>
       ) : (
         <>
           {visibleMatches.length > 0 ? (
@@ -514,6 +515,9 @@ function RegionMatchHistory({
             </div>
           ) : null}
           {pageLoading ? <LoadingState presentation="rows" className="m-3" rowCount={6} label={`Loading ${region.region} matches`} description="Fetching the missing rows for this page." /> : null}
+          {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
+            <p className="px-[18px] py-5 text-[0.82rem] text-[var(--loss)]">{pageFailure.message}</p>
+          ) : null}
           {pageCount > 1 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] px-[18px] py-3 text-[0.78rem] text-[var(--muted)] max-[560px]:px-3" aria-label={`${region.region} match history pagination`}>
               <span>{formatNumber(pageStart + 1)}–{formatNumber(pageStart + visibleRefs.length)} of {formatNumber(refs.length)}</span>

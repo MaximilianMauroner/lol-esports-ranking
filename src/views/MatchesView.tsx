@@ -56,7 +56,10 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
   const loadedSeries = useMemo(() => new Map(groupMatchSeries(loadedMatches).map((entry) => [entry.id, entry])), [loadedMatches])
   const visible = visibleRefs.map((entry) => loadedSeries.get(entry.id)).filter((entry): entry is MatchSeries => Boolean(entry))
   const pageFailure = state.status === 'ready' ? neededPages.map((pageNumber) => state.data.pages[pageNumber]).find((entry) => entry?.status === 'error' || entry?.status === 'missing') : undefined
-  const pageLoading = state.status === 'ready' && neededPages.some((pageNumber) => state.data.pages[pageNumber]?.status !== 'ready')
+  const pageLoading = state.status === 'ready' && neededPages.some((pageNumber) => {
+    const pageState = state.data.pages[pageNumber]
+    return !pageState || pageState.status === 'idle' || pageState.status === 'loading'
+  })
 
   useEffect(() => {
     if (neededPagesKey) onRequestPages(neededPagesKey.split(',').map(Number))
@@ -98,7 +101,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
   const readyCatalog = state.data.catalog
 
   const first = filtered.length === 0 ? 0 : pageStart + 1
-  const last = pageStart + visible.length
+  const last = pageStart + visibleRefs.length
 
   return (
     <section className="flex min-w-0 flex-col gap-4 px-[var(--page-x)] pt-6" aria-label="Match history results">
@@ -122,8 +125,6 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
 
       {visibleRefs.length === 0 ? (
         <Card className="grid min-h-44 place-items-center rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] p-6 text-center"><div><History className="mx-auto mb-3 text-[var(--faint)]" aria-hidden="true" /><h2 className="font-bold text-[var(--text-strong)]">No matches fit these filters</h2><p className="mt-1 text-sm text-[var(--muted)]">Try another team, league, or event.</p></div></Card>
-      ) : pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
-        <Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]">{pageFailure.message}</Alert>
       ) : (
         <>
           {visible.length > 0 ? (
@@ -138,6 +139,9 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
             </>
           ) : null}
           {pageLoading ? <LoadingState presentation="rows" label="Loading matches" description="Fetching the missing rows for this page." /> : null}
+          {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
+            <Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]">{pageFailure.message}</Alert>
+          ) : null}
         </>
       )}
 

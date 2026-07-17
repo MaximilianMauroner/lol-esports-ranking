@@ -483,9 +483,11 @@ export function TeamsView({
                             {option.value === 'All' ? option.label : `${option.label} (${formatNumber(option.count)})`}
                           </option>
                         ))}
-                        {tournamentMovementIndexState.status === 'loading' ? <option disabled>Loading exact tournaments…</option> : null}
                       </Select>
                     </label>
+                  ) : null}
+                  {tournamentMovementIndexState.status === 'loading' ? (
+                    <LoadingState presentation="inline" label="Loading tournaments" className="text-[0.72rem]" />
                   ) : null}
                   {hasActiveFilters ? (
                     <Button type="button" variant="ghost" size="sm" className="ml-auto h-[var(--gpr-control-h)] text-[var(--muted)] max-sm:col-span-full max-sm:ml-0 max-sm:justify-self-start" onClick={resetFilters}>
@@ -1607,6 +1609,10 @@ function TeamDetailDrawer({
   const rankConfidence = useMemo(() => summarizeRankConfidence(team, standings), [team, standings])
   const weightSummary = useMemo(() => summarizeTeamMatchWeights(series), [series])
   const powerResumeGap = powerResumeGapSummary(team)
+  const drawerLoading = [
+    historyState.status === 'loading' ? 'rating and match history' : '',
+    playerLoadState.status === 'loading' ? 'player rankings' : '',
+  ].filter(Boolean).join(' and ')
 
   return (
     <Sheet open onOpenChange={(nextOpen) => {
@@ -1619,6 +1625,7 @@ function TeamDetailDrawer({
         aria-label={`${team.team} details`}
         className="team-detail-sheet h-dvh max-h-dvh gap-0 overflow-hidden border-l border-[var(--line-strong)] bg-[var(--detail-surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] [--detail-surface-2:oklch(0.192_0.011_70)] [--detail-surface-3:oklch(0.222_0.013_72)] [--detail-surface:oklch(0.168_0.01_68)] data-[side=right]:w-[min(820px,100vw)] data-[side=right]:max-w-none data-[side=right]:sm:w-[min(820px,94vw)] data-[side=right]:sm:max-w-none"
       >
+        {drawerLoading ? <p className="sr-only" role="status" aria-live="polite">Loading {drawerLoading} for {team.team}.</p> : null}
         <SheetHeader className="flex-row items-center gap-3.5 border-b border-[var(--line)] bg-[var(--detail-surface)] px-5 py-4 text-left max-sm:flex-wrap max-sm:p-3.5">
           <div className="mr-auto flex min-w-0 items-center gap-3.5 [&_h2]:text-[1.15rem] [&_h2]:font-[680] [&_h2]:tracking-normal [&_h2]:text-[var(--text-strong)] [&_p]:mb-[3px] [&_p]:text-[0.72rem] [&_p]:tracking-[0.14em] [&_p]:text-[var(--faint)] [&_p]:uppercase max-[900px]:[&_h2]:text-[1.35rem]">
             <span className="inline-grid h-8 w-[54px] place-items-center rounded-[var(--r-sm)] border border-[oklch(0.79_0.155_205/0.32)] bg-[oklch(0.79_0.155_205/0.11)] font-mono text-[0.82rem] font-extrabold tracking-[0.02em] text-[var(--accent-strong)]">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
@@ -1901,7 +1908,7 @@ function roundSparklineCoord(value: number) {
 }
 
 function TrendChartSkeleton() {
-  return <LoadingState presentation="chart" className="trend-chart-skeleton" label="Loading rating trajectory" />
+  return <LoadingState presentation="chart" className="trend-chart-skeleton" label="Loading rating trajectory" announce={false} />
 }
 
 type RecentMatchSource = PublicRecentMatch & {
@@ -2002,7 +2009,7 @@ function RecentMatches({
                     ) : null}
                     {outcomeSignal ? <span className={outcomeSignal.tone} title={outcomeSignal.title}>{outcomeSignal.label}</span> : null}
                     {historyPending && !tierChip && typeof match.expectedWinProbability !== 'number' ? (
-                      <span>Loading context</span>
+                      <LoadingState presentation="inline" announce={false} label="Loading context" />
                     ) : null}
                   </span>
                 </div>
@@ -2063,7 +2070,7 @@ function MatchHistorySkeleton({
 }) {
   if (rowCount <= 0 && compact) return null
   return (
-    <div className="recent-match-skeleton" role="status" aria-live="polite" aria-label="Loading detailed match history">
+    <div className="recent-match-skeleton" aria-hidden="true">
       <p>{compact ? 'Loading remaining match context...' : 'Loading detailed match context...'}</p>
       {Array.from({ length: rowCount }, (_, index) => (
         <div className="recent-match-skeleton__row" key={index} aria-hidden="true">
@@ -2434,7 +2441,7 @@ function PlayerRankingCard({
 
 function PlayerRankingSkeleton() {
   return (
-    <div className="player-rank-skeleton" role="status" aria-live="polite" aria-label="Loading player rankings">
+    <div className="player-rank-skeleton" aria-hidden="true">
       {Array.from({ length: 5 }, (_, index) => (
         <div className="player-rank-skeleton__row" key={index} aria-hidden="true">
           <span className="detail-skeleton detail-skeleton--rank" />

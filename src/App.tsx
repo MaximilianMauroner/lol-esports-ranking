@@ -171,6 +171,11 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   const requestPlayers = useCallback(() => setLoadPlayers(true), [])
   const requestTeamHistory = useCallback(() => setLoadTeamHistory(true), [])
   const requestRegionHistory = useCallback(() => setLoadRegionHistory(true), [])
+  const goHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    setMode('rankings')
+    replaceHashForModeAndScope('rankings', effectiveScope)
+  }, [effectiveScope])
 
   const activePlayerScope = useMemo(
     () => playersState.status === 'ready' ? resolvePlayerScope(playersState.data, filter) : emptyPlayerScope(filter),
@@ -204,13 +209,13 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   }, [prefetchScope, preloadScopes, preloadScopesKey])
 
   if (manifestState.status === 'loading') {
-    return <main className="grid min-h-screen place-items-center"><LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} description="Fetching the published ranking manifest." /></main>
+    return <ManifestRouteShell mode={mode} scope={effectiveScope} onGoHome={goHome} />
   }
   if (manifestState.status !== 'ready') {
+    const message = manifestState.status === 'idle' ? 'Ranking manifest has not been requested yet.' : manifestState.message
+    if (mode !== 'rankings') return <ManifestRouteShell mode={mode} scope={effectiveScope} onGoHome={goHome} error={message} />
     return (
-      <ErrorScreen
-        message={manifestState.status === 'idle' ? 'Ranking manifest has not been requested yet.' : manifestState.message}
-      />
+      <ErrorScreen message={message} />
     )
   }
 
@@ -240,12 +245,6 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
       />
     </Suspense>
   ) : null
-  const goHome = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault()
-    setMode('rankings')
-    replaceHashForModeAndScope('rankings', effectiveScope)
-  }
-
   function preloadOnIntent(nextScope: string) {
     if (nextScope !== effectiveScope) prefetchScope(nextScope)
   }
@@ -253,48 +252,10 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   return (
     <div className="flex min-h-full flex-col">
       <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[0.84rem] font-[650] text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content">Skip to content</a>
-        <nav className="sticky top-0 z-50 grid min-h-[var(--app-nav-h)] grid-cols-[minmax(158px,max-content)_minmax(0,1fr)] items-center gap-[clamp(10px,1.6vw,22px)] border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.96)] px-[var(--page-x)] py-2.5 backdrop-blur-[16px] max-[1040px]:gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)] max-[900px]:items-stretch max-[900px]:gap-x-3 max-[900px]:gap-y-2 max-[900px]:px-3 max-[900px]:pt-2 max-[900px]:pb-2.5" aria-label="Primary">
-          <a className="flex min-w-0 items-center gap-[11px] rounded-[var(--r-sm)] text-left text-inherit no-underline transition-colors duration-160 hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)] max-[1040px]:min-w-auto max-[900px]:mr-auto max-[900px]:min-h-9 max-[900px]:justify-self-start [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" href={hashForModeAndScope('rankings', effectiveScope)} onClick={goHome} title="Go to Rankings home">
-            <span className="grid size-[37px] shrink-0 place-items-center overflow-hidden rounded-[7px]">
-              <img className="block size-full" src="/logo.png" alt="" aria-hidden="true" width={37} height={37} />
-            </span>
-            <div className="min-w-0">
-              <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.94rem] tracking-normal text-[var(--text-strong)]">Power Index</b>
-              <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] tracking-[0.13em] text-[var(--faint)] uppercase">LoL Esports Rankings</span>
-            </div>
-          </a>
-        <div className="hidden">Compare</div>
-        <div className="-m-0.5 flex min-w-0 items-center justify-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:m-0 max-[900px]:w-full max-[900px]:justify-start max-[900px]:p-0 max-[480px]:overflow-visible">
-          {MODES.map((entry) => {
-            const Icon = entry.icon
-            return (
-              <a
-                key={entry.id}
-                href={hashForModeAndScope(entry.id, effectiveScope)}
-                className={cn(
-                  'flex min-h-11 min-w-0 flex-[1_1_132px] max-w-[min(186px,100%)] cursor-pointer items-center gap-[9px] rounded-[var(--r-sm)] border border-transparent px-2.5 py-[7px] text-left text-[var(--muted)] no-underline transition-[background,color,border-color] duration-160 hover:bg-[var(--surface-2)] hover:text-[var(--text)] max-[900px]:min-h-10 max-[900px]:flex-[0_0_min(38vw,144px)] max-[900px]:justify-start max-[900px]:px-1.5 max-[480px]:max-w-none max-[480px]:flex-1 max-[480px]:basis-0 max-[480px]:justify-center max-[480px]:px-1 max-[480px]:[&>svg]:hidden max-[480px]:[&_b]:text-[0.76rem] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [&>svg]:shrink-0 [&>span]:min-w-0 [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[0.88rem] [&_b]:font-semibold [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[0.72rem] [&_small]:text-[var(--faint)] max-[1040px]:[&_small]:hidden',
-                  mode === entry.id && 'border-[color-mix(in_oklch,var(--rank-gold),var(--line)_38%)] bg-[var(--surface-2)] text-[var(--text-strong)] shadow-[inset_0_-2px_0_var(--rank-gold)] [&_small]:text-[var(--rank-gold)]',
-                )}
-                aria-current={mode === entry.id ? 'page' : undefined}
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>
-                  <b>{entry.label}</b>
-                  <small>{entry.tagline}</small>
-                </span>
-              </a>
-            )
-          })}
-        </div>
-      </nav>
+      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} />
 
       <main id="main-content" className="flex min-w-0 flex-col pb-[calc(var(--tray-h)+24px+env(safe-area-inset-bottom))] max-sm:pb-[calc(96px+24px+env(safe-area-inset-bottom))]" tabIndex={-1} ref={mainRef}>
-        <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b border-[var(--line)] bg-[oklch(0.125_0.004_250/0.72)] px-[var(--page-x)] pt-[18px] pb-3.5">
-          <div className="mr-auto min-w-0 flex-[1_1_320px]">
-            <p className="text-[0.7rem] tracking-[0.16em] text-[var(--muted)] uppercase">{MODE_TITLES[mode].eyebrow}</p>
-            <h1 className="text-[1.7rem] font-[640] tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
-          </div>
-        </header>
+        <ModeHeader mode={mode} />
 
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2" aria-label="Snapshot scope controls">
           <div className="flex min-h-[38px] items-stretch gap-1 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Season">
@@ -573,6 +534,83 @@ function visiblePreloadScopes(
       : []),
   ]
   return [...new Set(targets.filter((target) => target !== effectiveScope))].slice(0, 3)
+}
+
+function ManifestRouteShell({
+  mode,
+  scope,
+  onGoHome,
+  error,
+}: {
+  mode: Mode
+  scope: string
+  onGoHome: (event: MouseEvent<HTMLAnchorElement>) => void
+  error?: string
+}) {
+  return (
+    <div className="flex min-h-full flex-col">
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[0.84rem] font-[650] text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] focus-visible:top-3" href="#main-content">Skip to content</a>
+      <AppNavigation mode={mode} scope={scope} onGoHome={onGoHome} />
+      <main id="main-content" className="flex min-w-0 flex-col" tabIndex={-1}>
+        <ModeHeader mode={mode} />
+        <div className="flex min-h-[55px] items-center border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-[0.78rem] text-[var(--muted)]">
+          Requested scope: <b className="ml-2 text-[var(--text)]">{scopeLabel(scope)}</b>
+        </div>
+        {error ? (
+          <section className="px-[var(--page-x)] pt-6">
+            <Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]" role="alert">{error}</Alert>
+          </section>
+        ) : (
+          <LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} description="Fetching the published ranking manifest." />
+        )}
+      </main>
+    </div>
+  )
+}
+
+function ModeHeader({ mode }: { mode: Mode }) {
+  return (
+    <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b border-[var(--line)] bg-[oklch(0.125_0.004_250/0.72)] px-[var(--page-x)] pt-[18px] pb-3.5">
+      <div className="mr-auto min-w-0 flex-[1_1_320px]">
+        <p className="text-[0.7rem] tracking-[0.16em] text-[var(--muted)] uppercase">{MODE_TITLES[mode].eyebrow}</p>
+        <h1 className="text-[1.7rem] font-[640] tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
+      </div>
+    </header>
+  )
+}
+
+function AppNavigation({ mode, scope, onGoHome }: { mode: Mode; scope: string; onGoHome: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  return (
+    <nav className="sticky top-0 z-50 grid min-h-[var(--app-nav-h)] grid-cols-[minmax(158px,max-content)_minmax(0,1fr)] items-center gap-[clamp(10px,1.6vw,22px)] border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.96)] px-[var(--page-x)] py-2.5 backdrop-blur-[16px] max-[1040px]:gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)] max-[900px]:items-stretch max-[900px]:gap-x-3 max-[900px]:gap-y-2 max-[900px]:px-3 max-[900px]:pt-2 max-[900px]:pb-2.5" aria-label="Primary">
+      <a className="flex min-w-0 items-center gap-[11px] rounded-[var(--r-sm)] text-left text-inherit no-underline transition-colors duration-160 hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)] max-[1040px]:min-w-auto max-[900px]:mr-auto max-[900px]:min-h-9 max-[900px]:justify-self-start [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
+        <span className="grid size-[37px] shrink-0 place-items-center overflow-hidden rounded-[7px]"><img className="block size-full" src="/logo.png" alt="" aria-hidden="true" width={37} height={37} /></span>
+        <div className="min-w-0">
+          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.94rem] tracking-normal text-[var(--text-strong)]">Power Index</b>
+          <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] tracking-[0.13em] text-[var(--faint)] uppercase">LoL Esports Rankings</span>
+        </div>
+      </a>
+      <div className="hidden">Compare</div>
+      <div className="-m-0.5 flex min-w-0 items-center justify-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:m-0 max-[900px]:w-full max-[900px]:justify-start max-[900px]:p-0 max-[480px]:overflow-visible">
+        {MODES.map((entry) => {
+          const Icon = entry.icon
+          return (
+            <a
+              key={entry.id}
+              href={hashForModeAndScope(entry.id, scope)}
+              className={cn(
+                'flex min-h-11 min-w-0 flex-[1_1_132px] max-w-[min(186px,100%)] cursor-pointer items-center gap-[9px] rounded-[var(--r-sm)] border border-transparent px-2.5 py-[7px] text-left text-[var(--muted)] no-underline transition-[background,color,border-color] duration-160 hover:bg-[var(--surface-2)] hover:text-[var(--text)] max-[900px]:min-h-10 max-[900px]:flex-[0_0_min(38vw,144px)] max-[900px]:justify-start max-[900px]:px-1.5 max-[480px]:max-w-none max-[480px]:flex-1 max-[480px]:basis-0 max-[480px]:justify-center max-[480px]:px-1 max-[480px]:[&>svg]:hidden max-[480px]:[&_b]:text-[0.76rem] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [&>svg]:shrink-0 [&>span]:min-w-0 [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[0.88rem] [&_b]:font-semibold [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[0.72rem] [&_small]:text-[var(--faint)] max-[1040px]:[&_small]:hidden',
+                mode === entry.id && 'border-[color-mix(in_oklch,var(--rank-gold),var(--line)_38%)] bg-[var(--surface-2)] text-[var(--text-strong)] shadow-[inset_0_-2px_0_var(--rank-gold)] [&_small]:text-[var(--rank-gold)]',
+              )}
+              aria-current={mode === entry.id ? 'page' : undefined}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span><b>{entry.label}</b><small>{entry.tagline}</small></span>
+            </a>
+          )
+        })}
+      </div>
+    </nav>
+  )
 }
 
 function scopeForSeasonTab(season: string) {
