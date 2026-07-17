@@ -38,6 +38,10 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
   const leagues = useMemo(() => unique(refs.map((match) => match.league)), [refs])
   const events = useMemo(() => unique(refs.map((match) => match.event)), [refs])
   const filtered = useMemo(() => refs.filter((entry) => matchesFilters(entry, view)), [refs, view])
+  const filteredGameCount = useMemo(
+    () => filtered.reduce((total, entry) => total + entry.gameCount, 0),
+    [filtered],
+  )
   const pageCount = Math.max(1, Math.ceil(filtered.length / view.pageSize))
   const scopeKey = catalog ? scopeForFilter(catalog.filter) : ''
   const page = view.scopeKey === scopeKey ? Math.min(view.page, pageCount) : 1
@@ -98,7 +102,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[0.78rem] text-[var(--muted)]">{scopeLabel} · newest first</p>
-          <p className="mt-1 text-[0.92rem] font-bold text-[var(--text-strong)]">{formatNumber(filtered.length)} {filtered.length === 1 ? 'match' : 'matches'} <span className="font-normal text-[var(--faint)]">· {formatNumber(readyCatalog.gameCount)} games</span></p>
+          <p className="mt-1 text-[0.92rem] font-bold text-[var(--text-strong)]">{formatNumber(filtered.length)} {filtered.length === 1 ? 'match' : 'matches'} <span className="font-normal text-[var(--faint)]">· {formatNumber(filteredGameCount)} {filteredGameCount === 1 ? 'game' : 'games'}</span></p>
         </div>
         <p className="text-[0.72rem] text-[var(--faint)]">Generated {formatDate(readyCatalog.generatedAt)}</p>
       </div>
@@ -118,7 +122,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages }: { state: Matc
       ) : pageError?.status === 'error' ? (
         <Alert className="rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]">{pageError.message}</Alert>
       ) : pageLoading ? (
-        <MatchPageLoading />
+        <MatchHistoryLoading contained label="Loading matches" />
       ) : (
         <>
           <Card className="hidden overflow-hidden rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] md:block">
@@ -162,12 +166,30 @@ function MobileSeriesCard({ series, expanded, onToggle }: { series: MatchSeries;
 
 function Impact({ match }: { match: PublicMatchHistoryEntry }) {
   if (match.impact.unit === 'held') return <div><b className="text-[0.78rem] text-[var(--text)]">Result evidence recorded</b><small className="block text-[0.68rem] text-[var(--faint)]">Power impact held until series completion</small></div>
+  if (!hasConsistentImpactDirection(match)) return <div><b className="text-[0.78rem] text-[var(--warn)]">Power impact unavailable</b><small className="block text-[0.68rem] text-[var(--faint)]">Artifact consistency check failed</small></div>
   const context = [typeof match.impact.expectedTeamA === 'number' ? `${match.teamA.code} expected ${formatRatio(match.impact.expectedTeamA)}` : '', typeof match.impact.eventWeight === 'number' ? `${formatNumber(match.impact.eventWeight)}× event weight` : ''].filter(Boolean).join(' · ')
   return <div className="tabular-nums"><b className={cn('mr-2', impactTone(match.impact.teamA))}>{match.teamA.code} {formatImpact(match.impact.teamA)}</b><b className={impactTone(match.impact.teamB)}>{match.teamB.code} {formatImpact(match.impact.teamB)}</b><small className="block text-[0.68rem] text-[var(--faint)]" title={context || undefined}>Series impact applied{context ? ` · ${context}` : ''}</small></div>
 }
 
-function MatchHistoryLoading() { return <section className="grid gap-3 px-[var(--page-x)] pt-6" aria-busy="true"><Skeleton className="h-16 w-full" /><Skeleton className="h-12 w-full" />{Array.from({ length: 6 }, (_, index) => <Skeleton className="h-16 w-full" key={index} />)}</section> }
-function MatchPageLoading() { return <Card className="grid gap-2 rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] p-3" aria-busy="true">{Array.from({ length: 8 }, (_, index) => <Skeleton className="h-14 w-full" key={index} />)}</Card> }
+function MatchHistoryLoading({ contained = false, label = 'Loading match history' }: { contained?: boolean; label?: string } = {}) {
+  const loading = (
+    <Card className="rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] p-4" role="status" aria-live="polite" aria-busy="true">
+      <div className="flex items-center gap-3">
+        <History className="size-5 shrink-0 text-[var(--accent)]" aria-hidden="true" />
+        <div>
+          <h2 className="text-sm font-bold text-[var(--text-strong)]">{label}</h2>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">Fetching the selected match ledger.</p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2" aria-hidden="true">
+        <Skeleton className="h-9 w-full rounded-md" />
+        <Skeleton className="h-9 w-full rounded-md" />
+        <Skeleton className="h-9 w-[72%] rounded-md" />
+      </div>
+    </Card>
+  )
+  return contained ? loading : <section className="px-[var(--page-x)] pt-6">{loading}</section>
+}
 function groupMatchSeries(matches: PublicMatchHistoryEntry[]): MatchSeries[] {
   const groups = new Map<string, PublicMatchHistoryEntry[]>()
   for (const match of matches) groups.set(match.seriesId, [...(groups.get(match.seriesId) ?? []), match])
@@ -179,6 +201,11 @@ function groupMatchSeries(matches: PublicMatchHistoryEntry[]): MatchSeries[] {
   })
 }
 function matchesFilters(match: PublicMatchHistorySeriesRef, view: ViewState) { const search = view.search.trim().toLocaleLowerCase(); return (!search || `${match.teamA.name} ${match.teamA.code} ${match.teamB.name} ${match.teamB.code}`.toLocaleLowerCase().includes(search)) && (view.league === 'All' || match.league === view.league) && (view.event === 'All' || match.event === view.event) }
+function hasConsistentImpactDirection(match: PublicMatchHistoryEntry) {
+  const { teamA, teamB } = match.impact
+  if (typeof teamA !== 'number' || typeof teamB !== 'number' || (teamA === 0 && teamB === 0)) return false
+  return match.winnerId === match.teamA.id ? teamA >= 0 && teamB <= 0 : teamB >= 0 && teamA <= 0
+}
 function unique(values: string[]) { return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right)) }
 function impactTone(value: number | undefined) { return typeof value !== 'number' ? 'text-[var(--faint)]' : value > 0 ? 'text-[var(--up)]' : value < 0 ? 'text-[var(--down)]' : 'text-[var(--faint)]' }
 function formatImpact(value: number | undefined) { return typeof value === 'number' ? formatSigned(Number(value.toFixed(1))) : '—' }

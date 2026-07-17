@@ -38,6 +38,8 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
 const exactTeamAliases: Record<string, string> = {
   '9Gaming Esports': '9Gaming',
   'AG.AL': "Anyone's Legend",
+  'Beijing JDG Esports': 'JD Gaming',
+  'BILIBILI GAMING': 'Bilibili Gaming',
   BRION: 'HANJIN BRION',
   'DN Freecs': 'DN SOOPers',
   DRX: 'Kiwoom DRX',
@@ -47,6 +49,7 @@ const exactTeamAliases: Record<string, string> = {
   'Dplus KIA Challengers': 'Dplus Kia Challengers',
   'Dplus KIA Youth': 'Dplus Kia Youth',
   GIANTX: 'GiantX',
+  'Gen.G Esports': 'Gen.G',
   'LYON (2024 American Team)': 'LYON',
   'MIBR.LOS': 'LØS',
   'Ninjas in Pyjamas.CN': 'Ninjas in Pyjamas',

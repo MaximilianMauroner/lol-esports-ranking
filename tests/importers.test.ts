@@ -356,6 +356,46 @@ test('community merge enriches Oracle rows with unique LoL Esports official ids'
   assert.equal(merged[0]?.officialScheduleState, 'completed')
 })
 
+test('community merge reconciles official schedule aliases and format', () => {
+  const leaguepediaMatch = matchFixture({
+    id: 'lp-ewc-hle-jdg',
+    sourceProvider: 'leaguepedia-cargo',
+    sourceGameId: 'ewc-hle-jdg-1',
+    sourceMatchId: undefined,
+    date: '2026-07-16',
+    teamA: 'JD Gaming',
+    teamB: 'Hanwha Life Esports',
+    winner: 'Hanwha Life Esports',
+    bestOf: 5,
+    bestOfBasis: 'fallback',
+  })
+  const lolEsports = importLolEsportsScheduleSnapshot({
+    events: [{
+      startTime: '2026-07-16T10:10:00Z',
+      state: 'completed',
+      type: 'match',
+      match: {
+        id: 'official-ewc-hle-jdg',
+        teams: [
+          { name: 'Beijing JDG Esports', result: { outcome: 'loss', gameWins: 0 } },
+          { name: 'Hanwha Life Esports', result: { outcome: 'win', gameWins: 1 } },
+        ],
+        strategy: { type: 'bestOf', count: 1 },
+      },
+    }],
+  })
+
+  const [merged] = mergeCommunityMatchSources({
+    oracleMatches: [],
+    leaguepediaMatches: [leaguepediaMatch],
+    lolEsportsReferences: lolEsports.events,
+  })
+
+  assert.equal(merged?.officialMatchId, 'official-ewc-hle-jdg')
+  assert.equal(merged?.bestOf, 1)
+  assert.equal(merged?.bestOfBasis, 'official')
+})
+
 test('duplicate schedule pages preserve an in-progress official Bo5', () => {
   const scheduleEvent = {
     startTime: '2026-07-11T08:00:00Z',
@@ -718,6 +758,9 @@ test('team identity cleanup maps exact source display aliases only', () => {
   assert.equal(canonicalTeamNameFor('ZEN Esports (Vietnamese Team)'), 'ZEN Esports')
   assert.equal(canonicalTeamNameFor('9Gaming Esports'), '9Gaming')
   assert.equal(canonicalTeamNameFor('AG.AL'), "Anyone's Legend")
+  assert.equal(canonicalTeamNameFor('Beijing JDG Esports'), 'JD Gaming')
+  assert.equal(canonicalTeamNameFor('BILIBILI GAMING'), 'Bilibili Gaming')
+  assert.equal(canonicalTeamNameFor('Gen.G Esports'), 'Gen.G')
   assert.equal(canonicalTeamNameFor('MIBR.LOS'), 'LØS')
   assert.equal(canonicalTeamNameFor('OKSavingsBank BRION'), 'HANJIN BRION')
   assert.equal(canonicalTeamNameFor('BRION'), 'HANJIN BRION')

@@ -1604,17 +1604,26 @@ function chunk<T>(items: T[], size: number): T[][] {
 function matchImpactLookup(standings: TeamStanding[]) {
   const lookup = new Map<string, { delta: number; expected?: number; eventWeight?: number }>()
   for (const standing of standings) {
-    const groups = new Map<string, TeamHistoryPoint[]>()
-    for (const point of standing.history ?? []) {
-      if (!point.source.seriesId) continue
-      groups.set(point.source.seriesId, [...(groups.get(point.source.seriesId) ?? []), point])
+    const history = standing.history ?? []
+    const groups = new Map<string, { points: TeamHistoryPoint[]; firstIndex: number }>()
+    for (const [index, point] of history.entries()) {
+      const seriesId = point.source.seriesId
+      if (!seriesId) continue
+      const current = groups.get(seriesId)
+      if (current) current.points.push(point)
+      else groups.set(seriesId, { points: [point], firstIndex: index })
     }
-    for (const [seriesId, points] of groups) {
+    for (const [seriesId, { points, firstIndex }] of groups) {
       const update = latestInformativeRatingUpdate(points)
       const observed = points.filter((point) => point.result === 'W').length > points.length / 2 ? 1 : 0
       const residual = finiteNumber(update?.neutralResultResidual)
+      const previousRating = finiteNumber(history[firstIndex - 1]?.rating)
+      const finalRating = finiteNumber(points.at(-1)?.rating)
+      const displayDelta = typeof previousRating === 'number' && typeof finalRating === 'number'
+        ? finalRating - previousRating
+        : points.reduce((sum, point) => sum + (Number.isFinite(point.delta) ? point.delta : 0), 0)
       lookup.set(`${canonicalTeamNameFor(standing.team)}\u0000${seriesId}`, {
-        delta: Number(points.reduce((sum, point) => sum + (Number.isFinite(point.delta) ? point.delta : 0), 0).toFixed(1)),
+        delta: Number(displayDelta.toFixed(1)),
         ...(typeof residual === 'number' ? { expected: Number((observed - residual).toFixed(3)) } : {}),
         ...(typeof update?.eventWeight === 'number' ? { eventWeight: Number(update.eventWeight.toFixed(3)) } : {}),
       })

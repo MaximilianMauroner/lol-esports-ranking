@@ -258,7 +258,7 @@ function App() {
             </div>
           </a>
         <div className="hidden">Compare</div>
-        <div className="-m-0.5 flex min-w-0 items-center justify-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:m-0 max-[900px]:w-full max-[900px]:justify-start max-[900px]:p-0">
+        <div className="-m-0.5 flex min-w-0 items-center justify-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:m-0 max-[900px]:w-full max-[900px]:justify-start max-[900px]:p-0 max-[480px]:overflow-visible">
           {MODES.map((entry) => {
             const Icon = entry.icon
             return (
@@ -266,7 +266,7 @@ function App() {
                 key={entry.id}
                 href={hashForModeAndScope(entry.id, effectiveScope)}
                 className={cn(
-                  'flex min-h-11 min-w-0 flex-[1_1_132px] max-w-[min(186px,100%)] cursor-pointer items-center gap-[9px] rounded-[var(--r-sm)] border border-transparent px-2.5 py-[7px] text-left text-[var(--muted)] no-underline transition-[background,color,border-color] duration-160 hover:bg-[var(--surface-2)] hover:text-[var(--text)] max-[900px]:min-h-10 max-[900px]:flex-[0_0_min(38vw,144px)] max-[900px]:justify-start max-[900px]:px-1.5 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [&>svg]:shrink-0 [&>span]:min-w-0 [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[0.88rem] [&_b]:font-semibold [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[0.72rem] [&_small]:text-[var(--faint)] max-[1040px]:[&_small]:hidden',
+                  'flex min-h-11 min-w-0 flex-[1_1_132px] max-w-[min(186px,100%)] cursor-pointer items-center gap-[9px] rounded-[var(--r-sm)] border border-transparent px-2.5 py-[7px] text-left text-[var(--muted)] no-underline transition-[background,color,border-color] duration-160 hover:bg-[var(--surface-2)] hover:text-[var(--text)] max-[900px]:min-h-10 max-[900px]:flex-[0_0_min(38vw,144px)] max-[900px]:justify-start max-[900px]:px-1.5 max-[480px]:max-w-none max-[480px]:flex-1 max-[480px]:basis-0 max-[480px]:justify-center max-[480px]:px-1 max-[480px]:[&>svg]:hidden max-[480px]:[&_b]:text-[0.76rem] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [&>svg]:shrink-0 [&>span]:min-w-0 [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[0.88rem] [&_b]:font-semibold [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[0.72rem] [&_small]:text-[var(--faint)] max-[1040px]:[&_small]:hidden',
                   mode === entry.id && 'border-[color-mix(in_oklch,var(--rank-gold),var(--line)_38%)] bg-[var(--surface-2)] text-[var(--text-strong)] shadow-[inset_0_-2px_0_var(--rank-gold)] [&_small]:text-[var(--rank-gold)]',
                 )}
                 aria-current={mode === entry.id ? 'page' : undefined}
@@ -312,7 +312,7 @@ function App() {
           </div>
 
           {activeSeason && activeSeason !== 'All' && checkpointTabs.length > 0 ? (
-            <div className="flex min-h-[38px] items-center gap-2 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label={`${activeSeason} checkpoints`}>
+            <div className="flex min-h-[38px] min-w-0 max-w-full items-center gap-2 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[640px]:flex-[1_1_100%] max-[640px]:flex-wrap max-[640px]:overflow-visible" role="group" aria-label={`${activeSeason} checkpoints`}>
               <Button
                 type="button"
                 variant="ghost"

@@ -48,6 +48,37 @@ test('match history parser rejects a winner outside the two teams', () => {
   }), /winnerId must identify a team/)
 })
 
+test('match history impact follows consecutive published ratings instead of a stale point delta', () => {
+  const opening = game(1, 'Gen.G')
+  opening.id = 'opening-game'
+  opening.sourceGameId = 'opening-game'
+  opening.sourceMatchId = 'opening-game'
+  opening.date = '2026-07-15'
+  opening.datetimeUtc = '2026-07-15T12:00:00.000Z'
+  opening.bestOf = 1
+  opening.bestOfBasis = 'provider'
+  const data = createStaticRankingData({
+    matches: [opening, game(1, 'Gen.G'), game(2, 'Gen.G')],
+    teams,
+    rosters: {},
+    generatedAt: '2026-07-16T00:00:00.000Z',
+    dataMode: 'scheduled-public-data',
+  })
+  const key = snapshotKey({ season: '2026', event: 'All', region: 'All' })
+  const standing = data.snapshots[key]?.standings.find((entry) => entry.team === 'Gen.G')
+  assert.ok(standing)
+  const finalPoint = standing.history.at(-1)
+  assert.ok(finalPoint)
+  finalPoint.delta = -50
+
+  const shard = createMatchHistoryArtifacts(data).pages[key][1]
+  const finalEntry = shard.matches.find((entry) => entry.id === 'lck-series_2')
+
+  assert.ok(finalEntry)
+  assert.equal(finalEntry.impact.unit, 'series-applied')
+  assert.ok((finalEntry.impact.teamA ?? 0) > 0)
+})
+
 function game(gameNumber: number, winner: 'Gen.G' | 'T1'): MatchRecord {
   const swapped = gameNumber % 2 === 0
   return {
