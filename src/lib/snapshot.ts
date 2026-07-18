@@ -87,6 +87,8 @@ import type {
   PublicRegionHistoryScope,
   PublicRankingManifest,
   PublicRankingShard,
+  PublicRollingWindow,
+  PublicTeamRollingMovement,
   PublicTeamHistoryIndex,
   PublicTeamHistoryDirectory,
   PublicTeamHistoryShard,
@@ -901,6 +903,7 @@ export type ComputedRankingSnapshot = {
   modelConfigHash: string
   matchCount: number
   sourceBreakdown: SnapshotSourceBreakdown[]
+  rollingWindow?: PublicRollingWindow
   standings: ComputedTeamStanding[]
   leagues: LeagueStrength[]
   leagueHistory: LeagueStrengthHistoryPoint[]
@@ -1252,6 +1255,7 @@ export function createStaticRankingData({
   const globalRanking = buildRankingModel(matches, teams, rankingOptions)
   const globalRankingScope: RankingScope = { ranking: globalRanking, teams }
   const seasonRankingCache = new Map<string, RankingScope>()
+  const rollingBaselineCache = new Map<string, RankingModel>()
   const rankingScopeForFilter = (filter: SnapshotFilter): RankingScope => {
     if (filter.season === 'All') return globalRankingScope
     const cacheKey = snapshotKey(filter)
@@ -1310,6 +1314,16 @@ export function createStaticRankingData({
       contextStandings: dssContextStandings,
       useCheckpointBaseline: Boolean(checkpoint),
     })
+    const rolling = rollingMovementForScope({
+      filter,
+      filteredMatches,
+      currentStandings: standingsWithDss,
+      matches,
+      teams,
+      rankingOptions,
+      checkpoint,
+      cache: rollingBaselineCache,
+    })
     const snapshotLeagueHistory = leagueHistoryForFilter(snapshotScope.ranking.leagueHistory, filteredMatches, snapshotScope.teams, filter)
     const snapshotRegions = withDeservedStandingRegionComparison(
       deriveRegionStrength(snapshotLeagues, standingsWithDss),
@@ -1325,7 +1339,8 @@ export function createStaticRankingData({
       modelConfigHash: transparentGprModelMetadata.configHash,
       matchCount: filteredMatches.length,
       sourceBreakdown: sourceBreakdown(filteredMatches),
-      standings: standingsWithDss,
+      ...(rolling.window ? { rollingWindow: rolling.window } : {}),
+      standings: rolling.standings,
       leagues: snapshotLeagues,
       leagueHistory: snapshotLeagueHistory,
       players: playersForFilter(filter, filteredMatches, snapshotScope),
@@ -2417,6 +2432,111 @@ function baselineRankingForCheckpoint(
     : matches.filter((match) => match.date < checkpoint.startDate && isCalendarAlignedSeasonMatch(match))
   const baselineTeams = teamProfilesForRankingScope(baselineMatches, teams)
   return buildRankingModel(baselineMatches, baselineTeams, rankingOptions)
+}
+
+const ROLLING_MOVEMENT_DAYS = 30 as const
+
+function rollingMovementForScope({
+  filter,
+  filteredMatches,
+  currentStandings,
+  matches,
+  teams,
+  rankingOptions,
+  checkpoint,
+  cache,
+}: {
+  filter: SnapshotFilter
+  filteredMatches: MatchRecord[]
+  currentStandings: ComputedTeamStanding[]
+  matches: MatchRecord[]
+  teams: Record<string, TeamProfile>
+  rankingOptions: Parameters<typeof buildRankingModel>[2]
+  checkpoint?: SnapshotCheckpointOption
+  cache: Map<string, RankingModel>
+}): { window?: PublicRollingWindow, standings: ComputedTeamStanding[] } {
+  const completedSeries = resolveCanonicalSeries(filteredMatches).filter((series) => series.state === 'completed')
+  const endDate = completedSeries.map((series) => series.finalMatch.date).sort().at(-1)
+  if (!endDate) return { standings: currentStandings }
+  const startDate = shiftUtcDate(endDate, -ROLLING_MOVEMENT_DAYS)
+  const scopeMatches = checkpoint
+    ? matchesThroughDate(matches, checkpoint.endDate)
+    : filter.season === 'All'
+      ? matches
+      : matchesThroughSeason(matches, filter.season)
+  const baselineMatches = matchesThroughDate(scopeMatches, startDate)
+  const cacheKey = `${filter.season}\u0000${checkpoint?.id ?? ''}\u0000${startDate}`
+  let baselineRanking = cache.get(cacheKey)
+  if (!baselineRanking) {
+    baselineRanking = buildRankingModel(baselineMatches, teamProfilesForRankingScope(baselineMatches, teams), rankingOptions)
+    cache.set(cacheKey, baselineRanking)
+  }
+
+  const currentTeamNames = new Set(currentStandings.map((standing) => standing.team))
+  const baselineByTeam = new Map(
+    rankedScopedStandings(baselineRanking.standings.filter((standing) => currentTeamNames.has(standing.team) && standing.history.length > 0))
+      .map((standing) => [standing.team, standing]),
+  )
+  const activeSeriesByTeam = new Map<string, number>()
+  for (const series of completedSeries) {
+    if (series.finalMatch.date <= startDate || series.finalMatch.date > endDate) continue
+    activeSeriesByTeam.set(series.teamA, (activeSeriesByTeam.get(series.teamA) ?? 0) + 1)
+    activeSeriesByTeam.set(series.teamB, (activeSeriesByTeam.get(series.teamB) ?? 0) + 1)
+  }
+
+  const standings = currentStandings.map((standing): ComputedTeamStanding => {
+    const baseline = baselineByTeam.get(standing.team)
+    const scoredSeries = activeSeriesByTeam.get(standing.team) ?? 0
+    const rankPoints = rollingRankPoints(standing, startDate, endDate, baseline?.rank)
+    const rollingMovement: PublicTeamRollingMovement = baseline
+      ? {
+          status: scoredSeries > 0 ? 'active' : 'inactive',
+          baselineRating: baseline.rating,
+          currentRating: standing.rating,
+          ratingDelta: standing.rating - baseline.rating,
+          baselineRank: baseline.rank,
+          currentRank: standing.rank,
+          rankMovement: baseline.rank - standing.rank,
+          scoredSeries,
+          rankPoints,
+        }
+      : {
+          status: 'missing-baseline',
+          currentRating: standing.rating,
+          currentRank: standing.rank,
+          scoredSeries,
+          rankPoints,
+        }
+    return { ...standing, rollingMovement }
+  })
+  return {
+    window: {
+      kind: 'rolling-power-movement',
+      days: ROLLING_MOVEMENT_DAYS,
+      startDate,
+      endDate,
+      modelVersion: transparentGprModelMetadata.version,
+      modelConfigHash: transparentGprModelMetadata.configHash,
+    },
+    standings,
+  }
+}
+
+function rollingRankPoints(standing: ComputedTeamStanding, startDate: string, endDate: string, baselineRank?: number) {
+  const points = new Map<string, number>()
+  if (baselineRank !== undefined) points.set(startDate, baselineRank)
+  for (const point of standing.history) {
+    if (point.date <= startDate || point.date > endDate || point.source.seriesState !== 'completed') continue
+    points.set(point.date, point.rank)
+  }
+  points.set(endDate, standing.rank)
+  return [...points.entries()].sort(([left], [right]) => left.localeCompare(right)) as Array<[string, number]>
+}
+
+function shiftUtcDate(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00.000Z`)
+  value.setUTCDate(value.getUTCDate() + days)
+  return value.toISOString().slice(0, 10)
 }
 
 function withCheckpointMovement(standings: TeamStanding[], baselineStandings: TeamStanding[] | undefined) {

@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 22,
-  "generatedAt": "2026-07-16T14:26:49.174Z",
+  "schemaVersion": 23,
+  "generatedAt": "2026-07-18T20:27:54.976Z",
   "source": "Oracle's Elixir primary with Leaguepedia Cargo gap-fill",
   "sources": [
     {
@@ -134,7 +134,7 @@
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-07-16T14:26:40.008Z",
+      "retrievedAt": "2026-07-18T20:27:47.497Z",
       "coverageStart": "2025-01-12",
       "coverageEnd": "2025-12-29",
       "rowCount": 2375,
@@ -160,7 +160,7 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-07-16T14:26:45.213Z",
+      "retrievedAt": "2026-07-18T20:27:51.589Z",
       "coverageStart": "2026-01-14",
       "coverageEnd": "2026-07-10",
       "rowCount": 1870,
@@ -979,7 +979,7 @@
           "team": "Bilibili Gaming",
           "role": "Jungle",
           "rank": 1,
-          "rating": 162.1,
+          "rating": 161.9,
           "games": 281,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1028,7 +1028,7 @@
           "team": "Bilibili Gaming",
           "role": "Bot",
           "rank": 2,
-          "rating": 161.4,
+          "rating": 161.3,
           "games": 281,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1159,7 +1159,7 @@
           "team": "Bilibili Gaming",
           "role": "Top",
           "rank": 5,
-          "rating": 152.7,
+          "rating": 152.6,
           "games": 309,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1249,7 +1249,7 @@
           "team": "Hanwha Life Esports",
           "role": "Jungle",
           "rank": 7,
-          "rating": 143,
+          "rating": 142.8,
           "games": 281,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1298,7 +1298,7 @@
           "team": "LYON",
           "role": "Jungle",
           "rank": 8,
-          "rating": 141.7,
+          "rating": 141.8,
           "games": 116,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1347,7 +1347,7 @@
           "team": "LYON",
           "role": "Bot",
           "rank": 9,
-          "rating": 141.5,
+          "rating": 141.6,
           "games": 170,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1396,7 +1396,7 @@
           "team": "LYON",
           "role": "Mid",
           "rank": 10,
-          "rating": 140.6,
+          "rating": 140.4,
           "games": 82,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1472,17 +1472,17 @@
       "segments": [
         {
           "key": "bo1",
-          "predictionCount": 277,
-          "accuracy": 0.6426,
-          "brierScore": 0.2308,
-          "logLoss": 0.6532
+          "predictionCount": 276,
+          "accuracy": 0.6413,
+          "brierScore": 0.2313,
+          "logLoss": 0.6543
         },
         {
           "key": "bo3-bo5",
-          "predictionCount": 4200,
-          "accuracy": 0.6319,
+          "predictionCount": 4201,
+          "accuracy": 0.632,
           "brierScore": 0.2294,
-          "logLoss": 0.6508
+          "logLoss": 0.6507
         },
         {
           "key": "international",
@@ -1535,23 +1535,23 @@
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 277,
-              "accuracy": 0.5054,
+              "predictionCount": 276,
+              "accuracy": 0.5036,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1372,
-              "publishedBrierDelta": 0.0192,
-              "publishedLogLossDelta": 0.0399
+              "publishedAccuracyDelta": 0.1377,
+              "publishedBrierDelta": 0.0187,
+              "publishedLogLossDelta": 0.0388
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 4200,
-              "accuracy": 0.5355,
+              "predictionCount": 4201,
+              "accuracy": 0.5356,
               "brierScore": 0.25,
               "logLoss": 0.6931,
               "publishedAccuracyDelta": 0.0964,
               "publishedBrierDelta": 0.0206,
-              "publishedLogLossDelta": 0.0423
+              "publishedLogLossDelta": 0.0424
             },
             {
               "key": "international",
@@ -1619,23 +1619,23 @@
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 277,
-              "accuracy": 0.6245,
-              "brierScore": 0.2311,
-              "logLoss": 0.6545,
-              "publishedAccuracyDelta": 0.0181,
-              "publishedBrierDelta": 0.0003,
-              "publishedLogLossDelta": 0.0013
+              "predictionCount": 276,
+              "accuracy": 0.6268,
+              "brierScore": 0.2309,
+              "logLoss": 0.6542,
+              "publishedAccuracyDelta": 0.0145,
+              "publishedBrierDelta": -0.0004,
+              "publishedLogLossDelta": -0.0001
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 4200,
-              "accuracy": 0.6214,
+              "predictionCount": 4201,
+              "accuracy": 0.6213,
               "brierScore": 0.2327,
               "logLoss": 0.6576,
-              "publishedAccuracyDelta": 0.0105,
+              "publishedAccuracyDelta": 0.0107,
               "publishedBrierDelta": 0.0033,
-              "publishedLogLossDelta": 0.0068
+              "publishedLogLossDelta": 0.0069
             },
             {
               "key": "international",
@@ -1703,20 +1703,20 @@
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 277,
-              "accuracy": 0.6426,
-              "brierScore": 0.2355,
-              "logLoss": 0.6634,
+              "predictionCount": 276,
+              "accuracy": 0.6413,
+              "brierScore": 0.236,
+              "logLoss": 0.6646,
               "publishedAccuracyDelta": 0,
               "publishedBrierDelta": 0.0047,
-              "publishedLogLossDelta": 0.0102
+              "publishedLogLossDelta": 0.0103
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 4200,
-              "accuracy": 0.6217,
+              "predictionCount": 4201,
+              "accuracy": 0.6218,
               "brierScore": 0.2364,
-              "logLoss": 0.6656,
+              "logLoss": 0.6655,
               "publishedAccuracyDelta": 0.0102,
               "publishedBrierDelta": 0.007,
               "publishedLogLossDelta": 0.0148
@@ -1936,9 +1936,9 @@
   "defaultSnapshotKey": "All__All__All",
   "artifactKind": "public-ranking-manifest",
   "artifactMeta": {
-    "schemaVersion": 22,
-    "runId": "run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
-    "generatedAt": "2026-07-16T14:26:49.174Z",
+    "schemaVersion": 23,
+    "runId": "run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+    "generatedAt": "2026-07-18T20:27:54.976Z",
     "modelVersion": "transparent-power-index-v0.0.0",
     "modelConfigHash": "fnv1a-7e4c9e6f"
   },
@@ -1954,12 +1954,12 @@
     "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
   },
   "summaryMode": "browser-summary",
-  "playerDirectoryUrl": "/data/entities/players.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
-  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
-  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
-  "regionHistoryUrl": "/data/history/region-series.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
-  "tournamentMovementIndexUrl": "/data/history/tournament-moves/index.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
-  "matchHistoryIndexUrl": "/data/matches/index.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+  "playerDirectoryUrl": "/data/entities/players.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+  "regionHistoryUrl": "/data/history/region-series.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+  "tournamentMovementIndexUrl": "/data/history/tournament-moves/index.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+  "matchHistoryIndexUrl": "/data/matches/index.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
   "teamCount": 102,
   "snapshotIndex": {
     "All__All__All": {
@@ -1968,7 +1968,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/all.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/all.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 4477,
       "sourceBreakdown": [
         {
@@ -1994,7 +1994,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2025.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/season-2025.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 2505,
       "sourceBreakdown": [
         {
@@ -2021,7 +2021,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2025-split-1.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/season-2025-split-1.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 486,
       "sourceBreakdown": [
         {
@@ -2048,7 +2048,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2025-split-2.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/season-2025-split-2.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 976,
       "sourceBreakdown": [
         {
@@ -2075,7 +2075,7 @@
         "region": "All",
         "checkpoint": "split-3"
       },
-      "url": "/data/scopes/season-2025-split-3.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/season-2025-split-3.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 974,
       "sourceBreakdown": [
         {
@@ -2101,7 +2101,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2026.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/season-2026.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 1905,
       "sourceBreakdown": [
         {
@@ -2128,7 +2128,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2026-split-1.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/season-2026-split-1.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 737,
       "sourceBreakdown": [
         {
@@ -2148,7 +2148,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2026-split-2.json?v=run_20260716142649_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
+      "url": "/data/scopes/season-2026-split-2.json?v=run_20260718202754_transparent-power-index-v0-0-0_fnv1a-7e4c9e6f",
       "matchCount": 1141,
       "sourceBreakdown": [
         {

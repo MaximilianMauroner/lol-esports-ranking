@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRi
 import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type {
   PublicRecentMatch,
+  PublicRollingWindow,
   PublicCurrentLineup,
   PublicTournamentMovementIndexEntry,
   PublicTournamentMovementShard,
@@ -74,6 +75,7 @@ type TeamDataSummary = {
   coverageEnd?: string
   latestMatchDate?: string
   movementBaseline?: string
+  rollingWindow?: PublicRollingWindow
   seeded?: boolean
   sourceBreakdown?: { provider: string; matchCount: number }[]
   notes?: string[]
@@ -226,7 +228,11 @@ export function TeamsView({
     () => scopeFiltered.filter((team) => !team.eligibility?.eligible).length,
     [scopeFiltered],
   )
-  const movementBaseline = activeTournament ? `${activeTournament.label} start` : dataSummary?.movementBaseline ?? 'the previous rating update in this scope'
+  const movementBaseline = activeTournament
+    ? `${activeTournament.label} start`
+    : dataSummary?.rollingWindow
+      ? `${formatDate(dataSummary.rollingWindow.startDate)} to ${formatDate(dataSummary.rollingWindow.endDate)}`
+      : dataSummary?.movementBaseline ?? 'the previous rating update in this scope'
   const eligibilityNote = hiddenFromRankedCount > 0
     ? eligibilityFilter === 'ranked'
       ? `${formatNumber(hiddenFromRankedCount)} ineligible teams hidden`
@@ -249,8 +255,8 @@ export function TeamsView({
     [displayStandings],
   )
   const rankingFlair = useMemo<RankingFlair>(
-    () => deriveRankingFlair(filtered, { tierUniverse: rankedTierUniverse }),
-    [filtered, rankedTierUniverse],
+    () => deriveRankingFlair(filtered, { tierUniverse: rankedTierUniverse, rollingWindow: dataSummary?.rollingWindow }),
+    [dataSummary?.rollingWindow, filtered, rankedTierUniverse],
   )
   const tierAssignments: RankingTierAssignment[] = rankingFlair.tiers
   const rankingSignals = useMemo(
@@ -537,8 +543,8 @@ export function TeamsView({
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} />
                       <TableHead>Team</TableHead>
                       <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" />
-                      <TableHead className="gpr-col-trend" title={`Movement = rank change vs ${movementBaseline}.`}>
-                        {activeTournament ? 'Tournament move' : 'Movement'}
+                      <TableHead className="gpr-col-trend" title={`Movement = rank and Power-score change from ${movementBaseline}.`}>
+                        {activeTournament ? 'Tournament move' : '30D move'}
                       </TableHead>
                       <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" className="gpr-col-record" />
                       <TableHead className="center" aria-label="Add to comparison" />
@@ -549,7 +555,6 @@ export function TeamsView({
                       const key = teamKey(team)
                       const total = team.wins + team.losses
                       const rank = teamRankFor(team)
-                      const historySeries = history?.[key]
                       const tier = tierByTeam.get(team.team.toLocaleLowerCase('en'))
                       const tierHighlighted = Boolean(activeSelectedTier && tier === activeSelectedTier)
                       const excludedFromRankedBoard = team.eligibility?.eligible === false
@@ -606,7 +611,7 @@ export function TeamsView({
                                 endpointLabel={tournamentBoundaryLabel(activeTournament.status)}
                               />
                             ) : (
-                              <TeamRankTrendCell team={team} series={historySeries} movementBaseline={movementBaseline} />
+                              <TeamRankTrendCell team={team} movementBaseline={movementBaseline} />
                             )}
                           </TableCell>
                           <TableCell className="right num gpr-col-record">
@@ -903,34 +908,36 @@ const RANK_SPARKLINE_HEIGHT = 28
 
 function TeamRankTrendCell({
   team,
-  series,
   movementBaseline,
 }: {
   team: RankingSummaryStanding
-  series?: TeamHistorySeries
   movementBaseline: string
 }) {
-  const summary = summarizeRankTrend(team, series)
-  const sparkline = rankSparklineShape(rankValuesForSparkline(summary, series), RANK_SPARKLINE_WIDTH, RANK_SPARKLINE_HEIGHT)
+  const movement = team.rollingMovement
+  const sparkline = rankSparklineShape(movement?.rankPoints.map((point) => point[1]) ?? [], RANK_SPARKLINE_WIDTH, RANK_SPARKLINE_HEIGHT)
 
-  if (!summary) {
+  if (!movement || movement.status !== 'active') {
+    const emptyLabel = movement?.status === 'inactive' ? '— No series' : '— No baseline'
+    const emptyTitle = `${team.team} · ${emptyLabel.slice(2)} in ${movementBaseline}`
     return (
-      <span className="rank-trend-cell rank-trend-cell--empty grid min-w-0 grid-cols-1 items-center gap-2 text-[var(--rank-movement-color,var(--faint))]">
-        <span className="rank-trend-cell__move flat inline-block min-w-[1.4em] overflow-hidden text-ellipsis whitespace-nowrap text-[0.82rem] font-[780] leading-[1.2] text-current tabular-nums">No history</span>
+      <span className="rank-trend-cell rank-trend-cell--empty grid min-w-0 grid-cols-1 items-center gap-2 text-[var(--faint)]" title={emptyTitle} aria-label={emptyTitle}>
+        <span className="rank-trend-cell__move flat inline-block overflow-hidden text-ellipsis whitespace-nowrap text-[0.72rem] font-[680] leading-[1.2] text-current">{emptyLabel}</span>
       </span>
     )
   }
 
-  const tone = rankMovementTone(summary.recentMovement)
-  const title = rankTrendTitle(team.team, summary, movementBaseline)
+  const rankMovement = movement.rankMovement ?? 0
+  const ratingDelta = movement.ratingDelta ?? 0
+  const tone = rankMovementTone(rankMovement)
+  const title = `${team.team} · #${movement.baselineRank} to #${movement.currentRank} · ${formatRating(movement.baselineRating!)} to ${formatRating(movement.currentRating)} Power (${formatRatingMovement(ratingDelta)}) · ${formatNumber(movement.scoredSeries)} scored series · ${movementBaseline}`
   return (
-    <span className="rank-trend-cell grid min-w-0 grid-cols-[46px_minmax(0,1fr)] items-center gap-2 text-[var(--rank-movement-color,var(--faint))]" role="img" title={title} aria-label={title} style={rankMovementStyle(summary.recentMovement)}>
+    <span className="rank-trend-cell grid min-w-0 grid-cols-[58px_minmax(0,1fr)] items-center gap-2 text-[var(--rank-movement-color,var(--faint))]" role="img" title={title} aria-label={title} style={rankMovementStyle(rankMovement)}>
       <span
-        className={`${tone} inline-flex min-w-0 items-center gap-[3px] text-current [&_svg]:shrink-0 [&_svg]:text-current`}
+        className={`${tone} flex min-w-0 flex-col text-current`}
         aria-hidden="true"
       >
-        <RankMovementIcon tone={tone} />
-        <b className={`rank-trend-cell__move ${tone} inline-block min-w-[1.4em] overflow-hidden text-ellipsis whitespace-nowrap text-[0.82rem] font-[780] leading-[1.2] text-current tabular-nums`}>{formatRankMovementCompact(summary.recentMovement)}</b>
+        <span className="inline-flex items-center gap-[3px]"><RankMovementIcon tone={tone} /><b className={`rank-trend-cell__move ${tone} tabular-nums`}>{formatRankMovementCompact(rankMovement)}</b></span>
+        <small className="whitespace-nowrap text-[0.62rem] text-[var(--faint)]">{formatRatingMovement(ratingDelta)}</small>
       </span>
       {sparkline ? (
         <svg
@@ -1150,14 +1157,6 @@ function rankTrendPoints(series?: TeamHistorySeries): RankTrendPoint[] {
   })
 }
 
-function rankValuesForSparkline(summary: RankTrendSummary | null, series?: TeamHistorySeries) {
-  const fromHistory = rankTrendPoints(series).map((point) => point.rank).slice(-18)
-  if (fromHistory.length >= 2) return fromHistory
-  const fallback = [summary?.previousRank, summary?.currentRank]
-    .filter((rank): rank is number => typeof rank === 'number' && Number.isFinite(rank))
-  return fallback.length >= 2 ? fallback : []
-}
-
 function positiveRank(value?: number) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) return undefined
   return Math.round(value)
@@ -1227,19 +1226,6 @@ function formatRankTransition(previousRank?: number, currentRank?: number) {
   }
   if (typeof currentRank === 'number') return `Now ${formatRankValue(currentRank)}`
   return 'Rank unavailable'
-}
-
-function rankTrendTitle(teamName: string, summary: RankTrendSummary, movementBaseline: string) {
-  const recent = formatRankMovementLabel(summary.recentMovement)
-  const transition = formatRankTransition(summary.previousRank, summary.currentRank)
-  const baseline = `Movement baseline: ${movementBaseline}`
-  const window = typeof summary.windowMovement === 'number' && summary.startDate
-    ? `${formatRankMovementLabel(summary.windowMovement)} since ${formatDate(summary.startDate)}`
-    : undefined
-  const range = typeof summary.bestRank === 'number' && typeof summary.worstRank === 'number'
-    ? `Best ${formatRankValue(summary.bestRank)}, worst ${formatRankValue(summary.worstRank)}`
-    : undefined
-  return [teamName, recent, baseline, transition, window, range].filter(Boolean).join(' · ')
 }
 
 type RankSparklineShape = {
@@ -2518,7 +2504,7 @@ function rankingSignalsProps(flair: RankingFlair, movementBaseline: string): Ran
   return {
     eyebrow: 'Table readout',
     title: 'Filtered signals',
-    subtitle: 'Movement, tier, upset, and evidence context from the current table rows.',
+    subtitle: `Movement, upset, and evidence context for ${movementBaseline}.`,
     tierCounts: tierCountsFor(flair.tiers),
     biggestRiser: movementSpotlight(flair.movement.biggestRiser, movementBaseline),
     biggestFaller: movementSpotlight(flair.movement.biggestFaller, movementBaseline),
@@ -2527,9 +2513,9 @@ function rankingSignalsProps(flair: RankingFlair, movementBaseline: string): Ran
       winner: flair.upsetHeadline.winner,
       loser: flair.upsetHeadline.opponent,
       event: flair.upsetHeadline.event,
-      score: `${formatSigned(flair.upsetHeadline.matchDelta)} rating`,
+      score: `${Math.round(flair.upsetHeadline.expectedWinProbability * 100)}% pre-match`,
       date: flair.upsetHeadline.date,
-      description: `Upset score ${formatNumber(flair.upsetHeadline.score)} from match delta, rating gap, and rank gap.`,
+      description: `Pre-series model expectation for the winner; lower probability means a larger surprise.`,
     } : undefined,
     confidenceBand: spicy ? {
       label: `${spicy.code}: evidence coverage`,

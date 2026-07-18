@@ -6,7 +6,7 @@ import type {
   TeamStanding,
 } from '../types'
 import { isDevelopmentalTeamName } from './model'
-import type { PublicDeservedStandingComparison } from './publicArtifacts/schema'
+import type { PublicDeservedStandingComparison, PublicTeamRollingMovement } from './publicArtifacts/schema'
 import { type RegionDeservedStandingComparison, type RegionStrength } from './regionStrength'
 import { dssRosterValidity, type DssReferenceStrengthContext, type DssSeriesLedgerEntry } from './deservedStanding'
 import { buildDeservedStandingModel, type DeservedStandingTeamSummary } from './deservedStandingModel'
@@ -14,6 +14,7 @@ import { buildDeservedStandingRegionModel, type DeservedStandingRegionSummary } 
 
 export type ComputedTeamStanding = TeamStanding & {
   deservedStanding?: PublicDeservedStandingComparison
+  rollingMovement?: PublicTeamRollingMovement
 }
 
 export function withDeservedStandingComparison(
