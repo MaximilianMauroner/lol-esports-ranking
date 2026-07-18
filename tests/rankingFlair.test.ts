@@ -130,13 +130,13 @@ test('keeps championship-score clusters together when no visible boundary gap ex
   )
 })
 
-test('derives podium and movement picks with deterministic tie-breakers', () => {
+test('derives podium and 30-day Power movement picks with deterministic tie-breakers', () => {
   const standings = [
-    standing({ team: 'First', code: 'FST', rank: 1, rating: 1800, movement: 1, previousRank: 2 }),
-    standing({ team: 'Second', code: 'SND', rank: 2, rating: 1760, movement: 4, previousRank: 6, delta: 20 }),
-    standing({ team: 'Third', code: 'TRD', rank: 3, rating: 1720, movement: 4, previousRank: 7, delta: 12 }),
-    standing({ team: 'Drop', code: 'DRP', rank: 8, rating: 1580, movement: -5, previousRank: 3, delta: -28 }),
-    standing({ team: 'Slide', code: 'SLD', rank: 9, rating: 1570, movement: -5, previousRank: 4, delta: -12 }),
+    standing({ team: 'First', code: 'FST', rank: 1, rating: 1800, rollingMovement: rolling(1800, 1, 0, 2) }),
+    standing({ team: 'Second', code: 'SND', rank: 2, rating: 1760, rollingMovement: rolling(1760, 2, 20, 4) }),
+    standing({ team: 'Third', code: 'TRD', rank: 3, rating: 1720, rollingMovement: rolling(1720, 3, 12, 4) }),
+    standing({ team: 'Drop', code: 'DRP', rank: 8, rating: 1580, rollingMovement: rolling(1580, 8, -28, -5) }),
+    standing({ team: 'Slide', code: 'SLD', rank: 9, rating: 1570, rollingMovement: rolling(1570, 9, -12, -5) }),
   ]
 
   assert.deepEqual(
@@ -153,41 +153,42 @@ test('derives podium and movement picks with deterministic tie-breakers', () => 
   assert.equal(movement.biggestFaller?.team, 'Drop')
 })
 
-test('movement picks require rank and rating to move in the same direction', () => {
+test('movement picks use Power delta first and exclude inactive teams', () => {
   const movement = deriveMovementPicks([
-    standing({ team: 'Rank Only', code: 'RNO', rank: 2, previousRank: 20, movement: 18, delta: -5 }),
-    standing({ team: 'True Riser', code: 'TRU', rank: 3, previousRank: 8, movement: 5, delta: 18 }),
-    standing({ team: 'Drop Only', code: 'DRO', rank: 20, previousRank: 2, movement: -18, delta: 5 }),
-    standing({ team: 'True Faller', code: 'TRF', rank: 19, previousRank: 10, movement: -9, delta: -18 }),
+    standing({ team: 'Rank Only', code: 'RNO', rank: 2, rollingMovement: rolling(1500, 2, -5, 18) }),
+    standing({ team: 'True Riser', code: 'TRU', rank: 3, rollingMovement: rolling(1500, 3, 18, 5) }),
+    standing({ team: 'Drop Only', code: 'DRO', rank: 20, rollingMovement: rolling(1500, 20, 5, -18) }),
+    standing({ team: 'True Faller', code: 'TRF', rank: 19, rollingMovement: rolling(1500, 19, -18, -9) }),
+    standing({ team: 'Inactive spike', code: 'INA', rank: 21, rollingMovement: { ...rolling(1500, 21, 100, 20), status: 'inactive', scoredSeries: 0 } }),
   ])
 
   assert.equal(movement.biggestRiser?.team, 'True Riser')
   assert.equal(movement.biggestFaller?.team, 'True Faller')
 })
 
-test('derives upset headline from recent winning matches and opponent standing gaps', () => {
+test('derives upset headline from lowest pre-series expectation in the rolling window', () => {
   const headline = deriveUpsetHeadline([
     standing({
       team: 'Favorite',
       code: 'FAV',
       rank: 1,
       rating: 1800,
-      recentMatches: [recentMatch({ opponent: 'Mid', delta: 12, result: 'W' })],
+      rollingMovement: { ...rolling(1800, 1, 12, 0), biggestUpsetWin: { date: '2026-05-01', event: 'LCK', opponent: 'Mid', expectedWinProbability: 0.4, ratingDelta: 12 } },
     }),
     standing({
       team: 'Underdog',
       code: 'DOG',
       rank: 9,
       rating: 1580,
-      recentMatches: [recentMatch({ opponent: 'Favorite', delta: 24, result: 'W', event: 'MSI 2026' })],
+      rollingMovement: { ...rolling(1580, 9, 24, 0), biggestUpsetWin: { date: '2026-05-01', event: 'MSI 2026', opponent: 'Favorite', expectedWinProbability: 0.22, ratingDelta: 24 } },
     }),
     standing({ team: 'Mid', code: 'MID', rank: 5, rating: 1680 }),
-  ])
+  ], { kind: 'rolling-power-movement', days: 30, startDate: '2026-04-01', endDate: '2026-05-01', modelVersion: 'test', modelConfigHash: 'test' })
 
   assert.equal(headline?.winner, 'Underdog')
   assert.equal(headline?.opponentCode, 'FAV')
-  assert.equal(headline?.ratingGap, 220)
-  assert.match(headline?.headline ?? '', /DOG upset FAV/)
+  assert.equal(headline?.expectedWinProbability, 0.22)
+  assert.match(headline?.headline ?? '', /DOG beat FAV.*22%/)
 })
 
 test('derives spicy-take confidence bands from confidence, uncertainty, and recent evidence', () => {
@@ -220,6 +221,15 @@ test('derives spicy-take confidence bands from confidence, uncertainty, and rece
   )
 })
 
+test('omitting rolling window keeps evidence independent from 30-day series counts for tournament flair', () => {
+  const row = standing({
+    recentMatches: [recentMatch({ opponent: 'A' }), recentMatch({ opponent: 'B' })],
+    rollingMovement: { ...rolling(1500, 1, 10, 1), scoredSeries: 99 },
+  })
+  const tournamentFlair = deriveRankingFlair([row])
+  assert.equal(tournamentFlair.spicyTakeConfidence[0]?.recentMatchCount, 2)
+})
+
 function recentMatch(overrides: Partial<PublicRecentMatch> = {}): PublicRecentMatch {
   return {
     date: '2026-05-01',
@@ -229,6 +239,20 @@ function recentMatch(overrides: Partial<PublicRecentMatch> = {}): PublicRecentMa
     rating: 1500,
     delta: 10,
     ...overrides,
+  }
+}
+
+function rolling(currentRating: number, currentRank: number, ratingDelta: number, rankMovement: number): NonNullable<PublicTeamStanding['rollingMovement']> {
+  return {
+    status: 'active',
+    baselineRating: currentRating - ratingDelta,
+    currentRating,
+    ratingDelta,
+    baselineRank: currentRank + rankMovement,
+    currentRank,
+    rankMovement,
+    scoredSeries: 1,
+    rankPoints: [['2026-04-01', currentRank + rankMovement], ['2026-05-01', currentRank]],
   }
 }
 

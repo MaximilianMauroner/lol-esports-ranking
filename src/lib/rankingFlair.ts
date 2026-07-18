@@ -1,4 +1,4 @@
-import type { PublicRecentMatch, PublicTeamStanding } from './publicArtifacts/schema'
+import type { PublicRollingUpsetWin, PublicRollingWindow, PublicTeamStanding } from './publicArtifacts/schema'
 
 export type RankingTierLabel = 'S' | 'A' | 'B' | 'C'
 
@@ -53,8 +53,7 @@ export type RankingUpsetHeadline = {
   event: string
   date: string
   matchDelta: number
-  ratingGap?: number
-  rankGap?: number
+  expectedWinProbability: number
   score: number
   headline: string
 }
@@ -103,7 +102,7 @@ export function powerScoreForStanding(standing: Pick<PublicTeamStanding, 'rating
 
 export function deriveRankingFlair(
   standings: readonly PublicTeamStanding[],
-  { tierUniverse = standings }: { tierUniverse?: readonly PublicTeamStanding[] } = {},
+  { tierUniverse = standings, rollingWindow }: { tierUniverse?: readonly PublicTeamStanding[], rollingWindow?: PublicRollingWindow } = {},
 ): RankingFlair {
   const canonicalTiers = deriveTierLabels(tierUniverse)
   const visibleTeams = new Set(standings.map(standingKey))
@@ -111,8 +110,8 @@ export function deriveRankingFlair(
     tiers: canonicalTiers.filter((assignment) => visibleTeams.has(standingKey(assignment))),
     podium: deriveTopThreePodium(standings, canonicalTiers, leaderPowerScore(tierUniverse)),
     movement: deriveMovementPicks(standings),
-    upsetHeadline: deriveUpsetHeadline(standings),
-    spicyTakeConfidence: standingsByRank(standings).map((standing) => deriveSpicyTakeConfidence(standing)),
+    upsetHeadline: deriveUpsetHeadline(standings, rollingWindow),
+    spicyTakeConfidence: standingsByRank(standings).map((standing) => deriveSpicyTakeConfidence(standing, rollingWindow)),
   }
 }
 
@@ -181,10 +180,10 @@ function standingKey(standing: Pick<PublicTeamStanding, 'team' | 'code'>) {
 export function deriveMovementPicks(standings: readonly PublicTeamStanding[]): RankingMovementPicks {
   const ranked = standingsByRank(standings)
   const biggestRiser = ranked
-    .filter((standing) => standing.movement > 0 && standing.delta > 0)
+    .filter((standing) => standing.rollingMovement?.status === 'active' && (standing.rollingMovement.ratingDelta ?? 0) > 0)
     .sort(compareRisers)[0]
   const biggestFaller = ranked
-    .filter((standing) => standing.movement < 0 && standing.delta < 0)
+    .filter((standing) => standing.rollingMovement?.status === 'active' && (standing.rollingMovement.ratingDelta ?? 0) < 0)
     .sort(compareFallers)[0]
 
   return {
@@ -193,19 +192,22 @@ export function deriveMovementPicks(standings: readonly PublicTeamStanding[]): R
   }
 }
 
-export function deriveUpsetHeadline(standings: readonly PublicTeamStanding[]): RankingUpsetHeadline | null {
+export function deriveUpsetHeadline(standings: readonly PublicTeamStanding[], rollingWindow?: PublicRollingWindow): RankingUpsetHeadline | null {
   const standingLookup = teamLookup(standings)
-  const candidates = standings.flatMap((standing) =>
-    standing.recentMatches
-      .filter((match) => match.result === 'W' && match.delta > 0)
-      .map((match) => upsetCandidate(standing, match, standingLookup)),
-  )
+  const candidates = rollingWindow
+    ? standings.flatMap((standing) => {
+        const upset = standing.rollingMovement?.biggestUpsetWin
+        return upset && upset.expectedWinProbability < 0.5 ? [upsetCandidate(standing, upset, standingLookup)] : []
+      })
+    : []
 
   return candidates.sort(compareUpsets)[0] ?? null
 }
 
-export function deriveSpicyTakeConfidence(standing: PublicTeamStanding): SpicyTakeConfidence {
-  const recentMatchCount = standing.recentMatches.length
+export function deriveSpicyTakeConfidence(standing: PublicTeamStanding, rollingWindow?: PublicRollingWindow): SpicyTakeConfidence {
+  const recentMatchCount = rollingWindow
+    ? standing.rollingMovement?.scoredSeries ?? 0
+    : standing.recentMatches.length
   const eligibleBonus = standing.eligibility.eligible ? 10 : -15
   const score = clampScore(
     standing.confidence - standing.uncertainty * 0.35 + Math.min(recentMatchCount, 5) * 3 + eligibleBonus,
@@ -306,22 +308,27 @@ function standingsByRank(standings: readonly PublicTeamStanding[]) {
 }
 
 function movementPick(standing: PublicTeamStanding): RankingMovementPick {
+  const movement = standing.rollingMovement
   return {
     team: standing.team,
     code: standing.code,
-    rank: standing.rank,
-    previousRank: standing.previousRank,
-    movement: standing.movement,
-    ratingDelta: standing.delta,
+    rank: movement?.currentRank ?? standing.rank,
+    previousRank: movement?.baselineRank ?? standing.previousRank,
+    movement: movement?.rankMovement ?? standing.movement,
+    ratingDelta: movement?.ratingDelta ?? standing.delta,
   }
 }
 
 function compareRisers(a: PublicTeamStanding, b: PublicTeamStanding) {
-  return b.movement - a.movement || b.delta - a.delta || a.rank - b.rank || a.team.localeCompare(b.team)
+  return (b.rollingMovement?.ratingDelta ?? 0) - (a.rollingMovement?.ratingDelta ?? 0)
+    || (b.rollingMovement?.rankMovement ?? 0) - (a.rollingMovement?.rankMovement ?? 0)
+    || a.rank - b.rank || a.team.localeCompare(b.team)
 }
 
 function compareFallers(a: PublicTeamStanding, b: PublicTeamStanding) {
-  return a.movement - b.movement || a.delta - b.delta || a.rank - b.rank || a.team.localeCompare(b.team)
+  return (a.rollingMovement?.ratingDelta ?? 0) - (b.rollingMovement?.ratingDelta ?? 0)
+    || (a.rollingMovement?.rankMovement ?? 0) - (b.rollingMovement?.rankMovement ?? 0)
+    || a.rank - b.rank || a.team.localeCompare(b.team)
 }
 
 function teamLookup(standings: readonly PublicTeamStanding[]) {
@@ -335,13 +342,12 @@ function teamLookup(standings: readonly PublicTeamStanding[]) {
 
 function upsetCandidate(
   standing: PublicTeamStanding,
-  match: PublicRecentMatch,
+  match: PublicRollingUpsetWin,
   standingLookup: ReadonlyMap<string, PublicTeamStanding>,
 ): RankingUpsetHeadline {
   const opponent = standingLookup.get(match.opponent.toLocaleLowerCase('en'))
-  const ratingGap = opponent ? opponent.rating - standing.rating : undefined
-  const rankGap = opponent ? standing.rank - opponent.rank : undefined
-  const score = match.delta + Math.max(0, ratingGap ?? 0) / 20 + Math.max(0, rankGap ?? 0) * 2
+  const expectedWinProbability = match.expectedWinProbability!
+  const score = (1 - expectedWinProbability) * 100
 
   return {
     winner: standing.team,
@@ -350,16 +356,15 @@ function upsetCandidate(
     opponentCode: opponent?.code,
     event: match.event,
     date: match.date,
-    matchDelta: match.delta,
-    ratingGap,
-    rankGap,
+    matchDelta: match.ratingDelta,
+    expectedWinProbability,
     score: roundOne(score),
-    headline: `${standing.code} upset ${opponent?.code ?? match.opponent} for ${signed(match.delta)} rating`,
+    headline: `${standing.code} beat ${opponent?.code ?? match.opponent} with a ${Math.round(expectedWinProbability * 100)}% pre-match chance`,
   }
 }
 
 function compareUpsets(a: RankingUpsetHeadline, b: RankingUpsetHeadline) {
-  return b.score - a.score || b.matchDelta - a.matchDelta || b.date.localeCompare(a.date) || a.winner.localeCompare(b.winner)
+  return a.expectedWinProbability - b.expectedWinProbability || b.date.localeCompare(a.date) || a.winner.localeCompare(b.winner)
 }
 
 function clampScore(value: number) {
@@ -381,8 +386,4 @@ function spicyBandLabel(band: SpicyTakeConfidenceBand) {
 
 function roundOne(value: number) {
   return Math.round(value * 10) / 10
-}
-
-function signed(value: number) {
-  return value > 0 ? `+${value}` : String(value)
 }

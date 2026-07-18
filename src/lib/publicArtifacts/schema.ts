@@ -40,7 +40,7 @@ import type { WalkForwardMetrics } from '../predictionModel'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
-export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 22 as const
+export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 23 as const
 const PUBLIC_TEAM_RECENT_MATCH_LIMIT = 25
 
 export type ArtifactMeta = {
@@ -60,6 +60,7 @@ export type PublicRecentMatch = {
   result: 'W' | 'L' | 'T'
   rating: number
   delta: number
+  expectedWinProbability?: number
   wins?: number
   losses?: number
   games?: number
@@ -67,6 +68,38 @@ export type PublicRecentMatch = {
   seriesId?: string
   formatBasis?: SourceTrace['formatBasis']
   formatConfidence?: SourceTrace['formatConfidence']
+}
+
+export type PublicRollingMovementPoint = [date: string, rank: number]
+
+export type PublicTeamRollingMovement = {
+  status: 'active' | 'inactive' | 'missing-baseline'
+  baselineRating?: number
+  currentRating: number
+  ratingDelta?: number
+  baselineRank?: number
+  currentRank: number
+  rankMovement?: number
+  scoredSeries: number
+  rankPoints: PublicRollingMovementPoint[]
+  biggestUpsetWin?: PublicRollingUpsetWin
+}
+
+export type PublicRollingUpsetWin = {
+  date: string
+  event: string
+  opponent: string
+  expectedWinProbability: number
+  ratingDelta: number
+}
+
+export type PublicRollingWindow = {
+  kind: 'rolling-power-movement'
+  days: 30
+  startDate: string
+  endDate: string
+  modelVersion: string
+  modelConfigHash: string
 }
 
 export type PublicTournamentAppearance = {
@@ -97,6 +130,7 @@ export type PublicTeamStanding = {
   rank: number
   previousRank: number
   movement: number
+  rollingMovement?: PublicTeamRollingMovement
   wins: number
   losses: number
   recordBasis: PublicRecordBasis
@@ -175,6 +209,7 @@ export type PublicRankingShard = {
   modelConfigHash: string
   matchCount: number
   sourceBreakdown: SnapshotSourceBreakdown[]
+  rollingWindow?: PublicRollingWindow
   scoreFamilies: PublicScoreFamilyInfo[]
   standings: PublicTeamStanding[]
   leagues: LeagueStrength[]
@@ -901,6 +936,7 @@ export function compactStanding(
     rank: standing.rank,
     previousRank: standing.previousRank,
     movement: standing.movement,
+    ...(standing.rollingMovement ? { rollingMovement: standing.rollingMovement } : {}),
     wins: matchRecord?.wins ?? standing.wins,
     losses: matchRecord?.losses ?? standing.losses,
     recordBasis: standing.recordBasis ?? (matchRecord ? 'grouped-match-record-from-scope-history' : 'standing-record-from-ranking-model'),
@@ -1021,6 +1057,11 @@ function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T', previou
   const wins = group.entries.filter((entry) => entry.result === 'W').length
   const losses = group.entries.length - wins
   const bestOf = bestOfForScore(wins, losses, latest.source.bestOf)
+  const observedOutcome = latest.source.seriesOutcome
+  const residual = latest.ratingUpdate?.neutralResultResidual
+  const expectedWinProbability = typeof observedOutcome === 'number' && typeof residual === 'number'
+    ? Math.max(0, Math.min(1, Number((observedOutcome - residual).toFixed(4))))
+    : undefined
 
   return {
     date: latest.date,
@@ -1029,6 +1070,7 @@ function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T', previou
     result,
     rating: Math.round(latest.rating),
     delta: previous ? Math.round(latest.rating) - Math.round(previous.rating) : group.entries.reduce((total, entry) => total + Math.round(entry.delta), 0),
+    ...(expectedWinProbability !== undefined ? { expectedWinProbability } : {}),
     wins,
     losses,
     games: group.entries.length,
@@ -1126,6 +1168,7 @@ export function parsePublicRankingShard(value: unknown): PublicRankingShard {
   assertString(value.modelVersion, 'ranking shard modelVersion')
   assertString(value.modelConfigHash, 'ranking shard modelConfigHash')
   assertNonNegativeInteger(value.matchCount, 'ranking shard matchCount')
+  if (value.rollingWindow !== undefined) assertPublicRollingWindow(value.rollingWindow, 'ranking shard rollingWindow', value)
   assertArray(value.sourceBreakdown, 'ranking shard sourceBreakdown')
   assertArray(value.scoreFamilies, 'ranking shard scoreFamilies')
   value.scoreFamilies.forEach((family, index) => assertPublicScoreFamily(family, `ranking shard scoreFamilies[${index}]`))
@@ -1134,9 +1177,32 @@ export function parsePublicRankingShard(value: unknown): PublicRankingShard {
   assertArray(value.regions, 'ranking shard regions')
   value.sourceBreakdown.forEach((source, index) => assertSnapshotSourceBreakdown(source, `ranking shard sourceBreakdown[${index}]`))
   value.standings.forEach((standing, index) => assertPublicTeamStanding(standing, `ranking shard standings[${index}]`))
+  if (value.rollingWindow !== undefined) {
+    value.standings.forEach((standing, index) => {
+      assertPublicTeamStanding(standing, `ranking shard standings[${index}]`)
+      assertRollingMovementWithinWindow(
+        standing.rollingMovement,
+        value.rollingWindow as PublicRollingWindow,
+        `ranking shard standings[${index}] rollingMovement`,
+      )
+    })
+  }
   value.leagues.forEach((league, index) => assertLeagueStrength(league, `ranking shard leagues[${index}]`))
   value.regions.forEach((region, index) => assertRegionStrength(region, `ranking shard regions[${index}]`))
   return value as PublicRankingShard
+}
+
+function assertRollingMovementWithinWindow(movement: PublicTeamRollingMovement | undefined, window: PublicRollingWindow, label: string) {
+  if (!movement) return
+  for (const [date] of movement.rankPoints) {
+    if (date < window.startDate || date > window.endDate) {
+      throw new Error(`Invalid public artifact: ${label} rank point date must fall inside rollingWindow`)
+    }
+  }
+  const upsetDate = movement.biggestUpsetWin?.date
+  if (upsetDate !== undefined && (upsetDate <= window.startDate || upsetDate > window.endDate)) {
+    throw new Error(`Invalid public artifact: ${label} biggestUpsetWin date must fall inside the active rollingWindow interval`)
+  }
 }
 
 function assertPublicScoreFamily(value: unknown, label: string): asserts value is PublicScoreFamilyInfo {
@@ -1480,6 +1546,7 @@ function assertPublicTeamStanding(value: unknown, label: string): asserts value 
   assertNonNegativeInteger(value.rank, `${label} rank`)
   assertNonNegativeInteger(value.previousRank, `${label} previousRank`)
   assertNumber(value.movement, `${label} movement`)
+  if (value.rollingMovement !== undefined) assertPublicTeamRollingMovement(value.rollingMovement, `${label} rollingMovement`)
   assertNonNegativeInteger(value.wins, `${label} wins`)
   assertNonNegativeInteger(value.losses, `${label} losses`)
   assertEnum(value.recordBasis, ['standing-record-from-ranking-model', 'grouped-match-record-from-scope-history'], `${label} recordBasis`)
@@ -1498,6 +1565,61 @@ function assertPublicTeamStanding(value: unknown, label: string): asserts value 
   assertArray(value.recentMatches, `${label} recentMatches`)
   value.recentMatches.forEach((match, index) => assertPublicRecentMatch(match, `${label} recentMatches[${index}]`))
   if (value.deservedStanding !== undefined) assertPublicDeservedStanding(value.deservedStanding, `${label} deservedStanding`)
+}
+
+function assertPublicRollingWindow(value: unknown, label: string, shard: Record<string, unknown>): asserts value is PublicRollingWindow {
+  assertObject(value, label)
+  assertEqual(value.kind, 'rolling-power-movement', `${label} kind`)
+  assertEqual(value.days, 30, `${label} days`)
+  assertDateString(value.startDate, `${label} startDate`)
+  assertDateString(value.endDate, `${label} endDate`)
+  if (value.startDate >= value.endDate) throw new Error(`Invalid public artifact: ${label} startDate must precede endDate`)
+  assertString(value.modelVersion, `${label} modelVersion`)
+  assertString(value.modelConfigHash, `${label} modelConfigHash`)
+  assertEqual(value.modelVersion, shard.modelVersion, `${label} modelVersion`)
+  assertEqual(value.modelConfigHash, shard.modelConfigHash, `${label} modelConfigHash`)
+}
+
+function assertPublicTeamRollingMovement(value: unknown, label: string): asserts value is PublicTeamRollingMovement {
+  assertObject(value, label)
+  assertEnum(value.status, ['active', 'inactive', 'missing-baseline'], `${label} status`)
+  assertNumber(value.currentRating, `${label} currentRating`)
+  assertNonNegativeInteger(value.currentRank, `${label} currentRank`)
+  assertNonNegativeInteger(value.scoredSeries, `${label} scoredSeries`)
+  assertArray(value.rankPoints, `${label} rankPoints`)
+  value.rankPoints.forEach((point, index) => {
+    assertArray(point, `${label} rankPoints[${index}]`)
+    if (point.length !== 2) throw new Error(`Invalid public artifact: ${label} rankPoints[${index}] must contain date and rank`)
+    assertDateString(point[0], `${label} rankPoints[${index}] date`)
+    assertNonNegativeInteger(point[1], `${label} rankPoints[${index}] rank`)
+  })
+  if (value.biggestUpsetWin !== undefined) assertPublicRollingUpsetWin(value.biggestUpsetWin, `${label} biggestUpsetWin`)
+  if (value.status === 'missing-baseline') {
+    if (value.baselineRating !== undefined || value.ratingDelta !== undefined || value.baselineRank !== undefined || value.rankMovement !== undefined) {
+      throw new Error(`Invalid public artifact: ${label} missing baseline must not publish baseline deltas`)
+    }
+    return
+  }
+  assertNumber(value.baselineRating, `${label} baselineRating`)
+  assertNumber(value.ratingDelta, `${label} ratingDelta`)
+  assertNonNegativeInteger(value.baselineRank, `${label} baselineRank`)
+  assertNumber(value.rankMovement, `${label} rankMovement`)
+  if (value.ratingDelta !== value.currentRating - value.baselineRating) throw new Error(`Invalid public artifact: ${label} ratingDelta mismatch`)
+  if (value.rankMovement !== value.baselineRank - value.currentRank) throw new Error(`Invalid public artifact: ${label} rankMovement mismatch`)
+  if (value.status === 'inactive' && value.scoredSeries !== 0) throw new Error(`Invalid public artifact: ${label} inactive status requires zero scored series`)
+  if (value.status === 'active' && value.scoredSeries === 0) throw new Error(`Invalid public artifact: ${label} active status requires scored series`)
+}
+
+function assertPublicRollingUpsetWin(value: unknown, label: string): asserts value is PublicRollingUpsetWin {
+  assertObject(value, label)
+  assertDateString(value.date, `${label} date`)
+  assertString(value.event, `${label} event`)
+  assertString(value.opponent, `${label} opponent`)
+  assertNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
+  if (value.expectedWinProbability < 0 || value.expectedWinProbability > 1) {
+    throw new Error(`Invalid public artifact: ${label} expectedWinProbability must be between 0 and 1`)
+  }
+  assertNumber(value.ratingDelta, `${label} ratingDelta`)
 }
 
 function assertLeagueStrength(value: unknown, label: string): asserts value is LeagueStrength {
@@ -1602,6 +1724,10 @@ function assertPublicRecentMatch(value: unknown, label: string): asserts value i
   assertEnum(value.result, ['W', 'L', 'T'], `${label} result`)
   assertNumber(value.rating, `${label} rating`)
   assertNumber(value.delta, `${label} delta`)
+  assertOptionalNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
+  if (typeof value.expectedWinProbability === 'number' && (value.expectedWinProbability < 0 || value.expectedWinProbability > 1)) {
+    throw new Error(`Invalid public artifact: ${label} expectedWinProbability must be between 0 and 1`)
+  }
   assertOptionalNonNegativeInteger(value.wins, `${label} wins`)
   assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
   assertOptionalNonNegativeInteger(value.games, `${label} games`)

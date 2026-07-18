@@ -6,7 +6,7 @@ import type {
   TeamHistoryPoint,
   TeamStanding,
 } from '../types'
-import type { PublicDeservedStandingComparison } from './publicArtifacts/schema'
+import type { PublicDeservedStandingComparison, PublicTeamRollingMovement } from './publicArtifacts/schema'
 import type { RegionDeservedStandingComparison, RegionStrength } from './regionStrength'
 import {
   toPublishedRating,
@@ -17,6 +17,7 @@ import { publishedRatingScale } from './modelConfig'
 
 export type PublishedRatingTeamStandingInput = TeamStanding & {
   deservedStanding?: PublicDeservedStandingComparison
+  rollingMovement?: PublicTeamRollingMovement
 }
 
 export function toPublishedTeamStanding(
@@ -42,6 +43,7 @@ export function toPublishedTeamStanding(
     delta: rating - previousRating,
     uncertainty: publishedDeltaValue(standing.uncertainty, scale),
     history: history.map((point) => toPublishedTeamHistoryPoint(point, scale)),
+    ...(standing.rollingMovement ? { rollingMovement: toPublishedRollingMovement(standing.rollingMovement, scale) } : {}),
   } as PublishedRatingTeamStandingInput
   return standing.deservedStanding
     ? {
@@ -49,6 +51,18 @@ export function toPublishedTeamStanding(
         deservedStanding: toPublishedDeservedStandingComparison(standing.deservedStanding, standing.rating, scale),
       }
     : publishedStanding
+}
+
+function toPublishedRollingMovement(movement: PublicTeamRollingMovement, scale: PublishedRatingScale): PublicTeamRollingMovement {
+  const currentRating = publishedRating(movement.currentRating, scale)
+  const biggestUpsetWin = movement.biggestUpsetWin
+    ? { ...movement.biggestUpsetWin, ratingDelta: publishedDelta(movement.biggestUpsetWin.ratingDelta, scale) }
+    : undefined
+  if (movement.status === 'missing-baseline' || movement.baselineRating === undefined) {
+    return { ...movement, currentRating, ...(biggestUpsetWin ? { biggestUpsetWin } : {}) }
+  }
+  const baselineRating = publishedRating(movement.baselineRating, scale)
+  return { ...movement, currentRating, baselineRating, ratingDelta: currentRating - baselineRating, ...(biggestUpsetWin ? { biggestUpsetWin } : {}) }
 }
 
 export function toPublishedLeagueStrength(

@@ -133,6 +133,19 @@ test('public ranking shard parser validates source, standing, and league rows', 
     /standings\[0\] rank/,
   )
 
+  for (const invalidProbability of ['0.2', Number.NaN, Number.POSITIVE_INFINITY, -0.01, 1.01]) {
+    assert.throws(
+      () => parsePublicRankingShard({
+        ...validShard,
+        standings: [{
+          ...standing,
+          recentMatches: [{ ...standing.recentMatches[0], expectedWinProbability: invalidProbability }],
+        }],
+      }),
+      /recentMatches\[0\] expectedWinProbability/,
+    )
+  }
+
   assert.throws(
     () => parsePublicRankingShard({
       ...validShard,
@@ -147,6 +160,36 @@ test('public ranking shard parser validates source, standing, and league rows', 
       scoreFamilies: [{ ...publicScoreFamilies[0], scoreField: 1 }] as unknown as PublicRankingShard['scoreFamilies'],
     }),
     /scoreFamilies\[0\] scoreField/,
+  )
+
+  const rollingWindow = {
+    kind: 'rolling-power-movement' as const,
+    days: 30 as const,
+    startDate: '2026-05-01',
+    endDate: '2026-05-31',
+    modelVersion: 'test-model',
+    modelConfigHash: 'test-config',
+  }
+  assert.throws(
+    () => parsePublicRankingShard({
+      ...validShard,
+      rollingWindow,
+      standings: [{
+        ...standing,
+        rollingMovement: {
+          status: 'active',
+          baselineRating: 1490,
+          currentRating: 1500,
+          ratingDelta: 10,
+          baselineRank: 2,
+          currentRank: 1,
+          rankMovement: 1,
+          scoredSeries: 1,
+          rankPoints: [['2026-04-30', 2]],
+        },
+      }],
+    }),
+    /rank point date must fall inside rollingWindow/,
   )
 
   assert.throws(

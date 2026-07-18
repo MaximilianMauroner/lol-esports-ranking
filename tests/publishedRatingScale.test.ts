@@ -135,6 +135,42 @@ test('published team history exposes current standing separately from the final 
   assert.equal(currentStanding.adjustment, standing.rating - finalPoint[1])
 })
 
+test('public snapshot publishes a true 30-day baseline, activity, and pre-series expectations', () => {
+  const data = rankingDataFixture()
+  const { snapshots } = createStaticRankingSummaryData(data)
+  const snapshot = snapshots[data.defaultSnapshotKey]
+
+  assert.deepEqual(snapshot.rollingWindow, {
+    kind: 'rolling-power-movement',
+    days: 30,
+    startDate: '2026-04-02',
+    endDate: '2026-05-02',
+    modelVersion: snapshot.modelVersion,
+    modelConfigHash: snapshot.modelConfigHash,
+  })
+  const gen = snapshot.standings.find((standing) => standing.team === 'Gen.G')
+  const fnatic = snapshot.standings.find((standing) => standing.team === 'Fnatic')
+  const blg = snapshot.standings.find((standing) => standing.team === 'Bilibili Gaming')
+  assert.equal(gen?.rollingMovement?.status, 'active')
+  assert.equal(gen?.rollingMovement?.scoredSeries, 1)
+  assert.equal(gen?.rollingMovement?.ratingDelta, (gen?.rollingMovement?.currentRating ?? 0) - (gen?.rollingMovement?.baselineRating ?? 0))
+  assert.equal(fnatic?.rollingMovement?.status, 'inactive')
+  assert.equal(fnatic?.rollingMovement?.scoredSeries, 0)
+  assert.equal(blg?.rollingMovement?.status, 'missing-baseline')
+  assert.equal(blg?.rollingMovement?.ratingDelta, undefined)
+  const genMsi = gen?.recentMatches.find((match) => match.event === 'MSI 2026')
+  assert.equal(typeof genMsi?.expectedWinProbability, 'number')
+  assert.ok((genMsi?.expectedWinProbability ?? -1) >= 0 && (genMsi?.expectedWinProbability ?? 2) <= 1)
+
+  const internalUpsetTeam = data.snapshots[data.defaultSnapshotKey].standings.find((standing) => standing.rollingMovement?.biggestUpsetWin)
+  const publicUpsetTeam = snapshot.standings.find((standing) => standing.team === internalUpsetTeam?.team)
+  const internalUpsetDelta = internalUpsetTeam?.rollingMovement?.biggestUpsetWin?.ratingDelta
+  assert.equal(
+    publicUpsetTeam?.rollingMovement?.biggestUpsetWin?.ratingDelta,
+    typeof internalUpsetDelta === 'number' ? Math.round(toPublishedRatingDelta(internalUpsetDelta)) : undefined,
+  )
+})
+
 test('public matchup estimates invert ladder ratings before probability math', () => {
   const data = rankingDataFixture()
   const { manifest, snapshots } = createStaticRankingSummaryData(data)

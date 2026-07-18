@@ -383,6 +383,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
                     coverageEnd: loadedData.coverage?.coverageEnd,
                     latestMatchDate: loadedData.coverage?.latestMatchDate,
                     movementBaseline: movementBaseline.label,
+                    rollingWindow: snapshot?.rollingWindow,
                     seeded,
                     sourceBreakdown: snapshot?.sourceBreakdown ?? [],
                     notes: loadedData.dataQuality?.notes,
