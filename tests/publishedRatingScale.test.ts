@@ -161,6 +161,14 @@ test('public snapshot publishes a true 30-day baseline, activity, and pre-series
   const genMsi = gen?.recentMatches.find((match) => match.event === 'MSI 2026')
   assert.equal(typeof genMsi?.expectedWinProbability, 'number')
   assert.ok((genMsi?.expectedWinProbability ?? -1) >= 0 && (genMsi?.expectedWinProbability ?? 2) <= 1)
+
+  const internalUpsetTeam = data.snapshots[data.defaultSnapshotKey].standings.find((standing) => standing.rollingMovement?.biggestUpsetWin)
+  const publicUpsetTeam = snapshot.standings.find((standing) => standing.team === internalUpsetTeam?.team)
+  const internalUpsetDelta = internalUpsetTeam?.rollingMovement?.biggestUpsetWin?.ratingDelta
+  assert.equal(
+    publicUpsetTeam?.rollingMovement?.biggestUpsetWin?.ratingDelta,
+    typeof internalUpsetDelta === 'number' ? Math.round(toPublishedRatingDelta(internalUpsetDelta)) : undefined,
+  )
 })
 
 test('public matchup estimates invert ladder ratings before probability math', () => {

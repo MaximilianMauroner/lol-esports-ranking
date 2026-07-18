@@ -55,11 +55,14 @@ export function toPublishedTeamStanding(
 
 function toPublishedRollingMovement(movement: PublicTeamRollingMovement, scale: PublishedRatingScale): PublicTeamRollingMovement {
   const currentRating = publishedRating(movement.currentRating, scale)
+  const biggestUpsetWin = movement.biggestUpsetWin
+    ? { ...movement.biggestUpsetWin, ratingDelta: publishedDelta(movement.biggestUpsetWin.ratingDelta, scale) }
+    : undefined
   if (movement.status === 'missing-baseline' || movement.baselineRating === undefined) {
-    return { ...movement, currentRating }
+    return { ...movement, currentRating, ...(biggestUpsetWin ? { biggestUpsetWin } : {}) }
   }
   const baselineRating = publishedRating(movement.baselineRating, scale)
-  return { ...movement, currentRating, baselineRating, ratingDelta: currentRating - baselineRating }
+  return { ...movement, currentRating, baselineRating, ratingDelta: currentRating - baselineRating, ...(biggestUpsetWin ? { biggestUpsetWin } : {}) }
 }
 
 export function toPublishedLeagueStrength(

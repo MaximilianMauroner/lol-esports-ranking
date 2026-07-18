@@ -221,6 +221,15 @@ test('derives spicy-take confidence bands from confidence, uncertainty, and rece
   )
 })
 
+test('omitting rolling window keeps evidence independent from 30-day series counts for tournament flair', () => {
+  const row = standing({
+    recentMatches: [recentMatch({ opponent: 'A' }), recentMatch({ opponent: 'B' })],
+    rollingMovement: { ...rolling(1500, 1, 10, 1), scoredSeries: 99 },
+  })
+  const tournamentFlair = deriveRankingFlair([row])
+  assert.equal(tournamentFlair.spicyTakeConfidence[0]?.recentMatchCount, 2)
+})
+
 function recentMatch(overrides: Partial<PublicRecentMatch> = {}): PublicRecentMatch {
   return {
     date: '2026-05-01',

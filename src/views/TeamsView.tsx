@@ -255,8 +255,8 @@ export function TeamsView({
     [displayStandings],
   )
   const rankingFlair = useMemo<RankingFlair>(
-    () => deriveRankingFlair(filtered, { tierUniverse: rankedTierUniverse, rollingWindow: dataSummary?.rollingWindow }),
-    [dataSummary?.rollingWindow, filtered, rankedTierUniverse],
+    () => deriveRankingFlair(filtered, { tierUniverse: rankedTierUniverse, rollingWindow: activeTournament ? undefined : dataSummary?.rollingWindow }),
+    [activeTournament, dataSummary?.rollingWindow, filtered, rankedTierUniverse],
   )
   const tierAssignments: RankingTierAssignment[] = rankingFlair.tiers
   const rankingSignals = useMemo(

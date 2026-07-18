@@ -1177,9 +1177,32 @@ export function parsePublicRankingShard(value: unknown): PublicRankingShard {
   assertArray(value.regions, 'ranking shard regions')
   value.sourceBreakdown.forEach((source, index) => assertSnapshotSourceBreakdown(source, `ranking shard sourceBreakdown[${index}]`))
   value.standings.forEach((standing, index) => assertPublicTeamStanding(standing, `ranking shard standings[${index}]`))
+  if (value.rollingWindow !== undefined) {
+    value.standings.forEach((standing, index) => {
+      assertPublicTeamStanding(standing, `ranking shard standings[${index}]`)
+      assertRollingMovementWithinWindow(
+        standing.rollingMovement,
+        value.rollingWindow as PublicRollingWindow,
+        `ranking shard standings[${index}] rollingMovement`,
+      )
+    })
+  }
   value.leagues.forEach((league, index) => assertLeagueStrength(league, `ranking shard leagues[${index}]`))
   value.regions.forEach((region, index) => assertRegionStrength(region, `ranking shard regions[${index}]`))
   return value as PublicRankingShard
+}
+
+function assertRollingMovementWithinWindow(movement: PublicTeamRollingMovement | undefined, window: PublicRollingWindow, label: string) {
+  if (!movement) return
+  for (const [date] of movement.rankPoints) {
+    if (date < window.startDate || date > window.endDate) {
+      throw new Error(`Invalid public artifact: ${label} rank point date must fall inside rollingWindow`)
+    }
+  }
+  const upsetDate = movement.biggestUpsetWin?.date
+  if (upsetDate !== undefined && (upsetDate <= window.startDate || upsetDate > window.endDate)) {
+    throw new Error(`Invalid public artifact: ${label} biggestUpsetWin date must fall inside the active rollingWindow interval`)
+  }
 }
 
 function assertPublicScoreFamily(value: unknown, label: string): asserts value is PublicScoreFamilyInfo {
