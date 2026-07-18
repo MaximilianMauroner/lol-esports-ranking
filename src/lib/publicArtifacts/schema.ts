@@ -847,14 +847,16 @@ export function artifactMetaFor({
   generatedAt,
   modelVersion,
   modelConfigHash,
+  runId,
 }: {
   generatedAt: string
   modelVersion: string
   modelConfigHash: string
+  runId?: string
 }): ArtifactMeta {
   return {
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-    runId: runIdForArtifact({ generatedAt, modelVersion, modelConfigHash }),
+    runId: runId ?? runIdForArtifact({ generatedAt, modelVersion, modelConfigHash }),
     generatedAt,
     modelVersion,
     modelConfigHash,

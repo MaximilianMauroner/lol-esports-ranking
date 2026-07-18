@@ -26,6 +26,7 @@ import {
   tournamentMovementShardFileName,
 } from './schema'
 import type { TournamentInstanceId } from '../internationalTournaments'
+import type { CrunchRunMetadata } from '../incremental/types'
 
 type StaticRankingData = Parameters<typeof createStaticRankingSummaryData>[0]
 
@@ -101,29 +102,34 @@ export function createPublicArtifactWritePlan(
   {
     fullSnapshotUrl,
     urlForPath = localPublicDataUrl,
+    runMetadata,
   }: {
     fullSnapshotUrl?: string
     urlForPath?: (relativePath: string) => string
+    runMetadata?: CrunchRunMetadata
   } = {},
 ): PublicArtifactWritePlan {
-  const artifactVersion = runIdForArtifact({
+  const artifactVersion = runMetadata?.runId ?? runIdForArtifact({
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
   })
   const versionedUrlForPath = (relativePath: string) => withArtifactVersion(urlForPath(relativePath), artifactVersion)
-  const playerDirectory = createPlayerDirectory(data)
-  const teamDirectory = createTeamDirectory(data)
+  const playerDirectory = createPlayerDirectory(data, { runMetadata })
+  const teamDirectory = createTeamDirectory(data, { runMetadata })
   const teamHistory = createTeamHistoryArtifacts(data, {
     teamHistoryUrlForKey: (key) => versionedUrlForPath(publicTeamHistoryShardPath(key)),
+    runMetadata,
   })
-  const regionHistory = createRegionHistory(data)
+  const regionHistory = createRegionHistory(data, { runMetadata })
   const tournamentMovements = createTournamentMovementArtifacts(data, {
     tournamentMovementUrlForId: (id) => versionedUrlForPath(publicTournamentMovementShardPath(id)),
+    runMetadata,
   })
   const matchHistory = createMatchHistoryArtifacts(data, {
     matchHistoryCatalogUrlForKey: (key) => versionedUrlForPath(publicMatchHistoryShardPath(key)),
     matchHistoryPageUrlForKey: (key, page) => versionedUrlForPath(publicMatchHistoryPagePath(key, page)),
+    runMetadata,
   })
   const summary = createStaticRankingSummaryData(data, {
     fullSnapshotUrl,
@@ -134,6 +140,7 @@ export function createPublicArtifactWritePlan(
     tournamentMovementIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex),
     matchHistoryIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex),
     snapshotUrlForKey: (key) => versionedUrlForPath(publicScopeArtifactPath(key)),
+    runMetadata,
   })
 
   const writes: PublicArtifactWrite[] = [

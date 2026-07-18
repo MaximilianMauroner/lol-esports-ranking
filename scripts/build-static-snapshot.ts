@@ -14,11 +14,30 @@ import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib
 import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
+import { transparentGprModelMetadata } from '../src/lib/model'
+import { runIdForArtifact } from '../src/lib/publicArtifacts/schema'
+import { createIncrementalCrunchReceipt, recordCrunchTiming } from '../src/lib/incremental/metrics'
+import { crunchModeFrom, orchestrateCrunch } from '../src/lib/incremental/orchestrator'
+import type { CrunchRunMetadata } from '../src/lib/incremental/types'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
 const reconciliationOutput = readArg('reconciliation-output') ? resolve(readArg('reconciliation-output')!) : undefined
+const receiptOutput = readArg('receipt') ? resolve(readArg('receipt')!) : undefined
 const publicDataDir = `${publicDataTargetDir}.next-${process.pid}`
+const generatedAt = readArg('generated-at') ?? new Date().toISOString()
+const runMetadata: CrunchRunMetadata = {
+  generatedAt,
+  runId: readArg('run-id') ?? runIdForArtifact({
+    generatedAt,
+    modelVersion: transparentGprModelMetadata.version,
+    modelConfigHash: transparentGprModelMetadata.configHash,
+  }),
+}
+const mode = process.argv.includes('--full')
+  ? 'full'
+  : crunchModeFrom(readArg('mode') ?? process.env.RANKING_CRUNCH_MODE)
+const receipt = createIncrementalCrunchReceipt({ run: runMetadata, requestedMode: mode })
 const manifestPath = readArg('manifest')
 const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
 const manifest = resolvedManifestPath
@@ -33,6 +52,7 @@ const lolEsportsImports = []
 const oracleWarnings = manifestSourceWarnings('oracle', manifest?.warnings)
 const leaguepediaWarnings = manifestSourceWarnings('leaguepedia', manifest?.warnings)
 const lolEsportsWarnings = manifestSourceWarnings('lolesports', manifest?.warnings)
+let sourceBytesScanned = 0
 
 if (process.argv.includes('--seeded-sample')) {
   throw new Error('Seeded sample generation has been removed from the production build path. Provide public source files or use tests/fixtures/rankingFixtures.ts for unit fixtures.')
@@ -40,16 +60,19 @@ if (process.argv.includes('--seeded-sample')) {
 
 for (const csvPath of oracleCsvPaths) {
   const csvText = await readFile(csvPath, 'utf8')
+  sourceBytesScanned += Buffer.byteLength(csvText)
   oracleImports.push(importOraclesElixirCsv(csvText, { sourceFileName: basename(csvPath) }))
 }
 
 for (const jsonPath of leaguepediaJsonPaths) {
   const jsonText = await readFile(jsonPath, 'utf8')
+  sourceBytesScanned += Buffer.byteLength(jsonText)
   leaguepediaImports.push(importLeaguepediaSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
 }
 
 for (const jsonPath of lolEsportsJsonPaths) {
   const jsonText = await readFile(jsonPath, 'utf8')
+  sourceBytesScanned += Buffer.byteLength(jsonText)
   lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
 }
 
@@ -63,10 +86,12 @@ const mergedTeams = importedMatches.length > 0 ? { ...deriveTeamProfilesFromMatc
 const ratingUniverse = filterPublishedRatingUniverseInput(importedMatches, mergedTeams)
 const matches = ratingUniverse.matches
 const teams = ratingUniverse.teams
-const snapshot = createStaticRankingData({
+const crunchStartedAt = performance.now()
+const runFull = () => createStaticRankingData({
   matches,
   teams,
   rosters: {},
+  runMetadata,
   source: matches.length > 0
     ? describeCommunitySource(oracleImports.length, leaguepediaImports.length)
     : importedMatches.length > 0 ? 'no rated public match data available for published team universe' : 'no public match data available',
@@ -143,6 +168,13 @@ const snapshot = createStaticRankingData({
   }),
   pipelineAudit: { importedMatchCount: importedMatches.length },
 })
+const orchestration = await orchestrateCrunch({ mode, receipt, runFull })
+const snapshot = orchestration.output
+recordCrunchTiming(receipt, 'reference-crunch', crunchStartedAt, performance.now())
+receipt.sources = {
+  filesScanned: oracleCsvPaths.length + leaguepediaJsonPaths.length + lolEsportsJsonPaths.length,
+  bytesScanned: sourceBytesScanned,
+}
 
 await mkdir(dirname(output), { recursive: true })
 await writeJsonFile(output, snapshot)
@@ -154,7 +186,9 @@ if (reconciliationOutput) {
     matches: reconciliationEntries(importedMatches),
   }, null, 2)}\n`)
 }
-const publicPlan = createPublicArtifactWritePlan(snapshot)
+const publicPlan = createPublicArtifactWritePlan(snapshot, { runMetadata })
+receipt.artifacts.reused = 0
+receipt.artifacts.regenerated = publicPlan.writes.length + 1
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)
 const publicWrites = publicPlan.writes.map((entry) => ({
@@ -177,6 +211,10 @@ try {
     preserveTarget: true,
   })
   const publicDataBytes = await directorySize(publicDataTargetDir)
+  if (receiptOutput) {
+    await mkdir(dirname(receiptOutput), { recursive: true })
+    await writeFile(receiptOutput, `${JSON.stringify(receipt, null, 2)}\n`)
+  }
 
   console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)
   console.log(`Wrote browser summary to ${summaryOutput}`)

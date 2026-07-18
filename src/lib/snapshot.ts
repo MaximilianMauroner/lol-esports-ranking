@@ -45,6 +45,7 @@ import {
   compactStanding as compactPublicStanding,
   leagueIdFor,
   publicScoreFamilies,
+  runIdForArtifact,
   snapshotKey,
   snapshotShardUrlPathForKey,
   scopeArtifactFileNameForKey,
@@ -52,6 +53,7 @@ import {
   teamHistoryShardUrlPathForKey,
   tournamentMovementShardUrlPathForId,
 } from './publicArtifacts/schema'
+import type { CrunchRunMetadata } from './incremental/types'
 import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
 import {
   deriveTournamentInstances,
@@ -266,7 +268,10 @@ export type RegionHistoryDirectory = PublicRegionHistoryDirectory
  * browser-loadable time series keyed by team standing key, so the team view can
  * draw rating-over-time charts without the full artifact.
  */
-export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory {
+export function createTeamHistory(
+  data: StaticRankingData,
+  { runMetadata }: { runMetadata?: CrunchRunMetadata } = {},
+): TeamHistoryDirectory {
   const defaultSnapshot = data.snapshots[data.defaultSnapshotKey]
   const minimumPointsPerSeries = 2
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
@@ -283,11 +288,7 @@ export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory
   return {
     artifactKind: 'team-history',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-    artifactMeta: artifactMetaFor({
-      generatedAt: data.generatedAt,
-      modelVersion: data.model.version,
-      modelConfigHash: data.model.configHash,
-    }),
+    artifactMeta: artifactMetaForStaticData(data, runMetadata),
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
@@ -308,15 +309,17 @@ export function createTeamHistoryArtifacts(
   data: StaticRankingData,
   {
     teamHistoryUrlForKey = teamHistoryShardUrlPathForKey,
+    runMetadata,
   }: {
     teamHistoryUrlForKey?: (key: string) => string
+    runMetadata?: CrunchRunMetadata
   } = {},
 ): TeamHistoryArtifacts {
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
   const historyScopes = Object.entries(data.snapshots)
     .filter(([key, snapshot]) => key === data.defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter))
   const shards = Object.fromEntries(
-    historyScopes.map(([key, snapshot]) => [key, createTeamHistoryShard(data, snapshot, ratingScale)]),
+    historyScopes.map(([key, snapshot]) => [key, createTeamHistoryShard(data, snapshot, ratingScale, runMetadata)]),
   )
   const defaultShard = shards[data.defaultSnapshotKey]
   const omissionPolicy = defaultShard?.omissionPolicy ?? {
@@ -329,11 +332,7 @@ export function createTeamHistoryArtifacts(
     index: {
       artifactKind: 'team-history-index',
       schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-      artifactMeta: artifactMetaFor({
-        generatedAt: data.generatedAt,
-        modelVersion: data.model.version,
-        modelConfigHash: data.model.configHash,
-      }),
+      artifactMeta: artifactMetaForStaticData(data, runMetadata),
       generatedAt: data.generatedAt,
       modelVersion: data.model.version,
       modelConfigHash: data.model.configHash,
@@ -360,8 +359,10 @@ export function createTournamentMovementArtifacts(
   data: StaticRankingData,
   {
     tournamentMovementUrlForId = tournamentMovementShardUrlPathForId,
+    runMetadata,
   }: {
     tournamentMovementUrlForId?: (id: TournamentInstanceId) => string
+    runMetadata?: CrunchRunMetadata
   } = {},
 ): TournamentMovementArtifacts {
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
@@ -370,11 +371,7 @@ export function createTournamentMovementArtifacts(
     index: {
       artifactKind: 'tournament-movement-index',
       schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-      artifactMeta: artifactMetaFor({
-        generatedAt: data.generatedAt,
-        modelVersion: data.model.version,
-        modelConfigHash: data.model.configHash,
-      }),
+      artifactMeta: artifactMetaForStaticData(data, runMetadata),
       ratingScale,
       generatedAt: data.generatedAt,
       modelVersion: data.model.version,
@@ -404,17 +401,14 @@ function createTeamHistoryShard(
   data: StaticRankingData,
   snapshot: ComputedRankingSnapshot | undefined,
   ratingScale: PublishedRatingScale = data.model.ratingScale ?? publishedRatingScale,
+  runMetadata?: CrunchRunMetadata,
 ): PublicTeamHistoryShard {
   const minimumPointsPerSeries = 2
   const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf: data.generatedAt })
   return {
     artifactKind: 'team-history-scope',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-    artifactMeta: artifactMetaFor({
-      generatedAt: data.generatedAt,
-      modelVersion: data.model.version,
-      modelConfigHash: data.model.configHash,
-    }),
+    artifactMeta: artifactMetaForStaticData(data, runMetadata),
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
@@ -431,7 +425,10 @@ function createTeamHistoryShard(
   }
 }
 
-export function createRegionHistory(data: StaticRankingData): RegionHistoryDirectory {
+export function createRegionHistory(
+  data: StaticRankingData,
+  { runMetadata }: { runMetadata?: CrunchRunMetadata } = {},
+): RegionHistoryDirectory {
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
   const scopes = Object.fromEntries(
     Object.entries(data.snapshots)
@@ -442,11 +439,7 @@ export function createRegionHistory(data: StaticRankingData): RegionHistoryDirec
   return {
     artifactKind: 'region-history',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-    artifactMeta: artifactMetaFor({
-      generatedAt: data.generatedAt,
-      modelVersion: data.model.version,
-      modelConfigHash: data.model.configHash,
-    }),
+    artifactMeta: artifactMetaForStaticData(data, runMetadata),
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
@@ -952,6 +945,27 @@ export type RankingSummarySnapshot = PublicRankingShard
 export type SnapshotIndexEntry = PublicSnapshotIndexEntry
 export type StaticRankingSummaryData = PublicRankingManifest
 
+function artifactMetaForStaticData(data: StaticRankingData, runMetadata?: CrunchRunMetadata) {
+  if (runMetadata && runMetadata.generatedAt !== data.generatedAt) {
+    throw new Error(`Crunch run generatedAt mismatch: ${runMetadata.generatedAt} !== ${data.generatedAt}`)
+  }
+  const runId = runMetadata?.runId ?? runIdForArtifact({
+    generatedAt: data.generatedAt,
+    modelVersion: data.model.version,
+    modelConfigHash: data.model.configHash,
+  })
+  const embeddedRunIds = new Set(Object.values(data.tournamentMovements).map((shard) => shard.artifactMeta.runId))
+  if ([...embeddedRunIds].some((embeddedRunId) => embeddedRunId !== runId)) {
+    throw new Error(`Crunch runId mismatch: full snapshot contains ${[...embeddedRunIds].join(', ')} but artifact generation uses ${runId}`)
+  }
+  return artifactMetaFor({
+    generatedAt: data.generatedAt,
+    modelVersion: data.model.version,
+    modelConfigHash: data.model.configHash,
+    runId,
+  })
+}
+
 export function createStaticRankingSummaryData(
   data: StaticRankingData,
   {
@@ -964,6 +978,7 @@ export function createStaticRankingSummaryData(
     tournamentMovementIndexUrl = '/data/history/tournament-moves/index.json',
     matchHistoryIndexUrl,
     snapshotUrlForKey = snapshotShardUrlPathForKey,
+    runMetadata,
   }: {
     fullSnapshotUrl?: string
     playerDirectoryUrl?: string
@@ -974,6 +989,7 @@ export function createStaticRankingSummaryData(
     tournamentMovementIndexUrl?: string
     matchHistoryIndexUrl?: string
     snapshotUrlForKey?: (key: string) => string
+    runMetadata?: CrunchRunMetadata
   } = {},
 ): {
   manifest: StaticRankingSummaryData
@@ -983,7 +999,12 @@ export function createStaticRankingSummaryData(
   const snapshots = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([key, snapshot]) => shouldPublishPublicScope(key, snapshot, data.defaultSnapshotKey))
-      .map(([key, snapshot]) => [key, compactSnapshot(snapshot, data.generatedAt, ratingScale)]),
+      .map(([key, snapshot]) => [key, compactSnapshot(
+        snapshot,
+        data.generatedAt,
+        ratingScale,
+        artifactMetaForStaticData(data, runMetadata).runId,
+      )]),
   )
   const snapshotIndex = Object.fromEntries(
     Object.entries(snapshots).map(([key, snapshot]) => [
@@ -1014,11 +1035,7 @@ export function createStaticRankingSummaryData(
     manifest: {
       ...manifestBase,
       artifactKind: 'public-ranking-manifest',
-      artifactMeta: artifactMetaFor({
-        generatedAt: data.generatedAt,
-        modelVersion: data.model.version,
-        modelConfigHash: data.model.configHash,
-      }),
+      artifactMeta: artifactMetaForStaticData(data, runMetadata),
       ratingScale,
       summaryMode: 'browser-summary',
       ...(fullSnapshotUrl ? { fullSnapshotUrl } : {}),
@@ -1040,6 +1057,7 @@ function compactSnapshot(
   snapshot: ComputedRankingSnapshot,
   generatedAt: string,
   ratingScale: PublishedRatingScale,
+  runId?: string,
 ): RankingSummarySnapshot {
   const {
     artifactKind: _artifactKind,
@@ -1065,6 +1083,7 @@ function compactSnapshot(
       generatedAt,
       modelVersion: summary.modelVersion,
       modelConfigHash: summary.modelConfigHash,
+      runId,
     }),
     ratingScale,
     scoreFamilies: [...publicScoreFamilies],
@@ -1085,11 +1104,13 @@ function createTournamentMovementShards({
   matches,
   teams,
   generatedAt,
+  runId,
   scheduleReferences,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
   generatedAt: string
+  runId: string
   scheduleReferences: TournamentScheduleReference[]
 }): Record<TournamentInstanceId, PublicTournamentMovementShard> {
   const instances = deriveTournamentInstances({ matches, scheduleReferences, generatedAt })
@@ -1107,6 +1128,7 @@ function createTournamentMovementShards({
     generatedAt,
     modelVersion: transparentGprModelMetadata.version,
     modelConfigHash: transparentGprModelMetadata.configHash,
+    runId,
   })
 
   return Object.fromEntries(instances.map((instance) => {
@@ -1202,7 +1224,8 @@ export function createStaticRankingData({
   matches,
   teams,
   rosters,
-  generatedAt = new Date().toISOString(),
+  generatedAt: requestedGeneratedAt,
+  runMetadata,
   source = 'seeded sample data',
   dataMode,
   externalSources = [],
@@ -1213,12 +1236,22 @@ export function createStaticRankingData({
   teams: Record<string, TeamProfile>
   rosters: Record<string, PlayerProfile[]>
   generatedAt?: string
+  runMetadata?: CrunchRunMetadata
   source?: string
   dataMode?: StaticRankingData['dataMode']
   externalSources?: DataSourceInfo[]
   tournamentScheduleReferences?: TournamentScheduleReference[]
   pipelineAudit?: { importedMatchCount: number }
 }): StaticRankingData {
+  const generatedAt = runMetadata?.generatedAt ?? requestedGeneratedAt ?? new Date().toISOString()
+  const resolvedRunMetadata: CrunchRunMetadata = runMetadata ?? {
+    generatedAt,
+    runId: runIdForArtifact({
+      generatedAt,
+      modelVersion: transparentGprModelMetadata.version,
+      modelConfigHash: transparentGprModelMetadata.configHash,
+    }),
+  }
   const ratingUniverse = filterPublishedRatingUniverseInput(matches, teams)
   matches = ratingUniverse.matches
   teams = ratingUniverse.teams
@@ -1459,6 +1492,7 @@ export function createStaticRankingData({
       matches,
       teams,
       generatedAt,
+      runId: resolvedRunMetadata.runId,
       scheduleReferences: tournamentScheduleReferences,
     }),
     teams,
@@ -1471,9 +1505,11 @@ export function createMatchHistoryArtifacts(
   {
     matchHistoryCatalogUrlForKey = (key: string) => `/data/matches/${encodeURIComponent(scopeArtifactFileNameForKey(key))}`,
     matchHistoryPageUrlForKey = (key: string, page: number) => `/data/matches/pages/${encodeURIComponent(scopeArtifactFileNameForKey(key).replace(/\.json$/, ''))}-${page}.json`,
+    runMetadata,
   }: {
     matchHistoryCatalogUrlForKey?: (key: string) => string
     matchHistoryPageUrlForKey?: (key: string, page: number) => string
+    runMetadata?: CrunchRunMetadata
   } = {},
 ): { index: PublicMatchHistoryIndex; catalogs: Record<string, PublicMatchHistoryCatalog>; pages: Record<string, Record<number, PublicMatchHistoryPage>> } {
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
@@ -1536,7 +1572,7 @@ export function createMatchHistoryArtifacts(
       return { id, games, summary }
     })
     const pageGroups = chunk(series, 25)
-    const artifactMeta = artifactMetaFor({ generatedAt: data.generatedAt, modelVersion: data.model.version, modelConfigHash: data.model.configHash })
+    const artifactMeta = artifactMetaForStaticData(data, runMetadata)
     const pages: Record<number, PublicMatchHistoryPage> = Object.fromEntries(pageGroups.map((group, index) => {
       const page = index + 1
       const pageMatches = group.flatMap((entry) => entry.games)
@@ -1598,7 +1634,7 @@ export function createMatchHistoryArtifacts(
     index: {
       artifactKind: 'match-history-index',
       schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-      artifactMeta: artifactMetaFor({ generatedAt: data.generatedAt, modelVersion: data.model.version, modelConfigHash: data.model.configHash }),
+      artifactMeta: artifactMetaForStaticData(data, runMetadata),
       generatedAt: data.generatedAt,
       modelVersion: data.model.version,
       modelConfigHash: data.model.configHash,
@@ -1654,7 +1690,10 @@ const ROLE_ORDER: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
  * browser-loadable directory. Region and league are joined from team standings so
  * the player view can group and filter without the 195MB full artifact.
  */
-export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory {
+export function createPlayerDirectory(
+  data: StaticRankingData,
+  { runMetadata }: { runMetadata?: CrunchRunMetadata } = {},
+): PlayerDirectory {
   const defaultSnapshot = data.snapshots[data.defaultSnapshotKey]
   const players = compactPlayersForSnapshot(defaultSnapshot, data.teams)
   const scopedPlayers: Record<string, CompactPlayer[]> = Object.fromEntries(
@@ -1670,11 +1709,7 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
   return {
     artifactKind: 'player-directory',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-    artifactMeta: artifactMetaFor({
-      generatedAt: data.generatedAt,
-      modelVersion: data.model.version,
-      modelConfigHash: data.model.configHash,
-    }),
+    artifactMeta: artifactMetaForStaticData(data, runMetadata),
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
@@ -1694,7 +1729,10 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
   }
 }
 
-export function createTeamDirectory(data: StaticRankingData): TeamDirectory {
+export function createTeamDirectory(
+  data: StaticRankingData,
+  { runMetadata }: { runMetadata?: CrunchRunMetadata } = {},
+): TeamDirectory {
   const teams = Object.values(data.teams)
     .map((team) => ({
       teamId: teamIdFor({ team: team.name, region: team.region, code: team.code }),
@@ -1714,11 +1752,7 @@ export function createTeamDirectory(data: StaticRankingData): TeamDirectory {
   return {
     artifactKind: 'team-directory',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-    artifactMeta: artifactMetaFor({
-      generatedAt: data.generatedAt,
-      modelVersion: data.model.version,
-      modelConfigHash: data.model.configHash,
-    }),
+    artifactMeta: artifactMetaForStaticData(data, runMetadata),
     generatedAt: data.generatedAt,
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
