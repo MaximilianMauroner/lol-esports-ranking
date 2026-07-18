@@ -66,7 +66,7 @@ export function sha256Hex(value: string | Uint8Array): string {
   view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x1_0000_0000), false)
   view.setUint32(paddedLength - 4, bitLength >>> 0, false)
 
-  const state = [...SHA256_INITIAL_STATE]
+  const state: number[] = [...SHA256_INITIAL_STATE]
   const words = new Uint32Array(64)
   for (let offset = 0; offset < bytes.length; offset += 64) {
     for (let index = 0; index < 16; index += 1) words[index] = view.getUint32(offset + index * 4, false)

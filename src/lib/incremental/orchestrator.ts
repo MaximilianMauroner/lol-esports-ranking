@@ -7,36 +7,96 @@ export type CrunchOrchestrationResult<T> = {
   executedMode: 'full' | 'incremental'
   fallback?: IncrementalFallbackReason
   receipt?: IncrementalCrunchReceipt
+  shadowOutput?: T
 }
 
-/**
- * Phase-0 shell: every mode deliberately invokes the direct reference engine.
- * Incremental restoration is not attempted until its compatibility contract exists.
- */
+export type IncrementalCrunchAttempt<T> =
+  | { output: T; fallback?: undefined }
+  | { output?: T; fallback: IncrementalFallbackReason }
+
+/** Runs the selected engine, preserving an explicit reference fallback path. */
 export async function orchestrateCrunch<T>({
   mode = 'full',
   runFull,
+  runIncremental,
   receipt,
 }: {
   mode?: CrunchMode
   runFull: () => T | Promise<T>
+  runIncremental?: () => IncrementalCrunchAttempt<T> | Promise<IncrementalCrunchAttempt<T>>
   receipt?: IncrementalCrunchReceipt
 }): Promise<CrunchOrchestrationResult<T>> {
-  const fallback: IncrementalFallbackReason | undefined = mode === 'full'
-    ? undefined
-    : { kind: 'incremental-mode-unavailable', requestedMode: mode }
+  if (mode === 'full') {
+    if (receipt) {
+      receipt.requestedMode = mode
+      receipt.executedMode = 'full'
+      receipt.checkpoint = {}
+    }
+    const output = await runAndRecordAttempt(runFull, 'reference', receipt)
+    return {
+      output,
+      requestedMode: mode,
+      executedMode: 'full',
+      ...(receipt ? { receipt } : {}),
+    }
+  }
+  const incrementalStartedAt = performance.now()
+  const attempt = runIncremental
+    ? await runIncremental()
+    : { fallback: { kind: 'incremental-mode-unavailable' as const, requestedMode: mode } }
+  if (receipt) receipt.attempts.push({
+    engine: 'incremental',
+    outcome: attempt.fallback ? 'fallback' : 'succeeded',
+    durationMs: Math.max(0, performance.now() - incrementalStartedAt),
+    sources: { filesScanned: null, bytesScanned: null, rowsParsed: null, observationsNormalized: null, observationsReused: null },
+  })
+  const fallback = attempt.fallback
   if (receipt) {
     receipt.requestedMode = mode
-    receipt.executedMode = 'full'
+    receipt.executedMode = fallback || mode === 'incremental-shadow' ? 'full' : 'incremental'
     receipt.checkpoint = fallback ? { fallback } : {}
   }
+  if (fallback) {
+    return {
+      output: await runAndRecordAttempt(runFull, 'reference', receipt),
+      ...(attempt.output === undefined ? {} : { shadowOutput: attempt.output }),
+      requestedMode: mode,
+      executedMode: 'full',
+      fallback,
+      ...(receipt ? { receipt } : {}),
+    }
+  }
+  if (mode === 'incremental-shadow') {
+    return {
+      output: await runAndRecordAttempt(runFull, 'reference', receipt),
+      shadowOutput: attempt.output,
+      requestedMode: mode,
+      executedMode: 'full',
+      ...(receipt ? { receipt } : {}),
+    }
+  }
   return {
-    output: await runFull(),
+    output: attempt.output,
     requestedMode: mode,
-    executedMode: 'full',
-    ...(fallback ? { fallback } : {}),
+    executedMode: 'incremental',
     ...(receipt ? { receipt } : {}),
   }
+}
+
+async function runAndRecordAttempt<T>(
+  run: () => T | Promise<T>,
+  engine: 'reference' | 'incremental',
+  receipt?: IncrementalCrunchReceipt,
+): Promise<T> {
+  const startedAt = performance.now()
+  const output = await run()
+  if (receipt) receipt.attempts.push({
+    engine,
+    outcome: 'succeeded',
+    durationMs: Math.max(0, performance.now() - startedAt),
+    sources: { filesScanned: null, bytesScanned: null, rowsParsed: null, observationsNormalized: null, observationsReused: null },
+  })
+  return output
 }
 
 export function crunchModeFrom(value: string | undefined): CrunchMode {

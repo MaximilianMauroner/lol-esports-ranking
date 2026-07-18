@@ -1,0 +1,602 @@
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, resolve } from 'node:path'
+import { knownTeamIdentities } from '../src/data/teamIdentity.ts'
+import type { OracleImportResult } from '../src/lib/importers/oraclesElixir.ts'
+import type { LeaguepediaImportResult } from '../src/lib/importers/leaguepedia.ts'
+import type { LolEsportsReferenceImportResult } from '../src/lib/importers/lolEsports.ts'
+import { transparentGprModelMetadata } from '../src/lib/model.ts'
+import { mergeTeamProfiles } from '../src/lib/teamProfiles.ts'
+import { decodePrivateState, encodePrivateState } from '../src/lib/incremental/canonicalCodec.ts'
+import { buildCanonicalLedger, CANONICAL_LEDGER_SCHEMA_VERSION, type CanonicalLedger } from '../src/lib/incremental/canonicalLedger.ts'
+import { reconcileCanonicalObservations } from '../src/lib/incremental/canonicalReconciler.ts'
+import type { CanonicalRankingInput } from '../src/lib/incremental/canonicalState.ts'
+import { compatibilityFallback, type CrunchCompatibility } from '../src/lib/incremental/compatibility.ts'
+import { canonicalContextDigests } from '../src/lib/incremental/dependencyDigests.ts'
+import { stableHash, sha256Hex } from '../src/lib/incremental/hash.ts'
+import { scanOracleCsv } from '../src/lib/incremental/oracleScanner.ts'
+import {
+  compatibleFingerprint,
+  processProviderFile,
+  type ProviderFileFingerprint,
+  type ProviderFileLedger,
+  type ProviderId,
+  type ProviderScanMetrics,
+} from '../src/lib/incremental/providerLedger.ts'
+import { scanLeaguepediaJson, scanLolEsportsJson } from '../src/lib/incremental/providerScanners.ts'
+import type { IncrementalFallbackReason } from '../src/lib/incremental/types.ts'
+
+const LOCAL_STATE_SCHEMA_VERSION = 2 as const
+
+type FileSignature = {
+  device: string
+  inode: string
+  byteLength: number
+  modifiedNs: string
+  changedNs: string
+}
+
+export type ProviderAuthority = {
+  receiptId: string
+  fileSetAuthoritative: boolean
+  contentReplacementAuthoritative: boolean
+}
+
+export type ProviderAuthorities = Record<ProviderId, ProviderAuthority>
+
+type ProviderGenerationEntry = {
+  sourcePath: string
+  provider: ProviderId
+  signature: FileSignature
+  ledgerHash: string
+  authority: ProviderAuthority
+  authorityHash: string
+}
+
+type CanonicalGenerationEntry = {
+  providerRoot: string
+  ledgerHash: string
+}
+
+type GenerationFileSet = {
+  paths: Record<ProviderId, string[]>
+  authorities: ProviderAuthorities
+  authorityHash: string
+}
+
+type StateGeneration = {
+  schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
+  kind: 'incremental-generation'
+  providers: Record<string, ProviderGenerationEntry>
+  canonical: CanonicalGenerationEntry
+  fileSet: GenerationFileSet
+  compatibility: CrunchCompatibility
+}
+
+type ActiveGenerationPointer = {
+  schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
+  kind: 'active-generation'
+  generationHash: string
+}
+
+type ContentEnvelope = {
+  schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
+  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation'
+  contentHash: string
+  payload: unknown
+}
+
+export type PendingIncrementalStateWrite = { path: string; contents: string }
+
+type ProviderPathResult = {
+  ledger?: ProviderFileLedger
+  fallback?: IncrementalFallbackReason
+  metrics: ProviderScanMetrics
+  contentRead: boolean
+  objectWrite?: PendingIncrementalStateWrite
+  entry?: ProviderGenerationEntry
+}
+
+type LoadedProviderState = { entry: ProviderGenerationEntry; ledger: ProviderFileLedger }
+
+type LoadedGeneration = {
+  generation: StateGeneration
+  providers: Map<string, LoadedProviderState>
+  canonicalLedger: CanonicalLedger
+}
+
+export type IncrementalStatePromotion = {
+  stagedWrites: PendingIncrementalStateWrite[]
+  pointerWrite: PendingIncrementalStateWrite
+}
+
+export type IncrementalLoadMetrics = ProviderScanMetrics & { filesScanned: number }
+
+export type IncrementalCommunityImports = {
+  oracleImports: OracleImportResult[]
+  leaguepediaImports: LeaguepediaImportResult[]
+  lolEsportsImports: LolEsportsReferenceImportResult[]
+  metrics: IncrementalLoadMetrics
+  canonical: CanonicalRankingInput
+}
+
+export type IncrementalCommunityLoadResult = {
+  imports?: IncrementalCommunityImports
+  promotion?: IncrementalStatePromotion
+  fallback?: IncrementalFallbackReason
+  metrics: IncrementalLoadMetrics
+}
+
+export async function loadIncrementalCommunityImports({
+  stateDir,
+  oracleCsvPaths,
+  leaguepediaJsonPaths,
+  lolEsportsJsonPaths,
+  oracleRetrievedAt,
+  now,
+  authorities,
+  compatibility,
+}: {
+  stateDir: string
+  oracleCsvPaths: string[]
+  leaguepediaJsonPaths: string[]
+  lolEsportsJsonPaths: string[]
+  oracleRetrievedAt: string
+  now: string
+  authorities: ProviderAuthorities
+  compatibility: CrunchCompatibility
+}): Promise<IncrementalCommunityLoadResult> {
+  let active: LoadedGeneration | undefined
+  let restoreFallback: IncrementalFallbackReason | undefined
+  try {
+    active = await loadActiveGeneration(stateDir)
+  } catch (error) {
+    restoreFallback = checkpointCorrupt(error)
+  }
+  if (!active && !restoreFallback) {
+    restoreFallback = { kind: 'checkpoint-unavailable', detail: 'No active incremental generation; cold bootstrap requires reference parity' }
+  }
+  if (active) {
+    const fallback = compatibilityFallback(compatibility, active.generation.compatibility)
+    if (fallback) {
+      restoreFallback = fallback
+      active = undefined
+    }
+  }
+
+  const currentFileSet = fileSetFor({ oracleCsvPaths, leaguepediaJsonPaths, lolEsportsJsonPaths, authorities })
+  const removedFallback = active ? removedFileFallback(active.generation.fileSet, currentFileSet) : undefined
+  try {
+    const oracle = await Promise.all(oracleCsvPaths.map((path) => loadProviderPath({
+      path,
+      provider: 'oracles-elixir',
+      stateDir,
+      oracleRetrievedAt,
+      now,
+      authority: authorities['oracles-elixir'],
+      previous: active?.providers.get(providerKey('oracles-elixir', path)),
+    })))
+    const leaguepedia = await Promise.all(leaguepediaJsonPaths.map((path) => loadProviderPath({
+      path,
+      provider: 'leaguepedia-cargo',
+      stateDir,
+      oracleRetrievedAt,
+      now,
+      authority: authorities['leaguepedia-cargo'],
+      previous: active?.providers.get(providerKey('leaguepedia-cargo', path)),
+    })))
+    const lolEsports = await Promise.all(lolEsportsJsonPaths.map((path) => loadProviderPath({
+      path,
+      provider: 'lol-esports-api',
+      stateDir,
+      oracleRetrievedAt,
+      now,
+      authority: authorities['lol-esports-api'],
+      previous: active?.providers.get(providerKey('lol-esports-api', path)),
+    })))
+    const results = [...oracle, ...leaguepedia, ...lolEsports]
+    const metrics = aggregateMetrics(results)
+    const providerFallback = results.find((result) => result.fallback)?.fallback
+    if (removedFallback || providerFallback) return { fallback: removedFallback ?? providerFallback, metrics }
+
+    const successful = results.filter((result): result is ProviderPathResult & { ledger: ProviderFileLedger; entry: ProviderGenerationEntry } => Boolean(result.ledger && result.entry))
+    const ledgers = successful.map((result) => result.ledger)
+    const canonical = loadCanonicalState({ stateDir, ledgers, previous: active })
+    const generation: StateGeneration = {
+      schemaVersion: LOCAL_STATE_SCHEMA_VERSION,
+      kind: 'incremental-generation',
+      providers: Object.fromEntries(successful
+        .map((result) => [providerKey(result.entry.provider, result.entry.sourcePath), result.entry] as const)
+        .sort(([left], [right]) => left.localeCompare(right))),
+      canonical: canonical.entry,
+      fileSet: currentFileSet,
+      compatibility,
+    }
+    const generationHash = stableHash(generation)
+    const stagedWrites = uniqueWrites([
+      ...successful.flatMap((result) => result.objectWrite ? [result.objectWrite] : []),
+      ...(canonical.objectWrite ? [canonical.objectWrite] : []),
+      contentWrite(resolve(stateDir, 'generations', `${generationHash}.json`), 'state-generation', generationHash, generation),
+    ])
+    const promotion: IncrementalStatePromotion = {
+      stagedWrites,
+      pointerWrite: privateWrite(resolve(stateDir, 'active-generation.json'), {
+        schemaVersion: LOCAL_STATE_SCHEMA_VERSION,
+        kind: 'active-generation',
+        generationHash,
+      } satisfies ActiveGenerationPointer),
+    }
+    const imports: IncrementalCommunityImports = {
+      oracleImports: ledgers.filter((ledger) => ledger.fingerprint.provider === 'oracles-elixir').map(oracleImportFor),
+      leaguepediaImports: ledgers.filter((ledger) => ledger.fingerprint.provider === 'leaguepedia-cargo').map(leaguepediaImportFor),
+      lolEsportsImports: ledgers.filter((ledger) => ledger.fingerprint.provider === 'lol-esports-api').map(lolEsportsImportFor),
+      canonical: canonical.canonical,
+      metrics,
+    }
+    return { imports, promotion, metrics, ...(restoreFallback ? { fallback: restoreFallback } : {}) }
+  } catch (error) {
+    return { fallback: checkpointCorrupt(error), metrics: emptyMetrics() }
+  }
+}
+
+export async function stageIncrementalState(promotion: IncrementalStatePromotion): Promise<void> {
+  for (const write of promotion.stagedWrites) await atomicWrite(write)
+}
+
+export async function promoteIncrementalState(promotion: IncrementalStatePromotion): Promise<void> {
+  await stageIncrementalState(promotion)
+  await atomicWrite(promotion.pointerWrite)
+}
+
+async function loadActiveGeneration(stateDir: string): Promise<LoadedGeneration | undefined> {
+  const pointerValue = await readOptionalPrivateState(resolve(stateDir, 'active-generation.json'))
+  if (pointerValue === undefined) return undefined
+  const pointer = parseActivePointer(pointerValue)
+  const generation = await readContentObject<StateGeneration>(
+    resolve(stateDir, 'generations', `${pointer.generationHash}.json`),
+    'state-generation',
+    pointer.generationHash,
+  )
+  verifyGeneration(generation)
+  const providers = new Map<string, LoadedProviderState>()
+  for (const [key, rawEntry] of Object.entries(generation.providers).sort(([left], [right]) => left.localeCompare(right))) {
+    const entry = parseProviderEntry(rawEntry)
+    if (key !== providerKey(entry.provider, entry.sourcePath)) throw new Error(`Provider generation key mismatch for ${entry.sourcePath}`)
+    const ledger = await readContentObject<ProviderFileLedger>(resolve(stateDir, 'providers', 'objects', `${entry.ledgerHash}.json`), 'provider-ledger', entry.ledgerHash)
+    verifyProviderLedger(ledger)
+    providers.set(key, { entry, ledger })
+  }
+  const canonicalLedger = await readContentObject<CanonicalLedger>(
+    resolve(stateDir, 'canonical', 'objects', `${generation.canonical.ledgerHash}.json`),
+    'canonical-ledger',
+    generation.canonical.ledgerHash,
+  )
+  verifyCanonicalLedger(canonicalLedger)
+  return { generation, providers, canonicalLedger }
+}
+
+function loadCanonicalState({
+  stateDir,
+  ledgers,
+  previous,
+}: {
+  stateDir: string
+  ledgers: ProviderFileLedger[]
+  previous?: LoadedGeneration
+}): { canonical: CanonicalRankingInput; entry: CanonicalGenerationEntry; objectWrite?: PendingIncrementalStateWrite } {
+  const observations = ledgers.flatMap((ledger) => ledger.observations)
+  const importedTeams = mergeTeamProfiles(ledgers.map((ledger) => ledger.teams))
+  const schedules = observations.flatMap((observation) => observation.kind === 'schedule' ? [observation.payload] : [])
+  const contextDigests = canonicalContextDigests({ identities: knownTeamIdentities, profiles: importedTeams, eventWeightContext: transparentGprModelMetadata, schedules })
+  const providerRoot = stableHash(ledgers.map(providerCanonicalState))
+  if (previous?.generation.canonical.providerRoot === providerRoot) {
+    const ledger = previous.canonicalLedger
+    if (stableHash(ledger.contextDigests) === stableHash(contextDigests)) {
+      return {
+        canonical: { matches: ledger.matches, teams: ledger.teams, importedMatches: ledger.importedMatches },
+        entry: previous.generation.canonical,
+      }
+    }
+  }
+  const canonical = reconcileCanonicalObservations({ observations, importedTeams })
+  const ledger = buildCanonicalLedger({ canonical, observations, contextDigests })
+  const ledgerHash = stableHash(ledger)
+  return {
+    canonical,
+    entry: { providerRoot, ledgerHash },
+    objectWrite: contentWrite(resolve(stateDir, 'canonical', 'objects', `${ledgerHash}.json`), 'canonical-ledger', ledgerHash, ledger),
+  }
+}
+
+function providerCanonicalState(ledger: ProviderFileLedger) {
+  return {
+    fingerprint: ledger.fingerprint,
+    observations: ledger.observations,
+    teams: ledger.teams,
+  }
+}
+
+async function loadProviderPath({
+  path,
+  provider,
+  stateDir,
+  oracleRetrievedAt,
+  now,
+  authority,
+  previous,
+}: {
+  path: string
+  provider: ProviderId
+  stateDir: string
+  oracleRetrievedAt: string
+  now: string
+  authority: ProviderAuthority
+  previous?: LoadedProviderState
+}): Promise<ProviderPathResult> {
+  const signature = await signatureFor(path)
+  const previousLedger = previous?.ledger
+  if (previous && equalSignature(previous.entry.signature, signature)) {
+    const ledger = provider === 'oracles-elixir'
+      ? { ...previous.ledger, source: { ...previous.ledger.source, retrievedAt: oracleRetrievedAt } }
+      : previous.ledger
+    const ledgerHash = stableHash(ledger)
+    return {
+      ledger,
+      entry: providerEntry({ path, provider, signature, ledgerHash, authority }),
+      contentRead: false,
+      metrics: { bytesScanned: 0, rowsParsed: 0, observationsNormalized: 0, observationsReused: ledger.observations.length },
+      ...(ledgerHash === previous.entry.ledgerHash ? {} : { objectWrite: providerObjectWrite(stateDir, ledgerHash, ledger) }),
+    }
+  }
+
+  const contents = await readFile(path, 'utf8')
+  const fingerprint: ProviderFileFingerprint = { provider, fileId: basename(path), byteLength: signature.byteLength, contentHash: sha256Hex(contents) }
+  if (previousLedger && compatibleFingerprint(previousLedger.fingerprint, fingerprint)) {
+    const ledger = provider === 'oracles-elixir'
+      ? { ...previousLedger, source: { ...previousLedger.source, retrievedAt: oracleRetrievedAt } }
+      : previousLedger
+    const ledgerHash = stableHash(ledger)
+    return {
+      ledger,
+      entry: providerEntry({ path, provider, signature, ledgerHash, authority }),
+      contentRead: true,
+      metrics: { bytesScanned: signature.byteLength, rowsParsed: 0, observationsNormalized: 0, observationsReused: ledger.observations.length },
+      ...(ledgerHash === previous?.entry.ledgerHash ? {} : { objectWrite: providerObjectWrite(stateDir, ledgerHash, ledger) }),
+    }
+  }
+
+  const result = await processProviderFile({
+    fingerprint,
+    previous: previousLedger,
+    authoritativeReplacement: authority.contentReplacementAuthoritative,
+    readContents: async () => contents,
+    normalize: (source, old) => {
+      if (provider === 'oracles-elixir') return scanOracleCsv({ contents: source, fingerprint: { ...fingerprint, provider }, previous: old, retrievedAt: oracleRetrievedAt })
+      if (provider === 'leaguepedia-cargo') return scanLeaguepediaJson({ contents: source, fingerprint: { ...fingerprint, provider }, previous: old })
+      return scanLolEsportsJson({ contents: source, fingerprint: { ...fingerprint, provider }, previous: old })
+    },
+    now,
+  })
+  if (result.fallback) return { fallback: result.fallback, metrics: result.metrics, contentRead: true }
+  verifyProviderLedger(result.ledger)
+  const ledgerHash = stableHash(result.ledger)
+  return {
+    ledger: result.ledger,
+    entry: providerEntry({ path, provider, signature, ledgerHash, authority }),
+    contentRead: true,
+    metrics: result.metrics,
+    objectWrite: providerObjectWrite(stateDir, ledgerHash, result.ledger),
+  }
+}
+
+function providerEntry({
+  path,
+  provider,
+  signature,
+  ledgerHash,
+  authority,
+}: {
+  path: string
+  provider: ProviderId
+  signature: FileSignature
+  ledgerHash: string
+  authority: ProviderAuthority
+}): ProviderGenerationEntry {
+  return { sourcePath: path, provider, signature, ledgerHash, authority, authorityHash: stableHash(authority) }
+}
+
+function providerObjectWrite(stateDir: string, ledgerHash: string, ledger: ProviderFileLedger) {
+  return contentWrite(resolve(stateDir, 'providers', 'objects', `${ledgerHash}.json`), 'provider-ledger', ledgerHash, ledger)
+}
+
+function verifyGeneration(generation: StateGeneration) {
+  if (generation.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION
+    || generation.kind !== 'incremental-generation'
+    || !isRecord(generation.providers)
+    || !isRecord(generation.canonical)
+    || !isRecord(generation.fileSet)
+    || !isRecord(generation.compatibility)) {
+    throw new Error('Invalid incremental state generation')
+  }
+  if (generation.fileSet.authorityHash !== stableHash(generation.fileSet.authorities)) throw new Error('Provider file-set authority receipt hash mismatch')
+  const compatibilityIntegrity = compatibilityFallback(generation.compatibility, generation.compatibility)
+  if (compatibilityIntegrity) throw new Error('Invalid compatibility envelope in state generation')
+  const expectedProviderKeys = (['oracles-elixir', 'leaguepedia-cargo', 'lol-esports-api'] as const)
+    .flatMap((provider) => generation.fileSet.paths[provider].map((path) => providerKey(provider, path)))
+    .sort()
+  const actualProviderKeys = Object.keys(generation.providers).sort()
+  if (stableHash(actualProviderKeys) !== stableHash(expectedProviderKeys)) throw new Error('Provider generation does not match its file set')
+}
+
+function verifyProviderLedger(ledger: ProviderFileLedger) {
+  if (ledger.observations.some((observation) => observation.payloadHash !== stableHash(observation.payload))) {
+    throw new Error(`Provider observation semantic hash mismatch in ${ledger.fingerprint.fileId}`)
+  }
+}
+
+function verifyCanonicalLedger(ledger: CanonicalLedger) {
+  if (ledger.schemaVersion !== CANONICAL_LEDGER_SCHEMA_VERSION) throw new Error('Incompatible canonical ledger object')
+  if (ledger.rootHash !== recomputeCanonicalRoot(ledger)) throw new Error('Canonical ledger semantic root mismatch')
+}
+
+function recomputeCanonicalRoot(ledger: CanonicalLedger) {
+  return stableHash({
+    matches: ledger.matches,
+    importedMatches: ledger.importedMatches,
+    teams: ledger.teams,
+    partitions: ledger.partitions,
+    contextDigests: ledger.contextDigests,
+    observationToGroups: ledger.observationToGroups,
+    groupToObservations: ledger.groupToObservations,
+  })
+}
+
+function fileSetFor({
+  oracleCsvPaths,
+  leaguepediaJsonPaths,
+  lolEsportsJsonPaths,
+  authorities,
+}: {
+  oracleCsvPaths: string[]
+  leaguepediaJsonPaths: string[]
+  lolEsportsJsonPaths: string[]
+  authorities: ProviderAuthorities
+}): GenerationFileSet {
+  return {
+    paths: {
+      'oracles-elixir': [...oracleCsvPaths].sort(),
+      'leaguepedia-cargo': [...leaguepediaJsonPaths].sort(),
+      'lol-esports-api': [...lolEsportsJsonPaths].sort(),
+    },
+    authorities,
+    authorityHash: stableHash(authorities),
+  }
+}
+
+function removedFileFallback(previous: GenerationFileSet, current: GenerationFileSet): IncrementalFallbackReason | undefined {
+  for (const provider of ['oracles-elixir', 'leaguepedia-cargo', 'lol-esports-api'] as const) {
+    const removed = previous.paths[provider].filter((path) => !current.paths[provider].includes(path))
+    if (removed.length > 0 && !current.authorities[provider].fileSetAuthoritative) {
+      return { kind: 'dependency-unknown', dependency: `ambiguous-provider-file-removal:${provider}:${removed.join(',')}` }
+    }
+  }
+  return undefined
+}
+
+function parseActivePointer(value: unknown): ActiveGenerationPointer {
+  if (!isRecord(value) || value.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION || value.kind !== 'active-generation' || typeof value.generationHash !== 'string') {
+    throw new Error('Invalid active generation pointer')
+  }
+  return value as ActiveGenerationPointer
+}
+
+function parseProviderEntry(value: unknown): ProviderGenerationEntry {
+  if (!isRecord(value) || typeof value.sourcePath !== 'string' || typeof value.provider !== 'string' || !isRecord(value.signature) || typeof value.ledgerHash !== 'string' || !isRecord(value.authority)) {
+    throw new Error('Invalid provider generation entry')
+  }
+  const entry = value as ProviderGenerationEntry
+  if (!isProviderId(entry.provider)) throw new Error(`Invalid provider ID for ${entry.sourcePath}`)
+  if (entry.authorityHash !== stableHash(entry.authority)) throw new Error(`Provider authority receipt hash mismatch for ${entry.sourcePath}`)
+  return entry
+}
+
+function isProviderId(value: string): value is ProviderId {
+  return value === 'oracles-elixir' || value === 'leaguepedia-cargo' || value === 'lol-esports-api'
+}
+
+async function readContentObject<T>(path: string, kind: ContentEnvelope['kind'], expectedHash: string): Promise<T> {
+  const value = decodePrivateState(await readFile(path, 'utf8'))
+  if (!isRecord(value) || value.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION || value.kind !== kind || value.contentHash !== expectedHash) {
+    throw new Error(`Invalid ${kind} envelope`)
+  }
+  if (stableHash(value.payload) !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
+  return value.payload as T
+}
+
+async function readOptionalPrivateState(path: string): Promise<unknown | undefined> {
+  try {
+    return decodePrivateState(await readFile(path, 'utf8'))
+  } catch (error) {
+    if (isMissingFileError(error)) return undefined
+    throw error
+  }
+}
+
+function contentWrite(path: string, kind: ContentEnvelope['kind'], contentHash: string, payload: unknown): PendingIncrementalStateWrite {
+  return privateWrite(path, { schemaVersion: LOCAL_STATE_SCHEMA_VERSION, kind, contentHash, payload } satisfies ContentEnvelope)
+}
+
+function privateWrite(path: string, value: unknown): PendingIncrementalStateWrite {
+  return { path, contents: encodePrivateState(value) }
+}
+
+function uniqueWrites(writes: PendingIncrementalStateWrite[]) {
+  return [...new Map(writes.map((write) => [write.path, write])).values()]
+}
+
+async function atomicWrite({ path, contents }: PendingIncrementalStateWrite) {
+  await mkdir(dirname(path), { recursive: true })
+  const temporary = `${path}.${process.pid}.tmp`
+  await writeFile(temporary, contents)
+  await rename(temporary, path)
+}
+
+async function signatureFor(path: string): Promise<FileSignature> {
+  const value = await stat(path, { bigint: true })
+  return {
+    device: value.dev.toString(),
+    inode: value.ino.toString(),
+    byteLength: Number(value.size),
+    modifiedNs: value.mtimeNs.toString(),
+    changedNs: value.ctimeNs.toString(),
+  }
+}
+
+function aggregateMetrics(results: ProviderPathResult[]): IncrementalLoadMetrics {
+  return results.reduce((total, result) => ({
+    filesScanned: total.filesScanned + (result.contentRead ? 1 : 0),
+    bytesScanned: total.bytesScanned + result.metrics.bytesScanned,
+    rowsParsed: total.rowsParsed + result.metrics.rowsParsed,
+    observationsNormalized: total.observationsNormalized + result.metrics.observationsNormalized,
+    observationsReused: total.observationsReused + result.metrics.observationsReused,
+  }), emptyMetrics())
+}
+
+function emptyMetrics(): IncrementalLoadMetrics {
+  return { filesScanned: 0, bytesScanned: 0, rowsParsed: 0, observationsNormalized: 0, observationsReused: 0 }
+}
+
+function checkpointCorrupt(error: unknown): IncrementalFallbackReason {
+  return { kind: 'checkpoint-corrupt', detail: error instanceof Error ? error.message : 'Unknown incremental state failure' }
+}
+
+function providerKey(provider: ProviderId, path: string) {
+  return stableHash({ provider, path })
+}
+
+function oracleImportFor(ledger: ProviderFileLedger): OracleImportResult {
+  return { matches: ledger.observations.flatMap((observation) => observation.kind === 'match' ? [observation.payload] : []), teams: ledger.teams, source: ledger.source as OracleImportResult['source'] }
+}
+
+function leaguepediaImportFor(ledger: ProviderFileLedger): LeaguepediaImportResult {
+  return { matches: ledger.observations.flatMap((observation) => observation.kind === 'match' ? [observation.payload] : []), teams: ledger.teams, source: ledger.source as LeaguepediaImportResult['source'] }
+}
+
+function lolEsportsImportFor(ledger: ProviderFileLedger): LolEsportsReferenceImportResult {
+  return { events: ledger.observations.flatMap((observation) => observation.kind === 'schedule' ? [observation.payload] : []), source: ledger.source as LolEsportsReferenceImportResult['source'] }
+}
+
+function equalSignature(left: FileSignature, right: FileSignature) {
+  return left.device === right.device
+    && left.inode === right.inode
+    && left.byteLength === right.byteLength
+    && left.modifiedNs === right.modifiedNs
+    && left.changedNs === right.changedNs
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return isRecord(error) && error.code === 'ENOENT'
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

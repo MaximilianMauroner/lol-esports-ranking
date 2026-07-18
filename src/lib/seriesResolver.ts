@@ -95,7 +95,7 @@ function buildCanonicalSeries(id: string, inputGames: MatchRecord[]): CanonicalS
   }
 }
 
-function canonicalSeriesId(match: MatchRecord) {
+export function canonicalSeriesId(match: MatchRecord) {
   const provider = match.sourceProvider ?? 'unknown'
   if (match.officialMatchId) return joinKey('official-match', match.officialMatchId)
   if (match.sourceMatchId) {

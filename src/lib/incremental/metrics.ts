@@ -3,6 +3,14 @@ import type { CrunchMode, CrunchRunMetadata, IncrementalFallbackReason } from '.
 /** `null` means this phase does not yet expose an exact counter; it never means zero. */
 export type InstrumentedCount = number | null
 
+export type IncrementalAttemptSourceMetrics = {
+  filesScanned: InstrumentedCount
+  bytesScanned: InstrumentedCount
+  rowsParsed: InstrumentedCount
+  observationsNormalized: InstrumentedCount
+  observationsReused: InstrumentedCount
+}
+
 export type IncrementalCrunchReceipt = {
   schemaVersion: 1
   run: CrunchRunMetadata
@@ -40,6 +48,12 @@ export type IncrementalCrunchReceipt = {
     fallback?: IncrementalFallbackReason
   }
   timingsMs: Record<string, number>
+  attempts: Array<{
+    engine: 'incremental' | 'reference'
+    outcome: 'succeeded' | 'fallback'
+    durationMs: number
+    sources: IncrementalAttemptSourceMetrics
+  }>
 }
 
 export function createIncrementalCrunchReceipt({
@@ -62,6 +76,7 @@ export function createIncrementalCrunchReceipt({
     bucket: { bytesRead: 0, bytesWritten: 0 },
     checkpoint: {},
     timingsMs: {},
+    attempts: [],
   }
 }
 
@@ -72,4 +87,13 @@ export function recordCrunchTiming(
   endedAtMs: number,
 ): void {
   receipt.timingsMs[phase] = Math.max(0, endedAtMs - startedAtMs)
+}
+
+export function recordCrunchAttemptSources(
+  receipt: IncrementalCrunchReceipt,
+  engine: IncrementalCrunchReceipt['attempts'][number]['engine'],
+  sources: IncrementalAttemptSourceMetrics,
+): void {
+  const attempt = receipt.attempts.findLast((entry) => entry.engine === engine)
+  if (attempt) attempt.sources = { ...sources }
 }

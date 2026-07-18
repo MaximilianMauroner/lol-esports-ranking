@@ -355,3 +355,14 @@ function appendMatch(matches: Map<string, MatchRecord[]>, key: string, match: Ma
 function isResultOnlyGapFill(match: MatchRecord) {
   return match.dataCompleteness === 'match-result-only' || (match.teamAKills === 0 && match.teamBKills === 0 && match.teamAGold === 0 && match.teamBGold === 0)
 }
+
+/** All current reconciliation groups a match can influence. */
+export function communityMatchInfluenceKeys(match: MatchRecord): string[] {
+  return [...new Set([
+    ...matchKeys(match).map((key) => `dedupe:${key}`),
+    ...oracleGameDuplicateKeys(match).map((key) => `oracle:${key}`),
+    `outcome:${matchOutcomeKey(match)}`,
+    `stat-outcome:${matchStatOutcomeKey(match)}`,
+    `team-date:${matchTeamDateKey(match)}`,
+  ])].sort()
+}

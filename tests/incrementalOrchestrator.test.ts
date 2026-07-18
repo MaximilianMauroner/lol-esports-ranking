@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createCrunchCompatibility, compatibilityFallback } from '../src/lib/incremental/compatibility.ts'
-import { createIncrementalCrunchReceipt } from '../src/lib/incremental/metrics.ts'
+import { createIncrementalCrunchReceipt, recordCrunchAttemptSources } from '../src/lib/incremental/metrics.ts'
 import { crunchModeFrom, orchestrateCrunch } from '../src/lib/incremental/orchestrator.ts'
+import { assertCrunchParity } from '../src/lib/incremental/parity.ts'
 import type { CrunchMode } from '../src/lib/incremental/types.ts'
 
 const run = { generatedAt: '2026-07-18T00:00:00.000Z', runId: 'run_contract' }
@@ -46,7 +47,110 @@ test('unavailable incremental modes fall back explicitly without claiming reuse'
     assert.equal(receipt.artifacts.reused, null)
     assert.equal(receipt.reducers.teamRows, null)
     assert.deepEqual(receipt.checkpoint.fallback, fallback)
+    assert.deepEqual(receipt.attempts.map(({ engine, outcome }) => ({ engine, outcome })), [
+      { engine: 'incremental', outcome: 'fallback' },
+      { engine: 'reference', outcome: 'succeeded' },
+    ])
   }
+})
+
+test('incremental and shadow modes use an available canonical reuse path safely', async () => {
+  let fullCalls = 0
+  let incrementalCalls = 0
+  const incremental = await orchestrateCrunch({
+    mode: 'incremental',
+    runFull: () => {
+      fullCalls += 1
+      return 'full'
+    },
+    runIncremental: () => {
+      incrementalCalls += 1
+      return { output: 'incremental' }
+    },
+  })
+  assert.equal(incremental.output, 'incremental')
+  assert.equal(incremental.executedMode, 'incremental')
+  assert.equal(fullCalls, 0)
+  assert.equal(incrementalCalls, 1)
+
+  const shadow = await orchestrateCrunch({
+    mode: 'incremental-shadow',
+    runFull: () => {
+      fullCalls += 1
+      return 'full'
+    },
+    runIncremental: () => ({ output: 'candidate' }),
+  })
+  assert.equal(shadow.output, 'full')
+  assert.equal(shadow.shadowOutput, 'candidate')
+  assert.equal(shadow.executedMode, 'full')
+  assert.equal(fullCalls, 1)
+})
+
+test('receipts preserve both shadow attempts instead of overwriting fallback work', async () => {
+  const receipt = createIncrementalCrunchReceipt({ run, requestedMode: 'incremental-shadow' })
+  const result = await orchestrateCrunch({
+    mode: 'incremental-shadow',
+    receipt,
+    runFull: () => 'full',
+    runIncremental: () => ({ output: 'candidate' }),
+  })
+  assert.equal(result.output, 'full')
+  assert.deepEqual(receipt.attempts.map(({ engine, outcome }) => ({ engine, outcome })), [
+    { engine: 'incremental', outcome: 'succeeded' },
+    { engine: 'reference', outcome: 'succeeded' },
+  ])
+})
+
+test('typed fallback preserves a faulty cold candidate for mandatory parity rejection', async () => {
+  const fallback = { kind: 'compatibility-hash-mismatch' as const, dependency: 'code', expected: 'new', actual: 'old' }
+  const result = await orchestrateCrunch({
+    mode: 'incremental',
+    runFull: () => ({ snapshot: 'reference' }),
+    runIncremental: () => ({ output: { snapshot: 'faulty-candidate' }, fallback }),
+  })
+  assert.deepEqual(result.output, { snapshot: 'reference' })
+  assert.deepEqual(result.shadowOutput, { snapshot: 'faulty-candidate' })
+  assert.deepEqual(result.fallback, fallback)
+  assert.equal(result.executedMode, 'full')
+  assert.throws(() => assertCrunchParity(
+    { fullSnapshot: result.output, publicWrites: [] },
+    { fullSnapshot: result.shadowOutput, publicWrites: [] },
+  ), /Incremental candidate mismatch/)
+})
+
+test('fallback receipts retain exact incremental scan metrics independently of reference work', async () => {
+  const receipt = createIncrementalCrunchReceipt({ run, requestedMode: 'incremental' })
+  await orchestrateCrunch({
+    mode: 'incremental',
+    receipt,
+    runFull: () => 'reference',
+    runIncremental: () => ({ fallback: { kind: 'dependency-unknown', dependency: 'ambiguous-provider-deletion' } }),
+  })
+  const sources = { filesScanned: 2, bytesScanned: 4096, rowsParsed: 12, observationsNormalized: 3, observationsReused: 7 }
+  recordCrunchAttemptSources(receipt, 'incremental', sources)
+  assert.deepEqual(receipt.attempts.find((attempt) => attempt.engine === 'incremental')?.sources, sources)
+  assert.deepEqual(receipt.attempts.find((attempt) => attempt.engine === 'reference')?.sources, {
+    filesScanned: null,
+    bytesScanned: null,
+    rowsParsed: null,
+    observationsNormalized: null,
+    observationsReused: null,
+  })
+})
+
+test('full mode never reads a missing or corrupt ledger path', async () => {
+  let ledgerReads = 0
+  const result = await orchestrateCrunch({
+    mode: 'full',
+    runFull: () => 'clean-full',
+    runIncremental: () => {
+      ledgerReads += 1
+      throw new Error('corrupt ledger')
+    },
+  })
+  assert.equal(result.output, 'clean-full')
+  assert.equal(ledgerReads, 0)
 })
 
 test('mode parsing rejects unknown values', () => {

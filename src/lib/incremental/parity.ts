@@ -53,6 +53,11 @@ export function compareCrunchOutputs(expected: ComparableCrunchOutput, actual: C
   return { equal: true }
 }
 
+export function assertCrunchParity(expected: ComparableCrunchOutput, actual: ComparableCrunchOutput): void {
+  const parity = compareCrunchOutputs(expected, actual)
+  if (!parity.equal) throw new Error(`Incremental candidate mismatch in ${parity.path} at byte ${parity.byteOffset}`)
+}
+
 function assertUniquePaths(writes: ComparablePublicWrite[], side: 'expected' | 'actual'): void {
   const seen = new Set<string>()
   for (const write of writes) {

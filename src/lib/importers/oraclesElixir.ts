@@ -7,7 +7,8 @@ import {
 } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 
-type CsvRecord = Record<string, string>
+export type OracleCsvRecord = Record<string, string>
+type CsvRecord = OracleCsvRecord
 
 const exactOraclePlayerIdAliases: Record<string, string> = {
   // Oracle split the same MVK/MGN top-laner across 2025/2026 LCP rows.
@@ -29,6 +30,15 @@ export type OracleImportResult = {
   }
 }
 
+export function oracleTeamProfilesForMatches(matches: MatchRecord[]): Record<string, TeamProfile> {
+  const teams: Record<string, TeamProfile> = {}
+  for (const match of matches) {
+    upsertTeam(teams, match.teamA, match.teamAHomeLeague ?? 'Unknown', match.teamARegion ?? 'International')
+    upsertTeam(teams, match.teamB, match.teamBHomeLeague ?? 'Unknown', match.teamBRegion ?? 'International')
+  }
+  return teams
+}
+
 export function importOraclesElixirCsv(
   csvText: string,
   options: {
@@ -37,7 +47,7 @@ export function importOraclesElixirCsv(
     retrievedAt?: string
   } = {},
 ): OracleImportResult {
-  const records = parseCsv(csvText)
+  const records = parseOraclesElixirCsvRecords(csvText)
   const byGame = new Map<string, CsvRecord[]>()
 
   for (const record of records) {
@@ -50,7 +60,7 @@ export function importOraclesElixirCsv(
   const teams: Record<string, TeamProfile> = {}
 
   for (const [gameId, rows] of byGame.entries()) {
-    const match = normalizeGame(gameId, rows, options)
+    const match = normalizeOracleGame(gameId, rows, options)
     if (!match) continue
     matches.push(match)
 
@@ -72,7 +82,7 @@ export function importOraclesElixirCsv(
   }
 }
 
-function normalizeGame(
+export function normalizeOracleGame(
   gameId: string,
   rows: CsvRecord[],
   options: { sourceUrl?: string; sourceFileName?: string },
@@ -322,7 +332,7 @@ function aggregateTeamRows(rows: CsvRecord[]) {
   })
 }
 
-function parseCsv(input: string): CsvRecord[] {
+export function parseOraclesElixirCsvRecords(input: string): OracleCsvRecord[] {
   const rows: string[][] = []
   let row: string[] = []
   let field = ''

@@ -20,6 +20,7 @@ import type {
 import { leagueTierFor } from '../data/leagueTiers'
 import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../data/regionTaxonomy'
 import { canonicalTeamNameFor, regionForLeague } from '../data/teamIdentity'
+import { regionalSplitCalendars } from '../data/rankingCalendar'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
 import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
 import { publishedRatingScale } from './modelConfig'
@@ -2730,22 +2731,6 @@ const checkpointBoundaryDefinitions = [
   { id: 'split-2', label: 'Split 2', kind: 'msi' },
   { id: 'split-3', label: 'Split 3', kind: 'worlds' },
 ] as const
-
-type RegionalSplitCalendar = {
-  starts: readonly [string, string, string]
-  seasonEnd: string
-}
-
-// Global split windows begin when the first of the six tier-one regions starts
-// that split. A window ends on the preceding calendar day. Keep announced
-// calendars explicit so future schedule changes do not silently rewrite an
-// already-published ranking scope.
-const regionalSplitCalendars: Readonly<Record<string, RegionalSplitCalendar>> = {
-  '2026': {
-    starts: ['2026-01-14', '2026-03-28', '2026-07-22'],
-    seasonEnd: '2026-11-14',
-  },
-}
 
 type CheckpointBoundaryDefinition = typeof checkpointBoundaryDefinitions[number]
 type CheckpointBoundaryKind = CheckpointBoundaryDefinition['kind']
