@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { createServer } from 'vite'
 import { renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
-import { shouldHoldPrerenderForManifest } from '../src/lib/bootstrap.ts'
+import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
 
 test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
   const html = await renderHomepagePrerenderFromPublicData()
@@ -33,17 +34,40 @@ test('homepage prerender includes ranking snapshot content from public artifacts
   }
 })
 
-test('Tailwind scans the source file that owns prerender-only classes', async () => {
+test('Tailwind emits utilities owned only by the prerender source file', async () => {
   const stylesheet = await readFile('src/index.css', 'utf8')
   assert.match(stylesheet, /@source\s+["']\.\.\/scripts\/seo-prerender\.ts["']/)
+
+  const vite = await createServer({
+    appType: 'custom',
+    configFile: 'vite.config.ts',
+    logLevel: 'silent',
+    server: { middlewareMode: true },
+  })
+  try {
+    const transformed = await vite.transformRequest('/src/index.css')
+    assert.ok(transformed)
+    assert.match(transformed.code, /max-width:\s*1080px/)
+  } finally {
+    await vite.close()
+  }
 })
 
 test('only ranking startup holds the prerender while the manifest loads', () => {
-  assert.equal(shouldHoldPrerenderForManifest('', false), true)
-  assert.equal(shouldHoldPrerenderForManifest('#rankings?scope=season%3A2026', false), true)
-  assert.equal(shouldHoldPrerenderForManifest('#matches', false), false)
-  assert.equal(shouldHoldPrerenderForManifest('#regions', false), false)
-  assert.equal(shouldHoldPrerenderForManifest('', true), false)
+  assert.equal(shouldHoldPrerenderForManifest('', '/', false), true)
+  assert.equal(shouldHoldPrerenderForManifest('#rankings?scope=season%3A2026', '/', false), true)
+  assert.equal(shouldHoldPrerenderForManifest('#teams?scope=season%3A2026', '/', false), true)
+  assert.equal(shouldHoldPrerenderForManifest('#matches', '/', false), false)
+  assert.equal(shouldHoldPrerenderForManifest('#regions', '/', false), false)
+  assert.equal(shouldHoldPrerenderForManifest('', '/matches', false), false)
+  assert.equal(shouldHoldPrerenderForManifest('', '/teams', false), true)
+  assert.equal(shouldHoldPrerenderForManifest('', '/', true), false)
+})
+
+test('non-ranking manifest errors stay in the app shell', () => {
+  assert.equal(showsManifestErrorInAppShell('matches'), true)
+  assert.equal(showsManifestErrorInAppShell('regions'), true)
+  assert.equal(showsManifestErrorInAppShell('rankings'), false)
 })
 
 function escapedNotice() {

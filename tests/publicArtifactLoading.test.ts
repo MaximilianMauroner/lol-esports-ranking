@@ -22,6 +22,21 @@ test('manifest loader deduplicates concurrent bootstrap and hook requests', asyn
   assert.equal(bootstrapManifest, hookManifest)
 })
 
+test('manifest loader retries after a shared request rejects', async () => {
+  const manifestJson = await readFile('public/data/ranking-summary.json', 'utf8')
+  let requests = 0
+  const loader = createPublicRankingManifestLoader('/data/ranking-summary.json', async () => {
+    requests += 1
+    return requests === 1 ? new Response(null, { status: 503 }) : new Response(manifestJson)
+  })
+
+  await assert.rejects(loader(), /Snapshot request failed with 503/)
+  const manifest = await loader()
+
+  assert.equal(requests, 2)
+  assert.equal(manifest.artifactKind, 'public-ranking-manifest')
+})
+
 test('snapshot loading repairs a cached shard from an older publish', async () => {
   const manifest = parsePublicRankingManifest(JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8')))
   const key = '2026__All__All'
