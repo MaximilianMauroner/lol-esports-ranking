@@ -3,14 +3,20 @@ import { dirname, relative, resolve, sep } from 'node:path'
 
 type ReplaceDirectoryOptions = {
   publishLast?: string
+  preserveTarget?: boolean
   renameDirectory?: typeof rename
 }
 
 export async function replaceDirectory(
   nextDir: string,
   targetDir: string,
-  { publishLast, renameDirectory = rename }: ReplaceDirectoryOptions = {},
+  { publishLast, preserveTarget = false, renameDirectory = rename }: ReplaceDirectoryOptions = {},
 ) {
+  if (preserveTarget) {
+    await publishInPlace(nextDir, targetDir, publishLast)
+    return
+  }
+
   const previousDir = `${targetDir}.previous-${process.pid}`
   await rm(previousDir, { recursive: true, force: true })
   let hasPrevious = false
@@ -38,8 +44,14 @@ export async function replaceDirectory(
 }
 
 async function publishAcrossFilesystems(nextDir: string, targetDir: string, publishLast?: string) {
+  await publishInPlace(nextDir, targetDir, publishLast)
+}
+
+async function publishInPlace(nextDir: string, targetDir: string, publishLast?: string) {
   const root = resolve(nextDir)
   const files = await listFiles(root)
+  const previousFiles = await listFilesIfPresent(resolve(targetDir))
+  const nextRelativePaths = new Set(files.map((file) => relativePath(root, file)))
   if (publishLast) {
     files.sort((left, right) => Number(relativePath(root, left) === publishLast) - Number(relativePath(root, right) === publishLast))
   }
@@ -57,7 +69,21 @@ async function publishAcrossFilesystems(nextDir: string, targetDir: string, publ
     }
   }
 
+  for (const previousFile of previousFiles) {
+    if (!nextRelativePaths.has(relativePath(resolve(targetDir), previousFile))) {
+      await rm(previousFile, { force: true })
+    }
+  }
   await rm(nextDir, { recursive: true, force: true })
+}
+
+async function listFilesIfPresent(dir: string): Promise<string[]> {
+  try {
+    return await listFiles(dir)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
+  }
 }
 
 async function listFiles(dir: string): Promise<string[]> {

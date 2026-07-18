@@ -172,7 +172,10 @@ try {
     await atomicWriteFile(write.path, write.contents)
   }
 
-  await replaceDirectory(publicDataDir, publicDataTargetDir, { publishLast: PUBLIC_ARTIFACT_PATHS.manifest })
+  await replaceDirectory(publicDataDir, publicDataTargetDir, {
+    publishLast: PUBLIC_ARTIFACT_PATHS.manifest,
+    preserveTarget: true,
+  })
   const publicDataBytes = await directorySize(publicDataTargetDir)
 
   console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)

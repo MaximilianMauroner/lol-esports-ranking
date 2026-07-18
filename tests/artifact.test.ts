@@ -255,7 +255,7 @@ test('generated public artifacts include season checkpoint scopes', async () => 
   const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
   const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
 
-  assert.match(checkpoint.boundaryEvent, /^(MSI 2026|2026 Mid-Season Invitational)$/)
+  assert.equal(checkpoint.boundaryEvent, '2026 Split 3 regional opening')
   assert.equal(shard.filter.checkpoint, checkpoint.id)
   assert.equal(shard.matchCount > 0, true)
   assert.equal(shard.standings.some((standing) => standing.movement !== 0 || standing.delta !== 0), true)

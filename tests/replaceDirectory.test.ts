@@ -32,3 +32,29 @@ test('directory promotion falls back to atomic file replacement across filesyste
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('in-place publication preserves the watched directory and removes stale files', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-directory-in-place-'))
+  const target = join(root, 'public-data')
+  const next = join(root, 'public-data-next')
+
+  try {
+    await mkdir(join(target, 'scopes'), { recursive: true })
+    await mkdir(join(next, 'scopes'), { recursive: true })
+    await writeFile(join(target, 'ranking-summary.json'), 'old manifest')
+    await writeFile(join(target, 'scopes', 'stale.json'), 'stale shard')
+    await writeFile(join(next, 'ranking-summary.json'), 'new manifest')
+    await writeFile(join(next, 'scopes', 'all.json'), 'new shard')
+
+    await replaceDirectory(next, target, {
+      publishLast: 'ranking-summary.json',
+      preserveTarget: true,
+    })
+
+    assert.equal(await readFile(join(target, 'scopes', 'all.json'), 'utf8'), 'new shard')
+    assert.equal(await readFile(join(target, 'ranking-summary.json'), 'utf8'), 'new manifest')
+    await assert.rejects(readFile(join(target, 'scopes', 'stale.json'), 'utf8'), { code: 'ENOENT' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

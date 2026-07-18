@@ -2697,6 +2697,22 @@ const checkpointBoundaryDefinitions = [
   { id: 'split-3', label: 'Split 3', kind: 'worlds' },
 ] as const
 
+type RegionalSplitCalendar = {
+  starts: readonly [string, string, string]
+  seasonEnd: string
+}
+
+// Global split windows begin when the first of the six tier-one regions starts
+// that split. A window ends on the preceding calendar day. Keep announced
+// calendars explicit so future schedule changes do not silently rewrite an
+// already-published ranking scope.
+const regionalSplitCalendars: Readonly<Record<string, RegionalSplitCalendar>> = {
+  '2026': {
+    starts: ['2026-01-14', '2026-03-28', '2026-07-22'],
+    seasonEnd: '2026-11-14',
+  },
+}
+
 type CheckpointBoundaryDefinition = typeof checkpointBoundaryDefinitions[number]
 type CheckpointBoundaryKind = CheckpointBoundaryDefinition['kind']
 type CheckpointBoundaryEvent = {
@@ -2708,11 +2724,17 @@ type CheckpointBoundaryEvent = {
 
 function buildSeasonCheckpointOptions(matches: MatchRecord[]) {
   const checkpointsBySeason = new Map<string, Map<CheckpointBoundaryKind, CheckpointBoundaryEvent>>()
+  const latestMatchDateBySeason = new Map<string, string>()
 
   for (const match of matches) {
+    const matchSeason = matchSeasonKey(match)
+    if (matchBelongsToSeasonScope(match, matchSeason)) {
+      const latestDate = latestMatchDateBySeason.get(matchSeason)
+      if (!latestDate || match.date > latestDate) latestMatchDateBySeason.set(matchSeason, match.date)
+    }
     const definition = checkpointBoundaryDefinitionForMatch(match)
     if (!definition) continue
-    const season = matchSeasonKey(match)
+    const season = matchSeason
     if (!matchBelongsToSeasonScope(match, season)) continue
     const byBoundary = checkpointsBySeason.get(season) ?? new Map<CheckpointBoundaryKind, CheckpointBoundaryEvent>()
     checkpointsBySeason.set(season, byBoundary)
@@ -2731,8 +2753,39 @@ function buildSeasonCheckpointOptions(matches: MatchRecord[]) {
   }
 
   return Object.fromEntries(
-    Array.from(checkpointsBySeason.entries())
-      .map(([season, boundaries]) => {
+    Array.from(latestMatchDateBySeason.keys())
+      .map((season) => {
+        const boundaries = checkpointsBySeason.get(season) ?? new Map<CheckpointBoundaryKind, CheckpointBoundaryEvent>()
+        const regionalCalendar = regionalSplitCalendars[season]
+        const latestMatchDate = latestMatchDateBySeason.get(season)
+        if (regionalCalendar && latestMatchDate) {
+          const checkpoints = checkpointBoundaryDefinitions
+            .map((definition, index): SnapshotCheckpointOption | undefined => {
+              const startDate = regionalCalendar.starts[index]
+              if (!startDate || startDate > latestMatchDate) return undefined
+              const nextStartDate = regionalCalendar.starts[index + 1]
+              const endDate = nextStartDate ? shiftUtcDate(nextStartDate, -1) : regionalCalendar.seasonEnd
+              const previousEndDate = index > 0 ? shiftUtcDate(startDate, -1) : undefined
+              const boundaryEvent = nextStartDate
+                ? `${season} ${checkpointBoundaryDefinitions[index + 1]?.label} regional opening`
+                : `${season} season end`
+              return {
+                id: definition.id,
+                season,
+                label: definition.label,
+                startDate,
+                endDate,
+                boundaryEvent,
+                ...(previousEndDate ? { previousEndDate } : {}),
+                description: `${season} ${definition.label} regional window, ${startDate} through ${endDate}`,
+              }
+            })
+            .filter((checkpoint): checkpoint is SnapshotCheckpointOption => Boolean(checkpoint))
+          return checkpoints.length > 0 ? [season, checkpoints] as const : undefined
+        }
+
+        if (boundaries.size === 0) return undefined
+
         let previousEndDate: string | undefined
         const seasonStart = `${season}-01-01`
         const checkpoints = checkpointBoundaryDefinitions
