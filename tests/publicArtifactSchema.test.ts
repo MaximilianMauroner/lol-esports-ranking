@@ -133,6 +133,19 @@ test('public ranking shard parser validates source, standing, and league rows', 
     /standings\[0\] rank/,
   )
 
+  for (const invalidProbability of ['0.2', Number.NaN, Number.POSITIVE_INFINITY, -0.01, 1.01]) {
+    assert.throws(
+      () => parsePublicRankingShard({
+        ...validShard,
+        standings: [{
+          ...standing,
+          recentMatches: [{ ...standing.recentMatches[0], expectedWinProbability: invalidProbability }],
+        }],
+      }),
+      /recentMatches\[0\] expectedWinProbability/,
+    )
+  }
+
   assert.throws(
     () => parsePublicRankingShard({
       ...validShard,

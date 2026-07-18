@@ -1,4 +1,4 @@
-import type { PublicRecentMatch, PublicRollingWindow, PublicTeamStanding } from './publicArtifacts/schema'
+import type { PublicRollingUpsetWin, PublicRollingWindow, PublicTeamStanding } from './publicArtifacts/schema'
 
 export type RankingTierLabel = 'S' | 'A' | 'B' | 'C'
 
@@ -194,21 +194,19 @@ export function deriveMovementPicks(standings: readonly PublicTeamStanding[]): R
 
 export function deriveUpsetHeadline(standings: readonly PublicTeamStanding[], rollingWindow?: PublicRollingWindow): RankingUpsetHeadline | null {
   const standingLookup = teamLookup(standings)
-  const candidates = standings.flatMap((standing) =>
-    standing.recentMatches
-      .filter((match) => match.result === 'W'
-        && typeof match.expectedWinProbability === 'number'
-        && match.expectedWinProbability < 0.5
-        && (!rollingWindow || (match.date > rollingWindow.startDate && match.date <= rollingWindow.endDate)))
-      .map((match) => upsetCandidate(standing, match, standingLookup)),
-  )
+  const candidates = rollingWindow
+    ? standings.flatMap((standing) => {
+        const upset = standing.rollingMovement?.biggestUpsetWin
+        return upset && upset.expectedWinProbability < 0.5 ? [upsetCandidate(standing, upset, standingLookup)] : []
+      })
+    : []
 
   return candidates.sort(compareUpsets)[0] ?? null
 }
 
 export function deriveSpicyTakeConfidence(standing: PublicTeamStanding, rollingWindow?: PublicRollingWindow): SpicyTakeConfidence {
   const recentMatchCount = rollingWindow
-    ? standing.recentMatches.filter((match) => match.date > rollingWindow.startDate && match.date <= rollingWindow.endDate).length
+    ? standing.rollingMovement?.scoredSeries ?? 0
     : standing.recentMatches.length
   const eligibleBonus = standing.eligibility.eligible ? 10 : -15
   const score = clampScore(
@@ -344,7 +342,7 @@ function teamLookup(standings: readonly PublicTeamStanding[]) {
 
 function upsetCandidate(
   standing: PublicTeamStanding,
-  match: PublicRecentMatch,
+  match: PublicRollingUpsetWin,
   standingLookup: ReadonlyMap<string, PublicTeamStanding>,
 ): RankingUpsetHeadline {
   const opponent = standingLookup.get(match.opponent.toLocaleLowerCase('en'))
@@ -358,7 +356,7 @@ function upsetCandidate(
     opponentCode: opponent?.code,
     event: match.event,
     date: match.date,
-    matchDelta: match.delta,
+    matchDelta: match.ratingDelta,
     expectedWinProbability,
     score: roundOne(score),
     headline: `${standing.code} beat ${opponent?.code ?? match.opponent} with a ${Math.round(expectedWinProbability * 100)}% pre-match chance`,

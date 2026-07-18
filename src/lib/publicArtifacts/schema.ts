@@ -82,6 +82,15 @@ export type PublicTeamRollingMovement = {
   rankMovement?: number
   scoredSeries: number
   rankPoints: PublicRollingMovementPoint[]
+  biggestUpsetWin?: PublicRollingUpsetWin
+}
+
+export type PublicRollingUpsetWin = {
+  date: string
+  event: string
+  opponent: string
+  expectedWinProbability: number
+  ratingDelta: number
 }
 
 export type PublicRollingWindow = {
@@ -1511,10 +1520,6 @@ function assertPublicTeamStanding(value: unknown, label: string): asserts value 
   assertNumber(value.rating, `${label} rating`)
   assertNumber(value.previousRating, `${label} previousRating`)
   assertNumber(value.delta, `${label} delta`)
-  assertOptionalNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
-  if (typeof value.expectedWinProbability === 'number' && (value.expectedWinProbability < 0 || value.expectedWinProbability > 1)) {
-    throw new Error(`Invalid public artifact: ${label} expectedWinProbability must be between 0 and 1`)
-  }
   assertNonNegativeInteger(value.rank, `${label} rank`)
   assertNonNegativeInteger(value.previousRank, `${label} previousRank`)
   assertNumber(value.movement, `${label} movement`)
@@ -1565,6 +1570,7 @@ function assertPublicTeamRollingMovement(value: unknown, label: string): asserts
     assertDateString(point[0], `${label} rankPoints[${index}] date`)
     assertNonNegativeInteger(point[1], `${label} rankPoints[${index}] rank`)
   })
+  if (value.biggestUpsetWin !== undefined) assertPublicRollingUpsetWin(value.biggestUpsetWin, `${label} biggestUpsetWin`)
   if (value.status === 'missing-baseline') {
     if (value.baselineRating !== undefined || value.ratingDelta !== undefined || value.baselineRank !== undefined || value.rankMovement !== undefined) {
       throw new Error(`Invalid public artifact: ${label} missing baseline must not publish baseline deltas`)
@@ -1579,6 +1585,18 @@ function assertPublicTeamRollingMovement(value: unknown, label: string): asserts
   if (value.rankMovement !== value.baselineRank - value.currentRank) throw new Error(`Invalid public artifact: ${label} rankMovement mismatch`)
   if (value.status === 'inactive' && value.scoredSeries !== 0) throw new Error(`Invalid public artifact: ${label} inactive status requires zero scored series`)
   if (value.status === 'active' && value.scoredSeries === 0) throw new Error(`Invalid public artifact: ${label} active status requires scored series`)
+}
+
+function assertPublicRollingUpsetWin(value: unknown, label: string): asserts value is PublicRollingUpsetWin {
+  assertObject(value, label)
+  assertDateString(value.date, `${label} date`)
+  assertString(value.event, `${label} event`)
+  assertString(value.opponent, `${label} opponent`)
+  assertNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
+  if (value.expectedWinProbability < 0 || value.expectedWinProbability > 1) {
+    throw new Error(`Invalid public artifact: ${label} expectedWinProbability must be between 0 and 1`)
+  }
+  assertNumber(value.ratingDelta, `${label} ratingDelta`)
 }
 
 function assertLeagueStrength(value: unknown, label: string): asserts value is LeagueStrength {
@@ -1683,6 +1701,10 @@ function assertPublicRecentMatch(value: unknown, label: string): asserts value i
   assertEnum(value.result, ['W', 'L', 'T'], `${label} result`)
   assertNumber(value.rating, `${label} rating`)
   assertNumber(value.delta, `${label} delta`)
+  assertOptionalNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
+  if (typeof value.expectedWinProbability === 'number' && (value.expectedWinProbability < 0 || value.expectedWinProbability > 1)) {
+    throw new Error(`Invalid public artifact: ${label} expectedWinProbability must be between 0 and 1`)
+  }
   assertOptionalNonNegativeInteger(value.wins, `${label} wins`)
   assertOptionalNonNegativeInteger(value.losses, `${label} losses`)
   assertOptionalNonNegativeInteger(value.games, `${label} games`)
