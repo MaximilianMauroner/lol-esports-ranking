@@ -53,13 +53,16 @@ export function acquireBucketLease(relativeKey: string, options: {
   fenceActiveKey?: string
   config?: unknown
   client?: BucketClient
+  beforeAuthorityCas?: (context: { attempt: number; active: unknown; lease: unknown }) => Promise<void>
+  afterMirrorPut?: (context: { lease: unknown; mirror: unknown }) => Promise<void>
 }): Promise<
-  | { acquired: true; lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string }; etag?: string; activeEtag?: string }
+  | { acquired: true; lease: { key?: string; owner: string; fencingToken: number; acquiredAt: string; expiresAt: string }; etag?: string; activeEtag?: string; authorityKey?: string; idempotent?: boolean }
   | { acquired: false; reason: string; lease?: unknown }
 >
 export function releaseBucketLease(relativeKey: string, lease: {
   lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string }
   etag?: string
+  authorityKey?: string
 }, options?: {
   now?: string | Date
   config?: unknown
@@ -69,6 +72,7 @@ export function verifyBucketLease(relativeKey: string, expected: {
   owner: string
   fencingToken: number
   etag?: string
+  authorityKey?: string
 }, options?: Record<string, unknown>): Promise<{ valid: boolean; reason?: string; lease?: unknown; etag?: string }>
 export function uploadRankingArtifacts(options?: {
   publicDataDir?: string
@@ -86,7 +90,7 @@ export function uploadRankingArtifacts(options?: {
   rollout?: Record<string, unknown>
   rolloutForActive?: (previous: unknown) => Record<string, unknown>
   publishGeneration?: boolean
-  leaseGuard?: { key: string; owner: string; fencingToken: number; etag?: string }
+  leaseGuard?: { key: string; owner: string; fencingToken: number; etag?: string; authorityKey?: string }
   rolloutUpdateId?: string
   clock?: () => string | Date
   beforeActivePointerCas?: () => Promise<void>

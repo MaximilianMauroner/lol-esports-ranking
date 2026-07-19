@@ -1,3 +1,17 @@
+type DurableCandidateReceipt = Record<string, unknown>
+
+export type RefreshDataResult = {
+  changed: boolean
+  status?: string
+  reason?: string
+  fingerprint?: string
+  healthFingerprint?: string
+  previousFingerprint?: string
+  durableCandidate:
+    | { kind: 'not-produced'; reason: 'stale-source' | 'unchanged-source-data' | 'skip-crunch' }
+    | { kind: 'produced'; receipt: DurableCandidateReceipt }
+}
+
 export function refreshDataIfChanged(
   rawArgs?: string[],
   options?: {
@@ -6,7 +20,7 @@ export function refreshDataIfChanged(
     bucketClient?: unknown
     run?: (command: string, args: string[]) => Promise<void>
   },
-): Promise<Record<string, unknown>>
+): Promise<RefreshDataResult>
 
 export function createSourceFingerprint(manifest: unknown, options?: {
   additionalFiles?: Array<{ kind: string; path: string }>

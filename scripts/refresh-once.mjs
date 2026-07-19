@@ -131,6 +131,7 @@ async function run(command, args, timeoutMs, refreshLease) {
           RANKING_REFRESH_LEASE_KEY: leaseKey,
           RANKING_REFRESH_LEASE_OWNER: refreshLease.lease.owner,
           RANKING_REFRESH_LEASE_ETAG: refreshLease.etag,
+          RANKING_REFRESH_LEASE_AUTHORITY_KEY: refreshLease.authorityKey,
           RANKING_REFRESH_LEASE_EXPIRES_AT: refreshLease.lease.expiresAt,
         } : {}),
       },

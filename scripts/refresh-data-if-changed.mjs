@@ -129,6 +129,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         changed: false,
         status: 'stale-source',
         reason: 'no-current-match-source-data',
+        durableCandidate: { kind: 'not-produced', reason: 'stale-source' },
         healthFingerprint,
         previousFingerprint: previousState?.fingerprint,
       }
@@ -166,6 +167,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       console.log(`No source-data changes detected for ${start} through ${end}; skipping crunch.`)
       return {
         changed: false,
+        status: 'unchanged',
+        durableCandidate: { kind: 'not-produced', reason: 'unchanged-source-data' },
         fingerprint: fingerprint.fingerprint,
         healthFingerprint: fingerprint.healthFingerprint,
         previousFingerprint: previousState?.fingerprint,
@@ -214,6 +217,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           },
     }
 
+    let durableCandidate
     if (!skipCrunch) {
       await rm(durableCandidatePath, { force: true })
       await rm(crunchReceiptPath, { force: true })
@@ -236,6 +240,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       ]
       if (env.RANKING_STATIC_PLAYER_JSON) buildArgs.push('--static-player-json', env.RANKING_STATIC_PLAYER_JSON)
       await (options.run ?? runCommand)('pnpm', buildArgs)
+      durableCandidate = validateDurableCandidateReceipt(await readJsonIfExists(durableCandidatePath))
+      if (!durableCandidate) {
+        throw new Error('Crunch completed without a valid durable candidate receipt')
+      }
     }
 
     const crunchReceipt = skipCrunch ? undefined : await readJsonIfExists(crunchReceiptPath)
@@ -257,7 +265,6 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           console.warn(`Railway bucket upload skipped; missing ${bucketConfig.missing.join(', ')}.`)
         }
       } else {
-        const durableCandidate = validateDurableCandidateReceipt(await readJsonIfExists(durableCandidatePath))
         const semanticNoChange = durableCandidate?.eligibility === 'no-change'
         const browserManifest = semanticNoChange ? undefined : await readJson(resolve(publicDataDir, 'ranking-summary.json'))
         const generationId = !semanticNoChange && env.RANKING_REFRESH_FENCING_TOKEN
@@ -388,6 +395,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
     return {
       changed: true,
+      durableCandidate: skipCrunch
+        ? { kind: 'not-produced', reason: 'skip-crunch' }
+        : { kind: 'produced', receipt: durableCandidate },
       fingerprint: fingerprint.fingerprint,
       healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
@@ -850,9 +860,10 @@ function refreshLeaseGuard(env) {
   const key = env.RANKING_REFRESH_LEASE_KEY
   const owner = env.RANKING_REFRESH_LEASE_OWNER
   const etag = env.RANKING_REFRESH_LEASE_ETAG
+  const authorityKey = env.RANKING_REFRESH_LEASE_AUTHORITY_KEY
   const fencingToken = Number(env.RANKING_REFRESH_FENCING_TOKEN)
-  if (!key || !owner || !etag || !Number.isFinite(fencingToken) || fencingToken <= 0) return undefined
-  return { key, owner, etag, fencingToken }
+  if (!key || !owner || !Number.isFinite(fencingToken) || fencingToken <= 0) return undefined
+  return { key, owner, ...(etag ? { etag } : {}), ...(authorityKey ? { authorityKey } : {}), fencingToken }
 }
 
 function errorMessage(error) {

@@ -9,6 +9,7 @@ import {
   readBucketJson,
   releaseBucketLease,
   uploadRankingArtifacts,
+  verifyBucketLease,
   writeBucketJson,
 } from '../scripts/railway-bucket.mjs'
 import {
@@ -59,6 +60,157 @@ test('released leases allow the next scheduled worker to run immediately', async
   assert.equal(second.acquired, true)
   assert.equal(second.acquired && second.lease.fencingToken, 2)
   assert.equal((await releaseBucketLease('lease.json', first, { now: '2026-07-11T00:00:12Z', config, client })).reason, 'lease-changed')
+})
+
+test('active pointer CAS is the single lease authority across the expired-successor interleaving', async () => {
+  const client = memoryS3()
+  await writeBucketJson('active-generation.json', {
+    schemaVersion: 1,
+    generationId: 'current-generation',
+    fencingToken: 1,
+    privateState: { manifestKey: 'durable/current.json' },
+    refreshLease: {
+      schemaVersion: 1,
+      key: 'ops/refresh-lease.json',
+      owner: 'expired',
+      fencingToken: 1,
+      acquiredAt: '2026-07-19T00:00:00.000Z',
+      expiresAt: '2026-07-19T00:00:10.000Z',
+    },
+  }, { ifNoneMatch: '*', config, client })
+
+  let resumeStaleCas: (() => void) | undefined
+  const stalePaused = new Promise<void>((resolvePause) => {
+    resumeStaleCas = resolvePause
+  })
+  let staleReachedCas: (() => void) | undefined
+  const staleAtCas = new Promise<void>((resolveReached) => {
+    staleReachedCas = resolveReached
+  })
+  const staleAttempt = acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'stale-successor',
+    now: '2026-07-19T00:00:11.000Z',
+    ttlMs: 60_000,
+    fenceActiveKey: 'active-generation.json',
+    config,
+    client,
+    beforeAuthorityCas: async ({ attempt }) => {
+      if (attempt !== 0) return
+      staleReachedCas?.()
+      await stalePaused
+    },
+  })
+  await staleAtCas
+
+  const winner = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'winner',
+    now: '2026-07-19T00:00:12.000Z',
+    ttlMs: 60_000,
+    fenceActiveKey: 'active-generation.json',
+    config,
+    client,
+  })
+  assert.equal(winner.acquired, true)
+  if (!winner.acquired) return
+  resumeStaleCas?.()
+  const stale = await staleAttempt
+  assert.equal(stale.acquired, false)
+  assert.equal(stale.reason, 'active-lease')
+
+  const active = await readBucketJson('active-generation.json', { config, client })
+  assert.equal(active.value?.generationId, 'current-generation')
+  assert.deepEqual(active.value?.privateState, { manifestKey: 'durable/current.json' })
+  assert.equal(active.value?.fencingToken, 2)
+  assert.equal((active.value?.refreshLease as { owner?: string }).owner, 'winner')
+
+  const retry = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'winner',
+    now: '2026-07-19T00:00:13.000Z',
+    ttlMs: 60_000,
+    fenceActiveKey: 'active-generation.json',
+    config,
+    client,
+  })
+  assert.equal(retry.acquired, true)
+  assert.equal(retry.acquired && retry.idempotent, true)
+  assert.equal(retry.acquired && retry.lease.fencingToken, 2)
+
+  const staleRelease = await releaseBucketLease('ops/refresh-lease.json', {
+    authorityKey: 'active-generation.json',
+    lease: {
+      owner: 'expired', fencingToken: 1, acquiredAt: '2026-07-19T00:00:00.000Z', expiresAt: '2026-07-19T00:00:10.000Z',
+    },
+  }, { now: '2026-07-19T00:00:14.000Z', config, client })
+  assert.equal(staleRelease.released, false)
+  assert.equal((await readBucketJson('active-generation.json', { config, client })).value?.fencingToken, 2)
+})
+
+test('lease authority remains valid when the observability mirror cannot be written', async () => {
+  const client = memoryS3({ failPutKeys: new Set(['rankings/ops/refresh-lease.json']) })
+  const acquired = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'authority-owner',
+    now: '2026-07-19T00:00:00.000Z',
+    ttlMs: 60_000,
+    fenceActiveKey: 'active-generation.json',
+    config,
+    client,
+  })
+  assert.equal(acquired.acquired, true)
+  if (!acquired.acquired) return
+  assert.equal(client.objects.has('rankings/ops/refresh-lease.json'), false)
+  const verified = await verifyBucketLease('ops/refresh-lease.json', {
+    authorityKey: acquired.authorityKey,
+    owner: acquired.lease.owner,
+    fencingToken: acquired.lease.fencingToken,
+    etag: 'deliberately-stale-observability-etag',
+  }, { now: '2026-07-19T00:00:01.000Z', config, client })
+  assert.equal(verified.valid, true)
+})
+
+test('a successor remains authoritative when an expired owner pauses after its mirror write', async () => {
+  const client = memoryS3()
+  let resumeMirror: (() => void) | undefined
+  const mirrorPaused = new Promise<void>((resolvePause) => {
+    resumeMirror = resolvePause
+  })
+  let mirrorReached: (() => void) | undefined
+  const atMirror = new Promise<void>((resolveReached) => {
+    mirrorReached = resolveReached
+  })
+  const expiredAttempt = acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'expired-owner',
+    now: '2026-07-19T00:00:00.000Z',
+    ttlMs: 10_000,
+    fenceActiveKey: 'active-generation.json',
+    config,
+    client,
+    afterMirrorPut: async () => {
+      mirrorReached?.()
+      await mirrorPaused
+    },
+  })
+  await atMirror
+  const successor = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'successor',
+    now: '2026-07-19T00:00:11.000Z',
+    ttlMs: 60_000,
+    fenceActiveKey: 'active-generation.json',
+    config,
+    client,
+  })
+  assert.equal(successor.acquired, true)
+  resumeMirror?.()
+  const expired = await expiredAttempt
+  assert.equal(expired.acquired, true)
+  if (!expired.acquired || !successor.acquired) return
+  assert.equal((await verifyBucketLease('ops/refresh-lease.json', {
+    authorityKey: expired.authorityKey,
+    owner: expired.lease.owner,
+    fencingToken: expired.lease.fencingToken,
+  }, { now: '2026-07-19T00:00:11.000Z', config, client })).valid, false)
+  const active = await readBucketJson('active-generation.json', { config, client })
+  assert.equal(active.value?.fencingToken, successor.lease.fencingToken)
+  assert.equal((active.value?.refreshLease as { owner?: string }).owner, 'successor')
 })
 
 test('an active refresh lease rejects unguarded and competing generation promotion', async () => {
@@ -126,7 +278,7 @@ test('expired lease owners cannot publish and a successor fenced during the fina
       publicDataDir: staleDir,
       generationId: 'expired',
       fencingToken: staleLease.lease.fencingToken,
-      leaseGuard: { key: 'ops/refresh-lease.json', owner: staleLease.lease.owner, fencingToken: staleLease.lease.fencingToken, etag: staleLease.etag },
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: staleLease.lease.owner, fencingToken: staleLease.lease.fencingToken, authorityKey: staleLease.authorityKey },
       clock: () => '2026-07-19T00:00:11.000Z',
       config,
       client,
@@ -137,7 +289,7 @@ test('expired lease owners cannot publish and a successor fenced during the fina
       publicDataDir: staleDir,
       generationId: 'stale',
       fencingToken: staleLease.lease.fencingToken,
-      leaseGuard: { key: 'ops/refresh-lease.json', owner: staleLease.lease.owner, fencingToken: staleLease.lease.fencingToken, etag: staleLease.etag },
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: staleLease.lease.owner, fencingToken: staleLease.lease.fencingToken, authorityKey: staleLease.authorityKey },
       clock: () => now,
       beforeActivePointerCas: async () => {
         now = '2026-07-19T00:00:11.000Z'
@@ -150,7 +302,7 @@ test('expired lease owners cannot publish and a successor fenced during the fina
           publicDataDir: winnerDir,
           generationId: 'winner',
           fencingToken: winnerLease.lease.fencingToken,
-          leaseGuard: { key: 'ops/refresh-lease.json', owner: winnerLease.lease.owner, fencingToken: winnerLease.lease.fencingToken, etag: winnerLease.etag },
+          leaseGuard: { key: 'ops/refresh-lease.json', owner: winnerLease.lease.owner, fencingToken: winnerLease.lease.fencingToken, authorityKey: winnerLease.authorityKey },
           clock: () => now,
           config,
           client,
@@ -352,7 +504,7 @@ test('Railway bucket adapter restores private state referenced by the public CAS
   }
 })
 
-function memoryS3() {
+function memoryS3(options: { failPutKeys?: Set<string> } = {}) {
   const objects = new Map<string, { body: string; etag: string; metadata?: Record<string, string> }>()
   let version = 0
   return {
@@ -366,6 +518,7 @@ function memoryS3() {
         return { Body: Readable.from([object.body]), ETag: object.etag, ContentLength: Buffer.byteLength(object.body), Metadata: object.metadata }
       }
       if (name === 'PutObjectCommand') {
+        if (options.failPutKeys?.has(key)) throw new Error('observability mirror unavailable')
         const current = objects.get(key)
         if (input.IfNoneMatch === '*' && current) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
         if (input.IfMatch && input.IfMatch !== current?.etag) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })

@@ -169,6 +169,17 @@ export async function uploadRankingArtifacts({
   }
   if (generationId && publishGeneration) {
     await requirePromotionLease(leaseGuard, { config, client, now: clock() })
+    active = await readBucketJson('active-generation.json', { config, client })
+    const finalFence = Number(active.value?.fencingToken ?? 0)
+    const incomingFence = Number(fencingToken ?? 0)
+    if (finalFence > incomingFence) throw new Error('Stale refresh worker cannot promote an active generation')
+    if (finalFence === incomingFence
+      && active.value?.generationId !== generationId
+      && (!leaseGuard
+        || active.value?.refreshLease?.owner !== leaseGuard.owner
+        || Number(active.value?.refreshLease?.fencingToken) !== incomingFence)) {
+      throw new Error('Equal fencing token cannot promote a different generation')
+    }
     const rolloutAlreadyApplied = Boolean(rolloutUpdateId && active.value?.rolloutUpdateId === rolloutUpdateId)
     const resolvedRollout = rolloutAlreadyApplied
       ? active.value?.rollout
@@ -416,7 +427,20 @@ export async function acquireBucketLease(relativeKey, {
   fenceActiveKey,
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
+  beforeAuthorityCas,
+  afterMirrorPut,
 } = {}) {
+  if (fenceActiveKey) {
+    return acquireAuthoritativeBucketLease(relativeKey, fenceActiveKey, {
+      owner,
+      ttlMs,
+      now,
+      config,
+      client,
+      beforeAuthorityCas,
+      afterMirrorPut,
+    })
+  }
   const current = await readBucketJson(relativeKey, { config, client })
   const nowMs = new Date(now).getTime()
   if (current.found && new Date(current.value?.expiresAt).getTime() > nowMs && current.value?.owner !== owner) {
@@ -435,14 +459,6 @@ export async function acquireBucketLease(relativeKey, {
     ...(current.found ? { ifMatch: current.etag } : { ifNoneMatch: '*' }),
   })
   if (!write.written) return { acquired: false, reason: write.conflict ? 'lease-race' : 'bucket-unavailable' }
-  if (fenceActiveKey) {
-    const fence = await fenceActivePointer(fenceActiveKey, relativeKey, lease, write.etag, { config, client })
-    if (!fence.fenced) {
-      await releaseBucketLease(relativeKey, { lease, etag: write.etag }, { now, config, client })
-      return { acquired: false, reason: fence.reason }
-    }
-    return { acquired: true, lease, etag: write.etag, activeEtag: fence.etag }
-  }
   return { acquired: true, lease, etag: write.etag }
 }
 
@@ -451,7 +467,35 @@ export async function releaseBucketLease(relativeKey, lease, {
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
 } = {}) {
-  if (!lease?.etag || !lease?.lease) return { released: false, reason: 'invalid-lease' }
+  if (!lease?.lease) return { released: false, reason: 'invalid-lease' }
+  if (lease.authorityKey) {
+    const authority = await readBucketJson(lease.authorityKey, { config, client })
+    const embedded = authority.value?.refreshLease
+    if (!authority.found || !authority.etag
+      || embedded?.key !== relativeKey
+      || embedded?.owner !== lease.lease.owner
+      || Number(embedded?.fencingToken) !== Number(lease.lease.fencingToken)) {
+      return { released: false, reason: 'lease-changed' }
+    }
+    const releasedAt = new Date(now).toISOString()
+    const next = {
+      ...authority.value,
+      refreshLease: {
+        ...embedded,
+        expiresAt: releasedAt,
+        releasedAt,
+      },
+    }
+    const write = await writeBucketJson(lease.authorityKey, next, {
+      config,
+      client,
+      ifMatch: authority.etag,
+    })
+    if (!write.written) return { released: false, reason: write.conflict ? 'lease-changed' : 'bucket-unavailable' }
+    await writeLeaseMirror(relativeKey, next.refreshLease, { config, client })
+    return { released: true, etag: write.etag }
+  }
+  if (!lease.etag) return { released: false, reason: 'invalid-lease' }
   const releasedAt = new Date(now).toISOString()
   const write = await writeBucketJson(relativeKey, {
     ...lease.lease,
@@ -473,17 +517,20 @@ export async function verifyBucketLease(relativeKey, expected, {
   client = createBucketClient(config),
 } = {}) {
   if (!expected || !config.enabled || !client) return { valid: false, reason: 'invalid-lease-guard' }
-  const current = await readBucketJson(relativeKey, { config, client })
+  const authorityKey = expected.authorityKey
+  const current = await readBucketJson(authorityKey ?? relativeKey, { config, client })
   if (!current.found) return { valid: false, reason: 'lease-missing' }
-  if (expected.etag && current.etag !== expected.etag) return { valid: false, reason: 'lease-etag-changed' }
-  if (current.value?.owner !== expected.owner
-    || Number(current.value?.fencingToken) !== Number(expected.fencingToken)) {
+  const currentLease = authorityKey ? current.value?.refreshLease : current.value
+  if (authorityKey && currentLease?.key !== relativeKey) return { valid: false, reason: 'lease-key-changed' }
+  if (!authorityKey && expected.etag && current.etag !== expected.etag) return { valid: false, reason: 'lease-etag-changed' }
+  if (currentLease?.owner !== expected.owner
+    || Number(currentLease?.fencingToken) !== Number(expected.fencingToken)) {
     return { valid: false, reason: 'lease-owner-changed' }
   }
-  if (new Date(current.value?.expiresAt).getTime() <= new Date(now).getTime()) {
+  if (new Date(currentLease?.expiresAt).getTime() <= new Date(now).getTime()) {
     return { valid: false, reason: 'lease-expired' }
   }
-  return { valid: true, lease: current.value, etag: current.etag }
+  return { valid: true, lease: currentLease, etag: current.etag }
 }
 
 export async function downloadBucketDirectory({
@@ -988,28 +1035,90 @@ async function requirePromotionLease(leaseGuard, options) {
     if (!verified.valid) throw new Error(`Refresh lease no longer authorizes promotion: ${verified.reason}`)
     return
   }
+  const active = await readBucketJson('active-generation.json', options)
+  if (new Date(active.value?.refreshLease?.expiresAt).getTime() > new Date(options.now ?? new Date()).getTime()) {
+    throw new Error('Active refresh lease requires a matching promotion guard')
+  }
   const current = await readBucketJson(key, options)
   if (current.found && new Date(current.value?.expiresAt).getTime() > new Date(options.now ?? new Date()).getTime()) {
     throw new Error('Active refresh lease requires a matching promotion guard')
   }
 }
 
-async function fenceActivePointer(activeKey, leaseKey, lease, leaseEtag, options) {
+async function acquireAuthoritativeBucketLease(relativeKey, authorityKey, {
+  owner,
+  ttlMs,
+  now,
+  config,
+  client,
+  beforeAuthorityCas,
+  afterMirrorPut,
+}) {
+  const nowMs = new Date(now).getTime()
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const active = await readBucketJson(activeKey, options)
-    if (Number(active.value?.fencingToken ?? 0) > lease.fencingToken) return { fenced: false, reason: 'active-fence-ahead' }
+    const active = await readBucketJson(authorityKey, { config, client })
+    const currentLease = active.value?.refreshLease
+    const currentExpiresAt = new Date(currentLease?.expiresAt).getTime()
+    if (currentLease?.key === relativeKey && currentLease?.owner === owner && currentExpiresAt > nowMs) {
+      return {
+        acquired: true,
+        lease: currentLease,
+        authorityKey,
+        activeEtag: active.etag,
+        idempotent: true,
+      }
+    }
+    if (currentExpiresAt > nowMs && currentLease?.owner !== owner) {
+      return { acquired: false, reason: 'active-lease', lease: currentLease }
+    }
+    const fencingToken = Math.max(
+      Number(active.value?.fencingToken ?? 0),
+      Number(currentLease?.fencingToken ?? 0),
+    ) + 1
+    const lease = {
+      schemaVersion: 1,
+      key: relativeKey,
+      owner,
+      fencingToken,
+      acquiredAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + ttlMs).toISOString(),
+    }
     const next = {
       ...(active.value && typeof active.value === 'object' && !Array.isArray(active.value) ? active.value : {}),
       schemaVersion: 1,
-      fencingToken: lease.fencingToken,
-      refreshLease: { key: leaseKey, owner: lease.owner, fencingToken: lease.fencingToken, expiresAt: lease.expiresAt, etag: leaseEtag },
+      fencingToken,
+      refreshLease: lease,
     }
-    const write = await writeBucketJson(activeKey, next, {
-      ...options,
+    if (beforeAuthorityCas) await beforeAuthorityCas({ attempt, active, lease })
+    const write = await writeBucketJson(authorityKey, next, {
+      config,
+      client,
       ...(active.found ? { ifMatch: active.etag } : { ifNoneMatch: '*' }),
     })
-    if (write.written) return { fenced: true, etag: write.etag }
-    if (!write.conflict) return { fenced: false, reason: 'active-fence-unavailable' }
+    if (write.written) {
+      const mirror = await writeLeaseMirror(relativeKey, lease, { config, client })
+      if (afterMirrorPut) await afterMirrorPut({ lease, mirror })
+      return {
+        acquired: true,
+        lease,
+        authorityKey,
+        activeEtag: write.etag,
+        ...(mirror.etag ? { etag: mirror.etag } : {}),
+      }
+    }
+    if (!write.conflict) return { acquired: false, reason: 'bucket-unavailable' }
   }
-  return { fenced: false, reason: 'active-fence-race' }
+  return { acquired: false, reason: 'lease-race' }
+}
+
+async function writeLeaseMirror(relativeKey, lease, options) {
+  try {
+    const current = await readBucketJson(relativeKey, options)
+    return await writeBucketJson(relativeKey, lease, {
+      ...options,
+      ...(current.found ? { ifMatch: current.etag } : { ifNoneMatch: '*' }),
+    })
+  } catch {
+    return { written: false }
+  }
 }

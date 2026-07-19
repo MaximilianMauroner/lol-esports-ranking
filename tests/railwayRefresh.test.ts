@@ -14,6 +14,9 @@ type RefreshResult = {
   previousFingerprint?: string
   status?: string
   reason?: string
+  durableCandidate:
+    | { kind: 'not-produced'; reason: string }
+    | { kind: 'produced'; receipt: Record<string, unknown> }
 }
 type RefreshWindow = {
   start: string
@@ -206,6 +209,7 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
 
     if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
       crunchCount += 1
+      await writeFakeDurableCandidate(commandArgs)
       return
     }
 
@@ -228,7 +232,7 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       join(tempDir, 'public-data'),
       '--end',
       '2026-06-29',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
     const second = await refreshDataIfChanged([
       '--raw-dir',
       rawDir,
@@ -244,7 +248,7 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       join(tempDir, 'public-data'),
       '--end',
       '2026-06-29',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
     const unchangedState = JSON.parse(await readFile(statePath, 'utf8'))
     const third = await refreshDataIfChanged([
       '--raw-dir',
@@ -261,7 +265,7 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       join(tempDir, 'public-data'),
       '--end',
       '2026-06-29',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
     const fourth = await refreshDataIfChanged([
       '--raw-dir', rawDir,
       '--manifest', manifestPath,
@@ -270,7 +274,7 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       '--output', join(tempDir, 'derived.json'),
       '--public-data-dir', join(tempDir, 'public-data'),
       '--end', '2026-06-29',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
     const outageState = JSON.parse(await readFile(statePath, 'utf8'))
     const fifth = await refreshDataIfChanged([
       '--raw-dir', rawDir,
@@ -280,10 +284,12 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
       '--output', join(tempDir, 'derived.json'),
       '--public-data-dir', join(tempDir, 'public-data'),
       '--end', '2026-06-29',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
 
     assert.equal(first.changed, true)
     assert.equal(second.changed, false)
+    assert.equal(first.durableCandidate.kind, 'produced')
+    assert.deepEqual(second.durableCandidate, { kind: 'not-produced', reason: 'unchanged-source-data' })
     assert.equal(third.changed, true)
     assert.equal(fourth.status, 'stale-source')
     assert.equal(fifth.changed, false)
@@ -468,6 +474,7 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
 
     if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
       crunchCount += 1
+      await writeFakeDurableCandidate(commandArgs)
       return
     }
 
@@ -513,7 +520,7 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
       '--end',
       '2026-06-29',
       '--skip-bucket-upload',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const state = JSON.parse(await readFile(statePath, 'utf8'))
 
@@ -585,6 +592,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
 
     if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
       crunchCount += 1
+      await writeFakeDurableCandidate(commandArgs)
       return
     }
 
@@ -637,7 +645,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       '--end',
       '2026-07-09',
       '--skip-bucket-upload',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const state = JSON.parse(await readFile(statePath, 'utf8'))
 
@@ -710,6 +718,7 @@ test('refresh wrapper warns when previous Oracle raw data is preserved for a fal
 
     if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
       crunchCount += 1
+      await writeFakeDurableCandidate(commandArgs)
       return
     }
 
@@ -756,7 +765,7 @@ test('refresh wrapper warns when previous Oracle raw data is preserved for a fal
       '--end',
       '2026-07-09',
       '--skip-bucket-upload',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ], { run: fakeRun, env: isolatedRefreshEnvFor(tempDir) })
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
 
     assert.equal(result.changed, true)
@@ -798,7 +807,10 @@ test('refresh wrapper bootstraps when manifest exists but raw files are missing'
       return
     }
 
-    if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) return
+    if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
+      await writeFakeDurableCandidate(commandArgs)
+      return
+    }
     throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
   }
 
@@ -835,7 +847,7 @@ test('refresh wrapper bootstraps when manifest exists but raw files are missing'
     ], {
       run: fakeRun,
       env: {
-        ...isolatedRefreshEnv,
+        ...isolatedRefreshEnvFor(tempDir),
         RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01',
       },
     })
@@ -888,6 +900,7 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
       await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
       await writeFile(join(publicDataDir, 'scopes', 'all.json'), '{}\n')
       await writeFile(output, '{}\n')
+      await writeFakeDurableCandidate(commandArgs)
       return
     }
 
@@ -920,6 +933,7 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
         RANKING_BUCKET_SECRET_ACCESS_KEY: 'secret-key',
         RANKING_BUCKET_PREFIX: 'rankings',
         RANKING_BUCKET_RESTORE_RAW: 'false',
+        RANKING_INCREMENTAL_STATE_DIR: join(tempDir, 'private'),
       },
     })
 
@@ -944,7 +958,17 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
     })
     assert.equal(typeof uploadedBytes, 'number')
     assert.equal(uploadedBytes > 0, true)
-    assert.deepEqual(localState.bucket, uploadedState.bucket)
+    assert.deepEqual(localState.bucket, {
+      ...uploadedState.bucket,
+      durable: {
+        uploadedObjects: 0,
+        uploadedBytes: 0,
+        skippedObjects: 0,
+        skippedBytes: 0,
+        parity: 'not-run',
+        promotion: { promoted: false, reason: 'unversioned-upload' },
+      },
+    })
 
     const publishBody = sent.find((entry) => entry.input.Key === 'rankings/latest-publish.json')?.input.Body
     assert.equal(typeof publishBody, 'string')
@@ -967,7 +991,7 @@ test('refresh rejects absent and corrupt durable candidates while preserving pri
     await mkdir(privateDir, { recursive: true })
     await writeFile(join(privateDir, 'durable-candidate.json'), '{"eligibility":"eligible","manifestKey":"stale"}\n')
     try {
-      await refreshDataIfChanged([
+      await assert.rejects(() => refreshDataIfChanged([
         '--raw-dir', rawDir,
         '--manifest', join(rawDir, 'manifest.json'),
         '--state', join(rawDir, 'refresh-state.json'),
@@ -1004,10 +1028,10 @@ test('refresh rejects absent and corrupt durable candidates while preserving pri
             await writeFile(valueAfter(args, '--durable-candidate-output'), '{"schemaVersion":1,"eligibility":"eligible","identity":{},"identityHash":"wrong"}\n')
           }
         },
-      })
+      }), /without a valid durable candidate receipt/)
       const active = JSON.parse(client.text('rankings/active-generation.json'))
-      assert.equal(active.generationId, 'independent-full')
-      assert.equal(active.fencingToken, 4)
+      assert.equal(active.generationId, 'prior-run')
+      assert.equal(active.fencingToken, 3)
       assert.deepEqual(active.privateState, priorPrivate)
     } finally {
       await rm(tempDir, { recursive: true, force: true })
@@ -1319,6 +1343,27 @@ function valueAfter(args: string[], flag: string) {
   const index = args.indexOf(flag)
   assert.notEqual(index, -1)
   return args[index + 1]
+}
+
+async function writeFakeDurableCandidate(args: string[]) {
+  const identity = { fixture: 'railway-refresh' }
+  const identityHash = createHash('sha256').update(JSON.stringify(identity)).digest('hex')
+  const candidatePath = valueAfter(args, '--durable-candidate-output')
+  await mkdir(dirname(candidatePath), { recursive: true })
+  await writeFile(candidatePath, `${JSON.stringify({
+    schemaVersion: 1,
+    runId: 'fixture-run',
+    eligibility: 'ineligible',
+    outcome: 'full-requested',
+    identity,
+    identityHash,
+    parity: { kind: 'not-run' },
+    metrics: { uploadedObjects: 0, uploadedBytes: 0, skippedObjects: 0, skippedBytes: 0 },
+  })}\n`)
+}
+
+function isolatedRefreshEnvFor(tempDir: string) {
+  return { ...isolatedRefreshEnv, RANKING_INCREMENTAL_STATE_DIR: join(tempDir, 'private') }
 }
 
 function escapeRegExp(value: string) {

@@ -59,7 +59,7 @@ export async function runIdentityBootstrapScenario() {
       metadata: runMetadata('no-change', 'identity-b1'), baseEnv, force: true,
       extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-b' },
     })
-    assert.equal(identityB1.candidate.eligibility, 'eligible')
+    assert.equal(requiredCandidate(identityB1).eligibility, 'eligible')
     assert.equal(record(identityB1.active.rollout).consecutiveShadowSuccesses, 1)
     assert.notEqual(record(identityA.active.privateState).identityHash, record(identityB1.active.privateState).identityHash)
     await removeContainerState(root)
@@ -83,13 +83,16 @@ export async function runIdentityBootstrapScenario() {
       metadata: runMetadata('no-change', 'identity-b-active'), baseEnv, force: false,
       extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-b' },
     })
-    assert.equal(record(activated.receipt.durable).promotion, 'no-change')
+    assert.deepEqual(activated.candidate, { kind: 'not-produced', reason: 'unchanged-source-data' })
     assert.equal(activated.active.generationId, identityB3.active.generationId)
+    assert.deepEqual(activated.active.privateState, identityB3.active.privateState)
+    assert.equal(activated.publicUploads, 0)
+    assert.equal(activated.bucketWrites, 0)
     return {
       identityChanged: record(identityA.active.privateState).identityHash !== record(identityB1.active.privateState).identityHash,
       firstBSuccesses: number(record(identityB1.active.rollout).consecutiveShadowSuccesses),
       restoredBBytes: number(record(identityB2.receipt.durable).restoredBytes),
-      activatedPromotion: record(activated.receipt.durable).promotion,
+      activatedPromotion: 'not-produced',
     }
   } finally {
     await s3.close()
@@ -133,8 +136,8 @@ export async function runParityMismatchRolloutScenario() {
         RANKING_ALERT_WEBHOOK_URL: alerts.endpoint,
       },
     })
-    assert.equal(mismatch.candidate.eligibility, 'ineligible')
-    assert.equal(mismatch.candidate.outcome, 'parity-mismatch')
+    assert.equal(requiredCandidate(mismatch).eligibility, 'ineligible')
+    assert.equal(requiredCandidate(mismatch).outcome, 'parity-mismatch')
     assert.equal(record(mismatch.active.rollout).blockedReason, 'parity-mismatch')
     assert.equal(record(mismatch.active.rollout).consecutiveShadowSuccesses, 0)
     assert.deepEqual(mismatch.active.privateState, prior.active.privateState)
@@ -310,6 +313,7 @@ async function productionRefresh(options: {
   })
   if (!lease.acquired) throw new Error(`Benchmark refresh lease was not acquired: ${lease.reason}`)
   assert.equal(lease.lease.fencingToken, options.fence)
+  const beforeBucketWrites = options.s3.putKeys.length
   const env: NodeJS.ProcessEnv = {
     ...options.baseEnv,
     ...options.extraEnv,
@@ -320,6 +324,7 @@ async function productionRefresh(options: {
     RANKING_REFRESH_LEASE_KEY: leaseKey,
     RANKING_REFRESH_LEASE_OWNER: lease.lease.owner,
     RANKING_REFRESH_LEASE_ETAG: lease.etag,
+    RANKING_REFRESH_LEASE_AUTHORITY_KEY: lease.authorityKey,
     RANKING_REFRESH_LEASE_EXPIRES_AT: lease.lease.expiresAt,
     RANKING_BUCKET_RESTORE_RAW: 'true',
     RANKING_DURABLE_GC_DRY_RUN: 'false',
@@ -330,7 +335,7 @@ async function productionRefresh(options: {
       : {}),
   }
   try {
-    await refreshDataIfChanged([
+    const refreshResult = await refreshDataIfChanged([
       '--raw-dir', rawDir,
       '--manifest', join(rawDir, 'manifest.json'),
       '--state', statePath,
@@ -363,21 +368,47 @@ async function productionRefresh(options: {
         ], env)
       },
     })
+    if (refreshResult.durableCandidate.kind === 'not-produced') {
+      assert.equal(refreshResult.changed, false)
+      assert.equal(refreshResult.status, 'unchanged')
+      assert.equal(refreshResult.durableCandidate.reason, 'unchanged-source-data')
+    }
+    return await benchmarkRefreshResult({
+      options,
+      statePath,
+      beforePublicPuts,
+      beforeBucketWrites,
+      refreshResult,
+    })
   } finally {
     const released = await releaseBucketLease(leaseKey, lease, { config: bucketConfig, client: bucketClient })
     assert.equal(released.released, true)
   }
+}
+
+async function benchmarkRefreshResult({ options, statePath, beforePublicPuts, beforeBucketWrites, refreshResult }: {
+  options: Parameters<typeof productionRefresh>[0]
+  statePath: string
+  beforePublicPuts: number
+  beforeBucketWrites: number
+  refreshResult: Awaited<ReturnType<typeof refreshDataIfChanged>>
+}) {
   const active = JSON.parse(Buffer.from(requiredObject(options.s3.objects, 'bucket/rankings/active-generation.json').bytes).toString('utf8'))
   const state = JSON.parse(await readFile(statePath, 'utf8'))
-  const candidate = JSON.parse(await readFile(join(stateDir, 'durable-candidate.json'), 'utf8'))
   return {
     active,
     activeGeneration: String(active.generationId),
     hasPrivateState: Boolean(active.privateState),
-    candidate,
+    candidate: refreshResult.durableCandidate,
     receipt: record(record(state.crunch).receipt),
     publicUploads: options.s3.putKeys.filter((key) => key.includes('/generations/') && key.includes('/data/')).length - beforePublicPuts,
+    bucketWrites: options.s3.putKeys.length - beforeBucketWrites,
   }
+}
+
+function requiredCandidate(result: { candidate: Awaited<ReturnType<typeof refreshDataIfChanged>>['durableCandidate'] }) {
+  if (result.candidate.kind !== 'produced') throw new Error(`Expected a durable candidate, received ${result.candidate.reason}`)
+  return result.candidate.receipt
 }
 
 async function materializeInputs(root: string, scenario: ScenarioName, phase: 'base' | 'changed', name: string, bootstrapStep: number) {
