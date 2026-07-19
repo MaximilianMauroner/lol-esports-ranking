@@ -7,7 +7,7 @@ import { basename, dirname, extname, join, posix, relative, resolve, sep } from 
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 
-let activeGenerationCache = { expiresAt: 0, value: null }
+const activeGenerationCaches = new WeakMap()
 
 export function bucketConfigFromEnv(env = process.env) {
   const bucket = env.RANKING_BUCKET_NAME ?? env.S3_BUCKET ?? env.BUCKET
@@ -70,6 +70,7 @@ export async function uploadRankingArtifacts({
   privateState,
   rollout,
   rolloutForActive,
+  publishGeneration = true,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -90,7 +91,25 @@ export async function uploadRankingArtifacts({
   const unchanged = []
   const skipped = []
   const dataPrefix = generationId ? `generations/${safeObjectPath(generationId)}/data` : 'data'
-  uploads.push(...await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json'))
+  let active
+  let idempotentGeneration = false
+  if (generationId && publishGeneration) {
+    active = await readBucketJson('active-generation.json', { config, client })
+    const currentFence = Number(active.value?.fencingToken ?? 0)
+    const incomingFence = Number(fencingToken ?? 0)
+    if (!Number.isFinite(incomingFence) || incomingFence <= 0 || currentFence > incomingFence) {
+      throw new Error('Stale refresh worker cannot promote an active generation')
+    }
+    if (currentFence === incomingFence) {
+      if (active.value?.generationId !== generationId) throw new Error('Equal fencing token cannot promote a different generation')
+      idempotentGeneration = true
+    }
+  }
+  if (publishGeneration) {
+    const publicSync = await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json', { immutable: Boolean(generationId) })
+    uploads.push(...publicSync.filter((entry) => entry.status !== 'unchanged'))
+    unchanged.push(...publicSync.filter((entry) => entry.status === 'unchanged'))
+  }
   if (rawDir) {
     const rawSync = await uploadRawSourceFiles(client, config, rawDir, manifestPath)
     uploads.push(...rawSync.uploaded)
@@ -120,7 +139,7 @@ export async function uploadRankingArtifacts({
 
   const publishReceipt = {
     schemaVersion: 1,
-    publishedAt: new Date().toISOString(),
+    ...(generationId ? {} : { publishedAt: new Date().toISOString() }),
     prefix: config.prefix,
     ...(generationId ? { generationId } : {}),
     ...publishMetrics,
@@ -128,14 +147,20 @@ export async function uploadRankingArtifacts({
     unchanged: unchanged.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, digest })),
     skipped,
   }
-  await uploadJson(client, config, generationId ? `generations/${safeObjectPath(generationId)}/publish.json` : 'latest-publish.json', publishReceipt)
-  if (generationId) {
-    const active = await readBucketJson('active-generation.json', { config, client })
-    if (Number(active.value?.fencingToken ?? 0) > Number(fencingToken ?? 0)) {
-      throw new Error('Stale refresh worker cannot promote an active generation')
+  if (generationId && publishGeneration) {
+    const generationReceiptKey = `generations/${safeObjectPath(generationId)}/publish.json`
+    if (idempotentGeneration) {
+      const existingReceipt = await readBucketBytes(generationReceiptKey, { config, client })
+      if (!existingReceipt.found) throw new Error('Idempotent generation is missing its immutable publish receipt')
+    } else {
+      await uploadImmutableJson(client, config, generationReceiptKey, publishReceipt)
     }
+  } else {
+    await uploadJson(client, config, 'latest-publish.json', publishReceipt)
+  }
+  if (generationId && publishGeneration) {
     const resolvedRollout = rolloutForActive ? rolloutForActive(active.value?.rollout) : rollout
-    const promotion = await writeBucketJson('active-generation.json', {
+    const nextPointer = {
       ...(active.value && typeof active.value === 'object' && !Array.isArray(active.value) ? active.value : {}),
       schemaVersion: 1,
       generationId,
@@ -144,13 +169,31 @@ export async function uploadRankingArtifacts({
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
       ...(privateState ? { privateState } : {}),
       ...(resolvedRollout ? { rollout: resolvedRollout } : {}),
-    }, {
+    }
+    if (idempotentGeneration) {
+      if (active.value?.manifestKey !== nextPointer.manifestKey
+        || (privateState && stableObjectJson(active.value?.privateState) !== stableObjectJson(privateState))) {
+        throw new Error('Same-generation retry does not match the active generation identity')
+      }
+      setActiveGenerationCache(config, client, generationId)
+      return {
+        enabled: true,
+        bucket: config.bucket,
+        prefix: config.prefix,
+        uploaded: uploads,
+        unchanged,
+        skipped,
+        promotion: { promoted: false, idempotent: true, generationId, fencingToken },
+        ...publishMetrics,
+      }
+    }
+    const promotion = await writeBucketJson('active-generation.json', nextPointer, {
       config,
       client,
       ...(active.found ? { ifMatch: active.etag } : { ifNoneMatch: '*' }),
     })
     if (!promotion.written) throw new Error('Active generation changed during promotion')
-    activeGenerationCache = { expiresAt: Date.now() + 30_000, value: generationId }
+    setActiveGenerationCache(config, client, generationId)
   }
 
   return {
@@ -160,7 +203,9 @@ export async function uploadRankingArtifacts({
     uploaded: uploads,
     unchanged,
     skipped,
-    promotion: generationId ? { promoted: true, generationId, fencingToken } : { promoted: false, reason: 'unversioned-upload' },
+    promotion: generationId && publishGeneration
+      ? { promoted: true, generationId, fencingToken }
+      : { promoted: false, reason: publishGeneration ? 'unversioned-upload' : 'semantic-no-change' },
     ...publishMetrics,
   }
 }
@@ -479,7 +524,7 @@ export async function downloadBucketObject({
   }
 }
 
-export async function uploadDirectory(client, config, dir, destinationPrefix, publishLast) {
+export async function uploadDirectory(client, config, dir, destinationPrefix, publishLast, { immutable = false } = {}) {
   const root = resolve(dir)
   const files = await listFiles(root)
   if (publishLast) {
@@ -488,7 +533,9 @@ export async function uploadDirectory(client, config, dir, destinationPrefix, pu
   const uploads = []
   for (const file of files) {
     const relativePath = relative(root, file).split(sep).join('/')
-    uploads.push(await uploadFile(client, config, file, `${destinationPrefix}/${relativePath}`))
+    uploads.push(immutable
+      ? await uploadImmutableFile(client, config, file, `${destinationPrefix}/${relativePath}`)
+      : await uploadFile(client, config, file, `${destinationPrefix}/${relativePath}`))
   }
   return uploads
 }
@@ -585,6 +632,38 @@ export async function uploadFile(client, config, filePath, relativeKey, { metada
 
 export async function uploadJson(client, config, relativeKey, value) {
   return uploadJsonBody(client, config, relativeKey, jsonBody(value))
+}
+
+async function uploadImmutableJson(client, config, relativeKey, value) {
+  const body = jsonBody(value)
+  const result = await writeBucketBytes(relativeKey, body, {
+    config,
+    client,
+    ifNoneMatch: '*',
+    contentType: 'application/json; charset=utf-8',
+  })
+  if (result.written) return result
+  const existing = await readBucketBytes(relativeKey, { config, client })
+  if (!existing.found || !Buffer.from(existing.bytes).equals(Buffer.from(body))) {
+    throw new Error(`Immutable generation object collision: ${relativeKey}`)
+  }
+  return { ...result, written: false, unchanged: true, bytes: Buffer.byteLength(body) }
+}
+
+async function uploadImmutableFile(client, config, filePath, relativeKey) {
+  const bytes = await readFile(filePath)
+  const result = await writeBucketBytes(relativeKey, bytes, {
+    config,
+    client,
+    ifNoneMatch: '*',
+    contentType: contentTypeForPath(filePath),
+  })
+  if (result.written) return { status: 'uploaded', key: result.key, bytes: bytes.byteLength, contentType: contentTypeForPath(filePath) }
+  const existing = await readBucketBytes(relativeKey, { config, client })
+  if (!existing.found || !Buffer.from(existing.bytes).equals(bytes)) {
+    throw new Error(`Immutable generation object collision: ${relativeKey}`)
+  }
+  return { status: 'unchanged', key: result.key, bytes: bytes.byteLength, contentType: contentTypeForPath(filePath) }
 }
 
 async function uploadJsonBody(client, config, relativeKey, body) {
@@ -760,22 +839,37 @@ function isMissingObjectError(error) {
 }
 
 async function activeGeneration(config, client) {
-  if (activeGenerationCache.expiresAt > Date.now()) return activeGenerationCache.value
+  const cached = getActiveGenerationCache(config, client)
+  if (cached?.expiresAt > Date.now()) return cached.value
   try {
     const object = await client.send(new GetObjectCommand({
       Bucket: config.bucket,
       Key: bucketKey(config, 'active-generation.json'),
     }))
     const value = JSON.parse(await bodyText(object.Body))
-    activeGenerationCache = {
-      expiresAt: Date.now() + 30_000,
-      value: typeof value?.generationId === 'string' ? value.generationId : null,
-    }
+    setActiveGenerationCache(config, client, typeof value?.generationId === 'string' ? value.generationId : null)
   } catch (error) {
     if (!isMissingObjectError(error)) throw error
-    activeGenerationCache = { expiresAt: Date.now() + 30_000, value: null }
+    setActiveGenerationCache(config, client, null)
   }
-  return activeGenerationCache.value
+  return getActiveGenerationCache(config, client)?.value ?? null
+}
+
+function activeGenerationCacheKey(config) {
+  return `${config.bucket}\0${config.prefix}`
+}
+
+function getActiveGenerationCache(config, client) {
+  return activeGenerationCaches.get(client)?.get(activeGenerationCacheKey(config))
+}
+
+function setActiveGenerationCache(config, client, value) {
+  let clientCache = activeGenerationCaches.get(client)
+  if (!clientCache) {
+    clientCache = new Map()
+    activeGenerationCaches.set(client, clientCache)
+  }
+  clientCache.set(activeGenerationCacheKey(config), { expiresAt: Date.now() + 30_000, value })
 }
 
 function isPreconditionError(error) {
@@ -796,4 +890,12 @@ async function bodyBytes(body) {
   const chunks = []
   for await (const chunk of body ?? []) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks)
+}
+
+function stableObjectJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableObjectJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableObjectJson(value[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
 }

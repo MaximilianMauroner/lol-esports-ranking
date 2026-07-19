@@ -12,8 +12,16 @@ import {
   loadIncrementalCommunityImports,
   promoteIncrementalState,
   stageIncrementalState,
+  validateIncrementalStateTree,
   type ProviderAuthorities,
 } from '../scripts/incremental-provider-state.ts'
+import {
+  createMemoryDurableObjectStore,
+  promoteDurableGeneration,
+  restoreDurableGeneration,
+  stageDurableGeneration,
+  type DurableIdentity,
+} from '../scripts/durable-ranking-state.mjs'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { decodePrivateState, encodePrivateState } from '../src/lib/incremental/canonicalCodec.ts'
 import { createCrunchCompatibility } from '../src/lib/incremental/compatibility.ts'
@@ -65,6 +73,54 @@ const secondGame = [
   'g2,2026-01-17,2026,LCK,Spring,0,26.1,team,Blue,T1,1,19,66000',
   'g2,2026-01-17,2026,LCK,Spring,0,26.1,team,Red,Gen.G,0,10,58000',
 ]
+const durableIdentity: DurableIdentity = {
+  compatibilityHash: compatibility.hash,
+  pipelineVersion: 'test-v1',
+  codeHash: 'code-v1',
+  modelVersion: 'test-v1',
+  modelConfigHash: 'test-config',
+}
+
+test('durable cold restore rejects outer-valid malformed inner pointers and content objects before swap', async () => {
+  for (const corruption of ['pointer', 'provider-object'] as const) {
+    const fixture = await createFixture([header, ...firstGame].join('\n'))
+    const loaded = await loadIncrementalCommunityImports(fixture.input)
+    assert.ok(loaded.promotion)
+    await promoteIncrementalState(loaded.promotion)
+    const summary = await validateIncrementalStateTree(fixture.stateDir, compatibility.hash)
+    if (corruption === 'pointer') {
+      await writePrivate(activePointerPath(fixture.stateDir), { schemaVersion: 2, kind: 'active-generation', generationHash: 'missing-generation' })
+    } else {
+      const providerPath = summary.reachablePaths.find((path) => path.startsWith('providers/objects/'))
+      assert.ok(providerPath)
+      const contentHash = providerPath.split('/').at(-1)?.replace(/\.json$/, '')
+      assert.ok(contentHash)
+      await writePrivate(resolve(fixture.stateDir, providerPath), { schemaVersion: 2, kind: 'provider-ledger', contentHash, payload: {} })
+    }
+    const store = createMemoryDurableObjectStore()
+    const candidate = await stageDurableGeneration({
+      store,
+      stateDir: fixture.stateDir,
+      identity: durableIdentity,
+      generatedAt: '2026-07-19T00:00:00.000Z',
+      stateSummary: summary,
+      reachablePaths: summary.reachablePaths,
+    })
+    await promoteDurableGeneration({ store, candidate, fencingToken: 1, generationId: corruption, promotedAt: '2026-07-19T00:00:01.000Z' })
+    const destination = resolve(fixture.root, 'restore-destination')
+    await mkdir(destination, { recursive: true })
+    await writeFile(resolve(destination, 'sentinel.txt'), 'preserved')
+    const restored = await restoreDurableGeneration({
+      store,
+      stateDir: destination,
+      expectedIdentity: durableIdentity,
+      validateStateDir: (stateDir) => validateIncrementalStateTree(stateDir, compatibility.hash),
+    })
+    assert.equal(restored.restored, false)
+    assert.equal(record(restored.fallback).kind, 'checkpoint-corrupt')
+    assert.equal(await readFile(resolve(destination, 'sentinel.txt'), 'utf8'), 'preserved')
+  }
+})
 
 test('production generation reads unchanged source files zero times after atomic promotion', async () => {
   const fixture = await createFixture([header, ...firstGame].join('\n'))

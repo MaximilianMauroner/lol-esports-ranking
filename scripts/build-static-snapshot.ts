@@ -9,8 +9,10 @@ import {
   attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
   attachIncrementalSnapshotModelCache,
+  describeIncrementalStateTransition,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
+  validateIncrementalStateTree,
   type IncrementalCommunityImports,
   type IncrementalStatePromotion,
   type ProviderAuthorities,
@@ -50,7 +52,7 @@ import { PROVIDER_LEDGER_SCHEMA_VERSION } from '../src/lib/incremental/providerL
 import { regionalSplitCalendars } from '../src/data/rankingCalendar'
 import { canonicalCodeProvenanceHash } from './canonical-code-provenance.ts'
 import type { RankingModelResult } from '../src/lib/model.ts'
-import type { PlayerStanding } from '../src/types.ts'
+import type { PlayerProfile, PlayerStanding } from '../src/types.ts'
 import { deriveTournamentInstances } from '../src/lib/internationalTournaments.ts'
 import { runIncrementalRankingReducers } from '../src/lib/incremental/rankingReducer.ts'
 import type { IncrementalReducerCheckpoint } from '../src/lib/incremental/reducerCheckpoint.ts'
@@ -63,6 +65,7 @@ import {
   type PersistedSnapshotModelState,
 } from '../src/lib/incremental/snapshotInputs.ts'
 import { buildPublicArtifactDag, type PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
+import { stableHash } from '../src/lib/incremental/hash.ts'
 import { bucketConfigFromEnv, createBucketClient } from './railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
@@ -99,6 +102,7 @@ const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
 const manifest = resolvedManifestPath
   ? manifestWithResolvedFiles(JSON.parse(await readFile(resolvedManifestPath, 'utf8')) as LocalDataManifest, dirname(resolvedManifestPath)) as LocalDataManifest
   : undefined
+const staticPlayerRosters = await loadStaticPlayerRosters(readArg('static-player-json') ?? process.env.RANKING_STATIC_PLAYER_JSON)
 const oracleCsvPaths = uniquePaths([...readArgList('oracle-csv'), ...(manifest?.files.oracleCsv ?? [])])
 const leaguepediaJsonPaths = uniquePaths([...readArgList('leaguepedia-json'), ...(manifest?.files.leaguepediaJson ?? [])])
 const lolEsportsJsonPaths = uniquePaths([...readArgList('lolesports-json'), ...(manifest?.files.lolEsportsJson ?? [])])
@@ -137,11 +141,15 @@ const durableStore = process.env.RANKING_DURABLE_STATE_ENABLED !== 'false' && du
   : undefined
 let durableActivePointer: Record<string, unknown> | undefined
 let durableRolloutReason = 'durable-state-disabled'
+let durableBootstrapEligible = false
+let durableRestoreFailed = false
+let previousDurableRetentionBoundaries: Array<{ processedDate?: string; classes: string[] }> = []
 if (durableStore && requestedMode !== 'full') {
   const restore = await restoreDurableGeneration({
     store: durableStore,
     stateDir: privateStateDir,
     expectedIdentity: durableIdentity,
+    validateStateDir: (stateDir) => validateIncrementalStateTree(stateDir, durableIdentity.compatibilityHash),
   })
   const restoreMetrics = recordValue(restore.metrics)
   receipt.durable.restoredObjects = numberValue(restoreMetrics.restoredObjects)
@@ -150,6 +158,9 @@ if (durableStore && requestedMode !== 'full') {
   receipt.durable.cacheMisses = numberValue(restoreMetrics.cacheMisses)
   if (restore.restored) {
     durableActivePointer = recordValue(restore.active)
+    const restoredManifest = recordValue(restore.manifest)
+    const restoredSemanticState = recordValue(restoredManifest.semanticState)
+    previousDurableRetentionBoundaries = retentionBoundaryValues(restoredSemanticState.retentionBoundaries)
     const rollout = decideDurableCrunchMode({
       requestedMode,
       identity: durableIdentity,
@@ -167,7 +178,11 @@ if (durableStore && requestedMode !== 'full') {
     const fallback = durableFallback(restore.fallback)
     receipt.durable.fallback = fallback
     receipt.checkpoint.fallback = fallback
-    mode = 'full'
+    const fallbackDetail = fallback.kind === 'checkpoint-unavailable' ? fallback.detail : ''
+    durableBootstrapEligible = requestedMode === 'incremental-shadow'
+      && (fallbackDetail === 'durable-active-pointer-missing' || fallbackDetail === 'durable-private-pointer-missing')
+    durableRestoreFailed = !durableBootstrapEligible
+    mode = durableBootstrapEligible ? 'incremental-shadow' : 'full'
     durableRolloutReason = fallback.kind
   }
 }
@@ -190,14 +205,18 @@ const directImportedMatches = canonical ? undefined : mergeCommunityMatchSources
 })
 const importedMatches = canonical?.importedMatches ?? directImportedMatches ?? []
 const importedTeams = mergeTeamProfiles([...leaguepediaImports.map((result) => result.teams), ...oracleImports.map((result) => result.teams)])
-const mergedTeams = canonical?.teams ?? (importedMatches.length > 0 ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities } : {})
-const ratingUniverse = canonical ?? filterPublishedRatingUniverseInput(importedMatches, mergedTeams)
+const mergedTeams = canonical
+  ? { ...canonical.teams, ...knownTeamIdentities }
+  : importedMatches.length > 0 ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities } : {}
+const ratingUniverse = canonical
+  ? filterPublishedRatingUniverseInput(canonical.matches, mergedTeams)
+  : filterPublishedRatingUniverseInput(importedMatches, mergedTeams)
 const matches = ratingUniverse.matches
 const teams = ratingUniverse.teams
 const snapshot = createStaticRankingData({
   matches,
   teams,
-  rosters: {},
+  rosters: staticPlayerRosters,
   runMetadata,
   source: matches.length > 0
     ? describeCommunitySource(oracleImports.length, leaguepediaImports.length)
@@ -260,7 +279,7 @@ const snapshot = createStaticRankingData({
   tournamentScheduleReferences: tournamentScheduleReferencesFor(lolEsportsImports),
   pipelineAudit: { importedMatchCount: importedMatches.length },
   precomputedGlobalRanking,
-  precomputedGlobalPlayers,
+  precomputedGlobalPlayers: Object.keys(staticPlayerRosters).length > 0 ? undefined : precomputedGlobalPlayers,
   modelProvider,
 })
   return {
@@ -404,14 +423,15 @@ if (reconciliationOutput) {
   }, null, 2)}\n`)
 }
 const publicPlan = createPublicArtifactWritePlan(snapshot, { runMetadata })
-let incrementalPlan: ReturnType<typeof createPublicArtifactWritePlan> | undefined
+let incrementalPlan = incrementalCandidate
+  ? createPublicArtifactWritePlan(incrementalCandidate.snapshot, { runMetadata })
+  : undefined
 let durableParity: { result: 'match' | 'mismatch'; audit?: boolean; detail?: string } | undefined
 if (orchestration.shadowOutput) {
-  incrementalPlan = createPublicArtifactWritePlan(orchestration.shadowOutput.snapshot, { runMetadata })
   try {
     assertCrunchParity(
       { fullSnapshot: snapshot, publicWrites: publicPlan.writes },
-      { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: incrementalPlan.writes },
+      { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: incrementalPlan!.writes },
     )
     durableParity = { result: 'match', ...(receipt.durable.audit === 'scheduled' || receipt.durable.audit === 'forced' ? { audit: true } : {}) }
     receipt.durable.parity = 'match'
@@ -428,13 +448,15 @@ if (orchestration.shadowOutput) {
   }
 }
 let writesToPublish = publicPlan.writes
-if (incrementalPlan && orchestration.shadowOutput) {
+let dagFallback = false
+if (incrementalPlan && incrementalCandidate) {
   const dagResult = buildPublicArtifactDag({
     actual: incrementalPlan,
-    semantic: createSemanticPublicArtifactWritePlan(orchestration.shadowOutput.snapshot),
+    semantic: createSemanticPublicArtifactWritePlan(incrementalCandidate.snapshot),
     previous: previousArtifactCache,
   })
   if (dagResult.fallback) {
+    dagFallback = true
     receipt.checkpoint.fallback = dagResult.fallback
     receipt.artifacts.reused = 0
     receipt.artifacts.regenerated = publicPlan.writes.length
@@ -445,11 +467,11 @@ if (incrementalPlan && orchestration.shadowOutput) {
     receipt.artifacts.reused = dagResult.dag.semanticReused
     receipt.artifacts.regenerated = dagResult.dag.regenerated
     if (pendingPromotion) {
-      if (orchestration.shadowOutput.snapshotModelState) {
+      if (incrementalCandidate.snapshotModelState) {
         pendingPromotion = attachIncrementalSnapshotModelCache(
           pendingPromotion,
           privateStateDir,
-          orchestration.shadowOutput.snapshotModelState,
+          incrementalCandidate.snapshotModelState,
         )
       }
       pendingPromotion = attachIncrementalArtifactCache(pendingPromotion, privateStateDir, dagResult.dag.cache)
@@ -460,8 +482,26 @@ if (incrementalPlan && orchestration.shadowOutput) {
   receipt.artifacts.reused = 0
   receipt.artifacts.regenerated = publicPlan.writes.length
 }
+const incrementalOutcomeEligible = requestedMode !== 'full'
+  && Boolean(incrementalCandidate)
+  && !durableRestoreFailed
+  && (!orchestration.fallback || durableBootstrapEligible)
+  && durableParity?.result !== 'mismatch'
+  && !dagFallback
+let stateTransition: Awaited<ReturnType<typeof describeIncrementalStateTransition>> | undefined
+if (pendingPromotion && incrementalOutcomeEligible) {
+  stateTransition = await describeIncrementalStateTransition(pendingPromotion, privateStateDir)
+}
+const semanticNoChange = Boolean(stateTransition?.semanticNoChange && incrementalOutcomeEligible)
+if (!incrementalOutcomeEligible || semanticNoChange) pendingPromotion = undefined
+if (semanticNoChange) {
+  writesToPublish = []
+  receipt.artifacts.reused = publicPlan.writes.length
+  receipt.artifacts.regenerated = 0
+  receipt.durable.promotion = 'no-change'
+}
 const selectedPublicPaths = new Set(writesToPublish.map((write) => write.relativePath))
-for (const write of publicPlan.writes) {
+for (const write of semanticNoChange ? [] : publicPlan.writes) {
   if (selectedPublicPaths.has(write.relativePath)) continue
   if (await isRegularFile(resolve(publicDataTargetDir, write.relativePath))) continue
   writesToPublish.push(write)
@@ -496,21 +536,48 @@ try {
     const promoted = await promoteIncrementalState(pendingPromotion)
     receipt.bucket.bytesWritten = promoted.reducerStateBytesWritten
   }
-  if (durableStore && await isDirectory(privateStateDir)) {
+  if (durableStore && pendingPromotion === undefined && incrementalOutcomeEligible && !semanticNoChange) {
+    throw new Error('Eligible incremental state was not promoted locally')
+  }
+  if (durableStore && incrementalOutcomeEligible && !semanticNoChange && await isDirectory(privateStateDir)) {
+    const stateSummary = await validateIncrementalStateTree(privateStateDir, durableIdentity.compatibilityHash)
     const candidate = await stageDurableGeneration({
       store: durableStore,
       stateDir: privateStateDir,
       identity: durableIdentity,
       generatedAt: runMetadata.generatedAt,
+      outcome: durableBootstrapEligible ? 'shadow-bootstrap-match' : orchestration.executedMode === 'incremental' ? 'incremental-success' : 'shadow-match',
+      stateSummary,
+      reachablePaths: stateSummary.reachablePaths,
       parity: durableParity ?? { kind: 'not-run', rolloutReason: durableRolloutReason },
       retention: {
         date: runMetadata.generatedAt.slice(0, 10),
-        boundaries: durableRetentionBoundaries(snapshot),
+        boundaries: durableRetentionBoundaries(snapshot, stateSummary.retentionBoundaries, previousDurableRetentionBoundaries),
       },
     })
     recordDurableCandidateMetrics(receipt, candidate)
     receipt.durable.promotion = 'staged'
     if (durableCandidateOutput) await atomicWriteFile(resolve(durableCandidateOutput), `${JSON.stringify(durableCandidateReceipt(candidate, durableParity), null, 2)}\n`)
+  } else if (durableCandidateOutput) {
+    const eligibility = semanticNoChange ? 'no-change' : 'ineligible'
+    const outcome = semanticNoChange
+      ? 'semantic-no-change'
+      : requestedMode === 'full' ? 'full-requested'
+        : durableRestoreFailed ? 'restore-fallback'
+          : durableParity?.result === 'mismatch' ? 'parity-mismatch'
+            : dagFallback ? 'artifact-dag-fallback'
+              : orchestration.fallback ? 'incremental-fallback'
+                : 'incremental-output-unavailable'
+    await atomicWriteFile(resolve(durableCandidateOutput), `${JSON.stringify({
+      schemaVersion: 1,
+      eligibility,
+      outcome,
+      identity: durableIdentity,
+      identityHash: stableHash(durableIdentity),
+      stateRoot: stateTransition?.next.stateRoot,
+      parity: durableParity ?? { kind: 'not-run' },
+      metrics: { uploadedObjects: 0, uploadedBytes: 0, skippedObjects: 0, skippedBytes: 0 },
+    }, null, 2)}\n`)
   }
   receipt.durable.reusedUnits = sumInstrumented([
     receipt.observations.reused,
@@ -807,7 +874,13 @@ function dateRange(matches: { date?: string }[]) {
 }
 
 async function directorySize(dir: string): Promise<number> {
-  const entries = await readdir(dir, { withFileTypes: true })
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0
+    throw error
+  }
   let total = 0
   for (const entry of entries) {
     const path = resolve(dir, entry.name)
@@ -836,6 +909,16 @@ async function isDirectory(path: string) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
     throw error
   }
+}
+
+async function loadStaticPlayerRosters(path: string | undefined): Promise<Record<string, PlayerProfile[]>> {
+  if (!path) return {}
+  const value: unknown = JSON.parse(await readFile(resolve(path), 'utf8'))
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Static player roster input must be a team-keyed object')
+  for (const [team, players] of Object.entries(value)) {
+    if (!team || !Array.isArray(players)) throw new Error('Static player roster input contains an invalid team entry')
+  }
+  return value as Record<string, PlayerProfile[]>
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -876,6 +959,8 @@ function recordDurableCandidateMetrics(target: IncrementalCrunchReceipt, candida
 function durableCandidateReceipt(candidate: DurableCandidate, parity: typeof durableParity) {
   return {
     schemaVersion: 1,
+    eligibility: candidate.eligibility,
+    outcome: candidate.outcome,
     manifestKey: candidate.manifestKey,
     manifestDigest: candidate.manifestDigest,
     manifestBytes: candidate.manifestBytes,
@@ -887,7 +972,11 @@ function durableCandidateReceipt(candidate: DurableCandidate, parity: typeof dur
   }
 }
 
-function durableRetentionBoundaries(data: CrunchOutput['snapshot']) {
+function durableRetentionBoundaries(
+  data: CrunchOutput['snapshot'],
+  retention: Array<{ processedDate?: string; classes: string[] }> = [],
+  previous: Array<{ processedDate?: string; classes: string[] }> = [],
+) {
   const boundaries = new Set<string>()
   const date = runMetadata.generatedAt.slice(0, 10)
   const tomorrow = new Date(`${date}T00:00:00.000Z`)
@@ -895,7 +984,25 @@ function durableRetentionBoundaries(data: CrunchOutput['snapshot']) {
   if (tomorrow.getUTCMonth() !== new Date(`${date}T00:00:00.000Z`).getUTCMonth()) boundaries.add('month-end')
   if (Object.values(data.tournamentMovements).some((entry) => entry.status === 'completed' && entry.boundaryDate === date)) boundaries.add('international-event')
   if (Object.values(data.filterOptions.checkpoints ?? {}).flat().some((checkpoint) => checkpoint.endDate === date)) boundaries.add('season-split')
+  const previousKeys = new Set(previous.map(retentionBoundaryKey))
+  const newClasses = retention.filter((entry) => !previousKeys.has(retentionBoundaryKey(entry))).flatMap((entry) => entry.classes)
+  if (newClasses.includes('monthly')) boundaries.add('month-end')
+  if (newClasses.includes('season-boundary')) boundaries.add('season-split')
+  if (newClasses.includes('international-boundary')) boundaries.add('international-event')
   return [...boundaries].sort()
+}
+
+function retentionBoundaryValues(value: unknown): Array<{ processedDate?: string; classes: string[] }> {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const record = recordValue(entry)
+    if (!Array.isArray(record.classes) || record.classes.some((item) => typeof item !== 'string')) return []
+    return [{ ...(typeof record.processedDate === 'string' ? { processedDate: record.processedDate } : {}), classes: record.classes }]
+  })
+}
+
+function retentionBoundaryKey(value: { processedDate?: string; classes: string[] }) {
+  return `${value.processedDate ?? ''}:${[...value.classes].sort().join(',')}`
 }
 
 async function sendDurableAlert(kind: string, message: string) {

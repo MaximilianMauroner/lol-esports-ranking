@@ -90,6 +90,19 @@ test('cold restore rejects missing, corrupt, partial, and incompatible generatio
     assert.equal(await readFile(join(destination, 'sentinel.txt'), 'utf8'), 'keep-me')
 
     const restaged = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z' })
+    const auditObject = store.objects.get(restaged.manifest.audit.key)
+    assert.ok(auditObject)
+    const auditBytes = Buffer.from(auditObject.bytes)
+    store.objects.delete(restaged.manifest.audit.key)
+    const missingAudit = await restoreDurableGeneration({ store, stateDir: destination, expectedIdentity: identity })
+    assert.equal(fallbackDetail(missingAudit), 'durable-audit-missing')
+    store.objects.set(restaged.manifest.audit.key, { ...auditObject, bytes: auditBytes })
+    const restoredAuditObject = store.objects.get(restaged.manifest.audit.key)
+    assert.ok(restoredAuditObject)
+    restoredAuditObject.bytes = Buffer.from('{"corrupt":true}\n')
+    const corruptAudit = await restoreDurableGeneration({ store, stateDir: destination, expectedIdentity: identity })
+    assert.equal(fallbackDetail(corruptAudit), 'durable-audit-integrity')
+    restoredAuditObject.bytes = auditBytes
     const manifestObject = store.objects.get(restaged.manifestKey)
     assert.ok(manifestObject)
     manifestObject.bytes = Buffer.from('corrupt manifest')
@@ -123,6 +136,14 @@ test('durable promotion is fenced, CAS-safe, interruption-safe, and skips exact 
       promotedAt: '2026-07-19T00:00:02.000Z',
     })
     assert.equal(stale.reason, 'stale-fencing-token')
+    const equalFence = await promoteDurableGeneration({
+      store,
+      candidate,
+      fencingToken: 4,
+      generationId: 'equal-fence-different-generation',
+      promotedAt: '2026-07-19T00:00:02.500Z',
+    })
+    assert.equal(equalFence.reason, 'equal-fencing-token-conflict')
     const unchanged = await promoteDurableGeneration({
       store,
       candidate,
@@ -220,6 +241,19 @@ test('reachability GC protects active, recent, and permanent-boundary generation
     store.failures.deleteKeys.add(firstDelete.key)
     const swept = await executeDurableGc({ store, plan, dryRun: false })
     assert.ok(Number(swept.skipped) >= 1)
+
+    const activeObject = requiredObject(store, 'active-generation.json')
+    const fencedPlan = await planDurableGc({
+      store,
+      activePointer: pointer,
+      activeEtag: activeObject.etag,
+      now: '2026-07-20T00:00:00.000Z',
+      recentDays: 35,
+    })
+    await store.put('active-generation.json', Buffer.from('{"schemaVersion":1,"generationId":"winner","fencingToken":2}\n'), { ifMatch: activeObject.etag })
+    const raced = await executeDurableGc({ store, plan: fencedPlan, dryRun: false })
+    assert.equal(raced.reason, 'active-pointer-changed')
+    assert.equal(raced.deleted, 0)
     assert.ok(store.objects.has(activeCandidate.manifestKey))
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
@@ -237,6 +271,28 @@ test('durable staging is deterministic for identical metadata and records exact 
     assert.equal(second.metrics.uploadedObjects, 0)
     assert.ok(second.metrics.skippedObjects > 0)
     assert.ok(second.metrics.skippedBytes > 0)
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
+test('durable staging uploads only the active local reachability graph', async () => {
+  const fixture = await stateFixture('reachable')
+  const store = createMemoryDurableObjectStore()
+  try {
+    await mkdir(join(fixture.stateDir, 'canonical', 'objects'), { recursive: true })
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'obsolete.json'), 'obsolete')
+    const candidate = await stageDurableGeneration({
+      store,
+      stateDir: fixture.stateDir,
+      identity,
+      generatedAt: '2026-07-19T00:00:00.000Z',
+      reachablePaths: ['active-generation.json', 'canonical/objects/canonical-a.json'],
+    })
+    assert.deepEqual(candidate.manifest.objects.map((entry) => entry.path), [
+      'active-generation.json',
+      'canonical/objects/canonical-a.json',
+    ])
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
   }

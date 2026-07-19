@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve, sep } from 'node:path'
 import {
   deleteObject,
@@ -78,12 +78,17 @@ export async function stageDurableGeneration({
   stateDir,
   identity,
   generatedAt,
+  outcome = 'incremental-success',
+  stateSummary,
+  reachablePaths,
   retention = { date: generatedAt.slice(0, 10), boundaries: [] },
   parity = { kind: 'not-run' },
   prefix = DEFAULT_DURABLE_PREFIX,
 }) {
   const root = resolve(stateDir)
-  const files = await listLocalFiles(root)
+  const files = reachablePaths
+    ? await reachableLocalFiles(root, reachablePaths)
+    : await listLocalFiles(root)
   const refs = []
   let uploadedObjects = 0
   let uploadedBytes = 0
@@ -127,6 +132,9 @@ export async function stageDurableGeneration({
     identity,
     identityHash,
     stateRoot,
+    eligibility: 'eligible',
+    outcome,
+    semanticState: stateSummary ?? { stateRoot, compatibilityHash: identity.compatibilityHash },
     retention: {
       date: retention.date,
       boundaries: [...new Set(retention.boundaries)].sort(),
@@ -140,6 +148,8 @@ export async function stageDurableGeneration({
   const manifestKey = `${prefix}/generations/${manifestDigest}.json`
   const manifestUpload = await putImmutable(store, manifestKey, manifestBytes, manifestDigest, 'application/json; charset=utf-8')
   return {
+    eligibility: 'eligible',
+    outcome,
     manifest,
     manifestKey,
     manifestDigest,
@@ -163,16 +173,20 @@ export async function restoreDurableGeneration({
   store,
   stateDir,
   expectedIdentity,
+  validateStateDir,
   activeKey = 'active-generation.json',
 }) {
   const metrics = { restoredObjects: 0, restoredBytes: 0, cacheHits: 0, cacheMisses: 0 }
+  let restorationPath
   try {
     const activeObject = await store.get(activeKey)
     if (!activeObject.found) return restoreFallback('checkpoint-unavailable', 'durable-active-pointer-missing', metrics)
     const active = parseJsonBytes(activeObject.bytes)
-    if (!isRecord(active) || active.schemaVersion !== 1 || !isRecord(active.privateState)) {
+    if (!isRecord(active) || active.schemaVersion !== 1) {
       return restoreFallback('checkpoint-corrupt', 'durable-active-pointer-invalid', metrics)
     }
+    if (active.privateState === undefined) return restoreFallback('checkpoint-unavailable', 'durable-private-pointer-missing', metrics)
+    if (!isRecord(active.privateState)) return restoreFallback('checkpoint-corrupt', 'durable-private-pointer-invalid', metrics)
     const pointer = active.privateState
     if (typeof pointer.manifestKey !== 'string' || typeof pointer.manifestDigest !== 'string' || typeof pointer.manifestBytes !== 'number') {
       return restoreFallback('checkpoint-corrupt', 'durable-private-pointer-invalid', metrics)
@@ -186,6 +200,14 @@ export async function restoreDurableGeneration({
     const manifest = parseJsonBytes(manifestObject.bytes)
     const validation = validateManifest(manifest, expectedIdentity)
     if (validation) return restoreFallback(validation.kind, validation.detail, metrics)
+    const auditObject = await store.get(manifest.audit.key)
+    if (!auditObject.found) return restoreFallback('checkpoint-unavailable', 'durable-audit-missing', metrics)
+    metrics.cacheMisses += 1
+    if (!validBytes(auditObject.bytes, manifest.audit.bytes, manifest.audit.digest)) {
+      return restoreFallback('checkpoint-corrupt', 'durable-audit-integrity', metrics)
+    }
+    const auditValidation = validateAudit(parseJsonBytes(auditObject.bytes), manifest)
+    if (auditValidation) return restoreFallback('checkpoint-corrupt', auditValidation, metrics)
     const loaded = []
     for (const ref of manifest.objects) {
       const object = await store.get(ref.key)
@@ -198,14 +220,26 @@ export async function restoreDurableGeneration({
     }
     const target = resolve(stateDir)
     const next = `${target}.restore-${process.pid}-${Date.now()}`
+    restorationPath = next
     const previous = `${target}.previous-${process.pid}-${Date.now()}`
     await bestEffortRemove(next)
     await bestEffortRemove(previous)
+    restorationPath = undefined
     for (const object of loaded) {
       const path = resolve(next, object.path)
       assertInside(next, path)
       await mkdir(dirname(path), { recursive: true })
       await writeFile(path, object.bytes)
+    }
+    if (validateStateDir) {
+      const stateSummary = await validateStateDir(next, expectedIdentity)
+      if (!isRecord(stateSummary)
+        || !isRecord(manifest.semanticState)
+        || stateSummary.stateRoot !== manifest.semanticState.stateRoot
+        || stateSummary.compatibilityHash !== expectedIdentity.compatibilityHash) {
+        await bestEffortRemove(next)
+        return restoreFallback('checkpoint-corrupt', 'durable-inner-state-root', metrics)
+      }
     }
     let hadPrevious = false
     try {
@@ -225,6 +259,7 @@ export async function restoreDurableGeneration({
     metrics.restoredBytes = loaded.reduce((sum, object) => sum + object.bytes.byteLength, 0)
     return { restored: true, active, manifest, metrics }
   } catch (error) {
+    if (restorationPath) await bestEffortRemove(restorationPath)
     return restoreFallback('checkpoint-corrupt', `durable-restore:${errorMessage(error)}`, metrics)
   }
 }
@@ -239,11 +274,17 @@ export async function promoteDurableGeneration({
   activeKey = 'active-generation.json',
   expectedActiveEtag,
 }) {
+  if (candidate?.eligibility !== 'eligible') {
+    return { promoted: false, reason: 'candidate-ineligible', uploadedObjects: 0, uploadedBytes: 0 }
+  }
   const currentObject = await store.get(activeKey)
   const current = currentObject.found ? parseJsonBytes(currentObject.bytes) : undefined
   const currentFence = isRecord(current) ? Number(current.fencingToken ?? 0) : 0
   if (!Number.isFinite(fencingToken) || fencingToken <= 0 || currentFence > fencingToken) {
     return { promoted: false, reason: 'stale-fencing-token', uploadedObjects: candidate.metrics.uploadedObjects, uploadedBytes: candidate.metrics.uploadedBytes }
+  }
+  if (currentFence === fencingToken && isRecord(current) && current.generationId !== generationId) {
+    return { promoted: false, reason: 'equal-fencing-token-conflict', uploadedObjects: candidate.metrics.uploadedObjects, uploadedBytes: candidate.metrics.uploadedBytes }
   }
   if (isRecord(current?.privateState)
     && current.privateState.stateRoot === candidate.stateRoot
@@ -314,7 +355,7 @@ export function recordRolloutOutcome(previous, { identityHash, parity, at }) {
       identityHash,
       consecutiveShadowSuccesses: sameIdentity ? Number(previous.consecutiveShadowSuccesses ?? 0) + 1 : 1,
       lastShadowAt: at,
-      lastAuditAt: parity.audit ? at : previous?.lastAuditAt,
+      lastAuditAt: at,
     }
   }
   if (parity?.result === 'mismatch') {
@@ -322,7 +363,7 @@ export function recordRolloutOutcome(previous, { identityHash, parity, at }) {
       identityHash,
       consecutiveShadowSuccesses: 0,
       lastShadowAt: at,
-      lastAuditAt: parity.audit ? at : previous?.lastAuditAt,
+      lastAuditAt: at,
       blockedReason: 'parity-mismatch',
     }
   }
@@ -334,6 +375,8 @@ export function recordRolloutOutcome(previous, { identityHash, parity, at }) {
 export async function planDurableGc({
   store,
   activePointer,
+  activeEtag,
+  activeKey = 'active-generation.json',
   now,
   recentDays = 35,
   prefix = DEFAULT_DURABLE_PREFIX,
@@ -375,6 +418,13 @@ export async function planDurableGc({
   ].sort((left, right) => left.key.localeCompare(right.key))
   return {
     safe: true,
+    ...(activeEtag ? { activeSnapshot: {
+      activeKey,
+      etag: activeEtag,
+      fencingToken: activePointer?.fencingToken,
+      generationId: activePointer?.generationId,
+      manifestKey: activeManifestKey,
+    } } : {}),
     plannedDeletes,
     retainedManifests: retainedManifests.size,
     retainedObjects: reachable.size,
@@ -385,6 +435,21 @@ export async function planDurableGc({
 
 export async function executeDurableGc({ store, plan, dryRun = true }) {
   if (!plan.safe) return { planned: 0, deleted: 0, skipped: 0, bytesDeleted: 0, reason: plan.reason }
+  if (isRecord(plan.activeSnapshot)) {
+    const current = await store.get(plan.activeSnapshot.activeKey)
+    if (!current.found
+      || !plan.activeSnapshot.etag
+      || current.etag !== plan.activeSnapshot.etag) {
+      return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: 'active-pointer-changed' }
+    }
+    const pointer = parseJsonBytes(current.bytes)
+    if (!isRecord(pointer)
+      || pointer.fencingToken !== plan.activeSnapshot.fencingToken
+      || pointer.generationId !== plan.activeSnapshot.generationId
+      || pointer.privateState?.manifestKey !== plan.activeSnapshot.manifestKey) {
+      return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: 'active-pointer-changed' }
+    }
+  }
   if (dryRun) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, dryRun: true }
   let deleted = 0
   let skipped = 0
@@ -411,6 +476,15 @@ function validateManifest(manifest, expectedIdentity) {
   if (root !== manifest.stateRoot) return { kind: 'checkpoint-corrupt', detail: 'durable-state-root' }
 }
 
+function validateAudit(audit, manifest) {
+  if (!isRecord(audit)
+    || audit.schemaVersion !== DURABLE_STATE_SCHEMA_VERSION
+    || audit.kind !== 'durable-ranking-audit'
+    || audit.identityHash !== manifest.identityHash
+    || audit.stateRoot !== manifest.stateRoot
+    || stableHash(audit.parity) !== stableHash(manifest.parity)) return 'durable-audit-invalid'
+}
+
 function validateManifestShape(manifest) {
   if (!isRecord(manifest)
     || manifest.schemaVersion !== DURABLE_STATE_SCHEMA_VERSION
@@ -418,6 +492,9 @@ function validateManifestShape(manifest) {
     || !isRecord(manifest.identity)
     || typeof manifest.identityHash !== 'string'
     || typeof manifest.stateRoot !== 'string'
+    || manifest.eligibility !== 'eligible'
+    || typeof manifest.outcome !== 'string'
+    || !isRecord(manifest.semanticState)
     || !isRecord(manifest.retention)
     || typeof manifest.retention.date !== 'string'
     || !Array.isArray(manifest.retention.boundaries)
@@ -463,6 +540,20 @@ async function listLocalFiles(root) {
   }
   await walk(root)
   return files.sort()
+}
+
+async function reachableLocalFiles(root, reachablePaths) {
+  if (!Array.isArray(reachablePaths) || reachablePaths.length === 0) throw new Error('Durable reachable path set is empty')
+  const files = []
+  for (const logicalPath of [...new Set(reachablePaths)].sort()) {
+    const safePath = safeLogicalPath(logicalPath)
+    const path = resolve(root, safePath)
+    assertInside(root, path)
+    const info = await stat(path)
+    if (!info.isFile()) throw new Error(`Durable reachable path is not a file: ${safePath}`)
+    files.push(path)
+  }
+  return files
 }
 
 function categoryFor(path) {

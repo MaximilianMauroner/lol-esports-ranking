@@ -5,7 +5,7 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, writeBucketJson } from './railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
   executeDurableGc,
@@ -47,6 +47,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const publicDataDir = resolve(stringArg(args.publicDataDir ?? env.RANKING_PUBLIC_DATA_DIR ?? 'public/data'))
   const privateStateDir = resolve(stringArg(env.RANKING_INCREMENTAL_STATE_DIR ?? '.ranking-crunch'))
   const durableCandidatePath = resolve(privateStateDir, 'durable-candidate.json')
+  const crunchReceiptPath = resolve(privateStateDir, 'durable-crunch-receipt.json')
   const end = stringArg(args.end ?? env.RANKING_REFRESH_END ?? today())
   const force = booleanArg(args.force) || env.RANKING_FORCE_REFRESH === 'true'
   const skipCrunch = booleanArg(args.skipCrunch) || env.RANKING_SKIP_CRUNCH === 'true'
@@ -132,7 +133,11 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       }
     }
 
-    const fingerprint = await createSourceFingerprint(stagingManifest)
+    const fingerprint = await createSourceFingerprint(stagingManifest, {
+      additionalFiles: env.RANKING_STATIC_PLAYER_JSON
+        ? [{ kind: 'static-player-rosters', path: resolve(env.RANKING_STATIC_PLAYER_JSON) }]
+        : [],
+    })
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
 
     if (!changed) {
@@ -210,7 +215,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
 
     if (!skipCrunch) {
       await rm(durableCandidatePath, { force: true })
-      await (options.run ?? runCommand)('pnpm', [
+      await rm(crunchReceiptPath, { force: true })
+      const buildArgs = [
         'exec',
         'tsx',
         'scripts/build-static-snapshot.ts',
@@ -224,8 +230,15 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         reconciliationOutput,
         '--durable-candidate-output',
         durableCandidatePath,
-      ])
+        '--receipt',
+        crunchReceiptPath,
+      ]
+      if (env.RANKING_STATIC_PLAYER_JSON) buildArgs.push('--static-player-json', env.RANKING_STATIC_PLAYER_JSON)
+      await (options.run ?? runCommand)('pnpm', buildArgs)
     }
+
+    const crunchReceipt = skipCrunch ? undefined : await readJsonIfExists(crunchReceiptPath)
+    if (crunchReceipt) state.crunch.receipt = crunchReceipt
 
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
 
@@ -243,11 +256,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           console.warn(`Railway bucket upload skipped; missing ${bucketConfig.missing.join(', ')}.`)
         }
       } else {
-        const browserManifest = await readJson(resolve(publicDataDir, 'ranking-summary.json'))
-        const generationId = env.RANKING_REFRESH_FENCING_TOKEN
+        const durableCandidate = validateDurableCandidateReceipt(await readJsonIfExists(durableCandidatePath))
+        const semanticNoChange = durableCandidate?.eligibility === 'no-change'
+        const browserManifest = semanticNoChange ? undefined : await readJson(resolve(publicDataDir, 'ranking-summary.json'))
+        const generationId = !semanticNoChange && env.RANKING_REFRESH_FENCING_TOKEN
           ? stringArg(browserManifest?.artifactMeta?.runId)
           : undefined
-        const durableCandidate = await readJsonIfExists(durableCandidatePath)
+        const eligibleCandidate = durableCandidate?.eligibility === 'eligible' ? durableCandidate : undefined
         const bucketPublish = await uploadRankingArtifacts({
           publicDataDir,
           rawDir,
@@ -258,18 +273,19 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           client: options.bucketClient,
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
           generationId,
+          publishGeneration: !semanticNoChange,
           fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
-          ...(durableCandidate ? {
+          ...(eligibleCandidate ? {
             privateState: {
-              manifestKey: durableCandidate.manifestKey,
-              manifestDigest: durableCandidate.manifestDigest,
-              manifestBytes: durableCandidate.manifestBytes,
-              stateRoot: durableCandidate.stateRoot,
-              identityHash: durableCandidate.identityHash,
+              manifestKey: eligibleCandidate.manifestKey,
+              manifestDigest: eligibleCandidate.manifestDigest,
+              manifestBytes: eligibleCandidate.manifestBytes,
+              stateRoot: eligibleCandidate.stateRoot,
+              identityHash: eligibleCandidate.identityHash,
             },
             rolloutForActive: (previousRollout) => recordRolloutOutcome(previousRollout, {
-              identityHash: durableCandidate.identityHash,
-              parity: durableCandidate.parity,
+              identityHash: eligibleCandidate.identityHash,
+              parity: eligibleCandidate.parity,
               at: new Date().toISOString(),
             }),
           } : {}),
@@ -309,13 +325,14 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             },
           } : {}),
         }
-        if (durableCandidate && generationId) {
+        if (eligibleCandidate && generationId) {
           try {
             const activeAfterPublish = await readBucketJson('active-generation.json', { config: bucketConfig, client: options.bucketClient })
             const durableStore = createRailwayDurableObjectStore({ config: bucketConfig, client: options.bucketClient })
             const gcPlan = await planDurableGc({
               store: durableStore,
               activePointer: activeAfterPublish.value,
+              activeEtag: activeAfterPublish.etag,
               now: new Date().toISOString(),
               recentDays: positiveInteger(env.RANKING_DURABLE_RETENTION_DAYS) ?? 35,
             })
@@ -329,6 +346,17 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             console.error(`Durable post-commit GC failed: ${errorMessage(error)}`)
           }
         }
+        if (crunchReceipt?.durable) {
+          crunchReceipt.durable.promotion = semanticNoChange
+            ? 'no-change'
+            : bucketPublish.promotion?.promoted ? 'promoted'
+              : bucketPublish.promotion?.idempotent ? 'no-change'
+                : 'not-attempted'
+          crunchReceipt.durable.gc = state.bucket.durable?.gc ?? { planned: 0, deleted: 0, skipped: 0 }
+          state.crunch.receipt = crunchReceipt
+          await writeFile(crunchReceiptPath, `${JSON.stringify(crunchReceipt, null, 2)}\n`)
+        }
+        await writeBucketJson('raw/refresh-state.json', state, { config: bucketConfig, client: options.bucketClient })
         const optionalSkippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
         console.log(`Uploaded ${bucketPublish.uploadedCount} ranking artifact(s) (${bucketPublish.uploadedBytes} bytes); reused ${bucketPublish.unchangedCount} unchanged artifact(s) (${bucketPublish.unchangedBytes} bytes) in Railway bucket prefix ${bucketPublish.prefix || '(root)'}${optionalSkippedMessage}.`)
       }
@@ -352,7 +380,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   }
 }
 
-export async function createSourceFingerprint(manifest) {
+export async function createSourceFingerprint(manifest, { additionalFiles = [] } = {}) {
   const files = []
   for (const [kind, paths] of Object.entries(manifest?.files ?? {})) {
     if (!Array.isArray(paths)) continue
@@ -363,6 +391,9 @@ export async function createSourceFingerprint(manifest) {
         digest: await digestSourceFile(path),
       })
     }
+  }
+  for (const file of additionalFiles) {
+    files.push({ kind: file.kind, name: basename(file.path), digest: await digestSourceFile(file.path) })
   }
 
   files.sort((left, right) => `${left.kind}:${left.name}`.localeCompare(`${right.kind}:${right.name}`))
@@ -775,6 +806,24 @@ function positiveInteger(value) {
     throw new Error(`Expected a positive integer, received ${value}`)
   }
   return number
+}
+
+function validateDurableCandidateReceipt(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || value.schemaVersion !== 1
+    || (value.eligibility !== 'eligible' && value.eligibility !== 'no-change' && value.eligibility !== 'ineligible')
+    || typeof value.outcome !== 'string'
+    || !value.identity || typeof value.identity !== 'object' || Array.isArray(value.identity)
+    || typeof value.identityHash !== 'string'
+    || value.identityHash !== sha256(stableJson(value.identity))) return undefined
+  if (value.eligibility === 'eligible' && (typeof value.manifestKey !== 'string'
+    || typeof value.manifestDigest !== 'string'
+    || typeof value.manifestBytes !== 'number'
+    || typeof value.stateRoot !== 'string'
+    || !value.metrics || typeof value.metrics !== 'object'
+    || !value.parity || typeof value.parity !== 'object')) return undefined
+  if (value.eligibility === 'no-change' && typeof value.stateRoot !== 'string') return undefined
+  return value
 }
 
 function errorMessage(error) {

@@ -79,6 +79,7 @@ export function uploadRankingArtifacts(options?: {
   privateState?: Record<string, unknown>
   rollout?: Record<string, unknown>
   rolloutForActive?: (previous: unknown) => Record<string, unknown>
+  publishGeneration?: boolean
 }): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>

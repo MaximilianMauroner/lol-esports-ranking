@@ -87,6 +87,29 @@ test('generation publication uploads immutable data before promoting one pointer
       config,
       client,
     })
+    const retry = await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'run-2',
+      fencingToken: 5,
+      config,
+      client,
+    })
+    assert.equal((retry.promotion as { idempotent?: boolean }).idempotent, true)
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'equal-fence-different-run',
+      fencingToken: 5,
+      config,
+      client,
+    }), /Equal fencing token/)
+    await writeFile(join(publicDir, 'scopes', 'all.json'), '{"matchCount":2}\n')
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'run-2',
+      fencingToken: 6,
+      config,
+      client,
+    }), /Immutable generation object collision/)
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'stale-run',

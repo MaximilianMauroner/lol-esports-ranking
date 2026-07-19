@@ -1,195 +1,426 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { decodePrivateState, encodePrivateState } from '../src/lib/incremental/canonicalCodec.ts'
-import { assertCrunchParity } from '../src/lib/incremental/parity.ts'
-import {
-  createIncrementalSnapshotModelProvider,
-  type PersistedSnapshotModelState,
-} from '../src/lib/incremental/snapshotInputs.ts'
-import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
-import type { PlayerProfile, Role } from '../src/types.ts'
-import {
-  createMemoryDurableObjectStore,
-  promoteDurableGeneration,
-  restoreDurableGeneration,
-  stageDurableGeneration,
-  type DurableIdentity,
-} from './durable-ranking-state.mjs'
-import {
-  fixedIncrementalFixture,
-  mutateIncrementalFixture,
-  type IncrementalFixture,
-} from '../tests/fixtures/incrementalRankingFixtures.ts'
+import { bucketConfigFromEnv, createBucketClient } from './railway-bucket.mjs'
+import { refreshDataIfChanged } from './refresh-data-if-changed.mjs'
 
-type BenchmarkScenario = {
-  name: 'no-change' | 'append' | 'old-correction' | 'context-only' | 'static-player-change' | 'cold-restore'
-  fixture: IncrementalFixture
-  rosters: Record<string, PlayerProfile[]>
-  coldRestore?: boolean
-}
+type ScenarioName = 'no-change' | 'append' | 'old-correction' | 'context-only' | 'static-player-change' | 'cold-restore'
+type StoredObject = { bytes: Buffer; etag: string; metadata: Record<string, string> }
 
-const identity: DurableIdentity = {
-  compatibilityHash: 'phase5-benchmark',
-  pipelineVersion: 'incremental-canonical-v2',
-  codeHash: 'benchmark-code',
-  modelVersion: 'transparent-gpr-v2',
-  modelConfigHash: 'benchmark-config',
-}
+const header = 'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold'
+const gameOne = [
+  'g1,2026-01-10,2026,LCK,Spring,0,26.1,team,Blue,Gen.G,1,18,65000',
+  'g1,2026-01-10,2026,LCK,Spring,0,26.1,team,Red,T1,0,12,59000',
+]
+const gameTwo = [
+  'g2,2026-01-17,2026,LCK,Spring,0,26.1,team,Blue,T1,1,19,66000',
+  'g2,2026-01-17,2026,LCK,Spring,0,26.1,team,Red,Gen.G,0,10,58000',
+]
+const gameThree = [
+  'g3,2026-01-24,2026,LCK,Spring,0,26.1,team,Blue,Gen.G,1,20,67000',
+  'g3,2026-01-24,2026,LCK,Spring,0,26.1,team,Red,T1,0,11,57000',
+]
+const gameFour = [
+  'g4,2026-01-31,2026,LCK,Spring,0,26.1,team,Blue,T1,1,21,68000',
+  'g4,2026-01-31,2026,LCK,Spring,0,26.1,team,Red,Gen.G,0,9,56000',
+]
 
 export async function runDurableBenchmark() {
-  const root = await mkdtemp(join(tmpdir(), 'ranking-durable-benchmark-'))
-  const stateDir = join(root, 'state')
-  const restoredDir = join(root, 'restored')
-  const store = createMemoryDurableObjectStore()
-  try {
-    const base = fixedIncrementalFixture()
-    const baseRosters = staticRosters()
-    const baseProvider = createIncrementalSnapshotModelProvider({ compatibilityHash: identity.compatibilityHash })
-    createStaticRankingData(snapshotInput(base, baseRosters, baseProvider, 'benchmark-base'))
-    const baseState = baseProvider.persistedState()
-    await writePrivateProviderState(stateDir, baseState)
-    const initial = await stageDurableGeneration({
-      store,
-      stateDir,
-      identity,
-      generatedAt: '2026-07-19T00:00:00.000Z',
-      parity: { result: 'match' },
-    })
-    await promoteDurableGeneration({
-      store,
-      candidate: initial,
-      fencingToken: 1,
-      generationId: 'benchmark-base',
-      promotedAt: '2026-07-19T00:00:01.000Z',
-      parityOutcome: { result: 'match' },
-    })
+  const allScenarios: ScenarioName[] = ['no-change', 'append', 'old-correction', 'context-only', 'static-player-change', 'cold-restore']
+  const selected = process.env.RANKING_BENCHMARK_SCENARIO
+  const scenarios = selected && allScenarios.includes(selected as ScenarioName) ? [selected as ScenarioName] : allScenarios
+  const rows = []
+  for (const scenario of scenarios) rows.push(await runScenario(scenario))
+  return { schemaVersion: 2, scenarios: rows }
+}
 
-    const scenarios: BenchmarkScenario[] = [
-      { name: 'no-change', fixture: base, rosters: baseRosters },
-      { name: 'append', fixture: mutateIncrementalFixture(base, 'append'), rosters: baseRosters },
-      { name: 'old-correction', fixture: mutateIncrementalFixture(base, 'correction'), rosters: baseRosters },
-      { name: 'context-only', fixture: mutateIncrementalFixture(base, 'tournament-completion'), rosters: baseRosters },
-      { name: 'static-player-change', fixture: base, rosters: renamedStaticRoster(baseRosters) },
-      { name: 'cold-restore', fixture: base, rosters: baseRosters, coldRestore: true },
-    ]
-    const rows = []
-    for (const [index, scenario] of scenarios.entries()) {
-      const previous = scenario.coldRestore
-        ? await restoredProviderState(store, restoredDir)
-        : baseState
-      const provider = createIncrementalSnapshotModelProvider({ compatibilityHash: identity.compatibilityHash, previous })
-      const runId = `benchmark-${scenario.name}`
-      const common = snapshotInput(scenario.fixture, scenario.rosters, undefined, runId)
-      const reference = createStaticRankingData(common)
-      const candidate = createStaticRankingData({ ...common, modelProvider: provider })
-      const runMetadata = common.runMetadata
-      const referencePlan = createPublicArtifactWritePlan(reference, { runMetadata })
-      const candidatePlan = createPublicArtifactWritePlan(candidate, { runMetadata })
-      assertCrunchParity(
-        { fullSnapshot: reference, publicWrites: referencePlan.writes },
-        { fullSnapshot: candidate, publicWrites: candidatePlan.writes },
-      )
-      const metrics = provider.metrics()
-      assert.equal(metrics.directRankingBuilds, 0)
-      assert.equal(metrics.directPlayerBuilds, 0)
-      await writePrivateProviderState(stateDir, provider.persistedState())
-      const staged = await stageDurableGeneration({
-        store,
-        stateDir,
-        identity,
-        generatedAt: `2026-07-${String(20 + index).padStart(2, '0')}T00:00:00.000Z`,
-        parity: { result: 'match', scenario: scenario.name },
-      })
-      rows.push({
-        scenario: scenario.name,
-        publicBytes: referencePlan.writes.reduce((sum, write) => sum + Buffer.byteLength(write.contents), 0),
-        rankingRequests: metrics.rankingRequests,
-        rankingRuns: metrics.rankingReducerRuns,
-        rankingRows: metrics.rankingRows,
-        playerRequests: metrics.playerRequests,
-        playerRuns: metrics.playerReducerRuns,
-        playerRows: metrics.playerRows,
-        resultCacheHits: metrics.rankingResultCacheHits + metrics.playerResultCacheHits,
-        uploadedObjects: staged.metrics.uploadedObjects,
-        uploadedBytes: staged.metrics.uploadedBytes,
-        skippedObjects: staged.metrics.skippedObjects,
-        skippedBytes: staged.metrics.skippedBytes,
-      })
+async function runScenario(scenario: ScenarioName) {
+  const root = await mkdtemp(join(tmpdir(), `ranking-durable-production-${scenario}-`))
+  const s3 = await startMemoryS3()
+  try {
+    const baseEnv = bucketEnv(s3.endpoint)
+    let activeGeneration = ''
+    for (let run = 1; run <= 3; run += 1) {
+      const metadata = runMetadata(scenario, `shadow-${run}`)
+      const result = await productionRefresh({ root, s3, scenario, phase: 'base', mode: 'incremental-shadow', fence: run, metadata, baseEnv, force: true })
+      if (!result.hasPrivateState) throw new Error(`Shadow bootstrap did not publish private state: ${JSON.stringify(result.candidate)}`)
+      activeGeneration = result.activeGeneration
+      await removeContainerState(root)
     }
-    const noChange = rows.find((row) => row.scenario === 'no-change')
-    assert.ok(noChange)
-    assert.equal(noChange.rankingRuns, 0)
-    assert.equal(noChange.playerRuns, 0)
-    return { schemaVersion: 1, scenarios: rows }
+    const finalMetadata = runMetadata(scenario, 'final')
+    const final = await productionRefresh({ root, s3, scenario, phase: 'changed', mode: 'incremental', fence: 4, metadata: finalMetadata, baseEnv, force: false })
+    const preservedGeneration = final.activeGeneration === activeGeneration
+    const expectedGeneration = final.activeGeneration
+    if (scenario === 'no-change' && final.activeGeneration !== activeGeneration) {
+      throw new Error(`Semantic no-change promoted unexpectedly: ${JSON.stringify(final.receipt)}`)
+    }
+    const fullMetadata = preservedGeneration ? runMetadata(scenario, 'shadow-3') : finalMetadata
+    const fullDir = join(root, 'full-public')
+    const fullRaw = await materializeInputs(root, scenario, 'changed', 'full-input', 3)
+    await runBuild([
+      '--full',
+      '--manifest', fullRaw.manifest,
+      '--output', join(root, 'full.json'),
+      '--public-data-dir', fullDir,
+      '--generated-at', fullMetadata.generatedAt,
+      '--run-id', fullMetadata.runId,
+      '--static-player-json', fullRaw.rosters,
+    ], { ...baseEnv, RANKING_DURABLE_STATE_ENABLED: 'false' })
+    assertPublicTreesEqual(await publicTreeFromBucket(s3.objects, expectedGeneration), await publicTreeFromDirectory(fullDir))
+    const receipt = final.receipt
+    const durable = record(receipt.durable)
+    const snapshotInputs = record(receipt.snapshotInputs)
+    const artifacts = record(receipt.artifacts)
+    const bucket = record(receipt.bucket)
+    if (scenario === 'no-change') {
+      assert.equal(durable.promotion, 'no-change')
+      assert.equal(number(durable.uploadedObjects), 0)
+      assert.equal(number(durable.uploadedBytes), 0)
+      assert.equal(number(artifacts.regenerated), 0)
+      assert.equal(number(snapshotInputs.rankingReducerRuns), 0)
+      assert.equal(number(snapshotInputs.playerReducerRuns), 0)
+    }
+    return {
+      scenario,
+      promotion: durable.promotion,
+      publicUploads: final.publicUploads,
+      privateUploadedObjects: number(durable.uploadedObjects),
+      privateUploadedBytes: number(durable.uploadedBytes),
+      restoredBytes: number(durable.restoredBytes),
+      stateBytesRead: number(bucket.bytesRead),
+      stateBytesWritten: number(bucket.bytesWritten),
+      rankingRuns: number(snapshotInputs.rankingReducerRuns),
+      rankingRows: number(snapshotInputs.rankingRows),
+      playerRuns: number(snapshotInputs.playerReducerRuns),
+      playerRows: number(snapshotInputs.playerRows),
+      cacheHits: number(snapshotInputs.rankingResultCacheHits) + number(snapshotInputs.playerResultCacheHits),
+      artifactWrites: number(artifacts.regenerated),
+      gc: durable.gc,
+    }
   } finally {
+    await s3.close()
     await rm(root, { recursive: true, force: true })
   }
 }
 
-async function restoredProviderState(store: ReturnType<typeof createMemoryDurableObjectStore>, restoredDir: string) {
-  const restore = await restoreDurableGeneration({ store, stateDir: restoredDir, expectedIdentity: identity })
-  assert.equal(restore.restored, true)
-  const contents = await readFile(join(restoredDir, 'snapshot-models', 'provider-state.json'), 'utf8')
-  return parsePersistedProviderState(decodePrivateState(contents))
-}
-
-async function writePrivateProviderState(stateDir: string, state: PersistedSnapshotModelState) {
-  await mkdir(join(stateDir, 'snapshot-models'), { recursive: true })
-  await writeFile(join(stateDir, 'active-generation.json'), 'benchmark-active\n')
-  await writeFile(join(stateDir, 'snapshot-models', 'provider-state.json'), encodePrivateState(state))
-}
-
-function parsePersistedProviderState(value: unknown): PersistedSnapshotModelState {
-  assert.equal(typeof value, 'object')
-  assert.notEqual(value, null)
-  assert.equal(Array.isArray(value), false)
-  const state = value as Partial<PersistedSnapshotModelState>
-  assert.equal(state.schemaVersion, 1)
-  assert.ok(state.rankingCatalogs instanceof Map)
-  assert.ok(state.playerCatalogs instanceof Map)
-  assert.ok(state.rankingResults instanceof Map)
-  assert.ok(state.playerResults instanceof Map)
-  return state as PersistedSnapshotModelState
-}
-
-function snapshotInput(
-  fixture: IncrementalFixture,
-  rosters: Record<string, PlayerProfile[]>,
-  modelProvider: ReturnType<typeof createIncrementalSnapshotModelProvider> | undefined,
-  runId: string,
-) {
+async function productionRefresh(options: {
+  root: string
+  s3: Awaited<ReturnType<typeof startMemoryS3>>
+  scenario: ScenarioName
+  phase: 'base' | 'changed'
+  mode: 'incremental-shadow' | 'incremental'
+  fence: number
+  metadata: { generatedAt: string; runId: string }
+  baseEnv: NodeJS.ProcessEnv
+  force: boolean
+}) {
+  const container = join(options.root, `container-${options.fence}`)
+  const rawDir = join(container, 'raw')
+  const publicDir = join(container, 'public')
+  const stateDir = join(container, 'private')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const rosterPath = join(container, 'rosters.json')
+  const beforePublicPuts = options.s3.putKeys.filter((key) => key.includes('/generations/') && key.includes('/data/')).length
+  const env: NodeJS.ProcessEnv = {
+    ...options.baseEnv,
+    RANKING_CRUNCH_MODE: options.mode,
+    RANKING_INCREMENTAL_STATE_DIR: stateDir,
+    RANKING_STATIC_PLAYER_JSON: rosterPath,
+    RANKING_REFRESH_FENCING_TOKEN: String(options.fence),
+    RANKING_BUCKET_RESTORE_RAW: 'true',
+    RANKING_DURABLE_GC_DRY_RUN: 'false',
+  }
+  await refreshDataIfChanged([
+    '--raw-dir', rawDir,
+    '--manifest', join(rawDir, 'manifest.json'),
+    '--state', statePath,
+    '--output', join(container, 'snapshot.json'),
+    '--public-data-dir', publicDir,
+    '--staging-dir', join(container, 'staging'),
+    '--end', '2026-07-19',
+    ...(options.force ? ['--force'] : []),
+  ], {
+    env,
+    bucketConfig: bucketConfigFromEnv(env),
+    bucketClient: createBucketClient(bucketConfigFromEnv(env)),
+    run: async (command: string, args: string[]) => {
+      if (args.includes('scripts/download-local-data.mjs')) {
+        const outputDir = valueAfter(args, '--out-dir')
+        const inputs = await materializeInputs(options.root, options.scenario, options.phase, relative(options.root, outputDir), options.fence)
+        await copyInputs(inputs, outputDir, rosterPath)
+        return
+      }
+      assert.equal(command, 'pnpm')
+      await runBuild([...args.slice(args.indexOf('scripts/build-static-snapshot.ts') + 1),
+        '--generated-at', options.metadata.generatedAt,
+        '--run-id', options.metadata.runId,
+      ], env)
+    },
+  })
+  const active = JSON.parse(Buffer.from(requiredObject(options.s3.objects, 'bucket/rankings/active-generation.json').bytes).toString('utf8'))
+  const state = JSON.parse(await readFile(statePath, 'utf8'))
+  const candidate = JSON.parse(await readFile(join(stateDir, 'durable-candidate.json'), 'utf8'))
   return {
-    matches: fixture.matches,
-    teams: fixture.teams,
-    rosters,
-    runMetadata: { generatedAt: '2026-07-19T00:00:00.000Z', runId },
-    source: 'phase5 benchmark fixture',
-    dataMode: 'scheduled-public-data' as const,
-    tournamentScheduleReferences: fixture.scheduleReferences,
-    ...(modelProvider ? { modelProvider } : {}),
+    activeGeneration: String(active.generationId),
+    hasPrivateState: Boolean(active.privateState),
+    candidate,
+    receipt: record(record(state.crunch).receipt),
+    publicUploads: options.s3.putKeys.filter((key) => key.includes('/generations/') && key.includes('/data/')).length - beforePublicPuts,
   }
 }
 
-function staticRosters(): Record<string, PlayerProfile[]> {
-  const roles: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
-  return Object.fromEntries(['Gen.G', 'T1'].map((team) => [team, roles.map((role) => ({
-    id: `${team}-${role}`,
-    name: `${team} ${role}`,
-    team,
-    role,
-  }))]))
+async function materializeInputs(root: string, scenario: ScenarioName, phase: 'base' | 'changed', name: string, bootstrapStep: number) {
+  const dir = resolve(root, name)
+  const oracleDir = join(dir, 'oracles-elixir')
+  const lolDir = join(dir, 'lol-esports')
+  await mkdir(oracleDir, { recursive: true })
+  await mkdir(lolDir, { recursive: true })
+  const oracle = join(oracleDir, '2026.csv')
+  const lolesports = join(lolDir, 'schedule.json')
+  const rosters = join(dir, 'rosters.json')
+  await writeFile(oracle, oracleContents(scenario, phase, bootstrapStep))
+  await writeFile(lolesports, `${JSON.stringify(scheduleContents(scenario, phase), null, 2)}\n`)
+  await writeFile(rosters, `${JSON.stringify(rosterContents(scenario, phase), null, 2)}\n`)
+  const manifest = join(dir, 'manifest.json')
+  await writeFile(manifest, `${JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: '2026-07-19T00:00:00.000Z',
+    start: '2026-01-01',
+    end: '2026-07-19',
+    files: { oracleCsv: [oracle], leaguepediaJson: [], lolEsportsJson: scenario === 'context-only' && phase === 'changed' ? [lolesports] : [] },
+    sources: {
+      oracle: { status: 'downloaded', downloadedCount: 1, failedCount: 0 },
+      leaguepedia: { status: 'disabled', downloadedCount: 0, failedCount: 0 },
+      lolesports: { status: 'downloaded', downloadedCount: 1, failedCount: 0 },
+    },
+    warnings: [],
+  }, null, 2)}\n`)
+  return { dir, oracle, lolesports, rosters, manifest }
 }
 
-function renamedStaticRoster(rosters: Record<string, PlayerProfile[]>) {
-  return Object.fromEntries(Object.entries(rosters).map(([team, players]) => [team, players.map((player, index) => (
-    team === 'T1' && index === 0 ? { ...player, name: `${player.name} Updated` } : { ...player }
-  ))]))
+async function copyInputs(inputs: Awaited<ReturnType<typeof materializeInputs>>, outputDir: string, rosterPath: string) {
+  const oracle = join(outputDir, 'oracles-elixir', '2026.csv')
+  const schedule = join(outputDir, 'lol-esports', 'schedule.json')
+  await mkdir(dirname(oracle), { recursive: true })
+  await mkdir(dirname(schedule), { recursive: true })
+  await writeFile(oracle, await readFile(inputs.oracle))
+  await writeFile(schedule, await readFile(inputs.lolesports))
+  await mkdir(dirname(rosterPath), { recursive: true })
+  await writeFile(rosterPath, await readFile(inputs.rosters))
+  const manifest = JSON.parse(await readFile(inputs.manifest, 'utf8'))
+  manifest.files.oracleCsv = [oracle]
+  manifest.files.lolEsportsJson = manifest.files.lolEsportsJson.length > 0 ? [schedule] : []
+  await writeFile(join(outputDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  console.log(JSON.stringify(await runDurableBenchmark(), null, 2))
+function oracleContents(scenario: ScenarioName, phase: 'base' | 'changed', bootstrapStep: number) {
+  let rows = [...gameOne, ...(bootstrapStep >= 2 ? gameTwo : []), ...(bootstrapStep >= 3 ? gameThree : [])]
+  if (phase === 'changed' && scenario === 'append') rows.push(...gameFour)
+  if (phase === 'changed' && scenario === 'old-correction') {
+    rows = rows.map((row) => row.includes(',Blue,Gen.G,1,') ? row.replace(',Blue,Gen.G,1,', ',Blue,Gen.G,0,') : row.replace(',Red,T1,0,', ',Red,T1,1,'))
+  }
+  const suffix = phase === 'changed' && (scenario === 'no-change' || scenario === 'cold-restore') ? '\n' : ''
+  return [header, ...rows].join('\n') + suffix
 }
+
+function scheduleContents(scenario: ScenarioName, phase: 'base' | 'changed') {
+  const completed = scenario === 'context-only' && phase === 'changed'
+  return {
+    source: 'benchmark',
+    fetchedAt: '2026-07-19T00:00:00.000Z',
+    events: [{
+      startTime: '2026-01-10T12:00:00Z',
+      state: completed ? 'completed' : 'unstarted',
+      type: 'match',
+      league: { name: 'LCK', slug: 'lck' },
+      match: {
+        id: 'official-g1',
+        teams: [
+          { name: 'Gen.G', result: { outcome: completed ? 'win' : null, gameWins: completed ? 1 : 0 } },
+          { name: 'T1', result: { outcome: completed ? 'loss' : null, gameWins: 0 } },
+        ],
+        strategy: { type: 'bestOf', count: 1 },
+      },
+    }],
+  }
+}
+
+function rosterContents(scenario: ScenarioName, phase: 'base' | 'changed') {
+  const changed = scenario === 'static-player-change' && phase === 'changed'
+  return {
+    'Gen.G': [{ id: 'gen-top', name: changed ? 'Kiin Updated' : 'Kiin', team: 'Gen.G', role: 'Top' }],
+    T1: [{ id: 't1-top', name: 'Doran', team: 'T1', role: 'Top' }],
+  }
+}
+
+function runMetadata(scenario: ScenarioName, phase: string) {
+  const index = ['shadow-1', 'shadow-2', 'shadow-3', 'final'].indexOf(phase) + 1
+  return { generatedAt: `2026-07-${String(10 + index).padStart(2, '0')}T00:00:00.000Z`, runId: `${scenario}-${phase}` }
+}
+
+async function runBuild(args: string[], env: NodeJS.ProcessEnv) {
+  await new Promise<void>((resolvePromise, reject) => {
+    const child = spawn('pnpm', ['exec', 'tsx', 'scripts/build-static-snapshot.ts', ...args], {
+      cwd: process.cwd(), env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stderr = ''
+    child.stderr.on('data', (chunk) => { stderr += String(chunk) })
+    child.on('error', reject)
+    child.on('exit', (code) => {
+      if (process.env.RANKING_DEBUG_PARITY === 'true' && stderr) process.stderr.write(stderr)
+      if (code === 0) resolvePromise()
+      else reject(new Error(`build-static-snapshot exited ${code}: ${stderr}`))
+    })
+  })
+}
+
+async function removeContainerState(root: string) {
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name.startsWith('container-')) await rm(join(root, entry.name), { recursive: true, force: true })
+  }
+}
+
+async function publicTreeFromDirectory(root: string) {
+  const result: Record<string, string> = {}
+  const walk = async (dir: string) => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) await walk(path)
+      else result[relative(root, path).split(sep).join('/')] = (await readFile(path)).toString('base64')
+    }
+  }
+  await walk(root)
+  return result
+}
+
+async function publicTreeFromBucket(objects: Map<string, StoredObject>, generationId: string) {
+  const prefix = `bucket/rankings/generations/${generationId}/data/`
+  return Object.fromEntries([...objects.entries()]
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([key, value]) => [key.slice(prefix.length), value.bytes.toString('base64')])
+    .sort(([left], [right]) => left.localeCompare(right)))
+}
+
+async function startMemoryS3() {
+  const objects = new Map<string, StoredObject>()
+  const putKeys: string[] = []
+  let revision = 0
+  const server = createServer(async (request, response) => {
+    try {
+      const url = new URL(request.url ?? '/', 'http://localhost')
+      const key = decodeURIComponent(url.pathname.replace(/^\//, ''))
+      if (request.method === 'GET' && url.searchParams.get('list-type') === '2') return listObjects(response, objects, url.searchParams.get('prefix') ?? '')
+      if (request.method === 'PUT') {
+        const current = objects.get(key)
+        if ((request.headers['if-none-match'] === '*' && current) || (request.headers['if-match'] && request.headers['if-match'] !== current?.etag)) return precondition(response)
+        const bytes = await requestBytes(request)
+        const etag = `"memory-${++revision}"`
+        const metadata = Object.fromEntries(Object.entries(request.headers)
+          .filter(([name, value]) => name.startsWith('x-amz-meta-') && typeof value === 'string')
+          .map(([name, value]) => [name.slice('x-amz-meta-'.length), String(value)]))
+        objects.set(key, { bytes, etag, metadata })
+        putKeys.push(key)
+        response.writeHead(200, { etag })
+        return response.end()
+      }
+      if (request.method === 'GET' || request.method === 'HEAD') {
+        const object = objects.get(key)
+        if (!object) return missing(response)
+        response.writeHead(200, { etag: object.etag, 'content-length': object.bytes.byteLength, ...Object.fromEntries(Object.entries(object.metadata).map(([name, value]) => [`x-amz-meta-${name}`, value])) })
+        return response.end(request.method === 'HEAD' ? undefined : object.bytes)
+      }
+      if (request.method === 'DELETE') {
+        objects.delete(key)
+        response.writeHead(204)
+        return response.end()
+      }
+      response.writeHead(400)
+      response.end()
+    } catch (error) {
+      response.writeHead(500)
+      response.end(error instanceof Error ? error.message : String(error))
+    }
+  })
+  await new Promise<void>((resolvePromise) => server.listen(0, '127.0.0.1', resolvePromise))
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+  return {
+    endpoint: `http://127.0.0.1:${address.port}`,
+    objects,
+    putKeys,
+    close: () => new Promise<void>((resolvePromise, reject) => server.close((error) => error ? reject(error) : resolvePromise())),
+  }
+}
+
+function listObjects(response: ServerResponse, objects: Map<string, StoredObject>, rawPrefix: string) {
+  const prefix = `bucket/${rawPrefix}`
+  const contents = [...objects.entries()].filter(([key]) => key.startsWith(prefix)).map(([key, object]) => `<Contents><Key>${xml(key.slice('bucket/'.length))}</Key><ETag>${xml(object.etag)}</ETag><Size>${object.bytes.byteLength}</Size></Contents>`).join('')
+  response.writeHead(200, { 'content-type': 'application/xml' })
+  response.end(`<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><Name>bucket</Name><Prefix>${xml(rawPrefix)}</Prefix><IsTruncated>false</IsTruncated>${contents}</ListBucketResult>`)
+}
+
+function precondition(response: ServerResponse) {
+  response.writeHead(412, { 'content-type': 'application/xml' })
+  response.end('<Error><Code>PreconditionFailed</Code></Error>')
+}
+
+function missing(response: ServerResponse) {
+  response.writeHead(404, { 'content-type': 'application/xml' })
+  response.end('<Error><Code>NoSuchKey</Code></Error>')
+}
+
+async function requestBytes(request: IncomingMessage) {
+  const chunks: Buffer[] = []
+  for await (const chunk of request) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
+}
+
+function bucketEnv(endpoint: string): NodeJS.ProcessEnv {
+  return {
+    BUCKET: 'bucket', ENDPOINT: endpoint, REGION: 'us-east-1', ACCESS_KEY_ID: 'test', SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_PREFIX: 'rankings', RANKING_BUCKET_FORCE_PATH_STYLE: 'true', RANKING_BUCKET_UPLOAD_ENABLED: 'true',
+  }
+}
+
+function valueAfter(args: string[], flag: string) {
+  const value = args[args.indexOf(flag) + 1]
+  if (!value) throw new Error(`Missing ${flag}`)
+  return value
+}
+
+function requiredObject(objects: Map<string, StoredObject>, key: string) {
+  const value = objects.get(key)
+  if (!value) throw new Error(`Missing object ${key}`)
+  return value
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function number(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function assertPublicTreesEqual(actual: Record<string, string>, expected: Record<string, string>) {
+  assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort())
+  for (const path of Object.keys(expected).sort()) {
+    const actualBytes = Buffer.from(actual[path] ?? '', 'base64')
+    const expectedBytes = Buffer.from(expected[path] ?? '', 'base64')
+    if (actualBytes.equals(expectedBytes)) continue
+    const shared = Math.min(actualBytes.byteLength, expectedBytes.byteLength)
+    let offset = 0
+    while (offset < shared && actualBytes[offset] === expectedBytes[offset]) offset += 1
+    throw new Error(`Public tree mismatch ${path} at byte ${offset} (${actualBytes.byteLength} != ${expectedBytes.byteLength})`)
+  }
+}
+
+function xml(value: string) {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) console.log(JSON.stringify(await runDurableBenchmark(), null, 2))

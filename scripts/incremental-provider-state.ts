@@ -111,6 +111,18 @@ type StateGeneration = {
   snapshotModelCache?: { cacheHash: string; rankingResults: number; playerResults: number }
 }
 
+export type IncrementalStateTreeSummary = {
+  generationHash: string
+  compatibilityHash: string
+  canonicalRoot: string
+  contextRoot: string
+  componentRoot: string
+  stateRoot: string
+  reachablePaths: string[]
+  retention: ReducerCheckpointRetention[]
+  retentionBoundaries: Array<{ processedDate?: string; classes: ReducerCheckpointRetention[] }>
+}
+
 type ActiveGenerationPointer = {
   schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
   kind: 'active-generation'
@@ -320,6 +332,44 @@ export async function promoteIncrementalState(promotion: IncrementalStatePromoti
   await stageIncrementalState(promotion)
   await atomicWrite(promotion.pointerWrite)
   return { reducerStateBytesWritten: promotion.reducerStateBytesWritten }
+}
+
+export async function validateIncrementalStateTree(
+  stateDir: string,
+  expectedCompatibilityHash?: string,
+): Promise<IncrementalStateTreeSummary> {
+  const loaded = await loadActiveGeneration(stateDir, { bytesRead: 0 })
+  if (!loaded) throw new Error('No active incremental generation')
+  if (expectedCompatibilityHash !== undefined && loaded.generation.compatibility.hash !== expectedCompatibilityHash) {
+    throw new Error('Incremental generation compatibility hash mismatch')
+  }
+  const pointer = parseActivePointer(decodePrivateState(await readFile(resolve(stateDir, 'active-generation.json'), 'utf8')))
+  return stateTreeSummary(pointer.generationHash, loaded.generation, loaded.canonicalLedger)
+}
+
+export async function describeIncrementalStateTransition(
+  promotion: IncrementalStatePromotion,
+  stateDir: string,
+): Promise<{ previous?: IncrementalStateTreeSummary; next: IncrementalStateTreeSummary; semanticNoChange: boolean }> {
+  const previous = await validateIncrementalStateTree(stateDir).catch(() => undefined)
+  const pointer = parseActivePointer(decodePrivateState(promotion.pointerWrite.contents))
+  const generationPath = resolve(stateDir, 'generations', `${pointer.generationHash}.json`)
+  const generationWrite = promotion.stagedWrites.find((write) => write.path === generationPath)
+  if (!generationWrite) throw new Error('Pending incremental generation is unavailable for transition inspection')
+  const generationEnvelope = decodePrivateState(generationWrite.contents)
+  if (!isRecord(generationEnvelope) || generationEnvelope.kind !== 'state-generation' || !isRecord(generationEnvelope.payload)) {
+    throw new Error('Invalid pending incremental generation envelope')
+  }
+  const generation = generationEnvelope.payload as StateGeneration
+  verifyGeneration(generation)
+  const canonicalPath = resolve(stateDir, 'canonical', 'objects', `${generation.canonical.ledgerHash}.json`)
+  const canonicalWrite = promotion.stagedWrites.find((write) => write.path === canonicalPath)
+  const canonicalLedger = canonicalWrite
+    ? contentPayload<CanonicalLedger>(canonicalWrite.contents, 'canonical-ledger', generation.canonical.ledgerHash)
+    : await readContentObject<CanonicalLedger>(canonicalPath, 'canonical-ledger', generation.canonical.ledgerHash)
+  verifyCanonicalLedger(canonicalLedger)
+  const next = stateTreeSummary(pointer.generationHash, generation, canonicalLedger)
+  return { previous, next, semanticNoChange: previous?.stateRoot === next.stateRoot }
 }
 
 export function attachIncrementalReducerCheckpoint(
@@ -862,6 +912,55 @@ function verifyCanonicalLedger(ledger: CanonicalLedger) {
   if (ledger.rootHash !== recomputeCanonicalRoot(ledger)) throw new Error('Canonical ledger semantic root mismatch')
 }
 
+function stateTreeSummary(generationHash: string, generation: StateGeneration, canonicalLedger: CanonicalLedger): IncrementalStateTreeSummary {
+  const canonicalRoot = canonicalLedger.rootHash
+  const contextRoot = stableHash(canonicalLedger.contextDigests)
+  const componentState = {
+    reducerCheckpoints: generation.reducerCheckpoints ?? [],
+    playerCheckpoints: generation.playerCheckpoints ?? [],
+    snapshotModelCache: generation.snapshotModelCache,
+  }
+  const componentRoot = stableHash(componentState)
+  const stateRoot = stableHash({ canonicalRoot, contextRoot, componentRoot })
+  const reachablePaths = [
+    'active-generation.json',
+    `generations/${generationHash}.json`,
+    ...Object.values(generation.providers).map((entry) => `providers/objects/${entry.ledgerHash}.json`),
+    `canonical/objects/${generation.canonical.ledgerHash}.json`,
+    ...(generation.reducerCheckpoints ?? []).flatMap((entry) => [
+      `reducers/checkpoints/${entry.checkpointHash}.json`,
+      `reducers/journals/histories/${entry.journalHashes.histories}.json`,
+      `reducers/journals/predictions/${entry.journalHashes.predictions}.json`,
+      `reducers/journals/league-history/${entry.journalHashes.leagueHistory}.json`,
+    ]),
+    ...(generation.playerCheckpoints ?? []).flatMap((entry) => [
+      `players/checkpoints/${entry.checkpointHash}.json`,
+      `players/journals/history/${entry.historyHash}.json`,
+    ]),
+    ...(generation.artifactCache ? [`artifacts/caches/${generation.artifactCache.cacheHash}.json`] : []),
+    ...(generation.snapshotModelCache ? [`snapshot-models/caches/${generation.snapshotModelCache.cacheHash}.json`] : []),
+  ]
+  const retention = [...new Set([
+    ...(generation.reducerCheckpoints ?? []).flatMap((entry) => entry.retention),
+    ...(generation.playerCheckpoints ?? []).flatMap((entry) => entry.retention),
+  ])].sort()
+  const retentionBoundaries = [...new Map([
+    ...(generation.reducerCheckpoints ?? []).map((entry) => [`${entry.processedDate ?? ''}:${entry.retention.join(',')}`, { ...(entry.processedDate ? { processedDate: entry.processedDate } : {}), classes: entry.retention }] as const),
+    ...(generation.playerCheckpoints ?? []).map((entry) => [`${entry.processedDate ?? ''}:${entry.retention.join(',')}`, { ...(entry.processedDate ? { processedDate: entry.processedDate } : {}), classes: entry.retention }] as const),
+  ]).values()].toSorted((left, right) => (left.processedDate ?? '').localeCompare(right.processedDate ?? ''))
+  return {
+    generationHash,
+    compatibilityHash: generation.compatibility.hash,
+    canonicalRoot,
+    contextRoot,
+    componentRoot,
+    stateRoot,
+    reachablePaths: [...new Set(reachablePaths)].sort(),
+    retention,
+    retentionBoundaries,
+  }
+}
+
 function recomputeCanonicalRoot(ledger: CanonicalLedger) {
   return stableHash({
     matches: ledger.matches,
@@ -955,6 +1054,15 @@ async function readContentObject<T>(
     ? privateStateHash(value.payload)
     : stableHash(value.payload)
   if (payloadHash !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
+  return value.payload as T
+}
+
+function contentPayload<T>(contents: string, kind: ContentEnvelope['kind'], expectedHash: string): T {
+  const value = decodePrivateState(contents)
+  if (!isRecord(value) || value.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION || value.kind !== kind || value.contentHash !== expectedHash) {
+    throw new Error(`Invalid ${kind} envelope`)
+  }
+  if (stableHash(value.payload) !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
   return value.payload as T
 }
 

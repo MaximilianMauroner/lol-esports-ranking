@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
 
@@ -954,6 +954,67 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
   }
 })
 
+test('refresh rejects absent and corrupt durable candidates while preserving prior private authority', async () => {
+  for (const candidateKind of ['absent', 'corrupt'] as const) {
+    const tempDir = await mkdtemp(join(tmpdir(), `lol-ranking-candidate-${candidateKind}-`))
+    const rawDir = join(tempDir, 'raw')
+    const privateDir = join(tempDir, 'private')
+    const publicDataDir = join(tempDir, 'public')
+    const priorPrivate = { manifestKey: 'private/generations/prior.json', manifestDigest: 'prior', manifestBytes: 10, stateRoot: 'prior-root', identityHash: 'prior-identity' }
+    const client = statefulBucketClient({
+      'rankings/active-generation.json': JSON.stringify({ schemaVersion: 1, generationId: 'prior-run', fencingToken: 3, privateState: priorPrivate }),
+    })
+    await mkdir(privateDir, { recursive: true })
+    await writeFile(join(privateDir, 'durable-candidate.json'), '{"eligibility":"eligible","manifestKey":"stale"}\n')
+    try {
+      await refreshDataIfChanged([
+        '--raw-dir', rawDir,
+        '--manifest', join(rawDir, 'manifest.json'),
+        '--state', join(rawDir, 'refresh-state.json'),
+        '--staging-dir', join(tempDir, 'staging'),
+        '--output', join(tempDir, 'snapshot.json'),
+        '--public-data-dir', publicDataDir,
+        '--end', '2026-06-29',
+      ], {
+        bucketClient: client,
+        env: {
+          RANKING_BUCKET_NAME: 'bucket-123',
+          RANKING_BUCKET_ENDPOINT: 'https://storage.railway.app',
+          RANKING_BUCKET_ACCESS_KEY_ID: 'access-key',
+          RANKING_BUCKET_SECRET_ACCESS_KEY: 'secret-key',
+          RANKING_BUCKET_PREFIX: 'rankings',
+          RANKING_BUCKET_RESTORE_RAW: 'false',
+          RANKING_INCREMENTAL_STATE_DIR: privateDir,
+          RANKING_REFRESH_FENCING_TOKEN: '4',
+        },
+        run: async (_command, args) => {
+          if (args.includes('scripts/download-local-data.mjs')) {
+            const outDir = valueAfter(args, '--out-dir')
+            const oraclePath = join(outDir, 'oracles-elixir', '2026.csv')
+            await mkdir(dirname(oraclePath), { recursive: true })
+            await writeFile(oraclePath, 'gameid,result\nnew,1\n')
+            await writeFile(valueAfter(args, '--manifest'), `${JSON.stringify({ ...manifest(oraclePath), files: { oracleCsv: [oraclePath], leaguepediaJson: [] } })}\n`)
+            return
+          }
+          await mkdir(publicDataDir, { recursive: true })
+          await writeFile(join(publicDataDir, 'ranking-summary.json'), '{"artifactMeta":{"runId":"independent-full"}}\n')
+          await writeFile(join(tempDir, 'snapshot.json'), '{}\n')
+          await writeFile(valueAfter(args, '--receipt'), '{"durable":{"promotion":"staged","gc":{"planned":0,"deleted":0,"skipped":0}}}\n')
+          if (candidateKind === 'corrupt') {
+            await writeFile(valueAfter(args, '--durable-candidate-output'), '{"schemaVersion":1,"eligibility":"eligible","identity":{},"identityHash":"wrong"}\n')
+          }
+        },
+      })
+      const active = JSON.parse(client.text('rankings/active-generation.json'))
+      assert.equal(active.generationId, 'independent-full')
+      assert.equal(active.fencingToken, 4)
+      assert.deepEqual(active.privateState, priorPrivate)
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  }
+})
+
 test('bucket publisher skips full audit artifact upload by default', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-bucket-'))
   const publicDataDir = join(tempDir, 'public-data')
@@ -1275,4 +1336,54 @@ function bucketConfig() {
     prefix: 'rankings',
     forcePathStyle: false,
   }
+}
+
+function statefulBucketClient(initial: Record<string, string>) {
+  const objects = new Map(Object.entries(initial).map(([key, body], index) => [key, { body: Buffer.from(body), etag: `"seed-${index}"` }]))
+  let revision = 0
+  return {
+    text(key: string) {
+      const object = objects.get(key)
+      assert.ok(object)
+      return object.body.toString('utf8')
+    },
+    async send(command: { input: Record<string, unknown> }) {
+      const namedCommand = command as typeof command & { constructor: { name: string } }
+      const key = String(command.input.Key ?? '')
+      const current = objects.get(key)
+      if (namedCommand.constructor.name === 'GetObjectCommand') {
+        if (!current) throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
+        return { Body: Readable.from([current.body]), ETag: current.etag, ContentLength: current.body.byteLength }
+      }
+      if (namedCommand.constructor.name === 'HeadObjectCommand') {
+        if (!current) throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
+        return { ETag: current.etag, ContentLength: current.body.byteLength, Metadata: {} }
+      }
+      if (namedCommand.constructor.name === 'PutObjectCommand') {
+        if ((command.input.IfNoneMatch === '*' && current) || (command.input.IfMatch && command.input.IfMatch !== current?.etag)) {
+          throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
+        }
+        const body = await readableBytes(command.input.Body)
+        const etag = `"state-${++revision}"`
+        objects.set(key, { body, etag })
+        return { ETag: etag }
+      }
+      if (namedCommand.constructor.name === 'ListObjectsV2Command') {
+        const prefix = String(command.input.Prefix ?? '')
+        return { Contents: [...objects].filter(([objectKey]) => objectKey.startsWith(prefix)).map(([Key, object]) => ({ Key, Size: object.body.byteLength })) }
+      }
+      if (namedCommand.constructor.name === 'DeleteObjectCommand') {
+        objects.delete(key)
+        return {}
+      }
+      throw new Error(`Unsupported command ${namedCommand.constructor.name}`)
+    },
+  }
+}
+
+async function readableBytes(value: unknown) {
+  if (typeof value === 'string' || Buffer.isBuffer(value) || value instanceof Uint8Array) return Buffer.from(value)
+  const chunks: Buffer[] = []
+  for await (const chunk of value as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
 }

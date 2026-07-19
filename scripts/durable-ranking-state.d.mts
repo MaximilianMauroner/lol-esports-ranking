@@ -14,6 +14,8 @@ export type DurableObjectStore = {
 }
 
 export type DurableCandidate = {
+  eligibility: 'eligible'
+  outcome: string
   manifest: {
     schemaVersion: 1
     kind: 'durable-ranking-generation'
@@ -21,6 +23,9 @@ export type DurableCandidate = {
     identity: DurableIdentity
     identityHash: string
     stateRoot: string
+    eligibility: 'eligible'
+    outcome: string
+    semanticState: Record<string, unknown>
     retention: { date: string; boundaries: string[] }
     parity: Record<string, unknown>
     audit: { key: string; digest: string; bytes: number }
@@ -46,6 +51,9 @@ export function stageDurableGeneration(options: {
   stateDir: string
   identity: DurableIdentity
   generatedAt: string
+  outcome?: string
+  stateSummary?: Record<string, unknown>
+  reachablePaths?: string[]
   retention?: { date: string; boundaries: string[] }
   parity?: Record<string, unknown>
   prefix?: string
@@ -54,6 +62,7 @@ export function restoreDurableGeneration(options: {
   store: DurableObjectStore
   stateDir: string
   expectedIdentity: DurableIdentity
+  validateStateDir?: (stateDir: string, expectedIdentity: DurableIdentity) => Promise<{ stateRoot: string; compatibilityHash: string }>
   activeKey?: string
 }): Promise<Record<string, unknown> & { restored: boolean }>
 export function promoteDurableGeneration(options: {
@@ -76,5 +85,5 @@ export function decideDurableCrunchMode(options: {
   forceAudit?: boolean
 }): { effectiveMode: 'full' | 'incremental-shadow' | 'incremental'; reason: string; activationEligible: boolean }
 export function recordRolloutOutcome(previous: unknown, options: { identityHash: string; parity?: { result: 'match' | 'mismatch'; audit?: boolean }; at: string }): Record<string, unknown>
-export function planDurableGc(options: { store: DurableObjectStore; activePointer?: Record<string, unknown>; now: string; recentDays?: number; prefix?: string }): Promise<Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number; kind: string }> }>
+export function planDurableGc(options: { store: DurableObjectStore; activePointer?: Record<string, unknown>; activeEtag?: string; activeKey?: string; now: string; recentDays?: number; prefix?: string }): Promise<Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number; kind: string }> }>
 export function executeDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean }): Promise<Record<string, unknown>>
