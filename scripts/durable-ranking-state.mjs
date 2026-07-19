@@ -96,14 +96,13 @@ export async function stageDurableGeneration({
   let uploadedBytes = 0
   let skippedObjects = 0
   let skippedBytes = 0
-  const owner = safeOwnershipId(ownershipId ?? stableHash({ identity, generatedAt, outcome }))
   for (const path of files) {
     const logicalPath = safeLogicalPath(relative(root, path).split(sep).join('/'))
     const bytes = await readFile(path)
     const digest = sha256(bytes)
     const category = categoryFor(logicalPath)
-    const key = `${prefix}/owned/${owner}/objects/${category}/${digest}`
-    const upload = await putImmutable(store, key, bytes, digest)
+    const key = `${prefix}/objects/${category}/${digest}`
+    const upload = await putImmutable(store, key, bytes, digest, 'application/octet-stream', generatedAt)
     if (upload.uploaded) {
       uploadedObjects += 1
       uploadedBytes += bytes.byteLength
@@ -126,8 +125,8 @@ export async function stageDurableGeneration({
   }
   const auditBytes = jsonBytes(audit)
   const auditDigest = sha256(auditBytes)
-  const auditKey = `${prefix}/owned/${owner}/audits/${auditDigest}.json`
-  const auditUpload = await putImmutable(store, auditKey, auditBytes, auditDigest, 'application/json; charset=utf-8')
+  const auditKey = `${prefix}/audits/${auditDigest}.json`
+  const auditUpload = await putImmutable(store, auditKey, auditBytes, auditDigest, 'application/json; charset=utf-8', generatedAt)
   const manifest = {
     schemaVersion: DURABLE_STATE_SCHEMA_VERSION,
     kind: 'durable-ranking-generation',
@@ -135,7 +134,6 @@ export async function stageDurableGeneration({
     identity,
     identityHash,
     stateRoot,
-    ownershipId: owner,
     eligibility: 'eligible',
     outcome,
     semanticState: stateSummary ?? { stateRoot, compatibilityHash: identity.compatibilityHash },
@@ -149,8 +147,8 @@ export async function stageDurableGeneration({
   }
   const manifestBytes = jsonBytes(manifest)
   const manifestDigest = sha256(manifestBytes)
-  const manifestKey = `${prefix}/generations/${owner}/${manifestDigest}.json`
-  const manifestUpload = await putImmutable(store, manifestKey, manifestBytes, manifestDigest, 'application/json; charset=utf-8')
+  const manifestKey = `${prefix}/generations/${manifestDigest}.json`
+  const manifestUpload = await putImmutable(store, manifestKey, manifestBytes, manifestDigest, 'application/json; charset=utf-8', generatedAt)
   return {
     eligibility: 'eligible',
     outcome,
@@ -417,12 +415,13 @@ export async function planDurableGc({
   activeKey = 'active-generation.json',
   now,
   recentDays = 35,
+  stagingGraceMs = 24 * 60 * 60_000,
   prefix = DEFAULT_DURABLE_PREFIX,
 }) {
   const generationEntries = await store.list(`${prefix}/generations`)
   const ownedEntries = await store.list(`${prefix}/owned`)
-  const objectEntries = ownedEntries.filter((entry) => entry.key.includes('/objects/'))
-  const auditEntries = ownedEntries.filter((entry) => entry.key.includes('/audits/'))
+  const objectEntries = await store.list(`${prefix}/objects`)
+  const auditEntries = await store.list(`${prefix}/audits`)
   const activeManifestKey = activePointer?.privateState?.manifestKey
   const authoritativeBoundaryManifests = new Set(
     (Array.isArray(activePointer?.durableHistory) ? activePointer.durableHistory : [])
@@ -430,6 +429,8 @@ export async function planDurableGc({
       .map((entry) => entry.manifestKey),
   )
   const retainedManifests = new Map()
+  const parsedManifests = new Map()
+  const recentLatestByDate = new Map()
   let invalidManifests = 0
   for (const entry of generationEntries) {
     try {
@@ -437,14 +438,22 @@ export async function planDurableGc({
       if (!object.found) continue
       const manifest = parseJsonBytes(object.bytes)
       if (validateManifestShape(manifest)) throw new Error('invalid manifest')
-      const legacy = !isOwnedManifestKey(entry.key, prefix)
+      parsedManifests.set(entry.key, manifest)
+      const legacyOwnerScoped = isOwnedManifestKey(entry.key, prefix)
       const ageMs = new Date(now).getTime() - new Date(`${manifest.retention.date}T00:00:00.000Z`).getTime()
       const permanent = authoritativeBoundaryManifests.has(entry.key)
-      if (legacy || entry.key === activeManifestKey || permanent || ageMs <= recentDays * 24 * 60 * 60_000) retainedManifests.set(entry.key, manifest)
+      if (legacyOwnerScoped || entry.key === activeManifestKey || permanent) retainedManifests.set(entry.key, manifest)
+      else if (ageMs <= recentDays * 24 * 60 * 60_000) {
+        const previous = recentLatestByDate.get(manifest.retention.date)
+        if (!previous || `${manifest.createdAt}:${entry.key}` > `${previous.manifest.createdAt}:${previous.entry.key}`) {
+          recentLatestByDate.set(manifest.retention.date, { entry, manifest })
+        }
+      }
     } catch {
       invalidManifests += 1
     }
   }
+  for (const { entry, manifest } of recentLatestByDate.values()) retainedManifests.set(entry.key, manifest)
   if (activeManifestKey && !retainedManifests.has(activeManifestKey)) {
     return {
       safe: false,
@@ -456,10 +465,18 @@ export async function planDurableGc({
   }
   const reachable = new Set([...retainedManifests.values()].flatMap((manifest) => manifest.objects.map((ref) => ref.key)))
   const reachableAudits = new Set([...retainedManifests.values()].map((manifest) => manifest.audit.key))
+  const nowMs = new Date(now).getTime()
+  const unreferencedObjects = await gcEntriesPastGrace(store, objectEntries.filter((entry) => !reachable.has(entry.key)), nowMs, stagingGraceMs)
+  const unreferencedAudits = await gcEntriesPastGrace(store, auditEntries.filter((entry) => !reachableAudits.has(entry.key)), nowMs, stagingGraceMs)
+  const unretainedManifests = generationEntries.filter((entry) => !isOwnedManifestKey(entry.key, prefix) && !retainedManifests.has(entry.key))
+    .filter((entry) => {
+      const createdAt = parsedManifests.get(entry.key)?.createdAt
+      return typeof createdAt === 'string' && nowMs - new Date(createdAt).getTime() >= stagingGraceMs
+    })
   const plannedDeletes = [
-    ...objectEntries.filter((entry) => !reachable.has(entry.key)).map((entry) => ({ ...entry, kind: 'object' })),
-    ...auditEntries.filter((entry) => !reachableAudits.has(entry.key)).map((entry) => ({ ...entry, kind: 'audit' })),
-    ...generationEntries.filter((entry) => isOwnedManifestKey(entry.key, prefix) && !retainedManifests.has(entry.key)).map((entry) => ({ ...entry, kind: 'manifest' })),
+    ...unreferencedObjects.map((entry) => ({ ...entry, kind: 'object' })),
+    ...unreferencedAudits.map((entry) => ({ ...entry, kind: 'audit' })),
+    ...unretainedManifests.map((entry) => ({ ...entry, kind: 'manifest' })),
   ].sort((left, right) => left.key.localeCompare(right.key))
   return {
     safe: true,
@@ -630,8 +647,27 @@ function isOwnedManifestKey(key, prefix) {
   return relativeKey.split('/').length === 2
 }
 
-async function putImmutable(store, key, bytes, digest, contentType = 'application/octet-stream') {
-  const write = await store.put(key, bytes, { ifAbsent: true, metadata: { sha256: digest }, contentType })
+async function gcEntriesPastGrace(store, entries, nowMs, stagingGraceMs) {
+  const eligible = []
+  for (const entry of entries) {
+    try {
+      const object = await store.get(entry.key)
+      const createdAt = object.metadata?.['created-at']
+      if (object.found && typeof createdAt === 'string'
+        && nowMs - new Date(createdAt).getTime() >= stagingGraceMs) eligible.push(entry)
+    } catch {
+      // Missing or unreadable age fails closed; a staged graph may still reference this object.
+    }
+  }
+  return eligible
+}
+
+async function putImmutable(store, key, bytes, digest, contentType = 'application/octet-stream', createdAt) {
+  const write = await store.put(key, bytes, {
+    ifAbsent: true,
+    metadata: { sha256: digest, ...(createdAt ? { 'created-at': createdAt } : {}) },
+    contentType,
+  })
   if (write.written) return { uploaded: true }
   if (!write.conflict) throw new Error(`Unable to upload durable object ${key}`)
   const existing = await store.get(key)

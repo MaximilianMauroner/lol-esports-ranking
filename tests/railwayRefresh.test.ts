@@ -182,7 +182,7 @@ test('source fingerprint separates provider health noise from ranking content', 
   }
 })
 
-test('refresh wrapper skips crunch when staged source digest is unchanged', async () => {
+test('refresh wrapper runs semantic preflight when staged source digest is unchanged', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-refresh-'))
   const rawDir = join(tempDir, 'raw')
   const manifestPath = join(rawDir, 'manifest.json')
@@ -315,7 +315,7 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
     assert.equal(first.changed, true)
     assert.equal(second.changed, false)
     assert.equal(first.durableCandidate.kind, 'produced')
-    assert.deepEqual(second.durableCandidate, { kind: 'not-produced', reason: 'unchanged-source-data' })
+    assert.equal(second.durableCandidate.kind, 'produced')
     assert.equal(third.changed, true)
     assert.equal(fourth.status, 'stale-source')
     assert.equal(fifth.changed, false)
@@ -323,14 +323,13 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
     assert.equal(typeof second.healthFingerprint, 'string')
     assert.notEqual(first.healthFingerprint, second.healthFingerprint)
     assert.notEqual(second.fingerprint, third.fingerprint)
-    assert.equal(crunchCount, 2)
+    assert.equal(crunchCount, 4)
     assert.equal(outageState.fingerprint, third.fingerprint)
-    assert.equal(unchangedState.status, 'unchanged')
+    assert.equal(unchangedState.status, 'preflight')
     assert.deepEqual(unchangedState.warnings, ['Oracle provider health changed without changing ranking content.'])
-    assert.deepEqual(unchangedState.publish, { skipped: true, reason: 'unchanged-source-data' })
     assert.match(await readFile(manifestPath, 'utf8'), new RegExp(escapeRegExp(rawDir)))
     const state = JSON.parse(await readFile(statePath, 'utf8'))
-    assert.equal(state.status, 'unchanged')
+    assert.equal(state.status, 'preflight')
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
@@ -385,6 +384,7 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
   const client = {
     async send(command: { input: Record<string, unknown> }) {
       calls.push(command.input)
+      if (command.input.Key === 'rankings/active-generation.json') throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
       if (command.input.Prefix === 'rankings/raw/files/') {
         return {
           Contents: [

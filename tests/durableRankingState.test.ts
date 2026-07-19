@@ -264,6 +264,18 @@ test('reachability GC protects active, recent, and permanent-boundary generation
     const unactivatedBoundary = await stageDurableGeneration({
       store, stateDir: fixture.stateDir, identity, generatedAt: '2026-03-01T00:00:00.000Z', retention: { date: '2026-03-01', boundaries: ['season-split'] },
     })
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'recent-day-early')
+    const recentDayEarly = await stageDurableGeneration({
+      store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-18T01:00:00.000Z', retention: { date: '2026-07-18', boundaries: [] },
+    })
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'recent-day-latest')
+    const recentDayLatest = await stageDurableGeneration({
+      store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-18T23:00:00.000Z', retention: { date: '2026-07-18', boundaries: [] },
+    })
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'fresh-staged-grace')
+    const freshStaged = await stageDurableGeneration({
+      store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-20T00:00:00.000Z', retention: { date: '2020-01-01', boundaries: [] },
+    })
     await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'active')
     const activeCandidate = await stageDurableGeneration({
       store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z', retention: { date: '2026-07-19', boundaries: [] },
@@ -278,6 +290,10 @@ test('reachability GC protects active, recent, and permanent-boundary generation
     assert.ok(plan.plannedDeletes.some((entry) => entry.key === old.manifestKey))
     assert.ok(plan.plannedDeletes.some((entry) => entry.key === unactivatedBoundary.manifestKey))
     assert.ok(plan.plannedDeletes.some((entry) => entry.key === unactivatedBoundary.manifest.audit.key))
+    assert.ok(plan.plannedDeletes.some((entry) => entry.key === recentDayEarly.manifestKey))
+    assert.ok(!plan.plannedDeletes.some((entry) => entry.key === recentDayLatest.manifestKey))
+    assert.ok(!plan.plannedDeletes.some((entry) => entry.key === freshStaged.manifestKey))
+    assert.ok(freshStaged.manifest.objects.every((ref) => !plan.plannedDeletes.some((entry) => entry.key === ref.key)))
     const retainedObjectKeys = new Set([...permanent.manifest.objects, ...activeCandidate.manifest.objects].map((entry) => entry.key))
     const unactivatedUniqueObjects = unactivatedBoundary.manifest.objects.filter((entry) => !retainedObjectKeys.has(entry.key))
     assert.ok(unactivatedUniqueObjects.length > 0)
@@ -463,13 +479,17 @@ test('durable staging is deterministic for identical metadata and records exact 
   const fixture = await stateFixture('deterministic')
   const store = createMemoryDurableObjectStore()
   try {
-    const first = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
-    const second = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
+    const first = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, ownershipId: 'first-owner', generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
+    const second = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, ownershipId: 'second-owner', generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
     assert.equal(second.manifestDigest, first.manifestDigest)
     assert.equal(second.stateRoot, first.stateRoot)
     assert.equal(second.metrics.uploadedObjects, 0)
     assert.ok(second.metrics.skippedObjects > 0)
     assert.ok(second.metrics.skippedBytes > 0)
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'one changed object')
+    const changed = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, ownershipId: 'third-owner', generatedAt: '2026-07-20T00:00:00.000Z', parity: { result: 'match' } })
+    assert.equal(changed.metrics.uploadedObjects, 3)
+    assert.ok(changed.metrics.skippedObjects >= 2)
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
   }

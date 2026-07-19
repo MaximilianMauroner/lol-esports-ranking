@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
 import {
@@ -352,10 +352,20 @@ test('expired lease owners cannot publish and a successor fenced during the fina
   const root = await mkdtemp(join(tmpdir(), 'lease-cas-adversary-'))
   const staleDir = join(root, 'stale')
   const winnerDir = join(root, 'winner')
+  const staleRawDir = join(root, 'stale-raw')
+  const winnerRawDir = join(root, 'winner-raw')
   await mkdir(staleDir, { recursive: true })
   await mkdir(winnerDir, { recursive: true })
+  await mkdir(staleRawDir, { recursive: true })
+  await mkdir(winnerRawDir, { recursive: true })
   await writeFile(join(staleDir, 'ranking-summary.json'), '{"worker":"stale"}\n')
   await writeFile(join(winnerDir, 'ranking-summary.json'), '{"worker":"winner"}\n')
+  await writeFile(join(staleRawDir, 'matches.csv'), 'worker,game\nstale,1\n')
+  await writeFile(join(winnerRawDir, 'matches.csv'), 'worker,game\nwinner,1\n')
+  await writeFile(join(staleRawDir, 'manifest.json'), `${JSON.stringify({ files: { oracleCsv: [join(staleRawDir, 'matches.csv')] } })}\n`)
+  await writeFile(join(winnerRawDir, 'manifest.json'), `${JSON.stringify({ files: { oracleCsv: [join(winnerRawDir, 'matches.csv')] } })}\n`)
+  await writeFile(join(staleRawDir, 'refresh-state.json'), '{"worker":"stale"}\n')
+  await writeFile(join(winnerRawDir, 'refresh-state.json'), '{"worker":"winner"}\n')
   let now = '2026-07-19T00:00:00.000Z'
   const staleLease = await acquireBucketLease('ops/refresh-lease.json', {
     owner: 'stale', now, ttlMs: 10_000, fenceActiveKey: 'active-generation.json', config, client,
@@ -376,6 +386,9 @@ test('expired lease owners cannot publish and a successor fenced during the fina
     now = '2026-07-19T00:00:05.000Z'
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: staleDir,
+      rawDir: staleRawDir,
+      manifestPath: join(staleRawDir, 'manifest.json'),
+      statePath: join(staleRawDir, 'refresh-state.json'),
       generationId: 'stale',
       fencingToken: staleLease.lease.fencingToken,
       leaseGuard: { key: 'ops/refresh-lease.json', owner: staleLease.lease.owner, fencingToken: staleLease.lease.fencingToken, authorityKey: staleLease.authorityKey },
@@ -389,6 +402,9 @@ test('expired lease owners cannot publish and a successor fenced during the fina
         if (!winnerLease.acquired) return
         await uploadRankingArtifacts({
           publicDataDir: winnerDir,
+          rawDir: winnerRawDir,
+          manifestPath: join(winnerRawDir, 'manifest.json'),
+          statePath: join(winnerRawDir, 'refresh-state.json'),
           generationId: 'winner',
           fencingToken: winnerLease.lease.fencingToken,
           leaseGuard: { key: 'ops/refresh-lease.json', owner: winnerLease.lease.owner, fencingToken: winnerLease.lease.fencingToken, authorityKey: winnerLease.authorityKey },
@@ -403,6 +419,10 @@ test('expired lease owners cannot publish and a successor fenced during the fina
     const active = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
     assert.equal(active.generationId, 'winner')
     assert.equal(active.fencingToken, 2)
+    const rawDescriptor = JSON.parse(client.objects.get(`rankings/${active.rawState.descriptorKey}`)!.body)
+    const winnerSource = rawDescriptor.objects.find((entry: { kind: string }) => entry.kind === 'source')
+    assert.ok(winnerSource)
+    assert.equal(client.objects.get(`rankings/${winnerSource.key}`)?.body, 'worker,game\nwinner,1\n')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -597,6 +617,66 @@ test('Railway bucket adapter restores private state referenced by the public CAS
     assert.equal(active.rollout.identityHash, candidate.identityHash)
     assert.equal(active.rollout.consecutiveShadowSuccesses, 1)
     assert.equal(active.fencingToken, lease.lease.fencingToken)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('raw generations are immutable, deduplicated, and become authoritative only with the public CAS', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'raw-generation-cas-'))
+  const publicDir = join(root, 'public')
+  const rawDir = join(root, 'raw')
+  const sourcePath = join(rawDir, 'oracle', '2026.csv')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const client = memoryS3()
+  try {
+    await mkdir(publicDir, { recursive: true })
+    await mkdir(dirname(sourcePath), { recursive: true })
+    await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+    await writeFile(sourcePath, 'gameid,result\ng1,1\n')
+    await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, files: { oracleCsv: [sourcePath] } })}\n`)
+    await writeFile(statePath, '{"fingerprint":"one"}\n')
+    const firstLease = await acquireRefreshAuthority(client, 'raw-first')
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      rawDir,
+      manifestPath,
+      statePath,
+      generationId: 'raw-first',
+      fencingToken: firstLease.lease.fencingToken,
+      leaseGuard: refreshGuard(firstLease),
+      config,
+      client,
+    })
+    const firstActive = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.equal(typeof firstActive.rawState.descriptorKey, 'string')
+    assert.equal(client.objects.has('rankings/raw/manifest.json'), false)
+    assert.equal(client.objects.has('rankings/raw/refresh-state.json'), false)
+    const firstDescriptor = client.objects.get(`rankings/${firstActive.rawState.descriptorKey}`)
+    assert.ok(firstDescriptor)
+    const firstRawObjects = [...client.objects].filter(([key]) => key.startsWith('rankings/raw/objects/'))
+
+    assert.equal((await releaseBucketLease('ops/refresh-lease.json', firstLease, { config, client })).released, true)
+    await writeFile(sourcePath, 'gameid,result\ng1,0\n')
+    await writeFile(statePath, '{"fingerprint":"two"}\n')
+    const interruptedLease = await acquireRefreshAuthority(client, 'raw-interrupted')
+    const activeBeforeInterrupted = { ...client.objects.get('rankings/active-generation.json')! }
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      rawDir,
+      manifestPath,
+      statePath,
+      generationId: 'raw-interrupted',
+      fencingToken: interruptedLease.lease.fencingToken,
+      leaseGuard: refreshGuard(interruptedLease),
+      beforeActivePointerCas: async () => { throw new Error('interrupted before active CAS') },
+      config,
+      client,
+    }), /interrupted before active CAS/)
+    assert.deepEqual(client.objects.get('rankings/active-generation.json'), activeBeforeInterrupted)
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).rawState.descriptorKey, firstActive.rawState.descriptorKey)
+    assert.ok(firstRawObjects.every(([key, value]) => client.objects.get(key)?.body === value.body))
   } finally {
     await rm(root, { recursive: true, force: true })
   }

@@ -117,12 +117,38 @@ export async function uploadRankingArtifacts({
       }
     }
   }
+  if (!publishGeneration && !rolloutForActive) {
+    return {
+      enabled: true,
+      bucket: config.bucket,
+      prefix: config.prefix,
+      uploaded: [],
+      unchanged: [],
+      skipped: [],
+      promotion: { promoted: false, reason: 'semantic-no-change' },
+      artifactCount: 0,
+      uploadedCount: 0,
+      uploadedBytes: 0,
+      unchangedCount: 0,
+      unchangedBytes: 0,
+    }
+  }
   if (publishGeneration) {
     const publicSync = await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json', { immutable: Boolean(generationId) })
     uploads.push(...publicSync.filter((entry) => entry.status !== 'unchanged'))
     unchanged.push(...publicSync.filter((entry) => entry.status === 'unchanged'))
   }
-  if (rawDir) {
+  let rawState
+  if (rawDir && generationId && manifestPath) {
+    if (idempotentGeneration && active.value?.rawState) {
+      rawState = active.value.rawState
+    } else {
+      const rawSync = await stageRawGeneration(client, config, { rawDir, manifestPath, statePath })
+      rawState = rawSync.rawState
+      uploads.push(...rawSync.uploaded)
+      unchanged.push(...rawSync.unchanged)
+    }
+  } else if (rawDir && publishGeneration) {
     const rawSync = await uploadRawSourceFiles(client, config, rawDir, manifestPath)
     uploads.push(...rawSync.uploaded)
     unchanged.push(...rawSync.unchanged)
@@ -136,10 +162,10 @@ export async function uploadRankingArtifacts({
       reason: 'full-snapshot-upload-disabled',
     })
   }
-  if (manifestPath) {
+  if (manifestPath && publishGeneration && !generationId) {
     uploads.push(await uploadFile(client, config, manifestPath, 'raw/manifest.json'))
   }
-  if (statePath) {
+  if (statePath && publishGeneration && !generationId) {
     if (refreshStateForUpload) {
       uploads.push(await uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped }))
     } else {
@@ -196,13 +222,15 @@ export async function uploadRankingArtifacts({
       promotedAt,
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
       ...(privateState ? { privateState } : {}),
+      ...(rawState ? { rawState } : {}),
       ...(resolvedRollout ? { rollout: resolvedRollout } : {}),
       ...(rolloutUpdateId ? { rolloutUpdateId } : {}),
       ...(privateState ? { durableHistory: activatedDurableHistory(active.value, privateState, promotedAt) } : {}),
     }
     if (idempotentGeneration) {
       if (active.value?.manifestKey !== nextPointer.manifestKey
-        || (privateState && stableObjectJson(active.value?.privateState) !== stableObjectJson(privateState))) {
+        || (privateState && stableObjectJson(active.value?.privateState) !== stableObjectJson(privateState))
+        || (rawState && stableObjectJson(active.value?.rawState) !== stableObjectJson(rawState))) {
         throw new Error('Same-generation retry does not match the active generation identity')
       }
       setActiveGenerationCache(config, client, generationId)
@@ -688,6 +716,66 @@ export async function uploadRawSourceFiles(client, config, rawDir, manifestPath)
   return { uploaded, unchanged }
 }
 
+async function stageRawGeneration(client, config, { rawDir, manifestPath, statePath }) {
+  const root = resolve(rawDir)
+  const manifest = manifestWithResolvedFiles(JSON.parse(await readFile(manifestPath, 'utf8')), root)
+  const rootWithSeparator = `${root}${sep}`
+  const uploaded = []
+  const unchanged = []
+  const objects = []
+  const logicalFiles = {}
+  for (const [kind, paths] of Object.entries(manifest.files ?? {})) {
+    if (!Array.isArray(paths)) continue
+    logicalFiles[kind] = []
+    for (const path of paths) {
+      const filePath = resolve(path)
+      if (filePath !== root && !filePath.startsWith(rootWithSeparator)) throw new Error(`Raw source file is outside rawDir: ${path}`)
+      const logicalPath = relative(root, filePath).split(sep).join('/')
+      const bytes = await readFile(filePath)
+      const digest = sha256Bytes(bytes)
+      const result = await uploadImmutableBytes(client, config, `raw/objects/${digest}`, bytes, contentTypeForPath(filePath), digest)
+      ;(result.status === 'unchanged' ? unchanged : uploaded).push(result)
+      objects.push({ kind: 'source', logicalPath, key: `raw/objects/${digest}`, digest, bytes: bytes.byteLength })
+      logicalFiles[kind].push(logicalPath)
+    }
+  }
+  const logicalManifest = { ...manifest, files: logicalFiles }
+  const manifestBytes = Buffer.from(jsonBody(logicalManifest))
+  const manifestDigest = sha256Bytes(manifestBytes)
+  const manifestResult = await uploadImmutableBytes(client, config, `raw/objects/${manifestDigest}`, manifestBytes, 'application/json; charset=utf-8', manifestDigest)
+  ;(manifestResult.status === 'unchanged' ? unchanged : uploaded).push(manifestResult)
+  objects.push({ kind: 'manifest', logicalPath: 'manifest.json', key: `raw/objects/${manifestDigest}`, digest: manifestDigest, bytes: manifestBytes.byteLength })
+  if (statePath) {
+    const stateBytes = await readFile(statePath)
+    const stateDigest = sha256Bytes(stateBytes)
+    const stateResult = await uploadImmutableBytes(client, config, `raw/objects/${stateDigest}`, stateBytes, 'application/json; charset=utf-8', stateDigest)
+    ;(stateResult.status === 'unchanged' ? unchanged : uploaded).push(stateResult)
+    objects.push({ kind: 'refresh-state', logicalPath: 'refresh-state.json', key: `raw/objects/${stateDigest}`, digest: stateDigest, bytes: stateBytes.byteLength })
+  }
+  objects.sort((left, right) => `${left.kind}:${left.logicalPath}`.localeCompare(`${right.kind}:${right.logicalPath}`))
+  const descriptor = { schemaVersion: 1, kind: 'raw-generation', objects }
+  const descriptorBytes = Buffer.from(jsonBody(descriptor))
+  const descriptorDigest = sha256Bytes(descriptorBytes)
+  const descriptorKey = `raw/generations/${descriptorDigest}.json`
+  const descriptorResult = await uploadImmutableBytes(client, config, descriptorKey, descriptorBytes, 'application/json; charset=utf-8', descriptorDigest)
+  ;(descriptorResult.status === 'unchanged' ? unchanged : uploaded).push(descriptorResult)
+  return {
+    uploaded,
+    unchanged,
+    rawState: { descriptorKey, descriptorDigest, descriptorBytes: descriptorBytes.byteLength },
+  }
+}
+
+async function uploadImmutableBytes(client, config, relativeKey, bytes, contentType, digest) {
+  const result = await writeBucketBytes(relativeKey, bytes, { config, client, ifNoneMatch: '*', contentType, metadata: { sha256: digest } })
+  if (result.written) return { status: 'uploaded', key: result.key, bytes: bytes.byteLength, contentType, digest }
+  const existing = await readBucketBytes(relativeKey, { config, client })
+  if (!existing.found || existing.contentLength !== bytes.byteLength || sha256Bytes(existing.bytes) !== digest) {
+    throw new Error(`Immutable raw object collision: ${relativeKey}`)
+  }
+  return { status: 'unchanged', key: existing.key, bytes: bytes.byteLength, contentType, digest }
+}
+
 export async function syncRawFile(client, config, filePath, relativeKey) {
   const key = bucketKey(config, relativeKey)
   const snapshotDir = await mkdtemp(join(tmpdir(), 'ranking-raw-upload-'))
@@ -926,6 +1014,10 @@ async function sha256File(filePath) {
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(filePath)) hash.update(chunk)
   return hash.digest('hex')
+}
+
+function sha256Bytes(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
 }
 
 function sumBytes(entries) {

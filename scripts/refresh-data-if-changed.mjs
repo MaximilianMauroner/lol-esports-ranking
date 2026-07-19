@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
 import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { basename, dirname, resolve, sep } from 'node:path'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, writeBucketJson } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketBytes, readBucketJson, uploadRankingArtifacts } from './railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
   executeRailwayDurableGc,
@@ -145,39 +145,6 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     })
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
 
-    if (!changed) {
-      const state = {
-        ...(previousState ?? {}),
-        status: 'unchanged',
-        checkedAt: new Date().toISOString(),
-        fingerprint: fingerprint.fingerprint,
-        healthFingerprint: fingerprint.healthFingerprint,
-        downloadStart: start,
-        downloadEnd: end,
-        sources: stagingManifest?.sources ?? {},
-        warnings: arrayValue(stagingManifest?.warnings),
-        crunch: {
-          skipped: true,
-          reason: 'unchanged-source-data',
-        },
-        publish: {
-          skipped: true,
-          reason: 'unchanged-source-data',
-        },
-      }
-      await mkdir(dirname(statePath), { recursive: true })
-      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
-      console.log(`No source-data changes detected for ${start} through ${end}; skipping crunch.`)
-      return {
-        changed: false,
-        status: 'unchanged',
-        durableCandidate: { kind: 'not-produced', reason: 'unchanged-source-data' },
-        fingerprint: fingerprint.fingerprint,
-        healthFingerprint: fingerprint.healthFingerprint,
-        previousFingerprint: previousState?.fingerprint,
-      }
-    }
-
     const stagedManifestForRawDir = rewriteManifestPaths(stagingManifest, stagingDir, rawDir)
     const finalManifest = mergeExistingRaw
       ? mergeRawManifests(previousManifest, stagedManifestForRawDir)
@@ -195,7 +162,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
 
     const state = {
       schemaVersion: 1,
-      status: 'refreshed',
+      status: changed ? 'refreshed' : 'preflight',
       refreshedAt: new Date().toISOString(),
       fingerprint: fingerprint.fingerprint,
       healthFingerprint: fingerprint.healthFingerprint,
@@ -383,7 +350,6 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           state.crunch.receipt = crunchReceipt
           await writeFile(crunchReceiptPath, `${JSON.stringify(crunchReceipt, null, 2)}\n`)
         }
-        await writeBucketJson('raw/refresh-state.json', state, { config: bucketConfig, client: options.bucketClient })
         const optionalSkippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
         console.log(`Uploaded ${bucketPublish.uploadedCount} ranking artifact(s) (${bucketPublish.uploadedBytes} bytes); reused ${bucketPublish.unchangedCount} unchanged artifact(s) (${bucketPublish.unchangedBytes} bytes) in Railway bucket prefix ${bucketPublish.prefix || '(root)'}${optionalSkippedMessage}.`)
       }
@@ -395,9 +361,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
 
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
-    console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
+    console.log(`${changed ? 'Source data changed' : 'Source data unchanged; crunch preflight completed'} for ${start} through ${end}.`)
     return {
-      changed: true,
+      changed,
+      status: changed ? 'refreshed' : 'preflight',
       durableCandidate: skipCrunch
         ? { kind: 'not-produced', reason: 'skip-crunch' }
         : { kind: 'produced', receipt: durableCandidate },
@@ -494,6 +461,16 @@ async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, 
     }
   }
 
+  const active = await readBucketJson('active-generation.json', { config, client })
+  if (active.found && active.value?.rawState) {
+    const restored = await restoreRawGeneration({ rawDir, manifestPath, statePath, rawState: active.value.rawState, config, client })
+    if (restored.restored) {
+      console.log(`Restored ${restored.downloadedCount} raw baseline file(s) from active Railway raw generation.`)
+      return restored
+    }
+    return restored
+  }
+
   const result = await downloadBucketDirectory({
     destinationDir: rawDir,
     sourcePrefix: 'raw/files',
@@ -539,6 +516,72 @@ async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, 
     downloadedCount: result.downloaded.length,
     manifestRestored: manifestResult.found,
     stateRestored: stateResult.found,
+  }
+}
+
+async function restoreRawGeneration({ rawDir, manifestPath, statePath, rawState, config, client }) {
+  if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)
+    || typeof rawState.descriptorKey !== 'string'
+    || typeof rawState.descriptorDigest !== 'string'
+    || typeof rawState.descriptorBytes !== 'number') return { restored: false, reason: 'raw-generation-pointer-invalid' }
+  const descriptorObject = await readBucketBytes(rawState.descriptorKey, { config, client })
+  if (!descriptorObject.found || descriptorObject.contentLength !== rawState.descriptorBytes
+    || sha256(descriptorObject.bytes) !== rawState.descriptorDigest) return { restored: false, reason: 'raw-generation-descriptor-invalid' }
+  let descriptor
+  try {
+    descriptor = JSON.parse(Buffer.from(descriptorObject.bytes).toString('utf8'))
+  } catch {
+    return { restored: false, reason: 'raw-generation-descriptor-invalid' }
+  }
+  if (descriptor?.schemaVersion !== 1 || descriptor?.kind !== 'raw-generation' || !Array.isArray(descriptor.objects)) {
+    return { restored: false, reason: 'raw-generation-descriptor-invalid' }
+  }
+  const staging = `${rawDir}.restore-${process.pid}-${Date.now()}`
+  await rm(staging, { recursive: true, force: true })
+  await mkdir(staging, { recursive: true })
+  let downloadedCount = 0
+  try {
+    for (const ref of descriptor.objects) {
+      if (!ref || typeof ref !== 'object' || Array.isArray(ref)
+        || typeof ref.kind !== 'string' || typeof ref.logicalPath !== 'string'
+        || typeof ref.key !== 'string' || typeof ref.digest !== 'string' || typeof ref.bytes !== 'number'
+        || !resolve(staging, ref.logicalPath).startsWith(`${resolve(staging)}${sep}`)) {
+        return { restored: false, reason: 'raw-generation-reference-invalid' }
+      }
+      const object = await readBucketBytes(ref.key, { config, client })
+      if (!object.found || object.contentLength !== ref.bytes || sha256(object.bytes) !== ref.digest) {
+        return { restored: false, reason: 'raw-generation-object-invalid' }
+      }
+      if (ref.kind === 'source') {
+        const destination = resolve(staging, ref.logicalPath)
+        if (!destination.startsWith(`${resolve(staging)}${sep}`)) return { restored: false, reason: 'raw-generation-reference-invalid' }
+        await mkdir(dirname(destination), { recursive: true })
+        await writeFile(destination, object.bytes)
+        downloadedCount += 1
+      } else if (ref.kind === 'manifest') {
+        const manifest = JSON.parse(Buffer.from(object.bytes).toString('utf8'))
+        const restoredManifest = {
+          ...manifest,
+          files: Object.fromEntries(Object.entries(manifest.files ?? {}).map(([kind, paths]) => [
+            kind,
+            Array.isArray(paths) ? paths.map((path) => resolve(rawDir, String(path))) : [],
+          ])),
+        }
+        await writeFile(join(staging, 'manifest.json'), `${JSON.stringify(restoredManifest, null, 2)}\n`)
+      } else if (ref.kind === 'refresh-state') {
+        await writeFile(join(staging, 'refresh-state.json'), object.bytes)
+      }
+    }
+    if (downloadedCount === 0) return { restored: false, reason: 'raw-generation-empty' }
+    await rm(rawDir, { recursive: true, force: true })
+    await rename(staging, rawDir)
+    if (resolve(manifestPath) !== resolve(rawDir, 'manifest.json')) await cp(resolve(rawDir, 'manifest.json'), manifestPath)
+    if (resolve(statePath) !== resolve(rawDir, 'refresh-state.json')) {
+      try { await cp(resolve(rawDir, 'refresh-state.json'), statePath) } catch { /* optional state */ }
+    }
+    return { restored: true, source: 'active-raw-generation', downloadedCount, manifestRestored: true, stateRestored: await pathExists(statePath) }
+  } finally {
+    await rm(staging, { recursive: true, force: true })
   }
 }
 

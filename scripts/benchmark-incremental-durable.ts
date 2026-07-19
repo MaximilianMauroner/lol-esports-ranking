@@ -83,7 +83,7 @@ export async function runIdentityBootstrapScenario() {
       metadata: runMetadata('no-change', 'identity-b-active'), baseEnv, force: false,
       extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-b' },
     })
-    assert.deepEqual(activated.candidate, { kind: 'not-produced', reason: 'unchanged-source-data' })
+    assert.equal(requiredCandidate(activated).eligibility, 'no-change')
     assert.equal(activated.active.generationId, identityB3.active.generationId)
     assert.deepEqual(activated.active.privateState, identityB3.active.privateState)
     assert.equal(activated.publicUploads, 0)
@@ -92,7 +92,7 @@ export async function runIdentityBootstrapScenario() {
       identityChanged: record(identityA.active.privateState).identityHash !== record(identityB1.active.privateState).identityHash,
       firstBSuccesses: number(record(identityB1.active.rollout).consecutiveShadowSuccesses),
       restoredBBytes: number(record(identityB2.receipt.durable).restoredBytes),
-      activatedPromotion: 'not-produced',
+      activatedPromotion: record(activated.receipt.durable).promotion,
     }
   } finally {
     await s3.close()
