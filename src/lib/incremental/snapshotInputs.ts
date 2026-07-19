@@ -38,17 +38,35 @@ export type SnapshotModelProvider = {
   ranking(input: SnapshotRankingInput): RankingModelResult
   players(input: SnapshotPlayerInput): PlayerStanding[]
   metrics(): SnapshotInputMetrics
+  persistedState(): PersistedSnapshotModelState
+}
+
+export type PersistedSnapshotModelState = {
+  schemaVersion: 1
+  compatibilityHash: string
+  rankingCatalogs: Map<string, IncrementalReducerCheckpoint[]>
+  playerCatalogs: Map<string, IncrementalPlayerCheckpoint[]>
+  rankingResults: Map<string, RankingModelResult>
+  playerResults: Map<string, PlayerStanding[]>
 }
 
 export function createIncrementalSnapshotModelProvider({
   compatibilityHash,
+  previous,
 }: {
   compatibilityHash: string
+  previous?: PersistedSnapshotModelState
 }): SnapshotModelProvider {
-  const rankingCatalogs = new Map<string, IncrementalReducerCheckpoint[]>()
-  const playerCatalogs = new Map<string, IncrementalPlayerCheckpoint[]>()
-  const rankingResults = new Map<string, RankingModelResult>()
-  const playerResults = new Map<string, PlayerStanding[]>()
+  if (previous) validatePersistedSnapshotModelState(previous, compatibilityHash)
+  const restored = previous ? structuredClone(previous) : undefined
+  const rankingCatalogs = restored?.rankingCatalogs ?? new Map<string, IncrementalReducerCheckpoint[]>()
+  const playerCatalogs = restored?.playerCatalogs ?? new Map<string, IncrementalPlayerCheckpoint[]>()
+  const rankingResults = restored?.rankingResults ?? new Map<string, RankingModelResult>()
+  const playerResults = restored?.playerResults ?? new Map<string, PlayerStanding[]>()
+  const touchedRankingStreams = new Set<string>()
+  const touchedPlayerStreams = new Set<string>()
+  const touchedRankingResults = new Set<string>()
+  const touchedPlayerResults = new Set<string>()
   const counters: SnapshotInputMetrics = {
     rankingRequests: 0,
     rankingResultCacheHits: 0,
@@ -72,16 +90,19 @@ export function createIncrementalSnapshotModelProvider({
         teams: input.teams,
         tournamentLifecycles: input.tournamentLifecycles ?? new Map(),
       })
+      const streamKey = privateStateHash({
+        kind: 'snapshot-ranking-stream-v1',
+        compatibilityHash,
+        teams: input.teams,
+        tournamentLifecycles: input.tournamentLifecycles ?? new Map(),
+      })
+      touchedRankingResults.add(resultKey)
+      touchedRankingStreams.add(streamKey)
       const cached = rankingResults.get(resultKey)
       if (cached) {
         counters.rankingResultCacheHits += 1
         return structuredClone(cached)
       }
-      const streamKey = privateStateHash({
-        kind: 'snapshot-ranking-stream-v1',
-        compatibilityHash,
-        teams: input.teams,
-      })
       const run = runIncrementalRankingReducers({
         matches: input.matches,
         teams: input.teams,
@@ -106,11 +127,6 @@ export function createIncrementalSnapshotModelProvider({
         leagueStrengths: input.leagueStrengths,
         eventWeightContext,
       })
-      const cached = playerResults.get(resultKey)
-      if (cached) {
-        counters.playerResultCacheHits += 1
-        return structuredClone(cached)
-      }
       const streamKey = privateStateHash({
         kind: 'snapshot-player-stream-v1',
         compatibilityHash,
@@ -120,6 +136,13 @@ export function createIncrementalSnapshotModelProvider({
         leagueStrengths: input.leagueStrengths,
         eventWeightContext,
       })
+      touchedPlayerResults.add(resultKey)
+      touchedPlayerStreams.add(streamKey)
+      const cached = playerResults.get(resultKey)
+      if (cached) {
+        counters.playerResultCacheHits += 1
+        return structuredClone(cached)
+      }
       const run = runIncrementalPlayerReducer({
         ...input,
         checkpointHistory: playerCatalogs.get(streamKey) ?? [],
@@ -133,5 +156,55 @@ export function createIncrementalSnapshotModelProvider({
     metrics() {
       return { ...counters }
     },
+    persistedState() {
+      return structuredClone({
+        schemaVersion: 1 as const,
+        compatibilityHash,
+        rankingCatalogs: selectedEntries(rankingCatalogs, touchedRankingStreams),
+        playerCatalogs: selectedEntries(playerCatalogs, touchedPlayerStreams),
+        rankingResults: selectedEntries(rankingResults, touchedRankingResults),
+        playerResults: selectedEntries(playerResults, touchedPlayerResults),
+      })
+    },
   }
+}
+
+function selectedEntries<T>(source: Map<string, T>, selected: Set<string>): Map<string, T> {
+  return new Map([...selected].flatMap((key) => {
+    const value = source.get(key)
+    return value === undefined ? [] : [[key, value] as const]
+  }))
+}
+
+export function validatePersistedSnapshotModelState(
+  state: PersistedSnapshotModelState,
+  compatibilityHash?: string,
+): void {
+  if (state.schemaVersion !== 1
+    || typeof state.compatibilityHash !== 'string'
+    || !(state.rankingCatalogs instanceof Map)
+    || !(state.playerCatalogs instanceof Map)
+    || !(state.rankingResults instanceof Map)
+    || !(state.playerResults instanceof Map)) {
+    throw new Error('Invalid persisted snapshot model state')
+  }
+  if (compatibilityHash !== undefined && state.compatibilityHash !== compatibilityHash) {
+    throw new Error('Snapshot model state compatibility hash mismatch')
+  }
+  validateStringMap(state.rankingCatalogs, Array.isArray)
+  validateStringMap(state.playerCatalogs, Array.isArray)
+  validateStringMap(state.rankingResults, isRecord)
+  validateStringMap(state.playerResults, Array.isArray)
+}
+
+function validateStringMap<T>(map: Map<string, T>, validate: (value: T) => boolean): void {
+  for (const [key, value] of map) {
+    if (typeof key !== 'string' || key.length === 0 || !validate(value)) {
+      throw new Error('Invalid persisted snapshot model cache entry')
+    }
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

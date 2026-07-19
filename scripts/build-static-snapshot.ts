@@ -8,6 +8,7 @@ import {
   attachIncrementalArtifactCache,
   attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
+  attachIncrementalSnapshotModelCache,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
   type IncrementalCommunityImports,
@@ -58,6 +59,7 @@ import {
   createIncrementalSnapshotModelProvider,
   type SnapshotInputMetrics,
   type SnapshotModelProvider,
+  type PersistedSnapshotModelState,
 } from '../src/lib/incremental/snapshotInputs.ts'
 import { buildPublicArtifactDag, type PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
 
@@ -209,6 +211,7 @@ const snapshot = createStaticRankingData({
     ...(selectedCheckpointDate ? { selectedCheckpointDate } : {}),
     ...(selectedPlayerCheckpointDate ? { selectedPlayerCheckpointDate } : {}),
     ...(modelProvider ? { snapshotInputMetrics: modelProvider.metrics() } : {}),
+    ...(modelProvider ? { snapshotModelState: modelProvider.persistedState() } : {}),
   }
 }
 
@@ -234,7 +237,10 @@ const runIncremental = async () => {
     ? incrementalGlobalModels(result.imports, result.reducerCheckpoints, result.playerCheckpoints)
     : undefined
   const modelProvider = modelRun
-    ? createIncrementalSnapshotModelProvider({ compatibilityHash: compatibility.hash })
+    ? createIncrementalSnapshotModelProvider({
+        compatibilityHash: compatibility.hash,
+        previous: result.snapshotModelCache,
+      })
     : undefined
   if (result.promotion && modelRun) {
     const rankingPromotion = attachIncrementalReducerCheckpoint(result.promotion, privateStateDir, modelRun.ranking.checkpoints)
@@ -363,6 +369,13 @@ if (incrementalPlan && orchestration.shadowOutput) {
     receipt.artifacts.reused = dagResult.dag.semanticReused
     receipt.artifacts.regenerated = dagResult.dag.regenerated
     if (pendingPromotion) {
+      if (orchestration.shadowOutput.snapshotModelState) {
+        pendingPromotion = attachIncrementalSnapshotModelCache(
+          pendingPromotion,
+          privateStateDir,
+          orchestration.shadowOutput.snapshotModelState,
+        )
+      }
       pendingPromotion = attachIncrementalArtifactCache(pendingPromotion, privateStateDir, dagResult.dag.cache)
       if (incrementalAttemptMetrics) incrementalAttemptMetrics.reducerStateBytesWritten = pendingPromotion.reducerStateBytesWritten
     }
@@ -448,6 +461,7 @@ type CrunchOutput = {
   selectedCheckpointDate?: string
   selectedPlayerCheckpointDate?: string
   snapshotInputMetrics?: SnapshotInputMetrics
+  snapshotModelState?: PersistedSnapshotModelState
 }
 
 type ReducerRows = {

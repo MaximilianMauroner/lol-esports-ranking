@@ -9,6 +9,8 @@ export type ArtifactDagNode = {
   kind: ArtifactDagNodeKind
   semanticHash: string
   envelopeHash: string
+  semanticClosureHash: string
+  envelopeClosureHash: string
   payload: unknown
   validate: PublicArtifactWrite['validate']
   deps: string[]
@@ -43,7 +45,7 @@ export function buildPublicArtifactDag({
     const actualByPath = uniqueWrites(actual.writes, 'actual')
     const semanticByPath = uniqueWrites(semantic.writes, 'semantic')
     const previousById = uniquePrevious(previous)
-    const nodes = [...actualByPath].map(([path, write]): ArtifactDagNode => {
+    const nodes = [...actualByPath].map(([path, write]): Omit<ArtifactDagNode, 'semanticClosureHash' | 'envelopeClosureHash'> => {
       const semanticWrite = semanticByPath.get(path)
       if (!semanticWrite) throw new ArtifactDagError('missing', `semantic:${path}`)
       const id = artifactNodeId(path)
@@ -58,16 +60,33 @@ export function buildPublicArtifactDag({
         write,
       }
     })
-    const ordered = topologicalOrder(nodes)
-    const semanticReused = ordered.filter((node) => previousById.get(node.id)?.semanticHash === node.semanticHash).length
-    const envelopeReused = ordered.filter((node) => previousById.get(node.id)?.envelopeHash === node.envelopeHash).length
+    const orderedBase = topologicalOrder(nodes)
+    const semanticClosures = new Map<string, string>()
+    const envelopeClosures = new Map<string, string>()
+    const ordered: ArtifactDagNode[] = orderedBase.map((node) => {
+      const semanticClosureHash = closureHash(node.semanticHash, node.deps, semanticClosures)
+      const envelopeClosureHash = closureHash(node.envelopeHash, node.deps, envelopeClosures)
+      semanticClosures.set(node.id, semanticClosureHash)
+      envelopeClosures.set(node.id, envelopeClosureHash)
+      return { ...node, semanticClosureHash, envelopeClosureHash }
+    })
+    const semanticReused = ordered.filter((node) => previousById.get(node.id)?.semanticClosureHash === node.semanticClosureHash).length
+    const envelopeReused = ordered.filter((node) => previousById.get(node.id)?.envelopeClosureHash === node.envelopeClosureHash).length
     const writes = ordered
-      .filter((node) => previousById.get(node.id)?.envelopeHash !== node.envelopeHash)
+      .filter((node) => previousById.get(node.id)?.envelopeClosureHash !== node.envelopeClosureHash)
       .map((node) => node.write)
     return {
       dag: {
         nodes: ordered,
-        cache: ordered.map(({ id, kind, semanticHash, envelopeHash, deps }) => ({ id, kind, semanticHash, envelopeHash, deps })),
+        cache: ordered.map(({ id, kind, semanticHash, envelopeHash, semanticClosureHash, envelopeClosureHash, deps }) => ({
+          id,
+          kind,
+          semanticHash,
+          envelopeHash,
+          semanticClosureHash,
+          envelopeClosureHash,
+          deps,
+        })),
         writes,
         semanticReused,
         envelopeReused,
@@ -85,12 +104,28 @@ export function validatePersistedArtifactNodes(nodes: PersistedArtifactNode[]) {
   for (const node of nodes) {
     if (!node.id || ids.has(node.id)) throw new ArtifactDagError('duplicate', node.id)
     ids.add(node.id)
-    if (!isNodeKind(node.kind) || !node.semanticHash || !node.envelopeHash || !Array.isArray(node.deps)) {
+    if (!isNodeKind(node.kind)
+      || !node.semanticHash
+      || !node.envelopeHash
+      || !node.semanticClosureHash
+      || !node.envelopeClosureHash
+      || !Array.isArray(node.deps)) {
       throw new ArtifactDagError('invalid', node.id)
     }
   }
   for (const node of nodes) for (const dep of node.deps) if (!ids.has(dep)) throw new ArtifactDagError('missing', dep)
-  topologicalOrder(nodes.map((node) => ({ ...node, payload: undefined, validate: () => undefined, write: undefined as never })))
+  const ordered = topologicalOrder(nodes)
+  const semanticClosures = new Map<string, string>()
+  const envelopeClosures = new Map<string, string>()
+  for (const node of ordered) {
+    const semanticClosureHash = closureHash(node.semanticHash, node.deps, semanticClosures)
+    const envelopeClosureHash = closureHash(node.envelopeHash, node.deps, envelopeClosures)
+    if (node.semanticClosureHash !== semanticClosureHash || node.envelopeClosureHash !== envelopeClosureHash) {
+      throw new ArtifactDagError('invalid', `closure:${node.id}`)
+    }
+    semanticClosures.set(node.id, semanticClosureHash)
+    envelopeClosures.set(node.id, envelopeClosureHash)
+  }
 }
 
 function uniqueWrites(writes: PublicArtifactWrite[], label: string) {
@@ -128,16 +163,24 @@ function artifactDependencies(path: string, writes: Map<string, PublicArtifactWr
   if (path === 'matches/index.json') return paths.filter((candidate) => candidate.startsWith('matches/') && candidate !== path && !candidate.includes('/pages/')).map(artifactNodeId).sort()
   if (path.startsWith('matches/') && !path.includes('/pages/') && path !== 'matches/index.json') {
     const stem = path.split('/').at(-1)?.replace(/\.json$/, '') ?? ''
-    return paths.filter((candidate) => candidate.startsWith('matches/pages/') && candidate.includes(stem)).map(artifactNodeId).sort()
+    return paths.filter((candidate) => candidate.startsWith(`matches/pages/${stem}-`)).map(artifactNodeId).sort()
   }
   if (path.endsWith('/index.json')) {
     const prefix = path.slice(0, -'index.json'.length)
     return paths.filter((candidate) => candidate.startsWith(prefix) && candidate !== path).map(artifactNodeId).sort()
   }
-  if (path.startsWith('entities/') || path.startsWith('history/')) {
-    return paths.filter((candidate) => candidate.startsWith('scopes/')).map(artifactNodeId).sort()
-  }
   return []
+}
+
+function closureHash(selfHash: string, deps: string[], closures: Map<string, string>) {
+  return sha256Hex(JSON.stringify({
+    selfHash,
+    dependencies: deps.map((dependency) => {
+      const hash = closures.get(dependency)
+      if (!hash) throw new ArtifactDagError('missing', dependency)
+      return [dependency, hash]
+    }),
+  }))
 }
 
 function topologicalOrder<T extends Pick<ArtifactDagNode, 'id' | 'deps'>>(nodes: T[]): T[] {

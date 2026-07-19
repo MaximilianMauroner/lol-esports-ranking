@@ -6,15 +6,27 @@ type ReplaceDirectoryOptions = {
   preserveTarget?: boolean
   expectedFiles?: readonly string[]
   renameDirectory?: typeof rename
+  copyFileOperation?: typeof copyFile
 }
 
 export async function replaceDirectory(
   nextDir: string,
   targetDir: string,
-  { publishLast, preserveTarget = false, expectedFiles, renameDirectory = rename }: ReplaceDirectoryOptions = {},
+  {
+    publishLast,
+    preserveTarget = false,
+    expectedFiles,
+    renameDirectory = rename,
+    copyFileOperation = copyFile,
+  }: ReplaceDirectoryOptions = {},
 ) {
   if (preserveTarget) {
-    await publishInPlace(nextDir, targetDir, publishLast, expectedFiles)
+    await publishMaterialized(nextDir, targetDir, {
+      publishLast,
+      expectedFiles,
+      renameDirectory,
+      copyFileOperation,
+    })
     return
   }
 
@@ -28,7 +40,7 @@ export async function replaceDirectory(
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     if (code === 'EXDEV') {
-      await publishAcrossFilesystems(nextDir, targetDir, publishLast)
+      await publishMaterialized(nextDir, targetDir, { publishLast })
       return
     }
     if (code !== 'ENOENT') throw error
@@ -44,50 +56,71 @@ export async function replaceDirectory(
   if (hasPrevious) await rm(previousDir, { recursive: true, force: true })
 }
 
-async function publishAcrossFilesystems(nextDir: string, targetDir: string, publishLast?: string) {
-  await publishInPlace(nextDir, targetDir, publishLast)
-}
-
-async function publishInPlace(nextDir: string, targetDir: string, publishLast?: string, expectedFiles?: readonly string[]) {
+async function publishMaterialized(
+  nextDir: string,
+  targetDir: string,
+  {
+    publishLast,
+    expectedFiles,
+    renameDirectory = rename,
+    copyFileOperation = copyFile,
+  }: Pick<ReplaceDirectoryOptions, 'publishLast' | 'expectedFiles' | 'renameDirectory' | 'copyFileOperation'>,
+) {
   const root = resolve(nextDir)
   const files = await listFiles(root)
   const targetRoot = resolve(targetDir)
   const previousFiles = await listFilesIfPresent(targetRoot)
-  const previousRelativePaths = new Set(previousFiles.map((file) => relativePath(targetRoot, file)))
-  const stagedRelativePaths = new Set(files.map((file) => relativePath(root, file)))
-  const finalRelativePaths = new Set(expectedFiles ?? stagedRelativePaths)
+  const previousByPath = new Map(previousFiles.map((file) => [relativePath(targetRoot, file), file]))
+  const stagedByPath = new Map(files.map((file) => [relativePath(root, file), file]))
+  const finalRelativePaths = new Set(expectedFiles ?? stagedByPath.keys())
   for (const expected of finalRelativePaths) {
-    if (!stagedRelativePaths.has(expected) && !previousRelativePaths.has(expected)) {
+    if (!stagedByPath.has(expected) && !previousByPath.has(expected)) {
       throw new Error(`Cannot publish incomplete directory: missing expected file ${expected}`)
     }
   }
 
-  const publishFile = async (source: string, index: number) => {
-    const target = resolve(targetRoot, relative(root, source))
-    const temp = `${target}.${process.pid}.${index}.tmp`
-    await mkdir(dirname(target), { recursive: true })
+  if (files.length === 0 && expectedFiles === undefined) {
+    await rm(nextDir, { recursive: true, force: true })
+    return
+  }
+
+  const materializedDir = `${targetDir}.materialized-${process.pid}`
+  const previousDir = `${targetDir}.previous-${process.pid}`
+  await rm(materializedDir, { recursive: true, force: true })
+  await rm(previousDir, { recursive: true, force: true })
+  const orderedPaths = [...finalRelativePaths].sort((left, right) => {
+    if (left === publishLast) return 1
+    if (right === publishLast) return -1
+    return left.localeCompare(right)
+  })
+  try {
+    for (const relativePath of orderedPaths) {
+      const source = stagedByPath.get(relativePath) ?? previousByPath.get(relativePath)
+      if (!source) throw new Error(`Cannot materialize missing file ${relativePath}`)
+      const destination = resolve(materializedDir, relativePath)
+      await mkdir(dirname(destination), { recursive: true })
+      await copyFileOperation(source, destination)
+    }
+
+    let hasPrevious = false
     try {
-      await copyFile(source, temp)
-      await rename(temp, target)
+      await renameDirectory(targetDir, previousDir)
+      hasPrevious = true
     } catch (error) {
-      await rm(temp, { force: true })
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    try {
+      await renameDirectory(materializedDir, targetDir)
+    } catch (error) {
+      if (hasPrevious) await renameDirectory(previousDir, targetDir)
       throw error
     }
+    if (hasPrevious) await rm(previousDir, { recursive: true, force: true }).catch(() => undefined)
+    await rm(nextDir, { recursive: true, force: true })
+  } catch (error) {
+    await rm(materializedDir, { recursive: true, force: true })
+    throw error
   }
-
-  const publishLastSource = publishLast
-    ? files.find((file) => relativePath(root, file) === publishLast)
-    : undefined
-  const ordinaryFiles = publishLastSource ? files.filter((file) => file !== publishLastSource) : files
-  for (const [index, source] of ordinaryFiles.entries()) await publishFile(source, index)
-
-  for (const previousFile of previousFiles) {
-    if (!finalRelativePaths.has(relativePath(targetRoot, previousFile))) {
-      await rm(previousFile, { force: true })
-    }
-  }
-  if (publishLastSource) await publishFile(publishLastSource, ordinaryFiles.length)
-  await rm(nextDir, { recursive: true, force: true })
 }
 
 async function listFilesIfPresent(dir: string): Promise<string[]> {

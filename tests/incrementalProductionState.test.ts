@@ -8,6 +8,7 @@ import {
   attachIncrementalArtifactCache,
   attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
+  attachIncrementalSnapshotModelCache,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
   stageIncrementalState,
@@ -16,7 +17,7 @@ import {
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { decodePrivateState, encodePrivateState } from '../src/lib/incremental/canonicalCodec.ts'
 import { createCrunchCompatibility } from '../src/lib/incremental/compatibility.ts'
-import { stableHash } from '../src/lib/incremental/hash.ts'
+import { sha256Hex, stableHash } from '../src/lib/incremental/hash.ts'
 import { orchestrateCrunch } from '../src/lib/incremental/orchestrator.ts'
 import { assertCrunchParity } from '../src/lib/incremental/parity.ts'
 import {
@@ -41,6 +42,12 @@ import {
 } from '../src/lib/playerModel.ts'
 import { matchesByDate } from '../src/lib/matchContext.ts'
 import type { CanonicalRankingInput } from '../src/lib/incremental/canonicalState.ts'
+import {
+  createIncrementalSnapshotModelProvider,
+  type PersistedSnapshotModelState,
+} from '../src/lib/incremental/snapshotInputs.ts'
+import { createStaticRankingData } from '../src/lib/snapshot.ts'
+import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
 
 const retrievedAt = '2026-07-18T00:00:00.000Z'
 const authorities: ProviderAuthorities = {
@@ -76,6 +83,63 @@ test('production generation reads unchanged source files zero times after atomic
   const active = await activeGeneration(fixture.stateDir)
   assert.equal(Object.keys(record(active.generation.providers)).length, 1)
   assert.ok(await readFile(resolve(fixture.stateDir, 'canonical', 'objects', `${stringField(record(active.generation.canonical), 'ledgerHash')}.json`), 'utf8'))
+})
+
+test('production generation restores scoped snapshot results across fresh providers and append', async () => {
+  const completed2025Game = firstGame.map((row) => row.replace('2026-01-10,2026', '2025-01-10,2025'))
+  const fixture = await createFixture([header, ...completed2025Game].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  assert.ok(first.imports)
+  const firstRun = { generatedAt: '2026-07-18T00:00:00.000Z', runId: 'provider-cache-first' }
+  const firstProvider = createIncrementalSnapshotModelProvider({ compatibilityHash: compatibility.hash })
+  const firstCandidate = createStaticRankingData(snapshotInputForCanonical(first.imports.canonical, firstRun, firstProvider))
+  assertSnapshotParity(first.imports.canonical, firstRun, firstCandidate)
+  const firstPersisted = firstProvider.persistedState()
+  await promoteIncrementalState(attachIncrementalSnapshotModelCache(
+    first.promotion,
+    fixture.stateDir,
+    firstPersisted,
+  ))
+
+  const warm = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(warm.imports)
+  assert.ok(warm.snapshotModelCache, JSON.stringify(warm.fallback))
+  const metadataRun = { generatedAt: '2026-07-18T01:00:00.000Z', runId: 'provider-cache-metadata' }
+  const warmProvider = createIncrementalSnapshotModelProvider({
+    compatibilityHash: compatibility.hash,
+    previous: warm.snapshotModelCache,
+  })
+  const warmCandidate = createStaticRankingData(snapshotInputForCanonical(warm.imports.canonical, metadataRun, warmProvider))
+  assertSnapshotParity(warm.imports.canonical, metadataRun, warmCandidate)
+  const warmMetrics = warmProvider.metrics()
+  assert.equal(warmMetrics.rankingReducerRuns, 0)
+  assert.equal(warmMetrics.playerReducerRuns, 0)
+  assert.equal(warmMetrics.rankingRows, 0)
+  assert.equal(warmMetrics.playerRows, 0)
+  assert.equal(warmMetrics.rankingRequests, warmMetrics.rankingResultCacheHits)
+  assert.equal(warmMetrics.playerRequests, warmMetrics.playerResultCacheHits)
+
+  await writeFile(fixture.sourcePath, [header, ...completed2025Game, ...secondGame].join('\n'))
+  const appended = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(appended.imports)
+  assert.ok(appended.snapshotModelCache)
+  const appendRun = { generatedAt: '2026-07-19T00:00:00.000Z', runId: 'provider-cache-append' }
+  const appendProvider = createIncrementalSnapshotModelProvider({
+    compatibilityHash: compatibility.hash,
+    previous: appended.snapshotModelCache,
+  })
+  const appendCandidate = createStaticRankingData(snapshotInputForCanonical(appended.imports.canonical, appendRun, appendProvider))
+  assertSnapshotParity(appended.imports.canonical, appendRun, appendCandidate)
+  const appendMetrics = appendProvider.metrics()
+  assert.ok(appendMetrics.rankingResultCacheHits + appendMetrics.playerResultCacheHits > 0)
+  assert.ok(appendMetrics.rankingReducerRuns + appendMetrics.playerReducerRuns > 0)
+  assert.equal(appendMetrics.rankingRequests, appendMetrics.rankingReducerRuns + appendMetrics.rankingResultCacheHits)
+  assert.equal(appendMetrics.playerRequests, appendMetrics.playerReducerRuns + appendMetrics.playerResultCacheHits)
+  const bounded = appendProvider.persistedState()
+  assert.ok(bounded.rankingResults.size <= appendMetrics.rankingRequests)
+  assert.ok(bounded.playerResults.size <= appendMetrics.playerRequests)
+  assert.ok([...firstPersisted.rankingResults.keys()].some((key) => bounded.rankingResults.has(key)))
 })
 
 test('retrieval metadata changes preserve the canonical semantic root and skip reconciliation', async () => {
@@ -418,13 +482,42 @@ test('artifact DAG cache shares atomic generation promotion and rejects tamperin
   const first = await loadIncrementalCommunityImports(fixture.input)
   assert.ok(first.promotion)
   const cache: PersistedArtifactNode[] = [
-    { id: 'public:scopes/default.json', kind: 'scope', semanticHash: 'semantic-scope', envelopeHash: 'envelope-scope', deps: [] },
-    { id: 'public:ranking-summary.json', kind: 'manifest', semanticHash: 'semantic-manifest', envelopeHash: 'envelope-manifest', deps: ['public:scopes/default.json'] },
+    {
+      id: 'public:scopes/default.json',
+      kind: 'scope',
+      semanticHash: 'semantic-scope',
+      envelopeHash: 'envelope-scope',
+      semanticClosureHash: closureHash('semantic-scope', []),
+      envelopeClosureHash: closureHash('envelope-scope', []),
+      deps: [],
+    },
+    {
+      id: 'public:ranking-summary.json',
+      kind: 'manifest',
+      semanticHash: 'semantic-manifest',
+      envelopeHash: 'envelope-manifest',
+      semanticClosureHash: closureHash('semantic-manifest', [['public:scopes/default.json', closureHash('semantic-scope', [])]]),
+      envelopeClosureHash: closureHash('envelope-manifest', [['public:scopes/default.json', closureHash('envelope-scope', [])]]),
+      deps: ['public:scopes/default.json'],
+    },
   ]
-  const promotion = attachIncrementalArtifactCache(first.promotion, fixture.stateDir, cache)
+  const snapshotModelCache: PersistedSnapshotModelState = {
+    schemaVersion: 1 as const,
+    compatibilityHash: compatibility.hash,
+    rankingCatalogs: new Map(),
+    playerCatalogs: new Map(),
+    rankingResults: new Map(),
+    playerResults: new Map(),
+  }
+  const promotion = attachIncrementalArtifactCache(
+    attachIncrementalSnapshotModelCache(first.promotion, fixture.stateDir, snapshotModelCache),
+    fixture.stateDir,
+    cache,
+  )
   const promoted = await promoteIncrementalState(promotion)
   const restored = await loadIncrementalCommunityImports(fixture.input)
   assert.deepEqual(restored.artifactCache, cache)
+  assert.deepEqual(restored.snapshotModelCache, snapshotModelCache)
   assert.equal(restored.metrics.reducerStateBytesRead, promoted.reducerStateBytesWritten)
 
   const active = await activeGeneration(fixture.stateDir)
@@ -495,6 +588,40 @@ test('parseable reducer Map mutation cannot bypass its private-state semantic ha
   assert.match(result.fallback?.kind === 'checkpoint-corrupt' ? result.fallback.detail : '', /reducer-checkpoint semantic hash mismatch/)
   assert.ok(result.promotion)
 })
+
+function snapshotInputForCanonical(
+  canonical: CanonicalRankingInput,
+  runMetadata: { generatedAt: string; runId: string },
+  modelProvider?: ReturnType<typeof createIncrementalSnapshotModelProvider>,
+) {
+  return {
+    matches: canonical.matches,
+    teams: canonical.teams,
+    rosters: {},
+    runMetadata,
+    source: 'production provider state fixture',
+    dataMode: 'scheduled-public-data' as const,
+    ...(modelProvider ? { modelProvider } : {}),
+  }
+}
+
+function assertSnapshotParity(
+  canonical: CanonicalRankingInput,
+  runMetadata: { generatedAt: string; runId: string },
+  candidate: ReturnType<typeof createStaticRankingData>,
+) {
+  const reference = createStaticRankingData(snapshotInputForCanonical(canonical, runMetadata))
+  assertCrunchParity(
+    {
+      fullSnapshot: reference,
+      publicWrites: createPublicArtifactWritePlan(reference, { runMetadata }).writes,
+    },
+    {
+      fullSnapshot: candidate,
+      publicWrites: createPublicArtifactWritePlan(candidate, { runMetadata }).writes,
+    },
+  )
+}
 
 async function createFixture(contents: string) {
   const root = await mkdtemp(resolve(tmpdir(), 'lol-ranking-provider-state-'))
@@ -569,6 +696,10 @@ async function writePrivate(path: string, value: unknown) {
 function record(value: unknown): Record<string, unknown> {
   assert.ok(value && typeof value === 'object' && !Array.isArray(value))
   return value as Record<string, unknown>
+}
+
+function closureHash(selfHash: string, dependencies: Array<[string, string]>) {
+  return sha256Hex(JSON.stringify({ selfHash, dependencies }))
 }
 
 function stringField(value: Record<string, unknown>, field: string): string {

@@ -7,6 +7,7 @@ import {
 } from '../src/lib/incremental/artifactDag.ts'
 import { assertCrunchParity } from '../src/lib/incremental/parity.ts'
 import { createIncrementalSnapshotModelProvider } from '../src/lib/incremental/snapshotInputs.ts'
+import { createIncrementalCrunchReceipt, recordSnapshotInputMetrics } from '../src/lib/incremental/metrics.ts'
 import {
   createPublicArtifactWritePlan,
   createSemanticPublicArtifactWritePlan,
@@ -40,6 +41,18 @@ test('incremental state-at-date provider preserves full and public parity withou
   assert.equal(metrics.rankingReducerRuns + metrics.rankingResultCacheHits, metrics.rankingRequests)
   assert.equal(metrics.playerReducerRuns + metrics.playerResultCacheHits, metrics.playerRequests)
   assert.ok(metrics.rankingRows > 0)
+  const receipt = createIncrementalCrunchReceipt({ run: runMetadata, requestedMode: 'incremental' })
+  recordSnapshotInputMetrics(receipt, metrics)
+  assert.equal(receipt.snapshotInputs.rankingResultCacheHits, metrics.rankingResultCacheHits)
+  assert.equal(receipt.snapshotInputs.playerResultCacheHits, metrics.playerResultCacheHits)
+  assert.equal(
+    receipt.snapshotInputs.rankingRequests,
+    (receipt.snapshotInputs.rankingReducerRuns ?? 0) + (receipt.snapshotInputs.rankingResultCacheHits ?? 0),
+  )
+  assert.equal(
+    receipt.snapshotInputs.playerRequests,
+    (receipt.snapshotInputs.playerReducerRuns ?? 0) + (receipt.snapshotInputs.playerResultCacheHits ?? 0),
+  )
 })
 
 test('state-at-date provider preserves parity across append, correction, identity, and tournament changes', () => {
@@ -167,10 +180,45 @@ test('artifact DAG reuses completed nodes on append and rejects malformed graphs
   assert.match(missing.fallback?.kind === 'dependency-unknown' ? missing.fallback.dependency : '', /artifact-dag:missing/)
 
   const cyclic: PersistedArtifactNode[] = [
-    { id: 'a', kind: 'scope', semanticHash: 'a', envelopeHash: 'a', deps: ['b'] },
-    { id: 'b', kind: 'scope', semanticHash: 'b', envelopeHash: 'b', deps: ['a'] },
+    { id: 'a', kind: 'scope', semanticHash: 'a', envelopeHash: 'a', semanticClosureHash: 'a', envelopeClosureHash: 'a', deps: ['b'] },
+    { id: 'b', kind: 'scope', semanticHash: 'b', envelopeHash: 'b', semanticClosureHash: 'b', envelopeClosureHash: 'b', deps: ['a'] },
   ]
   assert.throws(() => validatePersistedArtifactNodes(cyclic), /Artifact DAG cycle/)
+})
+
+test('artifact DAG invalidates dependency closure in dependency-first order and preserves unrelated branches', () => {
+  const fixture = fixedIncrementalFixture()
+  const runMetadata = { generatedAt: '2026-05-10T18:00:00.000Z', runId: 'phase4-closure' }
+  const data = createStaticRankingData(snapshotInput(fixture, runMetadata))
+  const actual = createPublicArtifactWritePlan(data, { runMetadata })
+  const semantic = createSemanticPublicArtifactWritePlan(data)
+  const base = requiredDag(buildPublicArtifactDag({ actual, semantic }))
+  const leafPath = 'matches/pages/all-1.json'
+  const mutateLeaf = (plan: typeof actual) => ({
+    ...plan,
+    writes: plan.writes.map((write) => write.relativePath === leafPath
+      ? { ...write, contents: `${write.contents} ` }
+      : write),
+  })
+  const changed = requiredDag(buildPublicArtifactDag({
+    actual: mutateLeaf(actual),
+    semantic: mutateLeaf(semantic),
+    previous: base.cache,
+  }))
+  const changedPaths = changed.writes.map((write) => write.relativePath)
+  const closure = [leafPath, 'matches/all.json', 'matches/index.json', 'ranking-summary.json']
+  for (const path of closure) assert.ok(changedPaths.includes(path), path)
+  assert.ok(changedPaths.indexOf(leafPath) < changedPaths.indexOf('matches/all.json'))
+  assert.ok(changedPaths.indexOf('matches/all.json') < changedPaths.indexOf('matches/index.json'))
+  assert.ok(changedPaths.indexOf('matches/index.json') < changedPaths.indexOf('ranking-summary.json'))
+  assert.ok(!changedPaths.includes('matches/season-2026.json'))
+  assert.ok(!changedPaths.includes('matches/pages/season-2026-1.json'))
+
+  const tampered = structuredClone(base.cache)
+  const leaf = tampered.find((node) => node.id === `public:${leafPath}`)
+  assert.ok(leaf)
+  leaf.semanticHash = 'tampered-leaf'
+  assert.throws(() => validatePersistedArtifactNodes(tampered), /closure/)
 })
 
 function snapshotInput(

@@ -39,9 +39,11 @@ export type IncrementalCrunchReceipt = {
   }
   snapshotInputs: {
     rankingRequests: InstrumentedCount
+    rankingResultCacheHits: InstrumentedCount
     rankingReducerRuns: InstrumentedCount
     rankingRows: InstrumentedCount
     playerRequests: InstrumentedCount
+    playerResultCacheHits: InstrumentedCount
     playerReducerRuns: InstrumentedCount
     playerRows: InstrumentedCount
     directRankingBuilds: InstrumentedCount
@@ -87,9 +89,11 @@ export function createIncrementalCrunchReceipt({
     reducers: { livePlayerEdgeRows: null, teamRows: null, playerRows: null },
     snapshotInputs: {
       rankingRequests: null,
+      rankingResultCacheHits: null,
       rankingReducerRuns: null,
       rankingRows: null,
       playerRequests: null,
+      playerResultCacheHits: null,
       playerReducerRuns: null,
       playerRows: null,
       directRankingBuilds: null,
@@ -107,9 +111,11 @@ export function recordSnapshotInputMetrics(
   receipt: IncrementalCrunchReceipt,
   metrics: {
     rankingRequests: number
+    rankingResultCacheHits: number
     rankingReducerRuns: number
     rankingRows: number
     playerRequests: number
+    playerResultCacheHits: number
     playerReducerRuns: number
     playerRows: number
     directRankingBuilds: number
