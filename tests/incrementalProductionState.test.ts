@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { canonicalCodeProvenanceHash } from '../scripts/canonical-code-provenance.ts'
 import {
+  attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
@@ -23,6 +24,7 @@ import {
   privateStateHash,
   type IncrementalReducerCheckpoint,
 } from '../src/lib/incremental/reducerCheckpoint.ts'
+import { runIncrementalPlayerReducer } from '../src/lib/incremental/playerReducer.ts'
 import {
   finalizeTeamReducer,
   initializeTeamReducer,
@@ -328,6 +330,85 @@ test('reducer checkpoint is promoted and restored with the canonical generation'
   const expectedStateBytes = (await Promise.all(reducerPaths.map((path) => readFile(path)))).reduce((total, contents) => total + contents.byteLength, 0)
   assert.equal(restored.metrics.reducerStateBytesRead, expectedStateBytes)
   assert.equal(promoted.reducerStateBytesWritten, expectedStateBytes)
+})
+
+test('player checkpoint and immutable history journal share atomic generation promotion', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  assert.ok(first.imports)
+  const teamCheckpoint = reducerCheckpointFor(first.imports.canonical)
+  const playerRun = runIncrementalPlayerReducer({
+    matches: first.imports.canonical.matches,
+    rosters: {},
+    teams: first.imports.canonical.teams,
+    leagueStrengths: [],
+  })
+  const teamPromotion = attachIncrementalReducerCheckpoint(first.promotion, fixture.stateDir, teamCheckpoint)
+  const promotion = attachIncrementalPlayerCheckpoints(teamPromotion, fixture.stateDir, playerRun.checkpoints)
+  const promoted = await promoteIncrementalState(promotion)
+
+  const restored = await loadIncrementalCommunityImports(fixture.input)
+  assert.deepEqual(restored.playerCheckpoints, playerRun.checkpoints)
+  const active = await activeGeneration(fixture.stateDir)
+  assert.equal(arrayField(active.generation, 'reducerCheckpoints').length, 1)
+  const [playerEntry] = arrayField(active.generation, 'playerCheckpoints').map(record)
+  assert.ok(playerEntry)
+  const checkpointHash = stringField(playerEntry, 'checkpointHash')
+  const historyHash = stringField(playerEntry, 'historyHash')
+  const corePath = resolve(fixture.stateDir, 'players', 'checkpoints', `${checkpointHash}.json`)
+  const historyPath = resolve(fixture.stateDir, 'players', 'journals', 'history', `${historyHash}.json`)
+  const coreEnvelope = record(decodePrivateState(await readFile(corePath, 'utf8')))
+  const core = record(coreEnvelope.payload)
+  assert.equal('history' in record(core.player), false)
+  assert.equal(core.historyHash, historyHash)
+  const historyEnvelope = record(decodePrivateState(await readFile(historyPath, 'utf8')))
+  assert.deepEqual(historyEnvelope.payload, playerRun.checkpoints[0]?.player.history)
+  assert.ok(promoted.reducerStateBytesWritten > 0)
+  assert.equal(restored.metrics.reducerStateBytesRead, promoted.reducerStateBytesWritten)
+})
+
+test('player checkpoint and history journal reject independent parseable tampering', async () => {
+  for (const target of ['checkpoint', 'history'] as const) {
+    const fixture = await createFixture([header, ...firstGame].join('\n'))
+    const first = await loadIncrementalCommunityImports(fixture.input)
+    assert.ok(first.promotion)
+    assert.ok(first.imports)
+    const playerRun = runIncrementalPlayerReducer({
+      matches: first.imports.canonical.matches,
+      rosters: {},
+      teams: first.imports.canonical.teams,
+      leagueStrengths: [],
+    })
+    await promoteIncrementalState(attachIncrementalPlayerCheckpoints(
+      first.promotion,
+      fixture.stateDir,
+      playerRun.checkpoints,
+    ))
+    const active = await activeGeneration(fixture.stateDir)
+    const [entry] = arrayField(active.generation, 'playerCheckpoints').map(record)
+    assert.ok(entry)
+    const path = target === 'checkpoint'
+      ? resolve(fixture.stateDir, 'players', 'checkpoints', `${stringField(entry, 'checkpointHash')}.json`)
+      : resolve(fixture.stateDir, 'players', 'journals', 'history', `${stringField(entry, 'historyHash')}.json`)
+    const envelope = record(decodePrivateState(await readFile(path, 'utf8')))
+    if (target === 'checkpoint') {
+      const player = record(record(envelope.payload).player)
+      const state = record(player.state)
+      assert.ok(state.ratings instanceof Map)
+      state.ratings.set('tampered-player', 999)
+    } else {
+      assert.ok(envelope.payload instanceof Map)
+      envelope.payload.set('tampered-player', [])
+    }
+    await writePrivate(path, envelope)
+    const result = await loadIncrementalCommunityImports(fixture.input)
+    assert.equal(result.fallback?.kind, 'checkpoint-corrupt')
+    assert.match(
+      result.fallback?.kind === 'checkpoint-corrupt' ? result.fallback.detail : '',
+      new RegExp(`${target === 'checkpoint' ? 'player-checkpoint' : 'player-history-journal'} semantic hash mismatch`),
+    )
+  }
 })
 
 test('each reducer journal object rejects independent parseable tampering', async () => {

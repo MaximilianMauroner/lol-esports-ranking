@@ -5,6 +5,7 @@ import { basename, dirname, resolve } from 'node:path'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { replaceDirectory } from './replace-directory.ts'
 import {
+  attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
@@ -41,9 +42,12 @@ import { PROVIDER_LEDGER_SCHEMA_VERSION } from '../src/lib/incremental/providerL
 import { regionalSplitCalendars } from '../src/data/rankingCalendar'
 import { canonicalCodeProvenanceHash } from './canonical-code-provenance.ts'
 import type { RankingModelResult } from '../src/lib/model.ts'
+import type { PlayerStanding } from '../src/types.ts'
 import { deriveTournamentInstances } from '../src/lib/internationalTournaments.ts'
 import { runIncrementalRankingReducers } from '../src/lib/incremental/rankingReducer.ts'
 import type { IncrementalReducerCheckpoint } from '../src/lib/incremental/reducerCheckpoint.ts'
+import { runIncrementalPlayerReducer } from '../src/lib/incremental/playerReducer.ts'
+import type { IncrementalPlayerCheckpoint } from '../src/lib/incremental/playerReducer.ts'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
@@ -104,7 +108,7 @@ function buildCrunchOutput({
   lolEsportsImports,
   metrics,
   canonical,
-}: CommunityImports, precomputedGlobalRanking?: RankingModelResult, reducerRows?: ReducerRows, selectedCheckpointDate?: string): CrunchOutput {
+}: CommunityImports, precomputedGlobalRanking?: RankingModelResult, precomputedGlobalPlayers?: PlayerStanding[], reducerRows?: ReducerRows, selectedCheckpointDate?: string, selectedPlayerCheckpointDate?: string): CrunchOutput {
 const directImportedMatches = canonical ? undefined : mergeCommunityMatchSources({
   oracleMatches: oracleImports.flatMap((result) => result.matches),
   leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
@@ -182,6 +186,7 @@ const snapshot = createStaticRankingData({
   tournamentScheduleReferences: tournamentScheduleReferencesFor(lolEsportsImports),
   pipelineAudit: { importedMatchCount: importedMatches.length },
   precomputedGlobalRanking,
+  precomputedGlobalPlayers,
 })
   return {
     snapshot,
@@ -189,6 +194,7 @@ const snapshot = createStaticRankingData({
     metrics,
     ...(reducerRows ? { reducerRows } : {}),
     ...(selectedCheckpointDate ? { selectedCheckpointDate } : {}),
+    ...(selectedPlayerCheckpointDate ? { selectedPlayerCheckpointDate } : {}),
   }
 }
 
@@ -208,17 +214,25 @@ const runIncremental = async () => {
     compatibility,
   })
   incrementalAttemptMetrics = result.metrics
-  const rankingRun = result.imports
-    ? incrementalGlobalRanking(result.imports, result.reducerCheckpoints)
+  const modelRun = result.imports
+    ? incrementalGlobalModels(result.imports, result.reducerCheckpoints, result.playerCheckpoints)
     : undefined
-  if (result.promotion && rankingRun) {
-    pendingPromotion = attachIncrementalReducerCheckpoint(result.promotion, privateStateDir, rankingRun.checkpoints)
+  if (result.promotion && modelRun) {
+    const rankingPromotion = attachIncrementalReducerCheckpoint(result.promotion, privateStateDir, modelRun.ranking.checkpoints)
+    pendingPromotion = attachIncrementalPlayerCheckpoints(rankingPromotion, privateStateDir, modelRun.players.checkpoints)
     result.metrics.reducerStateBytesWritten = pendingPromotion.reducerStateBytesWritten
   } else {
     pendingPromotion = result.promotion
   }
-  const incrementalOutput = result.imports && rankingRun
-    ? buildCrunchOutput(result.imports, rankingRun.ranking, rankingRun.rows, rankingRun.selectedCheckpointDate)
+  const incrementalOutput = result.imports && modelRun
+    ? buildCrunchOutput(
+        result.imports,
+        modelRun.ranking.ranking,
+        modelRun.players.players,
+        { ...modelRun.ranking.rows, playerRows: modelRun.players.rows },
+        modelRun.ranking.selectedCheckpointDate,
+        modelRun.players.selectedCheckpointDate,
+      )
     : undefined
   if (result.fallback) return {
     fallback: result.fallback,
@@ -252,6 +266,7 @@ if (incrementalCandidate?.reducerRows) {
   recordIncrementalReducerCandidate(receipt, {
     ...incrementalCandidate.reducerRows,
     selectedCheckpoint: incrementalCandidate.selectedCheckpointDate,
+    selectedPlayerCheckpoint: incrementalCandidate.selectedPlayerCheckpointDate,
   })
 }
 const selectedAttempt = receipt.attempts.findLast((attempt) => (
@@ -372,11 +387,29 @@ type CrunchOutput = {
   metrics: SourceMetrics
   reducerRows?: ReducerRows
   selectedCheckpointDate?: string
+  selectedPlayerCheckpointDate?: string
 }
 
 type ReducerRows = {
   livePlayerEdgeRows: number
   teamRows: number
+  playerRows: number
+}
+
+function incrementalGlobalModels(
+  imports: IncrementalCommunityImports,
+  rankingCheckpointHistory: IncrementalReducerCheckpoint[] = [],
+  playerCheckpointHistory: IncrementalPlayerCheckpoint[] = [],
+) {
+  const ranking = incrementalGlobalRanking(imports, rankingCheckpointHistory)
+  const players = runIncrementalPlayerReducer({
+    matches: imports.canonical.matches,
+    rosters: {},
+    teams: imports.canonical.teams,
+    leagueStrengths: ranking.ranking.leagues,
+    checkpointHistory: playerCheckpointHistory,
+  })
+  return { ranking, players }
 }
 
 function incrementalGlobalRanking(

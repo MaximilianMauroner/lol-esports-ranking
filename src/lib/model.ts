@@ -18,7 +18,7 @@ import { eventWeightContextForMatches } from './eventWeighting'
 import { ensureLeague } from './leagueRatings'
 import { homeLeagueForMatch, matchesByDate } from './matchContext'
 import { buildEventSummaries, buildLeagueStrengths, buildSeasonSummaries } from './modelSummaries'
-import { buildPregamePlayerRatingEdges } from './playerModel'
+import { buildPregamePlayerRatingEdges, livePlayerEdgeMatchInput } from './playerModel'
 import {
   applyCompletedPlacementResiduals,
   startEventTrackersForDate,
@@ -71,6 +71,11 @@ export type RankingModelResult = {
   regions: Region[]
   leagueHistory: LeagueStrengthHistoryPoint[]
   predictions: PregamePrediction[]
+}
+
+/** Exact persisted match dependency consumed by the team reducer and its live player edge. */
+export function teamReducerMatchInput(match: MatchRecord): MatchRecord {
+  return livePlayerEdgeMatchInput(match)
 }
 
 export type TeamReducer = {

@@ -1233,6 +1233,7 @@ export function createStaticRankingData({
   tournamentScheduleReferences = [],
   pipelineAudit,
   precomputedGlobalRanking,
+  precomputedGlobalPlayers,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1245,6 +1246,7 @@ export function createStaticRankingData({
   tournamentScheduleReferences?: TournamentScheduleReference[]
   pipelineAudit?: { importedMatchCount: number }
   precomputedGlobalRanking?: RankingModelResult
+  precomputedGlobalPlayers?: PlayerStanding[]
 }): StaticRankingData {
   const generatedAt = runMetadata?.generatedAt ?? requestedGeneratedAt ?? new Date().toISOString()
   const resolvedRunMetadata: CrunchRunMetadata = runMetadata ?? {
@@ -1305,7 +1307,8 @@ export function createStaticRankingData({
     seasonRankingCache.set(cacheKey, scope)
     return scope
   }
-  const globalPlayers = buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
+  const globalPlayers = precomputedGlobalPlayers
+    ?? buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
   const seasonPlayerCache = new Map<string, PlayerStanding[]>()
   const playersForFilter = (filter: SnapshotFilter, filteredMatches: MatchRecord[], scope: RankingScope): PlayerStanding[] => {
     if (filter.event !== 'All' || filter.region !== 'All') return []

@@ -43,6 +43,7 @@ test('legacy generatedAt callers retain the existing derived run ID', () => {
     modelVersion: transparentGprModelMetadata.version,
     modelConfigHash: transparentGprModelMetadata.configHash,
   })
+  assert.ok(plan.manifest.artifactMeta)
   assert.equal(plan.manifest.artifactMeta.runId, expectedRunId)
 })
 

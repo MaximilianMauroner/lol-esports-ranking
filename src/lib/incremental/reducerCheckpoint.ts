@@ -1,12 +1,16 @@
 import type { MatchRecord, TeamProfile } from '../../types.ts'
 import { eventWeightContextForMatches, isWorldsEventMatch } from '../eventWeighting.ts'
-import type { TeamReducerCheckpoint } from '../model.ts'
+import { teamReducerMatchInput, type TeamReducerCheckpoint } from '../model.ts'
 import {
   isPlacementDependencyEvent,
   placementEventKeyForMatch,
   type PlacementTournamentLifecycle,
 } from '../placementResiduals.ts'
-import type { LivePlayerEdgeCheckpoint } from '../playerModel.ts'
+import {
+  playerModelModeForMatches,
+  sortPlayerModelMatches,
+  type LivePlayerEdgeCheckpoint,
+} from '../playerModel.ts'
 import { encodePrivateState } from './canonicalCodec.ts'
 import { sha256Hex, stableHash } from './hash.ts'
 
@@ -55,7 +59,14 @@ export type ReducerJournalHashes = {
 export function canonicalPrefixHash(matches: MatchRecord[], throughDate?: string) {
   return stableHash(matches
     .filter((match) => !throughDate || match.date <= throughDate)
-    .toSorted((left, right) => left.date.localeCompare(right.date) || left.id.localeCompare(right.id)))
+    .toSorted((left, right) => left.date.localeCompare(right.date) || left.id.localeCompare(right.id))
+    .map(teamReducerMatchInput))
+}
+
+export function fullMatchCanonicalPrefixHash(matches: MatchRecord[], throughDate?: string) {
+  const mode = playerModelModeForMatches(matches)
+  const prefix = matches.filter((match) => !throughDate || match.date <= throughDate)
+  return stableHash({ mode, matches: sortPlayerModelMatches(prefix, mode) })
 }
 
 export function selectLatestReducerCheckpoint(
@@ -108,7 +119,7 @@ export function buildReducerDependencyPlan({
     boundaries.push({
       key: `placement:${key}`,
       startDate: eventMatches[0]!.date,
-      hash: privateStateHash({ matches: eventMatches, lifecycle: tournamentLifecycles.get(key) }),
+      hash: privateStateHash({ matches: eventMatches.map(teamReducerMatchInput), lifecycle: tournamentLifecycles.get(key) }),
     })
   }
   const worldsMatches = groupMatches(sortedMatches.filter(isWorldsEventMatch), (match) => match.date.slice(0, 4))
@@ -117,7 +128,10 @@ export function buildReducerDependencyPlan({
     boundaries.push({
       key: `worlds:${year}`,
       startDate: eventMatches[0]!.date,
-      hash: privateStateHash({ matches: eventMatches, endDate: eventWeightContext.worldsEndDateByCalendarYear.get(Number(year)) }),
+      hash: privateStateHash({
+        matches: eventMatches.map(teamReducerMatchInput),
+        endDate: eventWeightContext.worldsEndDateByCalendarYear.get(Number(year)),
+      }),
     })
   }
   return {

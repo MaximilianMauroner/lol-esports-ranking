@@ -134,10 +134,88 @@ export type LivePlayerEdgeReducer = {
   processedDate?: string
 }
 
-type PlayerRatingContext = {
+export type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
   leagueStrengths?: LeagueStrength[]
   eventWeightContext?: EventWeightContext
+}
+
+export type PlayerHistoryJournal = Map<string, PlayerStanding['history']>
+
+export type StaticPlayerState = {
+  ratings: Map<string, number>
+  profiles: Map<string, PlayerProfile>
+  forms: Map<string, string[]>
+}
+
+type PlayerReducerBase = {
+  processedDate?: string
+  processedRows: number
+  history: PlayerHistoryJournal
+  context: PlayerRatingContext & { eventWeightContext: EventWeightContext }
+}
+
+export type StaticPlayerReducer = PlayerReducerBase & {
+  mode: 'static'
+  state: StaticPlayerState
+  rosters: Record<string, PlayerProfile[]>
+}
+
+export type SourcedPlayerReducer = PlayerReducerBase & {
+  mode: 'sourced'
+  state: SourcedPlayerState
+  leagueRatings: Map<string, number>
+  latestRosterByTeam: Map<string, PlayerProfile[]>
+  residualControlModel: IndividualResidualControlModel
+}
+
+export type PlayerModelReducer = StaticPlayerReducer | SourcedPlayerReducer
+export type PlayerModelMode = PlayerModelReducer['mode']
+
+export const livePlayerRatingStatsFields = [
+  'side',
+  'won',
+  'kills',
+  'deaths',
+  'assists',
+  'damageShare',
+  'earnedGoldShare',
+  'vspm',
+] as const satisfies ReadonlyArray<keyof PlayerGameStats>
+
+export function livePlayerEdgeMatchInput(match: MatchRecord): MatchRecord {
+  return {
+    ...match,
+    teamARoster: livePlayerEdgeRosterInput(match.teamARoster),
+    teamBRoster: livePlayerEdgeRosterInput(match.teamBRoster),
+  }
+}
+
+function livePlayerEdgeRosterInput(roster: MatchRecord['teamARoster']) {
+  if (!roster) return undefined
+  return {
+    ...roster,
+    players: roster.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      role: player.role,
+      ...(player.stats ? { stats: livePlayerRatingStatsInput(player.stats) } : {}),
+    })),
+  }
+}
+
+function livePlayerRatingStatsInput(stats: PlayerGameStats): PlayerGameStats {
+  return Object.fromEntries(livePlayerRatingStatsFields.map((field) => [field, stats[field]])) as PlayerGameStats
+}
+
+export type PlayerModelCheckpoint = {
+  schemaVersion: 1
+  processedDate?: string
+  processedRows: number
+  mode: PlayerModelReducer['mode']
+  state: StaticPlayerState | SourcedPlayerState
+  history: PlayerHistoryJournal
+  latestRosterByTeam?: Map<string, PlayerProfile[]>
 }
 
 export function buildPlayerModel(
@@ -145,41 +223,113 @@ export function buildPlayerModel(
   rosters: Record<string, PlayerProfile[]>,
   context: PlayerRatingContext = {},
 ): PlayerStanding[] {
+  const reducer = initializePlayerModelReducer(matches, rosters, context)
+  const sortedMatches = sortPlayerModelMatches(matches, reducer.mode)
+  for (const dateMatches of matchesByDate(sortedMatches)) processPlayerModelDateBatch(reducer, dateMatches)
+  return finalizePlayerModelReducer(reducer)
+}
+
+export function playerModelModeForMatches(matches: MatchRecord[]): PlayerModelMode {
+  return hasObservedPlayerStats(matches) ? 'sourced' : 'static'
+}
+
+export function sortPlayerModelMatches(matches: MatchRecord[], mode = playerModelModeForMatches(matches)) {
+  return matches.toSorted((left, right) =>
+    left.date.localeCompare(right.date) || (mode === 'sourced' ? left.id.localeCompare(right.id) : 0),
+  )
+}
+
+export function initializePlayerModelReducer(
+  matches: MatchRecord[],
+  rosters: Record<string, PlayerProfile[]>,
+  context: PlayerRatingContext = {},
+): PlayerModelReducer {
   const resolvedContext = {
     ...context,
     eventWeightContext: context.eventWeightContext ?? eventWeightContextForMatches(matches),
   }
-  if (hasObservedPlayerStats(matches)) {
-    return buildSourcedPlayerModel(matches, resolvedContext)
-  }
-
-  return buildStaticRosterPlayerModel(matches, rosters, resolvedContext.eventWeightContext)
-}
-
-function buildStaticRosterPlayerModel(
-  matches: MatchRecord[],
-  rosters: Record<string, PlayerProfile[]>,
-  eventWeightContext: EventWeightContext,
-): PlayerStanding[] {
-  const ratings = new Map<string, number>()
-  const profiles = new Map<string, PlayerProfile>()
-  const forms = new Map<string, string[]>()
-  const histories = new Map<string, PlayerStanding['history']>()
-  const finalShares = new Map<string, PlayerShare>()
-  const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date))
-
-  for (const roster of Object.values(rosters)) {
-    for (const player of roster) {
-      ratings.set(player.id, initialPlayerRating)
-      profiles.set(player.id, player)
-      forms.set(player.id, [])
-      histories.set(player.id, [])
+  if (playerModelModeForMatches(matches) === 'sourced') {
+    const leagueRatings = leagueRatingsFor(resolvedContext.leagueStrengths)
+    return {
+      mode: 'sourced',
+      state: createSourcedPlayerState(true, false),
+      processedRows: 0,
+      history: new Map(),
+      context: resolvedContext,
+      leagueRatings,
+      latestRosterByTeam: new Map(),
+      residualControlModel: buildIndividualResidualControlModel(matches, resolvedContext, leagueRatings),
     }
   }
 
-  for (const match of sortedMatches) {
+  const state: StaticPlayerState = { ratings: new Map(), profiles: new Map(), forms: new Map() }
+  const history: PlayerHistoryJournal = new Map()
+  for (const roster of Object.values(rosters)) {
+    for (const player of roster) {
+      state.ratings.set(player.id, initialPlayerRating)
+      state.profiles.set(player.id, player)
+      state.forms.set(player.id, [])
+      history.set(player.id, [])
+    }
+  }
+  return { mode: 'static', state, rosters, processedRows: 0, history, context: resolvedContext }
+}
+
+export function restorePlayerModelReducer(
+  checkpoint: PlayerModelCheckpoint,
+  matches: MatchRecord[],
+  rosters: Record<string, PlayerProfile[]>,
+  context: PlayerRatingContext = {},
+): PlayerModelReducer {
+  if (checkpoint.schemaVersion !== 1) throw new Error('Incompatible player-model checkpoint')
+  const initialized = initializePlayerModelReducer(matches, rosters, context)
+  if (initialized.mode !== checkpoint.mode) throw new Error(`Player-model checkpoint mode ${checkpoint.mode} does not match ${initialized.mode}`)
+  if (initialized.mode === 'static') {
+    return {
+      ...initialized,
+      state: structuredClone(checkpoint.state as StaticPlayerState),
+      history: structuredClone(checkpoint.history),
+      processedDate: checkpoint.processedDate,
+      processedRows: checkpoint.processedRows,
+    }
+  }
+  const state = structuredClone(checkpoint.state as SourcedPlayerState)
+  state.individualResiduals = new Map()
+  rebuildIndividualResiduals(state, initialized.residualControlModel)
+  return {
+    ...initialized,
+    state,
+    history: structuredClone(checkpoint.history),
+    latestRosterByTeam: structuredClone(checkpoint.latestRosterByTeam ?? new Map()),
+    processedDate: checkpoint.processedDate,
+    processedRows: checkpoint.processedRows,
+  }
+}
+
+export function processPlayerModelDateBatch(reducer: PlayerModelReducer, matches: MatchRecord[]): number {
+  const dateMatches = reducer.mode === 'sourced'
+    ? matches.toSorted((left, right) => left.id.localeCompare(right.id))
+    : matches
+  const date = dateMatches[0]?.date
+  if (!date) return 0
+  if (dateMatches.some((match) => match.date !== date)) throw new Error('Player-model batches must contain one complete UTC date')
+  if (reducer.processedDate && date <= reducer.processedDate) throw new Error(`Player-model date ${date} is not after checkpoint ${reducer.processedDate}`)
+
+  const processedRows = reducer.mode === 'sourced'
+    ? processSourcedPlayerDateBatch(reducer, dateMatches)
+    : processStaticPlayerDateBatch(reducer, dateMatches)
+  reducer.processedDate = date
+  reducer.processedRows += processedRows
+  return processedRows
+}
+
+function processStaticPlayerDateBatch(reducer: StaticPlayerReducer, matches: MatchRecord[]) {
+  const { ratings, forms } = reducer.state
+  let processedRows = 0
+
+  for (const match of matches) {
     for (const team of [match.teamA, match.teamB]) {
-      const roster = rosters[team]
+      const roster = reducer.rosters[team]
       if (!roster) continue
       const won = match.winner === team
       const isTeamA = match.teamA === team
@@ -190,7 +340,7 @@ function buildStaticRosterPlayerModel(
       const objectivesFor = teamObjectiveCount(match, isTeamA ? 'A' : 'B')
       const objectivesAgainst = teamObjectiveCount(match, isTeamA ? 'B' : 'A')
       const dominance = executionIndexFromStats(killsFor, killsAgainst, goldFor, goldAgainst, objectivesFor, objectivesAgainst)
-      const eventWeight = eventWeightForMatch(match, eventWeightContext)
+      const eventWeight = eventWeightForMatch(match, reducer.context.eventWeightContext)
       const shares = playerSharesForRoster(roster, ratings, forms)
 
       for (const player of roster) {
@@ -199,18 +349,55 @@ function buildStaticRosterPlayerModel(
         const shareMultiplier = playerShare.playerShare / 0.2
         const delta = Number((((won ? 1.6 : -1.1) * eventWeight + dominance * 5) * shareMultiplier).toFixed(1))
         const nextRating = Number((rating + delta).toFixed(1))
-        finalShares.set(player.id, playerShare)
         ratings.set(player.id, nextRating)
         forms.set(player.id, [...(forms.get(player.id) ?? []), won ? 'W' : 'L'].slice(-5))
-        histories.set(player.id, [
-          ...(histories.get(player.id) ?? []),
+        reducer.history.set(player.id, [
+          ...(reducer.history.get(player.id) ?? []),
           { date: match.date, event: match.event, rating: nextRating, delta },
         ])
+        processedRows += 1
       }
     }
   }
+  return processedRows
+}
 
-  for (const roster of Object.values(rosters)) {
+function processSourcedPlayerDateBatch(reducer: SourcedPlayerReducer, matches: MatchRecord[]) {
+  for (const match of matches) registerSourcedRosters(match, reducer.state, reducer.context, reducer.leagueRatings)
+  return applySourcedPlayerUpdates(
+    matches,
+    reducer.state,
+    new Map(reducer.state.ratings),
+    reducer.context,
+    reducer.leagueRatings,
+    reducer.latestRosterByTeam,
+    reducer.residualControlModel,
+    reducer.history,
+  )
+}
+
+export function snapshotPlayerModelReducer(reducer: PlayerModelReducer): PlayerModelCheckpoint {
+  return structuredClone({
+    schemaVersion: 1 as const,
+    processedDate: reducer.processedDate,
+    processedRows: reducer.processedRows,
+    mode: reducer.mode,
+    state: reducer.state,
+    history: reducer.history,
+    latestRosterByTeam: reducer.mode === 'sourced' ? reducer.latestRosterByTeam : undefined,
+  })
+}
+
+export function finalizePlayerModelReducer(reducer: PlayerModelReducer): PlayerStanding[] {
+  return reducer.mode === 'sourced' ? finalizeSourcedPlayerModel(reducer) : finalizeStaticPlayerModel(reducer)
+}
+
+function finalizeStaticPlayerModel(reducer: StaticPlayerReducer): PlayerStanding[] {
+  const { ratings, profiles, forms } = reducer.state
+  const histories = reducer.history
+  const finalShares = new Map<string, PlayerShare>()
+
+  for (const roster of Object.values(reducer.rosters)) {
     const shares = playerSharesForRoster(roster, ratings, forms)
     for (const player of roster) {
       finalShares.set(player.id, shares.get(player.id) ?? fallbackPlayerShare(player))
@@ -252,21 +439,10 @@ function buildStaticRosterPlayerModel(
     .map((player, index) => ({ ...player, rank: index + 1 }))
 }
 
-function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingContext): PlayerStanding[] {
-  const state = createSourcedPlayerState(true)
-  const histories = state.histories ?? new Map<string, PlayerStanding['history']>()
+function finalizeSourcedPlayerModel(reducer: SourcedPlayerReducer): PlayerStanding[] {
+  const { state, context, leagueRatings, latestRosterByTeam } = reducer
+  const histories = reducer.history
   const finalShares = new Map<string, PlayerShare>()
-  const latestRosterByTeam = new Map<string, PlayerProfile[]>()
-  const leagueRatings = leagueRatingsFor(context.leagueStrengths)
-  const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
-  const residualControlModel = buildIndividualResidualControlModel(sortedMatches, context, leagueRatings)
-
-  for (const dateMatches of matchesByDate(sortedMatches)) {
-    for (const match of dateMatches) {
-      registerSourcedRosters(match, state, context, leagueRatings)
-    }
-    applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings), context, leagueRatings, latestRosterByTeam, residualControlModel)
-  }
 
   for (const roster of latestRosterByTeam.values()) {
     const shares = playerSharesForRoster(roster, state.ratings, state.forms)
@@ -465,6 +641,7 @@ export type SourcedPlayerState = {
   appearances?: Map<string, PlayerAppearanceAccumulator>
   diagnostics?: Map<string, PlayerDiagnosticsAccumulator>
   individualResiduals?: Map<string, PlayerIndividualResidualAccumulator>
+  residualObservations?: PlayerIndividualResidualObservation[]
 }
 
 type PlayerAppearanceAccumulator = {
@@ -491,13 +668,30 @@ type PlayerDiagnosticsAccumulator = {
   vspm: DiagnosticAverageAccumulator
 }
 
-type IndividualResidualControlModel = {
+export type IndividualResidualControlModel = {
   global: DiagnosticAverageAccumulator
   role: Map<Role, DiagnosticAverageAccumulator>
   roleLeague: Map<string, DiagnosticAverageAccumulator>
   roleSide: Map<string, DiagnosticAverageAccumulator>
   rolePatch: Map<string, DiagnosticAverageAccumulator>
   roleTier: Map<string, DiagnosticAverageAccumulator>
+}
+
+export type PlayerIndividualResidualObservation = {
+  playerId: string
+  role: Role
+  opponentRole: Role
+  league: string
+  opponentLeague: string
+  side?: Side
+  opponentSide?: Side
+  patch: string
+  tier: MatchRecord['tier']
+  rating: number
+  opponentRating: number
+  noWinScore: number
+  opponentNoWinScore: number
+  won: boolean
 }
 
 type PlayerIndividualResidualAccumulator = {
@@ -515,17 +709,18 @@ type PlayerIndividualResidualAccumulator = {
   eventTierGames: Map<MatchRecord['tier'], number>
 }
 
-function createSourcedPlayerState(includeAuditFields: boolean): SourcedPlayerState {
+function createSourcedPlayerState(includeAuditFields: boolean, includeHistory = includeAuditFields): SourcedPlayerState {
   return {
     ratings: new Map(),
     games: new Map(),
     profiles: new Map(),
     forms: new Map(),
-    histories: includeAuditFields ? new Map() : undefined,
+    histories: includeHistory ? new Map() : undefined,
     sources: includeAuditFields ? new Map() : undefined,
     appearances: includeAuditFields ? new Map() : undefined,
     diagnostics: includeAuditFields ? new Map() : undefined,
     individualResiduals: includeAuditFields ? new Map() : undefined,
+    residualObservations: includeAuditFields ? [] : undefined,
   }
 }
 
@@ -563,7 +758,9 @@ function applySourcedPlayerUpdates(
   leagueRatings: Map<string, number>,
   latestRosterByTeam?: Map<string, PlayerProfile[]>,
   residualControlModel?: IndividualResidualControlModel,
+  historyJournal?: PlayerHistoryJournal,
 ) {
+  let processedRows = 0
   const seriesByMatchId = canonicalSeriesForMatches(matches)
   for (const match of matches) {
     const series = seriesByMatchId.get(match.id)
@@ -603,8 +800,9 @@ function applySourcedPlayerUpdates(
         state.profiles.set(player.id, profile)
         state.games.set(player.id, (state.games.get(player.id) ?? 0) + 1)
         state.forms.set(player.id, [...(state.forms.get(player.id) ?? []), player.stats.won ? 'W' : 'L'].slice(-5))
-        state.histories?.set(player.id, [
-          ...(state.histories.get(player.id) ?? []),
+        const histories = historyJournal ?? state.histories
+        histories?.set(player.id, [
+          ...(histories.get(player.id) ?? []),
           {
             date: match.date,
             event: match.event,
@@ -635,9 +833,11 @@ function applySourcedPlayerUpdates(
           residualControlModel,
         )
         recordRatedAppearance(player.id, profile, match, state)
+        processedRows += 1
       }
     }
   }
+  return processedRows
 }
 
 function oppositeSeriesOutcome(outcome: 0 | 0.5 | 1) {
@@ -811,7 +1011,7 @@ function diagnosticAverage(
   }
 }
 
-function buildIndividualResidualControlModel(
+export function buildIndividualResidualControlModel(
   matches: MatchRecord[],
   context: PlayerRatingContext,
   leagueRatings: Map<string, number>,
@@ -915,28 +1115,77 @@ function recordIndividualResidual(
   const opponentBaseline = playerBaselineForLeague(opponentLeague, leagueRatings)
   const rating = preUpdateRatings.get(player.id) ?? playerBaseline
   const opponentRating = preUpdateRatings.get(opponent.id) ?? opponentBaseline
-  const expected = residualControlBaseline(controlModel, player.role, league, player.stats?.side, match.patch, match.tier)
-  const opponentExpected = residualControlBaseline(controlModel, opponent.role, opponentLeague, opponent.stats?.side, match.patch, match.tier)
-  const sameRoleDiff = noWinScore - opponentNoWinScore
-  const strengthProxy = (expectedPlayerScore(rating, opponentRating) - 0.5) * individualResidualStrengthProxyWeight
+  const observation: PlayerIndividualResidualObservation = {
+    playerId,
+    role: player.role,
+    opponentRole: opponent.role,
+    league,
+    opponentLeague,
+    side: player.stats?.side,
+    opponentSide: opponent.stats?.side,
+    patch: match.patch,
+    tier: match.tier,
+    rating,
+    opponentRating,
+    noWinScore,
+    opponentNoWinScore,
+    won: Boolean(player.stats?.won),
+  }
+  state.residualObservations?.push(observation)
+  applyIndividualResidualObservation(observation, state.individualResiduals, controlModel)
+
+  void profile
+}
+
+function rebuildIndividualResiduals(state: SourcedPlayerState, controlModel: IndividualResidualControlModel) {
+  const residuals = state.individualResiduals
+  if (!residuals) return
+  for (const observation of state.residualObservations ?? []) {
+    applyIndividualResidualObservation(observation, residuals, controlModel)
+  }
+}
+
+function applyIndividualResidualObservation(
+  observation: PlayerIndividualResidualObservation,
+  residuals: Map<string, PlayerIndividualResidualAccumulator>,
+  controlModel: IndividualResidualControlModel,
+) {
+  const expected = residualControlBaseline(
+    controlModel,
+    observation.role,
+    observation.league,
+    observation.side,
+    observation.patch,
+    observation.tier,
+  )
+  const opponentExpected = residualControlBaseline(
+    controlModel,
+    observation.opponentRole,
+    observation.opponentLeague,
+    observation.opponentSide,
+    observation.patch,
+    observation.tier,
+  )
+  const sameRoleDiff = observation.noWinScore - observation.opponentNoWinScore
+  const strengthProxy = (expectedPlayerScore(observation.rating, observation.opponentRating) - 0.5)
+    * individualResidualStrengthProxyWeight
   const adjustedSameRoleDiff = sameRoleDiff - ((expected - opponentExpected) + strengthProxy)
-  const current = state.individualResiduals.get(playerId) ?? createPlayerIndividualResidualAccumulator()
+  const current = residuals.get(observation.playerId) ?? createPlayerIndividualResidualAccumulator()
 
   current.sampleGames += 1
-  if (player.stats?.won) current.wins += 1
+  if (observation.won) current.wins += 1
   else current.losses += 1
   recordDiagnosticValue(current.adjustedSameRoleDiff, adjustedSameRoleDiff)
   recordDiagnosticValue(current.expectedNoWinStatScore, expected)
   recordDiagnosticValue(current.opponentStrengthProxy, strengthProxy)
-  recordDiagnosticValue(current.noWinStatScore, noWinScore)
+  recordDiagnosticValue(current.noWinStatScore, observation.noWinScore)
   recordDiagnosticValue(current.sameRoleMatchupDiff, sameRoleDiff)
-  current.leagueGames.set(league, (current.leagueGames.get(league) ?? 0) + 1)
-  if (player.stats?.side) current.sideGames.set(player.stats.side, (current.sideGames.get(player.stats.side) ?? 0) + 1)
-  current.patchGames.set(patchBucket(match.patch), (current.patchGames.get(patchBucket(match.patch)) ?? 0) + 1)
-  current.eventTierGames.set(match.tier, (current.eventTierGames.get(match.tier) ?? 0) + 1)
-  state.individualResiduals.set(playerId, current)
-
-  void profile
+  current.leagueGames.set(observation.league, (current.leagueGames.get(observation.league) ?? 0) + 1)
+  if (observation.side) current.sideGames.set(observation.side, (current.sideGames.get(observation.side) ?? 0) + 1)
+  const patch = patchBucket(observation.patch)
+  current.patchGames.set(patch, (current.patchGames.get(patch) ?? 0) + 1)
+  current.eventTierGames.set(observation.tier, (current.eventTierGames.get(observation.tier) ?? 0) + 1)
+  residuals.set(observation.playerId, current)
 }
 
 function createPlayerIndividualResidualAccumulator(): PlayerIndividualResidualAccumulator {

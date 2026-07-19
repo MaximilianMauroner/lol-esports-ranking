@@ -47,6 +47,7 @@ export type IncrementalCrunchReceipt = {
   }
   checkpoint: {
     selected?: string
+    playerSelected?: string
     fallback?: IncrementalFallbackReason
   }
   timingsMs: Record<string, number>
@@ -105,10 +106,14 @@ export function recordIncrementalReducerCandidate(
   candidate: {
     livePlayerEdgeRows: number
     teamRows: number
+    playerRows?: number
     selectedCheckpoint?: string
+    selectedPlayerCheckpoint?: string
   },
 ): void {
   receipt.reducers.livePlayerEdgeRows = candidate.livePlayerEdgeRows
   receipt.reducers.teamRows = candidate.teamRows
+  if (candidate.playerRows !== undefined) receipt.reducers.playerRows = candidate.playerRows
   if (candidate.selectedCheckpoint) receipt.checkpoint.selected = candidate.selectedCheckpoint
+  if (candidate.selectedPlayerCheckpoint) receipt.checkpoint.playerSelected = candidate.selectedPlayerCheckpoint
 }

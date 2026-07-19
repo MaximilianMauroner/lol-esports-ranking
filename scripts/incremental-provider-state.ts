@@ -32,6 +32,11 @@ import {
   type ReducerJournalHashes,
   type ReducerCheckpointRetention,
 } from '../src/lib/incremental/reducerCheckpoint.ts'
+import {
+  isIncrementalPlayerCheckpoint,
+  type IncrementalPlayerCheckpoint,
+  type PersistedPlayerCheckpointCore,
+} from '../src/lib/incremental/playerReducer.ts'
 
 const LOCAL_STATE_SCHEMA_VERSION = 2 as const
 
@@ -78,6 +83,13 @@ type ReducerCheckpointGenerationEntry = {
   retention: ReducerCheckpointRetention[]
 }
 
+type PlayerCheckpointGenerationEntry = {
+  processedDate?: string
+  checkpointHash: string
+  historyHash: string
+  retention: ReducerCheckpointRetention[]
+}
+
 type StateGeneration = {
   schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
   kind: 'incremental-generation'
@@ -86,6 +98,7 @@ type StateGeneration = {
   fileSet: GenerationFileSet
   compatibility: CrunchCompatibility
   reducerCheckpoints?: ReducerCheckpointGenerationEntry[]
+  playerCheckpoints?: PlayerCheckpointGenerationEntry[]
 }
 
 type ActiveGenerationPointer = {
@@ -96,7 +109,7 @@ type ActiveGenerationPointer = {
 
 type ContentEnvelope = {
   schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
-  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation' | 'reducer-checkpoint' | 'reducer-journal'
+  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation' | 'reducer-checkpoint' | 'reducer-journal' | 'player-checkpoint' | 'player-history-journal'
   contentHash: string
   payload: unknown
 }
@@ -119,6 +132,7 @@ type LoadedGeneration = {
   providers: Map<string, LoadedProviderState>
   canonicalLedger: CanonicalLedger
   reducerCheckpoints: IncrementalReducerCheckpoint[]
+  playerCheckpoints: IncrementalPlayerCheckpoint[]
 }
 
 type ReducerStateIOMetrics = { bytesRead: number }
@@ -150,6 +164,8 @@ export type IncrementalCommunityLoadResult = {
   metrics: IncrementalLoadMetrics
   reducerCheckpoint?: IncrementalReducerCheckpoint
   reducerCheckpoints?: IncrementalReducerCheckpoint[]
+  playerCheckpoint?: IncrementalPlayerCheckpoint
+  playerCheckpoints?: IncrementalPlayerCheckpoint[]
 }
 
 export async function loadIncrementalCommunityImports({
@@ -268,6 +284,10 @@ export async function loadIncrementalCommunityImports({
         reducerCheckpoint: active.reducerCheckpoints.at(-1),
         reducerCheckpoints: active.reducerCheckpoints,
       } : {}),
+      ...(active?.playerCheckpoints.length ? {
+        playerCheckpoint: active.playerCheckpoints.at(-1),
+        playerCheckpoints: active.playerCheckpoints,
+      } : {}),
       ...(restoreFallback ? { fallback: restoreFallback } : {}),
     }
   } catch (error) {
@@ -351,6 +371,78 @@ export function attachIncrementalReducerCheckpoint(
   }
 }
 
+export function attachIncrementalPlayerCheckpoints(
+  promotion: IncrementalStatePromotion,
+  stateDir: string,
+  checkpointOrHistory: IncrementalPlayerCheckpoint | IncrementalPlayerCheckpoint[],
+): IncrementalStatePromotion {
+  const pointer = parseActivePointer(decodePrivateState(promotion.pointerWrite.contents))
+  const generationPath = resolve(stateDir, 'generations', `${pointer.generationHash}.json`)
+  const generationWrite = promotion.stagedWrites.find((write) => write.path === generationPath)
+  if (!generationWrite) throw new Error('Pending incremental generation is unavailable for player checkpoint attachment')
+  const envelope = decodePrivateState(generationWrite.contents)
+  if (!isRecord(envelope) || envelope.kind !== 'state-generation' || !isRecord(envelope.payload)) {
+    throw new Error('Invalid pending incremental generation envelope')
+  }
+  const generation = envelope.payload as StateGeneration
+  verifyGeneration(generation)
+  const checkpoints = Array.isArray(checkpointOrHistory) ? checkpointOrHistory : [checkpointOrHistory]
+  const checkpointWrites: PendingIncrementalStateWrite[] = []
+  const playerCheckpoints = checkpoints.map((checkpoint): PlayerCheckpointGenerationEntry => {
+    const historyHash = privateStateHash(checkpoint.player.history)
+    const core: PersistedPlayerCheckpointCore = {
+      schemaVersion: checkpoint.schemaVersion,
+      processedDate: checkpoint.processedDate,
+      canonicalPrefixHash: checkpoint.canonicalPrefixHash,
+      dependencyHash: checkpoint.dependencyHash,
+      residualControlHash: checkpoint.residualControlHash,
+      retention: checkpoint.retention,
+      player: {
+        schemaVersion: checkpoint.player.schemaVersion,
+        processedDate: checkpoint.player.processedDate,
+        processedRows: checkpoint.player.processedRows,
+        mode: checkpoint.player.mode,
+        state: checkpoint.player.state,
+        latestRosterByTeam: checkpoint.player.latestRosterByTeam,
+      },
+      historyHash,
+    }
+    const checkpointHash = privateStateHash(core)
+    checkpointWrites.push(
+      contentWrite(
+        resolve(stateDir, 'players', 'journals', 'history', `${historyHash}.json`),
+        'player-history-journal',
+        historyHash,
+        checkpoint.player.history,
+      ),
+      contentWrite(
+        resolve(stateDir, 'players', 'checkpoints', `${checkpointHash}.json`),
+        'player-checkpoint',
+        checkpointHash,
+        core,
+      ),
+    )
+    return { processedDate: checkpoint.processedDate, checkpointHash, historyHash, retention: checkpoint.retention }
+  })
+  const nextGeneration: StateGeneration = { ...generation, playerCheckpoints }
+  const generationHash = stableHash(nextGeneration)
+  const playerWrites = uniqueWrites(checkpointWrites)
+  return {
+    stagedWrites: uniqueWrites([
+      ...promotion.stagedWrites.filter((write) => write.path !== generationPath),
+      ...playerWrites,
+      contentWrite(resolve(stateDir, 'generations', `${generationHash}.json`), 'state-generation', generationHash, nextGeneration),
+    ]),
+    pointerWrite: privateWrite(resolve(stateDir, 'active-generation.json'), {
+      schemaVersion: LOCAL_STATE_SCHEMA_VERSION,
+      kind: 'active-generation',
+      generationHash,
+    } satisfies ActiveGenerationPointer),
+    reducerStateBytesWritten: promotion.reducerStateBytesWritten
+      + playerWrites.reduce((total, write) => total + encodedByteLength(write.contents), 0),
+  }
+}
+
 async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerStateIOMetrics): Promise<LoadedGeneration | undefined> {
   const pointerValue = await readOptionalPrivateState(resolve(stateDir, 'active-generation.json'))
   if (pointerValue === undefined) return undefined
@@ -420,7 +512,38 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
     }
     reducerCheckpoints.push(checkpoint)
   }
-  return { generation, providers, canonicalLedger, reducerCheckpoints }
+  const playerCheckpoints: IncrementalPlayerCheckpoint[] = []
+  for (const entry of generation.playerCheckpoints ?? []) {
+    const core = await readContentObject<PersistedPlayerCheckpointCore>(
+      resolve(stateDir, 'players', 'checkpoints', `${entry.checkpointHash}.json`),
+      'player-checkpoint',
+      entry.checkpointHash,
+      reducerStateIO,
+    )
+    if (core.historyHash !== entry.historyHash) throw new Error('Player checkpoint history reference mismatch')
+    const history = await readContentObject<IncrementalPlayerCheckpoint['player']['history']>(
+      resolve(stateDir, 'players', 'journals', 'history', `${entry.historyHash}.json`),
+      'player-history-journal',
+      entry.historyHash,
+      reducerStateIO,
+    )
+    const checkpoint: IncrementalPlayerCheckpoint = {
+      schemaVersion: core.schemaVersion,
+      processedDate: core.processedDate,
+      canonicalPrefixHash: core.canonicalPrefixHash,
+      dependencyHash: core.dependencyHash,
+      residualControlHash: core.residualControlHash,
+      retention: core.retention,
+      player: { ...core.player, history },
+    }
+    if (!isIncrementalPlayerCheckpoint(checkpoint)
+      || checkpoint.processedDate !== entry.processedDate
+      || stableHash(checkpoint.retention) !== stableHash(entry.retention)) {
+      throw new Error('Incompatible player checkpoint object')
+    }
+    playerCheckpoints.push(checkpoint)
+  }
+  return { generation, providers, canonicalLedger, reducerCheckpoints, playerCheckpoints }
 }
 
 function loadCanonicalState({
@@ -570,6 +693,10 @@ function verifyGeneration(generation: StateGeneration) {
     || generation.reducerCheckpoints.some((entry) => !isReducerCheckpointGenerationEntry(entry)))) {
     throw new Error('Invalid reducer checkpoint index in state generation')
   }
+  if (generation.playerCheckpoints !== undefined && (!Array.isArray(generation.playerCheckpoints)
+    || generation.playerCheckpoints.some((entry) => !isPlayerCheckpointGenerationEntry(entry)))) {
+    throw new Error('Invalid player checkpoint index in state generation')
+  }
   if (generation.fileSet.authorityHash !== stableHash(generation.fileSet.authorities)) throw new Error('Provider file-set authority receipt hash mismatch')
   const compatibilityIntegrity = compatibilityFallback(generation.compatibility, generation.compatibility)
   if (compatibilityIntegrity) throw new Error('Invalid compatibility envelope in state generation')
@@ -663,14 +790,20 @@ async function readContentObject<T>(
   reducerStateIO?: ReducerStateIOMetrics,
 ): Promise<T> {
   const contents = await readFile(path, 'utf8')
-  if (reducerStateIO && (kind === 'reducer-checkpoint' || kind === 'reducer-journal')) {
+  if (reducerStateIO && (kind === 'reducer-checkpoint'
+    || kind === 'reducer-journal'
+    || kind === 'player-checkpoint'
+    || kind === 'player-history-journal')) {
     reducerStateIO.bytesRead += encodedByteLength(contents)
   }
   const value = decodePrivateState(contents)
   if (!isRecord(value) || value.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION || value.kind !== kind || value.contentHash !== expectedHash) {
     throw new Error(`Invalid ${kind} envelope`)
   }
-  const payloadHash = kind === 'reducer-checkpoint' || kind === 'reducer-journal'
+  const payloadHash = kind === 'reducer-checkpoint'
+    || kind === 'reducer-journal'
+    || kind === 'player-checkpoint'
+    || kind === 'player-history-journal'
     ? privateStateHash(value.payload)
     : stableHash(value.payload)
   if (payloadHash !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
@@ -682,6 +815,14 @@ function isReducerCheckpointGenerationEntry(value: unknown): value is ReducerChe
     && (value.processedDate === undefined || typeof value.processedDate === 'string')
     && typeof value.checkpointHash === 'string'
     && isReducerJournalHashes(value.journalHashes)
+    && Array.isArray(value.retention)
+}
+
+function isPlayerCheckpointGenerationEntry(value: unknown): value is PlayerCheckpointGenerationEntry {
+  return isRecord(value)
+    && (value.processedDate === undefined || typeof value.processedDate === 'string')
+    && typeof value.checkpointHash === 'string'
+    && typeof value.historyHash === 'string'
     && Array.isArray(value.retention)
 }
 
