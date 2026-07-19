@@ -568,7 +568,7 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
       if (descriptor.objects.some((ref) => !isRecord(ref)
         || !validReferenceKinds.has(ref.kind)
         || typeof ref.logicalPath !== 'string'
-        || ref.logicalPath.length === 0
+        || !hasSafeLogicalPath(ref.logicalPath)
         || typeof ref.key !== 'string'
         || typeof ref.digest !== 'string'
         || !/^[a-f0-9]{64}$/.test(ref.digest)
@@ -862,6 +862,15 @@ function safeLogicalPath(path) {
     throw new Error(`Invalid durable logical path: ${path}`)
   }
   return path
+}
+
+function hasSafeLogicalPath(path) {
+  try {
+    safeLogicalPath(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function assertInside(root, path) {

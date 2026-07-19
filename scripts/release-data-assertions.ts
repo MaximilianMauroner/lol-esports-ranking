@@ -24,7 +24,7 @@ export async function assertReleaseData(dataDir: string, { allowFixture = false 
   await validatePublicArtifactBundle(root)
   const read = async (relativePath: string) => JSON.parse(await readFile(join(root, relativePath), 'utf8')) as unknown
   const pathFor = (url: string | undefined) => {
-    assert.ok(url?.startsWith('/data/'))
+    if (!url?.startsWith('/data/')) throw new Error(`Invalid public artifact URL: ${url ?? '<missing>'}`)
     return url.slice('/data/'.length).split('?', 1)[0]
   }
   const manifest = parsePublicRankingManifest(await read('ranking-summary.json'))

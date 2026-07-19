@@ -28,9 +28,12 @@ test('exclusive maintenance fences expired refreshes and blocks all successors u
   assert.equal(maintenance.acquired, true)
   if (!maintenance.maintenance) return
   assert.equal(maintenance.maintenance?.fencingToken, 2)
-  assert.equal((await acquireBucketLease('ops/refresh-lease.json', {
+  const blocked = await acquireBucketLease('ops/refresh-lease.json', {
     owner: 'successor', now: '2030-01-01T00:00:00Z', ttlMs: 60_000, fenceActiveKey: 'active-generation.json', config, client,
-  })).reason, 'maintenance-active')
+  })
+  assert.equal(blocked.acquired, false)
+  if (blocked.acquired) assert.fail('maintenance must block refresh lease acquisition')
+  assert.equal(blocked.reason, 'maintenance-active')
   assert.equal((await verifyBucketMaintenance({ owner: 'wrong', fencingToken: 2 }, { config, client })).valid, false)
   assert.equal((await releaseBucketMaintenance({ owner: 'wrong', fencingToken: 2 }, { config, client })).released, false)
   assert.equal((await releaseBucketMaintenance(maintenance.maintenance, { config, client })).released, true)
@@ -51,6 +54,7 @@ test('maintenance recovery requires operator confirmation and exact identity', a
   assert.equal((await recoverBucketMaintenance(maintenance.maintenance, { confirmedTerminated: true, config, client })).released, true)
 })
 import {
+  createMemoryDurableObjectStore,
   createRailwayDurableObjectStore,
   decideDurableCrunchMode,
   executeRailwayDurableGc,
@@ -761,6 +765,52 @@ test('Railway bucket adapter restores private state referenced by the public CAS
     assert.equal(active.fencingToken, lease.lease.fencingToken)
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('raw GC fails closed for every unsafe descriptor logical path', async (t) => {
+  for (const logicalPath of ['../escape.csv', '/absolute.csv', 'dir/./file.csv', '']) {
+    await t.test(JSON.stringify(logicalPath), async () => {
+      const store = createMemoryDurableObjectStore()
+      const referencedDigest = 'a'.repeat(64)
+      const rawGarbageKey = `raw/objects/${'b'.repeat(64)}`
+      const privateGarbageKey = `private/objects/${'c'.repeat(64)}`
+      const descriptorBytes = Buffer.from(JSON.stringify({
+        schemaVersion: 1,
+        kind: 'raw-generation',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        retention: { date: '2026-01-01', boundaries: [] },
+        objects: [{ kind: 'source', logicalPath, key: `raw/objects/${referencedDigest}`, digest: referencedDigest, bytes: 1 }],
+      }))
+      const descriptorDigest = createHash('sha256').update(descriptorBytes).digest('hex')
+      await store.put(`raw/generations/${descriptorDigest}.json`, descriptorBytes, {
+        ifAbsent: true,
+        metadata: { 'created-at': '2026-01-01T00:00:00.000Z' },
+      })
+      await store.put(rawGarbageKey, Buffer.from('raw garbage'), {
+        ifAbsent: true,
+        metadata: { 'created-at': '2026-01-01T00:00:00.000Z' },
+      })
+      await store.put(privateGarbageKey, Buffer.from('private garbage'), {
+        ifAbsent: true,
+        metadata: { 'created-at': '2026-01-01T00:00:00.000Z' },
+      })
+
+      const plan = await planDurableGc({
+        store,
+        now: '2026-07-30T00:00:00.000Z',
+        recentDays: 1,
+        stagingGraceMs: 1,
+      })
+      const raw = plan.raw as { safe?: boolean; reason?: string }
+      assert.equal(plan.safe, false)
+      assert.equal(plan.reason, 'raw-descriptor-invalid')
+      assert.equal(raw.safe, false)
+      assert.equal(raw.reason, 'raw-descriptor-invalid')
+      assert.deepEqual(plan.plannedDeletes, [])
+      assert.equal((await store.head(rawGarbageKey)).found, true)
+      assert.equal((await store.head(privateGarbageKey)).found, true)
+    })
   }
 })
 

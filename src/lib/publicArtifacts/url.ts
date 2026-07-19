@@ -21,6 +21,11 @@ export function resolvePublicArtifactUrl(url: string, manifestUrl: string, origi
   return new URL(url, normalizedManifest).toString()
 }
 
-function browserOrigin() {
-  return typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+function browserOrigin(environment: object = globalThis) {
+  const location = 'location' in environment ? environment.location : undefined
+  return isLocationWithOrigin(location) ? location.origin : 'http://localhost'
+}
+
+function isLocationWithOrigin(value: unknown): value is { origin: string } {
+  return typeof value === 'object' && value !== null && 'origin' in value && typeof value.origin === 'string' && value.origin.length > 0
 }

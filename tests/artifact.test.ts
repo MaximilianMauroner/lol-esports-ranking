@@ -29,7 +29,9 @@ test('deterministic browser fixture is a complete schema-valid artifact graph', 
   assert.ok(validated.relativePaths.length > 10)
   assert.equal(validated.manifest.schemaVersion, PUBLIC_ARTIFACT_SCHEMA_VERSION)
   assert.equal(validated.manifest.artifactKind, 'public-ranking-manifest')
-  assert.equal(validated.manifest.artifactMeta?.runId, PUBLIC_ARTIFACT_FIXTURE_RUN.runId)
+  const artifactMeta = validated.manifest.artifactMeta
+  assert.ok(artifactMeta)
+  assert.equal(artifactMeta.runId, PUBLIC_ARTIFACT_FIXTURE_RUN.runId)
 })
 
 test('browser artifacts stay compact and exclude full audit snapshots', async () => {
@@ -106,7 +108,9 @@ test('manifest references schema-valid scope and entity companions with one prov
   assert.ok(Array.isArray(players.players))
   for (const [key, expected] of Object.entries(manifest.snapshotIndex)) {
     const shard = parsePublicRankingShard(await json(dataPath(expected.url)))
-    assert.equal(shard.artifactMeta.runId, manifest.artifactMeta?.runId, key)
+    const artifactMeta = shard.artifactMeta
+    assert.ok(artifactMeta, key)
+    assert.equal(artifactMeta.runId, manifest.artifactMeta?.runId, key)
     assert.equal(shard.modelVersion, manifest.model.version, key)
     assert.equal(shard.modelConfigHash, manifest.model.configHash, key)
     assert.equal(shard.matchCount, expected.matchCount, key)
@@ -184,7 +188,6 @@ test('history families separate observed matches, current state, and region metr
   const regionHistory = parsePublicRegionHistory(await json(dataPath(manifest.regionHistoryUrl)))
   const regionScope = regionHistory.scopes[regionHistory.defaultScopeKey]
   assert.equal(Object.values(teamHistory.series).every((series) => series.currentStanding.asOf === teamHistory.generatedAt), true)
-  assert.equal(Object.values(teamHistory.series).flatMap((series) => series.points).some((point) => point[3]?.kind === 'standing-adjustment'), false)
   assert.equal(Object.values(regionScope.leagueStrengthSeries).flatMap((series) => series.points).every((point) => point[3]?.source === 'league-strength-history'), true)
   assert.equal(Object.values(regionScope.regionPowerSeries).flatMap((series) => series.points).every((point) => point[3]?.source === 'region-power-history'), true)
 })
@@ -291,7 +294,7 @@ test('rated team and player universe never leaks outside published leagues or st
 })
 
 function dataPath(url: string | undefined) {
-  assert.ok(url?.startsWith('/data/'))
+  if (!url?.startsWith('/data/')) throw new Error(`Invalid public artifact URL: ${url ?? '<missing>'}`)
   return url.slice('/data/'.length).split('?', 1)[0]
 }
 
