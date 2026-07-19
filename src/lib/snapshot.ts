@@ -22,7 +22,7 @@ import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierR
 import { canonicalTeamNameFor, regionForLeague } from '../data/teamIdentity'
 import { regionalSplitCalendars } from '../data/rankingCalendar'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
-import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
+import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata, type RankingModelResult } from './model'
 import { publishedRatingScale } from './modelConfig'
 import {
   teamNamesForDssContext,
@@ -1232,6 +1232,7 @@ export function createStaticRankingData({
   externalSources = [],
   tournamentScheduleReferences = [],
   pipelineAudit,
+  precomputedGlobalRanking,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1243,6 +1244,7 @@ export function createStaticRankingData({
   externalSources?: DataSourceInfo[]
   tournamentScheduleReferences?: TournamentScheduleReference[]
   pipelineAudit?: { importedMatchCount: number }
+  precomputedGlobalRanking?: RankingModelResult
 }): StaticRankingData {
   const generatedAt = runMetadata?.generatedAt ?? requestedGeneratedAt ?? new Date().toISOString()
   const resolvedRunMetadata: CrunchRunMetadata = runMetadata ?? {
@@ -1286,7 +1288,7 @@ export function createStaticRankingData({
   )
   const regions = ['All', ...currentTopTierRegions.filter((region) => observedCurrentRegions.has(region))] as Array<Region | 'All'>
   const snapshots: Record<string, ComputedRankingSnapshot> = {}
-  const globalRanking = buildRankingModel(matches, teams, rankingOptions)
+  const globalRanking = precomputedGlobalRanking ?? buildRankingModel(matches, teams, rankingOptions)
   const globalRankingScope: RankingScope = { ranking: globalRanking, teams }
   const seasonRankingCache = new Map<string, RankingScope>()
   const rollingBaselineCache = new Map<string, RollingRankingState>()

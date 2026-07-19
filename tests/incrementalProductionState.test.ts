@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { canonicalCodeProvenanceHash } from '../scripts/canonical-code-provenance.ts'
 import {
+  attachIncrementalReducerCheckpoint,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
   stageIncrementalState,
@@ -16,6 +17,26 @@ import { createCrunchCompatibility } from '../src/lib/incremental/compatibility.
 import { stableHash } from '../src/lib/incremental/hash.ts'
 import { orchestrateCrunch } from '../src/lib/incremental/orchestrator.ts'
 import { assertCrunchParity } from '../src/lib/incremental/parity.ts'
+import {
+  buildReducerDependencyPlan,
+  canonicalPrefixHash,
+  privateStateHash,
+  type IncrementalReducerCheckpoint,
+} from '../src/lib/incremental/reducerCheckpoint.ts'
+import {
+  finalizeTeamReducer,
+  initializeTeamReducer,
+  processTeamDateBatch,
+  snapshotTeamReducer,
+} from '../src/lib/model.ts'
+import {
+  finalizeLivePlayerEdgeReducer,
+  initializeLivePlayerEdgeReducer,
+  processLivePlayerEdgeDateBatch,
+  snapshotLivePlayerEdgeReducer,
+} from '../src/lib/playerModel.ts'
+import { matchesByDate } from '../src/lib/matchContext.ts'
+import type { CanonicalRankingInput } from '../src/lib/incremental/canonicalState.ts'
 
 const retrievedAt = '2026-07-18T00:00:00.000Z'
 const authorities: ProviderAuthorities = {
@@ -268,6 +289,103 @@ test('orphan staging without a root pointer is treated as cold state', async () 
   assert.equal(cold.metrics.filesScanned, 1)
 })
 
+test('reducer checkpoint is promoted and restored with the canonical generation', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  assert.ok(first.imports)
+  const checkpoint = reducerCheckpointFor(first.imports.canonical)
+  const promotion = attachIncrementalReducerCheckpoint(first.promotion, fixture.stateDir, checkpoint)
+  const promoted = await promoteIncrementalState(promotion)
+  assert.equal(promoted.reducerStateBytesWritten, promotion.reducerStateBytesWritten)
+  assert.ok(promoted.reducerStateBytesWritten > 0)
+
+  const restored = await loadIncrementalCommunityImports(fixture.input)
+  assert.equal(restored.fallback, undefined)
+  assert.deepEqual(restored.reducerCheckpoint, checkpoint)
+  assert.equal(restored.metrics.filesScanned, 0)
+  const active = await activeGeneration(fixture.stateDir)
+  const [checkpointEntry] = arrayField(active.generation, 'reducerCheckpoints').map(record)
+  assert.ok(checkpointEntry)
+  const checkpointHash = stringField(checkpointEntry, 'checkpointHash')
+  const journalHashes = record(checkpointEntry.journalHashes)
+  const coreEnvelope = record(decodePrivateState(await readFile(resolve(fixture.stateDir, 'reducers', 'checkpoints', `${checkpointHash}.json`), 'utf8')))
+  const core = record(coreEnvelope.payload)
+  assert.equal('journals' in record(core.team), false)
+  assert.deepEqual(record(core.teamJournalHashes), journalHashes)
+  const historiesEnvelope = record(decodePrivateState(await readFile(resolve(fixture.stateDir, 'reducers', 'journals', 'histories', `${stringField(journalHashes, 'histories')}.json`), 'utf8')))
+  const predictionsEnvelope = record(decodePrivateState(await readFile(resolve(fixture.stateDir, 'reducers', 'journals', 'predictions', `${stringField(journalHashes, 'predictions')}.json`), 'utf8')))
+  const leagueHistoryEnvelope = record(decodePrivateState(await readFile(resolve(fixture.stateDir, 'reducers', 'journals', 'league-history', `${stringField(journalHashes, 'leagueHistory')}.json`), 'utf8')))
+  assert.deepEqual(historiesEnvelope.payload, checkpoint.team.journals.histories)
+  assert.deepEqual(predictionsEnvelope.payload, checkpoint.team.journals.predictions)
+  assert.deepEqual(leagueHistoryEnvelope.payload, checkpoint.team.journals.leagueHistory)
+  const reducerPaths = [
+    resolve(fixture.stateDir, 'reducers', 'checkpoints', `${checkpointHash}.json`),
+    resolve(fixture.stateDir, 'reducers', 'journals', 'histories', `${stringField(journalHashes, 'histories')}.json`),
+    resolve(fixture.stateDir, 'reducers', 'journals', 'predictions', `${stringField(journalHashes, 'predictions')}.json`),
+    resolve(fixture.stateDir, 'reducers', 'journals', 'league-history', `${stringField(journalHashes, 'leagueHistory')}.json`),
+  ]
+  const expectedStateBytes = (await Promise.all(reducerPaths.map((path) => readFile(path)))).reduce((total, contents) => total + contents.byteLength, 0)
+  assert.equal(restored.metrics.reducerStateBytesRead, expectedStateBytes)
+  assert.equal(promoted.reducerStateBytesWritten, expectedStateBytes)
+})
+
+test('each reducer journal object rejects independent parseable tampering', async () => {
+  for (const journal of ['histories', 'predictions', 'leagueHistory'] as const) {
+    const fixture = await createFixture([header, ...firstGame].join('\n'))
+    const first = await loadIncrementalCommunityImports(fixture.input)
+    assert.ok(first.promotion)
+    assert.ok(first.imports)
+    await promoteIncrementalState(attachIncrementalReducerCheckpoint(
+      first.promotion,
+      fixture.stateDir,
+      reducerCheckpointFor(first.imports.canonical),
+    ))
+    const active = await activeGeneration(fixture.stateDir)
+    const [checkpointEntry] = arrayField(active.generation, 'reducerCheckpoints').map(record)
+    assert.ok(checkpointEntry)
+    const hashes = record(checkpointEntry.journalHashes)
+    const directory = journal === 'leagueHistory' ? 'league-history' : journal
+    const path = resolve(fixture.stateDir, 'reducers', 'journals', directory, `${stringField(hashes, journal)}.json`)
+    const envelope = record(decodePrivateState(await readFile(path, 'utf8')))
+    if (envelope.payload instanceof Map) envelope.payload.set('tampered-team', [])
+    else {
+      assert.ok(Array.isArray(envelope.payload))
+      envelope.payload.push({ tampered: true })
+    }
+    await writePrivate(path, envelope)
+    const result = await loadIncrementalCommunityImports(fixture.input)
+    assert.equal(result.fallback?.kind, 'checkpoint-corrupt')
+    assert.match(result.fallback?.kind === 'checkpoint-corrupt' ? result.fallback.detail : '', /reducer-journal semantic hash mismatch/)
+  }
+})
+
+test('parseable reducer Map mutation cannot bypass its private-state semantic hash', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  assert.ok(first.imports)
+  const checkpoint = reducerCheckpointFor(first.imports.canonical)
+  await promoteIncrementalState(attachIncrementalReducerCheckpoint(first.promotion, fixture.stateDir, checkpoint))
+  const active = await activeGeneration(fixture.stateDir)
+  const [checkpointEntry] = arrayField(active.generation, 'reducerCheckpoints').map(record)
+  assert.ok(checkpointEntry)
+  const checkpointHash = stringField(checkpointEntry, 'checkpointHash')
+  const reducerPath = resolve(fixture.stateDir, 'reducers', 'checkpoints', `${checkpointHash}.json`)
+  const envelope = record(decodePrivateState(await readFile(reducerPath, 'utf8')))
+  const payload = record(envelope.payload)
+  const livePlayerEdge = record(payload.livePlayerEdge)
+  const state = record(livePlayerEdge.state)
+  assert.ok(state.ratings instanceof Map)
+  state.ratings.set('tampered-player', 999)
+  await writePrivate(reducerPath, envelope)
+
+  const result = await loadIncrementalCommunityImports(fixture.input)
+  assert.equal(result.fallback?.kind, 'checkpoint-corrupt')
+  assert.match(result.fallback?.kind === 'checkpoint-corrupt' ? result.fallback.detail : '', /reducer-checkpoint semantic hash mismatch/)
+  assert.ok(result.promotion)
+})
+
 async function createFixture(contents: string) {
   const root = await mkdtemp(resolve(tmpdir(), 'lol-ranking-provider-state-'))
   const sourcePath = resolve(root, '2026.csv')
@@ -288,6 +406,26 @@ async function createFixture(contents: string) {
       authorities,
       compatibility,
     },
+  }
+}
+
+function reducerCheckpointFor(canonical: CanonicalRankingInput): IncrementalReducerCheckpoint {
+  const livePlayerEdge = initializeLivePlayerEdgeReducer(canonical.matches, { teams: canonical.teams })
+  for (const batch of matchesByDate(canonical.matches)) processLivePlayerEdgeDateBatch(livePlayerEdge, batch)
+  const edges = finalizeLivePlayerEdgeReducer(livePlayerEdge)
+  const team = initializeTeamReducer(canonical.matches, canonical.teams, { pregamePlayerRatingEdges: edges })
+  for (const batch of matchesByDate(canonical.matches)) processTeamDateBatch(team, batch)
+  finalizeTeamReducer(team)
+  const dependencyPlan = buildReducerDependencyPlan({ matches: canonical.matches, teams: canonical.teams })
+  return {
+    schemaVersion: 1,
+    processedDate: team.processedDate,
+    canonicalPrefixHash: canonicalPrefixHash(canonical.matches, team.processedDate),
+    dependencyHash: privateStateHash(dependencyPlan),
+    dependencyPlan,
+    retention: ['recent-daily'],
+    livePlayerEdge: snapshotLivePlayerEdgeReducer(livePlayerEdge),
+    team: snapshotTeamReducer(team),
   }
 }
 

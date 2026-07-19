@@ -52,9 +52,9 @@ export function buildEventTrackers(
 ) {
   const trackers = new Map<string, PlacementEventTracker>()
   for (const match of matches) {
-    if (!placementResidualConfigFor(match)) continue
+    if (!isRatedPlacementEvent(match)) continue
     const eventWeightMultiplier = eventWeightMultiplierForMatch(match, eventWeightContext)
-    const key = eventTrackerKey(match)
+    const key = placementEventKeyForMatch(match)
     const tracker = trackers.get(key) ?? {
       event: match.event,
       season: match.season,
@@ -93,7 +93,7 @@ export function startEventTrackersForDate(
   leagueMatchCounts: Map<string, number>,
 ) {
   for (const match of matches) {
-    const tracker = trackers.get(eventTrackerKey(match))
+    const tracker = trackers.get(placementEventKeyForMatch(match))
     if (!tracker || tracker.started) continue
     tracker.started = true
     for (const team of tracker.participants) {
@@ -112,7 +112,7 @@ export function startEventTrackersForDate(
 }
 
 export function trackMatchForPlacement(trackers: Map<string, PlacementEventTracker>, match: MatchRecord, teams: Record<string, TeamProfile>) {
-  const tracker = trackers.get(eventTrackerKey(match))
+  const tracker = trackers.get(placementEventKeyForMatch(match))
   if (!tracker) return
   tracker.matches.push(match)
   tracker.teamLeagues.set(match.teamA, homeLeagueForMatch(match, 'A', teams))
@@ -193,8 +193,16 @@ export function applyCompletedPlacementResiduals({
   }
 }
 
-function eventTrackerKey(match: MatchRecord) {
+export function placementEventKeyForMatch(match: MatchRecord) {
   return tournamentInstanceForEvent(match.event, match.season)?.id ?? `${match.season}\u0000${match.event}`
+}
+
+export function isRatedPlacementEvent(match: MatchRecord) {
+  return isPlacementResidualEvent(match)
+}
+
+export function isPlacementDependencyEvent(match: MatchRecord) {
+  return isRatedPlacementEvent(match) || /\b(?:worlds?|msi)\b/i.test(match.event)
 }
 
 function teamsForLeague(

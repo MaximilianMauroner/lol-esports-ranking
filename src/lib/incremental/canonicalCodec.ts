@@ -57,6 +57,8 @@ type EncodedValue =
   | ['number', number | 'NaN' | 'Infinity' | '-Infinity' | '-0']
   | ['string', string]
   | ['array', EncodedValue[]]
+  | ['map', Array<[EncodedValue, EncodedValue]>]
+  | ['set', EncodedValue[]]
   | ['object', Array<[string, EncodedValue]>]
 
 function encodeValue(value: unknown): EncodedValue {
@@ -72,6 +74,8 @@ function encodeValue(value: unknown): EncodedValue {
     return ['number', value]
   }
   if (Array.isArray(value)) return ['array', value.map(encodeValue)]
+  if (value instanceof Map) return ['map', [...value.entries()].map(([key, entry]) => [encodeValue(key), encodeValue(entry)])]
+  if (value instanceof Set) return ['set', [...value].map(encodeValue)]
   if (isRecord(value)) return ['object', Object.entries(value).map(([key, entry]) => [key, encodeValue(entry)])]
   throw new TypeError(`Unsupported private-state value: ${typeof value}`)
 }
@@ -91,6 +95,13 @@ function decodeValue(value: unknown): unknown {
     if (payload === '-0') return -0
   }
   if (tag === 'array' && Array.isArray(payload)) return payload.map(decodeValue)
+  if (tag === 'map' && Array.isArray(payload)) {
+    return new Map(payload.map((entry) => {
+      if (!Array.isArray(entry)) throw new Error('Invalid tagged private-state map entry')
+      return [decodeValue(entry[0]), decodeValue(entry[1])]
+    }))
+  }
+  if (tag === 'set' && Array.isArray(payload)) return new Set(payload.map(decodeValue))
   if (tag === 'object' && Array.isArray(payload)) {
     return Object.fromEntries(payload.map((entry) => {
       if (!Array.isArray(entry) || typeof entry[0] !== 'string') throw new Error('Invalid tagged private-state object entry')

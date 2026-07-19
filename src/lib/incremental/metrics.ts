@@ -9,6 +9,8 @@ export type IncrementalAttemptSourceMetrics = {
   rowsParsed: InstrumentedCount
   observationsNormalized: InstrumentedCount
   observationsReused: InstrumentedCount
+  reducerStateBytesRead: InstrumentedCount
+  reducerStateBytesWritten: InstrumentedCount
 }
 
 export type IncrementalCrunchReceipt = {
@@ -96,4 +98,17 @@ export function recordCrunchAttemptSources(
 ): void {
   const attempt = receipt.attempts.findLast((entry) => entry.engine === engine)
   if (attempt) attempt.sources = { ...sources }
+}
+
+export function recordIncrementalReducerCandidate(
+  receipt: IncrementalCrunchReceipt,
+  candidate: {
+    livePlayerEdgeRows: number
+    teamRows: number
+    selectedCheckpoint?: string
+  },
+): void {
+  receipt.reducers.livePlayerEdgeRows = candidate.livePlayerEdgeRows
+  receipt.reducers.teamRows = candidate.teamRows
+  if (candidate.selectedCheckpoint) receipt.checkpoint.selected = candidate.selectedCheckpoint
 }

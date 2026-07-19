@@ -102,6 +102,32 @@ test('receipts preserve both shadow attempts instead of overwriting fallback wor
   ])
 })
 
+test('reference parity gate keeps ordinary incremental candidates in shadow until activation', async () => {
+  let fullCalls = 0
+  const result = await orchestrateCrunch({
+    mode: 'incremental',
+    requireReferenceParity: true,
+    runFull: () => {
+      fullCalls += 1
+      return { snapshot: 'reference', publicWrites: ['reference'] }
+    },
+    runIncremental: () => ({ output: { snapshot: 'candidate', publicWrites: ['candidate'] } }),
+  })
+  assert.equal(fullCalls, 1)
+  assert.equal(result.executedMode, 'full')
+  assert.deepEqual(result.output, { snapshot: 'reference', publicWrites: ['reference'] })
+  assert.deepEqual(result.shadowOutput, { snapshot: 'candidate', publicWrites: ['candidate'] })
+  let promoted = false
+  assert.throws(() => {
+    assertCrunchParity(
+      { fullSnapshot: result.output.snapshot, publicWrites: result.output.publicWrites.map((contents) => ({ relativePath: 'scope.json', contents })) },
+      { fullSnapshot: result.shadowOutput!.snapshot, publicWrites: result.shadowOutput!.publicWrites.map((contents) => ({ relativePath: 'scope.json', contents })) },
+    )
+    promoted = true
+  }, /Incremental candidate mismatch/)
+  assert.equal(promoted, false)
+})
+
 test('typed fallback preserves a faulty cold candidate for mandatory parity rejection', async () => {
   const fallback = { kind: 'compatibility-hash-mismatch' as const, dependency: 'code', expected: 'new', actual: 'old' }
   const result = await orchestrateCrunch({
@@ -127,7 +153,15 @@ test('fallback receipts retain exact incremental scan metrics independently of r
     runFull: () => 'reference',
     runIncremental: () => ({ fallback: { kind: 'dependency-unknown', dependency: 'ambiguous-provider-deletion' } }),
   })
-  const sources = { filesScanned: 2, bytesScanned: 4096, rowsParsed: 12, observationsNormalized: 3, observationsReused: 7 }
+  const sources = {
+    filesScanned: 2,
+    bytesScanned: 4096,
+    rowsParsed: 12,
+    observationsNormalized: 3,
+    observationsReused: 7,
+    reducerStateBytesRead: 8192,
+    reducerStateBytesWritten: 2048,
+  }
   recordCrunchAttemptSources(receipt, 'incremental', sources)
   assert.deepEqual(receipt.attempts.find((attempt) => attempt.engine === 'incremental')?.sources, sources)
   assert.deepEqual(receipt.attempts.find((attempt) => attempt.engine === 'reference')?.sources, {
@@ -136,6 +170,8 @@ test('fallback receipts retain exact incremental scan metrics independently of r
     rowsParsed: null,
     observationsNormalized: null,
     observationsReused: null,
+    reducerStateBytesRead: null,
+    reducerStateBytesWritten: null,
   })
 })
 

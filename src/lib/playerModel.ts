@@ -117,6 +117,23 @@ export type PregamePlayerRatingEdge = {
   teamBCoverage: number
 }
 
+export type LivePlayerEdgeJournal = Map<string, Map<string, PregamePlayerRatingEdge>>
+
+export type LivePlayerEdgeCheckpoint = {
+  schemaVersion: 1
+  processedDate?: string
+  state: SourcedPlayerState
+  journal: LivePlayerEdgeJournal
+}
+
+export type LivePlayerEdgeReducer = {
+  state: SourcedPlayerState
+  journal: LivePlayerEdgeJournal
+  context: PlayerRatingContext & { eventWeightContext: EventWeightContext }
+  leagueRatings: Map<string, number>
+  processedDate?: string
+}
+
 type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
   leagueStrengths?: LeagueStrength[]
@@ -339,48 +356,87 @@ export function buildPregamePlayerRatingEdges(
   matches: MatchRecord[],
   context: PlayerRatingContext = {},
 ): Map<string, PregamePlayerRatingEdge> {
-  const resolvedContext = {
-    ...context,
-    eventWeightContext: context.eventWeightContext ?? eventWeightContextForMatches(matches),
-  }
-  const state = createSourcedPlayerState(false)
-  const edges = new Map<string, PregamePlayerRatingEdge>()
-  const leagueRatings = leagueRatingsFor(resolvedContext.leagueStrengths)
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+  const reducer = initializeLivePlayerEdgeReducer(sortedMatches, context)
+  for (const dateMatches of matchesByDate(sortedMatches)) processLivePlayerEdgeDateBatch(reducer, dateMatches)
+  return finalizeLivePlayerEdgeReducer(reducer)
+}
 
-  for (const dateMatches of matchesByDate(sortedMatches)) {
-    const dateStartRatings = new Map(state.ratings)
-    const dateStartGames = new Map(state.games)
+export function initializeLivePlayerEdgeReducer(
+  matches: MatchRecord[],
+  context: PlayerRatingContext = {},
+): LivePlayerEdgeReducer {
+  const resolvedContext = { ...context, eventWeightContext: context.eventWeightContext ?? eventWeightContextForMatches(matches) }
+  return {
+    state: createSourcedPlayerState(false),
+    journal: new Map(),
+    context: resolvedContext,
+    leagueRatings: leagueRatingsFor(resolvedContext.leagueStrengths),
+  }
+}
 
-    for (const match of dateMatches) {
+export function restoreLivePlayerEdgeReducer(
+  checkpoint: LivePlayerEdgeCheckpoint,
+  matches: MatchRecord[],
+  context: PlayerRatingContext = {},
+): LivePlayerEdgeReducer {
+  if (checkpoint.schemaVersion !== 1) throw new Error('Incompatible live player-edge checkpoint')
+  const initialized = initializeLivePlayerEdgeReducer(matches, context)
+  return {
+    ...initialized,
+    state: structuredClone(checkpoint.state),
+    journal: structuredClone(checkpoint.journal),
+    processedDate: checkpoint.processedDate,
+  }
+}
+
+export function processLivePlayerEdgeDateBatch(reducer: LivePlayerEdgeReducer, matches: MatchRecord[]): void {
+  const dateMatches = matches.toSorted((left, right) => left.id.localeCompare(right.id))
+  const date = dateMatches[0]?.date
+  if (!date) return
+  if (dateMatches.some((match) => match.date !== date)) throw new Error('Live player-edge batches must contain one complete UTC date')
+  if (reducer.processedDate && date <= reducer.processedDate) throw new Error(`Live player-edge date ${date} is not after checkpoint ${reducer.processedDate}`)
+  const dateEdges = new Map<string, PregamePlayerRatingEdge>()
+  const { state, context, leagueRatings } = reducer
+  const dateStartRatings = new Map(state.ratings)
+  const dateStartGames = new Map(state.games)
+
+  for (const match of dateMatches) {
       const teamAEdge = playerEdgeForRoster(
         match.teamARoster,
         dateStartRatings,
         dateStartGames,
-        leagueForSide(match, 'A', resolvedContext),
+        leagueForSide(match, 'A', context),
         leagueRatings,
       )
       const teamBEdge = playerEdgeForRoster(
         match.teamBRoster,
         dateStartRatings,
         dateStartGames,
-        leagueForSide(match, 'B', resolvedContext),
+        leagueForSide(match, 'B', context),
         leagueRatings,
       )
-      edges.set(match.id, {
+      dateEdges.set(match.id, {
         teamAAdjustment: teamAEdge.adjustment,
         teamBAdjustment: teamBEdge.adjustment,
         teamACoverage: teamAEdge.coverage,
         teamBCoverage: teamBEdge.coverage,
       })
-    }
-
-    for (const match of dateMatches) {
-      registerSourcedRosters(match, state, resolvedContext, leagueRatings)
-    }
-    applySourcedPlayerUpdates(dateMatches, state, dateStartRatings, resolvedContext, leagueRatings)
   }
 
+  for (const match of dateMatches) registerSourcedRosters(match, state, context, leagueRatings)
+  applySourcedPlayerUpdates(dateMatches, state, dateStartRatings, context, leagueRatings)
+  reducer.journal.set(date, dateEdges)
+  reducer.processedDate = date
+}
+
+export function snapshotLivePlayerEdgeReducer(reducer: LivePlayerEdgeReducer): LivePlayerEdgeCheckpoint {
+  return structuredClone({ schemaVersion: 1 as const, processedDate: reducer.processedDate, state: reducer.state, journal: reducer.journal })
+}
+
+export function finalizeLivePlayerEdgeReducer(reducer: LivePlayerEdgeReducer): Map<string, PregamePlayerRatingEdge> {
+  const edges = new Map<string, PregamePlayerRatingEdge>()
+  for (const [, dateEdges] of reducer.journal) for (const [matchId, edge] of dateEdges) edges.set(matchId, { ...edge })
   return edges
 }
 
@@ -399,7 +455,7 @@ function profileForAppearance(player: RosterPlayerAppearance, team: string): Pla
   }
 }
 
-type SourcedPlayerState = {
+export type SourcedPlayerState = {
   ratings: Map<string, number>
   games: Map<string, number>
   profiles: Map<string, PlayerProfile>

@@ -24,6 +24,14 @@ import {
 } from '../src/lib/incremental/providerLedger.ts'
 import { scanLeaguepediaJson, scanLolEsportsJson } from '../src/lib/incremental/providerScanners.ts'
 import type { IncrementalFallbackReason } from '../src/lib/incremental/types.ts'
+import {
+  isIncrementalReducerCheckpoint,
+  privateStateHash,
+  type IncrementalReducerCheckpoint,
+  type PersistedReducerCheckpointCore,
+  type ReducerJournalHashes,
+  type ReducerCheckpointRetention,
+} from '../src/lib/incremental/reducerCheckpoint.ts'
 
 const LOCAL_STATE_SCHEMA_VERSION = 2 as const
 
@@ -63,6 +71,13 @@ type GenerationFileSet = {
   authorityHash: string
 }
 
+type ReducerCheckpointGenerationEntry = {
+  processedDate?: string
+  checkpointHash: string
+  journalHashes: ReducerJournalHashes
+  retention: ReducerCheckpointRetention[]
+}
+
 type StateGeneration = {
   schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
   kind: 'incremental-generation'
@@ -70,6 +85,7 @@ type StateGeneration = {
   canonical: CanonicalGenerationEntry
   fileSet: GenerationFileSet
   compatibility: CrunchCompatibility
+  reducerCheckpoints?: ReducerCheckpointGenerationEntry[]
 }
 
 type ActiveGenerationPointer = {
@@ -80,7 +96,7 @@ type ActiveGenerationPointer = {
 
 type ContentEnvelope = {
   schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
-  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation'
+  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation' | 'reducer-checkpoint' | 'reducer-journal'
   contentHash: string
   payload: unknown
 }
@@ -102,14 +118,22 @@ type LoadedGeneration = {
   generation: StateGeneration
   providers: Map<string, LoadedProviderState>
   canonicalLedger: CanonicalLedger
+  reducerCheckpoints: IncrementalReducerCheckpoint[]
 }
+
+type ReducerStateIOMetrics = { bytesRead: number }
 
 export type IncrementalStatePromotion = {
   stagedWrites: PendingIncrementalStateWrite[]
   pointerWrite: PendingIncrementalStateWrite
+  reducerStateBytesWritten: number
 }
 
-export type IncrementalLoadMetrics = ProviderScanMetrics & { filesScanned: number }
+export type IncrementalLoadMetrics = ProviderScanMetrics & {
+  filesScanned: number
+  reducerStateBytesRead: number
+  reducerStateBytesWritten: number
+}
 
 export type IncrementalCommunityImports = {
   oracleImports: OracleImportResult[]
@@ -124,6 +148,8 @@ export type IncrementalCommunityLoadResult = {
   promotion?: IncrementalStatePromotion
   fallback?: IncrementalFallbackReason
   metrics: IncrementalLoadMetrics
+  reducerCheckpoint?: IncrementalReducerCheckpoint
+  reducerCheckpoints?: IncrementalReducerCheckpoint[]
 }
 
 export async function loadIncrementalCommunityImports({
@@ -145,10 +171,11 @@ export async function loadIncrementalCommunityImports({
   authorities: ProviderAuthorities
   compatibility: CrunchCompatibility
 }): Promise<IncrementalCommunityLoadResult> {
+  const reducerStateIO: ReducerStateIOMetrics = { bytesRead: 0 }
   let active: LoadedGeneration | undefined
   let restoreFallback: IncrementalFallbackReason | undefined
   try {
-    active = await loadActiveGeneration(stateDir)
+    active = await loadActiveGeneration(stateDir, reducerStateIO)
   } catch (error) {
     restoreFallback = checkpointCorrupt(error)
   }
@@ -194,7 +221,7 @@ export async function loadIncrementalCommunityImports({
       previous: active?.providers.get(providerKey('lol-esports-api', path)),
     })))
     const results = [...oracle, ...leaguepedia, ...lolEsports]
-    const metrics = aggregateMetrics(results)
+    const metrics = { ...aggregateMetrics(results), reducerStateBytesRead: reducerStateIO.bytesRead }
     const providerFallback = results.find((result) => result.fallback)?.fallback
     if (removedFallback || providerFallback) return { fallback: removedFallback ?? providerFallback, metrics }
 
@@ -219,6 +246,7 @@ export async function loadIncrementalCommunityImports({
     ])
     const promotion: IncrementalStatePromotion = {
       stagedWrites,
+      reducerStateBytesWritten: 0,
       pointerWrite: privateWrite(resolve(stateDir, 'active-generation.json'), {
         schemaVersion: LOCAL_STATE_SCHEMA_VERSION,
         kind: 'active-generation',
@@ -232,22 +260,98 @@ export async function loadIncrementalCommunityImports({
       canonical: canonical.canonical,
       metrics,
     }
-    return { imports, promotion, metrics, ...(restoreFallback ? { fallback: restoreFallback } : {}) }
+    return {
+      imports,
+      promotion,
+      metrics,
+      ...(active?.reducerCheckpoints.length ? {
+        reducerCheckpoint: active.reducerCheckpoints.at(-1),
+        reducerCheckpoints: active.reducerCheckpoints,
+      } : {}),
+      ...(restoreFallback ? { fallback: restoreFallback } : {}),
+    }
   } catch (error) {
-    return { fallback: checkpointCorrupt(error), metrics: emptyMetrics() }
+    return { fallback: checkpointCorrupt(error), metrics: { ...emptyMetrics(), reducerStateBytesRead: reducerStateIO.bytesRead } }
   }
 }
 
-export async function stageIncrementalState(promotion: IncrementalStatePromotion): Promise<void> {
+export async function stageIncrementalState(promotion: IncrementalStatePromotion): Promise<{ reducerStateBytesWritten: number }> {
   for (const write of promotion.stagedWrites) await atomicWrite(write)
+  return { reducerStateBytesWritten: promotion.reducerStateBytesWritten }
 }
 
-export async function promoteIncrementalState(promotion: IncrementalStatePromotion): Promise<void> {
+export async function promoteIncrementalState(promotion: IncrementalStatePromotion): Promise<{ reducerStateBytesWritten: number }> {
   await stageIncrementalState(promotion)
   await atomicWrite(promotion.pointerWrite)
+  return { reducerStateBytesWritten: promotion.reducerStateBytesWritten }
 }
 
-async function loadActiveGeneration(stateDir: string): Promise<LoadedGeneration | undefined> {
+export function attachIncrementalReducerCheckpoint(
+  promotion: IncrementalStatePromotion,
+  stateDir: string,
+  checkpointOrHistory: IncrementalReducerCheckpoint | IncrementalReducerCheckpoint[],
+): IncrementalStatePromotion {
+  const pointer = parseActivePointer(decodePrivateState(promotion.pointerWrite.contents))
+  const generationPath = resolve(stateDir, 'generations', `${pointer.generationHash}.json`)
+  const generationWrite = promotion.stagedWrites.find((write) => write.path === generationPath)
+  if (!generationWrite) throw new Error('Pending incremental generation is unavailable for reducer checkpoint attachment')
+  const envelope = decodePrivateState(generationWrite.contents)
+  if (!isRecord(envelope) || envelope.kind !== 'state-generation' || !isRecord(envelope.payload)) {
+    throw new Error('Invalid pending incremental generation envelope')
+  }
+  const generation = envelope.payload as StateGeneration
+  verifyGeneration(generation)
+  const checkpoints = Array.isArray(checkpointOrHistory) ? checkpointOrHistory : [checkpointOrHistory]
+  const checkpointWrites: PendingIncrementalStateWrite[] = []
+  const reducerCheckpoints = checkpoints.map((checkpoint): ReducerCheckpointGenerationEntry => {
+    const journalHashes: ReducerJournalHashes = {
+      histories: privateStateHash(checkpoint.team.journals.histories),
+      predictions: privateStateHash(checkpoint.team.journals.predictions),
+      leagueHistory: privateStateHash(checkpoint.team.journals.leagueHistory),
+    }
+    const core: PersistedReducerCheckpointCore = {
+      schemaVersion: checkpoint.schemaVersion,
+      processedDate: checkpoint.processedDate,
+      canonicalPrefixHash: checkpoint.canonicalPrefixHash,
+      dependencyHash: checkpoint.dependencyHash,
+      dependencyPlan: checkpoint.dependencyPlan,
+      retention: checkpoint.retention,
+      livePlayerEdge: checkpoint.livePlayerEdge,
+      team: {
+        schemaVersion: checkpoint.team.schemaVersion,
+        processedDate: checkpoint.team.processedDate,
+        state: checkpoint.team.state,
+      },
+      teamJournalHashes: journalHashes,
+    }
+    const checkpointHash = privateStateHash(core)
+    checkpointWrites.push(
+      contentWrite(resolve(stateDir, 'reducers', 'journals', 'histories', `${journalHashes.histories}.json`), 'reducer-journal', journalHashes.histories, checkpoint.team.journals.histories),
+      contentWrite(resolve(stateDir, 'reducers', 'journals', 'predictions', `${journalHashes.predictions}.json`), 'reducer-journal', journalHashes.predictions, checkpoint.team.journals.predictions),
+      contentWrite(resolve(stateDir, 'reducers', 'journals', 'league-history', `${journalHashes.leagueHistory}.json`), 'reducer-journal', journalHashes.leagueHistory, checkpoint.team.journals.leagueHistory),
+      contentWrite(resolve(stateDir, 'reducers', 'checkpoints', `${checkpointHash}.json`), 'reducer-checkpoint', checkpointHash, core),
+    )
+    return { processedDate: checkpoint.processedDate, checkpointHash, journalHashes, retention: checkpoint.retention }
+  })
+  const nextGeneration: StateGeneration = { ...generation, reducerCheckpoints }
+  const generationHash = stableHash(nextGeneration)
+  const reducerWrites = uniqueWrites(checkpointWrites)
+  return {
+    stagedWrites: uniqueWrites([
+      ...promotion.stagedWrites.filter((write) => write.path !== generationPath),
+      ...reducerWrites,
+      contentWrite(resolve(stateDir, 'generations', `${generationHash}.json`), 'state-generation', generationHash, nextGeneration),
+    ]),
+    pointerWrite: privateWrite(resolve(stateDir, 'active-generation.json'), {
+      schemaVersion: LOCAL_STATE_SCHEMA_VERSION,
+      kind: 'active-generation',
+      generationHash,
+    } satisfies ActiveGenerationPointer),
+    reducerStateBytesWritten: reducerWrites.reduce((total, write) => total + encodedByteLength(write.contents), 0),
+  }
+}
+
+async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerStateIOMetrics): Promise<LoadedGeneration | undefined> {
   const pointerValue = await readOptionalPrivateState(resolve(stateDir, 'active-generation.json'))
   if (pointerValue === undefined) return undefined
   const pointer = parseActivePointer(pointerValue)
@@ -271,7 +375,52 @@ async function loadActiveGeneration(stateDir: string): Promise<LoadedGeneration 
     generation.canonical.ledgerHash,
   )
   verifyCanonicalLedger(canonicalLedger)
-  return { generation, providers, canonicalLedger }
+  const reducerCheckpoints: IncrementalReducerCheckpoint[] = []
+  for (const entry of generation.reducerCheckpoints ?? []) {
+    const core = await readContentObject<PersistedReducerCheckpointCore>(
+      resolve(stateDir, 'reducers', 'checkpoints', `${entry.checkpointHash}.json`),
+      'reducer-checkpoint',
+      entry.checkpointHash,
+      reducerStateIO,
+    )
+    if (stableHash(core.teamJournalHashes) !== stableHash(entry.journalHashes)) throw new Error('Reducer checkpoint journal reference mismatch')
+    const histories = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['histories']>(
+      resolve(stateDir, 'reducers', 'journals', 'histories', `${entry.journalHashes.histories}.json`),
+      'reducer-journal',
+      entry.journalHashes.histories,
+      reducerStateIO,
+    )
+    const predictions = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['predictions']>(
+      resolve(stateDir, 'reducers', 'journals', 'predictions', `${entry.journalHashes.predictions}.json`),
+      'reducer-journal',
+      entry.journalHashes.predictions,
+      reducerStateIO,
+    )
+    const leagueHistory = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['leagueHistory']>(
+      resolve(stateDir, 'reducers', 'journals', 'league-history', `${entry.journalHashes.leagueHistory}.json`),
+      'reducer-journal',
+      entry.journalHashes.leagueHistory,
+      reducerStateIO,
+    )
+    const journals = { histories, predictions, leagueHistory }
+    const checkpoint: IncrementalReducerCheckpoint = {
+      schemaVersion: core.schemaVersion,
+      processedDate: core.processedDate,
+      canonicalPrefixHash: core.canonicalPrefixHash,
+      dependencyHash: core.dependencyHash,
+      dependencyPlan: core.dependencyPlan,
+      retention: core.retention,
+      livePlayerEdge: core.livePlayerEdge,
+      team: { ...core.team, journals },
+    }
+    if (!isIncrementalReducerCheckpoint(checkpoint)
+      || checkpoint.processedDate !== entry.processedDate
+      || stableHash(checkpoint.retention) !== stableHash(entry.retention)) {
+      throw new Error('Incompatible reducer checkpoint object')
+    }
+    reducerCheckpoints.push(checkpoint)
+  }
+  return { generation, providers, canonicalLedger, reducerCheckpoints }
 }
 
 function loadCanonicalState({
@@ -417,6 +566,10 @@ function verifyGeneration(generation: StateGeneration) {
     || !isRecord(generation.compatibility)) {
     throw new Error('Invalid incremental state generation')
   }
+  if (generation.reducerCheckpoints !== undefined && (!Array.isArray(generation.reducerCheckpoints)
+    || generation.reducerCheckpoints.some((entry) => !isReducerCheckpointGenerationEntry(entry)))) {
+    throw new Error('Invalid reducer checkpoint index in state generation')
+  }
   if (generation.fileSet.authorityHash !== stableHash(generation.fileSet.authorities)) throw new Error('Provider file-set authority receipt hash mismatch')
   const compatibilityIntegrity = compatibilityFallback(generation.compatibility, generation.compatibility)
   if (compatibilityIntegrity) throw new Error('Invalid compatibility envelope in state generation')
@@ -503,13 +656,40 @@ function isProviderId(value: string): value is ProviderId {
   return value === 'oracles-elixir' || value === 'leaguepedia-cargo' || value === 'lol-esports-api'
 }
 
-async function readContentObject<T>(path: string, kind: ContentEnvelope['kind'], expectedHash: string): Promise<T> {
-  const value = decodePrivateState(await readFile(path, 'utf8'))
+async function readContentObject<T>(
+  path: string,
+  kind: ContentEnvelope['kind'],
+  expectedHash: string,
+  reducerStateIO?: ReducerStateIOMetrics,
+): Promise<T> {
+  const contents = await readFile(path, 'utf8')
+  if (reducerStateIO && (kind === 'reducer-checkpoint' || kind === 'reducer-journal')) {
+    reducerStateIO.bytesRead += encodedByteLength(contents)
+  }
+  const value = decodePrivateState(contents)
   if (!isRecord(value) || value.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION || value.kind !== kind || value.contentHash !== expectedHash) {
     throw new Error(`Invalid ${kind} envelope`)
   }
-  if (stableHash(value.payload) !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
+  const payloadHash = kind === 'reducer-checkpoint' || kind === 'reducer-journal'
+    ? privateStateHash(value.payload)
+    : stableHash(value.payload)
+  if (payloadHash !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
   return value.payload as T
+}
+
+function isReducerCheckpointGenerationEntry(value: unknown): value is ReducerCheckpointGenerationEntry {
+  return isRecord(value)
+    && (value.processedDate === undefined || typeof value.processedDate === 'string')
+    && typeof value.checkpointHash === 'string'
+    && isReducerJournalHashes(value.journalHashes)
+    && Array.isArray(value.retention)
+}
+
+function isReducerJournalHashes(value: unknown): value is ReducerJournalHashes {
+  return isRecord(value)
+    && typeof value.histories === 'string'
+    && typeof value.predictions === 'string'
+    && typeof value.leagueHistory === 'string'
 }
 
 async function readOptionalPrivateState(path: string): Promise<unknown | undefined> {
@@ -558,11 +738,25 @@ function aggregateMetrics(results: ProviderPathResult[]): IncrementalLoadMetrics
     rowsParsed: total.rowsParsed + result.metrics.rowsParsed,
     observationsNormalized: total.observationsNormalized + result.metrics.observationsNormalized,
     observationsReused: total.observationsReused + result.metrics.observationsReused,
+    reducerStateBytesRead: total.reducerStateBytesRead,
+    reducerStateBytesWritten: total.reducerStateBytesWritten,
   }), emptyMetrics())
 }
 
 function emptyMetrics(): IncrementalLoadMetrics {
-  return { filesScanned: 0, bytesScanned: 0, rowsParsed: 0, observationsNormalized: 0, observationsReused: 0 }
+  return {
+    filesScanned: 0,
+    bytesScanned: 0,
+    rowsParsed: 0,
+    observationsNormalized: 0,
+    observationsReused: 0,
+    reducerStateBytesRead: 0,
+    reducerStateBytesWritten: 0,
+  }
+}
+
+function encodedByteLength(value: string) {
+  return new TextEncoder().encode(value).byteLength
 }
 
 function checkpointCorrupt(error: unknown): IncrementalFallbackReason {

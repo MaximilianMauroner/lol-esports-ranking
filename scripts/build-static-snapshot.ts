@@ -5,8 +5,10 @@ import { basename, dirname, resolve } from 'node:path'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { replaceDirectory } from './replace-directory.ts'
 import {
+  attachIncrementalReducerCheckpoint,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
+  type IncrementalCommunityImports,
   type IncrementalStatePromotion,
   type ProviderAuthorities,
 } from './incremental-provider-state.ts'
@@ -22,7 +24,12 @@ import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
 import { transparentGprModelMetadata } from '../src/lib/model'
 import { runIdForArtifact } from '../src/lib/publicArtifacts/schema'
-import { createIncrementalCrunchReceipt, recordCrunchAttemptSources, recordCrunchTiming } from '../src/lib/incremental/metrics'
+import {
+  createIncrementalCrunchReceipt,
+  recordCrunchAttemptSources,
+  recordCrunchTiming,
+  recordIncrementalReducerCandidate,
+} from '../src/lib/incremental/metrics'
 import { crunchModeFrom, orchestrateCrunch } from '../src/lib/incremental/orchestrator'
 import type { CrunchRunMetadata } from '../src/lib/incremental/types'
 import { incrementalStateDirectory } from '../src/lib/incremental/canonicalState'
@@ -33,6 +40,10 @@ import { CANONICAL_LEDGER_SCHEMA_VERSION } from '../src/lib/incremental/canonica
 import { PROVIDER_LEDGER_SCHEMA_VERSION } from '../src/lib/incremental/providerLedger'
 import { regionalSplitCalendars } from '../src/data/rankingCalendar'
 import { canonicalCodeProvenanceHash } from './canonical-code-provenance.ts'
+import type { RankingModelResult } from '../src/lib/model.ts'
+import { deriveTournamentInstances } from '../src/lib/internationalTournaments.ts'
+import { runIncrementalRankingReducers } from '../src/lib/incremental/rankingReducer.ts'
+import type { IncrementalReducerCheckpoint } from '../src/lib/incremental/reducerCheckpoint.ts'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
@@ -93,7 +104,7 @@ function buildCrunchOutput({
   lolEsportsImports,
   metrics,
   canonical,
-}: CommunityImports): CrunchOutput {
+}: CommunityImports, precomputedGlobalRanking?: RankingModelResult, reducerRows?: ReducerRows, selectedCheckpointDate?: string): CrunchOutput {
 const directImportedMatches = canonical ? undefined : mergeCommunityMatchSources({
   oracleMatches: oracleImports.flatMap((result) => result.matches),
   leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
@@ -168,25 +179,17 @@ const snapshot = createStaticRankingData({
       }
     }),
   ],
-  tournamentScheduleReferences: lolEsportsImports.flatMap((result) => {
-    const coverage = dateRange(result.events)
-    return result.events.map((event) => ({
-      matchId: event.matchId,
-      tournamentId: event.tournamentId,
-      leagueName: event.leagueName,
-      leagueSlug: event.leagueSlug,
-      startTime: event.startTime,
-      date: event.date,
-      state: event.state,
-      retrievedAt: result.source.retrievedAt,
-      coverageStart: coverage.start,
-      coverageEnd: coverage.end,
-      coverageEndComplete: result.source.coverageEndComplete,
-    }))
-  }),
+  tournamentScheduleReferences: tournamentScheduleReferencesFor(lolEsportsImports),
   pipelineAudit: { importedMatchCount: importedMatches.length },
+  precomputedGlobalRanking,
 })
-  return { snapshot, importedMatches, metrics }
+  return {
+    snapshot,
+    importedMatches,
+    metrics,
+    ...(reducerRows ? { reducerRows } : {}),
+    ...(selectedCheckpointDate ? { selectedCheckpointDate } : {}),
+  }
 }
 
 const crunchStartedAt = performance.now()
@@ -204,16 +207,33 @@ const runIncremental = async () => {
     authorities,
     compatibility,
   })
-  pendingPromotion = result.promotion
   incrementalAttemptMetrics = result.metrics
+  const rankingRun = result.imports
+    ? incrementalGlobalRanking(result.imports, result.reducerCheckpoints)
+    : undefined
+  if (result.promotion && rankingRun) {
+    pendingPromotion = attachIncrementalReducerCheckpoint(result.promotion, privateStateDir, rankingRun.checkpoints)
+    result.metrics.reducerStateBytesWritten = pendingPromotion.reducerStateBytesWritten
+  } else {
+    pendingPromotion = result.promotion
+  }
+  const incrementalOutput = result.imports && rankingRun
+    ? buildCrunchOutput(result.imports, rankingRun.ranking, rankingRun.rows, rankingRun.selectedCheckpointDate)
+    : undefined
   if (result.fallback) return {
     fallback: result.fallback,
-    ...(result.imports ? { output: buildCrunchOutput(result.imports) } : {}),
+    ...(incrementalOutput ? { output: incrementalOutput } : {}),
   }
   if (!result.imports) return { fallback: { kind: 'dependency-unknown' as const, dependency: 'provider-ledger-output' } }
-  return { output: buildCrunchOutput(result.imports) }
+  return { output: incrementalOutput! }
 }
-const orchestration = await orchestrateCrunch<CrunchOutput>({ mode, receipt, runFull, runIncremental })
+const orchestration = await orchestrateCrunch<CrunchOutput>({
+  mode,
+  receipt,
+  runFull,
+  runIncremental,
+  requireReferenceParity: true,
+})
 const { snapshot, importedMatches, metrics } = orchestration.output
 recordCrunchTiming(receipt, 'crunch-total', crunchStartedAt, performance.now())
 receipt.sources = {
@@ -223,6 +243,17 @@ receipt.sources = {
 receipt.observations.parsed = metrics.rowsParsed
 receipt.observations.normalized = metrics.observationsNormalized
 receipt.observations.reused = metrics.observationsReused
+receipt.bucket.bytesRead = incrementalAttemptMetrics?.reducerStateBytesRead ?? 0
+receipt.bucket.bytesWritten = 0
+const incrementalCandidate = orchestration.executedMode === 'incremental'
+  ? orchestration.output
+  : orchestration.shadowOutput
+if (incrementalCandidate?.reducerRows) {
+  recordIncrementalReducerCandidate(receipt, {
+    ...incrementalCandidate.reducerRows,
+    selectedCheckpoint: incrementalCandidate.selectedCheckpointDate,
+  })
+}
 const selectedAttempt = receipt.attempts.findLast((attempt) => (
   orchestration.executedMode === 'incremental' ? attempt.engine === 'incremental' : attempt.engine === 'reference'
 ))
@@ -232,6 +263,8 @@ if (selectedAttempt) recordCrunchAttemptSources(receipt, selectedAttempt.engine,
   rowsParsed: metrics.rowsParsed,
   observationsNormalized: metrics.observationsNormalized,
   observationsReused: metrics.observationsReused,
+  reducerStateBytesRead: metrics.reducerStateBytesRead,
+  reducerStateBytesWritten: metrics.reducerStateBytesWritten,
 })
 const incrementalAttempt = receipt.attempts.find((attempt) => attempt.engine === 'incremental')
 if (incrementalAttempt && incrementalAttemptMetrics) recordCrunchAttemptSources(receipt, 'incremental', {
@@ -240,6 +273,8 @@ if (incrementalAttempt && incrementalAttemptMetrics) recordCrunchAttemptSources(
   rowsParsed: incrementalAttemptMetrics.rowsParsed,
   observationsNormalized: incrementalAttemptMetrics.observationsNormalized,
   observationsReused: incrementalAttemptMetrics.observationsReused,
+  reducerStateBytesRead: incrementalAttemptMetrics.reducerStateBytesRead,
+  reducerStateBytesWritten: incrementalAttemptMetrics.reducerStateBytesWritten,
 })
 if (orchestration.shadowOutput) {
   if (incrementalAttempt) recordCrunchAttemptSources(receipt, 'incremental', {
@@ -248,6 +283,8 @@ if (orchestration.shadowOutput) {
     rowsParsed: orchestration.shadowOutput.metrics.rowsParsed,
     observationsNormalized: orchestration.shadowOutput.metrics.observationsNormalized,
     observationsReused: orchestration.shadowOutput.metrics.observationsReused,
+    reducerStateBytesRead: orchestration.shadowOutput.metrics.reducerStateBytesRead,
+    reducerStateBytesWritten: orchestration.shadowOutput.metrics.reducerStateBytesWritten,
   })
 }
 
@@ -292,7 +329,10 @@ try {
     publishLast: PUBLIC_ARTIFACT_PATHS.manifest,
     preserveTarget: true,
   })
-  if (pendingPromotion) await promoteIncrementalState(pendingPromotion)
+  if (pendingPromotion) {
+    const promoted = await promoteIncrementalState(pendingPromotion)
+    receipt.bucket.bytesWritten = promoted.reducerStateBytesWritten
+  }
   const publicDataBytes = await directorySize(publicDataTargetDir)
   if (receiptOutput) {
     await mkdir(dirname(receiptOutput), { recursive: true })
@@ -314,6 +354,8 @@ type SourceMetrics = {
   rowsParsed: number | null
   observationsNormalized: number | null
   observationsReused: number | null
+  reducerStateBytesRead: number
+  reducerStateBytesWritten: number
 }
 
 type CommunityImports = {
@@ -328,6 +370,58 @@ type CrunchOutput = {
   snapshot: ReturnType<typeof createStaticRankingData>
   importedMatches: ReturnType<typeof mergeCommunityMatchSources>
   metrics: SourceMetrics
+  reducerRows?: ReducerRows
+  selectedCheckpointDate?: string
+}
+
+type ReducerRows = {
+  livePlayerEdgeRows: number
+  teamRows: number
+}
+
+function incrementalGlobalRanking(
+  imports: IncrementalCommunityImports,
+  checkpointHistory: IncrementalReducerCheckpoint[] = [],
+) {
+  const canonical = imports.canonical
+  const tournamentLifecycles = new Map(
+    deriveTournamentInstances({
+      matches: canonical.matches,
+      scheduleReferences: tournamentScheduleReferencesFor(imports.lolEsportsImports),
+      generatedAt: runMetadata.generatedAt,
+    }).map((instance) => [instance.id, {
+      status: instance.status,
+      boundaryDate: instance.boundaryDate,
+      ratedThroughDate: instance.ratedThroughDate,
+      dataLag: instance.dataLag,
+      resultCoverageComplete: instance.resultCoverageComplete,
+    }] as const),
+  )
+  return runIncrementalRankingReducers({
+    matches: canonical.matches,
+    teams: canonical.teams,
+    tournamentLifecycles,
+    checkpointHistory,
+  })
+}
+
+function tournamentScheduleReferencesFor(imports: LolEsportsReferenceImportResult[]) {
+  return imports.flatMap((result) => {
+    const coverage = dateRange(result.events)
+    return result.events.map((event) => ({
+      matchId: event.matchId,
+      tournamentId: event.tournamentId,
+      leagueName: event.leagueName,
+      leagueSlug: event.leagueSlug,
+      startTime: event.startTime,
+      date: event.date,
+      state: event.state,
+      retrievedAt: result.source.retrievedAt,
+      coverageStart: coverage.start,
+      coverageEnd: coverage.end,
+      coverageEndComplete: result.source.coverageEndComplete,
+    }))
+  })
 }
 
 async function loadFullCommunityImports(): Promise<CommunityImports> {
@@ -363,6 +457,8 @@ async function loadFullCommunityImports(): Promise<CommunityImports> {
       rowsParsed: null,
       observationsNormalized: null,
       observationsReused: null,
+      reducerStateBytesRead: 0,
+      reducerStateBytesWritten: 0,
     },
   }
 }

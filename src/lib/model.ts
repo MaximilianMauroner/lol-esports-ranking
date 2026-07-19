@@ -33,6 +33,7 @@ import {
   leagueAdjustment,
   publishedLeagueAnchorContextAdjustment,
   publishedRosterPriorOffset,
+  recencyWeight,
   ratingComponents,
   ratingFromComponents,
 } from './ratingCalculations'
@@ -62,11 +63,7 @@ import {
 export { buildPlayerModel } from './playerModel'
 export { factorLabel, transparentGprModelMetadata } from './modelConfig'
 
-export function buildRankingModel(
-  matches: MatchRecord[],
-  teams: Record<string, TeamProfile>,
-  { tournamentLifecycles = new Map() }: { tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle> } = {},
-): {
+export type RankingModelResult = {
   standings: TeamStanding[]
   leagues: LeagueStrength[]
   events: EventSummary[]
@@ -74,50 +71,62 @@ export function buildRankingModel(
   regions: Region[]
   leagueHistory: LeagueStrengthHistoryPoint[]
   predictions: PregamePrediction[]
-} {
+}
+
+export type TeamReducer = {
+  sortedMatches: MatchRecord[]
+  teams: Record<string, TeamProfile>
+  state: ReturnType<typeof createRatingRunState>
+  pregamePlayerRatingEdges: ReturnType<typeof buildPregamePlayerRatingEdges>
+  teamRosterBasis: Map<string, RosterBasis>
+  lastDate: string
+  processedDate?: string
+}
+
+export type TeamReducerCheckpoint = {
+  schemaVersion: 1
+  processedDate?: string
+  state: ReturnType<typeof createRatingRunState>
+  journals: Pick<ReturnType<typeof createRatingRunState>, 'histories' | 'predictions' | 'leagueHistory'>
+}
+
+export function buildRankingModel(
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  { tournamentLifecycles = new Map() }: { tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle> } = {},
+): RankingModelResult {
+  const reducer = initializeTeamReducer(matches, teams, { tournamentLifecycles })
+  for (const dateMatches of matchesByDate(reducer.sortedMatches)) processTeamDateBatch(reducer, dateMatches)
+  return finalizeTeamReducer(reducer)
+}
+
+export function initializeTeamReducer(
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  { tournamentLifecycles = new Map(), pregamePlayerRatingEdges: suppliedEdges }: {
+    tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle>
+    pregamePlayerRatingEdges?: ReturnType<typeof buildPregamePlayerRatingEdges>
+  } = {},
+): TeamReducer {
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date))
   const eventWeightContext = eventWeightContextForMatches(sortedMatches)
-  const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sortedMatches, { teams, eventWeightContext })
+  const pregamePlayerRatingEdges = suppliedEdges ?? buildPregamePlayerRatingEdges(sortedMatches, { teams, eventWeightContext })
   const teamRosterBasis = rosterBasisByTeam(sortedMatches)
   const state = createRatingRunState(sortedMatches, teams, eventWeightContext, tournamentLifecycles)
-  const {
-    ratings,
-    previousDisplayRatings,
-    momentums,
-    rosterPriorOffsets,
-    latestRatingUpdates,
-    leaguePlacementDeltas,
-    wins,
-    losses,
-    forms,
-    histories,
-    factorSums,
-    factorCounts,
-    leagueScores,
-    previousLeagueScores,
-    uncertainties,
-    leagueWins,
-    leagueLosses,
-    leagueExpectedWins,
-    leagueOpponentRatingSums,
-    leagueForms,
-    leagueMatchCounts,
-    leagueLastEvents,
-    leagueLastUpdated,
-    leagueHistory,
-    predictions,
-    currentRosterContinuity,
-    eventTrackers,
-  } = state
   const lastDate = sortedMatches.at(-1)?.date ?? new Date().toISOString().slice(0, 10)
-
   for (const team of Object.keys(teams)) {
     ensureLeague(teams[team]?.league ?? 'Unknown', state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
   }
+  return { sortedMatches, teams, state, pregamePlayerRatingEdges, teamRosterBasis, lastDate }
+}
 
-  for (const dateMatches of matchesByDate(sortedMatches)) {
+export function processTeamDateBatch(reducer: TeamReducer, matches: MatchRecord[]): void {
+    const dateMatches = matches.toSorted((left, right) => left.id.localeCompare(right.id))
     const firstMatch = dateMatches[0]
-    if (!firstMatch) continue
+    if (!firstMatch) return
+    if (dateMatches.some((match) => match.date !== firstMatch.date)) throw new Error('Team reducer batches must contain one complete UTC date')
+    if (reducer.processedDate && firstMatch.date <= reducer.processedDate) throw new Error(`Team reducer date ${firstMatch.date} is not after checkpoint ${reducer.processedDate}`)
+    const { state, teams, pregamePlayerRatingEdges, lastDate } = reducer
 
     applyCompletedPlacementResiduals({
       cutoffDate: firstMatch.date,
@@ -179,7 +188,62 @@ export function buildRankingModel(
       lastDate,
       pregamePlayerRatingEdges,
     })
+    reducer.processedDate = firstMatch.date
+}
+
+export function snapshotTeamReducer(reducer: TeamReducer): TeamReducerCheckpoint {
+  const state = structuredClone(reducer.state)
+  const journals = { histories: state.histories, predictions: state.predictions, leagueHistory: state.leagueHistory }
+  state.histories = new Map()
+  state.predictions = []
+  state.leagueHistory = []
+  return { schemaVersion: 1, processedDate: reducer.processedDate, state, journals }
+}
+
+export function restoreTeamReducer(
+  checkpoint: TeamReducerCheckpoint,
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  options: {
+    tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle>
+    pregamePlayerRatingEdges?: ReturnType<typeof buildPregamePlayerRatingEdges>
+    rebuildPlacementContext?: boolean
+  } = {},
+): TeamReducer {
+  if (checkpoint.schemaVersion !== 1) throw new Error('Incompatible team reducer checkpoint')
+  const reducer = initializeTeamReducer(matches, teams, options)
+  const currentEventTrackers = reducer.state.eventTrackers
+  const currentEventWeightContext = reducer.state.eventWeightContext
+  reducer.state = structuredClone(checkpoint.state)
+  if (options.rebuildPlacementContext) {
+    reducer.state.eventTrackers = currentEventTrackers
+    reducer.state.eventWeightContext = currentEventWeightContext
   }
+  reducer.state.histories = structuredClone(checkpoint.journals.histories)
+  reducer.state.predictions = structuredClone(checkpoint.journals.predictions)
+  reducer.state.leagueHistory = structuredClone(checkpoint.journals.leagueHistory)
+  for (const [team, factors] of reducer.state.factorSums) {
+    const history = reducer.state.histories.get(team) ?? []
+    reducer.state.factorSums.set(team, {
+      ...factors,
+      recency: history.reduce((total, point) => total + recencyWeight(point.date, reducer.lastDate), 0),
+    })
+  }
+  reducer.processedDate = checkpoint.processedDate
+  return reducer
+}
+
+export function finalizeTeamReducer(input: TeamReducer): RankingModelResult {
+  const reducer = structuredClone(input)
+  const { sortedMatches, teams, state, teamRosterBasis, lastDate } = reducer
+  const {
+    ratings, previousDisplayRatings, momentums, rosterPriorOffsets, latestRatingUpdates,
+    leaguePlacementDeltas, wins, losses, forms, histories, factorSums, factorCounts,
+    leagueScores, previousLeagueScores, uncertainties, leagueWins, leagueLosses,
+    leagueExpectedWins, leagueOpponentRatingSums, leagueForms, leagueMatchCounts,
+    leagueLastEvents, leagueLastUpdated, leagueHistory, predictions, currentRosterContinuity,
+    eventTrackers,
+  } = state
 
   applyCompletedPlacementResiduals({
     cutoffDate: undefined,

@@ -91,6 +91,17 @@ test('private state encoding is bijective for tag-like user data and undefined',
   assert.deepEqual(decodePrivateState(encodePrivateState(value)), value)
 })
 
+test('private state encoding preserves Map and Set insertion order', () => {
+  const value = new Map<unknown, unknown>([
+    ['undefined', undefined],
+    [-0, new Set(['second', 'first'])],
+    [{ key: 'object' }, new Map([['nested', -0]])],
+  ])
+  const decoded = decodePrivateState(encodePrivateState(value))
+  assert.ok(decoded instanceof Map)
+  assert.deepEqual([...decoded.entries()], [...value.entries()])
+})
+
 function oracleFingerprint(contents: string): ProviderFileFingerprint & { provider: 'oracles-elixir' } {
   return {
     provider: 'oracles-elixir',

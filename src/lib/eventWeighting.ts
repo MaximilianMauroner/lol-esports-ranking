@@ -15,7 +15,7 @@ export const emptyEventWeightContext: EventWeightContext = {
 export function eventWeightContextForMatches(matches: readonly MatchRecord[]): EventWeightContext {
   const worldsEndDateByCalendarYear = new Map<number, string>()
   for (const match of matches) {
-    if (!isWorldsMatch(match)) continue
+    if (!isWorldsEventMatch(match)) continue
     const year = calendarYearForDate(match.date)
     if (year === undefined) continue
     const currentEndDate = worldsEndDateByCalendarYear.get(year)
@@ -58,7 +58,7 @@ export function isPostWorldsPreseasonMatch(
   match: MatchRecord,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
-  if (isWorldsMatch(match)) return false
+  if (isWorldsEventMatch(match)) return false
   const year = calendarYearForDate(match.date)
   if (year === undefined) return false
   const worldsEndDate = context.worldsEndDateByCalendarYear.get(year)
@@ -66,7 +66,7 @@ export function isPostWorldsPreseasonMatch(
   return match.date > worldsEndDate && match.date < `${year + 1}-01-01`
 }
 
-function isWorldsMatch(match: MatchRecord) {
+export function isWorldsEventMatch(match: MatchRecord) {
   if (match.tier === 'worlds-playoffs' || match.tier === 'worlds-main') return true
   return /\b(?:wlds?|worlds|world championship)\b/i.test(`${match.league} ${match.event}`)
 }

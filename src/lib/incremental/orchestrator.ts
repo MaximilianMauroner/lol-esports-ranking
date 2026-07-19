@@ -20,11 +20,13 @@ export async function orchestrateCrunch<T>({
   runFull,
   runIncremental,
   receipt,
+  requireReferenceParity = false,
 }: {
   mode?: CrunchMode
   runFull: () => T | Promise<T>
   runIncremental?: () => IncrementalCrunchAttempt<T> | Promise<IncrementalCrunchAttempt<T>>
   receipt?: IncrementalCrunchReceipt
+  requireReferenceParity?: boolean
 }): Promise<CrunchOrchestrationResult<T>> {
   if (mode === 'full') {
     if (receipt) {
@@ -48,12 +50,12 @@ export async function orchestrateCrunch<T>({
     engine: 'incremental',
     outcome: attempt.fallback ? 'fallback' : 'succeeded',
     durationMs: Math.max(0, performance.now() - incrementalStartedAt),
-    sources: { filesScanned: null, bytesScanned: null, rowsParsed: null, observationsNormalized: null, observationsReused: null },
+    sources: emptyAttemptSources(),
   })
   const fallback = attempt.fallback
   if (receipt) {
     receipt.requestedMode = mode
-    receipt.executedMode = fallback || mode === 'incremental-shadow' ? 'full' : 'incremental'
+    receipt.executedMode = fallback || mode === 'incremental-shadow' || requireReferenceParity ? 'full' : 'incremental'
     receipt.checkpoint = fallback ? { fallback } : {}
   }
   if (fallback) {
@@ -66,7 +68,7 @@ export async function orchestrateCrunch<T>({
       ...(receipt ? { receipt } : {}),
     }
   }
-  if (mode === 'incremental-shadow') {
+  if (mode === 'incremental-shadow' || requireReferenceParity) {
     return {
       output: await runAndRecordAttempt(runFull, 'reference', receipt),
       shadowOutput: attempt.output,
@@ -94,9 +96,21 @@ async function runAndRecordAttempt<T>(
     engine,
     outcome: 'succeeded',
     durationMs: Math.max(0, performance.now() - startedAt),
-    sources: { filesScanned: null, bytesScanned: null, rowsParsed: null, observationsNormalized: null, observationsReused: null },
+    sources: emptyAttemptSources(),
   })
   return output
+}
+
+function emptyAttemptSources() {
+  return {
+    filesScanned: null,
+    bytesScanned: null,
+    rowsParsed: null,
+    observationsNormalized: null,
+    observationsReused: null,
+    reducerStateBytesRead: null,
+    reducerStateBytesWritten: null,
+  }
 }
 
 export function crunchModeFrom(value: string | undefined): CrunchMode {
