@@ -5,7 +5,12 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { bucketConfigFromEnv, createBucketClient } from './railway-bucket.mjs'
+import {
+  acquireBucketLease,
+  bucketConfigFromEnv,
+  createBucketClient,
+  releaseBucketLease,
+} from './railway-bucket.mjs'
 import { refreshDataIfChanged } from './refresh-data-if-changed.mjs'
 
 type ScenarioName = 'no-change' | 'append' | 'old-correction' | 'context-only' | 'static-player-change' | 'cold-restore'
@@ -92,6 +97,104 @@ export async function runIdentityBootstrapScenario() {
   }
 }
 
+export async function runParityMismatchRolloutScenario() {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-durable-parity-mismatch-'))
+  const s3 = await startMemoryS3()
+  const alerts = await startAlertSink()
+  try {
+    const baseEnv = bucketEnv(s3.endpoint)
+    const prior = await productionRefresh({
+      root,
+      s3,
+      scenario: 'no-change',
+      phase: 'base',
+      mode: 'incremental-shadow',
+      fence: 1,
+      bootstrapStep: 3,
+      metadata: { generatedAt: '2026-07-10T00:00:00.000Z', runId: 'before-mismatch' },
+      baseEnv,
+      force: true,
+    })
+    await removeContainerState(root)
+    const mismatchMetadata = { generatedAt: '2026-07-11T00:00:00.000Z', runId: 'mismatch-run' }
+    const mismatch = await productionRefresh({
+      root,
+      s3,
+      scenario: 'no-change',
+      phase: 'base',
+      mode: 'incremental-shadow',
+      fence: 2,
+      bootstrapStep: 3,
+      metadata: mismatchMetadata,
+      baseEnv,
+      force: true,
+      extraEnv: {
+        RANKING_TEST_FORCE_PARITY_MISMATCH: 'true',
+        RANKING_ALERT_WEBHOOK_URL: alerts.endpoint,
+      },
+    })
+    assert.equal(mismatch.candidate.eligibility, 'ineligible')
+    assert.equal(mismatch.candidate.outcome, 'parity-mismatch')
+    assert.equal(record(mismatch.active.rollout).blockedReason, 'parity-mismatch')
+    assert.equal(record(mismatch.active.rollout).consecutiveShadowSuccesses, 0)
+    assert.deepEqual(mismatch.active.privateState, prior.active.privateState)
+    assert.equal(alerts.requests.length, 1)
+    assert.equal(record(alerts.requests[0]).kind, 'incremental-parity-mismatch')
+    const mismatchAuditAt = record(mismatch.active.rollout).lastAuditAt
+
+    await removeContainerState(root)
+    const retry = await productionRefresh({
+      root,
+      s3,
+      scenario: 'no-change',
+      phase: 'base',
+      mode: 'incremental-shadow',
+      fence: 3,
+      bootstrapStep: 3,
+      metadata: mismatchMetadata,
+      baseEnv,
+      force: true,
+      extraEnv: {
+        RANKING_TEST_FORCE_PARITY_MISMATCH: 'true',
+        RANKING_ALERT_WEBHOOK_URL: alerts.endpoint,
+      },
+    })
+    assert.equal(retry.active.rolloutUpdateId, 'mismatch-run')
+    assert.equal(record(retry.active.rollout).lastAuditAt, mismatchAuditAt)
+    assert.deepEqual(retry.active.privateState, prior.active.privateState)
+
+    await removeContainerState(root)
+    const next = await productionRefresh({
+      root,
+      s3,
+      scenario: 'no-change',
+      phase: 'base',
+      mode: 'incremental',
+      fence: 4,
+      bootstrapStep: 3,
+      metadata: { generatedAt: '2026-07-12T00:00:00.000Z', runId: 'after-mismatch' },
+      baseEnv,
+      force: true,
+      forbidLateWork: false,
+    })
+    assert.equal(next.receipt.executedMode, 'full')
+    assert.equal(record(next.active.rollout).blockedReason, 'parity-mismatch')
+    assert.deepEqual(next.active.privateState, prior.active.privateState)
+    return {
+      alertKind: record(alerts.requests[0]).kind,
+      mismatchGeneration: mismatch.activeGeneration,
+      priorGeneration: prior.activeGeneration,
+      privateStatePreserved: JSON.stringify(next.active.privateState) === JSON.stringify(prior.active.privateState),
+      retryAuditAtPreserved: record(retry.active.rollout).lastAuditAt === mismatchAuditAt,
+      nextExecutedMode: next.receipt.executedMode,
+    }
+  } finally {
+    await alerts.close()
+    await s3.close()
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
 async function runScenario(scenario: ScenarioName) {
   const root = await mkdtemp(join(tmpdir(), `ranking-durable-production-${scenario}-`))
   const s3 = await startMemoryS3()
@@ -105,8 +208,20 @@ async function runScenario(scenario: ScenarioName) {
       activeGeneration = result.activeGeneration
       await removeContainerState(root)
     }
-    const finalMetadata = runMetadata(scenario, 'final')
-    const final = await productionRefresh({ root, s3, scenario, phase: 'changed', mode: 'incremental', fence: 4, metadata: finalMetadata, baseEnv, force: false })
+    const finalMetadata = scenario === 'no-change' || scenario === 'cold-restore'
+      ? { generatedAt: '2026-07-13T12:00:00.000Z', runId: `${scenario}-final` }
+      : runMetadata(scenario, 'final')
+    const final = await productionRefresh({
+      root,
+      s3,
+      scenario,
+      phase: 'changed',
+      mode: 'incremental',
+      fence: 4,
+      metadata: finalMetadata,
+      baseEnv,
+      force: scenario === 'no-change' || scenario === 'cold-restore',
+    })
     const preservedGeneration = final.activeGeneration === activeGeneration
     const expectedGeneration = final.activeGeneration
     if (scenario === 'no-change' && final.activeGeneration !== activeGeneration) {
@@ -171,6 +286,8 @@ async function productionRefresh(options: {
   metadata: { generatedAt: string; runId: string }
   baseEnv: NodeJS.ProcessEnv
   force: boolean
+  bootstrapStep?: number
+  forbidLateWork?: boolean
   extraEnv?: NodeJS.ProcessEnv
 }) {
   const container = join(options.root, `container-${options.fence}`)
@@ -180,46 +297,76 @@ async function productionRefresh(options: {
   const statePath = join(rawDir, 'refresh-state.json')
   const rosterPath = join(container, 'rosters.json')
   const beforePublicPuts = options.s3.putKeys.filter((key) => key.includes('/generations/') && key.includes('/data/')).length
+  const bucketConfig = bucketConfigFromEnv(options.baseEnv)
+  const bucketClient = createBucketClient(bucketConfig)
+  assert.ok(bucketClient)
+  const leaseKey = 'ops/refresh-lease.json'
+  const lease = await acquireBucketLease(leaseKey, {
+    owner: `durable-benchmark:${options.scenario}:${options.fence}`,
+    ttlMs: 45 * 60_000,
+    fenceActiveKey: 'active-generation.json',
+    config: bucketConfig,
+    client: bucketClient,
+  })
+  if (!lease.acquired) throw new Error(`Benchmark refresh lease was not acquired: ${lease.reason}`)
+  assert.equal(lease.lease.fencingToken, options.fence)
   const env: NodeJS.ProcessEnv = {
     ...options.baseEnv,
     ...options.extraEnv,
     RANKING_CRUNCH_MODE: options.mode,
     RANKING_INCREMENTAL_STATE_DIR: stateDir,
     RANKING_STATIC_PLAYER_JSON: rosterPath,
-    RANKING_REFRESH_FENCING_TOKEN: String(options.fence),
+    RANKING_REFRESH_FENCING_TOKEN: String(lease.lease.fencingToken),
+    RANKING_REFRESH_LEASE_KEY: leaseKey,
+    RANKING_REFRESH_LEASE_OWNER: lease.lease.owner,
+    RANKING_REFRESH_LEASE_ETAG: lease.etag,
+    RANKING_REFRESH_LEASE_EXPIRES_AT: lease.lease.expiresAt,
     RANKING_BUCKET_RESTORE_RAW: 'true',
     RANKING_DURABLE_GC_DRY_RUN: 'false',
-    ...((options.scenario === 'no-change' || options.scenario === 'cold-restore') && options.mode === 'incremental'
+    ...((options.forbidLateWork ?? true)
+      && (options.scenario === 'no-change' || options.scenario === 'cold-restore')
+      && options.mode === 'incremental'
       ? { RANKING_TEST_FORBID_LATE_INCREMENTAL_WORK: 'true' }
       : {}),
   }
-  await refreshDataIfChanged([
-    '--raw-dir', rawDir,
-    '--manifest', join(rawDir, 'manifest.json'),
-    '--state', statePath,
-    '--output', join(container, 'snapshot.json'),
-    '--public-data-dir', publicDir,
-    '--staging-dir', join(container, 'staging'),
-    '--end', '2026-07-19',
-    ...(options.force ? ['--force'] : []),
-  ], {
-    env,
-    bucketConfig: bucketConfigFromEnv(env),
-    bucketClient: createBucketClient(bucketConfigFromEnv(env)),
-    run: async (command: string, args: string[]) => {
-      if (args.includes('scripts/download-local-data.mjs')) {
-        const outputDir = valueAfter(args, '--out-dir')
-        const inputs = await materializeInputs(options.root, options.scenario, options.phase, relative(options.root, outputDir), options.fence)
-        await copyInputs(inputs, outputDir, rosterPath)
-        return
-      }
-      assert.equal(command, 'pnpm')
-      await runBuild([...args.slice(args.indexOf('scripts/build-static-snapshot.ts') + 1),
-        '--generated-at', options.metadata.generatedAt,
-        '--run-id', options.metadata.runId,
-      ], env)
-    },
-  })
+  try {
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', join(rawDir, 'manifest.json'),
+      '--state', statePath,
+      '--output', join(container, 'snapshot.json'),
+      '--public-data-dir', publicDir,
+      '--staging-dir', join(container, 'staging'),
+      '--end', '2026-07-19',
+      ...(options.force ? ['--force'] : []),
+    ], {
+      env,
+      bucketConfig,
+      bucketClient,
+      run: async (command: string, args: string[]) => {
+        if (args.includes('scripts/download-local-data.mjs')) {
+          const outputDir = valueAfter(args, '--out-dir')
+          const inputs = await materializeInputs(
+            options.root,
+            options.scenario,
+            options.phase,
+            relative(options.root, outputDir),
+            options.bootstrapStep ?? options.fence,
+          )
+          await copyInputs(inputs, outputDir, rosterPath)
+          return
+        }
+        assert.equal(command, 'pnpm')
+        await runBuild([...args.slice(args.indexOf('scripts/build-static-snapshot.ts') + 1),
+          '--generated-at', options.metadata.generatedAt,
+          '--run-id', options.metadata.runId,
+        ], env)
+      },
+    })
+  } finally {
+    const released = await releaseBucketLease(leaseKey, lease, { config: bucketConfig, client: bucketClient })
+    assert.equal(released.released, true)
+  }
   const active = JSON.parse(Buffer.from(requiredObject(options.s3.objects, 'bucket/rankings/active-generation.json').bytes).toString('utf8'))
   const state = JSON.parse(await readFile(statePath, 'utf8'))
   const candidate = JSON.parse(await readFile(join(stateDir, 'durable-candidate.json'), 'utf8'))
@@ -283,8 +430,7 @@ function oracleContents(scenario: ScenarioName, phase: 'base' | 'changed', boots
   if (phase === 'changed' && scenario === 'old-correction') {
     rows = rows.map((row) => row.includes(',Blue,Gen.G,1,') ? row.replace(',Blue,Gen.G,1,', ',Blue,Gen.G,0,') : row.replace(',Red,T1,0,', ',Red,T1,1,'))
   }
-  const suffix = phase === 'changed' && (scenario === 'no-change' || scenario === 'cold-restore') ? '\n' : ''
-  return [header, ...rows].join('\n') + suffix
+  return [header, ...rows].join('\n')
 }
 
 function scheduleContents(scenario: ScenarioName, phase: 'base' | 'changed') {
@@ -412,6 +558,23 @@ async function startMemoryS3() {
     endpoint: `http://127.0.0.1:${address.port}`,
     objects,
     putKeys,
+    close: () => new Promise<void>((resolvePromise, reject) => server.close((error) => error ? reject(error) : resolvePromise())),
+  }
+}
+
+async function startAlertSink() {
+  const requests: unknown[] = []
+  const server = createServer(async (request, response) => {
+    requests.push(JSON.parse((await requestBytes(request)).toString('utf8')))
+    response.writeHead(204)
+    response.end()
+  })
+  await new Promise<void>((resolvePromise) => server.listen(0, '127.0.0.1', resolvePromise))
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+  return {
+    endpoint: `http://127.0.0.1:${address.port}`,
+    requests,
     close: () => new Promise<void>((resolvePromise, reject) => server.close((error) => error ? reject(error) : resolvePromise())),
   }
 }

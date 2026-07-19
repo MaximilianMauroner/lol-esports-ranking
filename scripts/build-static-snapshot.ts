@@ -67,6 +67,10 @@ import {
 } from '../src/lib/incremental/snapshotInputs.ts'
 import { buildPublicArtifactDag, type PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
 import { stableHash } from '../src/lib/incremental/hash.ts'
+import {
+  createIncrementalSemanticInputRoot,
+  deriveRankingTemporalContext,
+} from '../src/lib/incremental/semanticInputRoot.ts'
 import { bucketConfigFromEnv, createBucketClient } from './railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
@@ -300,6 +304,7 @@ const crunchStartedAt = performance.now()
 const runFull = async () => buildCrunchOutput(await loadFullCommunityImports())
 let pendingPromotion: IncrementalStatePromotion | undefined
 let incrementalAttemptMetrics: SourceMetrics | undefined
+let incrementalImports: IncrementalCommunityImports | undefined
 let previousArtifactCache: PersistedArtifactNode[] = []
 let preloadedIncrementalResult: Awaited<ReturnType<typeof loadIncrementalCommunityImports>> | undefined
 const loadIncrementalResult = () => loadIncrementalCommunityImports({
@@ -316,6 +321,7 @@ const runIncremental = async () => {
   const result = preloadedIncrementalResult ?? await loadIncrementalResult()
   preloadedIncrementalResult = undefined
   incrementalAttemptMetrics = result.metrics
+  incrementalImports = result.imports
   previousArtifactCache = result.artifactCache ?? []
   assertLateIncrementalWorkAllowed('reducers-and-models')
   const modelRun = result.imports
@@ -361,7 +367,11 @@ if (mode === 'incremental'
   if (current.imports && current.promotion && !current.fallback) {
     const roots = await describeIncrementalInputTransition(current.promotion, privateStateDir)
     const staticPlayerRoot = stableHash(staticPlayerRosters)
-    const inputRoot = stableHash({ canonicalRoot: roots.canonicalRoot, contextRoot: roots.contextRoot, staticPlayerRoot })
+    const { inputRoot } = createIncrementalSemanticInputRoot({
+      ...roots,
+      staticPlayerRoot,
+      temporalContext: rankingTemporalContext(current.imports),
+    })
     if (inputRoot === previousDurableSemanticState.inputRoot) {
       await finalizeEarlyNoChange({ ...current, imports: current.imports, promotion: current.promotion }, inputRoot, staticPlayerRoot)
       process.exit(0)
@@ -452,6 +462,9 @@ let incrementalPlan = incrementalCandidate
 let durableParity: { result: 'match' | 'mismatch'; audit?: boolean; detail?: string } | undefined
 if (orchestration.shadowOutput) {
   try {
+    if (process.env.RANKING_TEST_FORCE_PARITY_MISMATCH === 'true') {
+      throw new Error('injected incremental parity mismatch')
+    }
     assertCrunchParity(
       { fullSnapshot: snapshot, publicWrites: publicPlan.writes },
       { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: incrementalPlan!.writes },
@@ -564,16 +577,20 @@ try {
     throw new Error('Eligible incremental state was not promoted locally')
   }
   if (durableStore && incrementalOutcomeEligible && !semanticNoChange && await isDirectory(privateStateDir)) {
+    if (!incrementalImports) throw new Error('Eligible incremental output is missing its semantic input context')
     const validatedState = await validateIncrementalStateTree(privateStateDir, durableIdentity.compatibilityHash)
     const staticPlayerRoot = stableHash(staticPlayerRosters)
+    const semanticInput = createIncrementalSemanticInputRoot({
+      providerRoot: validatedState.providerRoot,
+      canonicalRoot: validatedState.canonicalRoot,
+      contextRoot: validatedState.contextRoot,
+      staticPlayerRoot,
+      temporalContext: rankingTemporalContext(incrementalImports),
+    })
     const stateSummary = {
       ...validatedState,
       staticPlayerRoot,
-      inputRoot: stableHash({
-        canonicalRoot: validatedState.canonicalRoot,
-        contextRoot: validatedState.contextRoot,
-        staticPlayerRoot,
-      }),
+      ...semanticInput,
     }
     const candidateParity = {
       ...(durableParity ?? { kind: 'not-run' }),
@@ -584,6 +601,7 @@ try {
       stateDir: privateStateDir,
       identity: durableIdentity,
       generatedAt: runMetadata.generatedAt,
+      ownershipId: stableHash({ runId: runMetadata.runId, fencingToken: process.env.RANKING_REFRESH_FENCING_TOKEN ?? 'unfenced' }),
       outcome: durableBootstrapEligible ? `shadow-bootstrap-match:${durableRolloutReason}` : orchestration.executedMode === 'incremental' ? 'incremental-success' : 'shadow-match',
       stateSummary,
       reachablePaths: stateSummary.reachablePaths,
@@ -820,6 +838,17 @@ function tournamentScheduleReferencesFor(imports: LolEsportsReferenceImportResul
       coverageEnd: coverage.end,
       coverageEndComplete: result.source.coverageEndComplete,
     }))
+  })
+}
+
+function rankingTemporalContext(imports: IncrementalCommunityImports) {
+  return deriveRankingTemporalContext({
+    matches: imports.canonical.matches,
+    scheduleReferences: tournamentScheduleReferencesFor(imports.lolEsportsImports),
+    generatedAt: runMetadata.generatedAt,
+    calendarHash: stableHash(regionalSplitCalendars),
+    modelVersion: transparentGprModelMetadata.version,
+    modelConfigHash: transparentGprModelMetadata.configHash,
   })
 }
 

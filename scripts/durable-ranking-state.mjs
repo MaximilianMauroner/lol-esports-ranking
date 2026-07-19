@@ -78,6 +78,7 @@ export async function stageDurableGeneration({
   stateDir,
   identity,
   generatedAt,
+  ownershipId,
   outcome = 'incremental-success',
   stateSummary,
   reachablePaths,
@@ -94,12 +95,13 @@ export async function stageDurableGeneration({
   let uploadedBytes = 0
   let skippedObjects = 0
   let skippedBytes = 0
+  const owner = safeOwnershipId(ownershipId ?? stableHash({ identity, generatedAt, outcome }))
   for (const path of files) {
     const logicalPath = safeLogicalPath(relative(root, path).split(sep).join('/'))
     const bytes = await readFile(path)
     const digest = sha256(bytes)
     const category = categoryFor(logicalPath)
-    const key = `${prefix}/objects/${category}/${digest}`
+    const key = `${prefix}/owned/${owner}/objects/${category}/${digest}`
     const upload = await putImmutable(store, key, bytes, digest)
     if (upload.uploaded) {
       uploadedObjects += 1
@@ -123,7 +125,7 @@ export async function stageDurableGeneration({
   }
   const auditBytes = jsonBytes(audit)
   const auditDigest = sha256(auditBytes)
-  const auditKey = `${prefix}/audits/${auditDigest}.json`
+  const auditKey = `${prefix}/owned/${owner}/audits/${auditDigest}.json`
   const auditUpload = await putImmutable(store, auditKey, auditBytes, auditDigest, 'application/json; charset=utf-8')
   const manifest = {
     schemaVersion: DURABLE_STATE_SCHEMA_VERSION,
@@ -132,6 +134,7 @@ export async function stageDurableGeneration({
     identity,
     identityHash,
     stateRoot,
+    ownershipId: owner,
     eligibility: 'eligible',
     outcome,
     semanticState: stateSummary ?? { stateRoot, compatibilityHash: identity.compatibilityHash },
@@ -145,7 +148,7 @@ export async function stageDurableGeneration({
   }
   const manifestBytes = jsonBytes(manifest)
   const manifestDigest = sha256(manifestBytes)
-  const manifestKey = `${prefix}/generations/${manifestDigest}.json`
+  const manifestKey = `${prefix}/generations/${owner}/${manifestDigest}.json`
   const manifestUpload = await putImmutable(store, manifestKey, manifestBytes, manifestDigest, 'application/json; charset=utf-8')
   return {
     eligibility: 'eligible',
@@ -205,6 +208,8 @@ export async function restoreDurableGeneration({
     const manifest = parseJsonBytes(manifestObject.bytes)
     const validation = validateManifest(manifest, expectedIdentity)
     if (validation) return restoreFallback(validation.kind, validation.detail, metrics)
+    const ownershipValidation = validateManifestOwnership(manifest, pointer.manifestKey)
+    if (ownershipValidation) return restoreFallback('checkpoint-corrupt', ownershipValidation, metrics)
     const auditObject = await store.get(manifest.audit.key)
     if (!auditObject.found) return restoreFallback('checkpoint-unavailable', 'durable-audit-missing', metrics)
     metrics.cacheMisses += 1
@@ -414,8 +419,9 @@ export async function planDurableGc({
   prefix = DEFAULT_DURABLE_PREFIX,
 }) {
   const generationEntries = await store.list(`${prefix}/generations`)
-  const objectEntries = await store.list(`${prefix}/objects`)
-  const auditEntries = await store.list(`${prefix}/audits`)
+  const ownedEntries = await store.list(`${prefix}/owned`)
+  const objectEntries = ownedEntries.filter((entry) => entry.key.includes('/objects/'))
+  const auditEntries = ownedEntries.filter((entry) => entry.key.includes('/audits/'))
   const activeManifestKey = activePointer?.privateState?.manifestKey
   const authoritativeBoundaryManifests = new Set(
     (Array.isArray(activePointer?.durableHistory) ? activePointer.durableHistory : [])
@@ -430,9 +436,10 @@ export async function planDurableGc({
       if (!object.found) continue
       const manifest = parseJsonBytes(object.bytes)
       if (validateManifestShape(manifest)) throw new Error('invalid manifest')
+      const legacy = !isOwnedManifestKey(entry.key, prefix)
       const ageMs = new Date(now).getTime() - new Date(`${manifest.retention.date}T00:00:00.000Z`).getTime()
       const permanent = authoritativeBoundaryManifests.has(entry.key)
-      if (entry.key === activeManifestKey || permanent || ageMs <= recentDays * 24 * 60 * 60_000) retainedManifests.set(entry.key, manifest)
+      if (legacy || entry.key === activeManifestKey || permanent || ageMs <= recentDays * 24 * 60 * 60_000) retainedManifests.set(entry.key, manifest)
     } catch {
       invalidManifests += 1
     }
@@ -451,7 +458,7 @@ export async function planDurableGc({
   const plannedDeletes = [
     ...objectEntries.filter((entry) => !reachable.has(entry.key)).map((entry) => ({ ...entry, kind: 'object' })),
     ...auditEntries.filter((entry) => !reachableAudits.has(entry.key)).map((entry) => ({ ...entry, kind: 'audit' })),
-    ...generationEntries.filter((entry) => !retainedManifests.has(entry.key)).map((entry) => ({ ...entry, kind: 'manifest' })),
+    ...generationEntries.filter((entry) => isOwnedManifestKey(entry.key, prefix) && !retainedManifests.has(entry.key)).map((entry) => ({ ...entry, kind: 'manifest' })),
   ].sort((left, right) => left.key.localeCompare(right.key))
   return {
     safe: true,
@@ -470,7 +477,7 @@ export async function planDurableGc({
   }
 }
 
-export async function executeDurableGc({ store, plan, dryRun = true, guard }) {
+export async function executeDurableGc({ store, plan, dryRun = true, guard, beforeDelete }) {
   if (!plan.safe) return { planned: 0, deleted: 0, skipped: 0, bytesDeleted: 0, reason: plan.reason }
   const initialGuardFailure = await durableGcGuardFailure(store, plan, guard)
   if (initialGuardFailure) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: initialGuardFailure }
@@ -489,6 +496,7 @@ export async function executeDurableGc({ store, plan, dryRun = true, guard }) {
         reason: guardFailure,
       }
     }
+    if (beforeDelete) await beforeDelete(entry)
     try {
       if (await store.delete(entry.key)) {
         deleted += 1
@@ -556,6 +564,7 @@ function validateManifestShape(manifest) {
     || !isRecord(manifest.identity)
     || typeof manifest.identityHash !== 'string'
     || typeof manifest.stateRoot !== 'string'
+    || (manifest.ownershipId !== undefined && typeof manifest.ownershipId !== 'string')
     || manifest.eligibility !== 'eligible'
     || typeof manifest.outcome !== 'string'
     || !isRecord(manifest.semanticState)
@@ -578,6 +587,26 @@ function validateManifestShape(manifest) {
       || paths.has(ref.path)) return 'durable-generation-object-ref-invalid'
     paths.add(ref.path)
   }
+}
+
+function validateManifestOwnership(manifest, manifestKey) {
+  if (manifest.ownershipId === undefined) return undefined
+  const owner = safeOwnershipId(manifest.ownershipId)
+  if (!manifestKey.includes(`/generations/${owner}/`)
+    || !manifest.audit.key.includes(`/owned/${owner}/audits/`)
+    || manifest.objects.some((ref) => !ref.key.includes(`/owned/${owner}/objects/`))) {
+    return 'durable-generation-ownership-linkage'
+  }
+}
+
+function safeOwnershipId(value) {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9._-]{8,128}$/.test(value)) throw new Error('Invalid durable ownership ID')
+  return value
+}
+
+function isOwnedManifestKey(key, prefix) {
+  const relativeKey = key.slice(`${prefix}/generations/`.length)
+  return relativeKey.split('/').length === 2
 }
 
 async function putImmutable(store, key, bytes, digest, contentType = 'application/octet-stream') {

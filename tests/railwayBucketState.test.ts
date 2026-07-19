@@ -13,6 +13,8 @@ import {
 } from '../scripts/railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
+  decideDurableCrunchMode,
+  recordRolloutOutcome,
   restoreDurableGeneration,
   stageDurableGeneration,
   type DurableIdentity,
@@ -101,6 +103,130 @@ test('an active refresh lease rejects unguarded and competing generation promoti
     assert.equal((promoted.promotion as { promoted?: boolean }).promoted, true)
   } finally {
     await rm(publicDir, { recursive: true, force: true })
+  }
+})
+
+test('expired lease owners cannot publish and a successor fenced during the final CAS wins', async () => {
+  const client = memoryS3()
+  const root = await mkdtemp(join(tmpdir(), 'lease-cas-adversary-'))
+  const staleDir = join(root, 'stale')
+  const winnerDir = join(root, 'winner')
+  await mkdir(staleDir, { recursive: true })
+  await mkdir(winnerDir, { recursive: true })
+  await writeFile(join(staleDir, 'ranking-summary.json'), '{"worker":"stale"}\n')
+  await writeFile(join(winnerDir, 'ranking-summary.json'), '{"worker":"winner"}\n')
+  let now = '2026-07-19T00:00:00.000Z'
+  const staleLease = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'stale', now, ttlMs: 10_000, fenceActiveKey: 'active-generation.json', config, client,
+  })
+  assert.equal(staleLease.acquired, true)
+  if (!staleLease.acquired) return
+  try {
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: staleDir,
+      generationId: 'expired',
+      fencingToken: staleLease.lease.fencingToken,
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: staleLease.lease.owner, fencingToken: staleLease.lease.fencingToken, etag: staleLease.etag },
+      clock: () => '2026-07-19T00:00:11.000Z',
+      config,
+      client,
+    }), /lease-expired/)
+
+    now = '2026-07-19T00:00:05.000Z'
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: staleDir,
+      generationId: 'stale',
+      fencingToken: staleLease.lease.fencingToken,
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: staleLease.lease.owner, fencingToken: staleLease.lease.fencingToken, etag: staleLease.etag },
+      clock: () => now,
+      beforeActivePointerCas: async () => {
+        now = '2026-07-19T00:00:11.000Z'
+        const winnerLease = await acquireBucketLease('ops/refresh-lease.json', {
+          owner: 'winner', now, ttlMs: 60_000, fenceActiveKey: 'active-generation.json', config, client,
+        })
+        assert.equal(winnerLease.acquired, true)
+        if (!winnerLease.acquired) return
+        await uploadRankingArtifacts({
+          publicDataDir: winnerDir,
+          generationId: 'winner',
+          fencingToken: winnerLease.lease.fencingToken,
+          leaseGuard: { key: 'ops/refresh-lease.json', owner: winnerLease.lease.owner, fencingToken: winnerLease.lease.fencingToken, etag: winnerLease.etag },
+          clock: () => now,
+          config,
+          client,
+        })
+      },
+      config,
+      client,
+    }), /active generation changed during promotion/i)
+    const active = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.equal(active.generationId, 'winner')
+    assert.equal(active.fencingToken, 2)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('parity mismatch is committed with the public full pointer, preserves private state, and is retry-idempotent', async () => {
+  const client = memoryS3()
+  const root = await mkdtemp(join(tmpdir(), 'rollout-mismatch-'))
+  await writeFile(join(root, 'ranking-summary.json'), '{}\n')
+  const privateState = {
+    manifestKey: 'durable/generations/owner/manifest.json',
+    manifestDigest: 'manifest',
+    manifestBytes: 10,
+    stateRoot: 'state',
+    identityHash: 'identity',
+  }
+  try {
+    await uploadRankingArtifacts({
+      publicDataDir: root,
+      generationId: 'before-mismatch',
+      fencingToken: 1,
+      privateState,
+      rollout: { identityHash: 'identity', consecutiveShadowSuccesses: 3 },
+      config,
+      client,
+    })
+    const mismatchAt = '2026-07-19T12:00:00.000Z'
+    await uploadRankingArtifacts({
+      publicDataDir: root,
+      generationId: 'mismatch-full',
+      fencingToken: 2,
+      rolloutUpdateId: 'mismatch-run',
+      rolloutForActive: (previous) => recordRolloutOutcome(previous, {
+        identityHash: 'identity', parity: { result: 'mismatch' }, at: mismatchAt,
+      }),
+      config,
+      client,
+    })
+    const mismatchPointer = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.equal(mismatchPointer.generationId, 'mismatch-full')
+    assert.deepEqual(mismatchPointer.privateState, privateState)
+    assert.equal(mismatchPointer.rollout.consecutiveShadowSuccesses, 0)
+    assert.equal(mismatchPointer.rollout.blockedReason, 'parity-mismatch')
+    assert.equal(mismatchPointer.rollout.lastAuditAt, mismatchAt)
+
+    await uploadRankingArtifacts({
+      publicDataDir: root,
+      generationId: 'mismatch-full',
+      fencingToken: 2,
+      rolloutUpdateId: 'mismatch-run',
+      rolloutForActive: () => { throw new Error('mismatch rollout reapplied') },
+      config,
+      client,
+    })
+    assert.deepEqual(JSON.parse(client.objects.get('rankings/active-generation.json')!.body), mismatchPointer)
+    assert.equal(decideDurableCrunchMode({
+      requestedMode: 'incremental',
+      identity: {
+        compatibilityHash: 'compatibility', pipelineVersion: 'pipeline', codeHash: 'code', modelVersion: 'model', modelConfigHash: 'config',
+      },
+      activePointer: mismatchPointer,
+      now: '2026-07-20T00:00:00.000Z',
+    }).effectiveMode, 'full')
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 

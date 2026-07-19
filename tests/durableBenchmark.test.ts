@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { runDurableBenchmark } from '../scripts/benchmark-incremental-durable.ts'
+import { runDurableBenchmark, runParityMismatchRolloutScenario } from '../scripts/benchmark-incremental-durable.ts'
+
+test('production mismatch rollout alerts, preserves private authority, is retry-idempotent, and forces full', async () => {
+  const result = await runParityMismatchRolloutScenario()
+  assert.equal(result.alertKind, 'incremental-parity-mismatch')
+  assert.notEqual(result.mismatchGeneration, result.priorGeneration)
+  assert.equal(result.privateStatePreserved, true)
+  assert.equal(result.retryAuditAtPreserved, true)
+  assert.equal(result.nextExecutedMode, 'full')
+})
 
 test('durable benchmark covers every Phase 5 change class with public parity', async () => {
   const result = await runDurableBenchmark()

@@ -43,6 +43,7 @@ if (!bucketConfig.enabled || !bucketClient) {
 const lease = await acquireBucketLease(leaseKey, {
   owner,
   ttlMs: numberEnv('RANKING_REFRESH_LEASE_TTL_MS', 45 * 60_000),
+  fenceActiveKey: 'active-generation.json',
   config: bucketConfig,
   client: bucketClient,
 })

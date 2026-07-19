@@ -23,6 +23,7 @@ export type DurableCandidate = {
     identity: DurableIdentity
     identityHash: string
     stateRoot: string
+    ownershipId?: string
     eligibility: 'eligible'
     outcome: string
     semanticState: Record<string, unknown>
@@ -51,6 +52,7 @@ export function stageDurableGeneration(options: {
   stateDir: string
   identity: DurableIdentity
   generatedAt: string
+  ownershipId?: string
   outcome?: string
   stateSummary?: Record<string, unknown>
   reachablePaths?: string[]
@@ -90,4 +92,4 @@ export function decideDurableCrunchMode(options: {
 }): { effectiveMode: 'full' | 'incremental-shadow' | 'incremental'; reason: string; activationEligible: boolean }
 export function recordRolloutOutcome(previous: unknown, options: { identityHash: string; parity?: { result: 'match' | 'mismatch'; audit?: boolean }; at: string }): Record<string, unknown>
 export function planDurableGc(options: { store: DurableObjectStore; activePointer?: Record<string, unknown>; activeEtag?: string; activeKey?: string; now: string; recentDays?: number; prefix?: string }): Promise<Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number; kind: string }> }>
-export function executeDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean; guard?: () => Promise<boolean | { valid: boolean; reason?: string }> }): Promise<Record<string, unknown>>
+export function executeDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean; guard?: () => Promise<boolean | { valid: boolean; reason?: string }>; beforeDelete?: (entry: { key: string; bytes: number }) => Promise<void> }): Promise<Record<string, unknown>>

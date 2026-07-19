@@ -50,10 +50,11 @@ export function acquireBucketLease(relativeKey: string, options: {
   owner: string
   ttlMs?: number
   now?: string | Date
+  fenceActiveKey?: string
   config?: unknown
   client?: BucketClient
 }): Promise<
-  | { acquired: true; lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string }; etag?: string }
+  | { acquired: true; lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string }; etag?: string; activeEtag?: string }
   | { acquired: false; reason: string; lease?: unknown }
 >
 export function releaseBucketLease(relativeKey: string, lease: {
@@ -87,6 +88,8 @@ export function uploadRankingArtifacts(options?: {
   publishGeneration?: boolean
   leaseGuard?: { key: string; owner: string; fencingToken: number; etag?: string }
   rolloutUpdateId?: string
+  clock?: () => string | Date
+  beforeActivePointerCas?: () => Promise<void>
 }): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>

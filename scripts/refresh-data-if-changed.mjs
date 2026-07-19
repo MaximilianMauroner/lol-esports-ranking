@@ -264,8 +264,14 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           ? stringArg(browserManifest?.artifactMeta?.runId)
           : undefined
         const eligibleCandidate = durableCandidate?.eligibility === 'eligible' ? durableCandidate : undefined
+        const mismatchCandidate = durableCandidate?.eligibility === 'ineligible'
+          && durableCandidate.outcome === 'parity-mismatch'
+          && durableCandidate.parity?.result === 'mismatch'
+          ? durableCandidate
+          : undefined
         const rolloutCandidate = eligibleCandidate
           ?? (semanticNoChange && durableCandidate?.parity?.result === 'match' ? durableCandidate : undefined)
+          ?? mismatchCandidate
         const bucketPublish = await uploadRankingArtifacts({
           publicDataDir,
           rawDir,

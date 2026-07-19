@@ -364,6 +364,75 @@ test('GC rechecks active authority before the first delete and preserves a concu
   }
 })
 
+test('a successor staged after the GC plan owns a graph the expired sweep can never name', async () => {
+  const fixture = await stateFixture('gc-owned-successor')
+  const store = createMemoryDurableObjectStore()
+  try {
+    const oldCandidate = await stageDurableGeneration({
+      store,
+      stateDir: fixture.stateDir,
+      identity,
+      ownershipId: 'old-owner',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      retention: { date: '2026-01-01', boundaries: [] },
+    })
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'active-before-plan')
+    const activeCandidate = await stageDurableGeneration({
+      store,
+      stateDir: fixture.stateDir,
+      identity,
+      ownershipId: 'active-owner',
+      generatedAt: '2026-07-19T00:00:00.000Z',
+      retention: { date: '2026-07-19', boundaries: [] },
+    })
+    await promoteDurableGeneration({
+      store, candidate: activeCandidate, fencingToken: 1, generationId: 'before-plan', promotedAt: '2026-07-19T00:00:01.000Z',
+    })
+    const activeObject = requiredObject(store, 'active-generation.json')
+    const plan = await planDurableGc({
+      store,
+      activePointer: parseObject(activeObject.bytes),
+      activeEtag: activeObject.etag,
+      now: '2026-07-20T00:00:00.000Z',
+      recentDays: 1,
+    })
+    assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldCandidate.manifestKey))
+    let successor: Awaited<ReturnType<typeof stageDurableGeneration>> | undefined
+    let paused = false
+    const swept = await executeDurableGc({
+      store,
+      plan,
+      dryRun: false,
+      beforeDelete: async () => {
+        if (paused) return
+        paused = true
+        await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'successor-after-plan')
+        successor = await stageDurableGeneration({
+          store,
+          stateDir: fixture.stateDir,
+          identity,
+          ownershipId: 'successor-owner',
+          generatedAt: '2026-07-20T00:00:00.000Z',
+          retention: { date: '2026-07-20', boundaries: [] },
+        })
+        assert.ok(!plan.plannedDeletes.some((entry) => entry.key === successor!.manifestKey))
+        assert.ok(successor!.manifest.objects.every((ref) => !plan.plannedDeletes.some((entry) => entry.key === ref.key)))
+        await promoteDurableGeneration({
+          store, candidate: successor, fencingToken: 2, generationId: 'successor', promotedAt: '2026-07-20T00:00:01.000Z',
+        })
+      },
+    })
+    assert.equal(swept.reason, 'active-pointer-changed')
+    assert.equal(swept.deleted, 1)
+    assert.ok(successor)
+    assert.ok(store.objects.has(successor.manifestKey))
+    assert.ok(store.objects.has(successor.manifest.audit.key))
+    for (const ref of successor.manifest.objects) assert.ok(store.objects.has(ref.key))
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
 test('durable staging is deterministic for identical metadata and records exact byte reductions', async () => {
   const fixture = await stateFixture('deterministic')
   const store = createMemoryDurableObjectStore()

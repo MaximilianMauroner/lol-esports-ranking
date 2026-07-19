@@ -73,6 +73,8 @@ export async function uploadRankingArtifacts({
   publishGeneration = true,
   leaseGuard,
   rolloutUpdateId,
+  clock = () => new Date(),
+  beforeActivePointerCas,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -96,7 +98,7 @@ export async function uploadRankingArtifacts({
   let active
   let idempotentGeneration = false
   if (generationId && publishGeneration) {
-    await requirePromotionLease(leaseGuard, { config, client })
+    await requirePromotionLease(leaseGuard, { config, client, now: clock() })
     active = await readBucketJson('active-generation.json', { config, client })
     const currentFence = Number(active.value?.fencingToken ?? 0)
     const incomingFence = Number(fencingToken ?? 0)
@@ -104,8 +106,12 @@ export async function uploadRankingArtifacts({
       throw new Error('Stale refresh worker cannot promote an active generation')
     }
     if (currentFence === incomingFence) {
-      if (active.value?.generationId !== generationId) throw new Error('Equal fencing token cannot promote a different generation')
-      idempotentGeneration = true
+      if (active.value?.generationId === generationId) idempotentGeneration = true
+      else if (!leaseGuard
+        || active.value?.refreshLease?.owner !== leaseGuard.owner
+        || Number(active.value?.refreshLease?.fencingToken) !== incomingFence) {
+        throw new Error('Equal fencing token cannot promote a different generation')
+      }
     }
   }
   if (publishGeneration) {
@@ -162,8 +168,11 @@ export async function uploadRankingArtifacts({
     await uploadJson(client, config, 'latest-publish.json', publishReceipt)
   }
   if (generationId && publishGeneration) {
-    await requirePromotionLease(leaseGuard, { config, client })
-    const resolvedRollout = rolloutForActive ? rolloutForActive(active.value?.rollout) : rollout
+    await requirePromotionLease(leaseGuard, { config, client, now: clock() })
+    const rolloutAlreadyApplied = Boolean(rolloutUpdateId && active.value?.rolloutUpdateId === rolloutUpdateId)
+    const resolvedRollout = rolloutAlreadyApplied
+      ? active.value?.rollout
+      : rolloutForActive ? rolloutForActive(active.value?.rollout) : rollout
     const promotedAt = new Date().toISOString()
     const nextPointer = {
       ...(active.value && typeof active.value === 'object' && !Array.isArray(active.value) ? active.value : {}),
@@ -174,6 +183,7 @@ export async function uploadRankingArtifacts({
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
       ...(privateState ? { privateState } : {}),
       ...(resolvedRollout ? { rollout: resolvedRollout } : {}),
+      ...(rolloutUpdateId ? { rolloutUpdateId } : {}),
       ...(privateState ? { durableHistory: activatedDurableHistory(active.value, privateState, promotedAt) } : {}),
     }
     if (idempotentGeneration) {
@@ -193,6 +203,7 @@ export async function uploadRankingArtifacts({
         ...publishMetrics,
       }
     }
+    if (beforeActivePointerCas) await beforeActivePointerCas()
     const promotion = await writeBucketJson('active-generation.json', nextPointer, {
       config,
       client,
@@ -203,7 +214,7 @@ export async function uploadRankingArtifacts({
   }
   let rolloutUpdated = false
   if (!publishGeneration && rolloutForActive && fencingToken) {
-    await requirePromotionLease(leaseGuard, { config, client })
+    await requirePromotionLease(leaseGuard, { config, client, now: clock() })
     const current = await readBucketJson('active-generation.json', { config, client })
     if (!current.found || !current.etag) throw new Error('Semantic no-change rollout update requires an active generation')
     const currentFence = Number(current.value?.fencingToken ?? 0)
@@ -216,6 +227,7 @@ export async function uploadRankingArtifacts({
         rolloutUpdatedAt: new Date().toISOString(),
         ...(rolloutUpdateId ? { rolloutUpdateId } : {}),
       }
+      if (beforeActivePointerCas) await beforeActivePointerCas()
       const update = await writeBucketJson('active-generation.json', nextPointer, { config, client, ifMatch: current.etag })
       if (!update.written) throw new Error('Active generation changed during rollout metadata update')
       rolloutUpdated = true
@@ -401,6 +413,7 @@ export async function acquireBucketLease(relativeKey, {
   owner,
   ttlMs = 10 * 60_000,
   now = new Date(),
+  fenceActiveKey,
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
 } = {}) {
@@ -421,9 +434,16 @@ export async function acquireBucketLease(relativeKey, {
     client,
     ...(current.found ? { ifMatch: current.etag } : { ifNoneMatch: '*' }),
   })
-  return write.written
-    ? { acquired: true, lease, etag: write.etag }
-    : { acquired: false, reason: write.conflict ? 'lease-race' : 'bucket-unavailable' }
+  if (!write.written) return { acquired: false, reason: write.conflict ? 'lease-race' : 'bucket-unavailable' }
+  if (fenceActiveKey) {
+    const fence = await fenceActivePointer(fenceActiveKey, relativeKey, lease, write.etag, { config, client })
+    if (!fence.fenced) {
+      await releaseBucketLease(relativeKey, { lease, etag: write.etag }, { now, config, client })
+      return { acquired: false, reason: fence.reason }
+    }
+    return { acquired: true, lease, etag: write.etag, activeEtag: fence.etag }
+  }
+  return { acquired: true, lease, etag: write.etag }
 }
 
 export async function releaseBucketLease(relativeKey, lease, {
@@ -969,7 +989,27 @@ async function requirePromotionLease(leaseGuard, options) {
     return
   }
   const current = await readBucketJson(key, options)
-  if (current.found && new Date(current.value?.expiresAt).getTime() > Date.now()) {
+  if (current.found && new Date(current.value?.expiresAt).getTime() > new Date(options.now ?? new Date()).getTime()) {
     throw new Error('Active refresh lease requires a matching promotion guard')
   }
+}
+
+async function fenceActivePointer(activeKey, leaseKey, lease, leaseEtag, options) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const active = await readBucketJson(activeKey, options)
+    if (Number(active.value?.fencingToken ?? 0) > lease.fencingToken) return { fenced: false, reason: 'active-fence-ahead' }
+    const next = {
+      ...(active.value && typeof active.value === 'object' && !Array.isArray(active.value) ? active.value : {}),
+      schemaVersion: 1,
+      fencingToken: lease.fencingToken,
+      refreshLease: { key: leaseKey, owner: lease.owner, fencingToken: lease.fencingToken, expiresAt: lease.expiresAt, etag: leaseEtag },
+    }
+    const write = await writeBucketJson(activeKey, next, {
+      ...options,
+      ...(active.found ? { ifMatch: active.etag } : { ifNoneMatch: '*' }),
+    })
+    if (write.written) return { fenced: true, etag: write.etag }
+    if (!write.conflict) return { fenced: false, reason: 'active-fence-unavailable' }
+  }
+  return { fenced: false, reason: 'active-fence-race' }
 }
