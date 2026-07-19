@@ -8,6 +8,7 @@ import {
   createMemoryDurableObjectStore,
   decideDurableCrunchMode,
   executeDurableGc,
+  executeRailwayDurableGc,
   planDurableGc,
   promoteDurableGeneration,
   restoreDurableGeneration,
@@ -287,22 +288,34 @@ test('reachability GC protects active, recent, and permanent-boundary generation
     const dry = await executeDurableGc({ store, plan, dryRun: true })
     assert.equal(dry.deleted, 0)
     assert.equal(requiredObject(store, old.manifestKey).bytes.byteLength, old.manifestBytes)
-    const mirrorGuarded = await executeDurableGc({
+    const activeBeforeRejectedSweeps = Buffer.from(requiredObject(store, 'active-generation.json').bytes)
+    const activeEtagBeforeRejectedSweeps = requiredObject(store, 'active-generation.json').etag
+    const noGuard = await executeDurableGc({ store, plan, dryRun: false })
+    assert.equal(noGuard.reason, 'missing-gc-authority')
+    assert.equal(noGuard.deleted, 0)
+    const mirrorGuarded = await executeRailwayDurableGc({
       store,
       plan,
       dryRun: false,
-      guard: {
-        authorityKey: 'ops/refresh-lease.json',
-        verify: async () => ({ valid: true }),
-      },
+      ...gcAuthority({ authorityKey: 'ops/refresh-lease.json', fencingToken: 99 }),
     })
-    assert.equal(mirrorGuarded.reason, 'invalid-gc-authority')
+    assert.equal(mirrorGuarded.reason, 'invalid-refresh-lease-authority')
     assert.equal(mirrorGuarded.deleted, 0)
+    const forgedActiveGuard = await executeRailwayDurableGc({
+      store,
+      plan,
+      dryRun: false,
+      ...gcAuthority({ fencingToken: 99, activeFencingToken: 1 }),
+    })
+    assert.equal(forgedActiveGuard.reason, 'lease-owner-changed')
+    assert.equal(forgedActiveGuard.deleted, 0)
     assert.ok(store.objects.has(old.manifestKey))
+    assert.deepEqual(requiredObject(store, 'active-generation.json').bytes, activeBeforeRejectedSweeps)
+    assert.equal(requiredObject(store, 'active-generation.json').etag, activeEtagBeforeRejectedSweeps)
     const firstDelete = plan.plannedDeletes[0]
     assert.ok(firstDelete)
     store.failures.deleteKeys.add(firstDelete.key)
-    const swept = await executeDurableGc({ store, plan, dryRun: false })
+    const swept = await executeRailwayDurableGc({ store, plan, dryRun: false, ...gcAuthority() })
     assert.ok(Number(swept.skipped) >= 1)
 
     const activeObject = requiredObject(store, 'active-generation.json')
@@ -314,7 +327,7 @@ test('reachability GC protects active, recent, and permanent-boundary generation
       recentDays: 35,
     })
     await store.put('active-generation.json', Buffer.from('{"schemaVersion":1,"generationId":"winner","fencingToken":2}\n'), { ifMatch: activeObject.etag })
-    const raced = await executeDurableGc({ store, plan: fencedPlan, dryRun: false })
+    const raced = await executeRailwayDurableGc({ store, plan: fencedPlan, dryRun: false, ...gcAuthority() })
     assert.equal(raced.reason, 'active-pointer-changed')
     assert.equal(raced.deleted, 0)
     assert.ok(store.objects.has(activeCandidate.manifestKey))
@@ -346,28 +359,25 @@ test('GC rechecks active authority before the first delete and preserves a concu
     })
     assert.ok(plan.plannedDeletes.some((entry) => entry.key === winnerCandidate.manifestKey))
     let guardCalls = 0
-    const swept = await executeDurableGc({
+    const swept = await executeRailwayDurableGc({
       store,
       plan,
       dryRun: false,
-      guard: {
-        authorityKey: 'active-generation.json',
-        verify: async () => {
-          guardCalls += 1
-          if (guardCalls === 2) {
-            await store.put('active-generation.json', Buffer.from(`${JSON.stringify({
-              schemaVersion: 1,
-              generationId: 'concurrent-winner',
-              fencingToken: 2,
-              privateState: {
-                manifestKey: winnerCandidate.manifestKey,
-                manifestDigest: winnerCandidate.manifestDigest,
-                manifestBytes: winnerCandidate.manifestBytes,
-              },
-            })}\n`), { ifMatch: activeObject.etag })
-          }
-          return { valid: true }
-        },
+      ...gcAuthority(),
+      beforeAuthorityCheck: async () => {
+        guardCalls += 1
+        if (guardCalls === 2) {
+          await store.put('active-generation.json', Buffer.from(`${JSON.stringify({
+            schemaVersion: 1,
+            generationId: 'concurrent-winner',
+            fencingToken: 2,
+            privateState: {
+              manifestKey: winnerCandidate.manifestKey,
+              manifestDigest: winnerCandidate.manifestDigest,
+              manifestBytes: winnerCandidate.manifestBytes,
+            },
+          })}\n`), { ifMatch: activeObject.etag })
+        }
       },
     })
     assert.equal(swept.reason, 'active-pointer-changed')
@@ -414,10 +424,11 @@ test('a successor staged after the GC plan owns a graph the expired sweep can ne
     assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldCandidate.manifestKey))
     let successor: Awaited<ReturnType<typeof stageDurableGeneration>> | undefined
     let paused = false
-    const swept = await executeDurableGc({
+    const swept = await executeRailwayDurableGc({
       store,
       plan,
       dryRun: false,
+      ...gcAuthority(),
       beforeDelete: async () => {
         if (paused) return
         paused = true
@@ -498,6 +509,56 @@ async function stateFixture(name: string) {
   await writeFile(join(stateDir, 'canonical', 'objects', 'canonical-a.json'), canonical)
   await writeFile(join(stateDir, 'reducers', 'checkpoints', 'checkpoint-a.json'), reducer)
   return { root, stateDir, active, canonical, reducer }
+}
+
+function gcAuthority({
+  authorityKey = 'active-generation.json',
+  fencingToken = 7,
+  activeFencingToken = fencingToken,
+}: {
+  authorityKey?: string
+  fencingToken?: number
+  activeFencingToken?: number
+} = {}) {
+  const owner = 'durable-gc-fixture'
+  const bucketConfig = {
+    enabled: true,
+    bucket: 'bucket',
+    endpoint: 'https://example.invalid',
+    region: 'auto',
+    accessKeyId: 'key',
+    secretAccessKey: 'secret',
+    prefix: 'rankings',
+  }
+  const active = JSON.stringify({
+    schemaVersion: 1,
+    fencingToken: activeFencingToken,
+    refreshLease: {
+      schemaVersion: 1,
+      key: 'ops/refresh-lease.json',
+      owner,
+      fencingToken: activeFencingToken,
+      acquiredAt: '2026-07-19T00:00:00.000Z',
+      expiresAt: '2099-07-19T00:00:00.000Z',
+    },
+  })
+  const bucketClient = {
+    async send(command: unknown) {
+      const input = (command as { input: Record<string, unknown> }).input
+      if (input.Key !== 'rankings/active-generation.json') throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
+      return { Body: active, ETag: '"gc-authority"', ContentLength: Buffer.byteLength(active) }
+    },
+  }
+  return {
+    bucketConfig,
+    bucketClient,
+    refreshLeaseGuard: {
+      key: 'ops/refresh-lease.json',
+      owner,
+      fencingToken,
+      authorityKey,
+    },
+  }
 }
 
 function record(value: unknown): Record<string, unknown> {

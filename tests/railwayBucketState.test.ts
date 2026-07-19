@@ -236,7 +236,7 @@ test('an active refresh lease rejects unguarded and competing generation promoti
       fencingToken: lease.lease.fencingToken,
       config,
       client,
-    }), /matching promotion guard/)
+    }), /requires an active generation lease guard/)
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'competitor',
@@ -264,14 +264,16 @@ test('a higher-token mirror-only lease cannot publish or update rollout metadata
   const publicDir = await mkdtemp(join(tmpdir(), 'mirror-only-guard-'))
   await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
   try {
+    const initialLease = await acquireRefreshAuthority(client, 'active-before-mirror', '2026-07-19T00:00:00.000Z')
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'active-before-mirror',
-      fencingToken: 1,
+      fencingToken: initialLease.lease.fencingToken,
+      leaseGuard: refreshGuard(initialLease),
       config,
       client,
     })
-    const mirror = await writeBucketJson('ops/refresh-lease.json', {
+    const mirror = await writeBucketJson('ops/mirror-only.json', {
       schemaVersion: 1,
       owner: 'mirror-only',
       fencingToken: 9,
@@ -280,7 +282,7 @@ test('a higher-token mirror-only lease cannot publish or update rollout metadata
     }, { ifNoneMatch: '*', config, client })
     assert.equal(mirror.written, true)
     const mirrorGuard = {
-      key: 'ops/refresh-lease.json',
+      key: 'ops/mirror-only.json',
       owner: 'mirror-only',
       fencingToken: 9,
       etag: mirror.etag,
@@ -311,6 +313,34 @@ test('a higher-token mirror-only lease cannot publish or update rollout metadata
       config,
       client,
     }), /invalid-refresh-lease-authority/)
+    assert.deepEqual(client.objects, before)
+  } finally {
+    await rm(publicDir, { recursive: true, force: true })
+  }
+})
+
+test('protected publication requires active authority even when no lease objects exist', async () => {
+  const client = memoryS3()
+  const publicDir = await mkdtemp(join(tmpdir(), 'missing-authority-'))
+  await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+  const before = new Map(client.objects)
+  try {
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'unguarded-empty-bucket',
+      fencingToken: 1,
+      config,
+      client,
+    }), /requires an active generation lease guard/)
+    assert.deepEqual(client.objects, before)
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      publishGeneration: false,
+      fencingToken: 1,
+      rolloutForActive: () => ({ consecutiveShadowSuccesses: 1 }),
+      config,
+      client,
+    }), /requires an active generation lease guard/)
     assert.deepEqual(client.objects, before)
   } finally {
     await rm(publicDir, { recursive: true, force: true })
@@ -390,20 +420,25 @@ test('parity mismatch is committed with the public full pointer, preserves priva
     identityHash: 'identity',
   }
   try {
+    const initialLease = await acquireRefreshAuthority(client, 'before-mismatch', '2026-07-19T00:00:00.000Z')
     await uploadRankingArtifacts({
       publicDataDir: root,
       generationId: 'before-mismatch',
-      fencingToken: 1,
+      fencingToken: initialLease.lease.fencingToken,
+      leaseGuard: refreshGuard(initialLease),
       privateState,
       rollout: { identityHash: 'identity', consecutiveShadowSuccesses: 3 },
       config,
       client,
     })
+    assert.equal((await releaseBucketLease('ops/refresh-lease.json', initialLease, { now: '2026-07-19T00:01:00.000Z', config, client })).released, true)
+    const mismatchLease = await acquireRefreshAuthority(client, 'mismatch', '2026-07-19T00:01:01.000Z')
     const mismatchAt = '2026-07-19T12:00:00.000Z'
     await uploadRankingArtifacts({
       publicDataDir: root,
       generationId: 'mismatch-full',
-      fencingToken: 2,
+      fencingToken: mismatchLease.lease.fencingToken,
+      leaseGuard: refreshGuard(mismatchLease),
       rolloutUpdateId: 'mismatch-run',
       rolloutForActive: (previous) => recordRolloutOutcome(previous, {
         identityHash: 'identity', parity: { result: 'mismatch' }, at: mismatchAt,
@@ -421,7 +456,8 @@ test('parity mismatch is committed with the public full pointer, preserves priva
     await uploadRankingArtifacts({
       publicDataDir: root,
       generationId: 'mismatch-full',
-      fencingToken: 2,
+      fencingToken: mismatchLease.lease.fencingToken,
+      leaseGuard: refreshGuard(mismatchLease),
       rolloutUpdateId: 'mismatch-run',
       rolloutForActive: () => { throw new Error('mismatch rollout reapplied') },
       config,
@@ -449,10 +485,12 @@ test('generation publication uploads immutable data before promoting one pointer
   await writeFile(join(publicDir, 'ranking-summary.json'), '{"artifactKind":"public-ranking-manifest"}\n')
   const client = memoryS3()
   try {
+    const firstLease = await acquireRefreshAuthority(client, 'run-1')
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'run-1',
-      fencingToken: 4,
+      fencingToken: firstLease.lease.fencingToken,
+      leaseGuard: refreshGuard(firstLease),
       config,
       client,
     })
@@ -460,42 +498,41 @@ test('generation publication uploads immutable data before promoting one pointer
     assert.ok(client.objects.has('rankings/generations/run-1/data/ranking-summary.json'))
     const active = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
     assert.equal(active.generationId, 'run-1')
-    assert.equal(active.fencingToken, 4)
+    assert.equal(active.fencingToken, firstLease.lease.fencingToken)
 
+    assert.equal((await releaseBucketLease('ops/refresh-lease.json', firstLease, { config, client })).released, true)
+    const secondLease = await acquireRefreshAuthority(client, 'run-2')
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'run-2',
-      fencingToken: 5,
+      fencingToken: secondLease.lease.fencingToken,
+      leaseGuard: refreshGuard(secondLease),
       config,
       client,
     })
     const retry = await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'run-2',
-      fencingToken: 5,
+      fencingToken: secondLease.lease.fencingToken,
+      leaseGuard: refreshGuard(secondLease),
       config,
       client,
     })
     assert.equal((retry.promotion as { idempotent?: boolean }).idempotent, true)
-    await assert.rejects(() => uploadRankingArtifacts({
-      publicDataDir: publicDir,
-      generationId: 'equal-fence-different-run',
-      fencingToken: 5,
-      config,
-      client,
-    }), /Equal fencing token/)
     await writeFile(join(publicDir, 'scopes', 'all.json'), '{"matchCount":2}\n')
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'run-2',
-      fencingToken: 6,
+      fencingToken: secondLease.lease.fencingToken,
+      leaseGuard: refreshGuard(secondLease),
       config,
       client,
     }), /Immutable generation object collision/)
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'stale-run',
-      fencingToken: 4,
+      fencingToken: firstLease.lease.fencingToken,
+      leaseGuard: refreshGuard(secondLease),
       config,
       client,
     }), /Stale refresh worker/)
@@ -531,10 +568,12 @@ test('Railway bucket adapter restores private state referenced by the public CAS
       identity: durableIdentity,
       generatedAt: '2026-07-19T00:00:00.000Z',
     })
+    const lease = await acquireRefreshAuthority(client, 'durable-run')
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'durable-run',
-      fencingToken: 8,
+      fencingToken: lease.lease.fencingToken,
+      leaseGuard: refreshGuard(lease),
       config,
       client,
       privateState: {
@@ -557,11 +596,33 @@ test('Railway bucket adapter restores private state referenced by the public CAS
     assert.equal(active.privateState.manifestKey, candidate.manifestKey)
     assert.equal(active.rollout.identityHash, candidate.identityHash)
     assert.equal(active.rollout.consecutiveShadowSuccesses, 1)
-    assert.equal(active.fencingToken, 8)
+    assert.equal(active.fencingToken, lease.lease.fencingToken)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+async function acquireRefreshAuthority(client: ReturnType<typeof memoryS3>, owner: string, now: string | Date = new Date()) {
+  const lease = await acquireBucketLease('ops/refresh-lease.json', {
+    owner,
+    now,
+    ttlMs: 24 * 60 * 60_000,
+    fenceActiveKey: 'active-generation.json',
+    config,
+    client,
+  })
+  if (!lease.acquired) throw new Error(`Fixture authority unavailable: ${lease.reason}`)
+  return lease
+}
+
+function refreshGuard(lease: Awaited<ReturnType<typeof acquireRefreshAuthority>>) {
+  return {
+    key: 'ops/refresh-lease.json',
+    owner: lease.lease.owner,
+    fencingToken: lease.lease.fencingToken,
+    authorityKey: lease.authorityKey,
+  }
+}
 
 function memoryS3(options: { failPutKeys?: Set<string> } = {}) {
   const objects = new Map<string, { body: string; etag: string; metadata?: Record<string, string> }>()

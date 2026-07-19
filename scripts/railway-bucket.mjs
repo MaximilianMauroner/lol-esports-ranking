@@ -1039,20 +1039,9 @@ function activatedDurableHistory(active, nextPrivateState, activatedAt) {
 }
 
 async function requirePromotionLease(leaseGuard, options) {
-  const key = leaseGuard?.key ?? process.env.RANKING_REFRESH_LEASE_KEY ?? 'ops/refresh-lease.json'
-  if (leaseGuard) {
-    const verified = await verifyBucketRefreshAuthority(key, leaseGuard, options)
-    if (!verified.valid) throw new Error(`Refresh lease no longer authorizes promotion: ${verified.reason}`)
-    return
-  }
-  const active = await readBucketJson('active-generation.json', options)
-  if (new Date(active.value?.refreshLease?.expiresAt).getTime() > new Date(options.now ?? new Date()).getTime()) {
-    throw new Error('Active refresh lease requires a matching promotion guard')
-  }
-  const current = await readBucketJson(key, options)
-  if (current.found && new Date(current.value?.expiresAt).getTime() > new Date(options.now ?? new Date()).getTime()) {
-    throw new Error('Active refresh lease requires a matching promotion guard')
-  }
+  if (!leaseGuard) throw new Error('Protected publication requires an active generation lease guard')
+  const verified = await verifyBucketRefreshAuthority(leaseGuard.key, leaseGuard, options)
+  if (!verified.valid) throw new Error(`Refresh lease no longer authorizes promotion: ${verified.reason}`)
 }
 
 async function acquireAuthoritativeBucketLease(relativeKey, authorityKey, {

@@ -128,6 +128,15 @@ test('refresh rejects mirror-only publication identity before downloading or cru
       runCount += 1
     },
   }), /requires active-generation\.json lease authority/)
+  await assert.rejects(() => refreshDataIfChanged([], {
+    env: {
+      ...isolatedRefreshEnv,
+      RANKING_REFRESH_FENCING_TOKEN: '9',
+    },
+    run: async () => {
+      runCount += 1
+    },
+  }), /requires active-generation\.json lease authority/)
   assert.equal(runCount, 0)
 })
 
@@ -1026,7 +1035,6 @@ test('refresh rejects absent and corrupt durable candidates while preserving pri
           RANKING_BUCKET_PREFIX: 'rankings',
           RANKING_BUCKET_RESTORE_RAW: 'false',
           RANKING_INCREMENTAL_STATE_DIR: privateDir,
-          RANKING_REFRESH_FENCING_TOKEN: '4',
         },
         run: async (_command, args) => {
           if (args.includes('scripts/download-local-data.mjs')) {

@@ -5,6 +5,7 @@ import {
   deleteObject,
   listBucketKeys,
   readBucketBytes,
+  verifyBucketRefreshAuthority,
   writeBucketBytes,
 } from './railway-bucket.mjs'
 
@@ -477,16 +478,36 @@ export async function planDurableGc({
   }
 }
 
-export async function executeDurableGc({ store, plan, dryRun = true, guard, beforeDelete }) {
+export async function executeDurableGc({ store, plan, dryRun = true, beforeDelete }) {
+  return executeDurableGcWithAuthority({ store, plan, dryRun, beforeDelete })
+}
+
+export async function executeRailwayDurableGc({
+  store,
+  plan,
+  dryRun = true,
+  refreshLeaseGuard,
+  bucketConfig,
+  bucketClient,
+  beforeAuthorityCheck,
+  beforeDelete,
+}) {
+  const verifyAuthority = refreshLeaseGuard
+    ? () => verifyBucketRefreshAuthority(refreshLeaseGuard.key, refreshLeaseGuard, { config: bucketConfig, client: bucketClient })
+    : undefined
+  return executeDurableGcWithAuthority({ store, plan, dryRun, verifyAuthority, beforeAuthorityCheck, beforeDelete })
+}
+
+async function executeDurableGcWithAuthority({ store, plan, dryRun, verifyAuthority, beforeAuthorityCheck, beforeDelete }) {
   if (!plan.safe) return { planned: 0, deleted: 0, skipped: 0, bytesDeleted: 0, reason: plan.reason }
-  const initialGuardFailure = await durableGcGuardFailure(store, plan, guard)
-  if (initialGuardFailure) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: initialGuardFailure }
   if (dryRun) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, dryRun: true }
+  const initialGuardFailure = await durableGcGuardFailure(store, plan, verifyAuthority, beforeAuthorityCheck)
+  if (initialGuardFailure) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: initialGuardFailure }
   let deleted = 0
   let skipped = 0
   let bytesDeleted = 0
   for (const entry of plan.plannedDeletes) {
-    const guardFailure = await durableGcGuardFailure(store, plan, guard)
+    const guardFailure = await durableGcGuardFailure(store, plan, verifyAuthority, beforeAuthorityCheck)
     if (guardFailure) {
       return {
         planned: plan.plannedDeletes.length,
@@ -509,14 +530,11 @@ export async function executeDurableGc({ store, plan, dryRun = true, guard, befo
   return { planned: plan.plannedDeletes.length, deleted, skipped, bytesDeleted, dryRun: false }
 }
 
-async function durableGcGuardFailure(store, plan, guard) {
-  if (guard) {
-    if (!isRecord(guard)
-      || guard.authorityKey !== 'active-generation.json'
-      || typeof guard.verify !== 'function') return 'invalid-gc-authority'
-    const result = await guard.verify()
-    if (result === false || (isRecord(result) && result.valid === false)) return result?.reason ?? 'lease-changed'
-  }
+async function durableGcGuardFailure(store, plan, verifyAuthority, beforeAuthorityCheck) {
+  if (!verifyAuthority) return 'missing-gc-authority'
+  if (beforeAuthorityCheck) await beforeAuthorityCheck()
+  const result = await verifyAuthority()
+  if (result === false || (isRecord(result) && result.valid === false)) return result?.reason ?? 'lease-changed'
   if (!isRecord(plan.activeSnapshot)) return undefined
   const current = await store.get(plan.activeSnapshot.activeKey)
   if (!current.found || !plan.activeSnapshot.etag || current.etag !== plan.activeSnapshot.etag) return 'active-pointer-changed'

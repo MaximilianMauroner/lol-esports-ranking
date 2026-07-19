@@ -5,10 +5,10 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, verifyBucketRefreshAuthority, writeBucketJson } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, writeBucketJson } from './railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
-  executeDurableGc,
+  executeRailwayDurableGc,
   planDurableGc,
   recordRolloutOutcome,
 } from './durable-ranking-state.mjs'
@@ -360,16 +360,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               now: new Date().toISOString(),
               recentDays: positiveInteger(env.RANKING_DURABLE_RETENTION_DAYS) ?? 35,
             })
-            state.bucket.durable.gc = await executeDurableGc({
+            state.bucket.durable.gc = await executeRailwayDurableGc({
               store: durableStore,
               plan: gcPlan,
               dryRun: env.RANKING_DURABLE_GC_DRY_RUN === 'true',
-              ...(leaseGuard ? {
-                guard: {
-                  authorityKey: leaseGuard.authorityKey,
-                  verify: () => verifyBucketRefreshAuthority(leaseGuard.key, leaseGuard, { config: bucketConfig, client: options.bucketClient }),
-                },
-              } : {}),
+              refreshLeaseGuard: leaseGuard,
+              bucketConfig,
+              bucketClient: options.bucketClient,
             })
           } catch (error) {
             state.bucket.durable.gc = { planned: 0, deleted: 0, skipped: 0, reason: `postcommit-gc:${errorMessage(error)}` }
@@ -873,7 +870,8 @@ function refreshLeaseGuard(env) {
 }
 
 function hasRefreshLeaseIdentity(env) {
-  return Boolean(env.RANKING_REFRESH_LEASE_KEY
+  return Boolean(env.RANKING_REFRESH_FENCING_TOKEN
+    || env.RANKING_REFRESH_LEASE_KEY
     || env.RANKING_REFRESH_LEASE_OWNER
     || env.RANKING_REFRESH_LEASE_ETAG
     || env.RANKING_REFRESH_LEASE_AUTHORITY_KEY)
