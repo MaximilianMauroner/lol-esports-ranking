@@ -546,6 +546,7 @@ export async function planDurableGc({
 }
 
 async function planRawGc({ store, activePointer, generationEntries, objectEntries, nowMs, recentDays, stagingGraceMs }) {
+  const validReferenceKinds = new Set(['source', 'manifest', 'refresh-state'])
   const activeDescriptorKey = activePointer?.rawState?.descriptorKey
   const historyKeys = new Set((Array.isArray(activePointer?.rawHistory) ? activePointer.rawHistory : [])
     .filter((entry) => isRecord(entry) && typeof entry.descriptorKey === 'string')
@@ -565,10 +566,15 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
       const descriptor = parseJsonBytes(object.bytes)
       if (!isRecord(descriptor) || descriptor.schemaVersion !== 1 || descriptor.kind !== 'raw-generation' || !Array.isArray(descriptor.objects)) throw new Error('invalid raw descriptor')
       if (descriptor.objects.some((ref) => !isRecord(ref)
+        || !validReferenceKinds.has(ref.kind)
+        || typeof ref.logicalPath !== 'string'
+        || ref.logicalPath.length === 0
         || typeof ref.key !== 'string'
         || typeof ref.digest !== 'string'
+        || !/^[a-f0-9]{64}$/.test(ref.digest)
         || ref.key !== `raw/objects/${ref.digest}`
-        || typeof ref.bytes !== 'number')) throw new Error('invalid raw reference')
+        || !Number.isSafeInteger(ref.bytes)
+        || ref.bytes < 0)) throw new Error('invalid raw reference')
       descriptors.set(entry.key, descriptor)
       const createdAt = typeof descriptor.createdAt === 'string' ? descriptor.createdAt : object.metadata?.['created-at']
       const date = isRecord(descriptor.retention) && typeof descriptor.retention.date === 'string'
@@ -606,6 +612,7 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
   if (invalidDescriptors > 0) {
     return { plannedDeletes: [], metrics: { safe: false, reason: 'raw-descriptor-invalid', invalidDescriptors, legacyDescriptors } }
   }
+  let integrityDeferred = 0
   for (const key of retained) {
     const descriptor = descriptors.get(key)
     if (!descriptor) return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-descriptor-unavailable', invalidDescriptors, legacyDescriptors } }
@@ -617,11 +624,7 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
       if (typeof object.storageVerifiedSha256 === 'string' && object.storageVerifiedSha256 !== ref.digest) {
         return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-object-invalid', invalidDescriptors, legacyDescriptors } }
       }
-      if (object.storageVerifiedSha256 === ref.digest) continue
-      const fallback = await store.get(ref.key)
-      if (!fallback.found || fallback.contentLength !== ref.bytes || sha256(fallback.bytes) !== ref.digest) {
-        return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-object-invalid', invalidDescriptors, legacyDescriptors } }
-      }
+      if (object.storageVerifiedSha256 !== ref.digest) integrityDeferred += 1
     }
   }
   const reachableObjects = new Set([...retained].flatMap((key) => descriptors.get(key)?.objects.map((ref) => ref.key) ?? []))
@@ -643,6 +646,8 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
       retainedObjects: reachableObjects.size,
       invalidDescriptors,
       legacyDescriptors,
+      integrityDeferred,
+      ...(integrityDeferred > 0 ? { integrityDeferredReason: 'checksum-unavailable' } : {}),
     },
   }
 }

@@ -461,6 +461,100 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
   }
 })
 
+test('same-length raw generation corruption fails cold restore and forces a full bootstrap', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-corrupt-generation-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const stagingDir = join(tempDir, 'staging')
+  const expectedSource = Buffer.from('gameid,result\nrestored,1\n')
+  const corruptSource = Buffer.from(expectedSource)
+  corruptSource[0] = corruptSource[0] === 120 ? 121 : 120
+  const sourceDigest = createHash('sha256').update(expectedSource).digest('hex')
+  const sourceKey = `raw/objects/${sourceDigest}`
+  const descriptor = Buffer.from(`${JSON.stringify({
+    schemaVersion: 1,
+    kind: 'raw-generation',
+    createdAt: '2026-06-21T00:00:00.000Z',
+    retention: { date: '2026-06-21', boundaries: [] },
+    objects: [{
+      kind: 'source',
+      logicalPath: 'oracles-elixir/2025.csv',
+      key: sourceKey,
+      digest: sourceDigest,
+      bytes: expectedSource.byteLength,
+    }],
+  })}\n`)
+  const descriptorDigest = createHash('sha256').update(descriptor).digest('hex')
+  const descriptorKey = `raw/generations/${descriptorDigest}.json`
+  const active = JSON.stringify({
+    schemaVersion: 1,
+    rawState: {
+      descriptorKey,
+      descriptorDigest,
+      descriptorBytes: descriptor.byteLength,
+    },
+  })
+  const payloadGets: string[] = []
+  const client = {
+    async send(command: { input: Record<string, unknown> }) {
+      const key = String(command.input.Key)
+      if (key) payloadGets.push(key)
+      if (key === 'rankings/active-generation.json') return { Body: Readable.from([active]), ContentLength: Buffer.byteLength(active) }
+      if (key === `rankings/${descriptorKey}`) return { Body: Readable.from([descriptor]), ContentLength: descriptor.byteLength }
+      if (key === `rankings/${sourceKey}`) return { Body: Readable.from([corruptSource]), ContentLength: corruptSource.byteLength }
+      throw new Error(`Unexpected bucket command: ${JSON.stringify(command.input)}`)
+    },
+  }
+  let downloadStart = ''
+  async function fakeRun(command: string, commandArgs: string[]) {
+    if (!commandArgs.includes('scripts/download-local-data.mjs')) {
+      throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
+    }
+    downloadStart = valueAfter(commandArgs, '--start')
+    const outDir = valueAfter(commandArgs, '--out-dir')
+    const nextManifestPath = valueAfter(commandArgs, '--manifest')
+    const nextOraclePath = join(outDir, 'oracles-elixir', '2026.csv')
+    await mkdir(dirname(nextOraclePath), { recursive: true })
+    await writeFile(nextOraclePath, 'gameid,result\ncurrent,1\n')
+    await writeFile(nextManifestPath, `${JSON.stringify({
+      ...manifest(nextOraclePath),
+      start: '2025-01-01',
+      end: '2026-06-29',
+      files: { leaguepediaJson: [], oracleCsv: [nextOraclePath] },
+    })}\n`)
+  }
+
+  try {
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', stagingDir,
+      '--lookback-days', '7',
+      '--end', '2026-06-29',
+      '--skip-crunch',
+    ], {
+      run: fakeRun,
+      bucketClient: client,
+      bucketConfig: bucketConfig(),
+      env: {
+        RANKING_BUCKET_RESTORE_RAW: 'true',
+        RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01',
+      },
+    })
+
+    assert.equal(downloadStart, '2025-01-01')
+    assert.ok(payloadGets.includes(`rankings/${sourceKey}`))
+    const state = JSON.parse(await readFile(statePath, 'utf8')) as { restoredRaw?: { restored?: boolean; reason?: string } }
+    assert.equal(state.restoredRaw?.restored, false)
+    assert.equal(state.restoredRaw?.reason, 'raw-generation-object-invalid')
+    assert.equal(await readFile(join(rawDir, 'oracles-elixir', '2026.csv'), 'utf8'), 'gameid,result\ncurrent,1\n')
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('refresh wrapper merges rolling downloads into existing raw baseline', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-rolling-refresh-'))
   const rawDir = join(tempDir, 'raw')

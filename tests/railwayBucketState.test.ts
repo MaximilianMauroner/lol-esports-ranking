@@ -845,13 +845,39 @@ test('raw generations are immutable, deduplicated, and become authoritative only
     const secondActive = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
     assert.equal(secondActive.rawHistory.some((entry: { descriptorKey: string }) => entry.descriptorKey === firstActive.rawState.descriptorKey), false)
     const durableStore = createRailwayDurableObjectStore({ config, client })
-    const fallbackPlan = await planDurableGc({
-      store: durableStore,
-      activePointer: secondActive,
-      now: '2026-07-30T00:00:00.000Z',
-      recentDays: 1,
-    })
+    assert.equal((await releaseBucketLease('ops/refresh-lease.json', secondLease, { config, client })).released, true)
+    const maintenance = await acquireBucketMaintenance({ owner: 'raw-gc', now: '2026-07-30T00:00:01.000Z', config, client })
+    assert.equal(maintenance.acquired, true)
+    if (!maintenance.maintenance) return
+    const readChecksumlessPlan = async () => {
+      const pointer = await readBucketJson('active-generation.json', { config, client })
+      return planDurableGc({
+        store: durableStore,
+        activePointer: pointer.value,
+        activeEtag: pointer.etag,
+        now: '2026-07-30T00:00:01.000Z',
+        recentDays: 1,
+      })
+    }
+    client.getKeys.length = 0
+    const fallbackPlan = await readChecksumlessPlan()
     assert.equal(fallbackPlan.safe, true)
+    const fallbackRaw = fallbackPlan.raw as { integrityDeferred?: number; integrityDeferredReason?: string }
+    assert.ok(Number(fallbackRaw.integrityDeferred) > 0)
+    assert.equal(fallbackRaw.integrityDeferredReason, 'checksum-unavailable')
+    assert.ok(fallbackPlan.plannedDeletes.some((entry) => entry.kind === 'raw-object' || entry.kind === 'raw-descriptor'))
+    const fallbackSweep = await executeRailwayDurableGc({
+      store: durableStore,
+      plan: fallbackPlan,
+      dryRun: false,
+      maintenanceGuard: maintenance.maintenance,
+      bucketConfig: config,
+      bucketClient: client,
+      replan: readChecksumlessPlan,
+    })
+    assert.ok(Number(fallbackSweep.deleted) > 0)
+    assert.equal(client.getKeys.some((key) => key.startsWith('rankings/raw/objects/')), false)
+    assert.equal((await releaseBucketMaintenance(maintenance.maintenance, { config, client })).released, true)
     client.behavior.rejectChecksumRequests = false
     client.behavior.headChecksums = true
     const privateGarbageKey = `private/objects/${'b'.repeat(64)}`

@@ -532,8 +532,16 @@ test('maintenance planning bounds raw generations while retaining active, perman
   store.failures.getKeys.add(shared.key)
   store.failures.getKeys.add(oldOnly.key)
   store.failures.getKeys.add(activeOnly.key)
+  const checksumlessStore = {
+    ...store,
+    async head(key: string) {
+      const result = await store.head(key)
+      delete result.storageVerifiedSha256
+      return result
+    },
+  }
   const plan = await planDurableGc({
-    store,
+    store: checksumlessStore,
     activePointer: {
       rawState: { descriptorKey: activeDescriptorKey },
       rawHistory: [{ descriptorKey: permanentDescriptorKey, date: '2026-02-01', boundaries: ['season'] }],
@@ -541,6 +549,9 @@ test('maintenance planning bounds raw generations while retaining active, perman
     now: '2026-07-20T00:00:00.000Z',
     recentDays: 35,
   })
+  const rawMetrics = plan.raw as { integrityDeferred?: number; integrityDeferredReason?: string }
+  assert.equal(rawMetrics.integrityDeferred, 2)
+  assert.equal(rawMetrics.integrityDeferredReason, 'checksum-unavailable')
   assert.ok(plan.plannedDeletes.some((entry) => entry.key === privateGarbageKey))
   assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldDescriptorKey))
   assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldOnly.key))
