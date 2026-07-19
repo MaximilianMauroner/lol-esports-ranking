@@ -74,6 +74,12 @@ export function verifyBucketLease(relativeKey: string, expected: {
   etag?: string
   authorityKey?: string
 }, options?: Record<string, unknown>): Promise<{ valid: boolean; reason?: string; lease?: unknown; etag?: string }>
+export function verifyBucketRefreshAuthority(relativeKey: string, expected: {
+  owner: string
+  fencingToken: number
+  etag?: string
+  authorityKey?: string
+}, options?: Record<string, unknown>): Promise<{ valid: boolean; reason?: string; lease?: unknown; etag?: string }>
 export function uploadRankingArtifacts(options?: {
   publicDataDir?: string
   rawDir?: string

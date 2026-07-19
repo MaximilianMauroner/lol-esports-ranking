@@ -511,7 +511,10 @@ export async function executeDurableGc({ store, plan, dryRun = true, guard, befo
 
 async function durableGcGuardFailure(store, plan, guard) {
   if (guard) {
-    const result = await guard()
+    if (!isRecord(guard)
+      || guard.authorityKey !== 'active-generation.json'
+      || typeof guard.verify !== 'function') return 'invalid-gc-authority'
+    const result = await guard.verify()
     if (result === false || (isRecord(result) && result.valid === false)) return result?.reason ?? 'lease-changed'
   }
   if (!isRecord(plan.activeSnapshot)) return undefined

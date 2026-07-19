@@ -97,6 +97,9 @@ export async function uploadRankingArtifacts({
   const dataPrefix = generationId ? `generations/${safeObjectPath(generationId)}/data` : 'data'
   let active
   let idempotentGeneration = false
+  if (!publishGeneration && rolloutForActive && fencingToken) {
+    await requirePromotionLease(leaseGuard, { config, client, now: clock() })
+  }
   if (generationId && publishGeneration) {
     await requirePromotionLease(leaseGuard, { config, client, now: clock() })
     active = await readBucketJson('active-generation.json', { config, client })
@@ -531,6 +534,13 @@ export async function verifyBucketLease(relativeKey, expected, {
     return { valid: false, reason: 'lease-expired' }
   }
   return { valid: true, lease: currentLease, etag: current.etag }
+}
+
+export async function verifyBucketRefreshAuthority(relativeKey, expected, options = {}) {
+  if (expected?.authorityKey !== 'active-generation.json') {
+    return { valid: false, reason: 'invalid-refresh-lease-authority' }
+  }
+  return verifyBucketLease(relativeKey, expected, options)
 }
 
 export async function downloadBucketDirectory({
@@ -1031,7 +1041,7 @@ function activatedDurableHistory(active, nextPrivateState, activatedAt) {
 async function requirePromotionLease(leaseGuard, options) {
   const key = leaseGuard?.key ?? process.env.RANKING_REFRESH_LEASE_KEY ?? 'ops/refresh-lease.json'
   if (leaseGuard) {
-    const verified = await verifyBucketLease(key, leaseGuard, options)
+    const verified = await verifyBucketRefreshAuthority(key, leaseGuard, options)
     if (!verified.valid) throw new Error(`Refresh lease no longer authorizes promotion: ${verified.reason}`)
     return
   }

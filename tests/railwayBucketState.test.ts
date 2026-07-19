@@ -223,6 +223,7 @@ test('an active refresh lease rejects unguarded and competing generation promoti
     owner: 'winner',
     now: new Date(),
     ttlMs: 60_000,
+    fenceActiveKey: 'active-generation.json',
     config,
     client,
   })
@@ -240,7 +241,7 @@ test('an active refresh lease rejects unguarded and competing generation promoti
       publicDataDir: publicDir,
       generationId: 'competitor',
       fencingToken: lease.lease.fencingToken,
-      leaseGuard: { key: 'ops/refresh-lease.json', owner: 'competitor', fencingToken: lease.lease.fencingToken, etag: lease.etag },
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: 'competitor', fencingToken: lease.lease.fencingToken, authorityKey: lease.authorityKey },
       config,
       client,
     }), /no longer authorizes promotion/)
@@ -248,11 +249,69 @@ test('an active refresh lease rejects unguarded and competing generation promoti
       publicDataDir: publicDir,
       generationId: 'winner',
       fencingToken: lease.lease.fencingToken,
-      leaseGuard: { key: 'ops/refresh-lease.json', owner: lease.lease.owner, fencingToken: lease.lease.fencingToken, etag: lease.etag },
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: lease.lease.owner, fencingToken: lease.lease.fencingToken, authorityKey: lease.authorityKey },
       config,
       client,
     })
     assert.equal((promoted.promotion as { promoted?: boolean }).promoted, true)
+  } finally {
+    await rm(publicDir, { recursive: true, force: true })
+  }
+})
+
+test('a higher-token mirror-only lease cannot publish or update rollout metadata', async () => {
+  const client = memoryS3()
+  const publicDir = await mkdtemp(join(tmpdir(), 'mirror-only-guard-'))
+  await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+  try {
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'active-before-mirror',
+      fencingToken: 1,
+      config,
+      client,
+    })
+    const mirror = await writeBucketJson('ops/refresh-lease.json', {
+      schemaVersion: 1,
+      owner: 'mirror-only',
+      fencingToken: 9,
+      acquiredAt: '2026-07-19T00:00:00.000Z',
+      expiresAt: '2026-07-19T01:00:00.000Z',
+    }, { ifNoneMatch: '*', config, client })
+    assert.equal(mirror.written, true)
+    const mirrorGuard = {
+      key: 'ops/refresh-lease.json',
+      owner: 'mirror-only',
+      fencingToken: 9,
+      etag: mirror.etag,
+    }
+    assert.equal((await verifyBucketLease(mirrorGuard.key, mirrorGuard, {
+      now: '2026-07-19T00:30:00.000Z', config, client,
+    })).valid, true)
+    const before = new Map([...client.objects].map(([key, value]) => [key, { ...value }]))
+
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'mirror-illegal-generation',
+      fencingToken: 9,
+      leaseGuard: mirrorGuard,
+      clock: () => '2026-07-19T00:30:00.000Z',
+      config,
+      client,
+    }), /invalid-refresh-lease-authority/)
+    assert.deepEqual(client.objects, before)
+
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      publishGeneration: false,
+      fencingToken: 9,
+      leaseGuard: mirrorGuard,
+      rolloutForActive: () => ({ consecutiveShadowSuccesses: 99 }),
+      clock: () => '2026-07-19T00:30:00.000Z',
+      config,
+      client,
+    }), /invalid-refresh-lease-authority/)
+    assert.deepEqual(client.objects, before)
   } finally {
     await rm(publicDir, { recursive: true, force: true })
   }

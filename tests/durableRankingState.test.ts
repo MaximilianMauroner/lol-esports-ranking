@@ -287,6 +287,18 @@ test('reachability GC protects active, recent, and permanent-boundary generation
     const dry = await executeDurableGc({ store, plan, dryRun: true })
     assert.equal(dry.deleted, 0)
     assert.equal(requiredObject(store, old.manifestKey).bytes.byteLength, old.manifestBytes)
+    const mirrorGuarded = await executeDurableGc({
+      store,
+      plan,
+      dryRun: false,
+      guard: {
+        authorityKey: 'ops/refresh-lease.json',
+        verify: async () => ({ valid: true }),
+      },
+    })
+    assert.equal(mirrorGuarded.reason, 'invalid-gc-authority')
+    assert.equal(mirrorGuarded.deleted, 0)
+    assert.ok(store.objects.has(old.manifestKey))
     const firstDelete = plan.plannedDeletes[0]
     assert.ok(firstDelete)
     store.failures.deleteKeys.add(firstDelete.key)
@@ -338,21 +350,24 @@ test('GC rechecks active authority before the first delete and preserves a concu
       store,
       plan,
       dryRun: false,
-      guard: async () => {
-        guardCalls += 1
-        if (guardCalls === 2) {
-          await store.put('active-generation.json', Buffer.from(`${JSON.stringify({
-            schemaVersion: 1,
-            generationId: 'concurrent-winner',
-            fencingToken: 2,
-            privateState: {
-              manifestKey: winnerCandidate.manifestKey,
-              manifestDigest: winnerCandidate.manifestDigest,
-              manifestBytes: winnerCandidate.manifestBytes,
-            },
-          })}\n`), { ifMatch: activeObject.etag })
-        }
-        return { valid: true }
+      guard: {
+        authorityKey: 'active-generation.json',
+        verify: async () => {
+          guardCalls += 1
+          if (guardCalls === 2) {
+            await store.put('active-generation.json', Buffer.from(`${JSON.stringify({
+              schemaVersion: 1,
+              generationId: 'concurrent-winner',
+              fencingToken: 2,
+              privateState: {
+                manifestKey: winnerCandidate.manifestKey,
+                manifestDigest: winnerCandidate.manifestDigest,
+                manifestBytes: winnerCandidate.manifestBytes,
+              },
+            })}\n`), { ifMatch: activeObject.etag })
+          }
+          return { valid: true }
+        },
       },
     })
     assert.equal(swept.reason, 'active-pointer-changed')

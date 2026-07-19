@@ -5,7 +5,7 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, verifyBucketLease, writeBucketJson } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, verifyBucketRefreshAuthority, writeBucketJson } from './railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
   executeDurableGc,
@@ -40,6 +40,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const args = parseArgs(rawArgs)
   const env = options.env ?? process.env
   const leaseGuard = refreshLeaseGuard(env)
+  if (hasRefreshLeaseIdentity(env) && !leaseGuard) {
+    throw new Error('Refresh publication requires active-generation.json lease authority')
+  }
   const rawDir = resolve(stringArg(args.rawDir ?? env.RANKING_RAW_DIR ?? 'data/raw'))
   const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
@@ -362,7 +365,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               plan: gcPlan,
               dryRun: env.RANKING_DURABLE_GC_DRY_RUN === 'true',
               ...(leaseGuard ? {
-                guard: () => verifyBucketLease(leaseGuard.key, leaseGuard, { config: bucketConfig, client: options.bucketClient }),
+                guard: {
+                  authorityKey: leaseGuard.authorityKey,
+                  verify: () => verifyBucketRefreshAuthority(leaseGuard.key, leaseGuard, { config: bucketConfig, client: options.bucketClient }),
+                },
               } : {}),
             })
           } catch (error) {
@@ -862,8 +868,15 @@ function refreshLeaseGuard(env) {
   const etag = env.RANKING_REFRESH_LEASE_ETAG
   const authorityKey = env.RANKING_REFRESH_LEASE_AUTHORITY_KEY
   const fencingToken = Number(env.RANKING_REFRESH_FENCING_TOKEN)
-  if (!key || !owner || !Number.isFinite(fencingToken) || fencingToken <= 0) return undefined
-  return { key, owner, ...(etag ? { etag } : {}), ...(authorityKey ? { authorityKey } : {}), fencingToken }
+  if (!key || !owner || authorityKey !== 'active-generation.json' || !Number.isFinite(fencingToken) || fencingToken <= 0) return undefined
+  return { key, owner, ...(etag ? { etag } : {}), authorityKey, fencingToken }
+}
+
+function hasRefreshLeaseIdentity(env) {
+  return Boolean(env.RANKING_REFRESH_LEASE_KEY
+    || env.RANKING_REFRESH_LEASE_OWNER
+    || env.RANKING_REFRESH_LEASE_ETAG
+    || env.RANKING_REFRESH_LEASE_AUTHORITY_KEY)
 }
 
 function errorMessage(error) {

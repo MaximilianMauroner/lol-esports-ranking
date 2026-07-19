@@ -114,6 +114,23 @@ test('source fingerprint ignores volatile fetch timestamps', async () => {
   }
 })
 
+test('refresh rejects mirror-only publication identity before downloading or crunching', async () => {
+  let runCount = 0
+  await assert.rejects(() => refreshDataIfChanged([], {
+    env: {
+      ...isolatedRefreshEnv,
+      RANKING_REFRESH_FENCING_TOKEN: '9',
+      RANKING_REFRESH_LEASE_KEY: 'ops/refresh-lease.json',
+      RANKING_REFRESH_LEASE_OWNER: 'mirror-only',
+      RANKING_REFRESH_LEASE_ETAG: '"mirror"',
+    },
+    run: async () => {
+      runCount += 1
+    },
+  }), /requires active-generation\.json lease authority/)
+  assert.equal(runCount, 0)
+})
+
 test('rolling refresh requires a Leaguepedia file covering the bootstrap start', () => {
   const source = { sources: { leaguepedia: { status: 'downloaded' } } }
   assert.equal(manifestHasBootstrapCoverage({
