@@ -313,9 +313,9 @@ test('reachability GC protects active, recent, and permanent-boundary generation
       store,
       plan,
       dryRun: false,
-      ...gcAuthority({ authorityKey: 'ops/refresh-lease.json', fencingToken: 99 }),
+      ...gcAuthority({ fencingToken: 99, activeFencingToken: 7 }),
     })
-    assert.equal(mirrorGuarded.reason, 'invalid-refresh-lease-authority')
+    assert.equal(mirrorGuarded.reason, 'maintenance-changed')
     assert.equal(mirrorGuarded.deleted, 0)
     const forgedActiveGuard = await executeRailwayDurableGc({
       store,
@@ -323,7 +323,7 @@ test('reachability GC protects active, recent, and permanent-boundary generation
       dryRun: false,
       ...gcAuthority({ fencingToken: 99, activeFencingToken: 1 }),
     })
-    assert.equal(forgedActiveGuard.reason, 'lease-owner-changed')
+    assert.equal(forgedActiveGuard.reason, 'maintenance-changed')
     assert.equal(forgedActiveGuard.deleted, 0)
     assert.ok(store.objects.has(old.manifestKey))
     assert.deepEqual(requiredObject(store, 'active-generation.json').bytes, activeBeforeRejectedSweeps)
@@ -413,7 +413,6 @@ test('a successor staged after the GC plan owns a graph the expired sweep can ne
       store,
       stateDir: fixture.stateDir,
       identity,
-      ownershipId: 'old-owner',
       generatedAt: '2026-01-01T00:00:00.000Z',
       retention: { date: '2026-01-01', boundaries: [] },
     })
@@ -422,7 +421,6 @@ test('a successor staged after the GC plan owns a graph the expired sweep can ne
       store,
       stateDir: fixture.stateDir,
       identity,
-      ownershipId: 'active-owner',
       generatedAt: '2026-07-19T00:00:00.000Z',
       retention: { date: '2026-07-19', boundaries: [] },
     })
@@ -453,7 +451,6 @@ test('a successor staged after the GC plan owns a graph the expired sweep can ne
           store,
           stateDir: fixture.stateDir,
           identity,
-          ownershipId: 'successor-owner',
           generatedAt: '2026-07-20T00:00:00.000Z',
           retention: { date: '2026-07-20', boundaries: [] },
         })
@@ -479,20 +476,68 @@ test('durable staging is deterministic for identical metadata and records exact 
   const fixture = await stateFixture('deterministic')
   const store = createMemoryDurableObjectStore()
   try {
-    const first = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, ownershipId: 'first-owner', generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
-    const second = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, ownershipId: 'second-owner', generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
+    const first = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
+    const second = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z', parity: { result: 'match' } })
     assert.equal(second.manifestDigest, first.manifestDigest)
     assert.equal(second.stateRoot, first.stateRoot)
     assert.equal(second.metrics.uploadedObjects, 0)
     assert.ok(second.metrics.skippedObjects > 0)
     assert.ok(second.metrics.skippedBytes > 0)
     await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'one changed object')
-    const changed = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, ownershipId: 'third-owner', generatedAt: '2026-07-20T00:00:00.000Z', parity: { result: 'match' } })
+    const changed = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-20T00:00:00.000Z', parity: { result: 'match' } })
     assert.equal(changed.metrics.uploadedObjects, 3)
     assert.ok(changed.metrics.skippedObjects >= 2)
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
   }
+})
+
+test('maintenance planning bounds raw generations while retaining active, permanent, recent, and shared objects', async () => {
+  const store = createMemoryDurableObjectStore()
+  const putContent = async (value: unknown, createdAt: string) => {
+    const bytes = Buffer.from(`${JSON.stringify(value)}\n`)
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    const key = `raw/objects/${digest}`
+    await store.put(key, bytes, { ifAbsent: true, metadata: { 'created-at': createdAt } })
+    return { key, digest, bytes: bytes.byteLength }
+  }
+  const putDescriptor = async (descriptor: unknown, createdAt: string) => {
+    const bytes = Buffer.from(`${JSON.stringify(descriptor)}\n`)
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    const key = `raw/generations/${digest}.json`
+    await store.put(key, bytes, { ifAbsent: true, metadata: { 'created-at': createdAt } })
+    return key
+  }
+  const shared = await putContent({ shared: true }, '2026-01-01T00:00:00.000Z')
+  const oldOnly = await putContent({ old: true }, '2026-01-01T00:00:00.000Z')
+  const activeOnly = await putContent({ active: true }, '2026-07-19T00:00:00.000Z')
+  const ref = (value: { key: string; digest: string; bytes: number }) => ({ kind: 'source', logicalPath: `${value.digest}.json`, ...value })
+  const oldDescriptorKey = await putDescriptor({
+    schemaVersion: 1, kind: 'raw-generation', createdAt: '2026-01-01T00:00:00.000Z',
+    retention: { date: '2026-01-01', boundaries: [] }, objects: [ref(shared), ref(oldOnly)],
+  }, '2026-01-01T00:00:00.000Z')
+  const permanentDescriptorKey = await putDescriptor({
+    schemaVersion: 1, kind: 'raw-generation', createdAt: '2026-02-01T00:00:00.000Z',
+    retention: { date: '2026-02-01', boundaries: ['season'] }, objects: [ref(shared)],
+  }, '2026-02-01T00:00:00.000Z')
+  const activeDescriptorKey = await putDescriptor({
+    schemaVersion: 1, kind: 'raw-generation', createdAt: '2026-07-19T00:00:00.000Z',
+    retention: { date: '2026-07-19', boundaries: [] }, objects: [ref(activeOnly)],
+  }, '2026-07-19T00:00:00.000Z')
+  const plan = await planDurableGc({
+    store,
+    activePointer: {
+      rawState: { descriptorKey: activeDescriptorKey },
+      rawHistory: [{ descriptorKey: permanentDescriptorKey, date: '2026-02-01', boundaries: ['season'] }],
+    },
+    now: '2026-07-20T00:00:00.000Z',
+    recentDays: 35,
+  })
+  assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldDescriptorKey))
+  assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldOnly.key))
+  assert.ok(!plan.plannedDeletes.some((entry) => entry.key === shared.key))
+  assert.ok(!plan.plannedDeletes.some((entry) => entry.key === activeOnly.key))
+  assert.ok(!plan.plannedDeletes.some((entry) => entry.key === permanentDescriptorKey))
 })
 
 test('durable staging uploads only the active local reachability graph', async () => {
@@ -532,11 +577,9 @@ async function stateFixture(name: string) {
 }
 
 function gcAuthority({
-  authorityKey = 'active-generation.json',
   fencingToken = 7,
   activeFencingToken = fencingToken,
 }: {
-  authorityKey?: string
   fencingToken?: number
   activeFencingToken?: number
 } = {}) {
@@ -553,13 +596,12 @@ function gcAuthority({
   const active = JSON.stringify({
     schemaVersion: 1,
     fencingToken: activeFencingToken,
-    refreshLease: {
-      schemaVersion: 1,
-      key: 'ops/refresh-lease.json',
+    maintenance: {
+      kind: 'ranking-state-gc',
       owner,
       fencingToken: activeFencingToken,
       acquiredAt: '2026-07-19T00:00:00.000Z',
-      expiresAt: '2099-07-19T00:00:00.000Z',
+      heartbeatAt: '2026-07-19T00:00:00.000Z',
     },
   })
   const bucketClient = {
@@ -572,11 +614,9 @@ function gcAuthority({
   return {
     bucketConfig,
     bucketClient,
-    refreshLeaseGuard: {
-      key: 'ops/refresh-lease.json',
+    maintenanceGuard: {
       owner,
       fencingToken,
-      authorityKey,
     },
   }
 }

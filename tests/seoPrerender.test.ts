@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { createServer } from 'vite'
@@ -6,7 +7,9 @@ import { renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../s
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
 import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
 
-test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
+const generatedArtifactTest = existsSync('.generated/ranking-data/ranking-summary.json') ? test : test.skip
+
+generatedArtifactTest('homepage prerender includes ranking snapshot content from public artifacts', async () => {
   const html = await renderHomepagePrerenderFromPublicData()
 
   assert.match(html, /<h1>LoL Esports Power Index<\/h1>/)
@@ -17,11 +20,11 @@ test('homepage prerender includes ranking snapshot content from public artifacts
   assert.match(html, new RegExp(escapeRegExp(escapedNotice())))
   assert.doesNotMatch(html, /<script\b/i)
 
-  const manifest = JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8'))
+  const manifest = JSON.parse(await readFile('.generated/ranking-data/ranking-summary.json', 'utf8'))
   const expectedKey = preferredPublicSnapshotKey(Object.keys(manifest.snapshotIndex), manifest.defaultSnapshotKey)
   assert.ok(expectedKey)
   assert.match(html, new RegExp(`data-snapshot-key="${escapeRegExp(expectedKey)}"`))
-  const shardPath = manifest.snapshotIndex[expectedKey].url.split('?', 1)[0].replace(/^\/data\//, 'public/data/')
+  const shardPath = manifest.snapshotIndex[expectedKey].url.split('?', 1)[0].replace(/^\/data\//, '.generated/ranking-data/')
   const shard = JSON.parse(await readFile(shardPath, 'utf8')) as {
     standings: Array<{ team: string; eligibility?: { eligible?: boolean } }>
   }

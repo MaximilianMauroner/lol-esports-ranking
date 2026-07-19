@@ -103,6 +103,13 @@ try {
 } finally {
   const released = await releaseBucketLease(leaseKey, lease, { config: bucketConfig, client: bucketClient })
   if (!released.released) console.warn(`Refresh lease release skipped: ${released.reason}`)
+  else if (process.env.RANKING_MAINTENANCE_GC_AFTER_REFRESH === 'true') {
+    try {
+      await run(process.execPath, ['scripts/gc-ranking-state.mjs', ...(process.env.RANKING_MAINTENANCE_GC_EXECUTE === 'true' ? ['--execute'] : [])], numberEnv('RANKING_MAINTENANCE_GC_TIMEOUT_MS', 30 * 60_000))
+    } catch (error) {
+      await sendAlert('ranking-state-maintenance-failed', errorMessage(error))
+    }
+  }
 }
 
 async function persistState(nextState, etag) {

@@ -82,7 +82,7 @@ import {
 } from './durable-ranking-state.mjs'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
-const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
+const publicDataTargetDir = resolve(readArg('public-data-dir') ?? '.generated/ranking-data')
 const reconciliationOutput = readArg('reconciliation-output') ? resolve(readArg('reconciliation-output')!) : undefined
 const receiptOutput = readArg('receipt') ? resolve(readArg('receipt')!) : undefined
 const publicDataDir = `${publicDataTargetDir}.next-${process.pid}`
@@ -601,7 +601,6 @@ try {
       stateDir: privateStateDir,
       identity: durableIdentity,
       generatedAt: runMetadata.generatedAt,
-      ownershipId: stableHash({ runId: runMetadata.runId, fencingToken: process.env.RANKING_REFRESH_FENCING_TOKEN ?? 'unfenced' }),
       outcome: durableBootstrapEligible ? `shadow-bootstrap-match:${durableRolloutReason}` : orchestration.executedMode === 'incremental' ? 'incremental-success' : 'shadow-match',
       stateSummary,
       reachablePaths: stateSummary.reachablePaths,

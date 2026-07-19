@@ -53,11 +53,15 @@ const dateFormatter = new Intl.DateTimeFormat('en', {
 })
 
 export async function renderHomepagePrerenderFromPublicData(rootDir = process.cwd()) {
-  return renderHomepagePrerenderFromDataDir(join(rootDir, 'public/data'))
+  return renderHomepagePrerenderFromDataDir(join(rootDir, '.generated/ranking-data'))
 }
 
 export async function renderHomepagePrerenderFromDataDir(publicDataDir: string) {
-  const manifest = await readJson(join(publicDataDir, 'ranking-summary.json'))
+  return renderHomepagePrerenderFromLoader((relativePath) => readJson(join(publicDataDir, relativePath)))
+}
+
+export async function renderHomepagePrerenderFromLoader(loadJson: (relativePath: string) => Promise<unknown>) {
+  const manifest = await loadJson('ranking-summary.json')
   const manifestRecord = asRecord(manifest)
   if (!manifestRecord) return renderFallbackHomepagePrerender()
 
@@ -68,7 +72,7 @@ export async function renderHomepagePrerenderFromDataDir(publicDataDir: string) 
     ? recordField(snapshotIndex, snapshotKey)
     : undefined
   const shardUrl = snapshotEntry ? stringField(snapshotEntry, 'url') : undefined
-  const shard = shardUrl ? await readJson(publicPathForDataUrl(publicDataDir, shardUrl)) : undefined
+  const shard = shardUrl ? await loadJson(relativePathForDataUrl(shardUrl)) : undefined
   const shardRecord = asRecord(shard)
 
   return renderHomepagePrerender({
@@ -86,7 +90,11 @@ export function injectHomepagePrerender(html: string, prerendered: string) {
 }
 
 export async function renderSitemapFromDataDir(publicDataDir: string, sitemap: string) {
-  const manifest = asRecord(await readJson(join(publicDataDir, 'ranking-summary.json')))
+  return renderSitemapFromManifest(await readJson(join(publicDataDir, 'ranking-summary.json')), sitemap)
+}
+
+export function renderSitemapFromManifest(value: unknown, sitemap: string) {
+  const manifest = asRecord(value)
   const generatedAt = manifest ? stringField(manifest, 'generatedAt') : undefined
   const generatedDate = generatedAt && !Number.isNaN(new Date(generatedAt).getTime())
     ? generatedAt.slice(0, 10)
@@ -94,6 +102,18 @@ export async function renderSitemapFromDataDir(publicDataDir: string, sitemap: s
   return generatedDate
     ? sitemap.replaceAll(/<lastmod>[^<]*<\/lastmod>/g, `<lastmod>${escapeHtml(generatedDate)}</lastmod>`)
     : sitemap
+}
+
+function relativePathForDataUrl(url: string) {
+  const parsed = new URL(url, PUBLIC_SITE_ORIGIN)
+  if (!parsed.pathname.startsWith('/data/')) throw new Error(`Unsupported public artifact URL: ${url}`)
+  return parsed.pathname.slice('/data/'.length).split('/').map((segment) => {
+    const decoded = decodeURIComponent(segment)
+    if (!decoded || decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+      throw new Error(`Unsafe public artifact URL: ${url}`)
+    }
+    return decoded
+  }).join('/')
 }
 
 export function renderHomepagePrerender(data: HomepagePrerenderData) {
@@ -239,21 +259,6 @@ function statMarkup(label: string, value: string) {
 
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(path, 'utf8')) as unknown
-}
-
-function publicPathForDataUrl(publicDataDir: string, url: string) {
-  const parsed = new URL(url, PUBLIC_SITE_ORIGIN)
-  if (!parsed.pathname.startsWith('/data/')) throw new Error(`Expected public data URL, received ${url}`)
-  const segments = parsed.pathname.slice(1).split('/').map(decodeSafePathSegment)
-  return join(publicDataDir, ...segments.slice(1))
-}
-
-function decodeSafePathSegment(segment: string) {
-  const decoded = decodeURIComponent(segment)
-  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
-    throw new Error(`Unsafe public data URL segment: ${segment}`)
-  }
-  return decoded
 }
 
 function arrayField(record: JsonRecord | undefined, key: string): unknown[] {

@@ -143,7 +143,14 @@ export async function uploadRankingArtifacts({
     if (idempotentGeneration && active.value?.rawState) {
       rawState = active.value.rawState
     } else {
-      const rawSync = await stageRawGeneration(client, config, { rawDir, manifestPath, statePath })
+      const rawCreatedAt = new Date(clock()).toISOString()
+      const rawSync = await stageRawGeneration(client, config, {
+        rawDir,
+        manifestPath,
+        statePath,
+        createdAt: rawCreatedAt,
+        boundaries: privateState?.retention?.boundaries ?? [],
+      })
       rawState = rawSync.rawState
       uploads.push(...rawSync.uploaded)
       unchanged.push(...rawSync.unchanged)
@@ -223,6 +230,7 @@ export async function uploadRankingArtifacts({
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
       ...(privateState ? { privateState } : {}),
       ...(rawState ? { rawState } : {}),
+      ...(rawState ? { rawHistory: activatedRawHistory(active.value, rawState, promotedAt) } : {}),
       ...(resolvedRollout ? { rollout: resolvedRollout } : {}),
       ...(rolloutUpdateId ? { rolloutUpdateId } : {}),
       ...(privateState ? { durableHistory: activatedDurableHistory(active.value, privateState, promotedAt) } : {}),
@@ -568,7 +576,85 @@ export async function verifyBucketRefreshAuthority(relativeKey, expected, option
   if (expected?.authorityKey !== 'active-generation.json') {
     return { valid: false, reason: 'invalid-refresh-lease-authority' }
   }
-  return verifyBucketLease(relativeKey, expected, options)
+  const verified = await verifyBucketLease(relativeKey, expected, options)
+  if (!verified.valid) return verified
+  const authority = await readBucketJson('active-generation.json', options)
+  if (authority.value?.maintenance) return { valid: false, reason: 'maintenance-active' }
+  return verified
+}
+
+export async function acquireBucketMaintenance({
+  owner,
+  now = new Date(),
+  authorityKey = 'active-generation.json',
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!owner || !config.enabled || !client) return { acquired: false, reason: 'invalid-maintenance-request' }
+  const nowMs = new Date(now).getTime()
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const active = await readBucketJson(authorityKey, { config, client })
+    const current = active.value && typeof active.value === 'object' && !Array.isArray(active.value) ? active.value : {}
+    if (current.maintenance) {
+      if (current.maintenance.owner === owner) {
+        return { acquired: true, maintenance: current.maintenance, authorityKey, etag: active.etag, idempotent: true }
+      }
+      return { acquired: false, reason: 'maintenance-active', maintenance: current.maintenance }
+    }
+    const refreshLease = current.refreshLease
+    if (new Date(refreshLease?.expiresAt).getTime() > nowMs) {
+      return { acquired: false, reason: 'active-refresh-lease', lease: refreshLease }
+    }
+    const fencingToken = Math.max(Number(current.fencingToken ?? 0), Number(refreshLease?.fencingToken ?? 0)) + 1
+    const acquiredAt = new Date(nowMs).toISOString()
+    const maintenance = { kind: 'ranking-state-gc', owner, fencingToken, acquiredAt, heartbeatAt: acquiredAt }
+    const write = await writeBucketJson(authorityKey, {
+      ...current,
+      schemaVersion: 1,
+      fencingToken,
+      maintenance,
+    }, {
+      config,
+      client,
+      ...(active.found ? { ifMatch: active.etag } : { ifNoneMatch: '*' }),
+    })
+    if (write.written) return { acquired: true, maintenance, authorityKey, etag: write.etag }
+    if (!write.conflict) return { acquired: false, reason: 'bucket-unavailable' }
+  }
+  return { acquired: false, reason: 'maintenance-race' }
+}
+
+export async function verifyBucketMaintenance(expected, {
+  authorityKey = 'active-generation.json',
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!expected?.owner || !Number.isFinite(Number(expected?.fencingToken))) return { valid: false, reason: 'invalid-maintenance-guard' }
+  const active = await readBucketJson(authorityKey, { config, client })
+  const maintenance = active.value?.maintenance
+  if (!active.found || !active.etag || maintenance?.kind !== 'ranking-state-gc'
+    || maintenance.owner !== expected.owner
+    || Number(maintenance.fencingToken) !== Number(expected.fencingToken)) {
+    return { valid: false, reason: 'maintenance-changed' }
+  }
+  return { valid: true, maintenance, etag: active.etag, activePointer: active.value }
+}
+
+export async function releaseBucketMaintenance(expected, options = {}) {
+  const authorityKey = options.authorityKey ?? 'active-generation.json'
+  const verified = await verifyBucketMaintenance(expected, { ...options, authorityKey })
+  if (!verified.valid) return { released: false, reason: verified.reason }
+  const next = { ...verified.activePointer }
+  delete next.maintenance
+  const write = await writeBucketJson(authorityKey, next, { ...options, ifMatch: verified.etag })
+  return write.written
+    ? { released: true, etag: write.etag }
+    : { released: false, reason: write.conflict ? 'maintenance-changed' : 'bucket-unavailable' }
+}
+
+export async function recoverBucketMaintenance(expected, { confirmedTerminated = false, ...options } = {}) {
+  if (!confirmedTerminated) return { released: false, reason: 'operator-confirmation-required' }
+  return releaseBucketMaintenance(expected, options)
 }
 
 export async function downloadBucketDirectory({
@@ -716,7 +802,7 @@ export async function uploadRawSourceFiles(client, config, rawDir, manifestPath)
   return { uploaded, unchanged }
 }
 
-async function stageRawGeneration(client, config, { rawDir, manifestPath, statePath }) {
+async function stageRawGeneration(client, config, { rawDir, manifestPath, statePath, createdAt, boundaries }) {
   const root = resolve(rawDir)
   const manifest = manifestWithResolvedFiles(JSON.parse(await readFile(manifestPath, 'utf8')), root)
   const rootWithSeparator = `${root}${sep}`
@@ -733,7 +819,7 @@ async function stageRawGeneration(client, config, { rawDir, manifestPath, stateP
       const logicalPath = relative(root, filePath).split(sep).join('/')
       const bytes = await readFile(filePath)
       const digest = sha256Bytes(bytes)
-      const result = await uploadImmutableBytes(client, config, `raw/objects/${digest}`, bytes, contentTypeForPath(filePath), digest)
+      const result = await uploadImmutableBytes(client, config, `raw/objects/${digest}`, bytes, contentTypeForPath(filePath), digest, createdAt)
       ;(result.status === 'unchanged' ? unchanged : uploaded).push(result)
       objects.push({ kind: 'source', logicalPath, key: `raw/objects/${digest}`, digest, bytes: bytes.byteLength })
       logicalFiles[kind].push(logicalPath)
@@ -742,32 +828,45 @@ async function stageRawGeneration(client, config, { rawDir, manifestPath, stateP
   const logicalManifest = { ...manifest, files: logicalFiles }
   const manifestBytes = Buffer.from(jsonBody(logicalManifest))
   const manifestDigest = sha256Bytes(manifestBytes)
-  const manifestResult = await uploadImmutableBytes(client, config, `raw/objects/${manifestDigest}`, manifestBytes, 'application/json; charset=utf-8', manifestDigest)
+  const manifestResult = await uploadImmutableBytes(client, config, `raw/objects/${manifestDigest}`, manifestBytes, 'application/json; charset=utf-8', manifestDigest, createdAt)
   ;(manifestResult.status === 'unchanged' ? unchanged : uploaded).push(manifestResult)
   objects.push({ kind: 'manifest', logicalPath: 'manifest.json', key: `raw/objects/${manifestDigest}`, digest: manifestDigest, bytes: manifestBytes.byteLength })
   if (statePath) {
     const stateBytes = await readFile(statePath)
     const stateDigest = sha256Bytes(stateBytes)
-    const stateResult = await uploadImmutableBytes(client, config, `raw/objects/${stateDigest}`, stateBytes, 'application/json; charset=utf-8', stateDigest)
+    const stateResult = await uploadImmutableBytes(client, config, `raw/objects/${stateDigest}`, stateBytes, 'application/json; charset=utf-8', stateDigest, createdAt)
     ;(stateResult.status === 'unchanged' ? unchanged : uploaded).push(stateResult)
     objects.push({ kind: 'refresh-state', logicalPath: 'refresh-state.json', key: `raw/objects/${stateDigest}`, digest: stateDigest, bytes: stateBytes.byteLength })
   }
   objects.sort((left, right) => `${left.kind}:${left.logicalPath}`.localeCompare(`${right.kind}:${right.logicalPath}`))
-  const descriptor = { schemaVersion: 1, kind: 'raw-generation', objects }
+  const descriptor = {
+    schemaVersion: 1,
+    kind: 'raw-generation',
+    createdAt,
+    retention: { date: createdAt.slice(0, 10), boundaries: [...new Set(boundaries)].sort() },
+    objects,
+  }
   const descriptorBytes = Buffer.from(jsonBody(descriptor))
   const descriptorDigest = sha256Bytes(descriptorBytes)
   const descriptorKey = `raw/generations/${descriptorDigest}.json`
-  const descriptorResult = await uploadImmutableBytes(client, config, descriptorKey, descriptorBytes, 'application/json; charset=utf-8', descriptorDigest)
+  const descriptorResult = await uploadImmutableBytes(client, config, descriptorKey, descriptorBytes, 'application/json; charset=utf-8', descriptorDigest, createdAt)
   ;(descriptorResult.status === 'unchanged' ? unchanged : uploaded).push(descriptorResult)
   return {
     uploaded,
     unchanged,
-    rawState: { descriptorKey, descriptorDigest, descriptorBytes: descriptorBytes.byteLength },
+    rawState: {
+      descriptorKey,
+      descriptorDigest,
+      descriptorBytes: descriptorBytes.byteLength,
+      createdAt,
+      date: createdAt.slice(0, 10),
+      boundaries: [...new Set(boundaries)].sort(),
+    },
   }
 }
 
-async function uploadImmutableBytes(client, config, relativeKey, bytes, contentType, digest) {
-  const result = await writeBucketBytes(relativeKey, bytes, { config, client, ifNoneMatch: '*', contentType, metadata: { sha256: digest } })
+async function uploadImmutableBytes(client, config, relativeKey, bytes, contentType, digest, createdAt) {
+  const result = await writeBucketBytes(relativeKey, bytes, { config, client, ifNoneMatch: '*', contentType, metadata: { sha256: digest, ...(createdAt ? { 'created-at': createdAt } : {}) } })
   if (result.written) return { status: 'uploaded', key: result.key, bytes: bytes.byteLength, contentType, digest }
   const existing = await readBucketBytes(relativeKey, { config, client })
   if (!existing.found || existing.contentLength !== bytes.byteLength || sha256Bytes(existing.bytes) !== digest) {
@@ -1130,6 +1229,27 @@ function activatedDurableHistory(active, nextPrivateState, activatedAt) {
     .sort((left, right) => left.manifestKey.localeCompare(right.manifestKey))
 }
 
+function activatedRawHistory(active, nextRawState, activatedAt, recentDays = 35) {
+  const entries = [
+    ...(Array.isArray(active?.rawHistory) ? active.rawHistory : []),
+    ...(active?.rawState ? [{ ...active.rawState, activatedAt: active.promotedAt ?? activatedAt }] : []),
+    { ...nextRawState, activatedAt },
+  ].filter((entry) => entry && typeof entry.descriptorKey === 'string' && typeof entry.date === 'string')
+  const cutoff = new Date(activatedAt).getTime() - recentDays * 24 * 60 * 60_000
+  const permanent = entries.filter((entry) => Array.isArray(entry.boundaries) && entry.boundaries.length > 0)
+  const latestByDate = new Map()
+  for (const entry of entries) {
+    if (new Date(`${entry.date}T00:00:00.000Z`).getTime() < cutoff && !permanent.includes(entry)) continue
+    const previous = latestByDate.get(entry.date)
+    if (!previous || `${entry.activatedAt}:${entry.descriptorKey}` > `${previous.activatedAt}:${previous.descriptorKey}`) {
+      latestByDate.set(entry.date, entry)
+    }
+  }
+  for (const entry of permanent) latestByDate.set(`permanent:${entry.descriptorKey}`, entry)
+  return [...new Map([...latestByDate.values()].map((entry) => [entry.descriptorKey, entry])).values()]
+    .sort((left, right) => left.descriptorKey.localeCompare(right.descriptorKey))
+}
+
 async function requirePromotionLease(leaseGuard, options) {
   if (!leaseGuard) throw new Error('Protected publication requires an active generation lease guard')
   const verified = await verifyBucketRefreshAuthority(leaseGuard.key, leaseGuard, options)
@@ -1148,6 +1268,9 @@ async function acquireAuthoritativeBucketLease(relativeKey, authorityKey, {
   const nowMs = new Date(now).getTime()
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const active = await readBucketJson(authorityKey, { config, client })
+    if (active.value?.maintenance) {
+      return { acquired: false, reason: 'maintenance-active', maintenance: active.value.maintenance }
+    }
     const currentLease = active.value?.refreshLease
     const currentExpiresAt = new Date(currentLease?.expiresAt).getTime()
     if (currentLease?.key === relativeKey && currentLease?.owner === owner && currentExpiresAt > nowMs) {

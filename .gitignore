@@ -29,32 +29,10 @@ data/**/*.sqlite
 data/**/*.db
 !data/README.md
 
-# Commit only the compact browser payload from data:crunch. Railway uploads
-# the same payload to Bucket storage, plus larger audit artifacts that should
-# stay out of Git.
+# Generated browser payloads are deploy artifacts. Railway stores them in the
+# private bucket; static hosts may materialize an ignored public/data tree.
+.generated/
 public/data/**
-!public/data/
-!public/data/ranking-summary.json
-!public/data/entities/
-!public/data/entities/*.json
-!public/data/history/
-!public/data/history/region-series.json
-!public/data/history/team-series/
-!public/data/history/team-series/*.json
-!public/data/history/tournament-moves/
-!public/data/history/tournament-moves/*.json
-!public/data/scopes/
-!public/data/scopes/*.json
-!public/data/matches/
-!public/data/matches/*.json
-!public/data/matches/pages/
-!public/data/matches/pages/*.json
-
-# Do not ship/re-add full public snapshots; they can exceed GitHub limits.
-public/data/ranking-snapshot.json
-public/data/ranking-snapshot.full.json
-public/data/*.full.json
-public/data/**/*.tmp
 
 # Editor directories and files
 .vscode/*

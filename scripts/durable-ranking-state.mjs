@@ -5,7 +5,7 @@ import {
   deleteObject,
   listBucketKeys,
   readBucketBytes,
-  verifyBucketRefreshAuthority,
+  verifyBucketMaintenance,
   writeBucketBytes,
 } from './railway-bucket.mjs'
 
@@ -79,7 +79,6 @@ export async function stageDurableGeneration({
   stateDir,
   identity,
   generatedAt,
-  ownershipId,
   outcome = 'incremental-success',
   stateSummary,
   reachablePaths,
@@ -207,8 +206,6 @@ export async function restoreDurableGeneration({
     const manifest = parseJsonBytes(manifestObject.bytes)
     const validation = validateManifest(manifest, expectedIdentity)
     if (validation) return restoreFallback(validation.kind, validation.detail, metrics)
-    const ownershipValidation = validateManifestOwnership(manifest, pointer.manifestKey)
-    if (ownershipValidation) return restoreFallback('checkpoint-corrupt', ownershipValidation, metrics)
     const auditObject = await store.get(manifest.audit.key)
     if (!auditObject.found) return restoreFallback('checkpoint-unavailable', 'durable-audit-missing', metrics)
     metrics.cacheMisses += 1
@@ -309,6 +306,9 @@ export async function promoteDurableGeneration({
   }
   const currentObject = await store.get(activeKey)
   const current = currentObject.found ? parseJsonBytes(currentObject.bytes) : undefined
+  if (isRecord(current?.maintenance)) {
+    return { promoted: false, reason: 'maintenance-active', uploadedObjects: candidate.metrics.uploadedObjects, uploadedBytes: candidate.metrics.uploadedBytes }
+  }
   const currentFence = isRecord(current) ? Number(current.fencingToken ?? 0) : 0
   if (!Number.isFinite(fencingToken) || fencingToken <= 0 || currentFence > fencingToken) {
     return { promoted: false, reason: 'stale-fencing-token', uploadedObjects: candidate.metrics.uploadedObjects, uploadedBytes: candidate.metrics.uploadedBytes }
@@ -419,9 +419,10 @@ export async function planDurableGc({
   prefix = DEFAULT_DURABLE_PREFIX,
 }) {
   const generationEntries = await store.list(`${prefix}/generations`)
-  const ownedEntries = await store.list(`${prefix}/owned`)
   const objectEntries = await store.list(`${prefix}/objects`)
   const auditEntries = await store.list(`${prefix}/audits`)
+  const rawGenerationEntries = await store.list('raw/generations')
+  const rawObjectEntries = await store.list('raw/objects')
   const activeManifestKey = activePointer?.privateState?.manifestKey
   const authoritativeBoundaryManifests = new Set(
     (Array.isArray(activePointer?.durableHistory) ? activePointer.durableHistory : [])
@@ -436,13 +437,14 @@ export async function planDurableGc({
     try {
       const object = await store.get(entry.key)
       if (!object.found) continue
+      const manifestDigest = entry.key.split('/').at(-1)?.replace(/\.json$/, '')
+      if (!manifestDigest || !/^[a-f0-9]{64}$/.test(manifestDigest) || sha256(object.bytes) !== manifestDigest) throw new Error('invalid manifest integrity')
       const manifest = parseJsonBytes(object.bytes)
       if (validateManifestShape(manifest)) throw new Error('invalid manifest')
       parsedManifests.set(entry.key, manifest)
-      const legacyOwnerScoped = isOwnedManifestKey(entry.key, prefix)
       const ageMs = new Date(now).getTime() - new Date(`${manifest.retention.date}T00:00:00.000Z`).getTime()
       const permanent = authoritativeBoundaryManifests.has(entry.key)
-      if (legacyOwnerScoped || entry.key === activeManifestKey || permanent) retainedManifests.set(entry.key, manifest)
+      if (entry.key === activeManifestKey || permanent) retainedManifests.set(entry.key, manifest)
       else if (ageMs <= recentDays * 24 * 60 * 60_000) {
         const previous = recentLatestByDate.get(manifest.retention.date)
         if (!previous || `${manifest.createdAt}:${entry.key}` > `${previous.manifest.createdAt}:${previous.entry.key}`) {
@@ -454,6 +456,15 @@ export async function planDurableGc({
     }
   }
   for (const { entry, manifest } of recentLatestByDate.values()) retainedManifests.set(entry.key, manifest)
+  if (invalidManifests > 0) {
+    return {
+      safe: false,
+      reason: 'durable-manifest-invalid',
+      plannedDeletes: [],
+      retainedManifests: retainedManifests.size,
+      invalidManifests,
+    }
+  }
   if (activeManifestKey && !retainedManifests.has(activeManifestKey)) {
     return {
       safe: false,
@@ -463,20 +474,38 @@ export async function planDurableGc({
       invalidManifests,
     }
   }
+  if (activeManifestKey) {
+    const activeManifestObject = await store.get(activeManifestKey)
+    if (!activeManifestObject.found
+      || (typeof activePointer?.privateState?.manifestDigest === 'string' && sha256(activeManifestObject.bytes) !== activePointer.privateState.manifestDigest)
+      || (typeof activePointer?.privateState?.manifestBytes === 'number' && activeManifestObject.contentLength !== activePointer.privateState.manifestBytes)) {
+      return { safe: false, reason: 'active-manifest-pointer-invalid', plannedDeletes: [], retainedManifests: retainedManifests.size, invalidManifests }
+    }
+  }
   const reachable = new Set([...retainedManifests.values()].flatMap((manifest) => manifest.objects.map((ref) => ref.key)))
   const reachableAudits = new Set([...retainedManifests.values()].map((manifest) => manifest.audit.key))
   const nowMs = new Date(now).getTime()
   const unreferencedObjects = await gcEntriesPastGrace(store, objectEntries.filter((entry) => !reachable.has(entry.key)), nowMs, stagingGraceMs)
   const unreferencedAudits = await gcEntriesPastGrace(store, auditEntries.filter((entry) => !reachableAudits.has(entry.key)), nowMs, stagingGraceMs)
-  const unretainedManifests = generationEntries.filter((entry) => !isOwnedManifestKey(entry.key, prefix) && !retainedManifests.has(entry.key))
+  const unretainedManifests = generationEntries.filter((entry) => !retainedManifests.has(entry.key))
     .filter((entry) => {
       const createdAt = parsedManifests.get(entry.key)?.createdAt
       return typeof createdAt === 'string' && nowMs - new Date(createdAt).getTime() >= stagingGraceMs
     })
+  const rawPlan = await planRawGc({
+    store,
+    activePointer,
+    generationEntries: rawGenerationEntries,
+    objectEntries: rawObjectEntries,
+    nowMs,
+    recentDays,
+    stagingGraceMs,
+  })
   const plannedDeletes = [
     ...unreferencedObjects.map((entry) => ({ ...entry, kind: 'object' })),
     ...unreferencedAudits.map((entry) => ({ ...entry, kind: 'audit' })),
     ...unretainedManifests.map((entry) => ({ ...entry, kind: 'manifest' })),
+    ...rawPlan.plannedDeletes,
   ].sort((left, right) => left.key.localeCompare(right.key))
   return {
     safe: true,
@@ -492,6 +521,103 @@ export async function planDurableGc({
     retainedObjects: reachable.size,
     retainedAudits: reachableAudits.size,
     invalidManifests,
+    raw: rawPlan.metrics,
+  }
+}
+
+async function planRawGc({ store, activePointer, generationEntries, objectEntries, nowMs, recentDays, stagingGraceMs }) {
+  const activeDescriptorKey = activePointer?.rawState?.descriptorKey
+  const historyKeys = new Set((Array.isArray(activePointer?.rawHistory) ? activePointer.rawHistory : [])
+    .filter((entry) => isRecord(entry) && typeof entry.descriptorKey === 'string')
+    .map((entry) => entry.descriptorKey))
+  if (activeDescriptorKey) historyKeys.add(activeDescriptorKey)
+  const descriptors = new Map()
+  const retained = new Set(historyKeys)
+  const recentLatestByDate = new Map()
+  let invalidDescriptors = 0
+  let legacyDescriptors = 0
+  for (const entry of generationEntries) {
+    try {
+      const object = await store.get(entry.key)
+      if (!object.found) continue
+      const descriptorDigest = entry.key.slice('raw/generations/'.length).replace(/\.json$/, '')
+      if (!/^[a-f0-9]{64}$/.test(descriptorDigest) || sha256(object.bytes) !== descriptorDigest) throw new Error('raw descriptor integrity')
+      const descriptor = parseJsonBytes(object.bytes)
+      if (!isRecord(descriptor) || descriptor.schemaVersion !== 1 || descriptor.kind !== 'raw-generation' || !Array.isArray(descriptor.objects)) throw new Error('invalid raw descriptor')
+      if (descriptor.objects.some((ref) => !isRecord(ref)
+        || typeof ref.key !== 'string'
+        || typeof ref.digest !== 'string'
+        || ref.key !== `raw/objects/${ref.digest}`
+        || typeof ref.bytes !== 'number')) throw new Error('invalid raw reference')
+      descriptors.set(entry.key, descriptor)
+      const createdAt = typeof descriptor.createdAt === 'string' ? descriptor.createdAt : object.metadata?.['created-at']
+      const date = isRecord(descriptor.retention) && typeof descriptor.retention.date === 'string'
+        ? descriptor.retention.date
+        : typeof createdAt === 'string' ? createdAt.slice(0, 10) : undefined
+      if (!createdAt || !date) {
+        legacyDescriptors += 1
+        retained.add(entry.key)
+        continue
+      }
+      const ageMs = nowMs - new Date(`${date}T00:00:00.000Z`).getTime()
+      const boundaries = isRecord(descriptor.retention) && Array.isArray(descriptor.retention.boundaries) ? descriptor.retention.boundaries : []
+      if (boundaries.length > 0 || ageMs <= recentDays * 24 * 60 * 60_000) {
+        const previous = recentLatestByDate.get(date)
+        if (!previous || `${createdAt}:${entry.key}` > `${previous.createdAt}:${previous.key}`) recentLatestByDate.set(date, { key: entry.key, createdAt })
+        if (boundaries.length > 0) retained.add(entry.key)
+      }
+    } catch {
+      invalidDescriptors += 1
+    }
+  }
+  for (const entry of recentLatestByDate.values()) retained.add(entry.key)
+  if (activeDescriptorKey && !descriptors.has(activeDescriptorKey)) {
+    return { plannedDeletes: [], metrics: { safe: false, reason: 'active-raw-descriptor-unavailable', invalidDescriptors, legacyDescriptors } }
+  }
+  if (activeDescriptorKey) {
+    const activeDescriptorObject = await store.get(activeDescriptorKey)
+    const expectedDigest = activePointer?.rawState?.descriptorDigest
+    const expectedBytes = activePointer?.rawState?.descriptorBytes
+    if (!activeDescriptorObject.found
+      || (typeof expectedDigest === 'string' && sha256(activeDescriptorObject.bytes) !== expectedDigest)
+      || (typeof expectedBytes === 'number' && activeDescriptorObject.contentLength !== expectedBytes)) {
+      return { plannedDeletes: [], metrics: { safe: false, reason: 'active-raw-pointer-invalid', invalidDescriptors, legacyDescriptors } }
+    }
+  }
+  // An unreadable descriptor may reference any object. Conservatively disable all raw deletion.
+  if (invalidDescriptors > 0) {
+    return { plannedDeletes: [], metrics: { safe: false, reason: 'raw-descriptor-invalid', invalidDescriptors, legacyDescriptors } }
+  }
+  for (const key of retained) {
+    const descriptor = descriptors.get(key)
+    if (!descriptor) return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-descriptor-unavailable', invalidDescriptors, legacyDescriptors } }
+    for (const ref of descriptor.objects) {
+      const object = await store.get(ref.key)
+      if (!object.found || object.contentLength !== ref.bytes || sha256(object.bytes) !== ref.digest) {
+        return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-object-invalid', invalidDescriptors, legacyDescriptors } }
+      }
+    }
+  }
+  const reachableObjects = new Set([...retained].flatMap((key) => descriptors.get(key)?.objects.map((ref) => ref.key) ?? []))
+  const collectibleObjects = await gcEntriesPastGrace(store, objectEntries.filter((entry) => !reachableObjects.has(entry.key)), nowMs, stagingGraceMs)
+  const collectibleDescriptors = []
+  for (const entry of generationEntries.filter((candidate) => !retained.has(candidate.key))) {
+    const descriptor = descriptors.get(entry.key)
+    const createdAt = descriptor?.createdAt
+    if (typeof createdAt === 'string' && nowMs - new Date(createdAt).getTime() >= stagingGraceMs) collectibleDescriptors.push(entry)
+  }
+  return {
+    plannedDeletes: [
+      ...collectibleObjects.map((entry) => ({ ...entry, kind: 'raw-object' })),
+      ...collectibleDescriptors.map((entry) => ({ ...entry, kind: 'raw-descriptor' })),
+    ],
+    metrics: {
+      safe: true,
+      retainedDescriptors: retained.size,
+      retainedObjects: reachableObjects.size,
+      invalidDescriptors,
+      legacyDescriptors,
+    },
   }
 }
 
@@ -503,23 +629,31 @@ export async function executeRailwayDurableGc({
   store,
   plan,
   dryRun = true,
-  refreshLeaseGuard,
+  maintenanceGuard,
   bucketConfig,
   bucketClient,
   beforeAuthorityCheck,
   beforeDelete,
+  replan,
 }) {
-  const verifyAuthority = refreshLeaseGuard
-    ? () => verifyBucketRefreshAuthority(refreshLeaseGuard.key, refreshLeaseGuard, { config: bucketConfig, client: bucketClient })
+  const verifyAuthority = maintenanceGuard
+    ? () => verifyBucketMaintenance(maintenanceGuard, { config: bucketConfig, client: bucketClient })
     : undefined
-  return executeDurableGcWithAuthority({ store, plan, dryRun, verifyAuthority, beforeAuthorityCheck, beforeDelete })
+  return executeDurableGcWithAuthority({ store, plan, dryRun, verifyAuthority, beforeAuthorityCheck, beforeDelete, replan })
 }
 
-async function executeDurableGcWithAuthority({ store, plan, dryRun, verifyAuthority, beforeAuthorityCheck, beforeDelete }) {
+async function executeDurableGcWithAuthority({ store, plan, dryRun, verifyAuthority, beforeAuthorityCheck, beforeDelete, replan }) {
   if (!plan.safe) return { planned: 0, deleted: 0, skipped: 0, bytesDeleted: 0, reason: plan.reason }
   if (dryRun) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, dryRun: true }
   const initialGuardFailure = await durableGcGuardFailure(store, plan, verifyAuthority, beforeAuthorityCheck)
   if (initialGuardFailure) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: initialGuardFailure }
+  if (replan) {
+    const refreshedPlan = await replan()
+    if (!refreshedPlan?.safe) return { planned: 0, deleted: 0, skipped: 0, bytesDeleted: 0, reason: refreshedPlan?.reason ?? 'gc-replan-unsafe' }
+    plan = refreshedPlan
+    const refreshedGuardFailure = await durableGcGuardFailure(store, plan, verifyAuthority, beforeAuthorityCheck)
+    if (refreshedGuardFailure) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: refreshedGuardFailure }
+  }
   let deleted = 0
   let skipped = 0
   let bytesDeleted = 0
@@ -602,7 +736,6 @@ function validateManifestShape(manifest) {
     || !isRecord(manifest.identity)
     || typeof manifest.identityHash !== 'string'
     || typeof manifest.stateRoot !== 'string'
-    || (manifest.ownershipId !== undefined && typeof manifest.ownershipId !== 'string')
     || manifest.eligibility !== 'eligible'
     || typeof manifest.outcome !== 'string'
     || !isRecord(manifest.semanticState)
@@ -625,26 +758,6 @@ function validateManifestShape(manifest) {
       || paths.has(ref.path)) return 'durable-generation-object-ref-invalid'
     paths.add(ref.path)
   }
-}
-
-function validateManifestOwnership(manifest, manifestKey) {
-  if (manifest.ownershipId === undefined) return undefined
-  const owner = safeOwnershipId(manifest.ownershipId)
-  if (!manifestKey.includes(`/generations/${owner}/`)
-    || !manifest.audit.key.includes(`/owned/${owner}/audits/`)
-    || manifest.objects.some((ref) => !ref.key.includes(`/owned/${owner}/objects/`))) {
-    return 'durable-generation-ownership-linkage'
-  }
-}
-
-function safeOwnershipId(value) {
-  if (typeof value !== 'string' || !/^[a-zA-Z0-9._-]{8,128}$/.test(value)) throw new Error('Invalid durable ownership ID')
-  return value
-}
-
-function isOwnedManifestKey(key, prefix) {
-  const relativeKey = key.slice(`${prefix}/generations/`.length)
-  return relativeKey.split('/').length === 2
 }
 
 async function gcEntriesPastGrace(store, entries, nowMs, stagingGraceMs) {

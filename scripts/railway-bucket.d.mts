@@ -80,6 +80,11 @@ export function verifyBucketRefreshAuthority(relativeKey: string, expected: {
   etag?: string
   authorityKey?: string
 }, options?: Record<string, unknown>): Promise<{ valid: boolean; reason?: string; lease?: unknown; etag?: string }>
+export type BucketMaintenanceGuard = { owner: string; fencingToken: number }
+export function acquireBucketMaintenance(options: { owner: string; now?: string | Date; authorityKey?: string; config?: unknown; client?: BucketClient }): Promise<{ acquired: boolean; reason?: string; maintenance?: BucketMaintenanceGuard; authorityKey?: string; etag?: string; idempotent?: boolean }>
+export function verifyBucketMaintenance(expected: BucketMaintenanceGuard, options?: { authorityKey?: string; config?: unknown; client?: BucketClient }): Promise<{ valid: boolean; reason?: string; maintenance?: BucketMaintenanceGuard; etag?: string; activePointer?: Record<string, unknown> }>
+export function releaseBucketMaintenance(expected: BucketMaintenanceGuard, options?: { authorityKey?: string; config?: unknown; client?: BucketClient }): Promise<{ released: boolean; reason?: string; etag?: string }>
+export function recoverBucketMaintenance(expected: BucketMaintenanceGuard, options?: { confirmedTerminated?: boolean; authorityKey?: string; config?: unknown; client?: BucketClient }): Promise<{ released: boolean; reason?: string; etag?: string }>
 export function uploadRankingArtifacts(options?: {
   publicDataDir?: string
   rawDir?: string

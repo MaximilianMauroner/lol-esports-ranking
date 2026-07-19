@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import handler from '../api/rankings.ts'
 import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
 
-test('/api/rankings reads versioned local public artifact URLs', async () => {
-  const manifest = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+const generatedArtifactTest = existsSync('.generated/ranking-data/ranking-summary.json') ? test : test.skip
+
+generatedArtifactTest('/api/rankings reads versioned local public artifact URLs', async () => {
+  const manifest = parsePublicRankingManifest(await readJson('.generated/ranking-data/ranking-summary.json'))
   const defaultEntry = manifest.snapshotIndex[manifest.defaultSnapshotKey]
   assert.ok(defaultEntry)
   assert.match(defaultEntry.url, /\?v=/)

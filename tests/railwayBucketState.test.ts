@@ -6,12 +6,49 @@ import { Readable } from 'node:stream'
 import test from 'node:test'
 import {
   acquireBucketLease,
+  acquireBucketMaintenance,
   readBucketJson,
   releaseBucketLease,
+  recoverBucketMaintenance,
+  releaseBucketMaintenance,
   uploadRankingArtifacts,
   verifyBucketLease,
+  verifyBucketMaintenance,
   writeBucketJson,
 } from '../scripts/railway-bucket.mjs'
+
+test('exclusive maintenance fences expired refreshes and blocks all successors until exact release', async () => {
+  const client = memoryS3()
+  const expired = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'expired', now: '2026-07-19T00:00:00Z', ttlMs: 1_000, fenceActiveKey: 'active-generation.json', config, client,
+  })
+  assert.equal(expired.acquired, true)
+  const maintenance = await acquireBucketMaintenance({ owner: 'gc-owner', now: '2026-07-19T00:00:02Z', config, client })
+  assert.equal(maintenance.acquired, true)
+  if (!maintenance.maintenance) return
+  assert.equal(maintenance.maintenance?.fencingToken, 2)
+  assert.equal((await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'successor', now: '2030-01-01T00:00:00Z', ttlMs: 60_000, fenceActiveKey: 'active-generation.json', config, client,
+  })).reason, 'maintenance-active')
+  assert.equal((await verifyBucketMaintenance({ owner: 'wrong', fencingToken: 2 }, { config, client })).valid, false)
+  assert.equal((await releaseBucketMaintenance({ owner: 'wrong', fencingToken: 2 }, { config, client })).released, false)
+  assert.equal((await releaseBucketMaintenance(maintenance.maintenance, { config, client })).released, true)
+  const successor = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'successor', now: '2026-07-19T00:00:03Z', ttlMs: 60_000, fenceActiveKey: 'active-generation.json', config, client,
+  })
+  assert.equal(successor.acquired, true)
+  assert.equal(successor.acquired && successor.lease.fencingToken, 3)
+})
+
+test('maintenance recovery requires operator confirmation and exact identity', async () => {
+  const client = memoryS3()
+  const maintenance = await acquireBucketMaintenance({ owner: 'crashed-gc', config, client })
+  assert.equal(maintenance.acquired, true)
+  if (!maintenance.maintenance) return
+  assert.equal((await recoverBucketMaintenance(maintenance.maintenance, { config, client })).reason, 'operator-confirmation-required')
+  assert.equal((await recoverBucketMaintenance({ ...maintenance.maintenance, fencingToken: maintenance.maintenance.fencingToken + 1 }, { confirmedTerminated: true, config, client })).released, false)
+  assert.equal((await recoverBucketMaintenance(maintenance.maintenance, { confirmedTerminated: true, config, client })).released, true)
+})
 import {
   createRailwayDurableObjectStore,
   decideDurableCrunchMode,

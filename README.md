@@ -6,7 +6,7 @@ Live site: [lol.lab4code.com](https://lol.lab4code.com/) · [Source code](https:
 
 ## Status
 
-For static deployments, the app serves the latest committed browser-safe snapshot from `public/data/`. On Railway, the same `/data/*` payload can be served from Railway Bucket storage after refresh. It is not an official Riot ranking, and each public ranking claim should stay tied to the data source manifest, model version, config hash, and coverage window that produced it. While the model is pre-1.0, `model.version` is intentionally stable; use `model.configHash` and `schemaVersion` for exact iteration provenance.
+Generated ranking payloads are not committed to Git. Railway serves the active immutable `/data/*` generation from private bucket storage; local crunches write `.generated/ranking-data/`. It is not an official Riot ranking, and each ranking claim stays tied to its source manifest, model version, config hash, and coverage window.
 
 ## Run
 
@@ -37,7 +37,7 @@ The frontend loads static JSON from:
 /data/ranking-summary.json
 ```
 
-By default, Vercel, Cloudflare Pages, and other static hosts serve the committed files in `public/data/`. Set `VITE_RANKING_DATA_URL` only when you intentionally want the browser to load an externally hosted manifest, such as a Vercel Blob URL written by the optional scheduled job.
+Static hosts must set `VITE_RANKING_DATA_URL` to an external manifest URL or artifact directory, or run `pnpm data:materialize` before deployment. `pnpm static:preflight` fails clearly when neither source exists. `public/data/` is an ignored, disposable materialization target.
 
 Static data can be generated without source inputs for a no-data smoke fixture:
 
@@ -45,7 +45,7 @@ Static data can be generated without source inputs for a no-data smoke fixture:
 pnpm run data:build
 ```
 
-With no source arguments, this writes a valid `no-data` summary instead of falling back to seeded samples. The app does not recalculate rankings in React render. It loads a compact default board first, then lazy-loads compact per-filter shards from `public/data/scopes/`. Event and region filters narrow the presented rows while preserving the global rating scale. Season filters publish the chronological model state through the selected season, so older years do not inherit current-year standings.
+With no source arguments, this writes a valid `no-data` summary instead of falling back to seeded samples. The app does not recalculate rankings in React render. It loads a compact default board first, then lazy-loads compact per-filter shards from `/data/scopes/`. Event and region filters narrow the presented rows while preserving the global rating scale. Season filters publish the chronological model state through the selected season, so older years do not inherit current-year standings.
 
 The normal local refresh workflow is:
 
@@ -53,20 +53,22 @@ The normal local refresh workflow is:
 pnpm run data:download
 pnpm run data:crunch
 pnpm run release:check
-git add data/raw/manifest.json public/data/ranking-summary.json public/data/entities public/data/history public/data/scopes
+git add data/raw/manifest.json
 git commit -m "Refresh LoL esports ranking data"
 git push
 ```
 
-`data:download` stores raw provider files under `data/raw/` and writes `data/raw/manifest.json`. Raw provider downloads are local inputs and are ignored by Git; the manifest is committed for provenance. By default the downloader fetches Oracle's Elixir CSVs and Leaguepedia ScoreboardGames from 2011-01-01 through today. `data:crunch` reads the local manifest and raw files, writes the full local calculation artifact to `data/derived/ranking-snapshot.full.json`, and writes the deployable client payload to `public/data/ranking-summary.json`, `public/data/entities/*.json`, `public/data/history/**/*.json`, and `public/data/scopes/*.json`.
+`data:download` stores raw provider files under `data/raw/` and writes `data/raw/manifest.json`. Raw provider downloads are local inputs and are ignored by Git; the manifest is committed for provenance. `data:crunch` writes the full local audit artifact to `data/derived/ranking-snapshot.full.json` and the deployable client bundle to ignored `.generated/ranking-data/`.
 
-Commit the compact generated `public/data` payload after review when you need static-host fallback files. Railway deployments can instead publish that payload to the private Railway Bucket during refresh. Do not commit raw provider downloads, `data/derived/ranking-snapshot.full.json`, or other full audit artifacts. The full public snapshot files `public/data/ranking-snapshot.json` and `public/data/*.full.json` are intentionally blocked because they can exceed GitHub file limits; the compact manifest and shards are the browser contract. Official LoL Esports ranking snapshots are not part of the local data-source manifest.
+Do not commit generated browser payloads, raw provider downloads, `data/derived/ranking-snapshot.full.json`, or other audit artifacts. Railway publishes the validated bundle to its private bucket. `pnpm data:materialize` validates the manifest and every referenced companion before copying the active local bundle into ignored `public/data/` for static hosting.
 
 `data:download` treats Oracle's Elixir as the primary game-level source and Leaguepedia as the backup/gap-fill source. It discovers the public Oracle CSV files from the Oracle Google Drive folder, downloads the CSVs that overlap the requested date range, then downloads Leaguepedia Cargo data for the same range. If Google Drive returns a quota/HTML page instead of a CSV for a file, that file is skipped with a manifest warning instead of being recorded as usable data.
 
 ## Railway Server Deployment
 
-`railway.toml` deploys the app as a Railway web service. The production server serves the built Vite app from `dist/`, serves `/data/*` from local `public/data/` when a file is present, falls back to Railway Bucket storage when configured, and keeps background refresh disabled unless `RANKING_REFRESH_ENABLED=true` is explicitly set. Data companion URLs include a run-version query string so Railway CDN can cache shard/entity/history JSON aggressively without mixing artifacts from different generated runs. The manifest keeps a short edge TTL so new runs are discovered quickly.
+`railway.toml` deploys the app as a Railway web service. With bucket credentials configured, the production server serves `/data/*`, readiness, homepage prerendering, and sitemap metadata from the active bucket generation before considering ignored local `.generated/ranking-data/`. Readiness returns 503 when no valid source exists.
+
+Destructive ranking-state cleanup never runs under a refresh lease. `pnpm data:gc` acquires a non-expiring exclusive maintenance authority and performs a dry run; use `pnpm data:gc -- --execute` only after reviewing it. A crash intentionally leaves refresh blocked. After confirming the prior process terminated, recover only the exact printed identity with `pnpm data:gc -- --recover <owner> <fencing-token> --confirm-terminated`. There is no timeout or automatic maintenance takeover.
 
 ```bash
 railway link
@@ -229,11 +231,11 @@ Official LoL Esports ranking snapshots can be compared against the generated bro
 pnpm run benchmark:riot-gpr -- --gpr data/raw/riot-gpr/riot-gpr-2026-current.json
 ```
 
-The comparison reads `public/data/ranking-summary.json` plus the default generated shard and writes `data/derived/riot-gpr-benchmark-report.json`. It is a sanity benchmark, not a formula-clone gate: broad top-board disagreements are reported, while the command exits nonzero only when elite teams are implausibly displaced, too many top-band outliers accumulate, or too few teams match. Use `--top`, `--max-rank-delta`, `--max-large-deltas`, `--elite-top`, `--max-elite-rank-delta`, and `--min-matched` to tune the check for a calibration pass. Official LoL Esports ranking exports remain outside `data/raw/manifest.json` and are not a model input.
+The comparison reads `.generated/ranking-data/ranking-summary.json` plus the default generated shard and writes `data/derived/riot-gpr-benchmark-report.json`. It is a sanity benchmark, not a formula-clone gate: broad top-board disagreements are reported, while the command exits nonzero only when elite teams are implausibly displaced, too many top-band outliers accumulate, or too few teams match. Use `--top`, `--max-rank-delta`, `--max-large-deltas`, `--elite-top`, `--max-elite-rank-delta`, and `--min-matched` to tune the check for a calibration pass. Official LoL Esports ranking exports remain outside `data/raw/manifest.json` and are not a model input.
 
 ## Optional Vercel Blob Recalculation
 
-The primary publish path is local refresh, commit `public/data`, push, and deploy the static app. The Vercel cron path is optional and only needed when you want a deployed function to publish an external Blob-backed manifest instead of using the committed static files. `vercel.json` configures a cron job:
+The primary publish path is a validated immutable bucket generation. Static deployments materialize ignored files during deployment or use an external `VITE_RANKING_DATA_URL`. The Vercel cron path is optional and only needed when you want a deployed function to publish an external Blob-backed manifest. `vercel.json` configures a cron job:
 
 ```json
 {

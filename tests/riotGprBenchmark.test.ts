@@ -225,8 +225,8 @@ test('elite missing-team checks are not truncated by a narrower reporting band',
 
 function artifact() {
   return {
-    manifestPath: 'public/data/ranking-summary.json',
-    shardPath: 'public/data/scopes/all.json',
+    manifestPath: '.generated/ranking-data/ranking-summary.json',
+    shardPath: '.generated/ranking-data/scopes/all.json',
     defaultSnapshotKey: 'All__All__All',
     modelVersion: 'transparent-power-index-v0.0.0',
     modelConfigHash: 'test-hash',

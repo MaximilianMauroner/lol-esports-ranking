@@ -7,12 +7,12 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
 import { bucketConfigFromEnv, contentTypeForPath, getBucketObject, readBucketJson } from './railway-bucket.mjs'
-import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
+import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderHomepagePrerenderFromLoader, renderSitemapFromDataDir, renderSitemapFromManifest } from './seo-prerender.ts'
 
 const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
 const distDir = resolve(process.env.RAILWAY_DIST_DIR ?? 'dist')
-const publicDataDir = resolve(process.env.RANKING_PUBLIC_DATA_DIR ?? 'public/data')
+const publicDataDir = resolve(process.env.RANKING_PUBLIC_DATA_DIR ?? '.generated/ranking-data')
 const refreshEnabled = process.env.RANKING_REFRESH_ENABLED === 'true'
 const refreshMode = ['shadow', 'gated'].includes(process.env.RANKING_REFRESH_MODE) ? process.env.RANKING_REFRESH_MODE : 'legacy'
 const refreshIntervalMinutes = Math.max(1, Number(process.env.RANKING_REFRESH_INTERVAL_MINUTES ?? 60))
@@ -134,20 +134,31 @@ server.listen(port, host, () => {
 async function readinessStatus() {
   try {
     await access(resolve(distDir, 'index.html'))
-    try {
-      await access(resolve(publicDataDir, 'ranking-summary.json'))
-      return { ok: true, app: true, data: 'local' }
-    } catch {
-      const manifest = await getBucketObject('ranking-summary.json')
-      if (manifest.found) {
-        destroyBody(manifest.body)
-        return { ok: true, app: true, data: 'bucket' }
+    if (bucketConfig.enabled) {
+      try {
+        const manifest = await readActiveBucketDataJson('ranking-summary.json')
+        if (validRankingManifest(manifest)) return { ok: true, app: true, data: 'bucket' }
+      } catch {
+        // Fall through to the explicit local generated-data fallback.
       }
+    }
+    try {
+      const manifest = JSON.parse(await readFile(resolve(publicDataDir, 'ranking-summary.json'), 'utf8'))
+      if (validRankingManifest(manifest)) return { ok: true, app: true, data: 'local' }
+      return { ok: false, app: true, data: 'invalid' }
+    } catch {
       return { ok: false, app: true, data: 'missing' }
     }
   } catch (error) {
     return { ok: false, app: false, data: 'unknown', error: error instanceof Error ? error.message : String(error) }
   }
+}
+
+function validRankingManifest(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && value.artifactKind === 'public-ranking-manifest'
+    && typeof value.artifactMeta?.runId === 'string'
+    && value.artifactMeta.runId.length > 0
 }
 
 async function schedulerStatus() {
@@ -213,7 +224,9 @@ async function serveAppShell(response, headOnly, requestHeaders) {
   }
 
   try {
-    const prerendered = await renderHomepagePrerenderFromDataDir(publicDataDir)
+    const prerendered = bucketConfig.enabled
+      ? await renderHomepagePrerenderFromLoader(readActiveBucketDataJson)
+      : await renderHomepagePrerenderFromDataDir(publicDataDir)
     html = injectHomepagePrerender(html, prerendered)
   } catch (error) {
     console.warn(`Live homepage prerender fallback used: ${error instanceof Error ? error.message : String(error)}`)
@@ -239,7 +252,9 @@ async function serveLiveSitemap(response, headOnly, requestHeaders) {
   }
   try {
     const sitemap = await readFile(sitemapPath, 'utf8')
-    const rendered = await renderSitemapFromDataDir(publicDataDir, sitemap)
+    const rendered = bucketConfig.enabled
+      ? renderSitemapFromManifest(await readActiveBucketDataJson('ranking-summary.json'), sitemap)
+      : await renderSitemapFromDataDir(publicDataDir, sitemap)
     await sendText(response, rendered, {
       cacheControl: cacheControlForPath('sitemap.xml'),
       contentType: 'application/xml; charset=utf-8',
@@ -254,6 +269,15 @@ async function serveLiveSitemap(response, headOnly, requestHeaders) {
     })
     if (!served) sendJson(response, 404, { ok: false, error: 'Not found' })
   }
+}
+
+async function readActiveBucketDataJson(relativePath) {
+  const object = await getBucketObject(relativePath, { config: bucketConfig })
+  if (!object.found) throw new Error(`Active bucket artifact not found: ${relativePath}`)
+  if (typeof object.body?.transformToString === 'function') return JSON.parse(await object.body.transformToString())
+  const chunks = []
+  for await (const chunk of object.body ?? []) chunks.push(Buffer.from(chunk))
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
 async function sendText(response, text, { cacheControl, contentType, headOnly, requestHeaders }) {

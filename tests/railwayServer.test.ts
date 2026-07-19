@@ -24,7 +24,7 @@ test('Railway server returns app shell only for known app routes', async () => {
 
     const notReady = await httpRequest(server.port, '/api/ready')
     assert.equal(notReady.statusCode, 503)
-    await writeFile(join(dataDir, 'ranking-summary.json'), '{}\n')
+    await writeFile(join(dataDir, 'ranking-summary.json'), '{"artifactKind":"public-ranking-manifest","artifactMeta":{"runId":"fixture"}}\n')
     const ready = await httpRequest(server.port, '/api/ready')
     assert.equal(ready.statusCode, 200)
     assert.equal(JSON.parse(ready.body).data, 'local')
@@ -76,7 +76,7 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
   await mkdir(distDir, { recursive: true })
   await mkdir(dataDir, { recursive: true })
   await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
-  await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify({ source: 'bundled' }))
+  await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify({ artifactKind: 'public-ranking-manifest', artifactMeta: { runId: 'bundled' }, source: 'bundled' }))
 
   const bucket = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
@@ -87,7 +87,7 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
     }
     if (pathname === '/test-bucket/rankings/generations/fresh/data/ranking-summary.json') {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ source: 'bucket' }))
+      response.end(JSON.stringify({ artifactKind: 'public-ranking-manifest', artifactMeta: { runId: 'fresh' }, source: 'bucket' }))
       return
     }
     response.statusCode = 404
@@ -104,6 +104,9 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
     RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
   })
   try {
+    const ready = await httpRequest(server.port, '/api/ready')
+    assert.equal(ready.statusCode, 200)
+    assert.equal(JSON.parse(ready.body).data, 'bucket')
     const response = await httpRequest(server.port, '/data/ranking-summary.json')
     assert.equal(response.statusCode, 200)
     assert.equal(JSON.parse(response.body).source, 'bucket')
@@ -303,6 +306,7 @@ async function startRailwayServer(
       PORT: String(port),
       RAILWAY_DIST_DIR: distDir,
       RANKING_PUBLIC_DATA_DIR: dataDir,
+      RANKING_TRIGGER_STATE: join(dataDir, 'refresh-trigger-state.json'),
       RANKING_REFRESH_ENABLED: 'false',
       RANKING_BUCKET_NAME: '',
       RANKING_BUCKET_ENDPOINT: '',

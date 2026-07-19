@@ -7,9 +7,6 @@ import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketBytes, readBucketJson, uploadRankingArtifacts } from './railway-bucket.mjs'
 import {
-  createRailwayDurableObjectStore,
-  executeRailwayDurableGc,
-  planDurableGc,
   recordRolloutOutcome,
 } from './durable-ranking-state.mjs'
 
@@ -48,7 +45,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
   const output = resolve(stringArg(args.output ?? env.RANKING_DERIVED_OUTPUT ?? 'data/derived/ranking-snapshot.full.json'))
   const reconciliationOutput = resolve(stringArg(args.reconciliationOutput ?? env.RANKING_RECONCILIATION_OUTPUT ?? `${rawDir}/reconciliation.json`))
-  const publicDataDir = resolve(stringArg(args.publicDataDir ?? env.RANKING_PUBLIC_DATA_DIR ?? 'public/data'))
+  const publicDataDir = resolve(stringArg(args.publicDataDir ?? env.RANKING_PUBLIC_DATA_DIR ?? '.generated/ranking-data'))
   const privateStateDir = resolve(stringArg(env.RANKING_INCREMENTAL_STATE_DIR ?? '.ranking-crunch'))
   const durableCandidatePath = resolve(privateStateDir, 'durable-candidate.json')
   const crunchReceiptPath = resolve(privateStateDir, 'durable-crunch-receipt.json')
@@ -317,28 +314,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           } : {}),
         }
         if (eligibleCandidate && generationId) {
-          try {
-            const activeAfterPublish = await readBucketJson('active-generation.json', { config: bucketConfig, client: options.bucketClient })
-            const durableStore = createRailwayDurableObjectStore({ config: bucketConfig, client: options.bucketClient })
-            const gcPlan = await planDurableGc({
-              store: durableStore,
-              activePointer: activeAfterPublish.value,
-              activeEtag: activeAfterPublish.etag,
-              now: new Date().toISOString(),
-              recentDays: positiveInteger(env.RANKING_DURABLE_RETENTION_DAYS) ?? 35,
-            })
-            state.bucket.durable.gc = await executeRailwayDurableGc({
-              store: durableStore,
-              plan: gcPlan,
-              dryRun: env.RANKING_DURABLE_GC_DRY_RUN === 'true',
-              refreshLeaseGuard: leaseGuard,
-              bucketConfig,
-              bucketClient: options.bucketClient,
-            })
-          } catch (error) {
-            state.bucket.durable.gc = { planned: 0, deleted: 0, skipped: 0, reason: `postcommit-gc:${errorMessage(error)}` }
-            console.error(`Durable post-commit GC failed: ${errorMessage(error)}`)
-          }
+          state.bucket.durable.gc = { planned: 0, deleted: 0, skipped: 0, reason: 'deferred-to-exclusive-maintenance' }
         }
         if (crunchReceipt?.durable) {
           crunchReceipt.durable.promotion = semanticNoChange
@@ -918,10 +894,6 @@ function hasRefreshLeaseIdentity(env) {
     || env.RANKING_REFRESH_LEASE_OWNER
     || env.RANKING_REFRESH_LEASE_ETAG
     || env.RANKING_REFRESH_LEASE_AUTHORITY_KEY)
-}
-
-function errorMessage(error) {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function dateDaysBefore(date, days) {

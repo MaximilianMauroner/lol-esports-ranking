@@ -81,7 +81,7 @@ type CliOptions = {
   required: boolean
 }
 
-const defaultPublicDataDir = 'public/data'
+const defaultPublicDataDir = '.generated/ranking-data'
 const benchmarkKeyAliases: Record<string, string[]> = {
   teamliquidalienware: ['teamliquid', 'tl'],
   tlaw: ['teamliquid', 'tl'],

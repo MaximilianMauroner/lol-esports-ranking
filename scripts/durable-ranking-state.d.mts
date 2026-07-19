@@ -23,7 +23,6 @@ export type DurableCandidate = {
     identity: DurableIdentity
     identityHash: string
     stateRoot: string
-    ownershipId?: string
     eligibility: 'eligible'
     outcome: string
     semanticState: Record<string, unknown>
@@ -52,7 +51,6 @@ export function stageDurableGeneration(options: {
   stateDir: string
   identity: DurableIdentity
   generatedAt: string
-  ownershipId?: string
   outcome?: string
   stateSummary?: Record<string, unknown>
   reachablePaths?: string[]
@@ -93,4 +91,4 @@ export function decideDurableCrunchMode(options: {
 export function recordRolloutOutcome(previous: unknown, options: { identityHash: string; parity?: { result: 'match' | 'mismatch'; audit?: boolean }; at: string }): Record<string, unknown>
 export function planDurableGc(options: { store: DurableObjectStore; activePointer?: Record<string, unknown>; activeEtag?: string; activeKey?: string; now: string; recentDays?: number; stagingGraceMs?: number; prefix?: string }): Promise<Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number; kind: string }> }>
 export function executeDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean; beforeDelete?: (entry: { key: string; bytes: number }) => Promise<void> }): Promise<Record<string, unknown>>
-export function executeRailwayDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean; refreshLeaseGuard?: { key: string; owner: string; fencingToken: number; authorityKey?: string; etag?: string }; bucketConfig?: unknown; bucketClient?: unknown; beforeAuthorityCheck?: () => Promise<void>; beforeDelete?: (entry: { key: string; bytes: number }) => Promise<void> }): Promise<Record<string, unknown>>
+export function executeRailwayDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean; maintenanceGuard?: { owner: string; fencingToken: number }; bucketConfig?: unknown; bucketClient?: unknown; beforeAuthorityCheck?: () => Promise<void>; beforeDelete?: (entry: { key: string; bytes: number }) => Promise<void>; replan?: () => Promise<Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }> }): Promise<Record<string, unknown>>

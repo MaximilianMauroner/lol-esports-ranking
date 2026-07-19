@@ -84,7 +84,18 @@ export function filterForScope(scope: string): SnapshotFilter {
 }
 
 async function readPublicJson(relativePath: string) {
-  return JSON.parse(await readFile(resolve(process.cwd(), 'public/data', relativePath), 'utf8'))
+  const externalBase = process.env.RANKING_DATA_URL ?? process.env.VITE_RANKING_DATA_URL
+  if (externalBase) {
+    const configured = new URL(externalBase)
+    const manifestUrl = configured.pathname.endsWith('.json')
+      ? configured
+      : new URL('ranking-summary.json', `${configured.href.replace(/\/$/, '')}/`)
+    const artifactUrl = relativePath === 'ranking-summary.json' ? manifestUrl : new URL(relativePath, manifestUrl)
+    const response = await fetch(artifactUrl)
+    if (!response.ok) throw new Error(`Artifact fetch failed with ${response.status}`)
+    return response.json()
+  }
+  return JSON.parse(await readFile(resolve(process.cwd(), process.env.RANKING_PUBLIC_DATA_DIR ?? '.generated/ranking-data', relativePath), 'utf8'))
 }
 
 async function readPublicJsonFromUrl(url: string) {
