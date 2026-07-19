@@ -8,6 +8,7 @@ type ReplaceDirectoryOptions = {
   renameDirectory?: typeof rename
   copyFileOperation?: typeof copyFile
   postCommitCleanup?: typeof rm
+  failedMaterializationCleanup?: typeof rm
 }
 
 export async function replaceDirectory(
@@ -20,6 +21,7 @@ export async function replaceDirectory(
     renameDirectory = rename,
     copyFileOperation = copyFile,
     postCommitCleanup = rm,
+    failedMaterializationCleanup = rm,
   }: ReplaceDirectoryOptions = {},
 ) {
   if (preserveTarget) {
@@ -29,6 +31,7 @@ export async function replaceDirectory(
       renameDirectory,
       copyFileOperation,
       postCommitCleanup,
+      failedMaterializationCleanup,
     })
     return
   }
@@ -68,7 +71,8 @@ async function publishMaterialized(
     renameDirectory = rename,
     copyFileOperation = copyFile,
     postCommitCleanup = rm,
-  }: Pick<ReplaceDirectoryOptions, 'publishLast' | 'expectedFiles' | 'renameDirectory' | 'copyFileOperation' | 'postCommitCleanup'>,
+    failedMaterializationCleanup = rm,
+  }: Pick<ReplaceDirectoryOptions, 'publishLast' | 'expectedFiles' | 'renameDirectory' | 'copyFileOperation' | 'postCommitCleanup' | 'failedMaterializationCleanup'>,
 ) {
   const root = resolve(nextDir)
   const files = await listFiles(root)
@@ -122,7 +126,7 @@ async function publishMaterialized(
     if (hasPrevious) await bestEffortCleanup(postCommitCleanup, previousDir)
     await bestEffortCleanup(postCommitCleanup, nextDir)
   } catch (error) {
-    await rm(materializedDir, { recursive: true, force: true })
+    await bestEffortCleanup(failedMaterializationCleanup, materializedDir)
     throw error
   }
 }
@@ -131,7 +135,7 @@ async function bestEffortCleanup(cleanup: typeof rm, path: string) {
   try {
     await cleanup(path, { recursive: true, force: true })
   } catch {
-    // Publication already committed; cleanup cannot roll it back or suppress state promotion.
+    // Cleanup is secondary to the transaction result at both commit boundaries.
   }
 }
 

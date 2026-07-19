@@ -86,6 +86,47 @@ test('filtered in-place publication retains declared reused files and removes on
   }
 })
 
+test('failed materialization cleanup preserves the exact original precommit error and target bytes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-directory-precommit-failure-'))
+  const target = join(root, 'public-data')
+  const next = join(root, 'public-data-next')
+  try {
+    await mkdir(join(target, 'scopes'), { recursive: true })
+    await mkdir(join(next, 'scopes'), { recursive: true })
+    await writeFile(join(target, 'ranking-summary.json'), 'old manifest')
+    await writeFile(join(target, 'scopes', 'all.json'), 'old shard')
+    await writeFile(join(next, 'ranking-summary.json'), 'new manifest')
+    await writeFile(join(next, 'scopes', 'all.json'), 'new shard')
+    const originalError = new Error('injected original copy failure')
+    let cleanupCalls = 0
+    let caught: unknown
+
+    try {
+      await replaceDirectory(next, target, {
+        preserveTarget: true,
+        expectedFiles: ['ranking-summary.json', 'scopes/all.json'],
+        copyFileOperation: () => {
+          throw originalError
+        },
+        failedMaterializationCleanup: () => {
+          cleanupCalls += 1
+          throw new Error('injected cleanup failure')
+        },
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    assert.strictEqual(caught, originalError)
+    assert.equal((caught as Error).message, 'injected original copy failure')
+    assert.equal(cleanupCalls, 1)
+    assert.equal(await readFile(join(target, 'ranking-summary.json'), 'utf8'), 'old manifest')
+    assert.equal(await readFile(join(target, 'scopes', 'all.json'), 'utf8'), 'old shard')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('materialized publication rolls back after the target is evacuated and the final rename fails', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-directory-rollback-'))
   const target = join(root, 'public-data')
