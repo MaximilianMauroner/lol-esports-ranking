@@ -13,7 +13,8 @@ import { reducerCheckpointRetentionDates } from '../src/lib/incremental/reducerC
 import { runIncrementalRankingReducers } from '../src/lib/incremental/rankingReducer.ts'
 import { buildRankingModel } from '../src/lib/model.ts'
 import { assertCrunchParity } from '../src/lib/incremental/parity.ts'
-import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
+import { buildPublicArtifactDag } from '../src/lib/incremental/artifactDag.ts'
+import { createPublicArtifactWritePlan, createSemanticPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
 import { createStaticRankingData } from '../src/lib/snapshot.ts'
 import { createIncrementalCrunchReceipt, recordIncrementalReducerCandidate } from '../src/lib/incremental/metrics.ts'
 import { orchestrateCrunch } from '../src/lib/incremental/orchestrator.ts'
@@ -266,15 +267,21 @@ test('diagnostic-only corrections rewind public players but reuse team and live-
   assert.deepEqual(teamCorrection.ranking, buildRankingModel(corrected, teams))
   assert.equal(playerCorrection.selectedCheckpointDate, '2026-01-01')
   assert.equal(playerCorrection.rows, 20)
+  assert.notDeepEqual(playerCorrection.players, playerBase.players)
 
-  const common = {
-    matches: corrected,
+  const baseCommon = {
+    matches,
     teams,
     rosters: {},
     runMetadata: { generatedAt: '2026-07-19T00:00:00.000Z', runId: 'phase3-diagnostic-correction' },
     source: 'phase3 diagnostic correction',
     dataMode: 'scheduled-public-data' as const,
   }
+  const common = {
+    ...baseCommon,
+    matches: corrected,
+  }
+  const baseSnapshot = createStaticRankingData(baseCommon)
   const reference = createStaticRankingData(common)
   const candidate = createStaticRankingData({
     ...common,
@@ -285,6 +292,23 @@ test('diagnostic-only corrections rewind public players but reuse team and live-
     { fullSnapshot: reference, publicWrites: createPublicArtifactWritePlan(reference, { runMetadata: common.runMetadata }).writes },
     { fullSnapshot: candidate, publicWrites: createPublicArtifactWritePlan(candidate, { runMetadata: common.runMetadata }).writes },
   )
+
+  const baseDag = buildPublicArtifactDag({
+    actual: createPublicArtifactWritePlan(baseSnapshot, { runMetadata: common.runMetadata }),
+    semantic: createSemanticPublicArtifactWritePlan(baseSnapshot),
+  }).dag
+  assert.ok(baseDag)
+  const correctedDag = buildPublicArtifactDag({
+    actual: createPublicArtifactWritePlan(reference, { runMetadata: common.runMetadata }),
+    semantic: createSemanticPublicArtifactWritePlan(reference),
+    previous: baseDag.cache,
+  }).dag
+  assert.ok(correctedDag)
+  assert.ok(correctedDag.writes.every((write) => (
+    write.relativePath !== 'entities/teams.json'
+      && !write.relativePath.startsWith('scopes/')
+      && !write.relativePath.startsWith('history/team-series')
+  )))
 })
 
 test('precomputed global players preserve the full snapshot and complete public write plan', () => {

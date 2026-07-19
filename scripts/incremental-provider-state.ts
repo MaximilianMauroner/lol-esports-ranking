@@ -37,6 +37,10 @@ import {
   type IncrementalPlayerCheckpoint,
   type PersistedPlayerCheckpointCore,
 } from '../src/lib/incremental/playerReducer.ts'
+import {
+  validatePersistedArtifactNodes,
+  type PersistedArtifactNode,
+} from '../src/lib/incremental/artifactDag.ts'
 
 const LOCAL_STATE_SCHEMA_VERSION = 2 as const
 
@@ -99,6 +103,7 @@ type StateGeneration = {
   compatibility: CrunchCompatibility
   reducerCheckpoints?: ReducerCheckpointGenerationEntry[]
   playerCheckpoints?: PlayerCheckpointGenerationEntry[]
+  artifactCache?: { cacheHash: string; nodeCount: number }
 }
 
 type ActiveGenerationPointer = {
@@ -109,7 +114,7 @@ type ActiveGenerationPointer = {
 
 type ContentEnvelope = {
   schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
-  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation' | 'reducer-checkpoint' | 'reducer-journal' | 'player-checkpoint' | 'player-history-journal'
+  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation' | 'reducer-checkpoint' | 'reducer-journal' | 'player-checkpoint' | 'player-history-journal' | 'artifact-cache'
   contentHash: string
   payload: unknown
 }
@@ -133,6 +138,7 @@ type LoadedGeneration = {
   canonicalLedger: CanonicalLedger
   reducerCheckpoints: IncrementalReducerCheckpoint[]
   playerCheckpoints: IncrementalPlayerCheckpoint[]
+  artifactCache: PersistedArtifactNode[]
 }
 
 type ReducerStateIOMetrics = { bytesRead: number }
@@ -166,6 +172,7 @@ export type IncrementalCommunityLoadResult = {
   reducerCheckpoints?: IncrementalReducerCheckpoint[]
   playerCheckpoint?: IncrementalPlayerCheckpoint
   playerCheckpoints?: IncrementalPlayerCheckpoint[]
+  artifactCache?: PersistedArtifactNode[]
 }
 
 export async function loadIncrementalCommunityImports({
@@ -288,6 +295,7 @@ export async function loadIncrementalCommunityImports({
         playerCheckpoint: active.playerCheckpoints.at(-1),
         playerCheckpoints: active.playerCheckpoints,
       } : {}),
+      ...(active?.artifactCache.length ? { artifactCache: active.artifactCache } : {}),
       ...(restoreFallback ? { fallback: restoreFallback } : {}),
     }
   } catch (error) {
@@ -443,6 +451,49 @@ export function attachIncrementalPlayerCheckpoints(
   }
 }
 
+export function attachIncrementalArtifactCache(
+  promotion: IncrementalStatePromotion,
+  stateDir: string,
+  artifactCache: PersistedArtifactNode[],
+): IncrementalStatePromotion {
+  validatePersistedArtifactNodes(artifactCache)
+  const pointer = parseActivePointer(decodePrivateState(promotion.pointerWrite.contents))
+  const generationPath = resolve(stateDir, 'generations', `${pointer.generationHash}.json`)
+  const generationWrite = promotion.stagedWrites.find((write) => write.path === generationPath)
+  if (!generationWrite) throw new Error('Pending incremental generation is unavailable for artifact cache attachment')
+  const envelope = decodePrivateState(generationWrite.contents)
+  if (!isRecord(envelope) || envelope.kind !== 'state-generation' || !isRecord(envelope.payload)) {
+    throw new Error('Invalid pending incremental generation envelope')
+  }
+  const generation = envelope.payload as StateGeneration
+  verifyGeneration(generation)
+  const cacheHash = privateStateHash(artifactCache)
+  const cacheWrite = contentWrite(
+    resolve(stateDir, 'artifacts', 'caches', `${cacheHash}.json`),
+    'artifact-cache',
+    cacheHash,
+    artifactCache,
+  )
+  const nextGeneration: StateGeneration = {
+    ...generation,
+    artifactCache: { cacheHash, nodeCount: artifactCache.length },
+  }
+  const generationHash = stableHash(nextGeneration)
+  return {
+    stagedWrites: uniqueWrites([
+      ...promotion.stagedWrites.filter((write) => write.path !== generationPath),
+      cacheWrite,
+      contentWrite(resolve(stateDir, 'generations', `${generationHash}.json`), 'state-generation', generationHash, nextGeneration),
+    ]),
+    pointerWrite: privateWrite(resolve(stateDir, 'active-generation.json'), {
+      schemaVersion: LOCAL_STATE_SCHEMA_VERSION,
+      kind: 'active-generation',
+      generationHash,
+    } satisfies ActiveGenerationPointer),
+    reducerStateBytesWritten: promotion.reducerStateBytesWritten + encodedByteLength(cacheWrite.contents),
+  }
+}
+
 async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerStateIOMetrics): Promise<LoadedGeneration | undefined> {
   const pointerValue = await readOptionalPrivateState(resolve(stateDir, 'active-generation.json'))
   if (pointerValue === undefined) return undefined
@@ -543,7 +594,19 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
     }
     playerCheckpoints.push(checkpoint)
   }
-  return { generation, providers, canonicalLedger, reducerCheckpoints, playerCheckpoints }
+  const artifactCache = generation.artifactCache
+    ? await readContentObject<PersistedArtifactNode[]>(
+        resolve(stateDir, 'artifacts', 'caches', `${generation.artifactCache.cacheHash}.json`),
+        'artifact-cache',
+        generation.artifactCache.cacheHash,
+        reducerStateIO,
+      )
+    : []
+  validatePersistedArtifactNodes(artifactCache)
+  if (generation.artifactCache && artifactCache.length !== generation.artifactCache.nodeCount) {
+    throw new Error('Artifact cache node count mismatch')
+  }
+  return { generation, providers, canonicalLedger, reducerCheckpoints, playerCheckpoints, artifactCache }
 }
 
 function loadCanonicalState({
@@ -697,6 +760,11 @@ function verifyGeneration(generation: StateGeneration) {
     || generation.playerCheckpoints.some((entry) => !isPlayerCheckpointGenerationEntry(entry)))) {
     throw new Error('Invalid player checkpoint index in state generation')
   }
+  if (generation.artifactCache !== undefined && (!isRecord(generation.artifactCache)
+    || typeof generation.artifactCache.cacheHash !== 'string'
+    || typeof generation.artifactCache.nodeCount !== 'number')) {
+    throw new Error('Invalid artifact cache index in state generation')
+  }
   if (generation.fileSet.authorityHash !== stableHash(generation.fileSet.authorities)) throw new Error('Provider file-set authority receipt hash mismatch')
   const compatibilityIntegrity = compatibilityFallback(generation.compatibility, generation.compatibility)
   if (compatibilityIntegrity) throw new Error('Invalid compatibility envelope in state generation')
@@ -793,7 +861,8 @@ async function readContentObject<T>(
   if (reducerStateIO && (kind === 'reducer-checkpoint'
     || kind === 'reducer-journal'
     || kind === 'player-checkpoint'
-    || kind === 'player-history-journal')) {
+    || kind === 'player-history-journal'
+    || kind === 'artifact-cache')) {
     reducerStateIO.bytesRead += encodedByteLength(contents)
   }
   const value = decodePrivateState(contents)
@@ -804,6 +873,7 @@ async function readContentObject<T>(
     || kind === 'reducer-journal'
     || kind === 'player-checkpoint'
     || kind === 'player-history-journal'
+    || kind === 'artifact-cache'
     ? privateStateHash(value.payload)
     : stableHash(value.payload)
   if (payloadHash !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)

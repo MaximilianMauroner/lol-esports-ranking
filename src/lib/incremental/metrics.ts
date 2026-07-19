@@ -37,6 +37,16 @@ export type IncrementalCrunchReceipt = {
     teamRows: InstrumentedCount
     playerRows: InstrumentedCount
   }
+  snapshotInputs: {
+    rankingRequests: InstrumentedCount
+    rankingReducerRuns: InstrumentedCount
+    rankingRows: InstrumentedCount
+    playerRequests: InstrumentedCount
+    playerReducerRuns: InstrumentedCount
+    playerRows: InstrumentedCount
+    directRankingBuilds: InstrumentedCount
+    directPlayerBuilds: InstrumentedCount
+  }
   artifacts: {
     reused: InstrumentedCount
     regenerated: InstrumentedCount
@@ -75,12 +85,38 @@ export function createIncrementalCrunchReceipt({
     observations: { parsed: null, normalized: null, reused: null },
     canonical: { added: null, changed: null, deleted: null },
     reducers: { livePlayerEdgeRows: null, teamRows: null, playerRows: null },
+    snapshotInputs: {
+      rankingRequests: null,
+      rankingReducerRuns: null,
+      rankingRows: null,
+      playerRequests: null,
+      playerReducerRuns: null,
+      playerRows: null,
+      directRankingBuilds: null,
+      directPlayerBuilds: null,
+    },
     artifacts: { reused: null, regenerated: null },
     bucket: { bytesRead: 0, bytesWritten: 0 },
     checkpoint: {},
     timingsMs: {},
     attempts: [],
   }
+}
+
+export function recordSnapshotInputMetrics(
+  receipt: IncrementalCrunchReceipt,
+  metrics: {
+    rankingRequests: number
+    rankingReducerRuns: number
+    rankingRows: number
+    playerRequests: number
+    playerReducerRuns: number
+    playerRows: number
+    directRankingBuilds: number
+    directPlayerBuilds: number
+  },
+) {
+  receipt.snapshotInputs = { ...metrics }
 }
 
 export function recordCrunchTiming(

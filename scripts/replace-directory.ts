@@ -4,16 +4,17 @@ import { dirname, relative, resolve, sep } from 'node:path'
 type ReplaceDirectoryOptions = {
   publishLast?: string
   preserveTarget?: boolean
+  expectedFiles?: readonly string[]
   renameDirectory?: typeof rename
 }
 
 export async function replaceDirectory(
   nextDir: string,
   targetDir: string,
-  { publishLast, preserveTarget = false, renameDirectory = rename }: ReplaceDirectoryOptions = {},
+  { publishLast, preserveTarget = false, expectedFiles, renameDirectory = rename }: ReplaceDirectoryOptions = {},
 ) {
   if (preserveTarget) {
-    await publishInPlace(nextDir, targetDir, publishLast)
+    await publishInPlace(nextDir, targetDir, publishLast, expectedFiles)
     return
   }
 
@@ -47,17 +48,22 @@ async function publishAcrossFilesystems(nextDir: string, targetDir: string, publ
   await publishInPlace(nextDir, targetDir, publishLast)
 }
 
-async function publishInPlace(nextDir: string, targetDir: string, publishLast?: string) {
+async function publishInPlace(nextDir: string, targetDir: string, publishLast?: string, expectedFiles?: readonly string[]) {
   const root = resolve(nextDir)
   const files = await listFiles(root)
-  const previousFiles = await listFilesIfPresent(resolve(targetDir))
-  const nextRelativePaths = new Set(files.map((file) => relativePath(root, file)))
-  if (publishLast) {
-    files.sort((left, right) => Number(relativePath(root, left) === publishLast) - Number(relativePath(root, right) === publishLast))
+  const targetRoot = resolve(targetDir)
+  const previousFiles = await listFilesIfPresent(targetRoot)
+  const previousRelativePaths = new Set(previousFiles.map((file) => relativePath(targetRoot, file)))
+  const stagedRelativePaths = new Set(files.map((file) => relativePath(root, file)))
+  const finalRelativePaths = new Set(expectedFiles ?? stagedRelativePaths)
+  for (const expected of finalRelativePaths) {
+    if (!stagedRelativePaths.has(expected) && !previousRelativePaths.has(expected)) {
+      throw new Error(`Cannot publish incomplete directory: missing expected file ${expected}`)
+    }
   }
 
-  for (const [index, source] of files.entries()) {
-    const target = resolve(targetDir, relative(root, source))
+  const publishFile = async (source: string, index: number) => {
+    const target = resolve(targetRoot, relative(root, source))
     const temp = `${target}.${process.pid}.${index}.tmp`
     await mkdir(dirname(target), { recursive: true })
     try {
@@ -69,11 +75,18 @@ async function publishInPlace(nextDir: string, targetDir: string, publishLast?: 
     }
   }
 
+  const publishLastSource = publishLast
+    ? files.find((file) => relativePath(root, file) === publishLast)
+    : undefined
+  const ordinaryFiles = publishLastSource ? files.filter((file) => file !== publishLastSource) : files
+  for (const [index, source] of ordinaryFiles.entries()) await publishFile(source, index)
+
   for (const previousFile of previousFiles) {
-    if (!nextRelativePaths.has(relativePath(resolve(targetDir), previousFile))) {
+    if (!finalRelativePaths.has(relativePath(targetRoot, previousFile))) {
       await rm(previousFile, { force: true })
     }
   }
+  if (publishLastSource) await publishFile(publishLastSource, ordinaryFiles.length)
   await rm(nextDir, { recursive: true, force: true })
 }
 

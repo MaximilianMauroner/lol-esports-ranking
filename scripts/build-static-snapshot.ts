@@ -5,6 +5,7 @@ import { basename, dirname, resolve } from 'node:path'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { replaceDirectory } from './replace-directory.ts'
 import {
+  attachIncrementalArtifactCache,
   attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
   loadIncrementalCommunityImports,
@@ -19,7 +20,11 @@ import { importLeaguepediaSnapshot, type LeaguepediaImportResult } from '../src/
 import { importLolEsportsScheduleSnapshot, type LolEsportsReferenceImportResult } from '../src/lib/importers/lolEsports'
 import { importOraclesElixirCsv, type OracleImportResult } from '../src/lib/importers/oraclesElixir'
 import { createStaticRankingData, type DataSourceWarning } from '../src/lib/snapshot'
-import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
+import {
+  createPublicArtifactWritePlan,
+  createSemanticPublicArtifactWritePlan,
+  PUBLIC_ARTIFACT_PATHS,
+} from '../src/lib/publicArtifacts/writePlan'
 import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
@@ -30,6 +35,7 @@ import {
   recordCrunchAttemptSources,
   recordCrunchTiming,
   recordIncrementalReducerCandidate,
+  recordSnapshotInputMetrics,
 } from '../src/lib/incremental/metrics'
 import { crunchModeFrom, orchestrateCrunch } from '../src/lib/incremental/orchestrator'
 import type { CrunchRunMetadata } from '../src/lib/incremental/types'
@@ -48,6 +54,12 @@ import { runIncrementalRankingReducers } from '../src/lib/incremental/rankingRed
 import type { IncrementalReducerCheckpoint } from '../src/lib/incremental/reducerCheckpoint.ts'
 import { runIncrementalPlayerReducer } from '../src/lib/incremental/playerReducer.ts'
 import type { IncrementalPlayerCheckpoint } from '../src/lib/incremental/playerReducer.ts'
+import {
+  createIncrementalSnapshotModelProvider,
+  type SnapshotInputMetrics,
+  type SnapshotModelProvider,
+} from '../src/lib/incremental/snapshotInputs.ts'
+import { buildPublicArtifactDag, type PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
@@ -108,7 +120,7 @@ function buildCrunchOutput({
   lolEsportsImports,
   metrics,
   canonical,
-}: CommunityImports, precomputedGlobalRanking?: RankingModelResult, precomputedGlobalPlayers?: PlayerStanding[], reducerRows?: ReducerRows, selectedCheckpointDate?: string, selectedPlayerCheckpointDate?: string): CrunchOutput {
+}: CommunityImports, precomputedGlobalRanking?: RankingModelResult, precomputedGlobalPlayers?: PlayerStanding[], reducerRows?: ReducerRows, selectedCheckpointDate?: string, selectedPlayerCheckpointDate?: string, modelProvider?: SnapshotModelProvider): CrunchOutput {
 const directImportedMatches = canonical ? undefined : mergeCommunityMatchSources({
   oracleMatches: oracleImports.flatMap((result) => result.matches),
   leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
@@ -187,6 +199,7 @@ const snapshot = createStaticRankingData({
   pipelineAudit: { importedMatchCount: importedMatches.length },
   precomputedGlobalRanking,
   precomputedGlobalPlayers,
+  modelProvider,
 })
   return {
     snapshot,
@@ -195,6 +208,7 @@ const snapshot = createStaticRankingData({
     ...(reducerRows ? { reducerRows } : {}),
     ...(selectedCheckpointDate ? { selectedCheckpointDate } : {}),
     ...(selectedPlayerCheckpointDate ? { selectedPlayerCheckpointDate } : {}),
+    ...(modelProvider ? { snapshotInputMetrics: modelProvider.metrics() } : {}),
   }
 }
 
@@ -202,6 +216,7 @@ const crunchStartedAt = performance.now()
 const runFull = async () => buildCrunchOutput(await loadFullCommunityImports())
 let pendingPromotion: IncrementalStatePromotion | undefined
 let incrementalAttemptMetrics: SourceMetrics | undefined
+let previousArtifactCache: PersistedArtifactNode[] = []
 const runIncremental = async () => {
   const result = await loadIncrementalCommunityImports({
     stateDir: privateStateDir,
@@ -214,8 +229,12 @@ const runIncremental = async () => {
     compatibility,
   })
   incrementalAttemptMetrics = result.metrics
+  previousArtifactCache = result.artifactCache ?? []
   const modelRun = result.imports
     ? incrementalGlobalModels(result.imports, result.reducerCheckpoints, result.playerCheckpoints)
+    : undefined
+  const modelProvider = modelRun
+    ? createIncrementalSnapshotModelProvider({ compatibilityHash: compatibility.hash })
     : undefined
   if (result.promotion && modelRun) {
     const rankingPromotion = attachIncrementalReducerCheckpoint(result.promotion, privateStateDir, modelRun.ranking.checkpoints)
@@ -232,6 +251,7 @@ const runIncremental = async () => {
         { ...modelRun.ranking.rows, playerRows: modelRun.players.rows },
         modelRun.ranking.selectedCheckpointDate,
         modelRun.players.selectedCheckpointDate,
+        modelProvider,
       )
     : undefined
   if (result.fallback) return {
@@ -268,6 +288,9 @@ if (incrementalCandidate?.reducerRows) {
     selectedCheckpoint: incrementalCandidate.selectedCheckpointDate,
     selectedPlayerCheckpoint: incrementalCandidate.selectedPlayerCheckpointDate,
   })
+}
+if (incrementalCandidate?.snapshotInputMetrics) {
+  recordSnapshotInputMetrics(receipt, incrementalCandidate.snapshotInputMetrics)
 }
 const selectedAttempt = receipt.attempts.findLast((attempt) => (
   orchestration.executedMode === 'incremental' ? attempt.engine === 'incremental' : attempt.engine === 'reference'
@@ -314,24 +337,57 @@ if (reconciliationOutput) {
   }, null, 2)}\n`)
 }
 const publicPlan = createPublicArtifactWritePlan(snapshot, { runMetadata })
+let incrementalPlan: ReturnType<typeof createPublicArtifactWritePlan> | undefined
 if (orchestration.shadowOutput) {
-  const shadowPlan = createPublicArtifactWritePlan(orchestration.shadowOutput.snapshot, { runMetadata })
+  incrementalPlan = createPublicArtifactWritePlan(orchestration.shadowOutput.snapshot, { runMetadata })
   assertCrunchParity(
     { fullSnapshot: snapshot, publicWrites: publicPlan.writes },
-    { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: shadowPlan.writes },
+    { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: incrementalPlan.writes },
   )
 }
-receipt.artifacts.reused = 0
-receipt.artifacts.regenerated = publicPlan.writes.length + 1
+let writesToPublish = publicPlan.writes
+if (incrementalPlan && orchestration.shadowOutput) {
+  const dagResult = buildPublicArtifactDag({
+    actual: incrementalPlan,
+    semantic: createSemanticPublicArtifactWritePlan(orchestration.shadowOutput.snapshot),
+    previous: previousArtifactCache,
+  })
+  if (dagResult.fallback) {
+    receipt.checkpoint.fallback = dagResult.fallback
+    receipt.artifacts.reused = 0
+    receipt.artifacts.regenerated = publicPlan.writes.length
+    pendingPromotion = undefined
+  } else {
+    const changedPaths = new Set(dagResult.dag.writes.map((write) => write.relativePath))
+    writesToPublish = publicPlan.writes.filter((write) => changedPaths.has(write.relativePath))
+    receipt.artifacts.reused = dagResult.dag.semanticReused
+    receipt.artifacts.regenerated = dagResult.dag.regenerated
+    if (pendingPromotion) {
+      pendingPromotion = attachIncrementalArtifactCache(pendingPromotion, privateStateDir, dagResult.dag.cache)
+      if (incrementalAttemptMetrics) incrementalAttemptMetrics.reducerStateBytesWritten = pendingPromotion.reducerStateBytesWritten
+    }
+  }
+} else {
+  receipt.artifacts.reused = 0
+  receipt.artifacts.regenerated = publicPlan.writes.length
+}
+const selectedPublicPaths = new Set(writesToPublish.map((write) => write.relativePath))
+for (const write of publicPlan.writes) {
+  if (selectedPublicPaths.has(write.relativePath)) continue
+  if (await isRegularFile(resolve(publicDataTargetDir, write.relativePath))) continue
+  writesToPublish.push(write)
+  selectedPublicPaths.add(write.relativePath)
+}
+receipt.artifacts.regenerated = writesToPublish.length
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)
-const publicWrites = publicPlan.writes.map((entry) => ({
+const publicWrites = writesToPublish.map((entry) => ({
   path: resolve(publicDataDir, entry.relativePath),
   contents: entry.contents,
   validate: entry.validate,
 }))
 
-await rm(publicDataDir, { recursive: true, force: true })
+if (publicWrites.length > 0) await rm(publicDataDir, { recursive: true, force: true })
 try {
   for (const write of publicWrites) {
     write.validate(JSON.parse(write.contents))
@@ -340,10 +396,13 @@ try {
     await atomicWriteFile(write.path, write.contents)
   }
 
-  await replaceDirectory(publicDataDir, publicDataTargetDir, {
-    publishLast: PUBLIC_ARTIFACT_PATHS.manifest,
-    preserveTarget: true,
-  })
+  if (publicWrites.length > 0) {
+    await replaceDirectory(publicDataDir, publicDataTargetDir, {
+      publishLast: PUBLIC_ARTIFACT_PATHS.manifest,
+      preserveTarget: true,
+      expectedFiles: publicPlan.writes.map((write) => write.relativePath),
+    })
+  }
   if (pendingPromotion) {
     const promoted = await promoteIncrementalState(pendingPromotion)
     receipt.bucket.bytesWritten = promoted.reducerStateBytesWritten
@@ -359,7 +418,7 @@ try {
   console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
   console.log(`Public data budget: ${publicDataBytes} bytes`)
 } catch (error) {
-  await rm(publicDataDir, { recursive: true, force: true })
+  if (publicWrites.length > 0) await rm(publicDataDir, { recursive: true, force: true })
   throw error
 }
 
@@ -388,6 +447,7 @@ type CrunchOutput = {
   reducerRows?: ReducerRows
   selectedCheckpointDate?: string
   selectedPlayerCheckpointDate?: string
+  snapshotInputMetrics?: SnapshotInputMetrics
 }
 
 type ReducerRows = {
@@ -641,6 +701,15 @@ async function directorySize(dir: string): Promise<number> {
     }
   }
   return total
+}
+
+async function isRegularFile(path: string) {
+  try {
+    return (await stat(path)).isFile()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
 }
 
 async function atomicWriteFile(path: string, contents: string) {

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { canonicalCodeProvenanceHash } from '../scripts/canonical-code-provenance.ts'
 import {
+  attachIncrementalArtifactCache,
   attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
   loadIncrementalCommunityImports,
@@ -25,6 +26,7 @@ import {
   type IncrementalReducerCheckpoint,
 } from '../src/lib/incremental/reducerCheckpoint.ts'
 import { runIncrementalPlayerReducer } from '../src/lib/incremental/playerReducer.ts'
+import type { PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
 import {
   finalizeTeamReducer,
   initializeTeamReducer,
@@ -409,6 +411,33 @@ test('player checkpoint and history journal reject independent parseable tamperi
       new RegExp(`${target === 'checkpoint' ? 'player-checkpoint' : 'player-history-journal'} semantic hash mismatch`),
     )
   }
+})
+
+test('artifact DAG cache shares atomic generation promotion and rejects tampering', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  const cache: PersistedArtifactNode[] = [
+    { id: 'public:scopes/default.json', kind: 'scope', semanticHash: 'semantic-scope', envelopeHash: 'envelope-scope', deps: [] },
+    { id: 'public:ranking-summary.json', kind: 'manifest', semanticHash: 'semantic-manifest', envelopeHash: 'envelope-manifest', deps: ['public:scopes/default.json'] },
+  ]
+  const promotion = attachIncrementalArtifactCache(first.promotion, fixture.stateDir, cache)
+  const promoted = await promoteIncrementalState(promotion)
+  const restored = await loadIncrementalCommunityImports(fixture.input)
+  assert.deepEqual(restored.artifactCache, cache)
+  assert.equal(restored.metrics.reducerStateBytesRead, promoted.reducerStateBytesWritten)
+
+  const active = await activeGeneration(fixture.stateDir)
+  const cacheEntry = record(active.generation.artifactCache)
+  const cachePath = resolve(fixture.stateDir, 'artifacts', 'caches', `${stringField(cacheEntry, 'cacheHash')}.json`)
+  const envelope = record(decodePrivateState(await readFile(cachePath, 'utf8')))
+  assert.ok(Array.isArray(envelope.payload))
+  const firstNode = record(envelope.payload[0])
+  firstNode.semanticHash = 'tampered-semantic'
+  await writePrivate(cachePath, envelope)
+  const corrupt = await loadIncrementalCommunityImports(fixture.input)
+  assert.equal(corrupt.fallback?.kind, 'checkpoint-corrupt')
+  assert.match(corrupt.fallback?.kind === 'checkpoint-corrupt' ? corrupt.fallback.detail : '', /artifact-cache semantic hash mismatch/)
 })
 
 test('each reducer journal object rejects independent parseable tampering', async () => {

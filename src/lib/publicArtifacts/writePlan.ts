@@ -178,6 +178,29 @@ export function createPublicArtifactWritePlan(
   }
 }
 
+const semanticEnvelopeGeneratedAt = '1970-01-01T00:00:00.000Z'
+const semanticEnvelopeRunId = 'semantic-public-artifact-v1'
+
+/** Rehydrates known public run envelopes with constants so DAG hashes contain domain semantics only. */
+export function createSemanticPublicArtifactWritePlan(data: StaticRankingData): PublicArtifactWritePlan {
+  const normalized: StaticRankingData = {
+    ...data,
+    generatedAt: semanticEnvelopeGeneratedAt,
+    tournamentMovements: Object.fromEntries(Object.entries(data.tournamentMovements).map(([id, shard]) => [id, {
+      ...shard,
+      generatedAt: semanticEnvelopeGeneratedAt,
+      artifactMeta: {
+        ...shard.artifactMeta,
+        generatedAt: semanticEnvelopeGeneratedAt,
+        runId: semanticEnvelopeRunId,
+      },
+    }])) as StaticRankingData['tournamentMovements'],
+  }
+  return createPublicArtifactWritePlan(normalized, {
+    runMetadata: { generatedAt: semanticEnvelopeGeneratedAt, runId: semanticEnvelopeRunId },
+  })
+}
+
 function withArtifactVersion(url: string, version: string) {
   if (!url.startsWith('/data/')) return url
   const separator = url.includes('?') ? '&' : '?'
