@@ -67,6 +67,9 @@ export async function uploadRankingArtifacts({
   refreshStateForUpload,
   generationId,
   fencingToken,
+  privateState,
+  rollout,
+  rolloutForActive,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -131,12 +134,16 @@ export async function uploadRankingArtifacts({
     if (Number(active.value?.fencingToken ?? 0) > Number(fencingToken ?? 0)) {
       throw new Error('Stale refresh worker cannot promote an active generation')
     }
+    const resolvedRollout = rolloutForActive ? rolloutForActive(active.value?.rollout) : rollout
     const promotion = await writeBucketJson('active-generation.json', {
+      ...(active.value && typeof active.value === 'object' && !Array.isArray(active.value) ? active.value : {}),
       schemaVersion: 1,
       generationId,
       fencingToken,
       promotedAt: new Date().toISOString(),
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
+      ...(privateState ? { privateState } : {}),
+      ...(resolvedRollout ? { rollout: resolvedRollout } : {}),
     }, {
       config,
       client,
@@ -153,6 +160,7 @@ export async function uploadRankingArtifacts({
     uploaded: uploads,
     unchanged,
     skipped,
+    promotion: generationId ? { promoted: true, generationId, fencingToken } : { promoted: false, reason: 'unversioned-upload' },
     ...publishMetrics,
   }
 }
@@ -212,6 +220,84 @@ export async function readBucketJson(relativeKey, {
     if (isMissingObjectError(error)) return { found: false, key }
     throw error
   }
+}
+
+export async function readBucketBytes(relativeKey, {
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
+  const key = bucketKey(config, relativeKey)
+  try {
+    const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+    const bytes = await bodyBytes(object.Body)
+    return {
+      found: true,
+      key,
+      etag: object.ETag,
+      bytes,
+      contentLength: object.ContentLength ?? bytes.byteLength,
+      metadata: object.Metadata ?? {},
+    }
+  } catch (error) {
+    if (isMissingObjectError(error)) return { found: false, key }
+    throw error
+  }
+}
+
+export async function writeBucketBytes(relativeKey, bytes, {
+  ifMatch,
+  ifNoneMatch,
+  metadata,
+  contentType = 'application/octet-stream',
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!config.enabled || !client) return { written: false, missingConfig: config.missing ?? [] }
+  const key = bucketKey(config, relativeKey)
+  const body = Buffer.from(bytes)
+  try {
+    const result = await client.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: body,
+      ContentLength: body.byteLength,
+      ContentType: contentType,
+      ...(metadata ? { Metadata: metadata } : {}),
+      ...(ifMatch ? { IfMatch: ifMatch } : {}),
+      ...(ifNoneMatch ? { IfNoneMatch: ifNoneMatch } : {}),
+    }))
+    return { written: true, key, etag: result.ETag, bytes: body.byteLength }
+  } catch (error) {
+    if (isPreconditionError(error)) return { written: false, conflict: true, key }
+    throw error
+  }
+}
+
+export async function listBucketKeys(relativePrefix, {
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!config.enabled || !client) return { enabled: false, keys: [], missingConfig: config.missing ?? [] }
+  const rootPrefix = bucketKey(config, relativePrefix).replace(/\/?$/, '/')
+  const keys = []
+  let continuationToken
+  do {
+    const result = await client.send(new ListObjectsV2Command({
+      Bucket: config.bucket,
+      Prefix: rootPrefix,
+      ContinuationToken: continuationToken,
+    }))
+    for (const object of result.Contents ?? []) {
+      if (!object.Key || object.Key.endsWith('/')) continue
+      keys.push({
+        key: object.Key.slice(config.prefix ? `${config.prefix}/`.length : 0),
+        bytes: object.Size ?? 0,
+      })
+    }
+    continuationToken = result.NextContinuationToken
+  } while (continuationToken)
+  return { enabled: true, keys }
 }
 
 export async function writeBucketJson(relativeKey, value, {
@@ -702,4 +788,12 @@ async function bodyText(body) {
   const chunks = []
   for await (const chunk of body ?? []) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks).toString('utf8')
+}
+
+async function bodyBytes(body) {
+  if (typeof body?.transformToByteArray === 'function') return Buffer.from(await body.transformToByteArray())
+  if (typeof body === 'string' || Buffer.isBuffer(body) || body instanceof Uint8Array) return Buffer.from(body)
+  const chunks = []
+  for await (const chunk of body ?? []) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
 }

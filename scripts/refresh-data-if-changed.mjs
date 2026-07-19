@@ -5,7 +5,13 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, uploadRankingArtifacts } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts } from './railway-bucket.mjs'
+import {
+  createRailwayDurableObjectStore,
+  executeDurableGc,
+  planDurableGc,
+  recordRolloutOutcome,
+} from './durable-ranking-state.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -39,6 +45,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const output = resolve(stringArg(args.output ?? env.RANKING_DERIVED_OUTPUT ?? 'data/derived/ranking-snapshot.full.json'))
   const reconciliationOutput = resolve(stringArg(args.reconciliationOutput ?? env.RANKING_RECONCILIATION_OUTPUT ?? `${rawDir}/reconciliation.json`))
   const publicDataDir = resolve(stringArg(args.publicDataDir ?? env.RANKING_PUBLIC_DATA_DIR ?? 'public/data'))
+  const privateStateDir = resolve(stringArg(env.RANKING_INCREMENTAL_STATE_DIR ?? '.ranking-crunch'))
+  const durableCandidatePath = resolve(privateStateDir, 'durable-candidate.json')
   const end = stringArg(args.end ?? env.RANKING_REFRESH_END ?? today())
   const force = booleanArg(args.force) || env.RANKING_FORCE_REFRESH === 'true'
   const skipCrunch = booleanArg(args.skipCrunch) || env.RANKING_SKIP_CRUNCH === 'true'
@@ -201,6 +209,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
 
     if (!skipCrunch) {
+      await rm(durableCandidatePath, { force: true })
       await (options.run ?? runCommand)('pnpm', [
         'exec',
         'tsx',
@@ -213,6 +222,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         manifestPath,
         '--reconciliation-output',
         reconciliationOutput,
+        '--durable-candidate-output',
+        durableCandidatePath,
       ])
     }
 
@@ -236,6 +247,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         const generationId = env.RANKING_REFRESH_FENCING_TOKEN
           ? stringArg(browserManifest?.artifactMeta?.runId)
           : undefined
+        const durableCandidate = await readJsonIfExists(durableCandidatePath)
         const bucketPublish = await uploadRankingArtifacts({
           publicDataDir,
           rawDir,
@@ -247,6 +259,20 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
           generationId,
           fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
+          ...(durableCandidate ? {
+            privateState: {
+              manifestKey: durableCandidate.manifestKey,
+              manifestDigest: durableCandidate.manifestDigest,
+              manifestBytes: durableCandidate.manifestBytes,
+              stateRoot: durableCandidate.stateRoot,
+              identityHash: durableCandidate.identityHash,
+            },
+            rolloutForActive: (previousRollout) => recordRolloutOutcome(previousRollout, {
+              identityHash: durableCandidate.identityHash,
+              parity: durableCandidate.parity,
+              at: new Date().toISOString(),
+            }),
+          } : {}),
           refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped }) => {
             state.bucket = {
               enabled: true,
@@ -272,6 +298,36 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           unchangedCount: bucketPublish.unchanged.length,
           unchangedBytes: bucketPublish.unchangedBytes,
           skipped: bucketPublish.skipped,
+          ...(durableCandidate ? {
+            durable: {
+              uploadedObjects: durableCandidate.metrics?.uploadedObjects ?? 0,
+              uploadedBytes: durableCandidate.metrics?.uploadedBytes ?? 0,
+              skippedObjects: durableCandidate.metrics?.skippedObjects ?? 0,
+              skippedBytes: durableCandidate.metrics?.skippedBytes ?? 0,
+              parity: durableCandidate.parity?.result ?? 'not-run',
+              promotion: bucketPublish.promotion,
+            },
+          } : {}),
+        }
+        if (durableCandidate && generationId) {
+          try {
+            const activeAfterPublish = await readBucketJson('active-generation.json', { config: bucketConfig, client: options.bucketClient })
+            const durableStore = createRailwayDurableObjectStore({ config: bucketConfig, client: options.bucketClient })
+            const gcPlan = await planDurableGc({
+              store: durableStore,
+              activePointer: activeAfterPublish.value,
+              now: new Date().toISOString(),
+              recentDays: positiveInteger(env.RANKING_DURABLE_RETENTION_DAYS) ?? 35,
+            })
+            state.bucket.durable.gc = await executeDurableGc({
+              store: durableStore,
+              plan: gcPlan,
+              dryRun: env.RANKING_DURABLE_GC_DRY_RUN === 'true',
+            })
+          } catch (error) {
+            state.bucket.durable.gc = { planned: 0, deleted: 0, skipped: 0, reason: `postcommit-gc:${errorMessage(error)}` }
+            console.error(`Durable post-commit GC failed: ${errorMessage(error)}`)
+          }
         }
         const optionalSkippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
         console.log(`Uploaded ${bucketPublish.uploadedCount} ranking artifact(s) (${bucketPublish.uploadedBytes} bytes); reused ${bucketPublish.unchangedCount} unchanged artifact(s) (${bucketPublish.unchangedBytes} bytes) in Railway bucket prefix ${bucketPublish.prefix || '(root)'}${optionalSkippedMessage}.`)
@@ -719,6 +775,10 @@ function positiveInteger(value) {
     throw new Error(`Expected a positive integer, received ${value}`)
   }
   return number
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function dateDaysBefore(date, days) {

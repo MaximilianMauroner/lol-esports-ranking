@@ -37,6 +37,7 @@ import {
   recordCrunchTiming,
   recordIncrementalReducerCandidate,
   recordSnapshotInputMetrics,
+  type IncrementalCrunchReceipt,
 } from '../src/lib/incremental/metrics'
 import { crunchModeFrom, orchestrateCrunch } from '../src/lib/incremental/orchestrator'
 import type { CrunchRunMetadata } from '../src/lib/incremental/types'
@@ -62,6 +63,15 @@ import {
   type PersistedSnapshotModelState,
 } from '../src/lib/incremental/snapshotInputs.ts'
 import { buildPublicArtifactDag, type PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
+import { bucketConfigFromEnv, createBucketClient } from './railway-bucket.mjs'
+import {
+  createRailwayDurableObjectStore,
+  decideDurableCrunchMode,
+  restoreDurableGeneration,
+  stageDurableGeneration,
+  type DurableCandidate,
+  type DurableIdentity,
+} from './durable-ranking-state.mjs'
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
@@ -77,11 +87,13 @@ const runMetadata: CrunchRunMetadata = {
     modelConfigHash: transparentGprModelMetadata.configHash,
   }),
 }
-const mode = process.argv.includes('--full')
+const requestedMode = process.argv.includes('--full')
   ? 'full'
   : crunchModeFrom(readArg('mode') ?? process.env.RANKING_CRUNCH_MODE)
-const receipt = createIncrementalCrunchReceipt({ run: runMetadata, requestedMode: mode })
+let mode = requestedMode
+const receipt = createIncrementalCrunchReceipt({ run: runMetadata, requestedMode })
 const privateStateDir = resolve(incrementalStateDirectory(readArg('incremental-state-dir') ?? process.env.RANKING_INCREMENTAL_STATE_DIR))
+const durableCandidateOutput = readArg('durable-candidate-output') ?? process.env.RANKING_DURABLE_CANDIDATE_OUTPUT
 const manifestPath = readArg('manifest')
 const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
 const manifest = resolvedManifestPath
@@ -111,6 +123,54 @@ const compatibility = createCrunchCompatibility({
   modelMetadata: transparentGprModelMetadata,
   codeProvenanceHash,
 })
+const durableIdentity: DurableIdentity = {
+  compatibilityHash: compatibility.hash,
+  pipelineVersion: compatibility.dependencies.pipelineVersion ?? '<missing>',
+  codeHash: compatibility.dependencies.codeProvenanceHash ?? '<missing>',
+  modelVersion: transparentGprModelMetadata.version,
+  modelConfigHash: transparentGprModelMetadata.configHash,
+}
+const durableBucketConfig = bucketConfigFromEnv()
+const durableBucketClient = createBucketClient(durableBucketConfig)
+const durableStore = process.env.RANKING_DURABLE_STATE_ENABLED !== 'false' && durableBucketConfig.enabled && durableBucketClient
+  ? createRailwayDurableObjectStore({ config: durableBucketConfig, client: durableBucketClient })
+  : undefined
+let durableActivePointer: Record<string, unknown> | undefined
+let durableRolloutReason = 'durable-state-disabled'
+if (durableStore && requestedMode !== 'full') {
+  const restore = await restoreDurableGeneration({
+    store: durableStore,
+    stateDir: privateStateDir,
+    expectedIdentity: durableIdentity,
+  })
+  const restoreMetrics = recordValue(restore.metrics)
+  receipt.durable.restoredObjects = numberValue(restoreMetrics.restoredObjects)
+  receipt.durable.restoredBytes = numberValue(restoreMetrics.restoredBytes)
+  receipt.durable.cacheHits = numberValue(restoreMetrics.cacheHits)
+  receipt.durable.cacheMisses = numberValue(restoreMetrics.cacheMisses)
+  if (restore.restored) {
+    durableActivePointer = recordValue(restore.active)
+    const rollout = decideDurableCrunchMode({
+      requestedMode,
+      identity: durableIdentity,
+      activePointer: durableActivePointer,
+      shadowThreshold: positiveIntegerEnv('RANKING_INCREMENTAL_SHADOW_THRESHOLD', 3),
+      now: runMetadata.generatedAt,
+      auditIntervalMs: positiveIntegerEnv('RANKING_INCREMENTAL_AUDIT_INTERVAL_MS', 7 * 24 * 60 * 60_000),
+      forceAudit: process.env.RANKING_INCREMENTAL_FORCE_AUDIT === 'true',
+    })
+    mode = rollout.effectiveMode
+    durableRolloutReason = rollout.reason
+    if (rollout.reason === 'forced-audit') receipt.durable.audit = 'forced'
+    else if (rollout.reason === 'scheduled-audit') receipt.durable.audit = 'scheduled'
+  } else {
+    const fallback = durableFallback(restore.fallback)
+    receipt.durable.fallback = fallback
+    receipt.checkpoint.fallback = fallback
+    mode = 'full'
+    durableRolloutReason = fallback.kind
+  }
+}
 
 if (process.argv.includes('--seeded-sample')) {
   throw new Error('Seeded sample generation has been removed from the production build path. Provide public source files or use tests/fixtures/rankingFixtures.ts for unit fixtures.')
@@ -272,8 +332,9 @@ const orchestration = await orchestrateCrunch<CrunchOutput>({
   receipt,
   runFull,
   runIncremental,
-  requireReferenceParity: true,
+  requireReferenceParity: mode !== 'incremental',
 })
+receipt.requestedMode = requestedMode
 const { snapshot, importedMatches, metrics } = orchestration.output
 recordCrunchTiming(receipt, 'crunch-total', crunchStartedAt, performance.now())
 receipt.sources = {
@@ -344,12 +405,27 @@ if (reconciliationOutput) {
 }
 const publicPlan = createPublicArtifactWritePlan(snapshot, { runMetadata })
 let incrementalPlan: ReturnType<typeof createPublicArtifactWritePlan> | undefined
+let durableParity: { result: 'match' | 'mismatch'; audit?: boolean; detail?: string } | undefined
 if (orchestration.shadowOutput) {
   incrementalPlan = createPublicArtifactWritePlan(orchestration.shadowOutput.snapshot, { runMetadata })
-  assertCrunchParity(
-    { fullSnapshot: snapshot, publicWrites: publicPlan.writes },
-    { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: incrementalPlan.writes },
-  )
+  try {
+    assertCrunchParity(
+      { fullSnapshot: snapshot, publicWrites: publicPlan.writes },
+      { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: incrementalPlan.writes },
+    )
+    durableParity = { result: 'match', ...(receipt.durable.audit === 'scheduled' || receipt.durable.audit === 'forced' ? { audit: true } : {}) }
+    receipt.durable.parity = 'match'
+    if (durableParity.audit) receipt.durable.audit = 'match'
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    durableParity = { result: 'mismatch', detail, ...(receipt.durable.audit === 'scheduled' || receipt.durable.audit === 'forced' ? { audit: true } : {}) }
+    receipt.durable.parity = 'mismatch'
+    if (durableParity.audit) receipt.durable.audit = 'mismatch'
+    receipt.checkpoint.fallback = { kind: 'dependency-unknown', dependency: `shadow-parity:${detail}` }
+    pendingPromotion = undefined
+    incrementalPlan = undefined
+    await sendDurableAlert('incremental-parity-mismatch', detail)
+  }
 }
 let writesToPublish = publicPlan.writes
 if (incrementalPlan && orchestration.shadowOutput) {
@@ -420,6 +496,33 @@ try {
     const promoted = await promoteIncrementalState(pendingPromotion)
     receipt.bucket.bytesWritten = promoted.reducerStateBytesWritten
   }
+  if (durableStore && await isDirectory(privateStateDir)) {
+    const candidate = await stageDurableGeneration({
+      store: durableStore,
+      stateDir: privateStateDir,
+      identity: durableIdentity,
+      generatedAt: runMetadata.generatedAt,
+      parity: durableParity ?? { kind: 'not-run', rolloutReason: durableRolloutReason },
+      retention: {
+        date: runMetadata.generatedAt.slice(0, 10),
+        boundaries: durableRetentionBoundaries(snapshot),
+      },
+    })
+    recordDurableCandidateMetrics(receipt, candidate)
+    receipt.durable.promotion = 'staged'
+    if (durableCandidateOutput) await atomicWriteFile(resolve(durableCandidateOutput), `${JSON.stringify(durableCandidateReceipt(candidate, durableParity), null, 2)}\n`)
+  }
+  receipt.durable.reusedUnits = sumInstrumented([
+    receipt.observations.reused,
+    receipt.snapshotInputs.rankingResultCacheHits,
+    receipt.snapshotInputs.playerResultCacheHits,
+    receipt.artifacts.reused,
+  ])
+  receipt.durable.replayedUnits = sumInstrumented([
+    receipt.reducers.livePlayerEdgeRows,
+    receipt.reducers.teamRows,
+    receipt.reducers.playerRows,
+  ])
   const publicDataBytes = await directorySize(publicDataTargetDir)
   if (receiptOutput) {
     await mkdir(dirname(receiptOutput), { recursive: true })
@@ -723,6 +826,94 @@ async function isRegularFile(path: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
     throw error
+  }
+}
+
+async function isDirectory(path: string) {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function sumInstrumented(values: Array<number | null>) {
+  const measured = values.filter((value): value is number => value !== null)
+  return measured.length > 0 ? measured.reduce((sum, value) => sum + value, 0) : null
+}
+
+function positiveIntegerEnv(name: string, fallback: number) {
+  const value = Number(process.env[name])
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+function durableFallback(value: unknown): NonNullable<IncrementalCrunchReceipt['durable']['fallback']> {
+  const fallback = recordValue(value)
+  const detail = typeof fallback.detail === 'string' ? fallback.detail : 'durable-state-unavailable'
+  if (fallback.kind === 'compatibility-hash-mismatch') {
+    return { kind: 'compatibility-hash-mismatch', dependency: detail, expected: durableIdentity.compatibilityHash }
+  }
+  if (fallback.kind === 'checkpoint-corrupt') return { kind: 'checkpoint-corrupt', detail }
+  return { kind: 'checkpoint-unavailable', detail }
+}
+
+function recordDurableCandidateMetrics(target: IncrementalCrunchReceipt, candidate: DurableCandidate) {
+  target.durable.uploadedObjects = candidate.metrics.uploadedObjects
+  target.durable.uploadedBytes = candidate.metrics.uploadedBytes
+  target.durable.skippedObjects = candidate.metrics.skippedObjects
+  target.durable.skippedBytes = candidate.metrics.skippedBytes
+}
+
+function durableCandidateReceipt(candidate: DurableCandidate, parity: typeof durableParity) {
+  return {
+    schemaVersion: 1,
+    manifestKey: candidate.manifestKey,
+    manifestDigest: candidate.manifestDigest,
+    manifestBytes: candidate.manifestBytes,
+    stateRoot: candidate.stateRoot,
+    identityHash: candidate.identityHash,
+    identity: durableIdentity,
+    metrics: candidate.metrics,
+    parity: parity ?? { kind: 'not-run' },
+  }
+}
+
+function durableRetentionBoundaries(data: CrunchOutput['snapshot']) {
+  const boundaries = new Set<string>()
+  const date = runMetadata.generatedAt.slice(0, 10)
+  const tomorrow = new Date(`${date}T00:00:00.000Z`)
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+  if (tomorrow.getUTCMonth() !== new Date(`${date}T00:00:00.000Z`).getUTCMonth()) boundaries.add('month-end')
+  if (Object.values(data.tournamentMovements).some((entry) => entry.status === 'completed' && entry.boundaryDate === date)) boundaries.add('international-event')
+  if (Object.values(data.filterOptions.checkpoints ?? {}).flat().some((checkpoint) => checkpoint.endDate === date)) boundaries.add('season-split')
+  return [...boundaries].sort()
+}
+
+async function sendDurableAlert(kind: string, message: string) {
+  const url = process.env.RANKING_ALERT_WEBHOOK_URL
+  if (!url) {
+    console.warn(`Alert ${kind}: ${message}`)
+    return
+  }
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind, message, service: 'lol-esports-ranking', at: runMetadata.generatedAt }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!response.ok) console.error(`Alert webhook failed with ${response.status}`)
+  } catch (error) {
+    console.error(`Alert webhook failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 

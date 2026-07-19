@@ -22,6 +22,7 @@
     "lint": "eslint .",
     "test": "tsx --test tests/**/*.test.ts",
     "benchmark:riot-gpr": "tsx scripts/compare-riot-gpr.ts",
+    "benchmark:incremental-durable": "tsx scripts/benchmark-incremental-durable.ts",
     "release:check": "pnpm run data:crunch && pnpm test && pnpm run typecheck && pnpm run lint && pnpm run build",
     "verify": "pnpm run typecheck && pnpm run lint && pnpm test",
     "railway:build": "pnpm run verify && pnpm run bundle",

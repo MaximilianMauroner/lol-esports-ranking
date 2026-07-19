@@ -57,6 +57,27 @@ export type IncrementalCrunchReceipt = {
     bytesRead: InstrumentedCount
     bytesWritten: InstrumentedCount
   }
+  durable: {
+    restoredObjects: InstrumentedCount
+    restoredBytes: InstrumentedCount
+    uploadedObjects: InstrumentedCount
+    uploadedBytes: InstrumentedCount
+    skippedObjects: InstrumentedCount
+    skippedBytes: InstrumentedCount
+    cacheHits: InstrumentedCount
+    cacheMisses: InstrumentedCount
+    reusedUnits: InstrumentedCount
+    replayedUnits: InstrumentedCount
+    fallback?: IncrementalFallbackReason
+    parity: 'not-run' | 'match' | 'mismatch'
+    audit: 'not-due' | 'scheduled' | 'forced' | 'match' | 'mismatch'
+    promotion: 'not-attempted' | 'staged' | 'promoted' | 'no-change' | 'conflict' | 'fenced'
+    gc: {
+      planned: InstrumentedCount
+      deleted: InstrumentedCount
+      skipped: InstrumentedCount
+    }
+  }
   checkpoint: {
     selected?: string
     playerSelected?: string
@@ -101,6 +122,22 @@ export function createIncrementalCrunchReceipt({
     },
     artifacts: { reused: null, regenerated: null },
     bucket: { bytesRead: 0, bytesWritten: 0 },
+    durable: {
+      restoredObjects: 0,
+      restoredBytes: 0,
+      uploadedObjects: 0,
+      uploadedBytes: 0,
+      skippedObjects: 0,
+      skippedBytes: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      reusedUnits: null,
+      replayedUnits: null,
+      parity: 'not-run',
+      audit: 'not-due',
+      promotion: 'not-attempted',
+      gc: { planned: 0, deleted: 0, skipped: 0 },
+    },
     checkpoint: {},
     timingsMs: {},
     attempts: [],

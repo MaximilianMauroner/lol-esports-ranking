@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -11,6 +11,12 @@ import {
   uploadRankingArtifacts,
   writeBucketJson,
 } from '../scripts/railway-bucket.mjs'
+import {
+  createRailwayDurableObjectStore,
+  restoreDurableGeneration,
+  stageDurableGeneration,
+  type DurableIdentity,
+} from '../scripts/durable-ranking-state.mjs'
 
 const config = {
   enabled: true,
@@ -94,8 +100,66 @@ test('generation publication uploads immutable data before promoting one pointer
   }
 })
 
+test('Railway bucket adapter restores private state referenced by the public CAS pointer', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-durable-adapter-'))
+  const publicDir = join(root, 'public')
+  const stateDir = join(root, 'state')
+  const restoredDir = join(root, 'restored')
+  const client = memoryS3()
+  const durableIdentity: DurableIdentity = {
+    compatibilityHash: 'compatibility',
+    pipelineVersion: 'pipeline',
+    codeHash: 'code',
+    modelVersion: 'model',
+    modelConfigHash: 'config',
+  }
+  try {
+    await mkdir(publicDir, { recursive: true })
+    await mkdir(join(stateDir, 'canonical'), { recursive: true })
+    await writeFile(join(publicDir, 'ranking-summary.json'), '{"artifactKind":"public-ranking-manifest"}\n')
+    await writeFile(join(stateDir, 'active-generation.json'), 'private active\n')
+    await writeFile(join(stateDir, 'canonical', 'ledger.json'), 'private canonical\n')
+    const store = createRailwayDurableObjectStore({ config, client })
+    const candidate = await stageDurableGeneration({
+      store,
+      stateDir,
+      identity: durableIdentity,
+      generatedAt: '2026-07-19T00:00:00.000Z',
+    })
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'durable-run',
+      fencingToken: 8,
+      config,
+      client,
+      privateState: {
+        manifestKey: candidate.manifestKey,
+        manifestDigest: candidate.manifestDigest,
+        manifestBytes: candidate.manifestBytes,
+        stateRoot: candidate.stateRoot,
+        identityHash: candidate.identityHash,
+      },
+      rolloutForActive: (previous) => ({
+        ...(typeof previous === 'object' && previous !== null ? previous : {}),
+        identityHash: candidate.identityHash,
+        consecutiveShadowSuccesses: 1,
+      }),
+    })
+    const restored = await restoreDurableGeneration({ store, stateDir: restoredDir, expectedIdentity: durableIdentity })
+    assert.equal(restored.restored, true)
+    assert.equal(await readFile(join(restoredDir, 'canonical', 'ledger.json'), 'utf8'), 'private canonical\n')
+    const active = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.equal(active.privateState.manifestKey, candidate.manifestKey)
+    assert.equal(active.rollout.identityHash, candidate.identityHash)
+    assert.equal(active.rollout.consecutiveShadowSuccesses, 1)
+    assert.equal(active.fencingToken, 8)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function memoryS3() {
-  const objects = new Map<string, { body: string; etag: string }>()
+  const objects = new Map<string, { body: string; etag: string; metadata?: Record<string, string> }>()
   let version = 0
   return {
     objects,
@@ -105,7 +169,7 @@ function memoryS3() {
       if (name === 'GetObjectCommand') {
         const object = objects.get(key)
         if (!object) throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
-        return { Body: Readable.from([object.body]), ETag: object.etag, ContentLength: Buffer.byteLength(object.body) }
+        return { Body: Readable.from([object.body]), ETag: object.etag, ContentLength: Buffer.byteLength(object.body), Metadata: object.metadata }
       }
       if (name === 'PutObjectCommand') {
         const current = objects.get(key)
@@ -113,8 +177,20 @@ function memoryS3() {
         if (input.IfMatch && input.IfMatch !== current?.etag) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
         const body = await streamText(input.Body)
         const etag = `"${++version}"`
-        objects.set(key, { body, etag })
+        objects.set(key, { body, etag, metadata: input.Metadata as Record<string, string> | undefined })
         return { ETag: etag }
+      }
+      if (name === 'ListObjectsV2Command') {
+        const prefix = String(input.Prefix ?? '')
+        return {
+          Contents: [...objects.entries()]
+            .filter(([objectKey]) => objectKey.startsWith(prefix))
+            .map(([Key, value]) => ({ Key, Size: Buffer.byteLength(value.body) })),
+        }
+      }
+      if (name === 'DeleteObjectCommand') {
+        objects.delete(key)
+        return {}
       }
       throw new Error(`Unsupported command ${name}`)
     },
@@ -128,6 +204,7 @@ function commandDetails(value: unknown) {
 
 async function streamText(value: unknown) {
   if (typeof value === 'string') return value
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return Buffer.from(value).toString('utf8')
   const chunks: Buffer[] = []
   for await (const chunk of value as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks).toString('utf8')

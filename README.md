@@ -99,12 +99,16 @@ pnpm run railway:refresh-once
 
 `RANKING_REFRESH_MODE=shadow` probes overlapping LoL Esports schedule pages, records strictly confirmed completed matches, and never calls Oracle or Leaguepedia. `RANKING_REFRESH_MODE=gated` calls scored providers only when a confirmed pending match is due for ingestion or an explicitly enabled correction audit is due. Trigger state and a fencing lease live in the Railway bucket, exact reconciliations acknowledge pending matches, and successful gated publishes use immutable `rankings/generations/<run-id>/data/**` objects before promoting `rankings/active-generation.json`. The default remains `legacy` until shadow metrics have been reviewed.
 
+The independent crunch engine control is `RANKING_CRUNCH_MODE=full|incremental-shadow|incremental`. Durable incremental state is restored from the active generation before crunching and staged under immutable content-addressed keys after a successful local publish. A missing, corrupt, or identity-incompatible checkpoint falls back to a full crunch without mixing old and new state. Shadow parity must succeed for the same exact compatibility, pipeline, code, model-version, and model-config identity before incremental activation; a mismatch resets and blocks that identity, publishes the full reference result, and uses `RANKING_ALERT_WEBHOOK_URL` when configured. Scheduled audits temporarily return an activated worker to shadow comparison. Source-fingerprint no-change runs still exit before crunching, staging, or pointer promotion.
+
 For cost/speed-constrained production refreshes, set `RANKING_REFRESH_LOOKBACK_DAYS=7` and choose a practical `RANKING_REFRESH_BOOTSTRAP_START`, such as `2025-01-01`. With an existing raw baseline, each scheduled run downloads only the rolling 7-day source window and merges those files into `data/raw` before crunching, so the ranking model still sees the restored baseline plus the current lookback window. If a fresh Railway container has no raw baseline, the refresh first restores `rankings/raw/files/**` from the Bucket; if no bucket baseline exists yet, it bootstraps once from `RANKING_REFRESH_BOOTSTRAP_START` through today and then subsequent scheduled runs use the lookback window. Earlier bootstrap dates improve historical coverage at the cost of slower first runs and larger raw storage; later dates are faster and cheaper but intentionally narrow the ranking context.
 
 Use a Railway Storage Bucket for generated artifacts that should not live in Git. Railway Buckets are private S3-compatible storage, so the app proxies `/data/*` through the Railway server instead of exposing the bucket publicly. The refresh job uploads:
 
 - `rankings/data/**`: legacy browser artifacts retained as a fallback.
 - `rankings/generations/<run-id>/data/**` and `rankings/active-generation.json`: immutable gated browser generations and their active pointer.
+- `rankings/private/objects/<category>/<sha256>`: immutable private reducer, provider, player, snapshot-model, and artifact state objects.
+- `rankings/private/generations/<sha256>.json` and `rankings/private/audits/<sha256>.json`: immutable state manifests and parity/audit records referenced by the active pointer.
 - `rankings/raw/manifest.json`: the data-source manifest for provenance.
 - `rankings/raw/files/**`: the raw source baseline used to restore a fresh Railway container before lookback-only refreshes.
 - `rankings/raw/refresh-state.json` and `rankings/latest-publish.json`: refresh/publish audit metadata.
@@ -122,6 +126,14 @@ Recommended Railway variables:
 - `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT`: set to `true` only when you need the full audit snapshot in the Bucket. Defaults to disabled because this artifact is large and the browser does not use it.
 - `RANKING_BUCKET_REQUIRED`: set to `true` in production if refreshes should fail when bucket credentials are missing.
 - `RANKING_BUCKET_FORCE_PATH_STYLE`: set to `true` only if the Bucket credentials tab says this bucket needs path-style S3 URLs.
+- `RANKING_DURABLE_STATE_ENABLED`: set to `false` to disable private-state restore/staging even when Bucket credentials exist. Defaults to enabled.
+- `RANKING_CRUNCH_MODE`: `full`, `incremental-shadow`, or `incremental`. This controls calculation, independently of the refresh trigger mode.
+- `RANKING_INCREMENTAL_SHADOW_THRESHOLD`: consecutive same-identity parity matches required before `incremental` can activate. Defaults to `3`.
+- `RANKING_INCREMENTAL_AUDIT_INTERVAL_MS`: maximum time between activated incremental shadow audits. Defaults to seven days.
+- `RANKING_INCREMENTAL_FORCE_AUDIT`: set to `true` to force the next eligible incremental run through full-versus-incremental parity comparison.
+- `RANKING_INCREMENTAL_STATE_DIR`: optional local materialization path for restored private state. The Bucket remains authoritative across fresh containers.
+- `RANKING_DURABLE_RETENTION_DAYS`: rolling private-generation retention window. Defaults to `35`; active and declared month-end, split, or international-event boundaries remain reachable permanently.
+- `RANKING_DURABLE_GC_DRY_RUN`: set to `true` to report unreachable immutable objects without deleting them. GC runs only after successful active-pointer promotion and treats deletion failures as nonfatal.
 - `RANKING_REFRESH_ENABLED`: set to `true` to enable the background scheduler. Defaults to disabled; manual `POST /api/refresh` still works when `CRON_SECRET` is configured.
 - `RANKING_REFRESH_MODE`: `legacy` (default), `shadow`, or `gated`. The web-process timer runs only in legacy mode; shadow/gated use the one-shot cron worker.
 - `RANKING_TRIGGER_STATE_KEY` and `RANKING_REFRESH_LEASE_KEY`: optional bucket keys for durable detector state and the fencing lease.

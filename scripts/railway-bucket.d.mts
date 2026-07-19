@@ -18,6 +18,28 @@ export function readBucketJson(relativeKey: string, options?: { config?: unknown
   etag?: string
   value?: Record<string, unknown>
 }>
+export function readBucketBytes(relativeKey: string, options?: { config?: unknown; client?: BucketClient }): Promise<{
+  found: boolean
+  key?: string
+  etag?: string
+  bytes?: Uint8Array
+  contentLength?: number
+  metadata?: Record<string, string>
+  missingConfig?: string[]
+}>
+export function writeBucketBytes(relativeKey: string, bytes: Uint8Array | string, options?: {
+  ifMatch?: string
+  ifNoneMatch?: string
+  metadata?: Record<string, string>
+  contentType?: string
+  config?: unknown
+  client?: BucketClient
+}): Promise<{ written: boolean; conflict?: boolean; key?: string; etag?: string; bytes?: number; missingConfig?: string[] }>
+export function listBucketKeys(relativePrefix: string, options?: { config?: unknown; client?: BucketClient }): Promise<{
+  enabled: boolean
+  keys: Array<{ key: string; bytes: number }>
+  missingConfig?: string[]
+}>
 export function writeBucketJson(relativeKey: string, value: unknown, options?: {
   ifMatch?: string
   ifNoneMatch?: string
@@ -42,7 +64,22 @@ export function releaseBucketLease(relativeKey: string, lease: {
   config?: unknown
   client?: BucketClient
 }): Promise<{ released: boolean; reason?: string; etag?: string }>
-export function uploadRankingArtifacts(options?: Record<string, unknown>): Promise<Record<string, unknown>>
+export function uploadRankingArtifacts(options?: {
+  publicDataDir?: string
+  rawDir?: string
+  fullSnapshotPath?: string
+  manifestPath?: string
+  statePath?: string
+  config?: unknown
+  client?: BucketClient
+  uploadFullSnapshot?: boolean
+  refreshStateForUpload?: unknown
+  generationId?: string
+  fencingToken?: number
+  privateState?: Record<string, unknown>
+  rollout?: Record<string, unknown>
+  rolloutForActive?: (previous: unknown) => Record<string, unknown>
+}): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>
 export function downloadBucketObject(options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
