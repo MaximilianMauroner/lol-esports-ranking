@@ -52,11 +52,107 @@ test('maintenance recovery requires operator confirmation and exact identity', a
 import {
   createRailwayDurableObjectStore,
   decideDurableCrunchMode,
+  executeRailwayDurableGc,
+  planDurableGc,
+  promoteDurableGeneration,
   recordRolloutOutcome,
   restoreDurableGeneration,
   stageDurableGeneration,
   type DurableIdentity,
 } from '../scripts/durable-ranking-state.mjs'
+import { runRankingStateGc } from '../scripts/gc-ranking-state.mjs'
+
+test('maintenance prints exact recovery identity before a planning failure', async () => {
+  const client = memoryS3()
+  let output = ''
+  await assert.rejects(runRankingStateGc({
+    args: [],
+    env: {},
+    config,
+    client,
+    owner: 'printed-owner',
+    now: () => new Date('2026-07-20T00:00:00.000Z'),
+    output: (message: string) => { output += message },
+    planGc: async () => { throw new Error('injected planning failure') },
+  }), /injected planning failure/)
+  assert.match(output, /^Maintenance acquired owner=printed-owner fencingToken=1\n/)
+  assert.match(output, /--recover printed-owner 1 --confirm-terminated/)
+})
+
+test('exclusive sweep and successor promotion share one active-pointer authority without a deletion race', async () => {
+  const client = memoryS3()
+  const store = createRailwayDurableObjectStore({ config, client })
+  const root = await mkdtemp(join(tmpdir(), 'ranking-gc-race-'))
+  const stateDir = join(root, 'state')
+  await mkdir(join(stateDir, 'canonical'), { recursive: true })
+  const identity: DurableIdentity = { compatibilityHash: 'gc', pipelineVersion: 'gc', codeHash: 'gc', modelVersion: 'gc', modelConfigHash: 'gc' }
+  try {
+    await writeFile(join(stateDir, 'canonical', 'state.json'), 'planned-reused-digest')
+    const old = await stageDurableGeneration({ store, stateDir, identity, generatedAt: '2026-01-01T00:00:00.000Z', retention: { date: '2026-01-01', boundaries: [] } })
+    await writeFile(join(stateDir, 'canonical', 'state.json'), 'active-digest')
+    const activeCandidate = await stageDurableGeneration({ store, stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z' })
+    assert.equal((await promoteDurableGeneration({ store, candidate: activeCandidate, fencingToken: 1, generationId: 'active', promotedAt: '2026-07-19T00:00:01.000Z' })).promoted, true)
+    const maintenance = await acquireBucketMaintenance({ owner: 'integrated-gc', now: '2026-07-20T00:00:00.000Z', config, client })
+    assert.equal(maintenance.acquired, true)
+    if (!maintenance.maintenance) return
+    const readPlan = async () => {
+      const pointer = await readBucketJson('active-generation.json', { config, client })
+      return planDurableGc({ store, activePointer: pointer.value, activeEtag: pointer.etag, now: '2026-07-20T00:00:00.000Z', recentDays: 1 })
+    }
+    const plan = await readPlan()
+    assert.ok(old.manifest.objects.some((ref) => plan.plannedDeletes.some((entry) => entry.key === ref.key)))
+    let checkedRace = false
+    const swept = await executeRailwayDurableGc({
+      store,
+      plan,
+      dryRun: false,
+      maintenanceGuard: maintenance.maintenance,
+      bucketConfig: config,
+      bucketClient: client,
+      replan: readPlan,
+      beforeDelete: async () => {
+        if (checkedRace) return
+        checkedRace = true
+        const blocked = await acquireBucketLease('ops/refresh-lease.json', { owner: 'successor', now: '2026-07-20T00:00:01.000Z', ttlMs: 60_000, fenceActiveKey: 'active-generation.json', config, client })
+        assert.equal(blocked.acquired, false)
+        assert.equal(!blocked.acquired && blocked.reason, 'maintenance-active')
+        assert.equal((await promoteDurableGeneration({ store, candidate: old, fencingToken: 3, generationId: 'forbidden', promotedAt: '2026-07-20T00:00:01.000Z' })).reason, 'maintenance-active')
+      },
+    })
+    assert.ok(Number(swept.deleted) > 0)
+    assert.equal((await releaseBucketMaintenance(maintenance.maintenance, { config, client })).released, true)
+    const successor = await acquireBucketLease('ops/refresh-lease.json', { owner: 'successor', now: '2026-07-20T00:00:02.000Z', ttlMs: 60_000, fenceActiveKey: 'active-generation.json', config, client })
+    assert.equal(successor.acquired, true)
+    if (!successor.acquired) return
+    await writeFile(join(stateDir, 'canonical', 'state.json'), 'planned-reused-digest')
+    const reused = await stageDurableGeneration({ store, stateDir, identity, generatedAt: '2026-07-20T00:00:02.000Z' })
+    const publicDir = join(root, 'public')
+    await mkdir(publicDir, { recursive: true })
+    await writeFile(join(publicDir, 'ranking-summary.json'), '{"artifactMeta":{"runId":"successor"}}\n')
+    const publication = await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'successor',
+      fencingToken: successor.lease.fencingToken,
+      privateState: {
+        manifestKey: reused.manifestKey,
+        manifestDigest: reused.manifestDigest,
+        manifestBytes: reused.manifestBytes,
+        stateRoot: reused.stateRoot,
+        identityHash: reused.identityHash,
+        retention: reused.manifest.retention,
+      },
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: successor.lease.owner, fencingToken: successor.lease.fencingToken, authorityKey: successor.authorityKey },
+      config,
+      client,
+      clock: () => new Date('2026-07-20T00:00:03.000Z'),
+    })
+    const promotion = publication.promotion
+    assert.equal(typeof promotion === 'object' && promotion !== null && 'promoted' in promotion && promotion.promoted, true)
+    for (const ref of reused.manifest.objects) assert.equal((await store.head(ref.key)).found, true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 const config = {
   enabled: true,
@@ -683,6 +779,8 @@ test('raw generations are immutable, deduplicated, and become authoritative only
       generationId: 'raw-first',
       fencingToken: firstLease.lease.fencingToken,
       leaseGuard: refreshGuard(firstLease),
+      rawRetentionDays: 1,
+      clock: () => new Date('2026-07-01T00:00:00.000Z'),
       config,
       client,
     })
@@ -714,6 +812,23 @@ test('raw generations are immutable, deduplicated, and become authoritative only
     assert.deepEqual(client.objects.get('rankings/active-generation.json'), activeBeforeInterrupted)
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).rawState.descriptorKey, firstActive.rawState.descriptorKey)
     assert.ok(firstRawObjects.every(([key, value]) => client.objects.get(key)?.body === value.body))
+    assert.equal((await releaseBucketLease('ops/refresh-lease.json', interruptedLease, { config, client })).released, true)
+    const secondLease = await acquireRefreshAuthority(client, 'raw-second', '2026-07-30T00:00:00.000Z')
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      rawDir,
+      manifestPath,
+      statePath,
+      generationId: 'raw-second',
+      fencingToken: secondLease.lease.fencingToken,
+      leaseGuard: refreshGuard(secondLease),
+      rawRetentionDays: 1,
+      clock: () => new Date('2026-07-30T00:00:00.000Z'),
+      config,
+      client,
+    })
+    const secondActive = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.equal(secondActive.rawHistory.some((entry: { descriptorKey: string }) => entry.descriptorKey === firstActive.rawState.descriptorKey), false)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -753,6 +868,11 @@ function memoryS3(options: { failPutKeys?: Set<string> } = {}) {
         const object = objects.get(key)
         if (!object) throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
         return { Body: Readable.from([object.body]), ETag: object.etag, ContentLength: Buffer.byteLength(object.body), Metadata: object.metadata }
+      }
+      if (name === 'HeadObjectCommand') {
+        const object = objects.get(key)
+        if (!object) throw Object.assign(new Error('missing'), { name: 'NotFound' })
+        return { ETag: object.etag, ContentLength: Buffer.byteLength(object.body), Metadata: object.metadata }
       }
       if (name === 'PutObjectCommand') {
         if (options.failPutKeys?.has(key)) throw new Error('observability mirror unavailable')

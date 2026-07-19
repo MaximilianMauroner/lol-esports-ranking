@@ -115,7 +115,7 @@ Use a Railway Storage Bucket for generated artifacts that should not live in Git
 - `rankings/latest-publish.json`: legacy/unversioned publish audit metadata.
 - `rankings/artifacts/latest-full.json`: optional full audit/calculation artifact, uploaded only when `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT=true`.
 
-Raw and private-state objects are globally content-addressed and uploaded create-only with digest verification. The active pointer references exact raw and private manifests, so interrupted uploads remain unreachable and stale workers cannot replace a successor's raw baseline. Private retention keeps the active manifest, the latest manifest per recent UTC day, and activated permanent month-end/season/international boundaries. Newly staged unreachable objects receive a bounded grace period before collection; missing age metadata fails closed, and legacy owner-scoped objects remain conservatively retained.
+Raw and private-state objects are globally content-addressed and uploaded create-only with digest verification. The active pointer references exact raw and private manifests, so interrupted uploads remain unreachable and stale workers cannot replace a successor's raw baseline. Retention keeps the active manifest, the latest valid manifest per recent UTC day, and only pointer-authorized permanent month-end/season/international boundaries. Newly staged unreachable objects receive a bounded grace period before collection; missing or corrupt reachability data fails the entire sweep closed.
 
 Railway Bucket egress is free only when clients download directly from the bucket, such as through presigned URLs. When the web service proxies bucket objects to users, Railway counts that as service egress. For this app, keep the same-origin `/data/*` proxy and enable Railway CDN caching on the web service so cache hits are served from the edge without reaching the service. Presigned GET URLs are useful for ad hoc large downloads, but they add URL-expiry and browser CORS concerns to the app's JSON contract.
 
@@ -133,8 +133,11 @@ Recommended Railway variables:
 - `RANKING_INCREMENTAL_AUDIT_INTERVAL_MS`: maximum time between activated incremental shadow audits. Defaults to seven days.
 - `RANKING_INCREMENTAL_FORCE_AUDIT`: set to `true` to force the next eligible incremental run through full-versus-incremental parity comparison.
 - `RANKING_INCREMENTAL_STATE_DIR`: optional local materialization path for restored private state. The Bucket remains authoritative across fresh containers.
-- `RANKING_DURABLE_RETENTION_DAYS`: rolling private-generation retention window. Defaults to `35`; active and declared month-end, split, or international-event boundaries remain reachable permanently.
-- `RANKING_DURABLE_GC_DRY_RUN`: set to `true` to report unreachable immutable objects without deleting them. GC runs only after successful active-pointer promotion and treats deletion failures as nonfatal.
+- `RANKING_DURABLE_RETENTION_DAYS`: rolling private and raw generation retention window. Defaults to `35`; active-pointer history authorizes permanent month-end, split, and international-event boundaries.
+- `RANKING_DURABLE_STAGING_GRACE_MS`: minimum age for unreachable staged objects before maintenance may collect them. Defaults to 24 hours.
+- `RANKING_MAINTENANCE_GC_AFTER_REFRESH`: opt in to a maintenance dry run after the refresh lease has been released. Defaults to disabled.
+- `RANKING_MAINTENANCE_GC_EXECUTE`: with post-refresh maintenance enabled, opt in to deletion instead of the default dry run.
+- `RANKING_MAINTENANCE_GC_TIMEOUT_MS`: timeout for the optional post-refresh maintenance child. A timeout can leave the non-expiring maintenance lock active by design; use the printed exact recovery command only after confirming the child terminated.
 - `RANKING_REFRESH_ENABLED`: set to `true` to enable the background scheduler. Defaults to disabled; manual `POST /api/refresh` still works when `CRON_SECRET` is configured.
 - `RANKING_REFRESH_MODE`: `legacy` (default), `shadow`, or `gated`. The web-process timer runs only in legacy mode; shadow/gated use the one-shot cron worker.
 - `RANKING_TRIGGER_STATE_KEY` and `RANKING_REFRESH_LEASE_KEY`: optional bucket keys for durable detector state and the fencing lease.

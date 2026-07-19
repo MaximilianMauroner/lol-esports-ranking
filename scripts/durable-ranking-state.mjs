@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/p
 import { dirname, relative, resolve, sep } from 'node:path'
 import {
   deleteObject,
+  headBucketObject,
   listBucketKeys,
   readBucketBytes,
   verifyBucketMaintenance,
@@ -15,6 +16,7 @@ export const DEFAULT_DURABLE_PREFIX = 'private'
 export function createRailwayDurableObjectStore({ config, client }) {
   return {
     get: (key) => readBucketBytes(key, { config, client }),
+    head: (key) => headBucketObject(key, { config, client }),
     put: (key, bytes, options = {}) => writeBucketBytes(key, bytes, {
       config,
       client,
@@ -43,6 +45,12 @@ export function createMemoryDurableObjectStore() {
       const object = objects.get(key)
       return object
         ? { found: true, key, etag: object.etag, bytes: Buffer.from(object.bytes), contentLength: object.bytes.byteLength, metadata: { ...object.metadata } }
+        : { found: false, key }
+    },
+    async head(key) {
+      const object = objects.get(key)
+      return object
+        ? { found: true, key, etag: object.etag, contentLength: object.bytes.byteLength, metadata: { ...object.metadata } }
         : { found: false, key }
     },
     async put(key, bytes, options = {}) {
@@ -501,6 +509,18 @@ export async function planDurableGc({
     recentDays,
     stagingGraceMs,
   })
+  if (rawPlan.metrics.safe === false) {
+    return {
+      safe: false,
+      reason: rawPlan.metrics.reason ?? 'raw-gc-unsafe',
+      plannedDeletes: [],
+      retainedManifests: retainedManifests.size,
+      retainedObjects: reachable.size,
+      retainedAudits: reachableAudits.size,
+      invalidManifests,
+      raw: rawPlan.metrics,
+    }
+  }
   const plannedDeletes = [
     ...unreferencedObjects.map((entry) => ({ ...entry, kind: 'object' })),
     ...unreferencedAudits.map((entry) => ({ ...entry, kind: 'audit' })),
@@ -560,11 +580,9 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
         continue
       }
       const ageMs = nowMs - new Date(`${date}T00:00:00.000Z`).getTime()
-      const boundaries = isRecord(descriptor.retention) && Array.isArray(descriptor.retention.boundaries) ? descriptor.retention.boundaries : []
-      if (boundaries.length > 0 || ageMs <= recentDays * 24 * 60 * 60_000) {
+      if (ageMs <= recentDays * 24 * 60 * 60_000) {
         const previous = recentLatestByDate.get(date)
         if (!previous || `${createdAt}:${entry.key}` > `${previous.createdAt}:${previous.key}`) recentLatestByDate.set(date, { key: entry.key, createdAt })
-        if (boundaries.length > 0) retained.add(entry.key)
       }
     } catch {
       invalidDescriptors += 1
@@ -592,8 +610,8 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
     const descriptor = descriptors.get(key)
     if (!descriptor) return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-descriptor-unavailable', invalidDescriptors, legacyDescriptors } }
     for (const ref of descriptor.objects) {
-      const object = await store.get(ref.key)
-      if (!object.found || object.contentLength !== ref.bytes || sha256(object.bytes) !== ref.digest) {
+      const object = await store.head(ref.key)
+      if (!object.found || object.contentLength !== ref.bytes || object.metadata?.sha256 !== ref.digest) {
         return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-object-invalid', invalidDescriptors, legacyDescriptors } }
       }
     }
@@ -764,7 +782,7 @@ async function gcEntriesPastGrace(store, entries, nowMs, stagingGraceMs) {
   const eligible = []
   for (const entry of entries) {
     try {
-      const object = await store.get(entry.key)
+      const object = await store.head(entry.key)
       const createdAt = object.metadata?.['created-at']
       if (object.found && typeof createdAt === 'string'
         && nowMs - new Date(createdAt).getTime() >= stagingGraceMs) eligible.push(entry)

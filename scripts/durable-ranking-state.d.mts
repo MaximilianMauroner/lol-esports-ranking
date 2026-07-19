@@ -8,6 +8,7 @@ export type DurableIdentity = {
 
 export type DurableObjectStore = {
   get(key: string): Promise<{ found: boolean; key?: string; etag?: string; bytes?: Uint8Array; contentLength?: number; metadata?: Record<string, string> }>
+  head(key: string): Promise<{ found: boolean; key?: string; etag?: string; contentLength?: number; metadata?: Record<string, string> }>
   put(key: string, bytes: Uint8Array, options?: { ifMatch?: string; ifAbsent?: boolean; metadata?: Record<string, string>; contentType?: string }): Promise<{ written: boolean; conflict?: boolean; key?: string; etag?: string; bytes?: number }>
   list(prefix: string): Promise<Array<{ key: string; bytes: number }>>
   delete(key: string): Promise<boolean>

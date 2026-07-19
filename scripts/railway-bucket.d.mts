@@ -27,6 +27,7 @@ export function readBucketBytes(relativeKey: string, options?: { config?: unknow
   metadata?: Record<string, string>
   missingConfig?: string[]
 }>
+export function headBucketObject(relativeKey: string, options?: { config?: unknown; client?: BucketClient }): Promise<{ found: boolean; key?: string; etag?: string; contentLength?: number; metadata?: Record<string, string>; missingConfig?: string[] }>
 export function writeBucketBytes(relativeKey: string, bytes: Uint8Array | string, options?: {
   ifMatch?: string
   ifNoneMatch?: string
@@ -105,6 +106,7 @@ export function uploadRankingArtifacts(options?: {
   rolloutUpdateId?: string
   clock?: () => string | Date
   beforeActivePointerCas?: () => Promise<void>
+  rawRetentionDays?: number
 }): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>

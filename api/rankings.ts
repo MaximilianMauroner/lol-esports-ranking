@@ -7,6 +7,7 @@ import {
   type SnapshotFilter,
 } from '../src/lib/publicArtifacts/schema'
 import { validatePublicSnapshotShard } from '../src/lib/publicArtifacts/resolver'
+import { resolvePublicArtifactUrl } from '../src/lib/publicArtifacts/url'
 
 type JsonResponse = {
   status(code: number): JsonResponse
@@ -90,7 +91,9 @@ async function readPublicJson(relativePath: string) {
     const manifestUrl = configured.pathname.endsWith('.json')
       ? configured
       : new URL('ranking-summary.json', `${configured.href.replace(/\/$/, '')}/`)
-    const artifactUrl = relativePath === 'ranking-summary.json' ? manifestUrl : new URL(relativePath, manifestUrl)
+    const artifactUrl = relativePath === 'ranking-summary.json'
+      ? manifestUrl
+      : resolvePublicArtifactUrl(`/data/${relativePath}`, manifestUrl.toString())
     const response = await fetch(artifactUrl)
     if (!response.ok) throw new Error(`Artifact fetch failed with ${response.status}`)
     return response.json()

@@ -327,7 +327,6 @@ async function productionRefresh(options: {
     RANKING_REFRESH_LEASE_AUTHORITY_KEY: lease.authorityKey,
     RANKING_REFRESH_LEASE_EXPIRES_AT: lease.lease.expiresAt,
     RANKING_BUCKET_RESTORE_RAW: 'true',
-    RANKING_DURABLE_GC_DRY_RUN: 'false',
     ...((options.forbidLateWork ?? true)
       && (options.scenario === 'no-change' || options.scenario === 'cold-restore')
       && options.mode === 'incremental'

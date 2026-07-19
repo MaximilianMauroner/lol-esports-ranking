@@ -498,7 +498,7 @@ test('maintenance planning bounds raw generations while retaining active, perman
     const bytes = Buffer.from(`${JSON.stringify(value)}\n`)
     const digest = createHash('sha256').update(bytes).digest('hex')
     const key = `raw/objects/${digest}`
-    await store.put(key, bytes, { ifAbsent: true, metadata: { 'created-at': createdAt } })
+    await store.put(key, bytes, { ifAbsent: true, metadata: { 'created-at': createdAt, sha256: digest } })
     return { key, digest, bytes: bytes.byteLength }
   }
   const putDescriptor = async (descriptor: unknown, createdAt: string) => {
@@ -514,7 +514,7 @@ test('maintenance planning bounds raw generations while retaining active, perman
   const ref = (value: { key: string; digest: string; bytes: number }) => ({ kind: 'source', logicalPath: `${value.digest}.json`, ...value })
   const oldDescriptorKey = await putDescriptor({
     schemaVersion: 1, kind: 'raw-generation', createdAt: '2026-01-01T00:00:00.000Z',
-    retention: { date: '2026-01-01', boundaries: [] }, objects: [ref(shared), ref(oldOnly)],
+    retention: { date: '2026-01-01', boundaries: ['self-declared-season'] }, objects: [ref(shared), ref(oldOnly)],
   }, '2026-01-01T00:00:00.000Z')
   const permanentDescriptorKey = await putDescriptor({
     schemaVersion: 1, kind: 'raw-generation', createdAt: '2026-02-01T00:00:00.000Z',
@@ -524,6 +524,14 @@ test('maintenance planning bounds raw generations while retaining active, perman
     schemaVersion: 1, kind: 'raw-generation', createdAt: '2026-07-19T00:00:00.000Z',
     retention: { date: '2026-07-19', boundaries: [] }, objects: [ref(activeOnly)],
   }, '2026-07-19T00:00:00.000Z')
+  const privateGarbageKey = `private/objects/${'a'.repeat(64)}`
+  await store.put(privateGarbageKey, Buffer.from('old private garbage'), {
+    ifAbsent: true,
+    metadata: { 'created-at': '2026-01-01T00:00:00.000Z' },
+  })
+  store.failures.getKeys.add(shared.key)
+  store.failures.getKeys.add(oldOnly.key)
+  store.failures.getKeys.add(activeOnly.key)
   const plan = await planDurableGc({
     store,
     activePointer: {
@@ -533,11 +541,33 @@ test('maintenance planning bounds raw generations while retaining active, perman
     now: '2026-07-20T00:00:00.000Z',
     recentDays: 35,
   })
+  assert.ok(plan.plannedDeletes.some((entry) => entry.key === privateGarbageKey))
   assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldDescriptorKey))
   assert.ok(plan.plannedDeletes.some((entry) => entry.key === oldOnly.key))
   assert.ok(!plan.plannedDeletes.some((entry) => entry.key === shared.key))
   assert.ok(!plan.plannedDeletes.some((entry) => entry.key === activeOnly.key))
   assert.ok(!plan.plannedDeletes.some((entry) => entry.key === permanentDescriptorKey))
+  const withoutPermanentAuthorization = await planDurableGc({
+    store,
+    activePointer: { rawState: { descriptorKey: activeDescriptorKey } },
+    now: '2026-07-20T00:00:00.000Z',
+    recentDays: 35,
+  })
+  assert.ok(withoutPermanentAuthorization.plannedDeletes.some((entry) => entry.key === permanentDescriptorKey))
+  assert.ok(withoutPermanentAuthorization.plannedDeletes.some((entry) => entry.key === shared.key))
+
+  const descriptor = requiredObject(store, activeDescriptorKey)
+  descriptor.bytes = Buffer.from('{"corrupt":true}\n')
+  const unsafe = await planDurableGc({
+    store,
+    activePointer: { rawState: { descriptorKey: activeDescriptorKey } },
+    now: '2026-07-20T00:00:00.000Z',
+    recentDays: 35,
+  })
+  assert.equal(unsafe.safe, false)
+  assert.match(String(unsafe.reason), /raw/)
+  assert.deepEqual(unsafe.plannedDeletes, [])
+  assert.ok(store.objects.has(privateGarbageKey))
 })
 
 test('durable staging uploads only the active local reachability graph', async () => {

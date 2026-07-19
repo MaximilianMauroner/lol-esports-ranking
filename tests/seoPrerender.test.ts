@@ -1,30 +1,28 @@
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import test from 'node:test'
 import { createServer } from 'vite'
-import { renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
+import { renderHomepagePrerenderFromDataDir, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
 import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
+import { PUBLIC_ARTIFACT_FIXTURE_DIR } from './fixtures/publicArtifactBundle.ts'
 
-const generatedArtifactTest = existsSync('.generated/ranking-data/ranking-summary.json') ? test : test.skip
-
-generatedArtifactTest('homepage prerender includes ranking snapshot content from public artifacts', async () => {
-  const html = await renderHomepagePrerenderFromPublicData()
+test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
+  const html = await renderHomepagePrerenderFromDataDir(PUBLIC_ARTIFACT_FIXTURE_DIR)
 
   assert.match(html, /<h1>LoL Esports Power Index<\/h1>/)
-  assert.match(html, /Top teams/)
   assert.match(html, /Region power/)
-  assert.match(html, /Bilibili Gaming|Gen\.G|T1|Hanwha Life Esports/)
-  assert.match(html, /Oracle&#39;s Elixir primary with Leaguepedia Cargo gap-fill/)
+  assert.match(html, /deterministic public artifact test fixture/)
+  assert.doesNotMatch(html, /Seeded sample data is loaded/)
   assert.match(html, new RegExp(escapeRegExp(escapedNotice())))
   assert.doesNotMatch(html, /<script\b/i)
 
-  const manifest = JSON.parse(await readFile('.generated/ranking-data/ranking-summary.json', 'utf8'))
+  const manifest = JSON.parse(await readFile(join(PUBLIC_ARTIFACT_FIXTURE_DIR, 'ranking-summary.json'), 'utf8'))
   const expectedKey = preferredPublicSnapshotKey(Object.keys(manifest.snapshotIndex), manifest.defaultSnapshotKey)
   assert.ok(expectedKey)
   assert.match(html, new RegExp(`data-snapshot-key="${escapeRegExp(expectedKey)}"`))
-  const shardPath = manifest.snapshotIndex[expectedKey].url.split('?', 1)[0].replace(/^\/data\//, '.generated/ranking-data/')
+  const shardPath = join(PUBLIC_ARTIFACT_FIXTURE_DIR, manifest.snapshotIndex[expectedKey].url.split('?', 1)[0].replace(/^\/data\//, ''))
   const shard = JSON.parse(await readFile(shardPath, 'utf8')) as {
     standings: Array<{ team: string; eligibility?: { eligible?: boolean } }>
   }

@@ -1,4 +1,5 @@
 {
+  "buildCommand": "pnpm run build:static",
   "crons": [
     {
       "path": "/api/recalculate-rankings",

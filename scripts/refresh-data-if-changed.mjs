@@ -291,6 +291,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             }
             return state
           },
+          rawRetentionDays: positiveInteger(env.RANKING_DURABLE_RETENTION_DAYS) ?? 35,
         })
         state.bucket = {
           enabled: true,

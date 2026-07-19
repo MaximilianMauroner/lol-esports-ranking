@@ -39,6 +39,7 @@ import {
 } from '../lib/publicArtifacts/resolver'
 import { tournamentEntriesForScope, type TournamentInstanceId } from '../lib/internationalTournaments'
 import { createPublicRankingManifestLoader } from '../lib/publicArtifacts/manifestLoader'
+import { resolvePublicArtifactUrl } from '../lib/publicArtifacts/url'
 
 export type PublicArtifactState<T> =
   | { status: 'idle' }
@@ -805,12 +806,7 @@ function isSeasonYear(value: string) {
 }
 
 function resolveArtifactUrl(url: string, baseUrl: string) {
-  if (/^[a-z][a-z\d+.-]*:/i.test(url) || url.startsWith('/')) return url
-  const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
-  const resolvedBase = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
-    ? baseUrl
-    : new URL(baseUrl, origin).toString()
-  return new URL(url, resolvedBase).toString()
+  return resolvePublicArtifactUrl(url, baseUrl)
 }
 
 function isAbortError(error: unknown) {

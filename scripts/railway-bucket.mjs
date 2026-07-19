@@ -75,6 +75,7 @@ export async function uploadRankingArtifacts({
   rolloutUpdateId,
   clock = () => new Date(),
   beforeActivePointerCas,
+  rawRetentionDays = positiveInteger(process.env.RANKING_DURABLE_RETENTION_DAYS) ?? 35,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -230,7 +231,7 @@ export async function uploadRankingArtifacts({
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
       ...(privateState ? { privateState } : {}),
       ...(rawState ? { rawState } : {}),
-      ...(rawState ? { rawHistory: activatedRawHistory(active.value, rawState, promotedAt) } : {}),
+      ...(rawState ? { rawHistory: activatedRawHistory(active.value, rawState, promotedAt, rawRetentionDays) } : {}),
       ...(resolvedRollout ? { rollout: resolvedRollout } : {}),
       ...(rolloutUpdateId ? { rolloutUpdateId } : {}),
       ...(privateState ? { durableHistory: activatedDurableHistory(active.value, privateState, promotedAt) } : {}),
@@ -373,6 +374,21 @@ export async function readBucketBytes(relativeKey, {
       contentLength: object.ContentLength ?? bytes.byteLength,
       metadata: object.Metadata ?? {},
     }
+  } catch (error) {
+    if (isMissingObjectError(error)) return { found: false, key }
+    throw error
+  }
+}
+
+export async function headBucketObject(relativeKey, {
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
+  const key = bucketKey(config, relativeKey)
+  try {
+    const object = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
+    return { found: true, key, etag: object.ETag, contentLength: object.ContentLength, metadata: object.Metadata ?? {} }
   } catch (error) {
     if (isMissingObjectError(error)) return { found: false, key }
     throw error
@@ -1212,6 +1228,11 @@ function stableObjectJson(value) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableObjectJson(value[key])}`).join(',')}}`
   }
   return JSON.stringify(value)
+}
+
+function positiveInteger(value) {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 function activatedDurableHistory(active, nextPrivateState, activatedAt) {

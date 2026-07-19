@@ -1,20 +1,26 @@
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import test from 'node:test'
 import handler from '../api/rankings.ts'
 import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
+import { PUBLIC_ARTIFACT_FIXTURE_DIR } from './fixtures/publicArtifactBundle.ts'
 
-const generatedArtifactTest = existsSync('.generated/ranking-data/ranking-summary.json') ? test : test.skip
-
-generatedArtifactTest('/api/rankings reads versioned local public artifact URLs', async () => {
-  const manifest = parsePublicRankingManifest(await readJson('.generated/ranking-data/ranking-summary.json'))
+test('/api/rankings reads versioned local public artifact URLs', async () => {
+  const manifest = parsePublicRankingManifest(await readJson(join(PUBLIC_ARTIFACT_FIXTURE_DIR, 'ranking-summary.json')))
   const defaultEntry = manifest.snapshotIndex[manifest.defaultSnapshotKey]
   assert.ok(defaultEntry)
   assert.match(defaultEntry.url, /\?v=/)
 
   const response = new MockResponse()
-  await handler({ method: 'GET', query: { pageSize: '3' } }, response)
+  const previous = process.env.RANKING_PUBLIC_DATA_DIR
+  process.env.RANKING_PUBLIC_DATA_DIR = PUBLIC_ARTIFACT_FIXTURE_DIR
+  try {
+    await handler({ method: 'GET', query: { pageSize: '3' } }, response)
+  } finally {
+    if (previous === undefined) delete process.env.RANKING_PUBLIC_DATA_DIR
+    else process.env.RANKING_PUBLIC_DATA_DIR = previous
+  }
 
   assert.equal(response.statusCode, 200)
   assertRecord(response.body)
