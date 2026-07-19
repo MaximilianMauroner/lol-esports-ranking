@@ -59,6 +59,51 @@ test('released leases allow the next scheduled worker to run immediately', async
   assert.equal((await releaseBucketLease('lease.json', first, { now: '2026-07-11T00:00:12Z', config, client })).reason, 'lease-changed')
 })
 
+test('an active refresh lease rejects unguarded and competing generation promotion', async () => {
+  const client = memoryS3()
+  const publicDir = await mkdtemp(join(tmpdir(), 'lease-promotion-'))
+  await mkdir(join(publicDir, 'scopes'), { recursive: true })
+  await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+  await writeFile(join(publicDir, 'scopes', 'all.json'), '{}\n')
+  const lease = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'winner',
+    now: new Date(),
+    ttlMs: 60_000,
+    config,
+    client,
+  })
+  assert.equal(lease.acquired, true)
+  if (!lease.acquired) return
+  try {
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'unguarded',
+      fencingToken: lease.lease.fencingToken,
+      config,
+      client,
+    }), /matching promotion guard/)
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'competitor',
+      fencingToken: lease.lease.fencingToken,
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: 'competitor', fencingToken: lease.lease.fencingToken, etag: lease.etag },
+      config,
+      client,
+    }), /no longer authorizes promotion/)
+    const promoted = await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'winner',
+      fencingToken: lease.lease.fencingToken,
+      leaseGuard: { key: 'ops/refresh-lease.json', owner: lease.lease.owner, fencingToken: lease.lease.fencingToken, etag: lease.etag },
+      config,
+      client,
+    })
+    assert.equal((promoted.promotion as { promoted?: boolean }).promoted, true)
+  } finally {
+    await rm(publicDir, { recursive: true, force: true })
+  }
+})
+
 test('generation publication uploads immutable data before promoting one pointer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-generation-'))
   const publicDir = join(root, 'public')

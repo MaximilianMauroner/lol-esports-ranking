@@ -174,10 +174,15 @@ export async function restoreDurableGeneration({
   stateDir,
   expectedIdentity,
   validateStateDir,
+  fsOps = {},
   activeKey = 'active-generation.json',
 }) {
   const metrics = { restoredObjects: 0, restoredBytes: 0, cacheHits: 0, cacheMisses: 0 }
   let restorationPath
+  let previousPath
+  let targetPath
+  const writeRestoredFile = fsOps.writeFile ?? writeFile
+  const renameRestoredPath = fsOps.rename ?? rename
   try {
     const activeObject = await store.get(activeKey)
     if (!activeObject.found) return restoreFallback('checkpoint-unavailable', 'durable-active-pointer-missing', metrics)
@@ -219,17 +224,18 @@ export async function restoreDurableGeneration({
       loaded.push({ path: ref.path, bytes: Buffer.from(object.bytes) })
     }
     const target = resolve(stateDir)
+    targetPath = target
     const next = `${target}.restore-${process.pid}-${Date.now()}`
     restorationPath = next
     const previous = `${target}.previous-${process.pid}-${Date.now()}`
+    previousPath = previous
     await bestEffortRemove(next)
     await bestEffortRemove(previous)
-    restorationPath = undefined
     for (const object of loaded) {
       const path = resolve(next, object.path)
       assertInside(next, path)
       await mkdir(dirname(path), { recursive: true })
-      await writeFile(path, object.bytes)
+      await writeRestoredFile(path, object.bytes)
     }
     if (validateStateDir) {
       const stateSummary = await validateStateDir(next, expectedIdentity)
@@ -243,23 +249,43 @@ export async function restoreDurableGeneration({
     }
     let hadPrevious = false
     try {
-      await rename(target, previous)
+      await renameRestoredPath(target, previous)
       hadPrevious = true
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error
     }
     try {
-      await rename(next, target)
+      await renameRestoredPath(next, target)
+      restorationPath = undefined
     } catch (error) {
-      if (hadPrevious) await rename(previous, target)
+      if (hadPrevious) {
+        try {
+          await renameRestoredPath(previous, target)
+          previousPath = undefined
+        } catch {
+          // Preserve the original commit failure; outer cleanup retries rollback.
+        }
+      }
       throw error
     }
     await bestEffortRemove(previous)
+    previousPath = undefined
     metrics.restoredObjects = loaded.length
     metrics.restoredBytes = loaded.reduce((sum, object) => sum + object.bytes.byteLength, 0)
     return { restored: true, active, manifest, metrics }
   } catch (error) {
     if (restorationPath) await bestEffortRemove(restorationPath)
+    if (previousPath && targetPath) {
+      if (!await pathExists(targetPath) && await pathExists(previousPath)) {
+        try {
+          await rename(previousPath, targetPath)
+          previousPath = undefined
+        } catch {
+          // Preserve the original restore error in the typed fallback.
+        }
+      }
+      if (await pathExists(targetPath)) await bestEffortRemove(previousPath)
+    }
     return restoreFallback('checkpoint-corrupt', `durable-restore:${errorMessage(error)}`, metrics)
   }
 }
@@ -311,7 +337,13 @@ export async function promoteDurableGeneration({
       manifestBytes: candidate.manifestBytes,
       stateRoot: candidate.stateRoot,
       identityHash: candidate.identityHash,
+      retention: candidate.manifest.retention,
     },
+    durableHistory: activatedDurableHistory(current, {
+      manifestKey: candidate.manifestKey,
+      manifestDigest: candidate.manifestDigest,
+      retention: candidate.manifest.retention,
+    }, promotedAt),
     rollout,
   }
   const write = await store.put(activeKey, jsonBytes(pointer), {
@@ -385,6 +417,11 @@ export async function planDurableGc({
   const objectEntries = await store.list(`${prefix}/objects`)
   const auditEntries = await store.list(`${prefix}/audits`)
   const activeManifestKey = activePointer?.privateState?.manifestKey
+  const authoritativeBoundaryManifests = new Set(
+    (Array.isArray(activePointer?.durableHistory) ? activePointer.durableHistory : [])
+      .filter((entry) => isRecord(entry) && typeof entry.manifestKey === 'string' && Array.isArray(entry.boundaries) && entry.boundaries.length > 0)
+      .map((entry) => entry.manifestKey),
+  )
   const retainedManifests = new Map()
   let invalidManifests = 0
   for (const entry of generationEntries) {
@@ -394,7 +431,7 @@ export async function planDurableGc({
       const manifest = parseJsonBytes(object.bytes)
       if (validateManifestShape(manifest)) throw new Error('invalid manifest')
       const ageMs = new Date(now).getTime() - new Date(`${manifest.retention.date}T00:00:00.000Z`).getTime()
-      const permanent = manifest.retention.boundaries.length > 0
+      const permanent = authoritativeBoundaryManifests.has(entry.key)
       if (entry.key === activeManifestKey || permanent || ageMs <= recentDays * 24 * 60 * 60_000) retainedManifests.set(entry.key, manifest)
     } catch {
       invalidManifests += 1
@@ -433,28 +470,25 @@ export async function planDurableGc({
   }
 }
 
-export async function executeDurableGc({ store, plan, dryRun = true }) {
+export async function executeDurableGc({ store, plan, dryRun = true, guard }) {
   if (!plan.safe) return { planned: 0, deleted: 0, skipped: 0, bytesDeleted: 0, reason: plan.reason }
-  if (isRecord(plan.activeSnapshot)) {
-    const current = await store.get(plan.activeSnapshot.activeKey)
-    if (!current.found
-      || !plan.activeSnapshot.etag
-      || current.etag !== plan.activeSnapshot.etag) {
-      return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: 'active-pointer-changed' }
-    }
-    const pointer = parseJsonBytes(current.bytes)
-    if (!isRecord(pointer)
-      || pointer.fencingToken !== plan.activeSnapshot.fencingToken
-      || pointer.generationId !== plan.activeSnapshot.generationId
-      || pointer.privateState?.manifestKey !== plan.activeSnapshot.manifestKey) {
-      return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: 'active-pointer-changed' }
-    }
-  }
+  const initialGuardFailure = await durableGcGuardFailure(store, plan, guard)
+  if (initialGuardFailure) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, reason: initialGuardFailure }
   if (dryRun) return { planned: plan.plannedDeletes.length, deleted: 0, skipped: plan.plannedDeletes.length, bytesDeleted: 0, dryRun: true }
   let deleted = 0
   let skipped = 0
   let bytesDeleted = 0
   for (const entry of plan.plannedDeletes) {
+    const guardFailure = await durableGcGuardFailure(store, plan, guard)
+    if (guardFailure) {
+      return {
+        planned: plan.plannedDeletes.length,
+        deleted,
+        skipped: skipped + plan.plannedDeletes.length - deleted - skipped,
+        bytesDeleted,
+        reason: guardFailure,
+      }
+    }
     try {
       if (await store.delete(entry.key)) {
         deleted += 1
@@ -465,6 +499,21 @@ export async function executeDurableGc({ store, plan, dryRun = true }) {
     }
   }
   return { planned: plan.plannedDeletes.length, deleted, skipped, bytesDeleted, dryRun: false }
+}
+
+async function durableGcGuardFailure(store, plan, guard) {
+  if (guard) {
+    const result = await guard()
+    if (result === false || (isRecord(result) && result.valid === false)) return result?.reason ?? 'lease-changed'
+  }
+  if (!isRecord(plan.activeSnapshot)) return undefined
+  const current = await store.get(plan.activeSnapshot.activeKey)
+  if (!current.found || !plan.activeSnapshot.etag || current.etag !== plan.activeSnapshot.etag) return 'active-pointer-changed'
+  const pointer = parseJsonBytes(current.bytes)
+  if (!isRecord(pointer)
+    || pointer.fencingToken !== plan.activeSnapshot.fencingToken
+    || pointer.generationId !== plan.activeSnapshot.generationId
+    || pointer.privateState?.manifestKey !== plan.activeSnapshot.manifestKey) return 'active-pointer-changed'
 }
 
 function validateManifest(manifest, expectedIdentity) {
@@ -483,6 +532,21 @@ function validateAudit(audit, manifest) {
     || audit.identityHash !== manifest.identityHash
     || audit.stateRoot !== manifest.stateRoot
     || stableHash(audit.parity) !== stableHash(manifest.parity)) return 'durable-audit-invalid'
+}
+
+function activatedDurableHistory(active, nextPrivateState, activatedAt) {
+  const history = Array.isArray(active?.durableHistory)
+    ? active.durableHistory.filter((entry) => isRecord(entry) && typeof entry.manifestKey === 'string' && Array.isArray(entry.boundaries))
+    : []
+  const activated = [[active?.privateState, active?.promotedAt ?? activatedAt], [nextPrivateState, activatedAt]].flatMap(([state, stateActivatedAt]) => (
+    isRecord(state) && typeof state.manifestKey === 'string' && Array.isArray(state.retention?.boundaries) && state.retention.boundaries.length > 0
+      ? [{ manifestKey: state.manifestKey, manifestDigest: state.manifestDigest, boundaries: [...new Set(state.retention.boundaries)].sort(), activatedAt: stateActivatedAt }]
+      : []
+  ))
+  const byManifest = new Map(history.map((entry) => [entry.manifestKey, entry]))
+  for (const entry of activated) if (!byManifest.has(entry.manifestKey)) byManifest.set(entry.manifestKey, entry)
+  return [...byManifest.values()]
+    .sort((left, right) => left.manifestKey.localeCompare(right.manifestKey))
 }
 
 function validateManifestShape(manifest) {
@@ -615,6 +679,16 @@ async function bestEffortRemove(path) {
     await rm(path, { recursive: true, force: true })
   } catch {
     // Durable cleanup never changes the restore or promotion result.
+  }
+}
+
+async function pathExists(path) {
+  try {
+    await stat(path)
+    return true
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false
+    throw error
   }
 }
 

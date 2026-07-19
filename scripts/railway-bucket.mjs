@@ -71,6 +71,8 @@ export async function uploadRankingArtifacts({
   rollout,
   rolloutForActive,
   publishGeneration = true,
+  leaseGuard,
+  rolloutUpdateId,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -94,6 +96,7 @@ export async function uploadRankingArtifacts({
   let active
   let idempotentGeneration = false
   if (generationId && publishGeneration) {
+    await requirePromotionLease(leaseGuard, { config, client })
     active = await readBucketJson('active-generation.json', { config, client })
     const currentFence = Number(active.value?.fencingToken ?? 0)
     const incomingFence = Number(fencingToken ?? 0)
@@ -159,16 +162,19 @@ export async function uploadRankingArtifacts({
     await uploadJson(client, config, 'latest-publish.json', publishReceipt)
   }
   if (generationId && publishGeneration) {
+    await requirePromotionLease(leaseGuard, { config, client })
     const resolvedRollout = rolloutForActive ? rolloutForActive(active.value?.rollout) : rollout
+    const promotedAt = new Date().toISOString()
     const nextPointer = {
       ...(active.value && typeof active.value === 'object' && !Array.isArray(active.value) ? active.value : {}),
       schemaVersion: 1,
       generationId,
       fencingToken,
-      promotedAt: new Date().toISOString(),
+      promotedAt,
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
       ...(privateState ? { privateState } : {}),
       ...(resolvedRollout ? { rollout: resolvedRollout } : {}),
+      ...(privateState ? { durableHistory: activatedDurableHistory(active.value, privateState, promotedAt) } : {}),
     }
     if (idempotentGeneration) {
       if (active.value?.manifestKey !== nextPointer.manifestKey
@@ -195,6 +201,27 @@ export async function uploadRankingArtifacts({
     if (!promotion.written) throw new Error('Active generation changed during promotion')
     setActiveGenerationCache(config, client, generationId)
   }
+  let rolloutUpdated = false
+  if (!publishGeneration && rolloutForActive && fencingToken) {
+    await requirePromotionLease(leaseGuard, { config, client })
+    const current = await readBucketJson('active-generation.json', { config, client })
+    if (!current.found || !current.etag) throw new Error('Semantic no-change rollout update requires an active generation')
+    const currentFence = Number(current.value?.fencingToken ?? 0)
+    if (currentFence > Number(fencingToken)) throw new Error('Stale refresh worker cannot update rollout metadata')
+    if (!rolloutUpdateId || current.value?.rolloutUpdateId !== rolloutUpdateId) {
+      const nextPointer = {
+        ...current.value,
+        fencingToken: Number(fencingToken),
+        rollout: rolloutForActive(current.value?.rollout),
+        rolloutUpdatedAt: new Date().toISOString(),
+        ...(rolloutUpdateId ? { rolloutUpdateId } : {}),
+      }
+      const update = await writeBucketJson('active-generation.json', nextPointer, { config, client, ifMatch: current.etag })
+      if (!update.written) throw new Error('Active generation changed during rollout metadata update')
+      rolloutUpdated = true
+      setActiveGenerationCache(config, client, current.value?.generationId ?? null)
+    }
+  }
 
   return {
     enabled: true,
@@ -205,7 +232,7 @@ export async function uploadRankingArtifacts({
     skipped,
     promotion: generationId && publishGeneration
       ? { promoted: true, generationId, fencingToken }
-      : { promoted: false, reason: publishGeneration ? 'unversioned-upload' : 'semantic-no-change' },
+      : { promoted: false, reason: publishGeneration ? 'unversioned-upload' : 'semantic-no-change', ...(rolloutUpdated ? { rolloutUpdated: true } : {}) },
     ...publishMetrics,
   }
 }
@@ -418,6 +445,25 @@ export async function releaseBucketLease(relativeKey, lease, {
   return write.written
     ? { released: true, etag: write.etag }
     : { released: false, reason: write.conflict ? 'lease-changed' : 'bucket-unavailable' }
+}
+
+export async function verifyBucketLease(relativeKey, expected, {
+  now = new Date(),
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  if (!expected || !config.enabled || !client) return { valid: false, reason: 'invalid-lease-guard' }
+  const current = await readBucketJson(relativeKey, { config, client })
+  if (!current.found) return { valid: false, reason: 'lease-missing' }
+  if (expected.etag && current.etag !== expected.etag) return { valid: false, reason: 'lease-etag-changed' }
+  if (current.value?.owner !== expected.owner
+    || Number(current.value?.fencingToken) !== Number(expected.fencingToken)) {
+    return { valid: false, reason: 'lease-owner-changed' }
+  }
+  if (new Date(current.value?.expiresAt).getTime() <= new Date(now).getTime()) {
+    return { valid: false, reason: 'lease-expired' }
+  }
+  return { valid: true, lease: current.value, etag: current.etag }
 }
 
 export async function downloadBucketDirectory({
@@ -898,4 +944,32 @@ function stableObjectJson(value) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableObjectJson(value[key])}`).join(',')}}`
   }
   return JSON.stringify(value)
+}
+
+function activatedDurableHistory(active, nextPrivateState, activatedAt) {
+  const history = Array.isArray(active?.durableHistory)
+    ? active.durableHistory.filter((entry) => entry && typeof entry.manifestKey === 'string' && Array.isArray(entry.boundaries))
+    : []
+  const activated = [[active?.privateState, active?.promotedAt ?? activatedAt], [nextPrivateState, activatedAt]].flatMap(([state, stateActivatedAt]) => (
+    state && typeof state.manifestKey === 'string' && Array.isArray(state.retention?.boundaries) && state.retention.boundaries.length > 0
+      ? [{ manifestKey: state.manifestKey, manifestDigest: state.manifestDigest, boundaries: [...new Set(state.retention.boundaries)].sort(), activatedAt: stateActivatedAt }]
+      : []
+  ))
+  const byManifest = new Map(history.map((entry) => [entry.manifestKey, entry]))
+  for (const entry of activated) if (!byManifest.has(entry.manifestKey)) byManifest.set(entry.manifestKey, entry)
+  return [...byManifest.values()]
+    .sort((left, right) => left.manifestKey.localeCompare(right.manifestKey))
+}
+
+async function requirePromotionLease(leaseGuard, options) {
+  const key = leaseGuard?.key ?? process.env.RANKING_REFRESH_LEASE_KEY ?? 'ops/refresh-lease.json'
+  if (leaseGuard) {
+    const verified = await verifyBucketLease(key, leaseGuard, options)
+    if (!verified.valid) throw new Error(`Refresh lease no longer authorizes promotion: ${verified.reason}`)
+    return
+  }
+  const current = await readBucketJson(key, options)
+  if (current.found && new Date(current.value?.expiresAt).getTime() > Date.now()) {
+    throw new Error('Active refresh lease requires a matching promotion guard')
+  }
 }

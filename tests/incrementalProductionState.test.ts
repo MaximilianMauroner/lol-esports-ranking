@@ -82,20 +82,44 @@ const durableIdentity: DurableIdentity = {
 }
 
 test('durable cold restore rejects outer-valid malformed inner pointers and content objects before swap', async () => {
-  for (const corruption of ['pointer', 'provider-object'] as const) {
+  for (const corruption of ['pointer', 'provider-object', 'mixed-linkage'] as const) {
     const fixture = await createFixture([header, ...firstGame].join('\n'))
     const loaded = await loadIncrementalCommunityImports(fixture.input)
     assert.ok(loaded.promotion)
     await promoteIncrementalState(loaded.promotion)
     const summary = await validateIncrementalStateTree(fixture.stateDir, compatibility.hash)
+    let reachablePaths = summary.reachablePaths
     if (corruption === 'pointer') {
       await writePrivate(activePointerPath(fixture.stateDir), { schemaVersion: 2, kind: 'active-generation', generationHash: 'missing-generation' })
-    } else {
+    } else if (corruption === 'provider-object') {
       const providerPath = summary.reachablePaths.find((path) => path.startsWith('providers/objects/'))
       assert.ok(providerPath)
       const contentHash = providerPath.split('/').at(-1)?.replace(/\.json$/, '')
       assert.ok(contentHash)
       await writePrivate(resolve(fixture.stateDir, providerPath), { schemaVersion: 2, kind: 'provider-ledger', contentHash, payload: {} })
+    } else {
+      const active = await activeGeneration(fixture.stateDir)
+      const providers = record(active.generation.providers)
+      const [providerKey, rawEntry] = Object.entries(providers)[0] ?? []
+      assert.ok(providerKey && rawEntry)
+      const entry = record(rawEntry)
+      const oldLedgerHash = stringField(entry, 'ledgerHash')
+      const oldProviderPath = `providers/objects/${oldLedgerHash}.json`
+      const ledgerEnvelope = record(decodePrivateState(await readFile(resolve(fixture.stateDir, oldProviderPath), 'utf8')))
+      const ledger = record(ledgerEnvelope.payload)
+      const fingerprint = record(ledger.fingerprint)
+      const mixedLedger = { ...ledger, fingerprint: { ...fingerprint, fileId: `mixed-${String(fingerprint.fileId)}` } }
+      const mixedLedgerHash = stableHash(mixedLedger)
+      const mixedProviderPath = `providers/objects/${mixedLedgerHash}.json`
+      await writePrivate(resolve(fixture.stateDir, mixedProviderPath), { schemaVersion: 2, kind: 'provider-ledger', contentHash: mixedLedgerHash, payload: mixedLedger })
+      const mixedGeneration = { ...active.generation, providers: { ...providers, [providerKey]: { ...entry, ledgerHash: mixedLedgerHash } } }
+      await installGeneration(fixture.stateDir, mixedGeneration)
+      const nextActive = await activeGeneration(fixture.stateDir)
+      reachablePaths = summary.reachablePaths.map((path) => (
+        path === oldProviderPath ? mixedProviderPath
+          : path.startsWith('generations/') ? `generations/${String(nextActive.pointer.generationHash)}.json`
+            : path
+      ))
     }
     const store = createMemoryDurableObjectStore()
     const candidate = await stageDurableGeneration({
@@ -104,7 +128,7 @@ test('durable cold restore rejects outer-valid malformed inner pointers and cont
       identity: durableIdentity,
       generatedAt: '2026-07-19T00:00:00.000Z',
       stateSummary: summary,
-      reachablePaths: summary.reachablePaths,
+      reachablePaths,
     })
     await promoteDurableGeneration({ store, candidate, fencingToken: 1, generationId: corruption, promotedAt: '2026-07-19T00:00:01.000Z' })
     const destination = resolve(fixture.root, 'restore-destination')

@@ -5,7 +5,7 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, writeBucketJson } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, readBucketJson, uploadRankingArtifacts, verifyBucketLease, writeBucketJson } from './railway-bucket.mjs'
 import {
   createRailwayDurableObjectStore,
   executeDurableGc,
@@ -39,6 +39,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const args = parseArgs(rawArgs)
   const env = options.env ?? process.env
+  const leaseGuard = refreshLeaseGuard(env)
   const rawDir = resolve(stringArg(args.rawDir ?? env.RANKING_RAW_DIR ?? 'data/raw'))
   const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
@@ -263,10 +264,12 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           ? stringArg(browserManifest?.artifactMeta?.runId)
           : undefined
         const eligibleCandidate = durableCandidate?.eligibility === 'eligible' ? durableCandidate : undefined
+        const rolloutCandidate = eligibleCandidate
+          ?? (semanticNoChange && durableCandidate?.parity?.result === 'match' ? durableCandidate : undefined)
         const bucketPublish = await uploadRankingArtifacts({
           publicDataDir,
           rawDir,
-          fullSnapshotPath: output,
+          fullSnapshotPath: semanticNoChange ? undefined : output,
           manifestPath,
           statePath,
           config: bucketConfig,
@@ -275,6 +278,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           generationId,
           publishGeneration: !semanticNoChange,
           fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
+          ...(leaseGuard ? { leaseGuard } : {}),
+          rolloutUpdateId: durableCandidate?.runId,
           ...(eligibleCandidate ? {
             privateState: {
               manifestKey: eligibleCandidate.manifestKey,
@@ -282,10 +287,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               manifestBytes: eligibleCandidate.manifestBytes,
               stateRoot: eligibleCandidate.stateRoot,
               identityHash: eligibleCandidate.identityHash,
+              retention: eligibleCandidate.retention,
             },
+          } : {}),
+          ...(rolloutCandidate ? {
             rolloutForActive: (previousRollout) => recordRolloutOutcome(previousRollout, {
-              identityHash: eligibleCandidate.identityHash,
-              parity: eligibleCandidate.parity,
+              identityHash: rolloutCandidate.identityHash,
+              parity: rolloutCandidate.parity,
               at: new Date().toISOString(),
             }),
           } : {}),
@@ -340,6 +348,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               store: durableStore,
               plan: gcPlan,
               dryRun: env.RANKING_DURABLE_GC_DRY_RUN === 'true',
+              ...(leaseGuard ? {
+                guard: () => verifyBucketLease(leaseGuard.key, leaseGuard, { config: bucketConfig, client: options.bucketClient }),
+              } : {}),
             })
           } catch (error) {
             state.bucket.durable.gc = { planned: 0, deleted: 0, skipped: 0, reason: `postcommit-gc:${errorMessage(error)}` }
@@ -811,6 +822,7 @@ function positiveInteger(value) {
 function validateDurableCandidateReceipt(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || value.schemaVersion !== 1
+    || typeof value.runId !== 'string'
     || (value.eligibility !== 'eligible' && value.eligibility !== 'no-change' && value.eligibility !== 'ineligible')
     || typeof value.outcome !== 'string'
     || !value.identity || typeof value.identity !== 'object' || Array.isArray(value.identity)
@@ -820,10 +832,21 @@ function validateDurableCandidateReceipt(value) {
     || typeof value.manifestDigest !== 'string'
     || typeof value.manifestBytes !== 'number'
     || typeof value.stateRoot !== 'string'
+    || !value.retention || typeof value.retention !== 'object' || Array.isArray(value.retention)
+    || typeof value.retention.date !== 'string' || !Array.isArray(value.retention.boundaries)
     || !value.metrics || typeof value.metrics !== 'object'
     || !value.parity || typeof value.parity !== 'object')) return undefined
   if (value.eligibility === 'no-change' && typeof value.stateRoot !== 'string') return undefined
   return value
+}
+
+function refreshLeaseGuard(env) {
+  const key = env.RANKING_REFRESH_LEASE_KEY
+  const owner = env.RANKING_REFRESH_LEASE_OWNER
+  const etag = env.RANKING_REFRESH_LEASE_ETAG
+  const fencingToken = Number(env.RANKING_REFRESH_FENCING_TOKEN)
+  if (!key || !owner || !etag || !Number.isFinite(fencingToken) || fencingToken <= 0) return undefined
+  return { key, owner, etag, fencingToken }
 }
 
 function errorMessage(error) {

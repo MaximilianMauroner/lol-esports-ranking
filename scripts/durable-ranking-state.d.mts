@@ -63,6 +63,10 @@ export function restoreDurableGeneration(options: {
   stateDir: string
   expectedIdentity: DurableIdentity
   validateStateDir?: (stateDir: string, expectedIdentity: DurableIdentity) => Promise<{ stateRoot: string; compatibilityHash: string }>
+  fsOps?: {
+    writeFile?: (path: string, bytes: Uint8Array) => Promise<unknown>
+    rename?: (from: string, to: string) => Promise<unknown>
+  }
   activeKey?: string
 }): Promise<Record<string, unknown> & { restored: boolean }>
 export function promoteDurableGeneration(options: {
@@ -86,4 +90,4 @@ export function decideDurableCrunchMode(options: {
 }): { effectiveMode: 'full' | 'incremental-shadow' | 'incremental'; reason: string; activationEligible: boolean }
 export function recordRolloutOutcome(previous: unknown, options: { identityHash: string; parity?: { result: 'match' | 'mismatch'; audit?: boolean }; at: string }): Record<string, unknown>
 export function planDurableGc(options: { store: DurableObjectStore; activePointer?: Record<string, unknown>; activeEtag?: string; activeKey?: string; now: string; recentDays?: number; prefix?: string }): Promise<Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number; kind: string }> }>
-export function executeDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean }): Promise<Record<string, unknown>>
+export function executeDurableGc(options: { store: DurableObjectStore; plan: Record<string, unknown> & { safe: boolean; plannedDeletes: Array<{ key: string; bytes: number }>; reason?: string }; dryRun?: boolean; guard?: () => Promise<boolean | { valid: boolean; reason?: string }> }): Promise<Record<string, unknown>>

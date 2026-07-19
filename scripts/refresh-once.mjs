@@ -82,7 +82,7 @@ try {
   } else {
     const dueMatchIds = duePendingMatchIds(state)
     try {
-      await runRefreshChild(lease.lease.fencingToken)
+      await runRefreshChild(lease)
       state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: new Date() })
       const ledger = await readJson(reconciliationPath)
       state = acknowledgeMatches(state, ledger?.matches ?? [])
@@ -115,17 +115,23 @@ async function persistState(nextState, etag) {
   return result.etag
 }
 
-async function runRefreshChild(fencingToken) {
-  await run(process.execPath, ['scripts/refresh-data-if-changed.mjs'], numberEnv('RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), fencingToken)
+async function runRefreshChild(refreshLease) {
+  await run(process.execPath, ['scripts/refresh-data-if-changed.mjs'], numberEnv('RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), refreshLease)
 }
 
-async function run(command, args, timeoutMs, fencingToken) {
+async function run(command, args, timeoutMs, refreshLease) {
   await new Promise((resolveRun, rejectRun) => {
     const child = spawn(command, args, {
       env: {
         ...process.env,
         RANKING_RECONCILIATION_OUTPUT: reconciliationPath,
-        ...(fencingToken ? { RANKING_REFRESH_FENCING_TOKEN: String(fencingToken) } : {}),
+        ...(refreshLease?.lease ? {
+          RANKING_REFRESH_FENCING_TOKEN: String(refreshLease.lease.fencingToken),
+          RANKING_REFRESH_LEASE_KEY: leaseKey,
+          RANKING_REFRESH_LEASE_OWNER: refreshLease.lease.owner,
+          RANKING_REFRESH_LEASE_ETAG: refreshLease.etag,
+          RANKING_REFRESH_LEASE_EXPIRES_AT: refreshLease.lease.expiresAt,
+        } : {}),
       },
       stdio: 'inherit',
     })

@@ -38,6 +38,60 @@ export async function runDurableBenchmark() {
   return { schemaVersion: 2, scenarios: rows }
 }
 
+export async function runIdentityBootstrapScenario() {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-durable-identity-bootstrap-'))
+  const s3 = await startMemoryS3()
+  try {
+    const baseEnv = bucketEnv(s3.endpoint)
+    const identityA = await productionRefresh({
+      root, s3, scenario: 'no-change', phase: 'base', mode: 'incremental-shadow', fence: 1,
+      metadata: runMetadata('no-change', 'identity-a'), baseEnv, force: true,
+      extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-a' },
+    })
+    await removeContainerState(root)
+    const identityB1 = await productionRefresh({
+      root, s3, scenario: 'no-change', phase: 'base', mode: 'incremental-shadow', fence: 2,
+      metadata: runMetadata('no-change', 'identity-b1'), baseEnv, force: true,
+      extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-b' },
+    })
+    assert.equal(identityB1.candidate.eligibility, 'eligible')
+    assert.equal(record(identityB1.active.rollout).consecutiveShadowSuccesses, 1)
+    assert.notEqual(record(identityA.active.privateState).identityHash, record(identityB1.active.privateState).identityHash)
+    await removeContainerState(root)
+    const identityB2 = await productionRefresh({
+      root, s3, scenario: 'no-change', phase: 'base', mode: 'incremental-shadow', fence: 3,
+      metadata: runMetadata('no-change', 'identity-b2'), baseEnv, force: true,
+      extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-b' },
+    })
+    assert.ok(number(record(identityB2.receipt.durable).restoredBytes) > 0)
+    assert.equal(record(identityB2.active.rollout).consecutiveShadowSuccesses, 2)
+    await removeContainerState(root)
+    const identityB3 = await productionRefresh({
+      root, s3, scenario: 'no-change', phase: 'base', mode: 'incremental-shadow', fence: 4,
+      metadata: runMetadata('no-change', 'identity-b3'), baseEnv, force: true,
+      extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-b' },
+    })
+    assert.equal(record(identityB3.active.rollout).consecutiveShadowSuccesses, 3)
+    await removeContainerState(root)
+    const activated = await productionRefresh({
+      root, s3, scenario: 'no-change', phase: 'changed', mode: 'incremental', fence: 5,
+      metadata: runMetadata('no-change', 'identity-b-active'), baseEnv, force: false,
+      extraEnv: { RANKING_INCREMENTAL_PIPELINE_VERSION: 'identity-b' },
+    })
+    assert.equal(record(activated.receipt.durable).promotion, 'no-change')
+    assert.equal(activated.active.generationId, identityB3.active.generationId)
+    return {
+      identityChanged: record(identityA.active.privateState).identityHash !== record(identityB1.active.privateState).identityHash,
+      firstBSuccesses: number(record(identityB1.active.rollout).consecutiveShadowSuccesses),
+      restoredBBytes: number(record(identityB2.receipt.durable).restoredBytes),
+      activatedPromotion: record(activated.receipt.durable).promotion,
+    }
+  } finally {
+    await s3.close()
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
 async function runScenario(scenario: ScenarioName) {
   const root = await mkdtemp(join(tmpdir(), `ranking-durable-production-${scenario}-`))
   const s3 = await startMemoryS3()
@@ -117,6 +171,7 @@ async function productionRefresh(options: {
   metadata: { generatedAt: string; runId: string }
   baseEnv: NodeJS.ProcessEnv
   force: boolean
+  extraEnv?: NodeJS.ProcessEnv
 }) {
   const container = join(options.root, `container-${options.fence}`)
   const rawDir = join(container, 'raw')
@@ -127,12 +182,16 @@ async function productionRefresh(options: {
   const beforePublicPuts = options.s3.putKeys.filter((key) => key.includes('/generations/') && key.includes('/data/')).length
   const env: NodeJS.ProcessEnv = {
     ...options.baseEnv,
+    ...options.extraEnv,
     RANKING_CRUNCH_MODE: options.mode,
     RANKING_INCREMENTAL_STATE_DIR: stateDir,
     RANKING_STATIC_PLAYER_JSON: rosterPath,
     RANKING_REFRESH_FENCING_TOKEN: String(options.fence),
     RANKING_BUCKET_RESTORE_RAW: 'true',
     RANKING_DURABLE_GC_DRY_RUN: 'false',
+    ...((options.scenario === 'no-change' || options.scenario === 'cold-restore') && options.mode === 'incremental'
+      ? { RANKING_TEST_FORBID_LATE_INCREMENTAL_WORK: 'true' }
+      : {}),
   }
   await refreshDataIfChanged([
     '--raw-dir', rawDir,
@@ -165,6 +224,7 @@ async function productionRefresh(options: {
   const state = JSON.parse(await readFile(statePath, 'utf8'))
   const candidate = JSON.parse(await readFile(join(stateDir, 'durable-candidate.json'), 'utf8'))
   return {
+    active,
     activeGeneration: String(active.generationId),
     hasPrivateState: Boolean(active.privateState),
     candidate,

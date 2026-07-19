@@ -26,6 +26,8 @@ import { scanLeaguepediaJson, scanLolEsportsJson } from '../src/lib/incremental/
 import type { IncrementalFallbackReason } from '../src/lib/incremental/types.ts'
 import {
   isIncrementalReducerCheckpoint,
+  canonicalPrefixHash,
+  fullMatchCanonicalPrefixHash,
   privateStateHash,
   type IncrementalReducerCheckpoint,
   type PersistedReducerCheckpointCore,
@@ -114,6 +116,7 @@ type StateGeneration = {
 export type IncrementalStateTreeSummary = {
   generationHash: string
   compatibilityHash: string
+  providerRoot: string
   canonicalRoot: string
   contextRoot: string
   componentRoot: string
@@ -267,7 +270,9 @@ export async function loadIncrementalCommunityImports({
     const providerFallback = results.find((result) => result.fallback)?.fallback
     if (removedFallback || providerFallback) return { fallback: removedFallback ?? providerFallback, metrics }
 
-    const successful = results.filter((result): result is ProviderPathResult & { ledger: ProviderFileLedger; entry: ProviderGenerationEntry } => Boolean(result.ledger && result.entry))
+    const successful = results
+      .filter((result): result is ProviderPathResult & { ledger: ProviderFileLedger; entry: ProviderGenerationEntry } => Boolean(result.ledger && result.entry))
+      .toSorted((left, right) => providerKey(left.entry.provider, left.entry.sourcePath).localeCompare(providerKey(right.entry.provider, right.entry.sourcePath)))
     const ledgers = successful.map((result) => result.ledger)
     const canonical = loadCanonicalState({ stateDir, ledgers, previous: active })
     const generation: StateGeneration = {
@@ -370,6 +375,29 @@ export async function describeIncrementalStateTransition(
   verifyCanonicalLedger(canonicalLedger)
   const next = stateTreeSummary(pointer.generationHash, generation, canonicalLedger)
   return { previous, next, semanticNoChange: previous?.stateRoot === next.stateRoot }
+}
+
+export async function describeIncrementalInputTransition(
+  promotion: IncrementalStatePromotion,
+  stateDir: string,
+): Promise<{ providerRoot: string; canonicalRoot: string; contextRoot: string }> {
+  const pointer = parseActivePointer(decodePrivateState(promotion.pointerWrite.contents))
+  const generationPath = resolve(stateDir, 'generations', `${pointer.generationHash}.json`)
+  const generationWrite = promotion.stagedWrites.find((write) => write.path === generationPath)
+  if (!generationWrite) throw new Error('Pending incremental generation is unavailable for input inspection')
+  const generation = contentPayload<StateGeneration>(generationWrite.contents, 'state-generation', pointer.generationHash)
+  verifyGeneration(generation)
+  const canonicalPath = resolve(stateDir, 'canonical', 'objects', `${generation.canonical.ledgerHash}.json`)
+  const canonicalWrite = promotion.stagedWrites.find((write) => write.path === canonicalPath)
+  const canonicalLedger = canonicalWrite
+    ? contentPayload<CanonicalLedger>(canonicalWrite.contents, 'canonical-ledger', generation.canonical.ledgerHash)
+    : await readContentObject<CanonicalLedger>(canonicalPath, 'canonical-ledger', generation.canonical.ledgerHash)
+  verifyCanonicalLedger(canonicalLedger)
+  return {
+    providerRoot: generation.canonical.providerRoot,
+    canonicalRoot: canonicalLedger.rootHash,
+    contextRoot: stableHash(canonicalLedger.contextDigests),
+  }
 }
 
 export function attachIncrementalReducerCheckpoint(
@@ -623,6 +651,7 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
     generation.canonical.ledgerHash,
   )
   verifyCanonicalLedger(canonicalLedger)
+  validateGenerationLinkage(generation, providers, canonicalLedger)
   const reducerCheckpoints: IncrementalReducerCheckpoint[] = []
   for (const entry of generation.reducerCheckpoints ?? []) {
     const core = await readContentObject<PersistedReducerCheckpointCore>(
@@ -699,6 +728,7 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
     }
     playerCheckpoints.push(checkpoint)
   }
+  validateCheckpointLinkage(canonicalLedger, reducerCheckpoints, playerCheckpoints)
   const artifactCache = generation.artifactCache
     ? await readContentObject<PersistedArtifactNode[]>(
         resolve(stateDir, 'artifacts', 'caches', `${generation.artifactCache.cacheHash}.json`),
@@ -912,7 +942,51 @@ function verifyCanonicalLedger(ledger: CanonicalLedger) {
   if (ledger.rootHash !== recomputeCanonicalRoot(ledger)) throw new Error('Canonical ledger semantic root mismatch')
 }
 
+function validateGenerationLinkage(
+  generation: StateGeneration,
+  providers: Map<string, LoadedProviderState>,
+  canonicalLedger: CanonicalLedger,
+) {
+  const ledgers = [...providers.values()].map(({ entry, ledger }) => {
+    if (entry.provider !== ledger.fingerprint.provider
+      || basename(entry.sourcePath) !== ledger.fingerprint.fileId
+      || entry.signature.byteLength !== ledger.fingerprint.byteLength) {
+      throw new Error(`Provider ledger identity mismatch for ${entry.sourcePath}`)
+    }
+    return ledger
+  })
+  const providerRoot = stableHash(ledgers.map(providerCanonicalState))
+  if (providerRoot !== generation.canonical.providerRoot) throw new Error('Canonical provider root mismatch')
+  const observations = ledgers.flatMap((ledger) => ledger.observations)
+  const importedTeams = mergeTeamProfiles(ledgers.map((ledger) => ledger.teams))
+  const schedules = observations.flatMap((observation) => observation.kind === 'schedule' ? [observation.payload] : [])
+  const contextDigests = canonicalContextDigests({ identities: knownTeamIdentities, profiles: importedTeams, eventWeightContext: transparentGprModelMetadata, schedules })
+  const canonical = reconcileCanonicalObservations({ observations, importedTeams })
+  const rebuilt = buildCanonicalLedger({ canonical, observations, contextDigests })
+  if (stableHash(rebuilt) !== generation.canonical.ledgerHash || stableHash(rebuilt) !== stableHash(canonicalLedger)) {
+    throw new Error('Canonical reconciliation linkage mismatch')
+  }
+}
+
+function validateCheckpointLinkage(
+  canonicalLedger: CanonicalLedger,
+  reducerCheckpoints: IncrementalReducerCheckpoint[],
+  playerCheckpoints: IncrementalPlayerCheckpoint[],
+) {
+  for (const checkpoint of reducerCheckpoints) {
+    if (checkpoint.canonicalPrefixHash !== canonicalPrefixHash(canonicalLedger.matches, checkpoint.processedDate)) {
+      throw new Error('Reducer checkpoint canonical linkage mismatch')
+    }
+  }
+  for (const checkpoint of playerCheckpoints) {
+    if (checkpoint.canonicalPrefixHash !== fullMatchCanonicalPrefixHash(canonicalLedger.matches, checkpoint.processedDate)) {
+      throw new Error('Player checkpoint canonical linkage mismatch')
+    }
+  }
+}
+
 function stateTreeSummary(generationHash: string, generation: StateGeneration, canonicalLedger: CanonicalLedger): IncrementalStateTreeSummary {
+  const providerRoot = generation.canonical.providerRoot
   const canonicalRoot = canonicalLedger.rootHash
   const contextRoot = stableHash(canonicalLedger.contextDigests)
   const componentState = {
@@ -921,7 +995,7 @@ function stateTreeSummary(generationHash: string, generation: StateGeneration, c
     snapshotModelCache: generation.snapshotModelCache,
   }
   const componentRoot = stableHash(componentState)
-  const stateRoot = stableHash({ canonicalRoot, contextRoot, componentRoot })
+  const stateRoot = stableHash({ providerRoot, canonicalRoot, contextRoot, componentRoot })
   const reachablePaths = [
     'active-generation.json',
     `generations/${generationHash}.json`,
@@ -951,6 +1025,7 @@ function stateTreeSummary(generationHash: string, generation: StateGeneration, c
   return {
     generationHash,
     compatibilityHash: generation.compatibility.hash,
+    providerRoot,
     canonicalRoot,
     contextRoot,
     componentRoot,

@@ -64,6 +64,11 @@ export function releaseBucketLease(relativeKey: string, lease: {
   config?: unknown
   client?: BucketClient
 }): Promise<{ released: boolean; reason?: string; etag?: string }>
+export function verifyBucketLease(relativeKey: string, expected: {
+  owner: string
+  fencingToken: number
+  etag?: string
+}, options?: Record<string, unknown>): Promise<{ valid: boolean; reason?: string; lease?: unknown; etag?: string }>
 export function uploadRankingArtifacts(options?: {
   publicDataDir?: string
   rawDir?: string
@@ -80,6 +85,8 @@ export function uploadRankingArtifacts(options?: {
   rollout?: Record<string, unknown>
   rolloutForActive?: (previous: unknown) => Record<string, unknown>
   publishGeneration?: boolean
+  leaseGuard?: { key: string; owner: string; fencingToken: number; etag?: string }
+  rolloutUpdateId?: string
 }): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>

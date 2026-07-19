@@ -29,5 +29,9 @@ test('durable benchmark covers every Phase 5 change class with public parity', a
   assert.equal(coldRestore.publicUploads, 0)
   assert.equal(coldRestore.privateUploadedObjects, 0)
   assert.ok(coldRestore.restoredBytes > 0)
-  assert.ok(result.scenarios.every((scenario) => scenario.cacheHits > 0))
+  assert.equal(noChange.cacheHits, 0)
+  assert.equal(coldRestore.cacheHits, 0)
+  assert.ok(result.scenarios
+    .filter((scenario) => scenario.scenario !== 'no-change' && scenario.scenario !== 'cold-restore')
+    .every((scenario) => scenario.cacheHits > 0))
 })

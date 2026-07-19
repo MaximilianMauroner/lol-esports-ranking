@@ -9,6 +9,7 @@ import {
   attachIncrementalPlayerCheckpoints,
   attachIncrementalReducerCheckpoint,
   attachIncrementalSnapshotModelCache,
+  describeIncrementalInputTransition,
   describeIncrementalStateTransition,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
@@ -111,8 +112,9 @@ const leaguepediaWarnings = manifestSourceWarnings('leaguepedia', manifest?.warn
 const lolEsportsWarnings = manifestSourceWarnings('lolesports', manifest?.warnings)
 const authorities = providerAuthorities(manifest)
 const codeProvenanceHash = await canonicalCodeProvenanceHash()
+const pipelineVersion = process.env.RANKING_INCREMENTAL_PIPELINE_VERSION ?? 'incremental-canonical-v2'
 const compatibility = createCrunchCompatibility({
-  pipelineVersion: 'incremental-canonical-v2',
+  pipelineVersion,
   importerVersion: 'community-importers-v1',
   reconciliationVersion: 'community-reconciliation-v1',
   ratingUniverseVersion: 'published-rating-universe-v1',
@@ -144,6 +146,7 @@ let durableRolloutReason = 'durable-state-disabled'
 let durableBootstrapEligible = false
 let durableRestoreFailed = false
 let previousDurableRetentionBoundaries: Array<{ processedDate?: string; classes: string[] }> = []
+let previousDurableSemanticState: Record<string, unknown> | undefined
 if (durableStore && requestedMode !== 'full') {
   const restore = await restoreDurableGeneration({
     store: durableStore,
@@ -160,6 +163,7 @@ if (durableStore && requestedMode !== 'full') {
     durableActivePointer = recordValue(restore.active)
     const restoredManifest = recordValue(restore.manifest)
     const restoredSemanticState = recordValue(restoredManifest.semanticState)
+    previousDurableSemanticState = restoredSemanticState
     previousDurableRetentionBoundaries = retentionBoundaryValues(restoredSemanticState.retentionBoundaries)
     const rollout = decideDurableCrunchMode({
       requestedMode,
@@ -178,9 +182,7 @@ if (durableStore && requestedMode !== 'full') {
     const fallback = durableFallback(restore.fallback)
     receipt.durable.fallback = fallback
     receipt.checkpoint.fallback = fallback
-    const fallbackDetail = fallback.kind === 'checkpoint-unavailable' ? fallback.detail : ''
     durableBootstrapEligible = requestedMode === 'incremental-shadow'
-      && (fallbackDetail === 'durable-active-pointer-missing' || fallbackDetail === 'durable-private-pointer-missing')
     durableRestoreFailed = !durableBootstrapEligible
     mode = durableBootstrapEligible ? 'incremental-shadow' : 'full'
     durableRolloutReason = fallback.kind
@@ -299,19 +301,23 @@ const runFull = async () => buildCrunchOutput(await loadFullCommunityImports())
 let pendingPromotion: IncrementalStatePromotion | undefined
 let incrementalAttemptMetrics: SourceMetrics | undefined
 let previousArtifactCache: PersistedArtifactNode[] = []
+let preloadedIncrementalResult: Awaited<ReturnType<typeof loadIncrementalCommunityImports>> | undefined
+const loadIncrementalResult = () => loadIncrementalCommunityImports({
+  stateDir: privateStateDir,
+  oracleCsvPaths,
+  leaguepediaJsonPaths,
+  lolEsportsJsonPaths,
+  oracleRetrievedAt: manifest?.generatedAt ?? runMetadata.generatedAt,
+  now: runMetadata.generatedAt,
+  authorities,
+  compatibility,
+})
 const runIncremental = async () => {
-  const result = await loadIncrementalCommunityImports({
-    stateDir: privateStateDir,
-    oracleCsvPaths,
-    leaguepediaJsonPaths,
-    lolEsportsJsonPaths,
-    oracleRetrievedAt: manifest?.generatedAt ?? runMetadata.generatedAt,
-    now: runMetadata.generatedAt,
-    authorities,
-    compatibility,
-  })
+  const result = preloadedIncrementalResult ?? await loadIncrementalResult()
+  preloadedIncrementalResult = undefined
   incrementalAttemptMetrics = result.metrics
   previousArtifactCache = result.artifactCache ?? []
+  assertLateIncrementalWorkAllowed('reducers-and-models')
   const modelRun = result.imports
     ? incrementalGlobalModels(result.imports, result.reducerCheckpoints, result.playerCheckpoints)
     : undefined
@@ -345,6 +351,22 @@ const runIncremental = async () => {
   }
   if (!result.imports) return { fallback: { kind: 'dependency-unknown' as const, dependency: 'provider-ledger-output' } }
   return { output: incrementalOutput! }
+}
+
+if (mode === 'incremental'
+  && typeof previousDurableSemanticState?.inputRoot === 'string'
+  && typeof previousDurableSemanticState.stateRoot === 'string') {
+  preloadedIncrementalResult = await loadIncrementalResult()
+  const current = preloadedIncrementalResult
+  if (current.imports && current.promotion && !current.fallback) {
+    const roots = await describeIncrementalInputTransition(current.promotion, privateStateDir)
+    const staticPlayerRoot = stableHash(staticPlayerRosters)
+    const inputRoot = stableHash({ canonicalRoot: roots.canonicalRoot, contextRoot: roots.contextRoot, staticPlayerRoot })
+    if (inputRoot === previousDurableSemanticState.inputRoot) {
+      await finalizeEarlyNoChange({ ...current, imports: current.imports, promotion: current.promotion }, inputRoot, staticPlayerRoot)
+      process.exit(0)
+    }
+  }
 }
 const orchestration = await orchestrateCrunch<CrunchOutput>({
   mode,
@@ -422,6 +444,7 @@ if (reconciliationOutput) {
     matches: reconciliationEntries(importedMatches),
   }, null, 2)}\n`)
 }
+assertLateIncrementalWorkAllowed('public-artifact-serialization')
 const publicPlan = createPublicArtifactWritePlan(snapshot, { runMetadata })
 let incrementalPlan = incrementalCandidate
   ? createPublicArtifactWritePlan(incrementalCandidate.snapshot, { runMetadata })
@@ -450,6 +473,7 @@ if (orchestration.shadowOutput) {
 let writesToPublish = publicPlan.writes
 let dagFallback = false
 if (incrementalPlan && incrementalCandidate) {
+  assertLateIncrementalWorkAllowed('artifact-dag')
   const dagResult = buildPublicArtifactDag({
     actual: incrementalPlan,
     semantic: createSemanticPublicArtifactWritePlan(incrementalCandidate.snapshot),
@@ -540,16 +564,30 @@ try {
     throw new Error('Eligible incremental state was not promoted locally')
   }
   if (durableStore && incrementalOutcomeEligible && !semanticNoChange && await isDirectory(privateStateDir)) {
-    const stateSummary = await validateIncrementalStateTree(privateStateDir, durableIdentity.compatibilityHash)
+    const validatedState = await validateIncrementalStateTree(privateStateDir, durableIdentity.compatibilityHash)
+    const staticPlayerRoot = stableHash(staticPlayerRosters)
+    const stateSummary = {
+      ...validatedState,
+      staticPlayerRoot,
+      inputRoot: stableHash({
+        canonicalRoot: validatedState.canonicalRoot,
+        contextRoot: validatedState.contextRoot,
+        staticPlayerRoot,
+      }),
+    }
+    const candidateParity = {
+      ...(durableParity ?? { kind: 'not-run' }),
+      ...(durableBootstrapEligible ? { bootstrapReason: durableRolloutReason } : {}),
+    }
     const candidate = await stageDurableGeneration({
       store: durableStore,
       stateDir: privateStateDir,
       identity: durableIdentity,
       generatedAt: runMetadata.generatedAt,
-      outcome: durableBootstrapEligible ? 'shadow-bootstrap-match' : orchestration.executedMode === 'incremental' ? 'incremental-success' : 'shadow-match',
+      outcome: durableBootstrapEligible ? `shadow-bootstrap-match:${durableRolloutReason}` : orchestration.executedMode === 'incremental' ? 'incremental-success' : 'shadow-match',
       stateSummary,
       reachablePaths: stateSummary.reachablePaths,
-      parity: durableParity ?? { kind: 'not-run', rolloutReason: durableRolloutReason },
+      parity: candidateParity,
       retention: {
         date: runMetadata.generatedAt.slice(0, 10),
         boundaries: durableRetentionBoundaries(snapshot, stateSummary.retentionBoundaries, previousDurableRetentionBoundaries),
@@ -557,7 +595,7 @@ try {
     })
     recordDurableCandidateMetrics(receipt, candidate)
     receipt.durable.promotion = 'staged'
-    if (durableCandidateOutput) await atomicWriteFile(resolve(durableCandidateOutput), `${JSON.stringify(durableCandidateReceipt(candidate, durableParity), null, 2)}\n`)
+    if (durableCandidateOutput) await atomicWriteFile(resolve(durableCandidateOutput), `${JSON.stringify(durableCandidateReceipt(candidate, candidateParity), null, 2)}\n`)
   } else if (durableCandidateOutput) {
     const eligibility = semanticNoChange ? 'no-change' : 'ineligible'
     const outcome = semanticNoChange
@@ -570,6 +608,7 @@ try {
                 : 'incremental-output-unavailable'
     await atomicWriteFile(resolve(durableCandidateOutput), `${JSON.stringify({
       schemaVersion: 1,
+      runId: runMetadata.runId,
       eligibility,
       outcome,
       identity: durableIdentity,
@@ -613,6 +652,89 @@ type SourceMetrics = {
   observationsReused: number | null
   reducerStateBytesRead: number
   reducerStateBytesWritten: number
+}
+
+async function finalizeEarlyNoChange(
+  result: Awaited<ReturnType<typeof loadIncrementalCommunityImports>> & { imports: IncrementalCommunityImports; promotion: IncrementalStatePromotion },
+  inputRoot: string,
+  staticPlayerRoot: string,
+) {
+  receipt.requestedMode = requestedMode
+  receipt.executedMode = 'incremental'
+  receipt.sources = { filesScanned: result.metrics.filesScanned, bytesScanned: result.metrics.bytesScanned }
+  receipt.observations = {
+    parsed: result.metrics.rowsParsed,
+    normalized: result.metrics.observationsNormalized,
+    reused: result.metrics.observationsReused,
+  }
+  receipt.reducers = { livePlayerEdgeRows: 0, teamRows: 0, playerRows: 0 }
+  receipt.snapshotInputs = {
+    rankingRequests: 0,
+    rankingResultCacheHits: 0,
+    rankingReducerRuns: 0,
+    rankingRows: 0,
+    playerRequests: 0,
+    playerResultCacheHits: 0,
+    playerReducerRuns: 0,
+    playerRows: 0,
+    directRankingBuilds: 0,
+    directPlayerBuilds: 0,
+  }
+  receipt.artifacts = { reused: 0, regenerated: 0 }
+  receipt.bucket.bytesRead = result.metrics.reducerStateBytesRead
+  receipt.bucket.bytesWritten = 0
+  receipt.durable.reusedUnits = result.metrics.observationsReused
+  receipt.durable.replayedUnits = 0
+  receipt.durable.promotion = 'no-change'
+  receipt.attempts.push({
+    engine: 'incremental',
+    outcome: 'succeeded',
+    durationMs: 0,
+    sources: {
+      filesScanned: result.metrics.filesScanned,
+      bytesScanned: result.metrics.bytesScanned,
+      rowsParsed: result.metrics.rowsParsed,
+      observationsNormalized: result.metrics.observationsNormalized,
+      observationsReused: result.metrics.observationsReused,
+      reducerStateBytesRead: result.metrics.reducerStateBytesRead,
+      reducerStateBytesWritten: 0,
+    },
+  })
+  if (reconciliationOutput) {
+    await mkdir(dirname(reconciliationOutput), { recursive: true })
+    await writeFile(reconciliationOutput, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: runMetadata.generatedAt,
+      matches: reconciliationEntries(result.imports.canonical.importedMatches),
+    }, null, 2)}\n`)
+  }
+  if (durableCandidateOutput) {
+    await atomicWriteFile(resolve(durableCandidateOutput), `${JSON.stringify({
+      schemaVersion: 1,
+      runId: runMetadata.runId,
+      eligibility: 'no-change',
+      outcome: 'semantic-input-no-change',
+      identity: durableIdentity,
+      identityHash: stableHash(durableIdentity),
+      stateRoot: previousDurableSemanticState!.stateRoot,
+      inputRoot,
+      staticPlayerRoot,
+      parity: { kind: 'not-run' },
+      metrics: { uploadedObjects: 0, uploadedBytes: 0, skippedObjects: 0, skippedBytes: 0 },
+    }, null, 2)}\n`)
+  }
+  recordCrunchTiming(receipt, 'crunch-total', crunchStartedAt, performance.now())
+  if (receiptOutput) {
+    await mkdir(dirname(receiptOutput), { recursive: true })
+    await writeFile(receiptOutput, `${JSON.stringify(receipt, null, 2)}\n`)
+  }
+  console.log('Canonical/context inputs unchanged; reused active public and private ranking authority.')
+}
+
+function assertLateIncrementalWorkAllowed(phase: string) {
+  if (process.env.RANKING_TEST_FORBID_LATE_INCREMENTAL_WORK === 'true') {
+    throw new Error(`Late incremental work invoked after no-change eligibility: ${phase}`)
+  }
 }
 
 type CommunityImports = {
@@ -956,9 +1078,10 @@ function recordDurableCandidateMetrics(target: IncrementalCrunchReceipt, candida
   target.durable.skippedBytes = candidate.metrics.skippedBytes
 }
 
-function durableCandidateReceipt(candidate: DurableCandidate, parity: typeof durableParity) {
+function durableCandidateReceipt(candidate: DurableCandidate, parity: Record<string, unknown> | undefined) {
   return {
     schemaVersion: 1,
+    runId: runMetadata.runId,
     eligibility: candidate.eligibility,
     outcome: candidate.outcome,
     manifestKey: candidate.manifestKey,
@@ -966,6 +1089,7 @@ function durableCandidateReceipt(candidate: DurableCandidate, parity: typeof dur
     manifestBytes: candidate.manifestBytes,
     stateRoot: candidate.stateRoot,
     identityHash: candidate.identityHash,
+    retention: candidate.manifest.retention,
     identity: durableIdentity,
     metrics: candidate.metrics,
     parity: parity ?? { kind: 'not-run' },

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -113,6 +113,43 @@ test('cold restore rejects missing, corrupt, partial, and incompatible generatio
   }
 })
 
+test('restore validator, write, and commit failures preserve the target and leak no restore directories', async () => {
+  const fixture = await stateFixture('restore-cleanup')
+  const store = createMemoryDurableObjectStore()
+  const candidate = await stageDurableGeneration({ store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z' })
+  await promoteDurableGeneration({ store, candidate, fencingToken: 1, generationId: 'cleanup', promotedAt: '2026-07-19T00:00:01.000Z' })
+  try {
+    for (const failure of ['validator', 'write', 'rename'] as const) {
+      const destination = join(fixture.root, `cleanup-${failure}`)
+      await mkdir(destination, { recursive: true })
+      await writeFile(join(destination, 'sentinel.txt'), failure)
+      let failedCommit = false
+      const restored = await restoreDurableGeneration({
+        store,
+        stateDir: destination,
+        expectedIdentity: identity,
+        ...(failure === 'validator' ? { validateStateDir: async () => { throw new Error('validator-injected') } } : {}),
+        ...(failure === 'write' ? { fsOps: { writeFile: async () => { throw new Error('write-injected') } } } : {}),
+        ...(failure === 'rename' ? { fsOps: {
+          rename: async (from, to) => {
+            if (!failedCommit && from.includes('.restore-')) {
+              failedCommit = true
+              throw new Error('rename-injected')
+            }
+            return rename(from, to)
+          },
+        } } : {}),
+      })
+      assert.equal(restored.restored, false)
+      assert.match(fallbackDetail(restored), new RegExp(`${failure === 'validator' ? 'validator' : failure}-injected`))
+      assert.equal(await readFile(join(destination, 'sentinel.txt'), 'utf8'), failure)
+      assert.deepEqual((await readdir(fixture.root)).filter((name) => name.startsWith(`cleanup-${failure}.restore-`) || name.startsWith(`cleanup-${failure}.previous-`)), [])
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
 test('durable promotion is fenced, CAS-safe, interruption-safe, and skips exact no-change', async () => {
   const fixture = await stateFixture('promotion')
   const store = createMemoryDurableObjectStore()
@@ -218,18 +255,32 @@ test('reachability GC protects active, recent, and permanent-boundary generation
     const permanent = await stageDurableGeneration({
       store, stateDir: fixture.stateDir, identity, generatedAt: '2026-02-01T00:00:00.000Z', retention: { date: '2026-02-01', boundaries: ['month-end'] },
     })
+    const permanentPromotion = await promoteDurableGeneration({
+      store, candidate: permanent, fencingToken: 1, generationId: 'gc-permanent', promotedAt: '2026-02-01T00:00:01.000Z', parityOutcome: { result: 'match' },
+    })
+    assert.equal(permanentPromotion.promoted, true)
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'unactivated-boundary')
+    const unactivatedBoundary = await stageDurableGeneration({
+      store, stateDir: fixture.stateDir, identity, generatedAt: '2026-03-01T00:00:00.000Z', retention: { date: '2026-03-01', boundaries: ['season-split'] },
+    })
     await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'active')
     const activeCandidate = await stageDurableGeneration({
       store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z', retention: { date: '2026-07-19', boundaries: [] },
     })
     const promotion = await promoteDurableGeneration({
-      store, candidate: activeCandidate, fencingToken: 1, generationId: 'gc-active', promotedAt: '2026-07-19T00:00:01.000Z', parityOutcome: { result: 'match' },
+      store, candidate: activeCandidate, fencingToken: 2, generationId: 'gc-active', promotedAt: '2026-07-19T00:00:01.000Z', parityOutcome: { result: 'match' },
     })
     assert.equal(promotion.promoted, true)
     const pointer = parseObject(requiredObject(store, 'active-generation.json').bytes)
     const plan = await planDurableGc({ store, activePointer: pointer, now: '2026-07-20T00:00:00.000Z', recentDays: 35 })
     assert.equal(plan.safe, true)
     assert.ok(plan.plannedDeletes.some((entry) => entry.key === old.manifestKey))
+    assert.ok(plan.plannedDeletes.some((entry) => entry.key === unactivatedBoundary.manifestKey))
+    assert.ok(plan.plannedDeletes.some((entry) => entry.key === unactivatedBoundary.manifest.audit.key))
+    const retainedObjectKeys = new Set([...permanent.manifest.objects, ...activeCandidate.manifest.objects].map((entry) => entry.key))
+    const unactivatedUniqueObjects = unactivatedBoundary.manifest.objects.filter((entry) => !retainedObjectKeys.has(entry.key))
+    assert.ok(unactivatedUniqueObjects.length > 0)
+    assert.ok(unactivatedUniqueObjects.every((object) => plan.plannedDeletes.some((entry) => entry.key === object.key)))
     assert.ok(!plan.plannedDeletes.some((entry) => entry.key === permanent.manifestKey))
     assert.ok(!plan.plannedDeletes.some((entry) => entry.key === permanent.manifest.audit.key))
     assert.ok(!plan.plannedDeletes.some((entry) => entry.key === activeCandidate.manifestKey))
@@ -255,6 +306,59 @@ test('reachability GC protects active, recent, and permanent-boundary generation
     assert.equal(raced.reason, 'active-pointer-changed')
     assert.equal(raced.deleted, 0)
     assert.ok(store.objects.has(activeCandidate.manifestKey))
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
+test('GC rechecks active authority before the first delete and preserves a concurrent winner graph', async () => {
+  const fixture = await stateFixture('gc-race')
+  const store = createMemoryDurableObjectStore()
+  try {
+    const winnerCandidate = await stageDurableGeneration({
+      store, stateDir: fixture.stateDir, identity, generatedAt: '2026-01-01T00:00:00.000Z', retention: { date: '2026-01-01', boundaries: [] },
+    })
+    await writeFile(join(fixture.stateDir, 'canonical', 'objects', 'canonical-a.json'), 'initial-active')
+    const activeCandidate = await stageDurableGeneration({
+      store, stateDir: fixture.stateDir, identity, generatedAt: '2026-07-19T00:00:00.000Z', retention: { date: '2026-07-19', boundaries: [] },
+    })
+    await promoteDurableGeneration({ store, candidate: activeCandidate, fencingToken: 1, generationId: 'initial', promotedAt: '2026-07-19T00:00:01.000Z' })
+    const activeObject = requiredObject(store, 'active-generation.json')
+    const active = parseObject(activeObject.bytes)
+    const plan = await planDurableGc({
+      store,
+      activePointer: active,
+      activeEtag: activeObject.etag,
+      now: '2026-07-20T00:00:00.000Z',
+      recentDays: 1,
+    })
+    assert.ok(plan.plannedDeletes.some((entry) => entry.key === winnerCandidate.manifestKey))
+    let guardCalls = 0
+    const swept = await executeDurableGc({
+      store,
+      plan,
+      dryRun: false,
+      guard: async () => {
+        guardCalls += 1
+        if (guardCalls === 2) {
+          await store.put('active-generation.json', Buffer.from(`${JSON.stringify({
+            schemaVersion: 1,
+            generationId: 'concurrent-winner',
+            fencingToken: 2,
+            privateState: {
+              manifestKey: winnerCandidate.manifestKey,
+              manifestDigest: winnerCandidate.manifestDigest,
+              manifestBytes: winnerCandidate.manifestBytes,
+            },
+          })}\n`), { ifMatch: activeObject.etag })
+        }
+        return { valid: true }
+      },
+    })
+    assert.equal(swept.reason, 'active-pointer-changed')
+    assert.equal(swept.deleted, 0)
+    assert.ok(store.objects.has(winnerCandidate.manifestKey))
+    for (const ref of winnerCandidate.manifest.objects) assert.ok(store.objects.has(ref.key))
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
   }
