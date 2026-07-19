@@ -7,7 +7,7 @@ import {
   type SnapshotFilter,
 } from '../src/lib/publicArtifacts/schema'
 import { validatePublicSnapshotShard } from '../src/lib/publicArtifacts/resolver'
-import { resolvePublicArtifactUrl } from '../src/lib/publicArtifacts/url'
+import { normalizeExternalRankingManifestUrl, resolvePublicArtifactUrl } from '../src/lib/publicArtifacts/url'
 
 type JsonResponse = {
   status(code: number): JsonResponse
@@ -87,13 +87,10 @@ export function filterForScope(scope: string): SnapshotFilter {
 async function readPublicJson(relativePath: string) {
   const externalBase = process.env.RANKING_DATA_URL ?? process.env.VITE_RANKING_DATA_URL
   if (externalBase) {
-    const configured = new URL(externalBase)
-    const manifestUrl = configured.pathname.endsWith('.json')
-      ? configured
-      : new URL('ranking-summary.json', `${configured.href.replace(/\/$/, '')}/`)
+    const manifestUrl = normalizeExternalRankingManifestUrl(externalBase)
     const artifactUrl = relativePath === 'ranking-summary.json'
       ? manifestUrl
-      : resolvePublicArtifactUrl(`/data/${relativePath}`, manifestUrl.toString())
+      : resolvePublicArtifactUrl(`/data/${relativePath}`, manifestUrl)
     const response = await fetch(artifactUrl)
     if (!response.ok) throw new Error(`Artifact fetch failed with ${response.status}`)
     return response.json()
@@ -104,6 +101,13 @@ async function readPublicJson(relativePath: string) {
 async function readPublicJsonFromUrl(url: string) {
   if (!url.startsWith('/data/')) {
     const response = await fetch(url, { headers: { Accept: 'application/json' } })
+    if (!response.ok) throw new Error(`Artifact fetch failed with ${response.status}`)
+    return response.json()
+  }
+  const externalBase = process.env.RANKING_DATA_URL ?? process.env.VITE_RANKING_DATA_URL
+  if (externalBase) {
+    const artifactUrl = resolvePublicArtifactUrl(url, normalizeExternalRankingManifestUrl(externalBase))
+    const response = await fetch(artifactUrl, { headers: { Accept: 'application/json' } })
     if (!response.ok) throw new Error(`Artifact fetch failed with ${response.status}`)
     return response.json()
   }

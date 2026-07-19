@@ -31,6 +31,37 @@ test('/api/rankings reads versioned local public artifact URLs', async () => {
   assert.equal((response.body.standings as unknown[]).length <= 3, true)
 })
 
+test('/api/rankings normalizes external directory and explicit manifest configurations', async () => {
+  const originalFetch = globalThis.fetch
+  const previous = process.env.RANKING_DATA_URL
+  const requests: string[] = []
+  globalThis.fetch = async (input) => {
+    const url = String(input)
+    requests.push(url)
+    const parsed = new URL(url)
+    const relativePath = parsed.pathname.replace(/^\/x\//, '')
+    return new Response(await readFile(join(PUBLIC_ARTIFACT_FIXTURE_DIR, relativePath)), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  try {
+    for (const configured of ['https://cdn.example/x/', 'https://cdn.example/x/ranking-summary.json']) {
+      requests.length = 0
+      process.env.RANKING_DATA_URL = configured
+      const response = new MockResponse()
+      await handler({ method: 'GET', query: { pageSize: '1' } }, response)
+      assert.equal(response.statusCode, 200)
+      assert.equal(requests[0], 'https://cdn.example/x/ranking-summary.json')
+      assert.match(requests[1] ?? '', /^https:\/\/cdn\.example\/x\/scopes\/all\.json\?v=/)
+    }
+  } finally {
+    globalThis.fetch = originalFetch
+    if (previous === undefined) delete process.env.RANKING_DATA_URL
+    else process.env.RANKING_DATA_URL = previous
+  }
+})
+
 async function readJson(file: string): Promise<unknown> {
   return JSON.parse(await readFile(file, 'utf8'))
 }

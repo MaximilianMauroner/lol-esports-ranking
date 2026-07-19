@@ -27,11 +27,12 @@ export function readBucketBytes(relativeKey: string, options?: { config?: unknow
   metadata?: Record<string, string>
   missingConfig?: string[]
 }>
-export function headBucketObject(relativeKey: string, options?: { config?: unknown; client?: BucketClient }): Promise<{ found: boolean; key?: string; etag?: string; contentLength?: number; metadata?: Record<string, string>; missingConfig?: string[] }>
+export function headBucketObject(relativeKey: string, options?: { config?: unknown; client?: BucketClient }): Promise<{ found: boolean; key?: string; etag?: string; contentLength?: number; metadata?: Record<string, string>; storageVerifiedSha256?: string; missingConfig?: string[] }>
 export function writeBucketBytes(relativeKey: string, bytes: Uint8Array | string, options?: {
   ifMatch?: string
   ifNoneMatch?: string
   metadata?: Record<string, string>
+  checksumSHA256?: string
   contentType?: string
   config?: unknown
   client?: BucketClient

@@ -16,7 +16,7 @@ export async function runRankingStateGc({
   config = bucketConfigFromEnv(env),
   client = createBucketClient(config),
   owner = `${env.RAILWAY_DEPLOYMENT_ID ?? 'operator'}:${process.pid}:${randomUUID()}`,
-  output = (message) => process.stdout.write(message),
+  output = writeStdout,
   planGc = planDurableGc,
   now = () => new Date(),
 } = {}) {
@@ -30,13 +30,12 @@ export async function runRankingStateGc({
       confirmedTerminated: flags.has('--confirm-terminated'), config, client,
     })
     if (!result.released) throw new Error(`Maintenance recovery refused: ${result.reason}`)
-    output(`Recovered maintenance authority ${recoveryOwner}/${fencingToken}\n`)
+    await output(`Recovered maintenance authority ${recoveryOwner}/${fencingToken}\n`)
     return result
   }
 
   const acquired = await acquireBucketMaintenance({ owner, now: now(), config, client })
   if (!acquired.acquired || !acquired.maintenance) throw new Error(`Maintenance acquisition refused: ${acquired.reason}`)
-  output(`Maintenance acquired owner=${owner} fencingToken=${acquired.maintenance.fencingToken}\nRecovery after confirming this process terminated: pnpm data:gc -- --recover ${owner} ${acquired.maintenance.fencingToken} --confirm-terminated\n`)
   const store = createRailwayDurableObjectStore({ config, client })
   const planningOptions = async () => {
     const active = await readBucketJson('active-generation.json', { config, client })
@@ -50,6 +49,7 @@ export async function runRankingStateGc({
     }
   }
   try {
+    await output(`Maintenance acquired owner=${owner} fencingToken=${acquired.maintenance.fencingToken}\nRecovery after confirming this process terminated: pnpm data:gc -- --recover ${owner} ${acquired.maintenance.fencingToken} --confirm-terminated\n`)
     const plan = await planGc(await planningOptions())
     if (!plan.safe) throw new Error(`Maintenance planning failed closed: ${plan.reason}`)
     const dryRun = !flags.has('--execute')
@@ -62,17 +62,23 @@ export async function runRankingStateGc({
       bucketClient: client,
       replan: async () => planGc(await planningOptions()),
     })
-    output(`${JSON.stringify({ owner, fencingToken: acquired.maintenance.fencingToken, dryRun, ...result })}\n`)
+    await output(`${JSON.stringify({ owner, fencingToken: acquired.maintenance.fencingToken, dryRun, ...result })}\n`)
     return result
   } finally {
     const released = await releaseBucketMaintenance(acquired.maintenance, { config, client })
-    if (!released.released) output(`Maintenance authority remains active: ${released.reason}\n`)
+    if (!released.released) await output(`Maintenance authority remains active: ${released.reason}\n`)
   }
 }
 
 function positiveInteger(value) {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function writeStdout(message) {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(message, (error) => error ? reject(error) : resolve())
+  })
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) await runRankingStateGc()

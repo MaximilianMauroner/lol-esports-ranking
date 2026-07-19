@@ -37,7 +37,7 @@ The frontend loads static JSON from:
 /data/ranking-summary.json
 ```
 
-Static hosts must set `VITE_RANKING_DATA_URL` to an external manifest URL or artifact directory, or run `pnpm data:materialize` before deployment. `pnpm static:preflight` fails clearly when neither source exists. `public/data/` is an ignored, disposable materialization target.
+Static hosts must set `VITE_RANKING_DATA_URL` to an external manifest URL or artifact directory, or run `pnpm data:materialize` before deployment. External directories are normalized to their `ranking-summary.json`. `pnpm static:preflight` fails clearly when neither source exists; with local materialized data it also runs the current release-data golden checks. An external-only preflight can validate only the configured HTTPS URL, so validate that remote artifact graph separately before release. `public/data/` is an ignored, disposable materialization target.
 
 Static data can be generated without source inputs for a no-data smoke fixture:
 
@@ -61,6 +61,8 @@ git push
 `data:download` stores raw provider files under `data/raw/` and writes `data/raw/manifest.json`. Raw provider downloads are local inputs and are ignored by Git; the manifest is committed for provenance. `data:crunch` writes the full local audit artifact to `data/derived/ranking-snapshot.full.json` and the deployable client bundle to ignored `.generated/ranking-data/`.
 
 Do not commit generated browser payloads, raw provider downloads, `data/derived/ranking-snapshot.full.json`, or other audit artifacts. Railway publishes the validated bundle to its private bucket. `pnpm data:materialize` validates the manifest and every referenced companion before copying the active local bundle into ignored `public/data/` for static hosting.
+
+Run `pnpm test:release-data` after materializing `.generated/ranking-data`. Unlike the clean deterministic suite, this explicit gate intentionally fails when release data is absent and owns current named-team, named-event, ordering, and coverage golden claims.
 
 `data:download` treats Oracle's Elixir as the primary game-level source and Leaguepedia as the backup/gap-fill source. It discovers the public Oracle CSV files from the Oracle Google Drive folder, downloads the CSVs that overlap the requested date range, then downloads Leaguepedia Cargo data for the same range. If Google Drive returns a quota/HTML page instead of a CSV for a file, that file is skipped with a manifest warning instead of being recorded as usable data.
 
@@ -115,7 +117,7 @@ Use a Railway Storage Bucket for generated artifacts that should not live in Git
 - `rankings/latest-publish.json`: legacy/unversioned publish audit metadata.
 - `rankings/artifacts/latest-full.json`: optional full audit/calculation artifact, uploaded only when `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT=true`.
 
-Raw and private-state objects are globally content-addressed and uploaded create-only with digest verification. The active pointer references exact raw and private manifests, so interrupted uploads remain unreachable and stale workers cannot replace a successor's raw baseline. Retention keeps the active manifest, the latest valid manifest per recent UTC day, and only pointer-authorized permanent month-end/season/international boundaries. Newly staged unreachable objects receive a bounded grace period before collection; missing or corrupt reachability data fails the entire sweep closed.
+Raw and private-state objects are globally content-addressed and uploaded create-only with digest verification. Raw uploads request an S3-managed SHA-256 checksum; maintenance verifies the independently returned checksum through `HEAD`, and falls back to a byte read plus SHA-256 when an S3-compatible bucket does not support stored checksums. User metadata is never treated as integrity proof. The active pointer references exact raw and private manifests, so interrupted uploads remain unreachable and stale workers cannot replace a successor's raw baseline. Retention keeps the active manifest, the latest valid manifest per recent UTC day, and only pointer-authorized permanent month-end/season/international boundaries. Newly staged unreachable objects receive a bounded grace period before collection; missing or corrupt reachability data fails the entire sweep closed.
 
 Railway Bucket egress is free only when clients download directly from the bucket, such as through presigned URLs. When the web service proxies bucket objects to users, Railway counts that as service egress. For this app, keep the same-origin `/data/*` proxy and enable Railway CDN caching on the web service so cache hits are served from the edge without reaching the service. Presigned GET URLs are useful for ad hoc large downloads, but they add URL-expiry and browser CORS concerns to the app's JSON contract.
 

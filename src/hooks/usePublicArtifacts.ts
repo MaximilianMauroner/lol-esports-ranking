@@ -39,7 +39,7 @@ import {
 } from '../lib/publicArtifacts/resolver'
 import { tournamentEntriesForScope, type TournamentInstanceId } from '../lib/internationalTournaments'
 import { createPublicRankingManifestLoader } from '../lib/publicArtifacts/manifestLoader'
-import { resolvePublicArtifactUrl } from '../lib/publicArtifacts/url'
+import { normalizeExternalRankingManifestUrl, resolvePublicArtifactUrl } from '../lib/publicArtifacts/url'
 
 export type PublicArtifactState<T> =
   | { status: 'idle' }
@@ -84,7 +84,7 @@ type TournamentMovementCacheEntry =
   | { status: 'missing'; message: string }
   | { status: 'error'; message: string }
 
-const DATA_URL = import.meta.env.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
+const DATA_URL = normalizeExternalRankingManifestUrl(import.meta.env.VITE_RANKING_DATA_URL)
 const PLAYERS_URL = import.meta.env.VITE_PLAYER_DATA_URL || '/data/entities/players.json'
 const TEAM_HISTORY_INDEX_URL = import.meta.env.VITE_TEAM_HISTORY_INDEX_URL || import.meta.env.VITE_TEAM_HISTORY_URL || '/data/history/team-series/index.json'
 const REGION_HISTORY_URL = import.meta.env.VITE_REGION_HISTORY_URL || '/data/history/region-series.json'

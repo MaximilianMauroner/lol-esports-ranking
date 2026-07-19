@@ -387,8 +387,22 @@ export async function headBucketObject(relativeKey, {
   if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
   const key = bucketKey(config, relativeKey)
   try {
-    const object = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
-    return { found: true, key, etag: object.ETag, contentLength: object.ContentLength, metadata: object.Metadata ?? {} }
+    let object
+    try {
+      object = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key, ChecksumMode: 'ENABLED' }))
+    } catch (error) {
+      if (!isUnsupportedChecksumError(error)) throw error
+      object = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
+    }
+    const storageVerifiedSha256 = checksumBase64ToHex(object.ChecksumSHA256)
+    return {
+      found: true,
+      key,
+      etag: object.ETag,
+      contentLength: object.ContentLength,
+      metadata: object.Metadata ?? {},
+      ...(storageVerifiedSha256 ? { storageVerifiedSha256 } : {}),
+    }
   } catch (error) {
     if (isMissingObjectError(error)) return { found: false, key }
     throw error
@@ -399,6 +413,7 @@ export async function writeBucketBytes(relativeKey, bytes, {
   ifMatch,
   ifNoneMatch,
   metadata,
+  checksumSHA256,
   contentType = 'application/octet-stream',
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
@@ -407,16 +422,26 @@ export async function writeBucketBytes(relativeKey, bytes, {
   const key = bucketKey(config, relativeKey)
   const body = Buffer.from(bytes)
   try {
-    const result = await client.send(new PutObjectCommand({
+    const input = {
       Bucket: config.bucket,
       Key: key,
       Body: body,
       ContentLength: body.byteLength,
       ContentType: contentType,
+      ...(checksumSHA256 ? { ChecksumSHA256: checksumSHA256 } : {}),
       ...(metadata ? { Metadata: metadata } : {}),
       ...(ifMatch ? { IfMatch: ifMatch } : {}),
       ...(ifNoneMatch ? { IfNoneMatch: ifNoneMatch } : {}),
-    }))
+    }
+    let result
+    try {
+      result = await client.send(new PutObjectCommand(input))
+    } catch (error) {
+      if (!checksumSHA256 || !isUnsupportedChecksumError(error)) throw error
+      const fallbackInput = { ...input }
+      delete fallbackInput.ChecksumSHA256
+      result = await client.send(new PutObjectCommand(fallbackInput))
+    }
     return { written: true, key, etag: result.ETag, bytes: body.byteLength }
   } catch (error) {
     if (isPreconditionError(error)) return { written: false, conflict: true, key }
@@ -882,8 +907,24 @@ async function stageRawGeneration(client, config, { rawDir, manifestPath, stateP
 }
 
 async function uploadImmutableBytes(client, config, relativeKey, bytes, contentType, digest, createdAt) {
-  const result = await writeBucketBytes(relativeKey, bytes, { config, client, ifNoneMatch: '*', contentType, metadata: { sha256: digest, ...(createdAt ? { 'created-at': createdAt } : {}) } })
+  const result = await writeBucketBytes(relativeKey, bytes, {
+    config,
+    client,
+    ifNoneMatch: '*',
+    contentType,
+    checksumSHA256: Buffer.from(digest, 'hex').toString('base64'),
+    metadata: { sha256: digest, ...(createdAt ? { 'created-at': createdAt } : {}) },
+  })
   if (result.written) return { status: 'uploaded', key: result.key, bytes: bytes.byteLength, contentType, digest }
+  const existingHead = await headBucketObject(relativeKey, { config, client })
+  if (existingHead.found && existingHead.contentLength === bytes.byteLength) {
+    if (existingHead.storageVerifiedSha256 === digest) {
+      return { status: 'unchanged', key: existingHead.key, bytes: bytes.byteLength, contentType, digest }
+    }
+    if (typeof existingHead.storageVerifiedSha256 === 'string') {
+      throw new Error(`Immutable raw object collision: ${relativeKey}`)
+    }
+  }
   const existing = await readBucketBytes(relativeKey, { config, client })
   if (!existing.found || existing.contentLength !== bytes.byteLength || sha256Bytes(existing.bytes) !== digest) {
     throw new Error(`Immutable raw object collision: ${relativeKey}`)
@@ -1204,6 +1245,19 @@ function setActiveGenerationCache(config, client, value) {
 
 function isPreconditionError(error) {
   return error?.name === 'PreconditionFailed' || error?.$metadata?.httpStatusCode === 412
+}
+
+function isUnsupportedChecksumError(error) {
+  return error?.name === 'NotImplemented'
+    || error?.name === 'InvalidRequest'
+    || error?.name === 'InvalidArgument'
+    || error?.$metadata?.httpStatusCode === 501
+}
+
+function checksumBase64ToHex(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) return undefined
+  const bytes = Buffer.from(value, 'base64')
+  return bytes.byteLength === 32 && bytes.toString('base64') === value ? bytes.toString('hex') : undefined
 }
 
 async function bodyText(body) {

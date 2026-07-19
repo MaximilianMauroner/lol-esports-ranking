@@ -20,13 +20,14 @@ import { replaceDirectory } from './replace-directory.ts'
 export async function validatePublicArtifactBundle(sourceDir: string) {
   const root = resolve(sourceDir)
   const manifest = parsePublicRankingManifest(await readJson(resolve(root, 'ranking-summary.json')))
+  const runId = manifest.artifactMeta?.runId
+  if (!runId) throw new Error('Generated ranking manifest is missing exact run provenance')
   const spine = {
-    runId: manifest.artifactMeta?.runId,
+    runId,
     generatedAt: manifest.generatedAt,
     modelVersion: manifest.model.version,
     modelConfigHash: manifest.model.configHash,
   }
-  if (!spine.runId) throw new Error('Generated ranking manifest is missing exact run provenance')
   const pending = ['ranking-summary.json']
   const visited = new Set<string>()
   while (pending.length > 0) {
@@ -93,14 +94,17 @@ function validateProvenance(value: unknown, spine: { runId: string; generatedAt:
   const artifact = record(value)
   const meta = record(artifact.artifactMeta)
   const model = optionalRecord(artifact.model)
-  const actual = {
-    runId: meta.runId,
-    generatedAt: artifact.generatedAt ?? meta.generatedAt,
-    modelVersion: artifact.modelVersion ?? model.version ?? meta.modelVersion,
-    modelConfigHash: artifact.modelConfigHash ?? model.configHash ?? meta.modelConfigHash,
+  const representations = {
+    runId: [artifact.runId, meta.runId],
+    generatedAt: [artifact.generatedAt, meta.generatedAt],
+    modelVersion: [artifact.modelVersion, model.version, meta.modelVersion],
+    modelConfigHash: [artifact.modelConfigHash, model.configHash, meta.modelConfigHash],
   }
   for (const key of ['runId', 'generatedAt', 'modelVersion', 'modelConfigHash'] as const) {
-    if (actual[key] !== spine[key]) throw new Error(`Public artifact provenance mismatch for ${path}: ${key}`)
+    const present = representations[key].filter((entry) => entry !== undefined)
+    if (present.length === 0 || present.some((entry) => entry !== spine[key])) {
+      throw new Error(`Public artifact provenance mismatch for ${path}: ${key}`)
+    }
   }
 }
 

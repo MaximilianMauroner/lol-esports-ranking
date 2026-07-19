@@ -50,7 +50,7 @@ export function createMemoryDurableObjectStore() {
     async head(key) {
       const object = objects.get(key)
       return object
-        ? { found: true, key, etag: object.etag, contentLength: object.bytes.byteLength, metadata: { ...object.metadata } }
+        ? { found: true, key, etag: object.etag, contentLength: object.bytes.byteLength, metadata: { ...object.metadata }, storageVerifiedSha256: sha256(object.bytes) }
         : { found: false, key }
     },
     async put(key, bytes, options = {}) {
@@ -611,7 +611,15 @@ async function planRawGc({ store, activePointer, generationEntries, objectEntrie
     if (!descriptor) return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-descriptor-unavailable', invalidDescriptors, legacyDescriptors } }
     for (const ref of descriptor.objects) {
       const object = await store.head(ref.key)
-      if (!object.found || object.contentLength !== ref.bytes || object.metadata?.sha256 !== ref.digest) {
+      if (!object.found || object.contentLength !== ref.bytes) {
+        return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-object-invalid', invalidDescriptors, legacyDescriptors } }
+      }
+      if (typeof object.storageVerifiedSha256 === 'string' && object.storageVerifiedSha256 !== ref.digest) {
+        return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-object-invalid', invalidDescriptors, legacyDescriptors } }
+      }
+      if (object.storageVerifiedSha256 === ref.digest) continue
+      const fallback = await store.get(ref.key)
+      if (!fallback.found || fallback.contentLength !== ref.bytes || sha256(fallback.bytes) !== ref.digest) {
         return { plannedDeletes: [], metrics: { safe: false, reason: 'retained-raw-object-invalid', invalidDescriptors, legacyDescriptors } }
       }
     }

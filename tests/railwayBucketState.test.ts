@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -65,6 +66,7 @@ import { runRankingStateGc } from '../scripts/gc-ranking-state.mjs'
 test('maintenance prints exact recovery identity before a planning failure', async () => {
   const client = memoryS3()
   let output = ''
+  let recoveryOutputFlushed = false
   await assert.rejects(runRankingStateGc({
     args: [],
     env: {},
@@ -72,8 +74,15 @@ test('maintenance prints exact recovery identity before a planning failure', asy
     client,
     owner: 'printed-owner',
     now: () => new Date('2026-07-20T00:00:00.000Z'),
-    output: (message: string) => { output += message },
-    planGc: async () => { throw new Error('injected planning failure') },
+    output: async (message: string) => {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      output += message
+      recoveryOutputFlushed = true
+    },
+    planGc: async () => {
+      assert.equal(recoveryOutputFlushed, true)
+      throw new Error('injected planning failure')
+    },
   }), /injected planning failure/)
   assert.match(output, /^Maintenance acquired owner=printed-owner fencingToken=1\n/)
   assert.match(output, /--recover printed-owner 1 --confirm-terminated/)
@@ -791,6 +800,9 @@ test('raw generations are immutable, deduplicated, and become authoritative only
     const firstDescriptor = client.objects.get(`rankings/${firstActive.rawState.descriptorKey}`)
     assert.ok(firstDescriptor)
     const firstRawObjects = [...client.objects].filter(([key]) => key.startsWith('rankings/raw/objects/'))
+    assert.ok(firstRawObjects.length > 0)
+    assert.equal(firstRawObjects.every(([key]) => client.checksumPutKeys.includes(key)), true)
+    assert.equal(client.checksumPutKeys.includes(`rankings/${firstActive.rawState.descriptorKey}`), true)
 
     assert.equal((await releaseBucketLease('ops/refresh-lease.json', firstLease, { config, client })).released, true)
     await writeFile(sourcePath, 'gameid,result\ng1,0\n')
@@ -812,7 +824,10 @@ test('raw generations are immutable, deduplicated, and become authoritative only
     assert.deepEqual(client.objects.get('rankings/active-generation.json'), activeBeforeInterrupted)
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).rawState.descriptorKey, firstActive.rawState.descriptorKey)
     assert.ok(firstRawObjects.every(([key, value]) => client.objects.get(key)?.body === value.body))
+    assert.equal(client.getKeys.some((key) => key.startsWith('rankings/raw/objects/')), false)
     assert.equal((await releaseBucketLease('ops/refresh-lease.json', interruptedLease, { config, client })).released, true)
+    client.behavior.rejectChecksumRequests = true
+    client.behavior.headChecksums = false
     const secondLease = await acquireRefreshAuthority(client, 'raw-second', '2026-07-30T00:00:00.000Z')
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
@@ -829,6 +844,46 @@ test('raw generations are immutable, deduplicated, and become authoritative only
     })
     const secondActive = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
     assert.equal(secondActive.rawHistory.some((entry: { descriptorKey: string }) => entry.descriptorKey === firstActive.rawState.descriptorKey), false)
+    const durableStore = createRailwayDurableObjectStore({ config, client })
+    const fallbackPlan = await planDurableGc({
+      store: durableStore,
+      activePointer: secondActive,
+      now: '2026-07-30T00:00:00.000Z',
+      recentDays: 1,
+    })
+    assert.equal(fallbackPlan.safe, true)
+    client.behavior.rejectChecksumRequests = false
+    client.behavior.headChecksums = true
+    const privateGarbageKey = `private/objects/${'b'.repeat(64)}`
+    await durableStore.put(privateGarbageKey, Buffer.from('old private garbage'), {
+      ifAbsent: true,
+      metadata: { 'created-at': '2026-01-01T00:00:00.000Z' },
+    })
+    const safeWithGarbage = await planDurableGc({
+      store: durableStore,
+      activePointer: secondActive,
+      now: '2026-07-30T00:00:00.000Z',
+      recentDays: 1,
+    })
+    assert.ok(safeWithGarbage.plannedDeletes.some((entry) => entry.key === privateGarbageKey))
+    const descriptor = JSON.parse(client.objects.get(`rankings/${secondActive.rawState.descriptorKey}`)!.body)
+    const rawObjectKey = `rankings/${descriptor.objects[0].key}`
+    const rawObject = client.objects.get(rawObjectKey)
+    assert.ok(rawObject)
+    const originalRawBytes = Buffer.byteLength(rawObject.body)
+    assert.equal(rawObject.metadata?.sha256, descriptor.objects[0].digest)
+    rawObject.body = `${rawObject.body.startsWith('x') ? 'y' : 'x'}${rawObject.body.slice(1)}`
+    assert.equal(Buffer.byteLength(rawObject.body), originalRawBytes)
+    assert.equal(rawObject.metadata?.sha256, descriptor.objects[0].digest)
+    const unsafe = await planDurableGc({
+      store: durableStore,
+      activePointer: secondActive,
+      now: '2026-07-30T00:00:00.000Z',
+      recentDays: 1,
+    })
+    assert.equal(unsafe.safe, false)
+    assert.deepEqual(unsafe.plannedDeletes, [])
+    assert.equal(client.objects.has(`rankings/${privateGarbageKey}`), true)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -858,28 +913,52 @@ function refreshGuard(lease: Awaited<ReturnType<typeof acquireRefreshAuthority>>
 
 function memoryS3(options: { failPutKeys?: Set<string> } = {}) {
   const objects = new Map<string, { body: string; etag: string; metadata?: Record<string, string> }>()
+  const behavior = { headChecksums: true, rejectChecksumRequests: false }
+  const getKeys: string[] = []
+  const checksumPutKeys: string[] = []
   let version = 0
   return {
     objects,
+    behavior,
+    getKeys,
+    checksumPutKeys,
     async send(command: unknown) {
       const { name, input } = commandDetails(command)
       const key = String(input.Key)
       if (name === 'GetObjectCommand') {
+        getKeys.push(key)
         const object = objects.get(key)
         if (!object) throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
         return { Body: Readable.from([object.body]), ETag: object.etag, ContentLength: Buffer.byteLength(object.body), Metadata: object.metadata }
       }
       if (name === 'HeadObjectCommand') {
+        if (input.ChecksumMode === 'ENABLED' && behavior.rejectChecksumRequests) {
+          throw Object.assign(new Error('checksums unsupported'), { name: 'InvalidRequest' })
+        }
         const object = objects.get(key)
         if (!object) throw Object.assign(new Error('missing'), { name: 'NotFound' })
-        return { ETag: object.etag, ContentLength: Buffer.byteLength(object.body), Metadata: object.metadata }
+        return {
+          ETag: object.etag,
+          ContentLength: Buffer.byteLength(object.body),
+          Metadata: object.metadata,
+          ...(input.ChecksumMode === 'ENABLED' && behavior.headChecksums
+            ? { ChecksumSHA256: createHash('sha256').update(object.body).digest('base64') }
+            : {}),
+        }
       }
       if (name === 'PutObjectCommand') {
+        if (input.ChecksumSHA256 && behavior.rejectChecksumRequests) {
+          throw Object.assign(new Error('checksums unsupported'), { name: 'InvalidRequest' })
+        }
         if (options.failPutKeys?.has(key)) throw new Error('observability mirror unavailable')
         const current = objects.get(key)
         if (input.IfNoneMatch === '*' && current) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
         if (input.IfMatch && input.IfMatch !== current?.etag) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
         const body = await streamText(input.Body)
+        if (typeof input.ChecksumSHA256 === 'string') {
+          assert.equal(input.ChecksumSHA256, createHash('sha256').update(body).digest('base64'))
+          checksumPutKeys.push(key)
+        }
         const etag = `"${++version}"`
         objects.set(key, { body, etag, metadata: input.Metadata as Record<string, string> | undefined })
         return { ETag: etag }
