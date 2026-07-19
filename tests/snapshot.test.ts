@@ -150,6 +150,7 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
         ],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
@@ -314,6 +315,7 @@ test('createPlayerDirectory groups recent player game rows into match series', (
         ],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
@@ -819,6 +821,7 @@ test('createPlayerDirectory credits season rows to the primary scoped team', () 
         players: [transferredPlayer],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
@@ -879,6 +882,7 @@ test('createPlayerDirectory reuses full-season player rows for checkpoint views'
         players: [checkpointPlayer],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
@@ -929,6 +933,7 @@ test('scoped player directories retain every rated team player without a global 
         players: [...leadingPlayers, ...coveredRoster],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
@@ -971,6 +976,7 @@ test('createPlayerDirectory gates low-sample sourced players from ranked public 
         players,
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
@@ -1023,6 +1029,7 @@ test('createPlayerDirectory gates unanchored-league teams from ranked public pla
         ],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const directory = createPlayerDirectory(data)
@@ -1087,6 +1094,7 @@ test('createTeamHistory reports omitted standings with fewer than two points', (
         standings: [includedStanding, omittedStanding],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
@@ -1201,6 +1209,7 @@ test('createTeamHistory publishes match-level history points for multi-game seri
         standings: [standing],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
@@ -1289,6 +1298,7 @@ test('createTeamHistory keeps independent official same-day matches separate', (
         standings: [standing],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
@@ -1367,6 +1377,7 @@ test('createTeamHistory preserves the final atomic delta for model-correct serie
         standings: [standing],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
@@ -1437,6 +1448,7 @@ test('createTeamHistory final point matches published standing rating', () => {
         standings: [standing],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
@@ -1507,6 +1519,7 @@ test('createTeamHistory skips unresolved tied match groups', () => {
         standings: [standing],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const history = createTeamHistory(data)
@@ -1765,6 +1778,7 @@ test('createRegionHistory context only describes leagues used for region power s
         ],
       },
     },
+    tournamentMovements: {},
   } as unknown as StaticRankingData
 
   const history = createRegionHistory(data)
