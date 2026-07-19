@@ -118,6 +118,40 @@ test('materialized publication rolls back after the target is evacuated and the 
   }
 })
 
+test('post-commit cleanup failure cannot suppress caller promotion after a successful swap', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-directory-cleanup-failure-'))
+  const target = join(root, 'public-data')
+  const next = join(root, 'public-data-next')
+  try {
+    await mkdir(join(target, 'scopes'), { recursive: true })
+    await mkdir(join(next, 'scopes'), { recursive: true })
+    await writeFile(join(target, 'ranking-summary.json'), 'old manifest')
+    await writeFile(join(target, 'scopes', 'all.json'), 'old shard')
+    await writeFile(join(next, 'ranking-summary.json'), 'new manifest')
+    await writeFile(join(next, 'scopes', 'all.json'), 'new shard')
+    let cleanupCalls = 0
+    const failCleanup: typeof rm = () => {
+      cleanupCalls += 1
+      throw Object.assign(new Error('injected cleanup failure'), { code: 'EIO' })
+    }
+    let promotionExecuted = false
+
+    await replaceDirectory(next, target, {
+      preserveTarget: true,
+      expectedFiles: ['ranking-summary.json', 'scopes/all.json'],
+      postCommitCleanup: failCleanup,
+    })
+    promotionExecuted = true
+
+    assert.equal(cleanupCalls, 2)
+    assert.equal(promotionExecuted, true)
+    assert.equal(await readFile(join(target, 'ranking-summary.json'), 'utf8'), 'new manifest')
+    assert.equal(await readFile(join(target, 'scopes', 'all.json'), 'utf8'), 'new shard')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('empty preserve publication is a target no-op', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-directory-noop-'))
   const target = join(root, 'public-data')
