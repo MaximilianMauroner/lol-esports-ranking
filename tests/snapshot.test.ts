@@ -1631,17 +1631,17 @@ test('season checkpoint scopes publish movement and companion history artifacts'
 
   assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1', 'split-2', 'split-3'])
   assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.boundaryEvent), [
-    '2026 Split 2 regional opening',
-    '2026 Split 3 regional opening',
-    '2026 season end',
+    'FST 2026',
+    'MSI 2026',
+    'WLDs 2026',
   ])
   assert.equal(checkpoints.some((checkpoint) => checkpoint.boundaryEvent === 'EWC 2026'), false)
   assert.deepEqual(
     checkpoints.map(({ startDate, endDate, previousEndDate }) => ({ startDate, endDate, previousEndDate })),
     [
-      { startDate: '2026-01-14', endDate: '2026-03-27', previousEndDate: undefined },
-      { startDate: '2026-03-28', endDate: '2026-07-21', previousEndDate: '2026-03-27' },
-      { startDate: '2026-07-22', endDate: '2026-11-14', previousEndDate: '2026-07-21' },
+      { startDate: '2026-01-01', endDate: '2026-03-22', previousEndDate: undefined },
+      { startDate: '2026-03-23', endDate: '2026-06-28', previousEndDate: '2026-03-22' },
+      { startDate: '2026-06-29', endDate: '2026-11-08', previousEndDate: '2026-06-28' },
     ],
   )
   assert.ok(checkpointSnapshot)
@@ -1671,10 +1671,9 @@ test('season checkpoint boundaries ignore domestic Road to MSI and Esports World
   })
   const checkpoints = data.filterOptions.checkpoints?.['2026'] ?? []
 
-  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1', 'split-2'])
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1'])
   assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.boundaryEvent), [
-    '2026 Split 2 regional opening',
-    '2026 Split 3 regional opening',
+    'FST 2026',
   ])
   assert.equal(checkpoints.some((checkpoint) => /EWC|ESPORTS WORLD CUP/i.test(checkpoint.boundaryEvent)), false)
 })

@@ -59,7 +59,9 @@ export type ReducerJournalHashes = {
 export function canonicalPrefixHash(matches: MatchRecord[], throughDate?: string) {
   return stableHash(matches
     .filter((match) => !throughDate || match.date <= throughDate)
-    .toSorted((left, right) => left.date.localeCompare(right.date) || left.id.localeCompare(right.id))
+    // Team scoring preserves legacy same-day input order. Include that order in
+    // the checkpoint identity so a reordered canonical prefix forces a replay.
+    .toSorted((left, right) => left.date.localeCompare(right.date))
     .map(teamReducerMatchInput))
 }
 

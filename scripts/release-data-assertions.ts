@@ -89,7 +89,7 @@ export async function assertReleaseData(dataDir: string, { allowFixture = false 
   assert.ok(geng.rank < t1.rank)
 
   const splitTwo = manifest.filterOptions.checkpoints?.['2026']?.find((entry) => entry.id === 'split-2')
-  assert.equal(splitTwo?.boundaryEvent, '2026 Split 3 regional opening')
+  assert.equal(splitTwo?.boundaryEvent, 'MSI 2026')
   const tournamentIndex = parsePublicTournamentMovementIndex(await read(pathFor(manifest.tournamentMovementIndexUrl)))
   const tournaments = new Map<string, ReturnType<typeof parsePublicTournamentMovementShard>>()
   for (const entry of tournamentIndex.tournaments) tournaments.set(entry.id, parsePublicTournamentMovementShard(await read(pathFor(entry.url))))

@@ -416,6 +416,7 @@ test('a higher-token mirror-only lease cannot publish or update rollout metadata
       generationId: 'active-before-mirror',
       fencingToken: initialLease.lease.fencingToken,
       leaseGuard: refreshGuard(initialLease),
+      clock: () => '2026-07-19T00:00:00.000Z',
       config,
       client,
     })
@@ -594,6 +595,7 @@ test('parity mismatch is committed with the public full pointer, preserves priva
       leaseGuard: refreshGuard(initialLease),
       privateState,
       rollout: { identityHash: 'identity', consecutiveShadowSuccesses: 3 },
+      clock: () => '2026-07-19T00:00:00.000Z',
       config,
       client,
     })
@@ -609,6 +611,7 @@ test('parity mismatch is committed with the public full pointer, preserves priva
       rolloutForActive: (previous) => recordRolloutOutcome(previous, {
         identityHash: 'identity', parity: { result: 'mismatch' }, at: mismatchAt,
       }),
+      clock: () => mismatchAt,
       config,
       client,
     })
@@ -626,6 +629,7 @@ test('parity mismatch is committed with the public full pointer, preserves priva
       leaseGuard: refreshGuard(mismatchLease),
       rolloutUpdateId: 'mismatch-run',
       rolloutForActive: () => { throw new Error('mismatch rollout reapplied') },
+      clock: () => mismatchAt,
       config,
       client,
     })

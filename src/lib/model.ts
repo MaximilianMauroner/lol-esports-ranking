@@ -126,7 +126,10 @@ export function initializeTeamReducer(
 }
 
 export function processTeamDateBatch(reducer: TeamReducer, matches: MatchRecord[]): void {
-    const dateMatches = matches.toSorted((left, right) => left.id.localeCompare(right.id))
+    // Same-day input order is part of the legacy team-model semantics. In
+    // particular, the series resolver can use it when source series IDs are
+    // incomplete, so normalizing by match ID here changes clean-replay scores.
+    const dateMatches = matches
     const firstMatch = dateMatches[0]
     if (!firstMatch) return
     if (dateMatches.some((match) => match.date !== firstMatch.date)) throw new Error('Team reducer batches must contain one complete UTC date')

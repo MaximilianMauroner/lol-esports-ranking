@@ -64,7 +64,7 @@ export function runIncrementalRankingReducers({
   const livePlayerEdge = selectedCheckpoint
     ? restoreLivePlayerEdgeReducer(selectedCheckpoint.livePlayerEdge, matches, { teams, eventWeightContext })
     : initializeLivePlayerEdgeReducer(matches, { teams, eventWeightContext })
-  const liveBatches = suffixDateBatches(matches, livePlayerEdge.processedDate)
+  const liveBatches = livePlayerEdgeDateBatches(matches, livePlayerEdge.processedDate)
   const liveCheckpointsByDate = new Map<string, ReturnType<typeof snapshotLivePlayerEdgeReducer>>()
   for (const batch of liveBatches) {
     processLivePlayerEdgeDateBatch(livePlayerEdge, batch)
@@ -80,7 +80,7 @@ export function runIncrementalRankingReducers({
         rebuildPlacementContext,
       })
     : initializeTeamReducer(matches, teams, { tournamentLifecycles, pregamePlayerRatingEdges })
-  const teamBatches = suffixDateBatches(matches, team.processedDate)
+  const teamBatches = teamDateBatches(matches, team.processedDate)
   const replayedCheckpoints: IncrementalReducerCheckpoint[] = []
   for (const batch of teamBatches) {
     processTeamDateBatch(team, batch)
@@ -130,7 +130,12 @@ function uniqueReducerCheckpoints(checkpoints: IncrementalReducerCheckpoint[]) {
     .toSorted((left, right) => (left.processedDate ?? '').localeCompare(right.processedDate ?? ''))
 }
 
-function suffixDateBatches(matches: MatchRecord[], processedDate?: string) {
+function livePlayerEdgeDateBatches(matches: MatchRecord[], processedDate?: string) {
   return matchesByDate(matches.toSorted((left, right) => left.date.localeCompare(right.date) || left.id.localeCompare(right.id)))
+    .filter((batch) => !processedDate || (batch[0]?.date ?? '') > processedDate)
+}
+
+function teamDateBatches(matches: MatchRecord[], processedDate?: string) {
+  return matchesByDate(matches.toSorted((left, right) => left.date.localeCompare(right.date)))
     .filter((batch) => !processedDate || (batch[0]?.date ?? '') > processedDate)
 }

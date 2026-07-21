@@ -56,6 +56,13 @@ test('direct live-edge and team wrappers are identical to explicit full lifecycl
   assert.deepEqual(finalizeTeamReducer(teamReducer), buildRankingModel(fixture.matches, fixture.teams))
 })
 
+test('team checkpoint identity preserves legacy same-date input order', () => {
+  const fixture = mutateIncrementalFixture(fixedIncrementalFixture(), 'same-day-series-addition')
+  const sameDay = fixture.matches.filter((match) => match.date === '2026-01-17')
+  assert.ok(sameDay.length > 1)
+  assert.notEqual(canonicalPrefixHash(sameDay), canonicalPrefixHash(sameDay.toReversed()))
+})
+
 test('latest append restores before the appended date and equals clean full', () => {
   const base = fixedIncrementalFixture()
   const appendedMatch = { ...base.matches[0]!, id: 'incremental-003', sourceGameId: 'incremental-003', date: '2026-05-17' }
