@@ -296,7 +296,10 @@ const snapshot = createStaticRankingData({
     ...(selectedCheckpointDate ? { selectedCheckpointDate } : {}),
     ...(selectedPlayerCheckpointDate ? { selectedPlayerCheckpointDate } : {}),
     ...(modelProvider ? { snapshotInputMetrics: modelProvider.metrics() } : {}),
-    ...(modelProvider ? { snapshotModelState: modelProvider.persistedState() } : {}),
+    ...(modelProvider && mode === 'incremental' ? { snapshotModelState: modelProvider.persistedState() } : {}),
+    ...(modelProvider && mode !== 'incremental'
+      ? { snapshotModelStateFactory: () => modelProvider.persistedState() }
+      : {}),
   }
 }
 
@@ -378,12 +381,13 @@ if (mode === 'incremental'
     }
   }
 }
-const orchestration = await orchestrateCrunch<CrunchOutput>({
+const orchestration = await orchestrateCrunch<CrunchOutput, PreparedCrunchOutput>({
   mode,
   receipt,
   runFull,
   runIncremental,
   requireReferenceParity: mode !== 'incremental',
+  prepareShadow: prepareCrunchOutputForParity,
 })
 receipt.requestedMode = requestedMode
 const { snapshot, importedMatches, metrics } = orchestration.output
@@ -397,7 +401,7 @@ receipt.observations.normalized = metrics.observationsNormalized
 receipt.observations.reused = metrics.observationsReused
 receipt.bucket.bytesRead = incrementalAttemptMetrics?.reducerStateBytesRead ?? 0
 receipt.bucket.bytesWritten = 0
-const incrementalCandidate = orchestration.executedMode === 'incremental'
+const incrementalCandidate: CrunchOutput | PreparedCrunchOutput | undefined = orchestration.executedMode === 'incremental'
   ? orchestration.output
   : orchestration.shadowOutput
 if (incrementalCandidate?.reducerRows) {
@@ -456,18 +460,26 @@ if (reconciliationOutput) {
 }
 assertLateIncrementalWorkAllowed('public-artifact-serialization')
 const publicPlan = createPublicArtifactWritePlan(snapshot, { runMetadata })
-let incrementalPlan = incrementalCandidate
-  ? createPublicArtifactWritePlan(incrementalCandidate.snapshot, { runMetadata })
-  : undefined
+let incrementalPlan = orchestration.shadowOutput?.publicPlan
+  ?? (orchestration.executedMode === 'incremental'
+    ? createPublicArtifactWritePlan(orchestration.output.snapshot, { runMetadata })
+    : undefined)
 let durableParity: { result: 'match' | 'mismatch'; audit?: boolean; detail?: string } | undefined
 if (orchestration.shadowOutput) {
   try {
     if (process.env.RANKING_TEST_FORCE_PARITY_MISMATCH === 'true') {
       throw new Error('injected incremental parity mismatch')
     }
+    const referenceFullSnapshot = JSON.stringify(snapshot)
+    if (referenceFullSnapshot !== orchestration.shadowOutput.fullSnapshot) {
+      assertCrunchParity(
+        { fullSnapshot: referenceFullSnapshot, publicWrites: [] },
+        { fullSnapshot: orchestration.shadowOutput.fullSnapshot, publicWrites: [] },
+      )
+    }
     assertCrunchParity(
-      { fullSnapshot: snapshot, publicWrites: publicPlan.writes },
-      { fullSnapshot: orchestration.shadowOutput.snapshot, publicWrites: incrementalPlan!.writes },
+      { fullSnapshot: '', publicWrites: publicPlan.writes },
+      { fullSnapshot: '', publicWrites: incrementalPlan!.writes },
     )
     durableParity = { result: 'match', ...(receipt.durable.audit === 'scheduled' || receipt.durable.audit === 'forced' ? { audit: true } : {}) }
     receipt.durable.parity = 'match'
@@ -489,7 +501,8 @@ if (incrementalPlan && incrementalCandidate) {
   assertLateIncrementalWorkAllowed('artifact-dag')
   const dagResult = buildPublicArtifactDag({
     actual: incrementalPlan,
-    semantic: createSemanticPublicArtifactWritePlan(incrementalCandidate.snapshot),
+    semantic: orchestration.shadowOutput?.semanticPlan
+      ?? createSemanticPublicArtifactWritePlan(orchestration.output.snapshot),
     previous: previousArtifactCache,
   })
   if (dagResult.fallback) {
@@ -771,6 +784,37 @@ type CrunchOutput = {
   selectedPlayerCheckpointDate?: string
   snapshotInputMetrics?: SnapshotInputMetrics
   snapshotModelState?: PersistedSnapshotModelState
+  snapshotModelStateFactory?: () => PersistedSnapshotModelState
+}
+
+type PreparedCrunchOutput = Omit<CrunchOutput, 'snapshot' | 'importedMatches' | 'snapshotModelStateFactory'> & {
+  fullSnapshot: string
+  publicPlan: ReturnType<typeof createPublicArtifactWritePlan>
+  semanticPlan: ReturnType<typeof createSemanticPublicArtifactWritePlan>
+}
+
+function prepareCrunchOutputForParity(output: CrunchOutput): PreparedCrunchOutput {
+  const { fullSnapshot, publicPlan, semanticPlan } = (() => {
+    const snapshot = output.snapshot
+    return {
+      fullSnapshot: JSON.stringify(snapshot),
+      publicPlan: createPublicArtifactWritePlan(snapshot, { runMetadata }),
+      semanticPlan: createSemanticPublicArtifactWritePlan(snapshot),
+    }
+  })()
+  const snapshotModelStateFactory = output.snapshotModelStateFactory
+  Reflect.deleteProperty(output, 'snapshot')
+  Reflect.deleteProperty(output, 'importedMatches')
+  Reflect.deleteProperty(output, 'snapshotModelStateFactory')
+  if (snapshotModelStateFactory && pendingPromotion) {
+    pendingPromotion = attachIncrementalSnapshotModelCache(
+      pendingPromotion,
+      privateStateDir,
+      snapshotModelStateFactory(),
+    )
+  }
+  const metadata = output as Omit<CrunchOutput, 'snapshot' | 'importedMatches' | 'snapshotModelStateFactory'>
+  return { ...metadata, fullSnapshot, publicPlan, semanticPlan }
 }
 
 type ReducerRows = {

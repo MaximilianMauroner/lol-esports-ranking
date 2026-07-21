@@ -87,6 +87,25 @@ test('incremental and shadow modes use an available canonical reuse path safely'
   assert.equal(fullCalls, 1)
 })
 
+test('shadow mode compacts the candidate before starting the reference replay', async () => {
+  let prepared = false
+  const result = await orchestrateCrunch<{ snapshot: string }, { serialized: string }>({
+    mode: 'incremental-shadow',
+    runIncremental: () => ({ output: { snapshot: 'candidate' } }),
+    prepareShadow: (candidate) => {
+      prepared = true
+      return { serialized: JSON.stringify(candidate) }
+    },
+    runFull: () => {
+      assert.equal(prepared, true)
+      return { snapshot: 'reference' }
+    },
+  })
+
+  assert.deepEqual(result.output, { snapshot: 'reference' })
+  assert.deepEqual(result.shadowOutput, { serialized: '{"snapshot":"candidate"}' })
+})
+
 test('receipts preserve both shadow attempts instead of overwriting fallback work', async () => {
   const receipt = createIncrementalCrunchReceipt({ run, requestedMode: 'incremental-shadow' })
   const result = await orchestrateCrunch({
