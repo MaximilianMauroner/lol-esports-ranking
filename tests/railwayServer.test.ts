@@ -175,6 +175,58 @@ test('Railway server serves versioned data from the requested bucket generation'
   }
 })
 
+test('Railway server retries transient versioned bucket reads without changing generation', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(join(dataDir, 'scopes'), { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
+  await writeFile(join(dataDir, 'scopes', 'season-2026.json'), JSON.stringify({ source: 'bundled' }))
+
+  let requestCount = 0
+  const bucket = createServer((request, response) => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+    if (pathname !== '/test-bucket/rankings/generations/stable/data/scopes/season-2026.json') {
+      response.statusCode = 404
+      response.end()
+      return
+    }
+    requestCount += 1
+    if (requestCount < 3) {
+      response.statusCode = 503
+      response.setHeader('Content-Type', 'application/xml')
+      response.end('<Error><Code>SlowDown</Code><Message>retry</Message></Error>')
+      return
+    }
+    response.setHeader('Content-Type', 'application/json')
+    response.end(JSON.stringify({ source: 'stable' }))
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const bucketPort = (bucket.address() as AddressInfo).port
+
+  const server = await startRailwayServer(distDir, dataDir, {
+    AWS_MAX_ATTEMPTS: '1',
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+    RANKING_BUCKET_READ_MAX_ATTEMPTS: '3',
+    RANKING_BUCKET_READ_RETRY_DELAY_MS: '1',
+  })
+  try {
+    const response = await httpRequest(server.port, '/data/scopes/season-2026.json?v=stable')
+    assert.equal(response.statusCode, 200)
+    assert.equal(JSON.parse(response.body).source, 'stable')
+    assert.equal(requestCount, 3)
+  } finally {
+    await server.close()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('Railway server reports stale-source refresh status as healthy', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
   const distDir = join(tempDir, 'dist')

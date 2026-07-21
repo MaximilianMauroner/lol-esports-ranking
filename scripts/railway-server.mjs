@@ -6,7 +6,7 @@ import { normalize, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
-import { bucketConfigFromEnv, contentTypeForPath, getBucketObject, readBucketJson } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, contentTypeForPath, createBucketClient, getBucketObject, readBucketJson } from './railway-bucket.mjs'
 import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderHomepagePrerenderFromLoader, renderSitemapFromDataDir, renderSitemapFromManifest } from './seo-prerender.ts'
 
 const port = Number(process.env.PORT ?? 4173)
@@ -25,6 +25,9 @@ const htmlCacheControl = process.env.RANKING_HTML_CACHE_CONTROL ?? 'no-store'
 const gzipEnabled = process.env.RANKING_GZIP_ENABLED !== 'false'
 const cronSecret = process.env.CRON_SECRET
 const bucketConfig = bucketConfigFromEnv()
+const bucketClient = createBucketClient(bucketConfig)
+const bucketReadMaxAttempts = boundedInteger(process.env.RANKING_BUCKET_READ_MAX_ATTEMPTS, 3, 1, 5)
+const bucketReadRetryDelayMs = boundedInteger(process.env.RANKING_BUCKET_READ_RETRY_DELAY_MS, 75, 0, 5_000)
 
 let refreshInFlight = null
 let lastRefresh = {
@@ -162,7 +165,10 @@ function validRankingManifest(value) {
 }
 
 async function schedulerStatus() {
-  const remote = await readBucketJson(process.env.RANKING_TRIGGER_STATE_KEY ?? 'raw/refresh-trigger-state.json')
+  const remote = await readBucketJson(process.env.RANKING_TRIGGER_STATE_KEY ?? 'raw/refresh-trigger-state.json', {
+    config: bucketConfig,
+    client: bucketClient,
+  })
   let state = remote.found ? remote.value : null
   if (!state) {
     try {
@@ -272,7 +278,7 @@ async function serveLiveSitemap(response, headOnly, requestHeaders) {
 }
 
 async function readActiveBucketDataJson(relativePath) {
-  const object = await getBucketObject(relativePath, { config: bucketConfig })
+  const object = await readBucketObject(relativePath)
   if (!object.found) throw new Error(`Active bucket artifact not found: ${relativePath}`)
   if (typeof object.body?.transformToString === 'function') return JSON.parse(await object.body.transformToString())
   const chunks = []
@@ -332,7 +338,7 @@ async function serveDataFile(response, relativePath, options) {
 }
 
 async function tryServeBucketFile(response, relativePath, { cacheControl, headOnly, requestHeaders, requestedGeneration }) {
-  const object = await getBucketObject(relativePath, { config: bucketConfig, generationId: requestedGeneration })
+  const object = await readBucketObject(relativePath, requestedGeneration)
   if (!object.found) return false
 
   const contentType = object.contentType ?? contentTypeForPath(relativePath)
@@ -365,6 +371,25 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
 
   await pipeBody(object.body, response, { gzip })
   return true
+}
+
+async function readBucketObject(relativePath, generationId) {
+  for (let attempt = 1; attempt <= bucketReadMaxAttempts; attempt += 1) {
+    try {
+      return await getBucketObject(relativePath, {
+        config: bucketConfig,
+        client: bucketClient,
+        generationId,
+      })
+    } catch (error) {
+      if (attempt === bucketReadMaxAttempts) throw error
+      console.warn(
+        `Bucket data read retry ${attempt}/${bucketReadMaxAttempts - 1} for ${relativePath}${generationId ? ` at ${generationId}` : ''}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, bucketReadRetryDelayMs * attempt))
+    }
+  }
+  throw new Error(`Bucket data read failed for ${relativePath}`)
 }
 
 async function tryServeFile(response, rootDir, relativePath, { cacheControl, headOnly, requestHeaders }) {
@@ -669,4 +694,10 @@ function sendNotModified(response, {
 
 function destroyBody(body) {
   if (body && typeof body.destroy === 'function') body.destroy()
+}
+
+function boundedInteger(value, fallback, minimum, maximum) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed)) return fallback
+  return Math.min(maximum, Math.max(minimum, parsed))
 }
