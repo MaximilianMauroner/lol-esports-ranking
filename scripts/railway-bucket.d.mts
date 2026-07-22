@@ -8,6 +8,7 @@ export type BucketConfig = {
   prefix?: string
   forcePathStyle?: boolean
 }
+export type BucketStorageConfig = Omit<BucketConfig, 'enabled'> & { enabled?: boolean }
 export type BucketClient = { send(command: unknown): Promise<unknown> }
 
 export function bucketConfigFromEnv(env?: NodeJS.ProcessEnv): BucketConfig | { enabled: false; missing: string[] }
@@ -65,7 +66,23 @@ export function getBucketObject(relativePath: string, options?: Record<string, u
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>
 export function downloadBucketObject(options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function uploadDirectory(...args: unknown[]): Promise<unknown[]>
-export function uploadContentAddressedPublicArtifacts(...args: unknown[]): Promise<Record<string, unknown>>
+export type SyncedArtifact = Record<string, unknown> & { key: string; bytes: number }
+export function uploadContentAddressedPublicArtifacts(
+  client: BucketClient,
+  config: BucketStorageConfig,
+  dir: string,
+  generationId: string,
+): Promise<{
+  uploaded: SyncedArtifact[]
+  unchanged: SyncedArtifact[]
+  manifest: Record<string, unknown>
+  manifestAuthority: { key: string; etag?: string; bytes: number; digest: string }
+  objectCount: number
+  logicalArtifactCount: number
+  compressedLogicalBytes: number
+  semanticLogicalBytes: number
+  uniqueCompressedBytes: number
+}>
 export function uploadRawSourceFiles(...args: unknown[]): Promise<Record<string, unknown>>
 export function syncRawFile(...args: unknown[]): Promise<Record<string, unknown>>
 export function uploadFile(...args: unknown[]): Promise<Record<string, unknown>>

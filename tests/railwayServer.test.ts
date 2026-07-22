@@ -217,13 +217,21 @@ test('Railway server resolves content-addressed manifests and decodes stored gzi
     RANKING_BUCKET_ACCESS_KEY_ID: 'test',
     RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
     RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+    RANKING_GZIP_ENABLED: 'false',
   })
   try {
     const manifestResponse = await httpRequest(server.port, '/data/ranking-summary.json')
     assert.equal(JSON.parse(manifestResponse.body).artifactKind, 'public-artifact-generation-manifest')
-    const objectResponse = await httpRequest(server.port, `/data/objects/sha256/${digest}`)
+    assert.match(String(manifestResponse.headers['cache-control']), /max-age=0/)
+    const objectResponse = await httpRequest(server.port, `/data/objects/sha256/${digest}`, {
+      headers: { 'accept-encoding': 'gzip' },
+    })
     assert.equal(objectResponse.headers['content-encoding'], undefined)
+    assert.equal(objectResponse.headers['cache-control'], 'public, max-age=31536000, immutable')
     assert.deepEqual(JSON.parse(objectResponse.body), semantic)
+    const invalidObject = await httpRequest(server.port, '/data/objects/sha256/not-a-digest')
+    assert.equal(invalidObject.statusCode, 404)
+    assert.notEqual(invalidObject.headers['cache-control'], 'public, max-age=31536000, immutable')
   } finally {
     await server.close()
     await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))

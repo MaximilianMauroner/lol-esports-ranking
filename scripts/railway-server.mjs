@@ -327,7 +327,7 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
   }
 
   const gzip = storedGzip
-    ? acceptsGzip(requestHeaders?.['accept-encoding'])
+    ? gzipEnabled && acceptsGzip(requestHeaders?.['accept-encoding'])
     : shouldGzip(requestHeaders, contentType, object.contentLength, headOnly)
   response.statusCode = 200
   response.setHeader('Content-Type', contentType)
@@ -576,6 +576,7 @@ function isImmutableStaticAssetPath(path) {
 
 function cacheControlForDataPath(path) {
   if (path === 'ranking-summary.json') return dataManifestCacheControl
+  if (/^objects\/sha256\/[a-f0-9]{64}$/.test(path)) return 'public, max-age=31536000, immutable'
   return dataCacheControl
 }
 

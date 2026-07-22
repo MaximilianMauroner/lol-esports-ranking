@@ -2,6 +2,7 @@ import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   type PublicRankingManifest,
 } from './schema'
+import { assertPublicLogicalPath, canonicalPublicLogicalPath } from './logicalPath.mjs'
 
 export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 1 as const
 export const PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION = 1 as const
@@ -76,13 +77,13 @@ export function parsePublicArtifactGenerationManifest(value: unknown): PublicArt
   assertString(value.provenance.source, 'generation manifest provenance source')
   assertOneOf(value.provenance.dataMode, ['no-data', 'seeded-sample', 'scheduled-public-data'], 'generation manifest provenance dataMode')
   assertStringArray(value.provenance.sourceProviders, 'generation manifest provenance sourceProviders')
-  assertLogicalPath(value.rootArtifact, 'generation manifest rootArtifact')
+  assertPublicLogicalPath(value.rootArtifact, 'generation manifest rootArtifact')
   assertRecord(value.artifacts, 'generation manifest artifacts')
 
   const entries = Object.entries(value.artifacts)
   if (entries.length === 0) throw new Error('Invalid public artifact: generation manifest artifacts must not be empty')
   for (const [logicalPath, candidate] of entries) {
-    assertLogicalPath(logicalPath, `generation manifest artifact key ${logicalPath}`)
+    assertPublicLogicalPath(logicalPath, `generation manifest artifact key ${logicalPath}`)
     assertRecord(candidate, `generation manifest artifact ${logicalPath}`)
     assertEqual(candidate.logicalPath, logicalPath, `generation manifest artifact ${logicalPath} logicalPath`)
     assertEqual(candidate.generationId, value.generationId, `generation manifest artifact ${logicalPath} generationId`)
@@ -176,7 +177,7 @@ export async function fetchPublicArtifact<T extends object>(
     return parse(await response.json())
   }
 
-  const logicalPath = canonicalLogicalPath(logicalUrl)
+  const logicalPath = canonicalPublicLogicalPath(logicalUrl)
   const entry = context.manifest.artifacts[logicalPath]
   if (!entry) throw new Error(`Invalid public artifact: generation mapping is incomplete for ${logicalPath}`)
   if (entry.generationId !== context.manifest.generationId) {
@@ -345,7 +346,7 @@ export function validateGenerationRankingManifest(
 export function assertGenerationMapping(owner: object, logicalUrl: string) {
   const context = generationContexts.get(owner)
   if (!context) return
-  const logicalPath = canonicalLogicalPath(logicalUrl)
+  const logicalPath = canonicalPublicLogicalPath(logicalUrl)
   if (!context.manifest.artifacts[logicalPath]) {
     throw new Error(`Invalid public artifact: generation mapping is incomplete for ${logicalPath}`)
   }
@@ -430,33 +431,7 @@ function rankingManifestLogicalPaths(manifest: PublicRankingManifest) {
     manifest.matchHistoryIndexUrl,
     ...Object.values(manifest.snapshotIndex).map((entry) => entry.url),
   ].filter((url): url is string => Boolean(url))
-  return [...new Set(urls.map(canonicalLogicalPath))]
-}
-
-function canonicalLogicalPath(value: string) {
-  const url = new URL(value, 'https://public-artifacts.invalid')
-  const decodedPath = decodeURIComponent(url.pathname)
-  assertLogicalPath(decodedPath, 'artifact logical path')
-  return decodedPath
-}
-
-function assertLogicalPath(value: unknown, label: string): asserts value is string {
-  assertString(value, label)
-  if (!value.startsWith('/data/') || value.includes('\\') || /(?:^|\/)\.\.?(?:\/|$)/.test(value)) {
-    throw new Error(`Invalid public artifact: ${label} must be a safe /data/ path`)
-  }
-  if (/%(?:2f|5c)/i.test(value)) {
-    throw new Error(`Invalid public artifact: ${label} contains encoded path separators`)
-  }
-  let decoded: string
-  try {
-    decoded = decodeURIComponent(value)
-  } catch {
-    throw new Error(`Invalid public artifact: ${label} contains invalid percent encoding`)
-  }
-  if (decoded.includes('\\') || /(?:^|\/)\.\.?(?:\/|$)/.test(decoded)) {
-    throw new Error(`Invalid public artifact: ${label} contains encoded path traversal`)
-  }
+  return [...new Set(urls.map(canonicalPublicLogicalPath))]
 }
 
 function assertSafeObjectUrl(value: unknown, label: string): asserts value is string {

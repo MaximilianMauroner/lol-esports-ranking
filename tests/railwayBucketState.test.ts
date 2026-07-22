@@ -12,10 +12,11 @@ import {
   readBucketJson,
   releaseBucketLease,
   renewBucketLease,
+  uploadContentAddressedPublicArtifacts,
   uploadRankingArtifacts,
   writeBucketJson,
 } from '../scripts/railway-bucket.mjs'
-import { prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { canonicalPublicLogicalPath, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
 
@@ -362,17 +363,19 @@ test('content-addressed generation reuses unchanged objects, uploads only change
       config,
       client,
     })
-    assert.equal(repeated.uploadedCount, 1)
-    assert.equal(repeated.unchangedCount, 3)
-    assert.equal(repeated.unchangedBytes, measuredCompressedBytes)
+    assert.equal(repeated.uploadedCount, 0)
+    assert.equal(repeated.unchangedCount, 4)
+    assert.equal(repeated.unchangedBytes, measuredCompressedBytes + generationManifestObject.bytes!.byteLength)
 
+    const changedGenerationId = 'run_content_storage_changed'
+    await writeContentAddressedFixture(publicDir, changedGenerationId)
     const shardPath = join(publicDir, 'scopes', 'all.json')
     const changedShard = JSON.parse(await readFile(shardPath, 'utf8'))
     changedShard.storageTestMarker = 'one-semantic-change'
     await writeFile(shardPath, `${JSON.stringify(changedShard)}\n`)
     const changed = await uploadRankingArtifacts({
       publicDataDir: publicDir,
-      generationId,
+      generationId: changedGenerationId,
       fencingToken: 3,
       contentAddressed: true,
       config,
@@ -393,6 +396,17 @@ test('content-addressed collisions and partial uploads fail before promotion', a
     await writeContentAddressedFixture(publicDir, generationId)
     const collisionClient = memoryS3()
     await uploadRankingArtifacts({ publicDataDir: publicDir, generationId, fencingToken: 1, contentAddressed: true, config, client: collisionClient })
+    const changedShardPath = join(publicDir, 'scopes', 'all.json')
+    const sameIdChangedShard = JSON.parse(await readFile(changedShardPath, 'utf8'))
+    sameIdChangedShard.storageTestMarker = 'same-generation-different-manifest'
+    await writeFile(changedShardPath, `${JSON.stringify(sameIdChangedShard)}\n`)
+    await assert.rejects(
+      uploadRankingArtifacts({ publicDataDir: publicDir, generationId, fencingToken: 2, contentAddressed: true, config, client: collisionClient }),
+      /Generation manifest collision/,
+    )
+    assert.equal(JSON.parse(collisionClient.objects.get('rankings/active-generation.json')!.body).fencingToken, 1)
+
+    await writeContentAddressedFixture(publicDir, generationId)
     const objectKey = [...collisionClient.objects.keys()].find((key) => key.startsWith('rankings/objects/sha256/'))!
     collisionClient.objects.get(objectKey)!.metadata = { sha256: '0'.repeat(64), 'semantic-bytes': '1', encoding: 'gzip' }
     await assert.rejects(
@@ -442,6 +456,111 @@ test('stale content-addressed publication never promotes its generation manifest
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'current')
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('generation manifest mutation between upload and pointer CAS blocks activation', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-content-manifest-race-'))
+  const publicDir = join(root, 'public')
+  const generationId = 'run_manifest_race'
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    await writeBucketJson('active-generation.json', { generationId: 'current', fencingToken: 1 }, { ifNoneMatch: '*', config, client })
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 2,
+      contentAddressed: true,
+      beforePromotionWrite: () => {
+        const key = `rankings/generations/${generationId}/manifest.json`
+        const manifest = client.objects.get(key)!
+        manifest.body = `${manifest.body} `
+        manifest.bytes = Buffer.from(manifest.body)
+        manifest.etag = 'mutated-manifest'
+        manifest.metadata = { sha256: '0'.repeat(64) }
+      },
+      config,
+      client,
+    }), /Generation manifest changed before active pointer promotion/)
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'current')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('concurrent identical generation publishers conditionally create or reuse one immutable manifest', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-content-concurrent-'))
+  const publicDir = join(root, 'public')
+  const generationId = 'run_concurrent_manifest'
+  const backing = memoryS3()
+  let manifestAttempts = 0
+  let releaseManifestBarrier: (() => void) | undefined
+  const manifestBarrier = new Promise<void>((resolve) => { releaseManifestBarrier = resolve })
+  const client = {
+    objects: backing.objects,
+    async send(command: unknown) {
+      const { name, input } = commandDetails(command)
+      if (name === 'PutObjectCommand' && input.Key === `rankings/generations/${generationId}/manifest.json`) {
+        manifestAttempts += 1
+        if (manifestAttempts === 2) releaseManifestBarrier?.()
+        await manifestBarrier
+      }
+      return backing.send(command)
+    },
+  }
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    const [first, second] = await Promise.all([
+      uploadContentAddressedPublicArtifacts(client, config, publicDir, generationId),
+      uploadContentAddressedPublicArtifacts(client, config, publicDir, generationId),
+    ])
+    assert.equal(manifestAttempts, 2)
+    const manifestKey = `rankings/generations/${generationId}/manifest.json`
+    assert.equal(backing.objects.has(manifestKey), true)
+    assert.equal(
+      [first, second].filter((result) => result.uploaded.some((entry) => entry.key === manifestKey)).length,
+      1,
+    )
+    assert.equal(
+      [first, second].filter((result) => result.unchanged.some((entry) => entry.key === manifestKey)).length,
+      1,
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('logical path aliases and encoded traversal fail before any bucket upload', async () => {
+  assert.equal(canonicalPublicLogicalPath('/data/scopes/%C3%81.json?v=run'), '/data/scopes/Á.json')
+  assert.throws(() => canonicalPublicLogicalPath('/data/a%2Fb.json'), /encoded path separators/)
+  assert.throws(() => canonicalPublicLogicalPath('/data/%2e%2e/private.json'), /path traversal/)
+  assert.throws(() => canonicalPublicLogicalPath('/data/%ZZ.json'), /invalid percent encoding/)
+
+  for (const artifactPaths of [
+    ['a%2Fb.json', 'a/b.json'],
+    ['%2e%2e/private.json'],
+    ['%ZZ.json'],
+    ['alias%20x.json', 'alias x.json'],
+  ]) {
+    const root = await mkdtemp(join(tmpdir(), 'ranking-content-invalid-path-'))
+    const publicDir = join(root, 'public')
+    const client = memoryS3()
+    try {
+      await writeContentAddressedFixture(publicDir, 'run_invalid_path')
+      for (const artifactPath of artifactPaths) {
+        const target = join(publicDir, ...artifactPath.split('/'))
+        await mkdir(join(target, '..'), { recursive: true })
+        await writeFile(target, '{"artifactKind":"test-artifact"}\n')
+      }
+      await assert.rejects(
+        uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'run_invalid_path', fencingToken: 1, contentAddressed: true, config, client }),
+        /encoded path separators|path traversal|invalid percent encoding|Duplicate public artifact logical path alias/,
+      )
+      assert.equal(client.objects.size, 0)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   }
 })
 
@@ -531,10 +650,10 @@ function memoryS3() {
         }
       }
       if (name === 'PutObjectCommand') {
+        const bytes = await streamBytes(input.Body)
         const current = objects.get(key)
         if (input.IfNoneMatch === '*' && current) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
         if (input.IfMatch && input.IfMatch !== current?.etag) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
-        const bytes = await streamBytes(input.Body)
         const etag = `"${++version}"`
         objects.set(key, {
           body: bytes.toString('utf8'),

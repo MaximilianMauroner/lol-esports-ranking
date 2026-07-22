@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
+import { canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
+
+export { canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
 
 export const CONTENT_ADDRESSED_STORAGE_MODE = 'content-addressed-gzip-v1'
 
@@ -39,6 +42,21 @@ export function createGenerationManifest({ generationId, rootManifest, entries }
   if (!Array.isArray(rootManifest.sources)) throw new Error('Invalid public artifact: ranking root sources must be an array')
   const runId = typeof rootManifest.artifactMeta?.runId === 'string' ? rootManifest.artifactMeta.runId : generationId
   if (runId !== generationId) throw new Error('Invalid public artifact: generationId must match ranking root runId')
+  const artifacts = {}
+  for (const entry of entries) {
+    const logicalPath = canonicalPublicLogicalPath(entry.logicalPath)
+    if (Object.hasOwn(artifacts, logicalPath)) {
+      throw new Error(`Invalid public artifact: duplicate logical path alias ${logicalPath}`)
+    }
+    artifacts[logicalPath] = {
+      logicalPath,
+      objectUrl: `/data/objects/sha256/${entry.digest}`,
+      generationId,
+      sha256: entry.digest,
+      bytes: entry.bytes,
+      encoding: 'gzip',
+    }
+  }
   return {
     artifactKind: 'public-artifact-generation-manifest',
     schemaVersion: 1,
@@ -60,14 +78,7 @@ export function createGenerationManifest({ generationId, rootManifest, entries }
       }),
     },
     rootArtifact: '/data/ranking-summary.json',
-    artifacts: Object.fromEntries(entries.map((entry) => [entry.logicalPath, {
-      logicalPath: entry.logicalPath,
-      objectUrl: `/data/objects/sha256/${entry.digest}`,
-      generationId,
-      sha256: entry.digest,
-      bytes: entry.bytes,
-      encoding: 'gzip',
-    }])),
+    artifacts,
   }
 }
 

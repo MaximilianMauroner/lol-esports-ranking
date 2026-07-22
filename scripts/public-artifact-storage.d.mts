@@ -11,6 +11,7 @@ export type PreparedSemanticArtifact = {
 }
 
 export function prepareSemanticArtifact(value: unknown): PreparedSemanticArtifact
+export function canonicalPublicLogicalPath(value: string): string
 export function createGenerationManifest(options: {
   generationId: string
   rootManifest: Record<string, unknown>

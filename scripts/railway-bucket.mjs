@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { CONTENT_ADDRESSED_STORAGE_MODE, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
+import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 
 let activeGenerationCache = { expiresAt: 0, value: null }
 
@@ -179,6 +179,9 @@ export async function uploadRankingArtifacts({
       throw new Error('Stale refresh worker cannot promote an active generation')
     }
     await beforePromotionWrite?.()
+    if (contentAddressed) {
+      await assertGenerationManifestAuthority(client, config, publicSync.manifestAuthority)
+    }
     const promotedAt = new Date(now()).toISOString()
     const promotion = await writeBucketJson('active-generation.json', {
       ...active.value,
@@ -279,7 +282,9 @@ export async function getBucketObject(relativePath, {
 } = {}) {
   if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
   const safePath = safeRequestedObjectPath(relativePath)
-  const directContentObject = safePath.startsWith('objects/sha256/')
+  const contentObjectRequest = safePath.startsWith('objects/sha256/')
+  const directContentObject = /^objects\/sha256\/[a-f0-9]{64}$/.test(safePath)
+  if (contentObjectRequest && !directContentObject) return { found: false }
   const generation = directContentObject
     ? undefined
     : typeof generationId === 'string' && generationId.length > 0
@@ -619,6 +624,7 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
   const files = await listFiles(root)
   files.sort((left, right) => relative(root, left).localeCompare(relative(root, right)))
   const prepared = []
+  const logicalPathSources = new Map()
   let rootManifest
 
   for (const file of files) {
@@ -628,8 +634,14 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
     }
     const value = JSON.parse(await readFile(file, 'utf8'))
     if (relativePath === 'ranking-summary.json') rootManifest = value
+    const logicalPath = canonicalPublicLogicalPath(`/data/${relativePath}`)
+    const existingSource = logicalPathSources.get(logicalPath)
+    if (existingSource) {
+      throw new Error(`Duplicate public artifact logical path alias: ${existingSource} and ${relativePath}`)
+    }
+    logicalPathSources.set(logicalPath, relativePath)
     prepared.push({
-      logicalPath: logicalDataPath(relativePath),
+      logicalPath,
       ...prepareSemanticArtifact(value),
     })
   }
@@ -652,17 +664,70 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
   }
 
   const manifest = createGenerationManifest({ generationId, rootManifest, entries: prepared })
-  uploaded.push(await uploadJson(client, config, `generations/${safeObjectPath(generationId)}/manifest.json`, manifest))
+  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
+  if (manifestSync.result.status === 'unchanged') unchanged.push(manifestSync.result)
+  else uploaded.push(manifestSync.result)
   return {
     uploaded,
     unchanged,
     manifest,
+    manifestAuthority: manifestSync.authority,
     objectCount: uniqueArtifacts.size,
     logicalArtifactCount: prepared.length,
     compressedLogicalBytes: prepared.reduce((total, artifact) => total + artifact.compressedBytes, 0),
     semanticLogicalBytes: prepared.reduce((total, artifact) => total + artifact.bytes, 0),
     uniqueCompressedBytes: [...uniqueArtifacts.values()].reduce((total, artifact) => total + artifact.compressedBytes, 0),
   }
+}
+
+async function syncGenerationManifest(client, config, generationId, manifest) {
+  const relativeKey = `generations/${safeObjectPath(generationId)}/manifest.json`
+  const key = bucketKey(config, relativeKey)
+  const body = jsonBody(manifest)
+  const bytes = Buffer.byteLength(body)
+  const digest = createHash('sha256').update(body).digest('hex')
+  try {
+    const put = await client.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: body,
+      ContentLength: bytes,
+      ContentType: 'application/json; charset=utf-8',
+      Metadata: { sha256: digest },
+      IfNoneMatch: '*',
+    }))
+    return {
+      result: { status: 'uploaded', key, bytes, contentType: 'application/json; charset=utf-8', digest },
+      authority: { key, etag: put.ETag, bytes, digest },
+    }
+  } catch (error) {
+    if (!isPreconditionError(error)) throw error
+    const existing = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+    const existingBody = await bodyText(existing.Body)
+    if (existingBody !== body) {
+      throw new Error(`Generation manifest collision for generationId ${generationId}`, { cause: error })
+    }
+    return {
+      result: {
+        status: 'unchanged',
+        reason: 'identical-generation-manifest-reused',
+        key,
+        bytes,
+        contentType: 'application/json; charset=utf-8',
+        digest,
+      },
+      authority: { key, etag: existing.ETag, bytes, digest },
+    }
+  }
+}
+
+async function assertGenerationManifestAuthority(client, config, authority) {
+  if (!authority?.etag) throw new Error('Generation manifest authority is missing an ETag')
+  const current = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: authority.key }))
+  const matches = current.ETag === authority.etag
+    && Number(current.ContentLength) === authority.bytes
+    && current.Metadata?.sha256 === authority.digest
+  if (!matches) throw new Error('Generation manifest changed before active pointer promotion')
 }
 
 async function syncContentAddressedObject(client, config, artifact) {
@@ -735,14 +800,6 @@ function assertContentAddressedMetadata(remote, artifact, key) {
     && remote.Metadata?.['semantic-bytes'] === String(artifact.bytes)
     && remote.Metadata?.encoding === 'gzip'
   if (!matches) throw new Error(`Content-addressed object collision or metadata mismatch: ${key}`)
-}
-
-function logicalDataPath(relativePath) {
-  try {
-    return decodeURIComponent(`/data/${relativePath}`)
-  } catch {
-    throw new Error(`Invalid encoded public artifact path: ${relativePath}`)
-  }
 }
 
 export async function uploadRawSourceFiles(client, config, rawDir, manifestPath) {
