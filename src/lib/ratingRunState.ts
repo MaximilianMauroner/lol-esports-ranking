@@ -52,6 +52,7 @@ export type RatingRunState = {
   eventTrackers: ReturnType<typeof buildEventTrackers>
   eventWeightContext: EventWeightContext
   previousMatch?: MatchRecord
+  processedThroughUtcDate?: string
   processedMatchCount: number
 }
 

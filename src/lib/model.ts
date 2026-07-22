@@ -18,7 +18,7 @@ import { eventWeightContextForMatches } from './eventWeighting'
 import { ensureLeague } from './leagueRatings'
 import { homeLeagueForMatch, matchesByDate } from './matchContext'
 import { buildEventSummaries, buildLeagueStrengths, buildSeasonSummaries } from './modelSummaries'
-import { buildPregamePlayerRatingEdges } from './playerModel'
+import { buildPregamePlayerRatingEdges, type PregamePlayerRatingEdge } from './playerModel'
 import {
   applyCompletedPlacementResiduals,
   startEventTrackersForDate,
@@ -36,7 +36,7 @@ import {
   ratingComponents,
   ratingFromComponents,
 } from './ratingCalculations'
-import { createRatingRunState, ensureMatchRunEntities } from './ratingRunState'
+import { createRatingRunState, ensureMatchRunEntities, type RatingRunState } from './ratingRunState'
 import type { PlacementTournamentLifecycle } from './placementResiduals'
 import { emitPregamePredictionsForDate, processRatingSeriesForDate } from './ratingSeriesEngine'
 import { applyRosterContinuityForDate, roundedContinuity } from './rosterContinuityRating'
@@ -62,6 +62,129 @@ import {
 export { buildPlayerModel } from './playerModel'
 export { factorLabel, transparentGprModelMetadata } from './modelConfig'
 
+export type RatingUtcDateBoundaryInput = {
+  dateMatches: MatchRecord[]
+  teams: Record<string, TeamProfile>
+  state: RatingRunState
+  lastDate: string
+  pregamePlayerRatingEdges: Map<string, PregamePlayerRatingEdge>
+}
+
+/**
+ * Applies one complete UTC date atomically from the shared pre-date snapshot.
+ * Callers must replay the whole date when any match on that date changes.
+ */
+export function processRatingUtcDateBoundary({
+  dateMatches,
+  teams,
+  state,
+  lastDate,
+  pregamePlayerRatingEdges,
+}: RatingUtcDateBoundaryInput) {
+  const firstMatch = dateMatches[0]
+  if (!firstMatch) throw new Error('A rating UTC date boundary cannot be empty')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(firstMatch.date)) {
+    throw new Error(`Invalid UTC rating boundary date: ${firstMatch.date}`)
+  }
+  if (dateMatches.some((match) => match.date !== firstMatch.date)) {
+    throw new Error(`Rating boundary ${firstMatch.date} contains matches from another UTC date`)
+  }
+  if (state.processedThroughUtcDate && firstMatch.date <= state.processedThroughUtcDate) {
+    throw new Error(`Rating boundary ${firstMatch.date} does not follow ${state.processedThroughUtcDate}`)
+  }
+
+  applyCompletedPlacementResiduals({
+    cutoffDate: firstMatch.date,
+    eventTrackers: state.eventTrackers,
+    teams,
+    ratings: state.ratings,
+    leagueScores: state.leagueScores,
+    previousLeagueScores: state.previousLeagueScores,
+    leagueLastEvents: state.leagueLastEvents,
+    leagueLastUpdated: state.leagueLastUpdated,
+    leaguePlacementDeltas: state.leaguePlacementDeltas,
+    latestRatingUpdates: state.latestRatingUpdates,
+  })
+
+  applyContextDecayToRatingChannels(
+    firstMatch,
+    state.previousMatch,
+    teams,
+    [state.ratings, state.executionRatings],
+    state.leagueScores,
+    {
+      initialTeamRating,
+      recencyFloor,
+      recencyRange,
+      recencyDecayDays,
+      normalPatchTeamRetention,
+      splitBreakTeamRetention,
+      seasonStartTeamRetention,
+      splitBreakLeagueRetention,
+      seasonStartLeagueRetention,
+      splitBreakMinimumGapDays,
+    },
+  )
+  applyMomentumBoundaryDecay(firstMatch, state.previousMatch, state.momentums)
+
+  for (const match of dateMatches) {
+    ensureMatchRunEntities(state, match, teams)
+    ensureLeague(homeLeagueForMatch(match, 'A', teams), state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
+    ensureLeague(homeLeagueForMatch(match, 'B', teams), state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
+  }
+
+  applyRosterContinuityForDate(dateMatches, state.ratings, state.executionRatings, state.uncertainties, state.lastRosterByTeam, state.currentRosterContinuity)
+  startEventTrackersForDate(dateMatches, state.eventTrackers, teams, state.ratings, state.momentums, state.rosterPriorOffsets, state.uncertainties, state.leagueScores, state.leagueMatchCounts)
+
+  const sideAdjustments = sideAdjustmentsFromSamples(state.sideAdjustmentSamples)
+  emitPregamePredictionsForDate({
+    matches: dateMatches,
+    teams,
+    state,
+    pregamePlayerRatingEdges,
+    sideAdjustments,
+  })
+  processRatingSeriesForDate({
+    matches: dateMatches,
+    teams,
+    state,
+    sideAdjustments,
+    lastDate,
+    pregamePlayerRatingEdges,
+  })
+  state.processedThroughUtcDate = firstMatch.date
+}
+
+export function finalizeRatingRunStateAtUtcBoundary(
+  state: RatingRunState,
+  teams: Record<string, TeamProfile>,
+) {
+  const processedThroughUtcDate = state.processedThroughUtcDate
+  if (!processedThroughUtcDate) return undefined
+  applyCompletedPlacementResiduals({
+    cutoffDate: utcDateAfter(processedThroughUtcDate),
+    eventTrackers: state.eventTrackers,
+    teams,
+    ratings: state.ratings,
+    leagueScores: state.leagueScores,
+    previousLeagueScores: state.previousLeagueScores,
+    leagueLastEvents: state.leagueLastEvents,
+    leagueLastUpdated: state.leagueLastUpdated,
+    leaguePlacementDeltas: state.leaguePlacementDeltas,
+    latestRatingUpdates: state.latestRatingUpdates,
+  })
+  return processedThroughUtcDate
+}
+
+function utcDateAfter(date: string) {
+  const parsed = new Date(`${date}T00:00:00.000Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw new Error(`Invalid processed-through UTC date ${date}`)
+  }
+  parsed.setUTCDate(parsed.getUTCDate() + 1)
+  return parsed.toISOString().slice(0, 10)
+}
+
 export function buildRankingModel(
   matches: MatchRecord[],
   teams: Record<string, TeamProfile>,
@@ -86,7 +209,6 @@ export function buildRankingModel(
     momentums,
     rosterPriorOffsets,
     latestRatingUpdates,
-    leaguePlacementDeltas,
     wins,
     losses,
     forms,
@@ -107,7 +229,6 @@ export function buildRankingModel(
     leagueHistory,
     predictions,
     currentRosterContinuity,
-    eventTrackers,
   } = state
   const lastDate = sortedMatches.at(-1)?.date ?? new Date().toISOString().slice(0, 10)
 
@@ -116,83 +237,10 @@ export function buildRankingModel(
   }
 
   for (const dateMatches of matchesByDate(sortedMatches)) {
-    const firstMatch = dateMatches[0]
-    if (!firstMatch) continue
-
-    applyCompletedPlacementResiduals({
-      cutoffDate: firstMatch.date,
-      eventTrackers: state.eventTrackers,
-      teams,
-      ratings: state.ratings,
-      leagueScores: state.leagueScores,
-      previousLeagueScores: state.previousLeagueScores,
-      leagueLastEvents: state.leagueLastEvents,
-      leagueLastUpdated: state.leagueLastUpdated,
-      leaguePlacementDeltas: state.leaguePlacementDeltas,
-      latestRatingUpdates: state.latestRatingUpdates,
-    })
-
-    applyContextDecayToRatingChannels(
-      firstMatch,
-      state.previousMatch,
-      teams,
-      [state.ratings, state.executionRatings],
-      state.leagueScores,
-      {
-        initialTeamRating,
-        recencyFloor,
-        recencyRange,
-        recencyDecayDays,
-        normalPatchTeamRetention,
-        splitBreakTeamRetention,
-        seasonStartTeamRetention,
-        splitBreakLeagueRetention,
-        seasonStartLeagueRetention,
-        splitBreakMinimumGapDays,
-      },
-    )
-    applyMomentumBoundaryDecay(firstMatch, state.previousMatch, state.momentums)
-
-    for (const match of dateMatches) {
-      ensureMatchRunEntities(state, match, teams)
-      ensureLeague(homeLeagueForMatch(match, 'A', teams), state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
-      ensureLeague(homeLeagueForMatch(match, 'B', teams), state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
-    }
-
-    applyRosterContinuityForDate(dateMatches, state.ratings, state.executionRatings, state.uncertainties, state.lastRosterByTeam, state.currentRosterContinuity)
-    startEventTrackersForDate(dateMatches, state.eventTrackers, teams, state.ratings, state.momentums, state.rosterPriorOffsets, state.uncertainties, state.leagueScores, state.leagueMatchCounts)
-
-    const sideAdjustments = sideAdjustmentsFromSamples(state.sideAdjustmentSamples)
-    emitPregamePredictionsForDate({
-      matches: dateMatches,
-      teams,
-      state,
-      pregamePlayerRatingEdges,
-      sideAdjustments,
-    })
-
-    processRatingSeriesForDate({
-      matches: dateMatches,
-      teams,
-      state,
-      sideAdjustments,
-      lastDate,
-      pregamePlayerRatingEdges,
-    })
+    processRatingUtcDateBoundary({ dateMatches, teams, state, lastDate, pregamePlayerRatingEdges })
   }
 
-  applyCompletedPlacementResiduals({
-    cutoffDate: undefined,
-    eventTrackers,
-    teams,
-    ratings,
-    leagueScores,
-    previousLeagueScores,
-    leagueLastEvents,
-    leagueLastUpdated,
-    leaguePlacementDeltas,
-    latestRatingUpdates,
-  })
+  finalizeRatingRunStateAtUtcBoundary(state, teams)
 
   const preliminaryDisplayRatings = makeDisplayRatings(ratings, teams, leagueScores, leagueMatchCounts, rosterPriorOffsets, momentums, uncertainties, wins, losses, teamRosterBasis)
   const directHeadToHeadContextAdjustments = makeDirectHeadToHeadContextAdjustments({
