@@ -13,7 +13,9 @@ export type PublicGenerationArtifactEntry = {
   objectUrl: string
   generationId: string
   sha256: string
+  /** Canonical UTF-8 byte length of the uncompressed semantic JSON. */
   bytes: number
+  /** HTTP transport encoding. Digest and bytes always describe uncompressed semantic JSON. */
   encoding: PublicArtifactEncoding
 }
 
@@ -95,7 +97,8 @@ export function parsePublicArtifactGenerationManifest(value: unknown): PublicArt
 
 export function createPublicSemanticArtifact(value: unknown): PublicSemanticArtifact {
   assertRecord(value, 'semantic artifact source')
-  const content = Object.fromEntries(Object.entries(value).filter(([key]) => !volatileArtifactKeys.has(key)))
+  const withoutVolatileMetadata = Object.fromEntries(Object.entries(value).filter(([key]) => !volatileArtifactKeys.has(key)))
+  const content = normalizeKnownLogicalUrls(withoutVolatileMetadata)
   return {
     artifactKind: 'public-semantic-artifact',
     schemaVersion: PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION,
@@ -181,7 +184,8 @@ export async function fetchPublicArtifact<T extends object>(
     headers: { Accept: 'application/json' },
   })
   if (!response.ok) throw new PublicArtifactRequestError(response.status)
-  const semanticArtifact = parsePublicSemanticArtifact(await response.json())
+  assertTransportEncoding(response, entry, logicalPath)
+  const semanticArtifact = parsePublicSemanticArtifact(await parseSemanticResponse(response, entry, logicalPath))
   const identity = await semanticArtifactIdentity(semanticArtifact)
   if (identity.sha256 !== entry.sha256 || identity.bytes !== entry.bytes) {
     throw new Error(`Invalid public artifact: semantic digest mismatch for ${logicalPath}`)
@@ -192,6 +196,117 @@ export async function fetchPublicArtifact<T extends object>(
   assertArtifactModelIdentity(parsed, context.manifest, logicalPath)
   registerGenerationContext(parsed, context.manifest, context.manifestUrl)
   return parsed
+}
+
+function normalizeKnownLogicalUrls(content: Record<string, unknown>): Record<string, unknown> {
+  switch (content.artifactKind) {
+    case 'public-ranking-manifest':
+      return normalizeRankingManifestUrls(content)
+    case 'team-history-index':
+    case 'match-history-index':
+      return { ...content, scopeIndex: normalizeRecordEntryUrls(content.scopeIndex) }
+    case 'tournament-movement-index':
+      return { ...content, tournaments: normalizeArrayEntryUrls(content.tournaments) }
+    case 'match-history-catalog':
+      return { ...content, pages: normalizeArrayEntryUrls(content.pages) }
+    default:
+      return content
+  }
+}
+
+function normalizeRankingManifestUrls(content: Record<string, unknown>) {
+  const normalized = { ...content }
+  for (const key of [
+    'fullSnapshotUrl',
+    'playerDirectoryUrl',
+    'teamDirectoryUrl',
+    'teamHistoryIndexUrl',
+    'teamHistoryUrl',
+    'regionHistoryUrl',
+    'tournamentMovementIndexUrl',
+    'matchHistoryIndexUrl',
+  ] as const) {
+    if (typeof normalized[key] === 'string') normalized[key] = normalizeLogicalArtifactUrl(normalized[key])
+  }
+  normalized.snapshotIndex = normalizeRecordEntryUrls(normalized.snapshotIndex)
+  return normalized
+}
+
+function normalizeRecordEntryUrls(value: unknown) {
+  return transformRecordEntryUrls(value, normalizeLogicalArtifactUrl)
+}
+
+function transformRecordEntryUrls(value: unknown, transform: (value: string) => string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, transformEntryUrl(entry, transform)]))
+}
+
+function normalizeArrayEntryUrls(value: unknown) {
+  return transformArrayEntryUrls(value, normalizeLogicalArtifactUrl)
+}
+
+function transformArrayEntryUrls(value: unknown, transform: (value: string) => string) {
+  if (!Array.isArray(value)) return value
+  return value.map((entry) => transformEntryUrl(entry, transform))
+}
+
+function transformEntryUrl(value: unknown, transform: (value: string) => string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  const entry = value as Record<string, unknown>
+  return typeof entry.url === 'string'
+    ? { ...entry, url: transform(entry.url) }
+    : entry
+}
+
+function normalizeLogicalArtifactUrl(value: string) {
+  const url = new URL(value, 'https://public-artifacts.invalid')
+  if (!url.pathname.startsWith('/data/')) return value
+  url.searchParams.delete('v')
+  url.searchParams.sort()
+  const query = url.searchParams.toString()
+  return `${url.pathname}${query ? `?${query}` : ''}`
+}
+
+function withGenerationVersion(value: string, runId: string) {
+  const url = new URL(value, 'https://public-artifacts.invalid')
+  if (!url.pathname.startsWith('/data/')) return value
+  url.searchParams.set('v', runId)
+  url.searchParams.sort()
+  const query = url.searchParams.toString()
+  return `${url.pathname}?${query}`
+}
+
+function assertTransportEncoding(
+  response: Response,
+  entry: PublicGenerationArtifactEntry,
+  logicalPath: string,
+) {
+  const actual = response.headers.get('content-encoding')?.trim().toLowerCase()
+  if (entry.encoding === 'identity') {
+    if (actual && actual !== 'identity') {
+      throw new Error(`Invalid public artifact: identity transport has unexpected Content-Encoding ${actual} for ${logicalPath}`)
+    }
+    return
+  }
+  if (actual !== 'gzip') {
+    throw new Error(`Invalid public artifact: gzip transport requires a CORS-visible Content-Encoding: gzip for ${logicalPath}`)
+  }
+}
+
+async function parseSemanticResponse(
+  response: Response,
+  entry: PublicGenerationArtifactEntry,
+  logicalPath: string,
+) {
+  const text = await response.text()
+  try {
+    return JSON.parse(text) as unknown
+  } catch (error) {
+    if (entry.encoding === 'gzip') {
+      throw new Error(`Invalid public artifact: gzip transport was not decoded by fetch for ${logicalPath}`, { cause: error })
+    }
+    throw new Error(`Invalid public artifact: identity transport is not valid JSON for ${logicalPath}`, { cause: error })
+  }
 }
 
 export function validateGenerationRankingManifest(
@@ -236,8 +351,9 @@ function hydrateSemanticArtifact(
   artifact: PublicSemanticArtifact,
   manifest: PublicArtifactGenerationManifest,
 ): Record<string, unknown> {
+  const content = hydrateKnownLogicalUrls(artifact.content, manifest.runId)
   return {
-    ...artifact.content,
+    ...content,
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     generatedAt: manifest.generatedAt,
     modelVersion: manifest.model.version,
@@ -249,6 +365,38 @@ function hydrateSemanticArtifact(
       modelVersion: manifest.model.version,
       modelConfigHash: manifest.model.configHash,
     },
+  }
+}
+
+function hydrateKnownLogicalUrls(content: Record<string, unknown>, runId: string) {
+  const hydrateUrl = (value: string) => withGenerationVersion(value, runId)
+  switch (content.artifactKind) {
+    case 'public-ranking-manifest': {
+      const hydrated = { ...content }
+      for (const key of [
+        'fullSnapshotUrl',
+        'playerDirectoryUrl',
+        'teamDirectoryUrl',
+        'teamHistoryIndexUrl',
+        'teamHistoryUrl',
+        'regionHistoryUrl',
+        'tournamentMovementIndexUrl',
+        'matchHistoryIndexUrl',
+      ] as const) {
+        if (typeof hydrated[key] === 'string') hydrated[key] = hydrateUrl(hydrated[key])
+      }
+      hydrated.snapshotIndex = transformRecordEntryUrls(hydrated.snapshotIndex, hydrateUrl)
+      return hydrated
+    }
+    case 'team-history-index':
+    case 'match-history-index':
+      return { ...content, scopeIndex: transformRecordEntryUrls(content.scopeIndex, hydrateUrl) }
+    case 'tournament-movement-index':
+      return { ...content, tournaments: transformArrayEntryUrls(content.tournaments, hydrateUrl) }
+    case 'match-history-catalog':
+      return { ...content, pages: transformArrayEntryUrls(content.pages, hydrateUrl) }
+    default:
+      return content
   }
 }
 
