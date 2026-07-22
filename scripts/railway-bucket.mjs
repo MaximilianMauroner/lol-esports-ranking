@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { gunzipSync } from 'node:zlib'
+import { createGunzip, gunzipSync } from 'node:zlib'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -374,6 +375,7 @@ export async function readBucketJson(relativeKey, {
 export async function readActiveContentAddressedGeneration({
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
+  verifyArtifacts = true,
 } = {}) {
   const active = await readBucketJson('active-generation.json', { config, client })
   if (!active.found || active.value?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE) {
@@ -400,18 +402,29 @@ export async function readActiveContentAddressedGeneration({
     || !manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) {
     throw new Error('Active public generation manifest is invalid')
   }
-  const artifacts = {}
+  const identities = {}
   for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
     const canonical = canonicalPublicLogicalPath(logicalPath)
     if (identity?.logicalPath !== canonical || identity?.objectUrl !== `/data/objects/sha256/${identity?.sha256}`
       || identity?.generationId !== generationId || identity?.storageEncoding !== 'gzip') {
       throw new Error(`Active public generation has an invalid mapping for ${canonical}`)
     }
-    artifacts[canonical] = await readVerifiedContentAddressedArtifact(client, config, identity, canonical)
+    identities[canonical] = identity
   }
+  const loadArtifacts = async (logicalPaths) => Object.fromEntries(await Promise.all(
+    [...new Set(logicalPaths.map((path) => canonicalPublicLogicalPath(path)))]
+      .filter((canonical) => identities[canonical])
+      .map(async (canonical) => {
+      const identity = identities[canonical]
+      return [canonical, await readVerifiedContentAddressedArtifact(client, config, identity, canonical)]
+      }),
+  ))
+  const artifacts = verifyArtifacts
+    ? await loadArtifacts(Object.keys(identities))
+    : await loadArtifacts(['/data/ranking-summary.json'])
   const rootArtifact = artifacts['/data/ranking-summary.json']
   if (!rootArtifact) throw new Error('Active public generation has no valid root artifact')
-  return { found: true, active: active.value, etag: active.etag, manifest, rootArtifact, artifacts }
+  return { found: true, active: active.value, etag: active.etag, manifest, rootArtifact, artifacts, loadArtifacts }
 }
 
 export async function writeBucketJson(relativeKey, value, {
@@ -771,7 +784,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   for (const entry of changedArtifacts ?? []) {
     const logicalPath = canonicalPublicLogicalPath(entry.logicalPath)
     if (changedByPath.has(logicalPath)) throw new Error(`Duplicate changed public artifact logical path: ${logicalPath}`)
-    changedByPath.set(logicalPath, { logicalPath, value: entry.value, ...prepareSemanticArtifact(entry.value) })
+    changedByPath.set(logicalPath, { logicalPath, value: entry.value })
   }
   const root = changedByPath.get('/data/ranking-summary.json')
   if (!root) throw new Error('Content-addressed artifact patch must include ranking-summary.json for generation provenance')
@@ -789,45 +802,48 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   const uniqueReused = new Map()
   for (const entry of entriesByPath.values()) uniqueReused.set(entry.digest, entry)
   for (const entry of uniqueReused.values()) {
-    await readVerifiedContentAddressedArtifact(client, config, {
+    await assertReferencedContentAddressedIntegrity(client, config, {
       logicalPath: entry.logicalPath,
       sha256: entry.digest,
       bytes: entry.bytes,
-      storageEncoding: 'gzip',
     }, entry.logicalPath)
   }
-  for (const artifact of changedByPath.values()) {
-    entriesByPath.set(artifact.logicalPath, {
-      logicalPath: artifact.logicalPath,
-      digest: artifact.digest,
-      bytes: artifact.bytes,
-    })
-  }
-  const actualPaths = [...entriesByPath.keys()].sort()
+  const actualPaths = [...new Set([...entriesByPath.keys(), ...changedByPath.keys()])].sort()
   if (expectedLogicalPaths) {
     const expectedPaths = [...new Set(expectedLogicalPaths.map((path) => canonicalPublicLogicalPath(path)))].sort()
     if (actualPaths.join('\u0000') !== expectedPaths.join('\u0000')) {
-      const missing = expectedPaths.filter((path) => !entriesByPath.has(path))
+      const actualPathSet = new Set(actualPaths)
+      const missing = expectedPaths.filter((path) => !actualPathSet.has(path))
       const unexpected = actualPaths.filter((path) => !expectedPaths.includes(path))
       throw new Error(`Incomplete public artifact patch mapping; missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}`)
     }
   }
-  if (!entriesByPath.has('/data/ranking-summary.json')) throw new Error('Public artifact patch removed the root manifest')
+  if (!actualPaths.includes('/data/ranking-summary.json')) throw new Error('Public artifact patch removed the root manifest')
 
   const uploaded = []
   const unchanged = []
   const uniqueChanged = new Map()
+  let compressedLogicalBytes = 0
   for (const artifact of changedByPath.values()) {
-    const existing = uniqueChanged.get(artifact.digest)
-    if (existing && existing.canonicalJson !== artifact.canonicalJson) {
-      throw new Error(`Local semantic SHA-256 collision: ${artifact.digest}`)
+    const prepared = prepareSemanticArtifact(artifact.value)
+    compressedLogicalBytes += prepared.compressedBytes
+    const existing = uniqueChanged.get(prepared.digest)
+    if (existing) {
+      if (prepareSemanticArtifact(existing.value).canonicalJson !== prepared.canonicalJson) {
+        throw new Error(`Local semantic SHA-256 collision: ${prepared.digest}`)
+      }
+    } else {
+      const result = await syncContentAddressedObject(client, config, prepared)
+      if (result.status === 'unchanged') unchanged.push(result)
+      else uploaded.push(result)
     }
-    uniqueChanged.set(artifact.digest, existing ?? artifact)
-  }
-  for (const artifact of uniqueChanged.values()) {
-    const result = await syncContentAddressedObject(client, config, artifact)
-    if (result.status === 'unchanged') unchanged.push(result)
-    else uploaded.push(result)
+    const metadata = existing ?? { ...artifact, digest: prepared.digest, bytes: prepared.bytes, compressedBytes: prepared.compressedBytes }
+    uniqueChanged.set(prepared.digest, metadata)
+    entriesByPath.set(artifact.logicalPath, {
+      logicalPath: artifact.logicalPath,
+      digest: prepared.digest,
+      bytes: prepared.bytes,
+    })
   }
   const manifest = createGenerationManifest({
     generationId,
@@ -845,7 +861,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
     manifestAuthority: manifestSync.authority,
     objectCount: new Set([...entriesByPath.values()].map((entry) => entry.digest)).size,
     logicalArtifactCount: entriesByPath.size,
-    compressedLogicalBytes: [...changedByPath.values()].reduce((sum, entry) => sum + entry.compressedBytes, 0),
+    compressedLogicalBytes,
     semanticLogicalBytes,
     uniqueCompressedBytes: [...uniqueChanged.values()].reduce((sum, entry) => sum + entry.compressedBytes, 0),
     changedLogicalPaths: [...changedByPath.keys()].sort(),
@@ -974,6 +990,50 @@ function assertContentAddressedMetadata(remote, artifact, key) {
     && remote.Metadata?.['semantic-bytes'] === String(artifact.bytes)
     && remote.Metadata?.encoding === 'gzip'
   if (!matches) throw new Error(`Content-addressed object collision or metadata mismatch: ${key}`)
+}
+
+async function assertReferencedContentAddressedIntegrity(client, config, identity, logicalPath) {
+  if (!/^[a-f0-9]{64}$/.test(identity?.sha256 ?? '') || !Number.isSafeInteger(identity?.bytes) || identity.bytes <= 0) {
+    throw new Error(`Invalid content-addressed object identity for ${logicalPath}`)
+  }
+  const key = bucketKey(config, `objects/sha256/${identity.sha256}`)
+  let remote
+  try {
+    remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  } catch (error) {
+    if (isMissingObjectError(error)) throw new Error(`Referenced content-addressed object is missing: ${logicalPath}`, { cause: error })
+    throw error
+  }
+  if (!Number.isSafeInteger(Number(remote.ContentLength)) || Number(remote.ContentLength) <= 0
+    || remote.ContentEncoding !== 'gzip' || remote.Metadata?.sha256 !== identity.sha256
+    || remote.Metadata?.['semantic-bytes'] !== String(identity.bytes) || remote.Metadata?.encoding !== 'gzip') {
+    throw new Error(`Referenced content-addressed object metadata mismatch: ${logicalPath}`)
+  }
+  let compressedBytes = 0
+  let semanticBytes = 0
+  const digest = createHash('sha256')
+  const countCompressed = new Transform({
+    transform(chunk, _encoding, callback) {
+      compressedBytes += chunk.length
+      callback(null, chunk)
+    },
+  })
+  const hashSemantic = new Transform({
+    transform(chunk, _encoding, callback) {
+      semanticBytes += chunk.length
+      digest.update(chunk)
+      callback()
+    },
+  })
+  try {
+    await pipeline(remote.Body, countCompressed, createGunzip(), hashSemantic)
+  } catch (error) {
+    throw new Error(`Referenced content-addressed object gzip is corrupt: ${logicalPath}`, { cause: error })
+  }
+  if (compressedBytes !== Number(remote.ContentLength)
+    || semanticBytes !== identity.bytes || digest.digest('hex') !== identity.sha256) {
+    throw new Error(`Referenced content-addressed object digest mismatch: ${logicalPath}`)
+  }
 }
 
 async function readVerifiedContentAddressedArtifact(client, config, identity, logicalPath) {

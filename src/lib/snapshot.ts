@@ -417,7 +417,10 @@ function createTeamHistoryShard(
   ratingScale: PublishedRatingScale = data.model.ratingScale ?? publishedRatingScale,
 ): PublicTeamHistoryShard {
   const minimumPointsPerSeries = 2
-  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf: data.generatedAt })
+  // A completed season shard is immutable: its standing is as of its last
+  // resolved match, while the all-time shard continues to expose the run time.
+  const asOf = snapshot && isSeasonHistoryScope(snapshot.filter) ? '' : data.generatedAt
+  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf })
   return {
     artifactKind: 'team-history-scope',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,

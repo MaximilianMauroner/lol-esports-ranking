@@ -76,6 +76,7 @@ export function prepareContentAddressedState(options: {
     compatibility?: StateCompatibility
     ratingCheckpoint: Record<string, unknown>
     causalSummaries: StateCausalSummaries
+    storedObjectReference?: StateObjectReference
   }>
 }): { manifest: IncrementalStateManifest; manifestPrepared: PreparedStateObject; objects: PreparedStateObject[] }
 export function syncContentAddressedStateObject(
@@ -87,6 +88,7 @@ export function writeIncrementalStateManifest(
   client: BucketClient,
   config: BucketStorageConfig,
   preparedState: { manifest: IncrementalStateManifest; manifestPrepared?: PreparedStateObject },
+  options?: { verifyObjects?: boolean },
 ): Promise<{ result: Record<string, unknown>; authority: StateManifestAuthority }>
 export function assertStateManifestAuthority(
   client: BucketClient,
@@ -98,6 +100,7 @@ export function readActiveIncrementalState(options: {
   client: BucketClient
   config: BucketStorageConfig
   verifyObjects?: boolean
+  checkpointLimit?: number
 }): Promise<
   | { found: false; reason: 'active-generation-missing' }
   | { found: false; reason: 'legacy-active-generation'; active: Record<string, unknown>; etag?: string }

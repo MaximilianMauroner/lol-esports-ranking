@@ -1,8 +1,9 @@
+import { createHash } from 'node:crypto'
 import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
-import { buildRankingIncrementally, persistIncrementalStateBuild, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from './incremental-ranking-orchestrator.ts'
+import { buildRankingIncrementally, persistIncrementalStateBuild, releasePersistedIncrementalInputs, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from './incremental-ranking-orchestrator.ts'
 import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
 import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { readActiveContentAddressedGeneration, uploadRankingArtifacts } from './railway-bucket.mjs'
@@ -25,17 +26,8 @@ try {
   await writeManifest(baselineManifest, ['oracle-baseline.csv'], '2026-07-21T00:00:00.000Z')
   await writeManifest(nextManifest, ['oracle-baseline.csv', 'oracle-delta.csv'], '2026-07-22T00:00:00.000Z')
 
-  const client = memoryS3()
-  const baselineSource = await importRankingSourceData({ manifestPath: baselineManifest })
-  const baseline = await run('baseline', baselineSource, '2026-07-21T00:00:00.000Z', { mode: 'gated', cause: 'daily-audit', enabled: true })
-  if (baseline.action === 'no-change' || !baseline.build) throw new Error('Benchmark baseline did not materialize')
-  const baselineGenerationId = generationIdFor(baseline)
-  const baselineState = await persistIncrementalStateBuild({ state: baseline.state, generationId: baselineGenerationId, client, config })
-  await uploadRankingArtifacts({
-    publicDataDir: baseline.build.publicDataDir, rawDir: root, manifestPath: baselineManifest,
-    generationId: baselineGenerationId, fencingToken: 1, contentAddressed: true,
-    stateManifestAuthority: baselineState.authority, config, client,
-  })
+  const client = fileBackedS3()
+  const { generationId: baselineGenerationId, matchCount: baselineMatchCount } = await seedBaseline(client, baselineManifest)
 
   client.resetIo()
   globalThis.gc?.()
@@ -44,9 +36,11 @@ try {
   let stageStarted = started
   const nextSource = await importRankingSourceData({ manifestPath: nextManifest })
   const sourceImportMs = performance.now() - stageStarted
+  const sourceImportRss = process.memoryUsage().rss
   stageStarted = performance.now()
   const restored = await restoreFromStorage(client)
   const restoreMs = performance.now() - stageStarted
+  const restoreRss = process.memoryUsage().rss
   stageStarted = performance.now()
   const incremental = await run('incremental', nextSource, '2026-07-22T00:00:00.000Z', {
     mode: 'gated', cause: 'pending-match', enabled: true, restored,
@@ -55,13 +49,19 @@ try {
     throw new Error(`Benchmark did not exercise the incremental fast path: ${incremental.metrics.fallbackReason ?? incremental.action}`)
   }
   const incrementalBuildMs = performance.now() - stageStarted
+  const incrementalBuildRss = process.memoryUsage().rss
   stageStarted = performance.now()
   const generationId = generationIdFor(incremental)
   const incrementalState = await persistIncrementalStateBuild({
     state: incremental.state, generationId, baseGenerationId: baselineGenerationId,
     baseRunId: baselineGenerationId, client, config,
   })
+  const stateCheckpointCount = incremental.state.checkpoints.length
+  const importedMatchCount = nextSource.matches.length
+  const importedTeamCount = Object.keys(nextSource.teams).length
+  releasePersistedIncrementalInputs(incremental, restored)
   const statePersistMs = performance.now() - stageStarted
+  const statePersistRss = process.memoryUsage().rss
   stageStarted = performance.now()
   await uploadRankingArtifacts({
     publicDataDir: incremental.build?.publicDataDir, rawDir: root, manifestPath: nextManifest,
@@ -70,10 +70,13 @@ try {
     config, client,
   })
   const artifactPublishMs = performance.now() - stageStarted
+  const artifactPublishRss = process.memoryUsage().rss
   const computeMs = performance.now() - started
   const peakRssBytes = Math.max(startingRssBytes, process.memoryUsage().rss)
 
-  const full = await run('full', nextSource, '2026-07-22T00:00:00.000Z', { mode: 'legacy', cause: 'daily-audit', enabled: false })
+  const paritySource = await importRankingSourceData({ manifestPath: nextManifest })
+  paritySource.externalSources = incremental.sourceData.externalSources
+  const full = await run('full', paritySource, '2026-07-22T00:00:00.000Z', { mode: 'legacy', cause: 'daily-audit', enabled: false })
   if (full.action === 'no-change') throw new Error('Benchmark clean full build did not materialize')
   const incrementalSemantic = semanticMap(incremental)
   const fullSemantic = semanticMap(full)
@@ -100,20 +103,24 @@ try {
       referenceMatchCount: currentShape.matchCount,
       benchmarkMatchCount,
       referenceTeamCount: currentShape.teamCount,
-      importedMatchCount: nextSource.matches.length,
-      importedTeamCount: Object.keys(nextSource.teams).length,
+      importedMatchCount,
+      importedTeamCount,
       sourceBytes: (await readFile(baselineCsv)).byteLength + (await readFile(deltaCsv)).byteLength,
-      appendedMatches: nextSource.matches.length - baselineSource.matches.length,
+      appendedMatches: importedMatchCount - baselineMatchCount,
     },
     computeMs: Math.round(computeMs), peakRssBytes, uploadedBytes,
     stageMs: {
       sourceImport: Math.round(sourceImportMs), restore: Math.round(restoreMs), incrementalBuild: Math.round(incrementalBuildMs),
       statePersist: Math.round(statePersistMs), artifactPublish: Math.round(artifactPublishMs),
     },
+    stageRssBytes: {
+      sourceImport: sourceImportRss, restore: restoreRss, incrementalBuild: incrementalBuildRss,
+      statePersist: statePersistRss, artifactPublish: artifactPublishRss,
+    },
     uploadedBytesBySurface: bytesBySurface,
     storageCommands: client.io,
     storagePutCount: client.puts.length,
-    stateCheckpointCount: incremental.state.checkpoints.length,
+    stateCheckpointCount,
     fullSnapshotWritten: incremental.metrics.fullSnapshotWritten,
     materializedScopeCount: incremental.metrics.materializedScopeCount,
     replayedMatchCount: incremental.metrics.replayedMatchCount,
@@ -133,6 +140,20 @@ try {
   await rm(root, { recursive: true, force: true })
 }
 
+async function seedBaseline(client: ReturnType<typeof fileBackedS3>, manifestPath: string) {
+  const source = await importRankingSourceData({ manifestPath })
+  const baseline = await run('baseline', source, '2026-07-21T00:00:00.000Z', { mode: 'gated', cause: 'daily-audit', enabled: true })
+  if (baseline.action === 'no-change' || !baseline.build) throw new Error('Benchmark baseline did not materialize')
+  const generationId = generationIdFor(baseline)
+  const state = await persistIncrementalStateBuild({ state: baseline.state, generationId, client, config })
+  await uploadRankingArtifacts({
+    publicDataDir: baseline.build.publicDataDir, rawDir: root, manifestPath,
+    generationId, fencingToken: 1, contentAddressed: true,
+    stateManifestAuthority: state.authority, config, client,
+  })
+  return { generationId, matchCount: source.matches.length }
+}
+
 function run(
   name: string,
   sourceData: RankingSourceImport,
@@ -145,10 +166,10 @@ function run(
   })
 }
 
-async function restoreFromStorage(client: ReturnType<typeof memoryS3>): Promise<RestoredIncrementalAuthority> {
+async function restoreFromStorage(client: ReturnType<typeof fileBackedS3>): Promise<RestoredIncrementalAuthority> {
   const [state, publicGeneration] = await Promise.all([
-    readActiveIncrementalState({ config, client }),
-    readActiveContentAddressedGeneration({ config, client }),
+    readActiveIncrementalState({ config, client, checkpointLimit: 1 }),
+    readActiveContentAddressedGeneration({ config, client, verifyArtifacts: false }),
   ])
   if (!state.found || !publicGeneration.found) throw new Error('Benchmark active authority did not restore')
   return {
@@ -158,6 +179,7 @@ async function restoreFromStorage(client: ReturnType<typeof memoryS3>): Promise<
     publicManifest: publicGeneration.manifest,
     rootArtifact: publicGeneration.rootArtifact,
     artifacts: publicGeneration.artifacts,
+    loadArtifacts: publicGeneration.loadArtifacts,
   }
 }
 
@@ -285,7 +307,8 @@ async function writeManifest(path: string, files: string[], generatedAt: string)
 }
 
 type StoredObject = {
-  bytes: Buffer
+  filePath: string
+  bytes: number
   etag: string
   contentType?: string
   contentEncoding?: string
@@ -293,7 +316,7 @@ type StoredObject = {
 }
 type PutLog = { key: string; bytes: number }
 
-function memoryS3() {
+function fileBackedS3() {
   const objects = new Map<string, StoredObject>()
   const puts: PutLog[] = []
   const io = { get: 0, head: 0, put: 0 }
@@ -312,8 +335,8 @@ function memoryS3() {
         const stored = objects.get(key)
         if (!stored) throw Object.assign(new Error('missing'), { name: name === 'GetObjectCommand' ? 'NoSuchKey' : 'NotFound' })
         return {
-          ...(name === 'GetObjectCommand' ? { Body: Readable.from([stored.bytes]) } : {}),
-          ETag: stored.etag, ContentLength: stored.bytes.byteLength,
+          ...(name === 'GetObjectCommand' ? { Body: Readable.from([await readFile(stored.filePath)]) } : {}),
+          ETag: stored.etag, ContentLength: stored.bytes,
           ContentType: stored.contentType, ContentEncoding: stored.contentEncoding, Metadata: stored.metadata,
         }
       }
@@ -324,8 +347,10 @@ function memoryS3() {
         if (input.IfMatch && input.IfMatch !== current?.etag) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
         const bytes = await bodyBytes(input.Body)
         const etag = `"${++version}"`
+        const filePath = join(root, `bucket-${createHash('sha256').update(key).digest('hex')}`)
+        await writeFile(filePath, bytes)
         objects.set(key, {
-          bytes, etag,
+          filePath, bytes: bytes.byteLength, etag,
           contentType: typeof input.ContentType === 'string' ? input.ContentType : undefined,
           contentEncoding: typeof input.ContentEncoding === 'string' ? input.ContentEncoding : undefined,
           metadata: isStringRecord(input.Metadata) ? input.Metadata : undefined,

@@ -126,7 +126,8 @@ try {
     console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
     console.log(`Public data budget: ${publicDataBytes} bytes`)
   }
-  return { snapshot, publicPlan, ...sourceData, publicDataBytes, publicDataDir: publicDataTargetDir }
+  const result = { publicPlan, ...sourceData, publicDataBytes, publicDataDir: publicDataTargetDir }
+  return options.writeFullSnapshot === false ? result : { snapshot, ...result }
 } catch (error) {
   await rm(publicDataDir, { recursive: true, force: true })
   throw error

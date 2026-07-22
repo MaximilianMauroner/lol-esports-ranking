@@ -19,9 +19,9 @@ export function readBucketJson(relativeKey: string, options?: { config?: unknown
   etag?: string
   value?: Record<string, unknown>
 }>
-export function readActiveContentAddressedGeneration(options?: { config?: unknown; client?: BucketClient }): Promise<
+export function readActiveContentAddressedGeneration(options?: { config?: unknown; client?: BucketClient; verifyArtifacts?: boolean }): Promise<
   | { found: false; reason: string; active?: Record<string, unknown>; etag?: string }
-  | { found: true; active: Record<string, unknown>; etag?: string; manifest: Record<string, unknown>; rootArtifact: Record<string, unknown>; artifacts: Record<string, unknown> }
+  | { found: true; active: Record<string, unknown>; etag?: string; manifest: Record<string, unknown>; rootArtifact: Record<string, unknown>; artifacts: Record<string, unknown>; loadArtifacts(paths: string[]): Promise<Record<string, unknown>> }
 >
 export function writeBucketJson(relativeKey: string, value: unknown, options?: {
   ifMatch?: string

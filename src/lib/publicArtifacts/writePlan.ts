@@ -156,6 +156,7 @@ export function createPublicArtifactWritePlan(
   const mergedTeamHistoryIndex = teamHistory ? mergeRecordIndex(teamHistory.index, previous(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex), 'scopeIndex') : undefined
   const mergedMatchHistoryIndex = matchHistory ? mergeRecordIndex(matchHistory.index, previous(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex), 'scopeIndex') : undefined
   const mergedTournamentMovementIndex = tournamentMovements ? mergeArrayIndex(tournamentMovements.index, previous(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex), 'tournaments', 'id') : undefined
+  const mergedRegionHistory = regionHistory ? mergeRecordIndex(regionHistory, previous(PUBLIC_ARTIFACT_PATHS.regionHistory), 'scopes') : undefined
 
   const allWrites: PublicArtifactWrite[] = [
     ...(playerDirectory ? [write('entity', PUBLIC_ARTIFACT_PATHS.players, playerDirectory, parsePublicPlayerDirectory)] : []),
@@ -164,7 +165,7 @@ export function createPublicArtifactWritePlan(
     ...Object.entries(teamHistory?.shards ?? {}).map(([key, shard]) => (
       write('history', publicTeamHistoryShardPath(key), shard, parsePublicTeamHistoryShard)
     )),
-    ...(regionHistory ? [write('history', PUBLIC_ARTIFACT_PATHS.regionHistory, regionHistory, parsePublicRegionHistory)] : []),
+    ...(mergedRegionHistory ? [write('history', PUBLIC_ARTIFACT_PATHS.regionHistory, mergedRegionHistory, parsePublicRegionHistory)] : []),
     ...(selected(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex) && mergedTournamentMovementIndex ? [write('history', PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex, mergedTournamentMovementIndex, parsePublicTournamentMovementIndex)] : []),
     ...Object.entries(tournamentMovements?.shards ?? {}).map(([id, shard]) => (
       write('history', publicTournamentMovementShardPath(id as TournamentInstanceId), shard, parsePublicTournamentMovementShard)

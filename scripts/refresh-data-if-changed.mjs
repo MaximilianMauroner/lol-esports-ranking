@@ -8,7 +8,7 @@ import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { bucketConfigFromEnv, createBucketClient, downloadBucketDirectory, downloadBucketObject, readActiveContentAddressedGeneration, uploadRankingArtifacts } from './railway-bucket.mjs'
 import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
 import { readActiveIncrementalState } from './incremental-state-storage.mjs'
-import { buildRankingIncrementally, persistIncrementalStateBuild } from './incremental-ranking-orchestrator.ts'
+import { buildRankingIncrementally, persistIncrementalStateBuild, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -265,8 +265,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       if (bucketConfig.enabled && bucketClient) {
         try {
           const [activeState, activePublic] = await Promise.all([
-            readActiveIncrementalState({ config: bucketConfig, client: bucketClient }),
-            readActiveContentAddressedGeneration({ config: bucketConfig, client: bucketClient }),
+            readActiveIncrementalState({ config: bucketConfig, client: bucketClient, checkpointLimit: 1 }),
+            readActiveContentAddressedGeneration({ config: bucketConfig, client: bucketClient, verifyArtifacts: false }),
           ])
           if (activeState.found && activePublic.found
             && activeState.manifest.generationId === activePublic.active.generationId) {
@@ -277,6 +277,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               publicManifest: activePublic.manifest,
               rootArtifact: activePublic.rootArtifact,
               artifacts: activePublic.artifacts,
+              loadArtifacts: activePublic.loadArtifacts,
             }
           }
         } catch (error) {
@@ -448,6 +449,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               checkpointCount: incrementalState.checkpointCount,
             },
           })
+          releasePersistedIncrementalInputs(incrementalBuild, restoredIncremental)
+          restoredIncremental = undefined
         }
         const bucketPublish = await uploadRankingArtifacts({
           publicDataDir: incrementalBuild?.build?.publicDataDir ?? publicDataDir,

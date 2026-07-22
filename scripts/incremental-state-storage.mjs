@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
-import { gunzipSync, gzipSync } from 'node:zlib'
+import { Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import { createGunzip, gunzipSync, gzipSync } from 'node:zlib'
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 
@@ -58,12 +60,15 @@ export function prepareContentAddressedState({
       ratingCheckpoint: checkpoint.ratingCheckpoint,
       causalSummaries: checkpoint.causalSummaries,
     }
-    const prepared = prepareStateObject(bundle)
-    objects.push(prepared)
+    const storedObject = checkpoint.storedObjectReference
+      ? parseObjectReference(checkpoint.storedObjectReference, `checkpoints[${index}].storedObjectReference`)
+      : undefined
+    const prepared = storedObject ? undefined : prepareStateObject(bundle)
+    if (prepared) objects.push(prepared)
     return {
       boundary,
       rawPrefix,
-      object: stateObjectReference(prepared),
+      object: storedObject ?? stateObjectReference(prepared),
     }
   })
   assertOrderedUniqueCandidates(candidates)
@@ -139,7 +144,7 @@ export async function syncContentAddressedStateObject(client, config, prepared) 
   }
 }
 
-export async function writeIncrementalStateManifest(client, config, preparedState) {
+export async function writeIncrementalStateManifest(client, config, preparedState, { verifyObjects = true } = {}) {
   assertRecord(preparedState, 'prepared state')
   const manifest = parseIncrementalStateManifest(preparedState.manifest)
   const prepared = preparedState.manifestPrepared ?? prepareStateObject(manifest)
@@ -147,8 +152,10 @@ export async function writeIncrementalStateManifest(client, config, preparedStat
   if (canonicalJsonFor(manifest) !== prepared.canonicalJson) {
     throw new Error('Invalid incremental state: prepared manifest bytes do not match manifest')
   }
-  await readStoredJsonStateObject(client, config, manifest.canonicalLedger)
-  for (const candidate of manifest.checkpoints) await assertStoredStateObject(client, config, candidate)
+  if (verifyObjects) {
+    await readStoredJsonStateObject(client, config, manifest.canonicalLedger)
+    for (const candidate of manifest.checkpoints) await assertStoredStateObject(client, config, candidate)
+  }
   const relativeKey = `state/generations/${safeStatePath(manifest.generationId)}.json`
   const key = stateBucketKey(config, relativeKey)
   const body = prepared.canonicalBytes
@@ -218,16 +225,15 @@ export async function assertStateManifestAuthority(client, config, authority, { 
     throw new Error('Incremental state manifest authority does not match stored manifest')
   }
   if (verifyObjects) {
-    await readStoredJsonStateObject(client, config, parsed.canonicalLedger)
+    await assertStoredStateObjectIntegrity(client, config, parsed.canonicalLedger)
     for (const candidate of parsed.checkpoints) {
-      const bundle = await readStoredStateObject(client, config, candidate)
-      assertMatchingCompatibility(bundle.compatibility, parsed.compatibility)
+      await assertStoredStateObjectIntegrity(client, config, candidate.object)
     }
   }
   return { manifest: parsed, key: authority.key, etag: remote.ETag, bytes: bytes.byteLength, digest }
 }
 
-export async function readActiveIncrementalState({ config, client, verifyObjects = true } = {}) {
+export async function readActiveIncrementalState({ config, client, verifyObjects = true, checkpointLimit } = {}) {
   const activeKey = stateBucketKey(config, 'active-generation.json')
   let activeObject
   try {
@@ -270,7 +276,10 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
   const checkpoints = []
   const canonicalLedger = await readStoredJsonStateObject(client, config, manifest.canonicalLedger)
   if (verifyObjects) {
-    for (const candidate of manifest.checkpoints) {
+    const candidates = Number.isSafeInteger(checkpointLimit) && checkpointLimit > 0
+      ? manifest.checkpoints.slice(-checkpointLimit)
+      : manifest.checkpoints
+    for (const candidate of candidates) {
       const bundle = await readStoredStateObject(client, config, candidate)
       assertMatchingCompatibility(bundle.compatibility, manifest.compatibility)
       checkpoints.push({ candidate, bundle })
@@ -313,6 +322,50 @@ export async function readStoredJsonStateObject(client, config, reference) {
     return value
   } catch (error) {
     throw new Error(`Incremental state object JSON is corrupt: ${expectedKey}`, { cause: error })
+  }
+}
+
+async function assertStoredStateObjectIntegrity(client, config, reference) {
+  const parsedReference = parseObjectReference(reference, 'state object reference')
+  const expectedReferenceKey = `state/objects/sha256/${parsedReference.sha256}`
+  if (parsedReference.key !== expectedReferenceKey) throw new Error('Incremental state object key is not canonical')
+  const expectedKey = stateBucketKey(config, parsedReference.key)
+  let remote
+  try {
+    remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
+  } catch (error) {
+    if (isMissingObjectError(error)) throw new Error(`Incremental state object is missing: ${expectedKey}`, { cause: error })
+    throw error
+  }
+  if (Number(remote.ContentLength) !== parsedReference.compressedBytes
+    || remote.ContentEncoding !== 'gzip' || remote.Metadata?.sha256 !== parsedReference.sha256
+    || remote.Metadata?.['semantic-bytes'] !== String(parsedReference.bytes) || remote.Metadata?.encoding !== 'gzip') {
+    throw new Error(`Incremental state object metadata mismatch: ${expectedKey}`)
+  }
+  let compressedBytes = 0
+  let semanticBytes = 0
+  const digest = createHash('sha256')
+  const countCompressed = new Transform({
+    transform(chunk, _encoding, callback) {
+      compressedBytes += chunk.length
+      callback(null, chunk)
+    },
+  })
+  const hashSemantic = new Transform({
+    transform(chunk, _encoding, callback) {
+      semanticBytes += chunk.length
+      digest.update(chunk)
+      callback()
+    },
+  })
+  try {
+    await pipeline(remote.Body, countCompressed, createGunzip(), hashSemantic)
+  } catch (error) {
+    throw new Error(`Incremental state object gzip is corrupt: ${expectedKey}`, { cause: error })
+  }
+  if (compressedBytes !== parsedReference.compressedBytes
+    || semanticBytes !== parsedReference.bytes || digest.digest('hex') !== parsedReference.sha256) {
+    throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
   }
 }
 

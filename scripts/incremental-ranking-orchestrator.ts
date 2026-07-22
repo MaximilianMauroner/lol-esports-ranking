@@ -25,6 +25,7 @@ import {
   writeIncrementalStateManifest,
   type IncrementalStateManifest,
   type StateCompatibility,
+  type StateObjectReference,
 } from './incremental-state-storage.mjs'
 import type { BucketClient, BucketStorageConfig } from './railway-bucket.mjs'
 
@@ -42,6 +43,7 @@ export type RestoredIncrementalAuthority = {
   publicManifest: Record<string, unknown>
   rootArtifact?: Record<string, unknown>
   artifacts?: Record<string, unknown>
+  loadArtifacts?: (paths: string[]) => Promise<Record<string, unknown>>
 }
 
 export type IncrementalBuildMetrics = {
@@ -76,6 +78,7 @@ export type IncrementalStateBuild = {
     boundary: { date: string; matchId: string }
     rawPrefix: { matchCount: number; digest: string }
     ratingCheckpoint: Record<string, unknown>
+    storedObjectReference?: StateObjectReference
     causalSummaries: {
       sourcedPlayer: Record<string, unknown>
       dssTeam: Record<string, unknown>
@@ -123,6 +126,22 @@ export type IncrementalDiagnostic = {
   stateParity?: { equal: boolean; expectedDigest: string; actualDigest: string; expectedCheckpointDigests: string[]; actualCheckpointDigests: string[] }
 }
 
+/** Release replay inputs once state persistence has completed and only the public patch remains to publish. */
+export function releasePersistedIncrementalInputs(
+  result: Exclude<IncrementalRankingBuildResult, { action: 'no-change' }>,
+  restored?: RestoredIncrementalAuthority,
+) {
+  result.sourceData.matches.length = 0
+  result.sourceData.importedMatches.length = 0
+  result.state.ledger.rows.length = 0
+  result.state.checkpoints.length = 0
+  if (restored) {
+    restored.checkpoints.length = 0
+    const rows = restored.canonicalLedger.rows
+    if (Array.isArray(rows)) rows.length = 0
+  }
+}
+
 export async function persistIncrementalStateBuild({
   state,
   generationId,
@@ -151,7 +170,9 @@ export async function persistIncrementalStateBuild({
   })
   const objectResults = []
   for (const object of prepared.objects) objectResults.push(await syncContentAddressedStateObject(client, config, object))
-  const manifest = await writeIncrementalStateManifest(client, config, prepared)
+  // Promotion validates the ledger and every checkpoint body before activation,
+  // so avoid repeating that exhaustive audit while writing the immutable manifest.
+  const manifest = await writeIncrementalStateManifest(client, config, prepared, { verifyObjects: false })
   return {
     authority: manifest.authority,
     uploadedBytes: [ledgerSync, ...objectResults, manifest.result]
@@ -242,12 +263,15 @@ export async function buildRankingIncrementally({
     }
 
     if (!restored.rootArtifact) throw new Error('verified-active-root-artifact-missing')
-    if (!restored.artifacts) throw new Error('verified-active-artifacts-missing')
     const changes = changesForClassification(previousLedger, ledger, classification)
     const preliminaryPlan = scopedDependencyPlan(changes, classification, restored.rootArtifact, restored.publicManifest)
     const affectedLogicalPaths = new Set(preliminaryPlan.logicalPaths.map(stripDataPrefix))
     const affectedSnapshotKeys = snapshotKeysForPlan(restored.rootArtifact, preliminaryPlan.logicalPaths, changes)
     const affectedTournamentIds = tournamentIdsForPlan(preliminaryPlan.logicalPaths, changes)
+    const previousArtifacts = restored.loadArtifacts
+      ? { ...restored.artifacts, ...await restored.loadArtifacts(previousArtifactMergePaths(preliminaryPlan.logicalPaths)) }
+      : restored.artifacts
+    if (!previousArtifacts) throw new Error('verified-active-artifacts-missing')
     const replay = selectReplay(restored.checkpoints, sourceData, classification, generatedAt)
     const replayResult = replayRankingState({
       authoritativeMatches: sourceData.matches,
@@ -267,7 +291,7 @@ export async function buildRankingIncrementally({
       affectedLogicalPaths,
       affectedSnapshotKeys,
       affectedTournamentIds,
-      previousArtifacts: restored.artifacts,
+      previousArtifacts,
       writeFullSnapshot: false,
       replacePublicDirectory: false,
       env,
@@ -327,7 +351,7 @@ export async function buildRankingIncrementally({
 
     await rm(candidateDir, { recursive: true, force: true })
     return {
-      action: 'publish-incremental', sourceData, build: candidate, state,
+      action: 'publish-incremental', sourceData, state,
       patch: {
         previousManifest: restored.publicManifest,
         changedArtifacts: changedWrites.map((write) => ({ logicalPath: `/data/${write.relativePath}`, value: write.value })),
@@ -347,6 +371,17 @@ export async function buildRankingIncrementally({
     const metrics = baseMetrics(classification?.kind ?? 'full-invalidation', ledger, { fullSnapshotWritten: true, fallbackReason: reason })
     return { action: 'publish-full', sourceData, build: full, state, diagnostic, metrics }
   }
+}
+
+function previousArtifactMergePaths(logicalPaths: string[]) {
+  const mergePaths = new Set([
+    `/data/${PUBLIC_ARTIFACT_PATHS.manifest}`,
+    `/data/${PUBLIC_ARTIFACT_PATHS.teamHistoryIndex}`,
+    `/data/${PUBLIC_ARTIFACT_PATHS.matchHistoryIndex}`,
+    `/data/${PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex}`,
+    `/data/${PUBLIC_ARTIFACT_PATHS.regionHistory}`,
+  ])
+  return logicalPaths.filter((path) => mergePaths.has(path))
 }
 
 function ledgerContext(sourceData: RankingSourceImport, previous?: CanonicalMatchLedger) {
@@ -494,6 +529,7 @@ function buildMetadataOnlyState(sourceData: RankingSourceImport, ledger: Canonic
       boundary: candidate.boundary,
       rawPrefix: candidate.rawPrefix,
       ratingCheckpoint: requiredRecord(bundle.ratingCheckpoint, 'restored rating checkpoint'),
+      storedObjectReference: candidate.object,
       causalSummaries: parseCausalSummaries(bundle.causalSummaries),
     })),
   }
@@ -528,11 +564,14 @@ function buildTerminalState(
     boundary: candidate.boundary,
     rawPrefix: candidate.rawPrefix,
     ratingCheckpoint: requiredRecord(bundle.ratingCheckpoint, 'restored rating checkpoint'),
+    storedObjectReference: candidate.object,
     causalSummaries: parseCausalSummaries(bundle.causalSummaries),
   }))
   const final = ledger.rows.at(-1)
   if (!final || !state.processedThroughUtcDate || !state.previousMatch) throw new Error('Cannot persist incremental state without a terminal rated match')
-  const byBoundary = new Map(previous.map((checkpoint) => [`${checkpoint.boundary.date}\u0000${checkpoint.boundary.matchId}`, checkpoint]))
+  const byBoundary = new Map<string, IncrementalStateBuild['checkpoints'][number]>(
+    previous.map((checkpoint) => [`${checkpoint.boundary.date}\u0000${checkpoint.boundary.matchId}`, checkpoint]),
+  )
   if (persistTerminalCheckpoint) {
     const terminal = checkpointFromState(sourceData, ledger, state, generatedAt)
     byBoundary.set(`${terminal.boundary.date}\u0000${terminal.boundary.matchId}`, terminal)
@@ -771,7 +810,11 @@ function dependencyInventory(
         .map((path) => ({ path, seriesIds: [] })),
     }]
   })
-  const historyPaths = scopes.map((scope) => `/data/${publicTeamHistoryShardPath(scope.key)}`)
+  const changedMatches = changes.flatMap((change) => [change.before, change.after]
+    .filter((match): match is RankingSourceImport['matches'][number] => Boolean(match)))
+  const historyPaths = scopes
+    .filter((scope) => changedMatches.length === 0 || changedMatches.some((match) => matchTouchesSnapshotFilter(match, scope.filter)))
+    .map((scope) => `/data/${publicTeamHistoryShardPath(scope.key)}`)
   const changedTeams = new Set(changes.flatMap((change) => [change.before?.teamA, change.before?.teamB, change.after?.teamA, change.after?.teamB].filter(isString)))
   const tournamentMovementPaths = Object.fromEntries(artifactPaths
     .filter((path) => path.startsWith('/data/history/tournament-moves/') && !path.endsWith('/index.json'))
@@ -784,6 +827,18 @@ function dependencyInventory(
     teamHistoryPaths: Object.fromEntries([...changedTeams].map((team) => [team, historyPaths])),
     tournamentMovementPaths,
   }
+}
+
+function matchTouchesSnapshotFilter(
+  match: RankingSourceImport['matches'][number],
+  filter: { season: string; event: string; region: Parameters<typeof snapshotKey>[0]['region'] },
+) {
+  if (filter.season !== 'All' && Number(filter.season) !== match.season) return false
+  if (filter.event !== 'All' && filter.event !== match.event) return false
+  return filter.region === 'All'
+    || filter.region === match.region
+    || filter.region === match.teamARegion
+    || filter.region === match.teamBRegion
 }
 
 function matchPageNumber(path: string) {
