@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto'
+import { fork } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { buildRankingIncrementally, persistIncrementalStateBuild, releasePersistedIncrementalInputs, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from './incremental-ranking-orchestrator.ts'
@@ -11,9 +14,28 @@ import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
 
 const targets = { computeMs: 15_000, peakRssBytes: 750 * 1024 * 1024, uploadedBytes: 2 * 1024 * 1024, fullSnapshotWritten: false }
 const config = { enabled: true, bucket: 'benchmark', endpoint: 'https://example.invalid', region: 'auto', accessKeyId: 'x', secretAccessKey: 'y', prefix: 'rankings' }
-const root = await mkdtemp(join(tmpdir(), 'incremental-ranking-benchmark-'))
+let root = process.env.RANKING_BENCHMARK_ROOT ?? ''
 
-try {
+if (process.argv.includes('--benchmark-worker')) {
+  if (!root) throw new Error('Benchmark worker requires RANKING_BENCHMARK_ROOT')
+  await runBenchmarkWorker()
+} else {
+  root = await mkdtemp(join(tmpdir(), 'incremental-ranking-benchmark-'))
+  try {
+    await runBenchmarkParent()
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
+type BenchmarkSetup = {
+  currentShape: { matchCount: number; teamCount: number }
+  benchmarkMatchCount: number
+  baselineGenerationId: string
+  baselineMatchCount: number
+}
+
+async function runBenchmarkParent() {
   const currentShape = await currentCorpusShape()
   const benchmarkMatchCount = positiveInteger(process.env.RANKING_BENCHMARK_MATCH_COUNT) ?? currentShape.matchCount
   const teamPools = await currentTeamPools()
@@ -26,12 +48,40 @@ try {
   await writeManifest(baselineManifest, ['oracle-baseline.csv'], '2026-07-21T00:00:00.000Z')
   await writeManifest(nextManifest, ['oracle-baseline.csv', 'oracle-delta.csv'], '2026-07-22T00:00:00.000Z')
 
-  const client = fileBackedS3()
+  const client = await fileBackedS3()
   const { generationId: baselineGenerationId, matchCount: baselineMatchCount } = await seedBaseline(client, baselineManifest)
+  await client.save()
+  await writeFile(join(root, 'benchmark-setup.json'), JSON.stringify({
+    currentShape, benchmarkMatchCount, baselineGenerationId, baselineMatchCount,
+  } satisfies BenchmarkSetup))
+
+  const { output, sampledPeakRssBytes, sampleCount } = await runMeasuredWorker()
+  const pass = output.computeMs < targets.computeMs
+    && sampledPeakRssBytes < targets.peakRssBytes
+    && output.uploadedBytes < targets.uploadedBytes
+    && output.fullSnapshotWritten === targets.fullSnapshotWritten
+    && output.parity
+  const result = {
+    ...output,
+    peakRssBytes: sampledPeakRssBytes,
+    rssSampling: { intervalMs: 10, sampleCount },
+    pass,
+  }
+  process.stdout.write(`${JSON.stringify(result)}\n`)
+  if (process.argv.includes('--enforce-targets') && !pass) process.exitCode = 1
+}
+
+async function runBenchmarkWorker() {
+  const setup = JSON.parse(await readFile(join(root, 'benchmark-setup.json'), 'utf8')) as BenchmarkSetup
+  const { currentShape, benchmarkMatchCount, baselineGenerationId, baselineMatchCount } = setup
+  const baselineCsv = join(root, 'oracle-baseline.csv')
+  const deltaCsv = join(root, 'oracle-delta.csv')
+  const nextManifest = join(root, 'next-manifest.json')
+  const client = await fileBackedS3()
 
   client.resetIo()
   globalThis.gc?.()
-  const startingRssBytes = process.memoryUsage().rss
+  process.send?.({ type: 'measurement-start' })
   const started = performance.now()
   let stageStarted = started
   const nextSource = await importRankingSourceData({ manifestPath: nextManifest })
@@ -72,7 +122,7 @@ try {
   const artifactPublishMs = performance.now() - stageStarted
   const artifactPublishRss = process.memoryUsage().rss
   const computeMs = performance.now() - started
-  const peakRssBytes = Math.max(startingRssBytes, process.memoryUsage().rss)
+  process.send?.({ type: 'measurement-stop' })
 
   const paritySource = await importRankingSourceData({ manifestPath: nextManifest })
   paritySource.externalSources = incremental.sourceData.externalSources
@@ -93,11 +143,6 @@ try {
   const parity = differingPaths.length === 0
   const uploadedBytes = client.puts.reduce((sum, put) => sum + put.bytes, 0)
   const bytesBySurface = byteTotals(client.puts)
-  const pass = computeMs < targets.computeMs
-    && peakRssBytes < targets.peakRssBytes
-    && uploadedBytes < targets.uploadedBytes
-    && incremental.metrics.fullSnapshotWritten === targets.fullSnapshotWritten
-    && parity
   const output = {
     corpus: {
       referenceMatchCount: currentShape.matchCount,
@@ -108,7 +153,7 @@ try {
       sourceBytes: (await readFile(baselineCsv)).byteLength + (await readFile(deltaCsv)).byteLength,
       appendedMatches: importedMatchCount - baselineMatchCount,
     },
-    computeMs: Math.round(computeMs), peakRssBytes, uploadedBytes,
+    computeMs: Math.round(computeMs), uploadedBytes,
     stageMs: {
       sourceImport: Math.round(sourceImportMs), restore: Math.round(restoreMs), incrementalBuild: Math.round(incrementalBuildMs),
       statePersist: Math.round(statePersistMs), artifactPublish: Math.round(artifactPublishMs),
@@ -132,15 +177,72 @@ try {
     differingPaths,
     differenceDetails,
     target: { computeMs: '<15000', peakRssBytes: '<786432000', uploadedBytes: '<2097152', fullSnapshotWritten: false, parity: true },
-    pass,
   }
   process.stdout.write(`${JSON.stringify(output)}\n`)
-  if (process.argv.includes('--enforce-targets') && !pass) process.exitCode = 1
-} finally {
-  await rm(root, { recursive: true, force: true })
 }
 
-async function seedBaseline(client: ReturnType<typeof fileBackedS3>, manifestPath: string) {
+async function runMeasuredWorker() {
+  const child = fork(fileURLToPath(import.meta.url), ['--benchmark-worker'], {
+    cwd: process.cwd(),
+    env: { ...process.env, RANKING_BENCHMARK_ROOT: root },
+    execArgv: process.execArgv,
+    silent: true,
+  })
+  let measuring = false
+  let sampledPeakRssBytes = 0
+  let sampleCount = 0
+  const sample = () => {
+    if (!measuring || !child.pid) return
+    try {
+      const match = /^VmRSS:\s+(\d+)\s+kB$/m.exec(readFileSync(`/proc/${child.pid}/status`, 'utf8'))
+      if (!match) return
+      sampledPeakRssBytes = Math.max(sampledPeakRssBytes, Number(match[1]) * 1024)
+      sampleCount += 1
+    } catch {
+      // The child may exit between the timer tick and the procfs read.
+    }
+  }
+  child.on('message', (message: unknown) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) return
+    const type = (message as { type?: unknown }).type
+    if (type === 'measurement-start') {
+      measuring = true
+      sample()
+    } else if (type === 'measurement-stop') {
+      sample()
+      measuring = false
+    }
+  })
+  const timer = setInterval(sample, 10)
+  const stdout: Buffer[] = []
+  const stderr: Buffer[] = []
+  child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk))
+  child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
+  const exitCode = await new Promise<number | null>((resolveExit, rejectExit) => {
+    child.once('error', rejectExit)
+    child.once('close', resolveExit)
+  })
+  clearInterval(timer)
+  if (exitCode !== 0) {
+    throw new Error(`Benchmark worker failed with exit code ${exitCode}: ${Buffer.concat(stderr).toString('utf8')}`)
+  }
+  const lines = Buffer.concat(stdout).toString('utf8').trim().split('\n').filter(Boolean)
+  const lastLine = lines.at(-1)
+  if (!lastLine) throw new Error('Benchmark worker produced no result')
+  return {
+    output: JSON.parse(lastLine) as {
+      computeMs: number
+      uploadedBytes: number
+      fullSnapshotWritten: boolean
+      parity: boolean
+      [key: string]: unknown
+    },
+    sampledPeakRssBytes,
+    sampleCount,
+  }
+}
+
+async function seedBaseline(client: Awaited<ReturnType<typeof fileBackedS3>>, manifestPath: string) {
   const source = await importRankingSourceData({ manifestPath })
   const baseline = await run('baseline', source, '2026-07-21T00:00:00.000Z', { mode: 'gated', cause: 'daily-audit', enabled: true })
   if (baseline.action === 'no-change' || !baseline.build) throw new Error('Benchmark baseline did not materialize')
@@ -166,7 +268,7 @@ function run(
   })
 }
 
-async function restoreFromStorage(client: ReturnType<typeof fileBackedS3>): Promise<RestoredIncrementalAuthority> {
+async function restoreFromStorage(client: Awaited<ReturnType<typeof fileBackedS3>>): Promise<RestoredIncrementalAuthority> {
   const [state, publicGeneration] = await Promise.all([
     readActiveIncrementalState({ config, client, checkpointLimit: 1 }),
     readActiveContentAddressedGeneration({ config, client, verifyArtifacts: false }),
@@ -316,13 +418,23 @@ type StoredObject = {
 }
 type PutLog = { key: string; bytes: number }
 
-function fileBackedS3() {
-  const objects = new Map<string, StoredObject>()
+async function fileBackedS3() {
+  const indexPath = join(root, 'bucket-index.json')
+  let persisted: { version: number; objects: Array<[string, StoredObject]> } = { version: 0, objects: [] }
+  try {
+    persisted = JSON.parse(await readFile(indexPath, 'utf8')) as typeof persisted
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
+  }
+  const objects = new Map<string, StoredObject>(persisted.objects)
   const puts: PutLog[] = []
   const io = { get: 0, head: 0, put: 0 }
-  let version = 0
+  let version = persisted.version
   return {
     objects, puts, io,
+    async save() {
+      await writeFile(indexPath, JSON.stringify({ version, objects: [...objects.entries()] }))
+    },
     resetIo() { puts.length = 0; io.get = 0; io.head = 0; io.put = 0 },
     async send(command: unknown) {
       const details = command as { constructor: { name: string }; input: Record<string, unknown> }
