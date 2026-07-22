@@ -10,11 +10,13 @@ import {
   type DssSeriesLedgerOptions,
 } from './deservedStanding'
 import {
+  buildCausalContextIdentity,
   buildCausalPrefixSummary,
   reconcileCausalPrefix,
   type CausalInputRow,
   type CausalPrefixSummary,
 } from './causalRecompute'
+import { eventWeightContextForMatches } from './eventWeighting'
 
 export type DeservedStandingModelOptions = DssSeriesLedgerOptions & {
   baseScoreFor?: (team: string, entries: DssSeriesLedgerEntry[]) => number | undefined
@@ -46,6 +48,23 @@ export type DeservedStandingModel = {
   ledgerEntries: DssSeriesLedgerEntry[]
 }
 
+export type DssTeamCausalCallbackSemanticIds = Partial<Record<
+  | 'referenceStrengthFor'
+  | 'contextAdjustmentFor'
+  | 'baseScoreFor'
+  | 'rosterValidityFor'
+  | 'standardOpponentReferenceStrengthFor'
+  | 'stagePointsFor'
+  | 'incomingPlayerBridgeCreditFor'
+  | 'uncertaintyFor',
+  string
+>>
+
+export type DssTeamCausalContext = {
+  options: DeservedStandingModelOptions
+  callbackSemanticIds: DssTeamCausalCallbackSemanticIds
+}
+
 export function buildDeservedStandingModel(
   matches: MatchRecord[],
   options: DeservedStandingModelOptions = {},
@@ -70,27 +89,34 @@ export function buildDeservedStandingModel(
 export function buildDssTeamCausalSummary({
   prefixMatches,
   processedThroughUtcDate,
+  causalContext,
   contextInputs = [],
 }: {
   prefixMatches: readonly MatchRecord[]
   processedThroughUtcDate: string
+  causalContext: DssTeamCausalContext
   contextInputs?: readonly CausalInputRow[]
 }) {
+  const contextIdentity = dssTeamContextIdentity(prefixMatches, causalContext)
+  if (!contextIdentity) throw new Error('DSS team callback semantic ids are incomplete')
   return buildCausalPrefixSummary({
     surface: 'dss-team',
     processedThroughUtcDate,
     inputs: dssCausalInputsForMatches(prefixMatches, contextInputs),
+    contextIdentity,
   })
 }
 
 export function reconcileDssTeamCausality({
   summary,
   freshMatches,
+  causalContext,
   contextInputs = [],
   availableProcessedThroughUtcDates = [],
 }: {
   summary: CausalPrefixSummary
   freshMatches: readonly MatchRecord[]
+  causalContext?: DssTeamCausalContext
   contextInputs?: readonly CausalInputRow[]
   availableProcessedThroughUtcDates?: readonly string[]
 }) {
@@ -98,13 +124,48 @@ export function reconcileDssTeamCausality({
   return reconcileCausalPrefix({
     summary,
     freshInputs: dssCausalInputsForMatches(freshMatches, contextInputs),
+    freshContextIdentity: causalContext
+      ? dssTeamContextIdentity(freshMatches, causalContext)
+      : undefined,
     availableProcessedThroughUtcDates,
   })
 }
 
+export function dssTeamContextIdentity(
+  matches: readonly MatchRecord[],
+  { options, callbackSemanticIds }: DssTeamCausalContext,
+) {
+  return buildCausalContextIdentity({
+    semanticId: 'dss-team-context-v1',
+    serializableInputs: {
+      modelParameters: deservedStandingModelParameters,
+      eventWeightContext: options.eventWeightContext ?? eventWeightContextForMatches(matches),
+      defaultPolicies: 'dss-team-defaults-v1',
+    },
+    callbacks: [
+      callbackBinding('referenceStrengthFor', options.referenceStrengthFor, callbackSemanticIds),
+      callbackBinding('contextAdjustmentFor', options.contextAdjustmentFor, callbackSemanticIds),
+      callbackBinding('baseScoreFor', options.baseScoreFor, callbackSemanticIds),
+      callbackBinding('rosterValidityFor', options.rosterValidityFor, callbackSemanticIds),
+      callbackBinding('standardOpponentReferenceStrengthFor', options.standardOpponentReferenceStrengthFor, callbackSemanticIds),
+      callbackBinding('stagePointsFor', options.stagePointsFor, callbackSemanticIds),
+      callbackBinding('incomingPlayerBridgeCreditFor', options.incomingPlayerBridgeCreditFor, callbackSemanticIds),
+      callbackBinding('uncertaintyFor', options.uncertaintyFor, callbackSemanticIds),
+    ],
+  })
+}
+
+function callbackBinding(
+  name: keyof DssTeamCausalCallbackSemanticIds,
+  implementation: unknown,
+  semanticIds: DssTeamCausalCallbackSemanticIds,
+) {
+  return { name, implementation, semanticId: semanticIds[name] }
+}
+
 export function recomputeDssTeamCausalState(
   matches: MatchRecord[],
-  options: DeservedStandingModelOptions = {},
+  { options }: DssTeamCausalContext,
 ) {
   return buildDeservedStandingModel(matches, options)
 }

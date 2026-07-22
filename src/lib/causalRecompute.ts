@@ -1,4 +1,4 @@
-export const CAUSAL_PREFIX_SCHEMA_VERSION = 1 as const
+export const CAUSAL_PREFIX_SCHEMA_VERSION = 2 as const
 
 export type CausalSurfaceId =
   | 'sourced-player'
@@ -23,8 +23,21 @@ export type CausalPrefixSummary = {
   schemaVersion: typeof CAUSAL_PREFIX_SCHEMA_VERSION
   surface: CausalSurfaceId
   processedThroughUtcDate: string
+  contextIdentity: CausalContextIdentity
   rows: CausalPrefixRow[]
   digest: string
+}
+
+export type CausalContextIdentity = {
+  schemaVersion: typeof CAUSAL_PREFIX_SCHEMA_VERSION
+  semanticId: string
+  digest: string
+}
+
+export type CausalCallbackBinding = {
+  name: string
+  implementation: unknown
+  semanticId?: string
 }
 
 export type CausalRecomputeDecision =
@@ -39,6 +52,7 @@ export type CausalRecomputeDecision =
   | {
       status: 'replay-required'
       surface: CausalSurfaceId
+      reason: 'prefix-changed' | 'context-changed' | 'context-unproven'
       changedUtcDate: string
       replayFromUtcDate: string
       resumeAfterUtcDate?: string
@@ -51,12 +65,15 @@ export function buildCausalPrefixSummary({
   surface,
   processedThroughUtcDate,
   inputs,
+  contextIdentity,
 }: {
   surface: CausalSurfaceId
   processedThroughUtcDate: string
   inputs: readonly CausalInputRow[]
+  contextIdentity: CausalContextIdentity
 }): CausalPrefixSummary {
   assertUtcDate(processedThroughUtcDate)
+  validateCausalContextIdentity(contextIdentity)
   const rows = canonicalRows(inputs)
   const duplicate = rows.find((row, index) => row.key === rows[index - 1]?.key)
   if (duplicate) throw new Error(`Duplicate causal input key ${duplicate.key}`)
@@ -67,23 +84,31 @@ export function buildCausalPrefixSummary({
     schemaVersion: CAUSAL_PREFIX_SCHEMA_VERSION,
     surface,
     processedThroughUtcDate,
+    contextIdentity,
     rows,
-    digest: digestValue(rows),
+    digest: digestValue({ contextIdentity, rows }),
   }
 }
 
 export function reconcileCausalPrefix({
   summary,
   freshInputs,
+  freshContextIdentity,
   availableProcessedThroughUtcDates = [],
   earliestRecomputeUtcDate,
 }: {
   summary: CausalPrefixSummary
   freshInputs: readonly CausalInputRow[]
+  freshContextIdentity?: CausalContextIdentity
   availableProcessedThroughUtcDates?: readonly string[]
   earliestRecomputeUtcDate?: string
 }): CausalRecomputeDecision {
   validateCausalPrefixSummary(summary)
+  if (!freshContextIdentity) return contextReplayDecision(summary, 'context-unproven')
+  validateCausalContextIdentity(freshContextIdentity)
+  if (!sameContextIdentity(summary.contextIdentity, freshContextIdentity)) {
+    return contextReplayDecision(summary, 'context-changed')
+  }
   const freshRows = canonicalRows(freshInputs)
   assertUniqueRows(freshRows)
   const freshByKey = new Map(freshRows.map((row) => [row.key, row]))
@@ -113,6 +138,7 @@ export function reconcileCausalPrefix({
     return {
       status: 'replay-required',
       surface: summary.surface,
+      reason: 'prefix-changed',
       changedUtcDate,
       replayFromUtcDate: changedUtcDate,
       ...(resumeAfterUtcDate ? { resumeAfterUtcDate } : {}),
@@ -139,9 +165,37 @@ export function causalInputRow(key: string, utcDate: string, value: unknown): Ca
   return { key, utcDate, value }
 }
 
+export function buildCausalContextIdentity({
+  semanticId,
+  serializableInputs,
+  callbacks = [],
+}: {
+  semanticId: string
+  serializableInputs: unknown
+  callbacks?: readonly CausalCallbackBinding[]
+}): CausalContextIdentity | undefined {
+  if (!semanticId.trim()) throw new Error('Causal context semantic id must be non-empty')
+  const callbackIdentities: { name: string; semanticId: string }[] = []
+  for (const callback of callbacks) {
+    if (callback.implementation === undefined) continue
+    if (typeof callback.implementation !== 'function') {
+      throw new Error(`Causal callback ${callback.name} must be a function`)
+    }
+    if (!callback.semanticId?.trim()) return undefined
+    callbackIdentities.push({ name: callback.name, semanticId: callback.semanticId })
+  }
+  callbackIdentities.sort((left, right) => compareCodeUnits(left.name, right.name))
+  return {
+    schemaVersion: CAUSAL_PREFIX_SCHEMA_VERSION,
+    semanticId,
+    digest: digestValue({ serializableInputs, callbackIdentities }),
+  }
+}
+
 export function validateCausalPrefixSummary(summary: CausalPrefixSummary) {
   if (summary.schemaVersion !== CAUSAL_PREFIX_SCHEMA_VERSION) throw new Error('Unsupported causal prefix schema')
   assertUtcDate(summary.processedThroughUtcDate)
+  validateCausalContextIdentity(summary.contextIdentity)
   const rows = summary.rows.toSorted((left, right) => compareCodeUnits(left.key, right.key))
   assertUniqueRows(rows)
   if (rows.some((row) => !row.key || !isUtcDate(row.utcDate) || !row.digest)) {
@@ -150,11 +204,47 @@ export function validateCausalPrefixSummary(summary: CausalPrefixSummary) {
   if (rows.some((row) => row.utcDate > summary.processedThroughUtcDate)) {
     throw new Error(`${summary.surface} causal prefix row exceeds its processed boundary`)
   }
-  if (digestValue(rows) !== summary.digest) throw new Error(`${summary.surface} causal prefix digest mismatch`)
+  if (digestValue({ contextIdentity: summary.contextIdentity, rows }) !== summary.digest) {
+    throw new Error(`${summary.surface} causal prefix digest mismatch`)
+  }
 }
 
 export function digestCausalValue(value: unknown) {
   return digestValue(value)
+}
+
+function contextReplayDecision(
+  summary: CausalPrefixSummary,
+  reason: 'context-changed' | 'context-unproven',
+): CausalRecomputeDecision {
+  const replayFromUtcDate = summary.rows
+    .map((row) => row.utcDate)
+    .sort(compareCodeUnits)[0] ?? summary.processedThroughUtcDate
+  return {
+    status: 'replay-required',
+    surface: summary.surface,
+    reason,
+    changedUtcDate: replayFromUtcDate,
+    replayFromUtcDate,
+    requiresFullReplay: true,
+    requiresWholeUtcDateReplay: true,
+    changedKeys: ['$context'],
+  }
+}
+
+function sameContextIdentity(left: CausalContextIdentity, right: CausalContextIdentity) {
+  return left.schemaVersion === right.schemaVersion
+    && left.semanticId === right.semanticId
+    && left.digest === right.digest
+}
+
+function validateCausalContextIdentity(identity: CausalContextIdentity | undefined) {
+  if (!identity || identity.schemaVersion !== CAUSAL_PREFIX_SCHEMA_VERSION || !identity.semanticId.trim()) {
+    throw new Error('Malformed causal context identity')
+  }
+  if (!/^fnv1a64-[0-9a-f]{16}$/.test(identity.digest)) {
+    throw new Error('Malformed causal context digest')
+  }
 }
 
 function canonicalRows(inputs: readonly CausalInputRow[]) {

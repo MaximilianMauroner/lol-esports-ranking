@@ -53,7 +53,7 @@ export const ratingCheckpointInventory = {
       causalSurface: 'sourced-player',
       summaryOwner: 'sourced-player causal prefix summary',
       outputs: ['player standings', 'pregame player edges'],
-      resumeRequirement: 'Validate the immutable raw/context prefix, then recompute from the full authoritative corpus. Prefix mutations require whole-UTC-date rating replay.',
+      resumeRequirement: 'Validate the immutable raw prefix and the typed player context identity (rosters, fallbacks, teams, league strengths, and event context), then recompute from the full authoritative corpus.',
     },
     {
       engine: 'deserved-standing-team-state',
@@ -61,7 +61,7 @@ export const ratingCheckpointInventory = {
       causalSurface: 'dss-team',
       summaryOwner: 'DSS team causal prefix summary',
       outputs: ['team summaries', 'team series ledgers'],
-      resumeRequirement: 'Validate match and option-derived context inputs, then rebuild the team model from the full authoritative corpus.',
+      resumeRequirement: 'Validate matches plus the typed DSS option identity; every custom callback requires an explicit stable semantic id.',
     },
     {
       engine: 'deserved-standing-region-state',
@@ -69,7 +69,7 @@ export const ratingCheckpointInventory = {
       causalSurface: 'dss-region',
       summaryOwner: 'DSS region causal prefix summary',
       outputs: ['region summaries', 'region ledgers'],
-      resumeRequirement: 'Validate matches, team profiles, and option-derived context inputs, then rebuild the region model from the full authoritative corpus.',
+      resumeRequirement: 'Validate matches, team profiles, region options, and explicit callback semantic ids, then rebuild from the full authoritative corpus.',
     },
     {
       engine: 'roster-era-ledger',
@@ -77,7 +77,7 @@ export const ratingCheckpointInventory = {
       causalSurface: 'roster-era',
       summaryOwner: 'roster-era causal prefix summary plus open-era boundaries',
       outputs: ['roster eras and attribution ledgers'],
-      resumeRequirement: 'Rebuild from the full authoritative corpus; an append touching an open era is causal from that era start, while prefix mutation requires whole-date replay.',
+      resumeRequirement: 'Validate roster options and attribution callback semantic ids; an append touching an open era is causal from that era start.',
     },
     {
       engine: 'player-resume-ledger',
@@ -85,7 +85,7 @@ export const ratingCheckpointInventory = {
       causalSurface: 'player-resume-ledger',
       summaryOwner: 'player-resume causal prefix summary',
       outputs: ['player resume ledgers', 'player resume credit entries'],
-      resumeRequirement: 'Validate series and option-derived context inputs, then rebuild from the full authoritative corpus.',
+      resumeRequirement: 'Validate current scope and uncertainty callback identity, then rebuild from the full authoritative corpus.',
     },
     {
       engine: 'event-placement-state',
@@ -96,7 +96,7 @@ export const ratingCheckpointInventory = {
       resumeRequirement: 'Reconcile tournament lifecycle, participant, match, calendar, and event-context changes before rating resume.',
     },
   ],
-  causalContextRequirement: 'Callback/configuration semantics must be supplied as dated causal context rows. If orchestration cannot prove those inputs, it must choose a full replay.',
+  causalContextRequirement: 'Each summary binds a canonical fingerprint of all serializable non-row inputs. Custom functions require caller-supplied semantic ids; missing or mismatched proof always requires a full replay.',
   activation: 'foundation-only-production-disabled',
 } as const
 

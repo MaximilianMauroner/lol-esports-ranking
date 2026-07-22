@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord, MatchRosterSnapshot, Region, Role, Side, TeamProfile } from '../src/types.ts'
-import { causalInputRow } from '../src/lib/causalRecompute.ts'
+import type { LeagueStrength, MatchRecord, MatchRosterSnapshot, Region, Role, Side, TeamProfile } from '../src/types.ts'
+import type { CausalRecomputeDecision } from '../src/lib/causalRecompute.ts'
 import {
   buildPlayerModel,
   buildPregamePlayerRatingEdges,
@@ -39,13 +39,20 @@ import { snapshotExternalCausalSurfaces } from '../src/lib/snapshot.ts'
 
 test('sourced-player causality accepts append and replays same-day inserts or source corrections', () => {
   const first = sourcedMatch({ id: 'first', date: '2026-01-02' })
+  const ratingContext = {
+    teams: teamProfiles(),
+    leagueStrengths: [leagueStrength('LCK', 'LCK', 1600)],
+    eventWeightContext: eventContext('2026-01-10'),
+  }
+  const causalContext = { rosters: {}, ratingContext }
   const summary = buildSourcedPlayerCausalSummary({
     prefixMatches: [first],
     processedThroughUtcDate: '2026-01-02',
+    causalContext,
   })
   const appended = sourcedMatch({ id: 'appended', date: '2026-01-03', winner: 'Beta' })
 
-  assert.deepEqual(reconcileSourcedPlayerCausality({ summary, freshMatches: [first, appended] }), {
+  assert.deepEqual(reconcileSourcedPlayerCausality({ summary, freshMatches: [first, appended], causalContext }), {
     status: 'recompute-ready',
     surface: 'sourced-player',
     mode: 'full-authoritative-corpus',
@@ -57,6 +64,7 @@ test('sourced-player causality accepts append and replays same-day inserts or so
   const insertionDecision = reconcileSourcedPlayerCausality({
     summary,
     freshMatches: [first, inserted, appended],
+    causalContext,
     availableProcessedThroughUtcDates: ['2026-01-01'],
   })
   assert.equal(insertionDecision.status, 'replay-required')
@@ -70,77 +78,165 @@ test('sourced-player causality accepts append and replays same-day inserts or so
     date: '2026-01-02',
     teamARoster: sourcedRoster('alpha', 'blue', true, { Bot: { kills: 20 } }),
   })
-  const correctionDecision = reconcileSourcedPlayerCausality({ summary, freshMatches: [corrected, appended] })
+  const correctionDecision = reconcileSourcedPlayerCausality({
+    summary,
+    freshMatches: [corrected, appended],
+    causalContext,
+  })
   assert.equal(correctionDecision.status, 'replay-required')
   if (correctionDecision.status === 'replay-required') {
     assert.deepEqual(correctionDecision.changedKeys, ['match:first'])
   }
 
+  const changedContexts = [
+    { ...causalContext, rosters: { Alpha: [{ id: 'fallback', name: 'Fallback', team: 'Alpha', role: 'Mid' as const }] } },
+    { ...causalContext, ratingContext: { ...ratingContext, teams: { ...ratingContext.teams, Alpha: { ...ratingContext.teams.Alpha, code: 'NEW' } } } },
+    { ...causalContext, ratingContext: { ...ratingContext, leagueStrengths: [leagueStrength('LCK', 'LCK', 1500)] } },
+    { ...causalContext, ratingContext: { ...ratingContext, eventWeightContext: eventContext('2026-01-11') } },
+  ]
+  for (const changedContext of changedContexts) {
+    assertFullContextReplay(reconcileSourcedPlayerCausality({
+      summary,
+      freshMatches: [first, appended],
+      causalContext: changedContext,
+    }), 'context-changed')
+  }
+  assertFullContextReplay(
+    reconcileSourcedPlayerCausality({ summary, freshMatches: [first, appended] }),
+    'context-unproven',
+  )
+
   assert.deepEqual(
-    recomputeSourcedPlayerCausalOutputs([first, appended], {}),
+    recomputeSourcedPlayerCausalOutputs([first, appended], causalContext),
     {
-      players: buildPlayerModel([first, appended], {}),
-      pregameEdges: buildPregamePlayerRatingEdges([first, appended]),
+      players: buildPlayerModel([first, appended], causalContext.rosters, ratingContext),
+      pregameEdges: buildPregamePlayerRatingEdges([first, appended], ratingContext),
     },
   )
 })
 
 test('DSS team causality covers append, synergy/config changes, and tournament completion boundaries', () => {
   const first = matchFixture({ id: 'series-one', date: '2026-01-02' })
-  const synergyV1 = causalInputRow('synergy-policy', '2026-01-02', { version: 1 })
-  const lifecycleOpen = causalInputRow('event:worlds-2026', '2026-01-02', { lifecycle: 'open' })
+  const options = {
+    eventWeightContext: eventContext('2026-01-10'),
+    baseScoreFor: (team: string) => team === 'Alpha' ? 1510 : 1490,
+    rosterValidityFor: () => 0.9,
+    stagePointsFor: () => 3,
+    incomingPlayerBridgeCreditFor: () => 2,
+    uncertaintyFor: () => 20,
+  }
+  const causalContext = {
+    options,
+    callbackSemanticIds: {
+      baseScoreFor: 'team-base-v1',
+      rosterValidityFor: 'synergy-and-roster-validity-v1',
+      stagePointsFor: 'tournament-placement-v1',
+      incomingPlayerBridgeCreditFor: 'resume-bridge-v1',
+      uncertaintyFor: 'team-uncertainty-v1',
+    },
+  }
   const summary = buildDssTeamCausalSummary({
     prefixMatches: [first],
     processedThroughUtcDate: '2026-01-02',
-    contextInputs: [synergyV1, lifecycleOpen],
+    causalContext,
   })
   const appended = matchFixture({ id: 'series-two', date: '2026-01-03', winner: 'Beta' })
 
   assert.equal(reconcileDssTeamCausality({
     summary,
     freshMatches: [first, appended],
-    contextInputs: [synergyV1, lifecycleOpen],
+    causalContext,
   }).status, 'recompute-ready')
 
   const contextDecision = reconcileDssTeamCausality({
     summary,
     freshMatches: [first, appended],
-    contextInputs: [
-      causalInputRow('synergy-policy', '2026-01-02', { version: 2 }),
-      causalInputRow('event:worlds-2026', '2026-01-02', { lifecycle: 'complete', placements: ['Alpha'] }),
-    ],
+    causalContext: {
+      options: {
+        ...options,
+        rosterValidityFor: () => 0.5,
+        stagePointsFor: () => 8,
+        baseScoreFor: () => 1540,
+        incomingPlayerBridgeCreditFor: () => 7,
+        uncertaintyFor: () => 40,
+      },
+      callbackSemanticIds: {
+        ...causalContext.callbackSemanticIds,
+        rosterValidityFor: 'synergy-and-roster-validity-v2',
+        stagePointsFor: 'tournament-placement-complete-v2',
+        baseScoreFor: 'team-base-v2',
+        incomingPlayerBridgeCreditFor: 'resume-bridge-v2',
+        uncertaintyFor: 'team-uncertainty-v2',
+      },
+    },
   })
-  assert.equal(contextDecision.status, 'replay-required')
-  if (contextDecision.status === 'replay-required') {
-    assert.equal(contextDecision.replayFromUtcDate, '2026-01-02')
-    assert.deepEqual(contextDecision.changedKeys, ['event:worlds-2026', 'synergy-policy'])
-  }
+  assertFullContextReplay(contextDecision, 'context-changed')
+  assertFullContextReplay(reconcileDssTeamCausality({
+    summary,
+    freshMatches: [first, appended],
+    causalContext: {
+      options,
+      callbackSemanticIds: { ...causalContext.callbackSemanticIds, uncertaintyFor: undefined },
+    },
+  }), 'context-unproven')
+  assertFullContextReplay(reconcileDssTeamCausality({
+    summary,
+    freshMatches: [first, appended],
+    causalContext: {
+      ...causalContext,
+      options: { ...options, eventWeightContext: eventContext('2026-01-11') },
+    },
+  }), 'context-changed')
 
   assert.deepEqual(
-    recomputeDssTeamCausalState([first, appended]),
-    buildDeservedStandingModel([first, appended]),
+    recomputeDssTeamCausalState([first, appended], causalContext),
+    buildDeservedStandingModel([first, appended], options),
   )
 })
 
 test('DSS region causality replays historical team-region corrections and preserves clean output parity', () => {
   const matches = [matchFixture({ id: 'international', date: '2026-01-02' })]
   const teams = teamProfiles()
+  const options = {
+    eventWeightContext: eventContext('2026-01-10'),
+    regionPriorFor: (region: Region) => region === 'LCK' ? 1520 : 1500,
+    teamRegionFor: (team: string) => teams[team]?.region ?? 'International' as Region,
+  }
+  const causalContext = {
+    options,
+    callbackSemanticIds: {
+      regionPriorFor: 'region-prior-v1',
+      teamRegionFor: 'team-region-v1',
+    },
+  }
   const summary = buildDssRegionCausalSummary({
     prefixMatches: matches,
     teams,
     processedThroughUtcDate: '2026-01-02',
+    causalContext,
   })
   const correctedTeams = { ...teams, Alpha: { ...teams.Alpha, region: 'LEC' as Region, league: 'LEC' } }
-  const decision = reconcileDssRegionCausality({ summary, freshMatches: matches, teams: correctedTeams })
+  const decision = reconcileDssRegionCausality({
+    summary,
+    freshMatches: matches,
+    teams: correctedTeams,
+    causalContext,
+  })
 
-  assert.equal(decision.status, 'replay-required')
-  if (decision.status === 'replay-required') {
-    assert.equal(decision.replayFromUtcDate, '2026-01-02')
-    assert.deepEqual(decision.changedKeys, ['team-profile:Alpha'])
-  }
+  assertFullContextReplay(decision, 'context-changed')
+  const changedRegionCallback = reconcileDssRegionCausality({
+    summary,
+    freshMatches: matches,
+    teams,
+    causalContext: {
+      options: { ...options, regionPriorFor: () => 1600 },
+      callbackSemanticIds: { ...causalContext.callbackSemanticIds, regionPriorFor: 'region-prior-v2' },
+    },
+  })
+  assertFullContextReplay(changedRegionCallback, 'context-changed')
   assert.deepEqual(
-    recomputeDssRegionCausalState(matches, correctedTeams),
-    buildDeservedStandingRegionModel(matches, correctedTeams),
+    recomputeDssRegionCausalState(matches, teams, causalContext),
+    buildDeservedStandingRegionModel(matches, teams, options),
   )
 })
 
@@ -151,9 +247,23 @@ test('roster-era causality recomputes an appended open era from its start and re
     teamARoster: roster('alpha'),
     teamBRoster: roster('beta'),
   })
+  const options = {
+    coachIdFor: () => 'coach-a',
+    resumeLedgerIdsFor: ({ matchId }: { matchId: string }) => [`resume:${matchId}`],
+    uncertaintyFor: () => 10,
+  }
+  const causalContext = {
+    options,
+    callbackSemanticIds: {
+      coachIdFor: 'coach-identity-v1',
+      resumeLedgerIdsFor: 'resume-ledger-attribution-v1',
+      uncertaintyFor: 'roster-era-uncertainty-v1',
+    },
+  }
   const summary = buildDssRosterEraCausalSummary({
     prefixMatches: [first],
     processedThroughUtcDate: '2026-01-02',
+    causalContext,
   })
   const changedRoster = roster('alpha', { Mid: 'alpha-new-mid' })
   const appended = matchFixture({
@@ -162,7 +272,7 @@ test('roster-era causality recomputes an appended open era from its start and re
     teamARoster: changedRoster,
     teamBRoster: roster('beta'),
   })
-  const appendDecision = reconcileDssRosterEraCausality({ summary, freshMatches: [first, appended] })
+  const appendDecision = reconcileDssRosterEraCausality({ summary, freshMatches: [first, appended], causalContext })
   assert.equal(appendDecision.status, 'recompute-ready')
   if (appendDecision.status === 'recompute-ready') {
     assert.equal(appendDecision.earliestRecomputeUtcDate, '2026-01-02')
@@ -177,38 +287,72 @@ test('roster-era causality recomputes an appended open era from its start and re
   const substitutionDecision = reconcileDssRosterEraCausality({
     summary,
     freshMatches: [first, substitution, appended],
+    causalContext,
   })
   assert.equal(substitutionDecision.status, 'replay-required')
   if (substitutionDecision.status === 'replay-required') {
     assert.equal(substitutionDecision.replayFromUtcDate, '2026-01-02')
   }
+  assertFullContextReplay(reconcileDssRosterEraCausality({
+    summary,
+    freshMatches: [first, appended],
+    causalContext: {
+      options: { ...options, coachIdFor: () => 'coach-b' },
+      callbackSemanticIds: { ...causalContext.callbackSemanticIds, coachIdFor: 'coach-identity-v2' },
+    },
+  }), 'context-changed')
   assert.deepEqual(
-    recomputeDssRosterEraCausalState([first, appended]),
-    buildDssRosterEras([first, appended]),
+    recomputeDssRosterEraCausalState([first, appended], causalContext),
+    buildDssRosterEras([first, appended], options),
   )
 })
 
 test('player resume causality accepts append, catches historical series corrections, and preserves parity', () => {
   const first = resumeSeries({ seriesKey: 'first', date: '2026-01-02' })
+  const options = {
+    currentSeason: 2026,
+    currentSplitId: 'spring',
+    uncertaintyFor: () => 12,
+  }
+  const causalContext = { options, uncertaintyForSemanticId: 'resume-uncertainty-v1' }
   const summary = buildDssPlayerResumeCausalSummary({
     prefixSeries: [first],
     processedThroughUtcDate: '2026-01-02',
+    causalContext,
   })
   const appended = resumeSeries({ seriesKey: 'second', date: '2026-01-03', weightedSeriesValue: -4 })
 
-  assert.equal(reconcileDssPlayerResumeCausality({ summary, freshSeries: [first, appended] }).status, 'recompute-ready')
+  assert.equal(reconcileDssPlayerResumeCausality({
+    summary,
+    freshSeries: [first, appended],
+    causalContext,
+  }).status, 'recompute-ready')
   const corrected = resumeSeries({ seriesKey: 'first', date: '2026-01-02', weightedSeriesValue: 22 })
   const correctionDecision = reconcileDssPlayerResumeCausality({
     summary,
     freshSeries: [corrected, appended],
+    causalContext,
   })
   assert.equal(correctionDecision.status, 'replay-required')
   if (correctionDecision.status === 'replay-required') {
     assert.equal(correctionDecision.replayFromUtcDate, '2026-01-02')
   }
+  assertFullContextReplay(reconcileDssPlayerResumeCausality({
+    summary,
+    freshSeries: [first, appended],
+    causalContext: {
+      options: { ...options, currentSplitId: 'summer', uncertaintyFor: () => 30 },
+      uncertaintyForSemanticId: 'resume-uncertainty-v2',
+    },
+  }), 'context-changed')
+  assertFullContextReplay(reconcileDssPlayerResumeCausality({
+    summary,
+    freshSeries: [first, appended],
+    causalContext: { options },
+  }), 'context-unproven')
   assert.deepEqual(
-    recomputeDssPlayerResumeCausalState([corrected, appended]),
-    buildDssPlayerResumeLedgers([corrected, appended]),
+    recomputeDssPlayerResumeCausalState([corrected, appended], causalContext),
+    buildDssPlayerResumeLedgers([corrected, appended], options),
   )
 })
 
@@ -227,6 +371,40 @@ test('inventory exposes every external contract without activating production re
   )
   assert.equal(ratingCheckpointInventory.activation, 'foundation-only-production-disabled')
 })
+
+function assertFullContextReplay(
+  decision: CausalRecomputeDecision,
+  reason: 'context-changed' | 'context-unproven',
+) {
+  assert.equal(decision.status, 'replay-required')
+  if (decision.status !== 'replay-required') return
+  assert.equal(decision.reason, reason)
+  assert.equal(decision.requiresFullReplay, true)
+  assert.equal(decision.requiresWholeUtcDateReplay, true)
+  assert.deepEqual(decision.changedKeys, ['$context'])
+}
+
+function eventContext(worldsEndDate: string) {
+  return { worldsEndDateByCalendarYear: new Map([[2026, worldsEndDate]]) }
+}
+
+function leagueStrength(league: string, region: Region, score: number): LeagueStrength {
+  return {
+    league,
+    region,
+    tier: 'tier-one',
+    priorScore: score,
+    rawScore: score,
+    connectivity: 1,
+    score,
+    adjustment: score - 1500,
+    delta: 0,
+    wins: 0,
+    losses: 0,
+    internationalMatches: 0,
+    form: [],
+  }
+}
 
 function sourcedMatch(overrides: Partial<MatchRecord> = {}): MatchRecord {
   const winner = overrides.winner ?? 'Alpha'

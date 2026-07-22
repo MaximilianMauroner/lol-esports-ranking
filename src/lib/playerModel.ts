@@ -25,6 +25,7 @@ import {
 import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
 import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam } from './seriesResolver'
 import {
+  buildCausalContextIdentity,
   buildCausalPrefixSummary,
   causalInputRow,
   reconcileCausalPrefix,
@@ -128,6 +129,11 @@ export type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
   leagueStrengths?: LeagueStrength[]
   eventWeightContext?: EventWeightContext
+}
+
+export type SourcedPlayerCausalContext = {
+  rosters: Record<string, PlayerProfile[]>
+  ratingContext: Required<PlayerRatingContext>
 }
 
 export function buildPlayerModel(
@@ -404,27 +410,34 @@ export function sourcedPlayerCausalInputs(
 export function buildSourcedPlayerCausalSummary({
   prefixMatches,
   processedThroughUtcDate,
+  causalContext,
   contextInputs = [],
 }: {
   prefixMatches: readonly MatchRecord[]
   processedThroughUtcDate: string
+  causalContext: SourcedPlayerCausalContext
   contextInputs?: readonly CausalInputRow[]
 }) {
+  const contextIdentity = sourcedPlayerContextIdentity(causalContext)
+  if (!contextIdentity) throw new Error('Sourced-player causal context is incomplete')
   return buildCausalPrefixSummary({
     surface: 'sourced-player',
     processedThroughUtcDate,
     inputs: sourcedPlayerCausalInputs(prefixMatches, contextInputs),
+    contextIdentity,
   })
 }
 
 export function reconcileSourcedPlayerCausality({
   summary,
   freshMatches,
+  causalContext,
   contextInputs = [],
   availableProcessedThroughUtcDates = [],
 }: {
   summary: CausalPrefixSummary
   freshMatches: readonly MatchRecord[]
+  causalContext?: SourcedPlayerCausalContext
   contextInputs?: readonly CausalInputRow[]
   availableProcessedThroughUtcDates?: readonly string[]
 }) {
@@ -432,18 +445,35 @@ export function reconcileSourcedPlayerCausality({
   return reconcileCausalPrefix({
     summary,
     freshInputs: sourcedPlayerCausalInputs(freshMatches, contextInputs),
+    freshContextIdentity: causalContext
+      ? sourcedPlayerContextIdentity(causalContext)
+      : undefined,
     availableProcessedThroughUtcDates,
+  })
+}
+
+function sourcedPlayerContextIdentity({ rosters, ratingContext }: SourcedPlayerCausalContext) {
+  if (!ratingContext.teams || !ratingContext.leagueStrengths || !ratingContext.eventWeightContext) return undefined
+  return buildCausalContextIdentity({
+    semanticId: 'sourced-player-context-v1',
+    serializableInputs: {
+      modelParameters: playerModelParameters,
+      fallbackPolicy: 'static-roster-player-model-v1',
+      rosters,
+      teams: ratingContext.teams,
+      leagueStrengths: ratingContext.leagueStrengths,
+      eventWeightContext: ratingContext.eventWeightContext,
+    },
   })
 }
 
 export function recomputeSourcedPlayerCausalOutputs(
   matches: MatchRecord[],
-  rosters: Record<string, PlayerProfile[]>,
-  context: PlayerRatingContext = {},
+  { rosters, ratingContext }: SourcedPlayerCausalContext,
 ) {
   return {
-    players: buildPlayerModel(matches, rosters, context),
-    pregameEdges: buildPregamePlayerRatingEdges(matches, context),
+    players: buildPlayerModel(matches, rosters, ratingContext),
+    pregameEdges: buildPregamePlayerRatingEdges(matches, ratingContext),
   }
 }
 

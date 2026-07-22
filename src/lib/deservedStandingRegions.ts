@@ -15,13 +15,16 @@ import {
   type DssSeriesLedgerEntry,
 } from './deservedStanding'
 import {
+  dssTeamContextIdentity,
   buildDeservedStandingModel,
   type DeservedStandingModel,
   type DeservedStandingModelOptions,
   type DeservedStandingTeamSummary,
+  type DssTeamCausalCallbackSemanticIds,
 } from './deservedStandingModel'
 import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
 import {
+  buildCausalContextIdentity,
   buildCausalPrefixSummary,
   causalInputRow,
   reconcileCausalPrefix,
@@ -116,6 +119,20 @@ export type DeservedStandingRegionModel = {
   teamModel: DeservedStandingModel
 }
 
+export type DssRegionCausalCallbackSemanticIds = DssTeamCausalCallbackSemanticIds & Partial<Record<
+  | 'regionPriorFor'
+  | 'teamRegionFor'
+  | 'seedExpectedSeriesResultFor'
+  | 'regionStagePointsFor'
+  | 'teamEligibleForDepth',
+  string
+>>
+
+export type DssRegionCausalContext = {
+  options: DeservedStandingRegionModelOptions
+  callbackSemanticIds: DssRegionCausalCallbackSemanticIds
+}
+
 const defaultRegionSeedReferenceStrengths: Record<Region, readonly number[]> = {
   LCK: [1660, 1625, 1590, 1555, 1525],
   LPL: [1655, 1620, 1585, 1550, 1520],
@@ -172,17 +189,22 @@ export function buildDssRegionCausalSummary({
   prefixMatches,
   teams,
   processedThroughUtcDate,
+  causalContext,
   contextInputs = [],
 }: {
   prefixMatches: readonly MatchRecord[]
   teams: Record<string, TeamProfile>
   processedThroughUtcDate: string
+  causalContext: DssRegionCausalContext
   contextInputs?: readonly CausalInputRow[]
 }) {
+  const contextIdentity = dssRegionContextIdentity(prefixMatches, teams, causalContext)
+  if (!contextIdentity) throw new Error('DSS region callback semantic ids are incomplete')
   return buildCausalPrefixSummary({
     surface: 'dss-region',
     processedThroughUtcDate,
     inputs: dssRegionCausalInputs(prefixMatches, teams, contextInputs),
+    contextIdentity,
   })
 }
 
@@ -190,12 +212,14 @@ export function reconcileDssRegionCausality({
   summary,
   freshMatches,
   teams,
+  causalContext,
   contextInputs = [],
   availableProcessedThroughUtcDates = [],
 }: {
   summary: CausalPrefixSummary
   freshMatches: readonly MatchRecord[]
   teams: Record<string, TeamProfile>
+  causalContext?: DssRegionCausalContext
   contextInputs?: readonly CausalInputRow[]
   availableProcessedThroughUtcDates?: readonly string[]
 }) {
@@ -203,14 +227,51 @@ export function reconcileDssRegionCausality({
   return reconcileCausalPrefix({
     summary,
     freshInputs: dssRegionCausalInputs(freshMatches, teams, contextInputs),
+    freshContextIdentity: causalContext
+      ? dssRegionContextIdentity(freshMatches, teams, causalContext)
+      : undefined,
     availableProcessedThroughUtcDates,
   })
+}
+
+function dssRegionContextIdentity(
+  matches: readonly MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  { options, callbackSemanticIds }: DssRegionCausalContext,
+) {
+  const teamContextIdentity = dssTeamContextIdentity(matches, { options, callbackSemanticIds })
+  if (!teamContextIdentity) return undefined
+  return buildCausalContextIdentity({
+    semanticId: 'dss-region-context-v1',
+    serializableInputs: {
+      teamContextIdentity,
+      teams,
+      includeInternationalRegion: options.includeInternationalRegion ?? false,
+      defaultRegionSeedReferenceStrengths,
+      defaultPolicies: 'dss-region-defaults-v1',
+    },
+    callbacks: [
+      regionCallbackBinding('regionPriorFor', options.regionPriorFor, callbackSemanticIds),
+      regionCallbackBinding('teamRegionFor', options.teamRegionFor, callbackSemanticIds),
+      regionCallbackBinding('seedExpectedSeriesResultFor', options.seedExpectedSeriesResultFor, callbackSemanticIds),
+      regionCallbackBinding('regionStagePointsFor', options.regionStagePointsFor, callbackSemanticIds),
+      regionCallbackBinding('teamEligibleForDepth', options.teamEligibleForDepth, callbackSemanticIds),
+    ],
+  })
+}
+
+function regionCallbackBinding(
+  name: 'regionPriorFor' | 'teamRegionFor' | 'seedExpectedSeriesResultFor' | 'regionStagePointsFor' | 'teamEligibleForDepth',
+  implementation: unknown,
+  semanticIds: DssRegionCausalCallbackSemanticIds,
+) {
+  return { name, implementation, semanticId: semanticIds[name] }
 }
 
 export function recomputeDssRegionCausalState(
   matches: MatchRecord[],
   teams: Record<string, TeamProfile>,
-  options: DeservedStandingRegionModelOptions = {},
+  { options }: DssRegionCausalContext,
 ) {
   return buildDeservedStandingRegionModel(matches, teams, options)
 }
