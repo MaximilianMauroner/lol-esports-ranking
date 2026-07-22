@@ -37,6 +37,21 @@ test('classifier exhaustively distinguishes receipts, append, insertion, correct
   const metadata = buildCanonicalMatchLedger([first, second], { ...context, provenanceReceiptIdentity: 'provenance-v2' })
   assert.equal(classifyRankingChange(previous, metadata).kind, 'metadata-only')
 
+  const scheduleBaseContext = { ...context, scheduleReceiptIdentity: 'schedule-causal-v1', scheduleCausalRows: [{ key: 'schedule-1', utcDate: '2026-01-02', digest: 'open' }] }
+  const scheduleBase = buildCanonicalMatchLedger([first, second], scheduleBaseContext)
+  const scheduleTransition = buildCanonicalMatchLedger([first, second], {
+    ...scheduleBaseContext,
+    scheduleReceiptIdentity: 'schedule-causal-v2',
+    scheduleCausalRows: [{ key: 'schedule-1', utcDate: '2026-01-02', digest: 'completed' }],
+  })
+  assert.equal(classifyRankingChange(scheduleBase, scheduleTransition).kind, 'historical-correction')
+  const scheduleAppend = buildCanonicalMatchLedger([first, second], {
+    ...scheduleBaseContext,
+    scheduleReceiptIdentity: 'schedule-causal-v3',
+    scheduleCausalRows: [...scheduleBaseContext.scheduleCausalRows, { key: 'schedule-2', utcDate: '2026-02-01', digest: 'future' }],
+  })
+  assert.equal(classifyRankingChange(scheduleBase, scheduleAppend).kind, 'latest-append')
+
   const appended = match({ id: 'third', date: '2026-01-03' })
   const appendDecision = classifyRankingChange(previous, buildCanonicalMatchLedger([first, second, appended], context))
   assert.equal(appendDecision.kind, 'latest-append')

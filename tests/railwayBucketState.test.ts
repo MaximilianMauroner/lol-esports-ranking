@@ -9,6 +9,7 @@ import {
   acquireBucketLease,
   assertBucketLease,
   getBucketObject,
+  readActiveContentAddressedGeneration,
   readBucketJson,
   releaseBucketLease,
   renewBucketLease,
@@ -387,6 +388,58 @@ test('content-addressed generation reuses unchanged objects, uploads only change
     })
     assert.equal(changed.uploadedCount, 2)
     assert.equal(changed.unchangedCount, 2)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('active content-addressed restore verifies pointer, manifest, and every referenced object authority', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-active-authority-'))
+  const publicDir = join(root, 'public')
+  try {
+    const pointerClient = memoryS3()
+    await writeContentAddressedFixture(publicDir, 'pointer-authority')
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'pointer-authority',
+      fencingToken: 1,
+      contentAddressed: true,
+      config,
+      client: pointerClient,
+    })
+    const restored = await readActiveContentAddressedGeneration({ config, client: pointerClient })
+    assert.equal(restored.found, true)
+    assert.equal(Object.keys(restored.artifacts).length, 3)
+
+    const activeObject = pointerClient.objects.get('rankings/active-generation.json')
+    assert.ok(activeObject)
+    const badPointer = { ...JSON.parse(activeObject.body), manifestDigest: '0'.repeat(64) }
+    activeObject.body = `${JSON.stringify(badPointer)}\n`
+    activeObject.bytes = Buffer.from(activeObject.body)
+    await assert.rejects(
+      readActiveContentAddressedGeneration({ config, client: pointerClient }),
+      /Active public generation manifest authority mismatch/,
+    )
+
+    const objectClient = memoryS3()
+    await writeContentAddressedFixture(publicDir, 'object-authority')
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'object-authority',
+      fencingToken: 1,
+      contentAddressed: true,
+      config,
+      client: objectClient,
+    })
+    const generationManifest = JSON.parse(objectClient.objects.get('rankings/generations/object-authority/manifest.json')!.body)
+    const rootIdentity = generationManifest.artifacts['/data/ranking-summary.json'] as { sha256: string }
+    const rootObject = objectClient.objects.get(`rankings/objects/sha256/${rootIdentity.sha256}`)
+    assert.ok(rootObject)
+    rootObject.metadata = { ...rootObject.metadata, 'semantic-bytes': '1' }
+    await assert.rejects(
+      readActiveContentAddressedGeneration({ config, client: objectClient }),
+      /Referenced content-addressed object metadata mismatch/,
+    )
   } finally {
     await rm(root, { recursive: true, force: true })
   }

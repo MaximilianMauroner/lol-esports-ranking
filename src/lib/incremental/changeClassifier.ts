@@ -49,24 +49,28 @@ export function buildCanonicalMatchLedger(
       scheduleReceiptIdentity: context.scheduleReceiptIdentity,
       contextReceiptIdentity: context.contextReceiptIdentity,
       provenanceReceiptIdentity: context.provenanceReceiptIdentity,
+      ...(context.providerAvailableAtForMatch?.(match) ? { providerAvailableAt: context.providerAvailableAtForMatch(match) } : {}),
       match,
     }
   }).sort(compareLedgerRows)
   const duplicate = rows.find((row, index) => row.key === rows[index - 1]?.key)
   if (duplicate) throw new Error(`Duplicate canonical match ledger key ${duplicate.key}`)
   const compatibility = compatibilityFrom(context)
+  const scheduleCausalRows = [...(context.scheduleCausalRows ?? [])].sort(compareScheduleRows)
   return {
     schemaVersion: CANONICAL_MATCH_LEDGER_SCHEMA_VERSION,
     compatibility,
     scheduleReceiptIdentity: context.scheduleReceiptIdentity,
     contextReceiptIdentity: context.contextReceiptIdentity,
     provenanceReceiptIdentity: context.provenanceReceiptIdentity,
+    scheduleCausalRows,
     rows,
     digest: stableDigest({
       compatibility,
       scheduleReceiptIdentity: context.scheduleReceiptIdentity,
       contextReceiptIdentity: context.contextReceiptIdentity,
       provenanceReceiptIdentity: context.provenanceReceiptIdentity,
+      scheduleCausalRows,
       rows: rows.map((row) => ({
         key: row.key,
         utcDate: row.utcDate,
@@ -75,6 +79,7 @@ export function buildCanonicalMatchLedger(
         scheduleReceiptIdentity: row.scheduleReceiptIdentity,
         contextReceiptIdentity: row.contextReceiptIdentity,
         provenanceReceiptIdentity: row.provenanceReceiptIdentity,
+        providerAvailableAt: row.providerAvailableAt,
       })),
     }),
   }
@@ -107,6 +112,7 @@ export function parseCanonicalMatchLedger(value: unknown): CanonicalMatchLedger 
       scheduleReceiptIdentity: requiredString(item.scheduleReceiptIdentity, `rows[${index}].scheduleReceiptIdentity`),
       contextReceiptIdentity: requiredString(item.contextReceiptIdentity, `rows[${index}].contextReceiptIdentity`),
       provenanceReceiptIdentity: requiredString(item.provenanceReceiptIdentity, `rows[${index}].provenanceReceiptIdentity`),
+      ...(optionalString(item.providerAvailableAt, `rows[${index}].providerAvailableAt`) ? { providerAvailableAt: String(item.providerAvailableAt) } : {}),
       match: match as MatchRecord,
     }
   }).sort(compareLedgerRows)
@@ -116,6 +122,7 @@ export function parseCanonicalMatchLedger(value: unknown): CanonicalMatchLedger 
     scheduleReceiptIdentity: requiredString(record.scheduleReceiptIdentity, 'scheduleReceiptIdentity'),
     contextReceiptIdentity: requiredString(record.contextReceiptIdentity, 'contextReceiptIdentity'),
     provenanceReceiptIdentity: requiredString(record.provenanceReceiptIdentity, 'provenanceReceiptIdentity'),
+    scheduleCausalRows: parseScheduleRows(record.scheduleCausalRows),
     rows,
     digest: requiredString(record.digest, 'digest'),
   }
@@ -124,10 +131,12 @@ export function parseCanonicalMatchLedger(value: unknown): CanonicalMatchLedger 
     scheduleReceiptIdentity: parsed.scheduleReceiptIdentity,
     contextReceiptIdentity: parsed.contextReceiptIdentity,
     provenanceReceiptIdentity: parsed.provenanceReceiptIdentity,
+    scheduleCausalRows: parsed.scheduleCausalRows,
     rows: rows.map((row) => ({
       key: row.key, utcDate: row.utcDate, scoringDigest: row.scoringDigest, artifactDigest: row.artifactDigest,
       scheduleReceiptIdentity: row.scheduleReceiptIdentity, contextReceiptIdentity: row.contextReceiptIdentity,
       provenanceReceiptIdentity: row.provenanceReceiptIdentity,
+      providerAvailableAt: row.providerAvailableAt,
     })),
   })
   if (rebuilt !== parsed.digest) throw new Error('Canonical match ledger digest mismatch')
@@ -160,13 +169,29 @@ export function classifyRankingChange(
       || before.artifactDigest !== row.artifactDigest
     )
   })
-  const receiptsChanged = previous.scheduleReceiptIdentity !== current.scheduleReceiptIdentity
-    || previous.contextReceiptIdentity !== current.contextReceiptIdentity
-    || previous.provenanceReceiptIdentity !== current.provenanceReceiptIdentity
+  const scheduleChange = compareScheduleCausality(previous, current)
+  const contextChanged = previous.contextReceiptIdentity !== current.contextReceiptIdentity
+  const provenanceChanged = previous.provenanceReceiptIdentity !== current.provenanceReceiptIdentity
 
   if (added.length === 0 && removed.length === 0 && changed.length === 0) {
-    return receiptsChanged
-      ? result('metadata-only', { reasons: ['receipt-identity-changed'] })
+    if (contextChanged) {
+      return result('full-invalidation', {
+        reasons: ['causal-context-changed'],
+        earliestChangedUtcDate: earliestDate(previous.rows, current.rows),
+        requiresFullReplay: true,
+      })
+    }
+    if (scheduleChange.changed) {
+      if (!scheduleChange.earliestChangedUtcDate) {
+        return result('full-invalidation', { reasons: ['schedule-context-changed-without-date'], requiresFullReplay: true })
+      }
+      return result(scheduleChange.onlyFutureAdds ? 'latest-append' : 'historical-correction', {
+        reasons: [scheduleChange.onlyFutureAdds ? 'schedule-context-appended' : 'schedule-context-changed'],
+        earliestChangedUtcDate: scheduleChange.earliestChangedUtcDate,
+      })
+    }
+    return provenanceChanged
+      ? result('metadata-only', { reasons: ['provenance-receipt-changed'] })
       : result('no-change')
   }
 
@@ -174,10 +199,11 @@ export function classifyRankingChange(
     ...added.map((row) => row.utcDate),
     ...removed.map((row) => row.utcDate),
     ...changed.flatMap((row) => [row.utcDate, previousByKey.get(row.key)?.utcDate].filter(isString)),
+    ...(scheduleChange.earliestChangedUtcDate ? [scheduleChange.earliestChangedUtcDate] : []),
   ].sort(compareCodeUnits)
   const earliestChangedUtcDate = affectedDates[0]
   const previousLatestDate = previous.rows.map((row) => row.utcDate).sort(compareCodeUnits).at(-1)
-  const onlyAdds = removed.length === 0 && changed.length === 0
+  const onlyAdds = removed.length === 0 && changed.length === 0 && (!scheduleChange.changed || scheduleChange.onlyFutureAdds)
   const isLatestAppend = onlyAdds && added.every((row) => !previousLatestDate || row.utcDate > previousLatestDate)
   const isSameDayInsertion = onlyAdds && added.every((row) => previous.rows.some((before) => before.utcDate === row.utcDate))
   const kind = isLatestAppend
@@ -191,7 +217,9 @@ export function classifyRankingChange(
     ...(changed.some((row) => previousByKey.get(row.key)?.utcDate !== row.utcDate) ? ['match-date-moved'] : []),
     ...(changed.some((row) => previousByKey.get(row.key)?.scoringDigest !== row.scoringDigest) ? ['scoring-input-changed'] : []),
     ...(changed.some((row) => previousByKey.get(row.key)?.artifactDigest !== row.artifactDigest) ? ['artifact-input-changed'] : []),
-    ...(receiptsChanged ? ['receipt-identity-changed'] : []),
+    ...(scheduleChange.changed ? [scheduleChange.onlyFutureAdds ? 'schedule-context-appended' : 'schedule-context-changed'] : []),
+    ...(contextChanged ? ['causal-context-changed'] : []),
+    ...(provenanceChanged ? ['provenance-receipt-changed'] : []),
   ]
   return result(kind, {
     earliestChangedUtcDate,
@@ -241,9 +269,59 @@ function compatibilityFrom(context: CanonicalMatchLedgerContext): RankingCompati
 
 function assertCompatibility(context: CanonicalMatchLedgerContext) {
   for (const [key, value] of Object.entries(context)) {
-    if (key === 'teams') continue
+    if (key === 'teams' || key === 'scheduleCausalRows' || key === 'providerAvailableAtForMatch') continue
     if (typeof value !== 'string' || !value.trim()) throw new Error(`Canonical ledger ${key} must be non-empty`)
   }
+}
+
+function compareScheduleCausality(previous: CanonicalMatchLedger, current: CanonicalMatchLedger) {
+  if (previous.scheduleReceiptIdentity === current.scheduleReceiptIdentity
+    && stableDigest(previous.scheduleCausalRows) === stableDigest(current.scheduleCausalRows)) {
+    return { changed: false, onlyFutureAdds: false }
+  }
+  const before = new Map(previous.scheduleCausalRows.map((row) => [row.key, row]))
+  const after = new Map(current.scheduleCausalRows.map((row) => [row.key, row]))
+  const added = current.scheduleCausalRows.filter((row) => !before.has(row.key))
+  const removed = previous.scheduleCausalRows.filter((row) => !after.has(row.key))
+  const changed = current.scheduleCausalRows.filter((row) => {
+    const prior = before.get(row.key)
+    return prior && (prior.digest !== row.digest || prior.utcDate !== row.utcDate)
+  })
+  const dates = [
+    ...added.map((row) => row.utcDate),
+    ...removed.map((row) => row.utcDate),
+    ...changed.flatMap((row) => [row.utcDate, before.get(row.key)?.utcDate]),
+  ].filter(isString).sort(compareCodeUnits)
+  const previousLatestDate = previous.scheduleCausalRows.map((row) => row.utcDate).filter(isString).sort(compareCodeUnits).at(-1)
+  const onlyFutureAdds = removed.length === 0 && changed.length === 0 && added.length > 0
+    && added.every((row) => row.utcDate && (!previousLatestDate || row.utcDate > previousLatestDate))
+  return { changed: true, onlyFutureAdds: Boolean(onlyFutureAdds), earliestChangedUtcDate: dates[0] }
+}
+
+function parseScheduleRows(value: unknown) {
+  if (!Array.isArray(value)) throw new Error('Canonical match ledger schedule causal rows are invalid')
+  const rows = value.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(`Canonical schedule row ${index} is invalid`)
+    const record = entry as Record<string, unknown>
+    return {
+      key: requiredString(record.key, `scheduleCausalRows[${index}].key`),
+      ...(optionalString(record.utcDate, `scheduleCausalRows[${index}].utcDate`) ? { utcDate: String(record.utcDate) } : {}),
+      digest: requiredString(record.digest, `scheduleCausalRows[${index}].digest`),
+    }
+  }).sort(compareScheduleRows)
+  const duplicate = rows.find((row, index) => row.key === rows[index - 1]?.key)
+  if (duplicate) throw new Error(`Duplicate canonical schedule row ${duplicate.key}`)
+  return rows
+}
+
+function compareScheduleRows(left: { key: string; utcDate?: string }, right: { key: string; utcDate?: string }) {
+  return compareCodeUnits(left.utcDate ?? '', right.utcDate ?? '') || compareCodeUnits(left.key, right.key)
+}
+
+function optionalString(value: unknown, label: string) {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !value) throw new Error(`${label} must be a non-empty string when present`)
+  return value
 }
 
 function compareLedgerRows(left: CanonicalMatchLedgerRow, right: CanonicalMatchLedgerRow) {

@@ -102,11 +102,14 @@ export function createPublicArtifactWritePlan(
     fullSnapshotUrl,
     urlForPath = localPublicDataUrl,
     affectedLogicalPaths,
+    previousArtifacts,
   }: {
     fullSnapshotUrl?: string
     urlForPath?: (relativePath: string) => string
     /** Optional dependency plan; omitted for the authoritative full writer. */
     affectedLogicalPaths?: ReadonlySet<string>
+    /** Verified semantic values from the active generation, used to merge partial indexes. */
+    previousArtifacts?: Readonly<Record<string, unknown>>
   } = {},
 ): PublicArtifactWritePlan {
   const artifactVersion = runIdForArtifact({
@@ -115,19 +118,30 @@ export function createPublicArtifactWritePlan(
     modelConfigHash: data.model.configHash,
   })
   const versionedUrlForPath = (relativePath: string) => withArtifactVersion(urlForPath(relativePath), artifactVersion)
-  const playerDirectory = createPlayerDirectory(data)
-  const teamDirectory = createTeamDirectory(data)
-  const teamHistory = createTeamHistoryArtifacts(data, {
-    teamHistoryUrlForKey: (key) => versionedUrlForPath(publicTeamHistoryShardPath(key)),
-  })
-  const regionHistory = createRegionHistory(data)
-  const tournamentMovements = createTournamentMovementArtifacts(data, {
-    tournamentMovementUrlForId: (id) => versionedUrlForPath(publicTournamentMovementShardPath(id)),
-  })
-  const matchHistory = createMatchHistoryArtifacts(data, {
-    matchHistoryCatalogUrlForKey: (key) => versionedUrlForPath(publicMatchHistoryShardPath(key)),
-    matchHistoryPageUrlForKey: (key, page) => versionedUrlForPath(publicMatchHistoryPagePath(key, page)),
-  })
+  const selected = (relativePath: string) => !affectedLogicalPaths || affectedLogicalPaths.has(relativePath)
+  const selectedFamily = (indexPath: string, prefix: string) => !affectedLogicalPaths
+    || selected(indexPath)
+    || [...affectedLogicalPaths].some((path) => path.startsWith(`${prefix}/`))
+  const previous = (relativePath: string) => previousArtifacts?.[`/data/${relativePath}`]
+  const playerDirectory = selected(PUBLIC_ARTIFACT_PATHS.players) ? createPlayerDirectory(data) : undefined
+  const teamDirectory = selected(PUBLIC_ARTIFACT_PATHS.teams) ? createTeamDirectory(data) : undefined
+  const teamHistory = selectedFamily(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir)
+    ? createTeamHistoryArtifacts(data, {
+        teamHistoryUrlForKey: (key) => versionedUrlForPath(publicTeamHistoryShardPath(key)),
+      })
+    : undefined
+  const regionHistory = selected(PUBLIC_ARTIFACT_PATHS.regionHistory) ? createRegionHistory(data) : undefined
+  const tournamentMovements = selectedFamily(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex, PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir)
+    ? createTournamentMovementArtifacts(data, {
+        tournamentMovementUrlForId: (id) => versionedUrlForPath(publicTournamentMovementShardPath(id)),
+      })
+    : undefined
+  const matchHistory = selectedFamily(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex, PUBLIC_ARTIFACT_PATHS.matchHistoryShardDir)
+    ? createMatchHistoryArtifacts(data, {
+        matchHistoryCatalogUrlForKey: (key) => versionedUrlForPath(publicMatchHistoryShardPath(key)),
+        matchHistoryPageUrlForKey: (key, page) => versionedUrlForPath(publicMatchHistoryPagePath(key, page)),
+      })
+    : undefined
   const summary = createStaticRankingSummaryData(data, {
     fullSnapshotUrl,
     playerDirectoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.players),
@@ -138,30 +152,34 @@ export function createPublicArtifactWritePlan(
     matchHistoryIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex),
     snapshotUrlForKey: (key) => versionedUrlForPath(publicScopeArtifactPath(key)),
   })
+  const mergedSummaryManifest = mergeRecordIndex(summary.manifest, previous(PUBLIC_ARTIFACT_PATHS.manifest), 'snapshotIndex')
+  const mergedTeamHistoryIndex = teamHistory ? mergeRecordIndex(teamHistory.index, previous(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex), 'scopeIndex') : undefined
+  const mergedMatchHistoryIndex = matchHistory ? mergeRecordIndex(matchHistory.index, previous(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex), 'scopeIndex') : undefined
+  const mergedTournamentMovementIndex = tournamentMovements ? mergeArrayIndex(tournamentMovements.index, previous(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex), 'tournaments', 'id') : undefined
 
   const allWrites: PublicArtifactWrite[] = [
-    write('entity', PUBLIC_ARTIFACT_PATHS.players, playerDirectory, parsePublicPlayerDirectory),
-    write('entity', PUBLIC_ARTIFACT_PATHS.teams, teamDirectory, parsePublicTeamDirectory),
-    write('history', PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, teamHistory.index, parsePublicTeamHistoryIndex),
-    ...Object.entries(teamHistory.shards).map(([key, shard]) => (
+    ...(playerDirectory ? [write('entity', PUBLIC_ARTIFACT_PATHS.players, playerDirectory, parsePublicPlayerDirectory)] : []),
+    ...(teamDirectory ? [write('entity', PUBLIC_ARTIFACT_PATHS.teams, teamDirectory, parsePublicTeamDirectory)] : []),
+    ...(selected(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex) && mergedTeamHistoryIndex ? [write('history', PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, mergedTeamHistoryIndex, parsePublicTeamHistoryIndex)] : []),
+    ...Object.entries(teamHistory?.shards ?? {}).map(([key, shard]) => (
       write('history', publicTeamHistoryShardPath(key), shard, parsePublicTeamHistoryShard)
     )),
-    write('history', PUBLIC_ARTIFACT_PATHS.regionHistory, regionHistory, parsePublicRegionHistory),
-    write('history', PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex, tournamentMovements.index, parsePublicTournamentMovementIndex),
-    ...Object.entries(tournamentMovements.shards).map(([id, shard]) => (
+    ...(regionHistory ? [write('history', PUBLIC_ARTIFACT_PATHS.regionHistory, regionHistory, parsePublicRegionHistory)] : []),
+    ...(selected(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex) && mergedTournamentMovementIndex ? [write('history', PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex, mergedTournamentMovementIndex, parsePublicTournamentMovementIndex)] : []),
+    ...Object.entries(tournamentMovements?.shards ?? {}).map(([id, shard]) => (
       write('history', publicTournamentMovementShardPath(id as TournamentInstanceId), shard, parsePublicTournamentMovementShard)
     )),
-    write('history', PUBLIC_ARTIFACT_PATHS.matchHistoryIndex, matchHistory.index, parsePublicMatchHistoryIndex),
-    ...Object.entries(matchHistory.catalogs).map(([key, catalog]) => (
+    ...(selected(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex) && mergedMatchHistoryIndex ? [write('history', PUBLIC_ARTIFACT_PATHS.matchHistoryIndex, mergedMatchHistoryIndex, parsePublicMatchHistoryIndex)] : []),
+    ...Object.entries(matchHistory?.catalogs ?? {}).map(([key, catalog]) => (
       write('history', publicMatchHistoryShardPath(key), catalog, parsePublicMatchHistoryCatalog)
     )),
-    ...Object.entries(matchHistory.pages).flatMap(([key, pages]) => Object.entries(pages).map(([page, shard]) => (
+    ...Object.entries(matchHistory?.pages ?? {}).flatMap(([key, pages]) => Object.entries(pages).map(([page, shard]) => (
       write('history', publicMatchHistoryPagePath(key, Number(page)), shard, parsePublicMatchHistoryPage)
     ))),
     ...Object.entries(summary.snapshots).map(([key, snapshot]) => (
       write('scope', publicScopeArtifactPath(key), snapshot, parsePublicRankingShard)
     )),
-    write('manifest', PUBLIC_ARTIFACT_PATHS.manifest, summary.manifest, parsePublicRankingManifest, true),
+    ...(selected(PUBLIC_ARTIFACT_PATHS.manifest) ? [write('manifest', PUBLIC_ARTIFACT_PATHS.manifest, mergedSummaryManifest, parsePublicRankingManifest, true)] : []),
   ]
 
   assertPublicArtifactBudgets(allWrites, data.defaultSnapshotKey)
@@ -170,11 +188,35 @@ export function createPublicArtifactWritePlan(
     : allWrites
 
   return {
-    manifest: summary.manifest,
+    manifest: mergedSummaryManifest,
     snapshots: summary.snapshots,
     writes,
     budgets: PUBLIC_ARTIFACT_BUDGETS,
   }
+}
+
+function mergeRecordIndex<T extends Record<string, unknown>>(current: T, previous: unknown, key: string): T {
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous)) return current
+  const before = (previous as Record<string, unknown>)[key]
+  const after = current[key]
+  if (!before || typeof before !== 'object' || Array.isArray(before)
+    || !after || typeof after !== 'object' || Array.isArray(after)) return current
+  return { ...current, [key]: { ...(before as Record<string, unknown>), ...(after as Record<string, unknown>) } }
+}
+
+function mergeArrayIndex<T extends Record<string, unknown>>(current: T, previous: unknown, key: string, identityKey: string): T {
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous)) return current
+  const before = (previous as Record<string, unknown>)[key]
+  const after = current[key]
+  if (!Array.isArray(before) || !Array.isArray(after)) return current
+  const merged = new Map<string, unknown>()
+  for (const entry of [...before, ...after]) {
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      const identity = (entry as Record<string, unknown>)[identityKey]
+      if (typeof identity === 'string') merged.set(identity, entry)
+    }
+  }
+  return { ...current, [key]: [...merged.values()] }
 }
 
 function withArtifactVersion(url: string, version: string) {

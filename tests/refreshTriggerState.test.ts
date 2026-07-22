@@ -68,6 +68,7 @@ test('gated fetches occur only for due pending work, audits, or manual recovery'
     events: [completed],
   })
   assert.equal(shouldFetchScoredProviders(shadow, { now: '2026-07-11T13:00:00Z' }), false)
+  assert.equal(shouldFetchScoredProviders(shadow, { now: '2026-07-11T13:00:00Z', shadowIngestionEnabled: true }), true)
   assert.equal(shouldFetchScoredProviders({ ...shadow, mode: 'gated' }, { now: '2026-07-11T13:00:00Z' }), true)
   assert.equal(shouldFetchScoredProviders(emptyTriggerState('gated'), { correctionAuditDue: true }), true)
   assert.equal(shouldFetchScoredProviders(emptyTriggerState('legacy'), { manual: true }), true)

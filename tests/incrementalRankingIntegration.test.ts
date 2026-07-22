@@ -53,6 +53,7 @@ test('append, same-day insertion, and historical correction use whole-date repla
     const restored = restoreFrom(base)
     const scenarios = {
       append: [...baseMatches(), match('m5', '2026-01-05', 'Event C')],
+      appendExistingEvent: [...baseMatches(), match('m5-existing', '2026-01-05', 'Event B')],
       sameDay: [...baseMatches(), match('m4b', '2026-01-04', 'Event B', { datetimeUtc: '2026-01-04T18:00:00.000Z' })],
       correction: baseMatches().map((entry) => entry.id === 'm3' ? { ...entry, winner: 'Beta' } : entry),
     }
@@ -80,7 +81,10 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     const shadow = await run(root, 'shadow', appended, { mode: 'shadow', cause: 'pending-match', enabled: true, restored })
     assert.equal(shadow.action, 'publish-full')
     assert.equal(shadow.metrics.parity, true)
+    assert.equal(shadow.metrics.stateParity, true)
     assert.equal(shadow.diagnostic, undefined)
+    const shadowFull = await run(root, 'shadow-authority', appended, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    assert.deepEqual(shadow.state, shadowFull.action === 'no-change' ? undefined : shadowFull.state)
 
     const missing = await run(root, 'missing', appended, {
       mode: 'gated', cause: 'pending-match', enabled: true,
@@ -113,6 +117,66 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     assert.equal(mismatch.metrics.parity, false)
     assert.equal(mismatch.diagnostic?.kind, 'shadow-parity')
     assert.equal(mismatch.diagnostic?.parity?.equal, false)
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('causal tournament schedule transitions replay while future schedule appends keep predecessor checkpoints valid', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-tournament-transition-'))
+  try {
+    const tournamentMatches = baseMatches().map((entry) => ({
+      ...entry,
+      event: 'MSI 2026',
+      tier: 'msi-bracket' as const,
+      officialMatchId: `official-${entry.id}`,
+    }))
+    const baseSource = fixtureSource(tournamentMatches)
+    baseSource.tournamentScheduleReferences = tournamentMatches.map((entry) => ({
+      matchId: entry.officialMatchId!, leagueName: 'MSI', date: entry.date, startTime: `${entry.date}T12:00:00.000Z`,
+      state: 'unstarted', retrievedAt: '2026-01-04T00:00:00.000Z', coverageStart: '2025-12-20', coverageEnd: '2026-01-04', coverageEndComplete: true,
+    }))
+    const baseline = await run(root, 'tournament-base', baseSource, { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(baseline)
+    const transitioned = structuredClone(baseSource)
+    transitioned.tournamentScheduleReferences = transitioned.tournamentScheduleReferences.map((entry) => ({ ...entry, state: 'completed', retrievedAt: '2026-01-05T00:00:00.000Z' }))
+    const incremental = await run(root, 'tournament-transition', transitioned, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    assert.equal(incremental.action, 'publish-full')
+    assert.equal(incremental.metrics.classification, 'historical-correction')
+    assert.match(incremental.metrics.fallbackReason ?? '', /checkpoint-/)
+    const full = await run(root, 'tournament-transition-full', transitioned, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    assert.deepEqual(semanticMap(incremental), semanticMap(full))
+
+    const future = structuredClone(baseSource)
+    future.tournamentScheduleReferences.push({
+      matchId: 'future-match', leagueName: 'MSI', date: '2026-02-01', startTime: '2026-02-01T12:00:00.000Z',
+      state: 'unstarted', retrievedAt: '2026-01-05T00:00:00.000Z', coverageStart: '2025-12-20', coverageEnd: '2026-02-01', coverageEndComplete: true,
+    })
+    const appended = await run(root, 'tournament-schedule-append', future, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    assert.equal(appended.action, 'publish-incremental', appended.metrics.fallbackReason)
+    assert.equal(appended.metrics.classification, 'latest-append')
+    assert.ok(appended.metrics.selectedBoundary)
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('provider availability is attributed to the receipt covering the newly observed match', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-provider-availability-'))
+  try {
+    const baselineSource = fixtureSource(baseMatches())
+    baselineSource.externalSources = [providerReceipt('2026-01-04T06:00:00.000Z', '2026-01-04')]
+    const baseline = await run(root, 'provider-base', baselineSource, { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const appendedSource = fixtureSource([...baseMatches(), match('m5', '2026-01-05', 'Event C')])
+    appendedSource.externalSources = [
+      providerReceipt('2026-01-04T06:00:00.000Z', '2026-01-04'),
+      providerReceipt('2026-01-05T08:30:00.000Z', '2026-01-05', 'Oracle fixture delta'),
+    ]
+    const incremental = await run(root, 'provider-append', appendedSource, {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreFrom(baseline),
+    })
+    assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+    assert.equal(incremental.metrics.providerAvailableAt, '2026-01-05T08:30:00.000Z')
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
@@ -172,13 +236,20 @@ function restoreFrom(result: IncrementalRankingBuildResult): RestoredIncremental
     checkpoints,
     publicManifest,
     rootArtifact: root,
+    artifacts: Object.fromEntries(result.build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, write.value])),
   }
 }
 
 function semanticMap(result: IncrementalRankingBuildResult) {
   if (result.action === 'no-change') throw new Error('no build')
+  if (result.action === 'publish-incremental') {
+    const mapped = Object.fromEntries(Object.entries(result.patch.previousManifest.artifacts as Record<string, { sha256: string }>).map(([path, identity]) => [path, identity.sha256]))
+    for (const path of result.patch.removedLogicalPaths) delete mapped[path]
+    for (const artifact of result.patch.changedArtifacts) mapped[artifact.logicalPath] = prepareSemanticArtifact(artifact.value).digest
+    return mapped
+  }
   if (!result.build) throw new Error('no materialized build')
-  return Object.fromEntries(result.build.publicPlan.writes.map((write) => [write.relativePath, prepareSemanticArtifact(write.value).digest]))
+  return Object.fromEntries(result.build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, prepareSemanticArtifact(write.value).digest]))
 }
 
 const teams: Record<string, TeamProfile> = {
@@ -190,6 +261,12 @@ function fixtureSource(matches: MatchRecord[]): RankingSourceImport {
     manifest: { schemaVersion: 1, generatedAt: '2026-07-22T00:00:00.000Z', files: {} },
     importedMatches: matches, matches, teams, mergedTeams: teams,
     source: 'deterministic integration fixture', dataMode: 'scheduled-public-data', externalSources: [], tournamentScheduleReferences: [],
+  }
+}
+function providerReceipt(retrievedAt: string, coverageEnd: string, name = 'Oracle fixture') {
+  return {
+    name, kind: 'game-stats' as const, description: 'fixture provider receipt', status: 'active' as const,
+    retrievedAt, coverageStart: '2025-12-01', coverageEnd, rowCount: 1,
   }
 }
 function baseMatches() {

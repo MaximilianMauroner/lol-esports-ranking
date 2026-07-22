@@ -7,6 +7,7 @@ import { replaceDirectory } from './replace-directory.ts'
 import { createStaticRankingData } from '../src/lib/snapshot'
 import type { RankingModelOutput } from '../src/lib/model'
 import type { MatchRecord } from '../src/types'
+import type { TournamentInstanceId } from '../src/lib/internationalTournaments'
 import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { appendRefreshStages, createRefreshMetrics } from './refresh-metrics.mjs'
@@ -23,6 +24,9 @@ export type StaticSnapshotBuildOptions = {
   generatedAt?: string
   precomputedGlobalRanking?: RankingModelOutput
   affectedLogicalPaths?: ReadonlySet<string>
+  affectedSnapshotKeys?: ReadonlySet<string>
+  affectedTournamentIds?: ReadonlySet<TournamentInstanceId>
+  previousArtifacts?: Readonly<Record<string, unknown>>
   writeFullSnapshot?: boolean
   replacePublicDirectory?: boolean
   env?: NodeJS.ProcessEnv
@@ -60,6 +64,8 @@ const snapshot = createStaticRankingData({
   pipelineAudit: { importedMatchCount: importedMatches.length },
   ...(options.generatedAt ? { generatedAt: options.generatedAt } : {}),
   ...(options.precomputedGlobalRanking ? { precomputedGlobalRanking: options.precomputedGlobalRanking } : {}),
+  ...(options.affectedSnapshotKeys ? { materializeSnapshotKeys: options.affectedSnapshotKeys } : {}),
+  ...(options.affectedTournamentIds ? { materializeTournamentIds: options.affectedTournamentIds } : {}),
 })
 
 if (options.writeFullSnapshot !== false) {
@@ -80,6 +86,7 @@ const serializationFinished = metrics.startStage('public-serialization', {
 })
 const publicPlan = createPublicArtifactWritePlan(snapshot, {
   ...(options.affectedLogicalPaths ? { affectedLogicalPaths: options.affectedLogicalPaths } : {}),
+  ...(options.previousArtifacts ? { previousArtifacts: options.previousArtifacts } : {}),
 })
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)

@@ -49,6 +49,40 @@ test('partial artifact patch uploads only changed hashes and composes exact comp
   }
 })
 
+test('partial artifact patch fails before manifest creation when a reused object is missing or corrupt', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-patch-authority-'))
+  const client = memoryS3()
+  try {
+    await writeFile(join(dir, 'ranking-summary.json'), JSON.stringify(root('base')))
+    await writeFile(join(dir, 'stable.json'), JSON.stringify({ artifactKind: 'fixture', value: 1 }))
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, 'base')
+    const stableIdentity = record(record(base.manifest.artifacts)['/data/stable.json'])
+    const objectKey = `rankings/objects/sha256/${String(stableIdentity.sha256)}`
+    const stored = client.objects.get(objectKey)
+    assert.ok(stored)
+
+    client.objects.delete(objectKey)
+    await assert.rejects(uploadContentAddressedPublicArtifactPatch(client, config, {
+      generationId: 'missing-reuse',
+      previousManifest: base.manifest,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: root('missing-reuse') }],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json'],
+    }), /Referenced content-addressed object is missing/)
+    assert.equal(client.objects.has('rankings/generations/missing-reuse/manifest.json'), false)
+
+    client.objects.set(objectKey, { ...stored, bytes: Buffer.from('not-gzip') })
+    await assert.rejects(uploadContentAddressedPublicArtifactPatch(client, config, {
+      generationId: 'corrupt-reuse',
+      previousManifest: base.manifest,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: root('corrupt-reuse') }],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json'],
+    }), /Referenced content-addressed object gzip is corrupt/)
+    assert.equal(client.objects.has('rankings/generations/corrupt-reuse/manifest.json'), false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 function root(runId: string) {
   return {
     artifactKind: 'public-ranking-manifest', schemaVersion: 23, generatedAt: '2026-07-22T00:00:00.000Z',

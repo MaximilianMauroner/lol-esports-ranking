@@ -276,6 +276,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               checkpoints: activeState.checkpoints,
               publicManifest: activePublic.manifest,
               rootArtifact: activePublic.rootArtifact,
+              artifacts: activePublic.artifacts,
             }
           }
         } catch (error) {
@@ -304,10 +305,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         diagnosticPath: resolve(rawDir, 'incremental-diagnostic.json'),
         env,
       })
-      providerAvailableAt = incrementalBuild.metrics.classification !== 'no-change'
-        && incrementalBuild.metrics.classification !== 'metadata-only'
-        ? firstScoredProviderResultAt(incrementalBuild.sourceData) ?? null
-        : null
+      providerAvailableAt = incrementalBuild.metrics.providerAvailableAt ?? null
       metrics.recordStage('classification', {
         durationMs: 0,
         output: {
@@ -349,12 +347,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           removedPaths: incrementalBuild.metrics.removedPaths,
           semanticBytes: incrementalBuild.metrics.semanticBytes,
           compressedBytes: incrementalBuild.metrics.compressedBytes,
+          materializedScopeCount: incrementalBuild.metrics.materializedScopeCount,
         },
       })
       metrics.recordStage('semantic-parity', {
         durationMs: 0,
         result: incrementalBuild.metrics.parity === null ? 'not-applicable' : incrementalBuild.metrics.parity ? 'completed' : 'failed',
-        output: { parity: incrementalBuild.metrics.parity },
+        output: { parity: incrementalBuild.metrics.parity, stateParity: incrementalBuild.metrics.stateParity },
       })
       metrics.setCheckpoint({
         applicable: incrementalBuild.metrics.classification !== 'no-change',
@@ -1070,15 +1069,6 @@ function parseAffectedIds(value) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
-}
-
-function firstScoredProviderResultAt(sourceData) {
-  return sourceData.externalSources
-    .filter((source) => source.status === 'active' && source.kind !== 'official-reference' && Number(source.rowCount) > 0)
-    .map((source) => source.retrievedAt)
-    .filter(Boolean)
-    .sort()[0]
-    ?? sourceData.manifest?.generatedAt
 }
 
 function uniqueValues(values) {

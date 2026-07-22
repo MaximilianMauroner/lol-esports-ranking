@@ -1,6 +1,12 @@
 import type { MatchRecord, TeamProfile } from '../../types'
 
-export const CANONICAL_MATCH_LEDGER_SCHEMA_VERSION = 1 as const
+export const CANONICAL_MATCH_LEDGER_SCHEMA_VERSION = 2 as const
+
+export type CanonicalScheduleCausalRow = {
+  key: string
+  utcDate?: string
+  digest: string
+}
 
 export type RankingCompatibility = {
   modelVersion: string
@@ -14,6 +20,8 @@ export type CanonicalMatchLedgerContext = RankingCompatibility & {
   contextReceiptIdentity: string
   provenanceReceiptIdentity: string
   teams?: Readonly<Record<string, TeamProfile>>
+  scheduleCausalRows?: readonly CanonicalScheduleCausalRow[]
+  providerAvailableAtForMatch?: (match: MatchRecord) => string | undefined
 }
 
 export type CanonicalMatchLedgerRow = {
@@ -24,6 +32,7 @@ export type CanonicalMatchLedgerRow = {
   scheduleReceiptIdentity: string
   contextReceiptIdentity: string
   provenanceReceiptIdentity: string
+  providerAvailableAt?: string
   match: MatchRecord
 }
 
@@ -33,6 +42,7 @@ export type CanonicalMatchLedger = {
   scheduleReceiptIdentity: string
   contextReceiptIdentity: string
   provenanceReceiptIdentity: string
+  scheduleCausalRows: CanonicalScheduleCausalRow[]
   rows: CanonicalMatchLedgerRow[]
   digest: string
 }

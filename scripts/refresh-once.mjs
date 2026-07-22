@@ -244,7 +244,12 @@ export async function runRefreshOnce(options = {}) {
     const affectedDate = pendingAffectedDate(state, affectedIds)
     tracker.setContext({ cause, affectedIds, affectedDate })
 
-    if (!shouldFetchScoredProviders(state, { correctionAuditDue, manual, now: now() })) {
+    if (!shouldFetchScoredProviders(state, {
+      correctionAuditDue,
+      manual,
+      now: now(),
+      shadowIngestionEnabled: env.RANKING_INCREMENTAL_SHADOW_INGESTION_ENABLED === 'true',
+    })) {
       logger.log(`Refresh probe complete: mode=${mode} pending=${Object.keys(state.pending).length}; scored providers skipped`)
     } else {
       const dueMatchIds = duePendingMatchIds(state, now())

@@ -166,10 +166,10 @@ export function acknowledgeMatches(stateValue, reconciliations, acknowledgedAt =
   return { ...state, generation: state.generation + 1, pending, acknowledged }
 }
 
-export function shouldFetchScoredProviders(stateValue, { now = new Date(), correctionAuditDue = false, manual = false } = {}) {
+export function shouldFetchScoredProviders(stateValue, { now = new Date(), correctionAuditDue = false, manual = false, shadowIngestionEnabled = false } = {}) {
   const state = parseTriggerState(stateValue)
   if (manual) return true
-  if (state.mode !== 'gated') return false
+  if (state.mode !== 'gated' && !(state.mode === 'shadow' && shadowIngestionEnabled)) return false
   return correctionAuditDue || duePendingMatchIds(state, now).length > 0
 }
 

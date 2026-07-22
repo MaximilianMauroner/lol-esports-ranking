@@ -522,6 +522,7 @@ function compareStandingsByRating(
 ) {
   return Number(b.eligibility.eligible) - Number(a.eligibility.eligible)
     || ratingFor(b) - ratingFor(a)
+    || a.team.localeCompare(b.team)
 }
 
 function strongestFactor(factors: FactorBreakdown): keyof FactorBreakdown {

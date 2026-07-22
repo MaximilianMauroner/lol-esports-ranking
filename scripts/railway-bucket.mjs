@@ -212,7 +212,12 @@ export async function uploadRankingArtifacts({
       manifestKey: bucketKey(config, contentAddressed
         ? `generations/${safeObjectPath(generationId)}/manifest.json`
         : `${dataPrefix}/ranking-summary.json`),
-      ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+      ...(contentAddressed ? {
+        storageMode: CONTENT_ADDRESSED_STORAGE_MODE,
+        manifestDigest: publicSync.manifestAuthority.digest,
+        manifestBytes: publicSync.manifestAuthority.bytes,
+        manifestEtag: publicSync.manifestAuthority.etag,
+      } : {}),
       ...(verifiedState ? {
         stateManifestKey: verifiedState.key,
         stateManifestDigest: verifiedState.digest,
@@ -378,22 +383,35 @@ export async function readActiveContentAddressedGeneration({
   const expectedKey = bucketKey(config, `generations/${safeObjectPath(generationId)}/manifest.json`)
   if (active.value.manifestKey !== expectedKey) throw new Error('Active public generation manifest key is not canonical')
   const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
-  const body = await bodyText(object.Body)
-  const manifest = JSON.parse(body)
+  const manifestBytes = await bodyBytes(object.Body)
+  const manifestDigest = createHash('sha256').update(manifestBytes).digest('hex')
+  if (!/^[a-f0-9]{64}$/.test(active.value.manifestDigest ?? '')
+    || !Number.isSafeInteger(active.value.manifestBytes) || active.value.manifestBytes <= 0
+    || typeof active.value.manifestEtag !== 'string'
+    || active.value.manifestDigest !== manifestDigest
+    || active.value.manifestBytes !== manifestBytes.byteLength
+    || active.value.manifestEtag !== object.ETag
+    || object.Metadata?.sha256 !== manifestDigest) {
+    throw new Error('Active public generation manifest authority mismatch')
+  }
+  const manifest = JSON.parse(manifestBytes.toString('utf8'))
   if (manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== generationId
+    || manifest.runId !== generationId || manifest.rootArtifact !== '/data/ranking-summary.json'
     || !manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) {
     throw new Error('Active public generation manifest is invalid')
   }
-  const rootIdentity = manifest.artifacts['/data/ranking-summary.json']
-  if (!rootIdentity || !/^[a-f0-9]{64}$/.test(rootIdentity.sha256 ?? '')) throw new Error('Active public generation has no valid root artifact')
-  const rootObject = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: bucketKey(config, `objects/sha256/${rootIdentity.sha256}`) }))
-  const compressed = await bodyBytes(rootObject.Body)
-  const decoded = rootObject.ContentEncoding === 'gzip' ? gunzipSync(compressed) : compressed
-  const rootEnvelope = JSON.parse(decoded.toString('utf8'))
-  if (rootEnvelope.artifactKind !== 'public-semantic-artifact' || !rootEnvelope.content || typeof rootEnvelope.content !== 'object') {
-    throw new Error('Active public root semantic artifact is invalid')
+  const artifacts = {}
+  for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
+    const canonical = canonicalPublicLogicalPath(logicalPath)
+    if (identity?.logicalPath !== canonical || identity?.objectUrl !== `/data/objects/sha256/${identity?.sha256}`
+      || identity?.generationId !== generationId || identity?.storageEncoding !== 'gzip') {
+      throw new Error(`Active public generation has an invalid mapping for ${canonical}`)
+    }
+    artifacts[canonical] = await readVerifiedContentAddressedArtifact(client, config, identity, canonical)
   }
-  return { found: true, active: active.value, etag: active.etag, manifest, rootArtifact: rootEnvelope.content }
+  const rootArtifact = artifacts['/data/ranking-summary.json']
+  if (!rootArtifact) throw new Error('Active public generation has no valid root artifact')
+  return { found: true, active: active.value, etag: active.etag, manifest, rootArtifact, artifacts }
 }
 
 export async function writeBucketJson(relativeKey, value, {
@@ -768,6 +786,16 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
     }
     entriesByPath.set(canonical, { logicalPath: canonical, digest: identity.sha256, bytes: identity.bytes })
   }
+  const uniqueReused = new Map()
+  for (const entry of entriesByPath.values()) uniqueReused.set(entry.digest, entry)
+  for (const entry of uniqueReused.values()) {
+    await readVerifiedContentAddressedArtifact(client, config, {
+      logicalPath: entry.logicalPath,
+      sha256: entry.digest,
+      bytes: entry.bytes,
+      storageEncoding: 'gzip',
+    }, entry.logicalPath)
+  }
   for (const artifact of changedByPath.values()) {
     entriesByPath.set(artifact.logicalPath, {
       logicalPath: artifact.logicalPath,
@@ -946,6 +974,40 @@ function assertContentAddressedMetadata(remote, artifact, key) {
     && remote.Metadata?.['semantic-bytes'] === String(artifact.bytes)
     && remote.Metadata?.encoding === 'gzip'
   if (!matches) throw new Error(`Content-addressed object collision or metadata mismatch: ${key}`)
+}
+
+async function readVerifiedContentAddressedArtifact(client, config, identity, logicalPath) {
+  if (!/^[a-f0-9]{64}$/.test(identity?.sha256 ?? '') || !Number.isSafeInteger(identity?.bytes) || identity.bytes <= 0) {
+    throw new Error(`Invalid content-addressed object identity for ${logicalPath}`)
+  }
+  const key = bucketKey(config, `objects/sha256/${identity.sha256}`)
+  let remote
+  try {
+    remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  } catch (error) {
+    if (isMissingObjectError(error)) throw new Error(`Referenced content-addressed object is missing: ${logicalPath}`, { cause: error })
+    throw error
+  }
+  const compressed = await bodyBytes(remote.Body)
+  if (remote.ContentEncoding !== 'gzip' || remote.Metadata?.sha256 !== identity.sha256
+    || remote.Metadata?.['semantic-bytes'] !== String(identity.bytes) || remote.Metadata?.encoding !== 'gzip'
+    || Number(remote.ContentLength) !== compressed.byteLength) {
+    throw new Error(`Referenced content-addressed object metadata mismatch: ${logicalPath}`)
+  }
+  let canonicalBytes
+  try { canonicalBytes = gunzipSync(compressed) } catch (error) {
+    throw new Error(`Referenced content-addressed object gzip is corrupt: ${logicalPath}`, { cause: error })
+  }
+  if (canonicalBytes.byteLength !== identity.bytes
+    || createHash('sha256').update(canonicalBytes).digest('hex') !== identity.sha256) {
+    throw new Error(`Referenced content-addressed object digest mismatch: ${logicalPath}`)
+  }
+  const envelope = JSON.parse(canonicalBytes.toString('utf8'))
+  if (envelope?.artifactKind !== 'public-semantic-artifact' || envelope?.schemaVersion !== 1
+    || !envelope.content || typeof envelope.content !== 'object' || Array.isArray(envelope.content)) {
+    throw new Error(`Referenced content-addressed object semantic envelope is invalid: ${logicalPath}`)
+  }
+  return envelope.content
 }
 
 export async function uploadRawSourceFiles(client, config, rawDir, manifestPath) {
