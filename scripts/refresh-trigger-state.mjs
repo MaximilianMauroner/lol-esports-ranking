@@ -173,6 +173,34 @@ export function shouldFetchScoredProviders(stateValue, { now = new Date(), corre
   return correctionAuditDue || duePendingMatchIds(state, now).length > 0
 }
 
+export function refreshTriggerCause(stateValue, { correctionAuditDue = false, manual = false, now = new Date() } = {}) {
+  if (manual) return 'manual-force'
+  if (correctionAuditDue) return 'daily-audit'
+  const state = parseTriggerState(stateValue)
+  const due = duePendingMatchIds(state, now)
+  if (due.some((matchId) => nonNegativeInteger(state.pending[matchId]?.attempts) > 0)) return 'retry'
+  if (due.length > 0) return 'pending-match'
+  return 'unchanged-scheduled-probe'
+}
+
+export function assertRefreshCadence({
+  intervalMinutes,
+  mode,
+  cheapExitProven = false,
+  leaseFencingConfigured = false,
+} = {}) {
+  if (!Number.isFinite(intervalMinutes) || intervalMinutes > 5) return true
+  const missing = [
+    mode !== 'gated' ? 'gated-mode' : undefined,
+    !cheapExitProven ? 'proven-cheap-exit' : undefined,
+    !leaseFencingConfigured ? 'lease-fencing' : undefined,
+  ].filter(Boolean)
+  if (missing.length > 0) {
+    throw new Error(`Refresh cadence of five minutes or less requires ${missing.join(', ')}`)
+  }
+  return true
+}
+
 export function retryDelayMs(attempts) {
   return RETRY_DELAYS_MS[Math.max(0, attempts - 1)] ?? LONG_RETRY_MS
 }

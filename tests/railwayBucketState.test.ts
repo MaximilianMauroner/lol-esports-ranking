@@ -6,8 +6,10 @@ import { Readable } from 'node:stream'
 import test from 'node:test'
 import {
   acquireBucketLease,
+  assertBucketLease,
   readBucketJson,
   releaseBucketLease,
+  renewBucketLease,
   uploadRankingArtifacts,
   writeBucketJson,
 } from '../scripts/railway-bucket.mjs'
@@ -53,6 +55,31 @@ test('released leases allow the next scheduled worker to run immediately', async
   assert.equal((await releaseBucketLease('lease.json', first, { now: '2026-07-11T00:00:12Z', config, client })).reason, 'lease-changed')
 })
 
+test('lease renewal is conditional and release uses the renewed ETag', async () => {
+  const client = memoryS3()
+  const acquired = await acquireBucketLease('lease.json', { owner: 'one', now: '2026-07-11T00:00:00Z', ttlMs: 60_000, config, client })
+  assert.equal(acquired.acquired, true)
+  if (!acquired.acquired) return
+  const renewed = await renewBucketLease('lease.json', acquired, { now: '2026-07-11T00:00:30Z', ttlMs: 60_000, config, client })
+  assert.equal(renewed.renewed, true)
+  if (!renewed.renewed) return
+  assert.notEqual(renewed.etag, acquired.etag)
+  assert.equal((await releaseBucketLease('lease.json', acquired, { now: '2026-07-11T00:00:31Z', config, client })).reason, 'lease-changed')
+  assert.equal((await releaseBucketLease('lease.json', renewed, { now: '2026-07-11T00:00:31Z', config, client })).released, true)
+})
+
+test('live lease assertion rejects expiry takeover and an old worker resuming', async () => {
+  const client = memoryS3()
+  const oldWorker = await acquireBucketLease('lease.json', { owner: 'old', now: '2026-07-11T00:00:00Z', ttlMs: 60_000, config, client })
+  assert.equal(oldWorker.acquired, true)
+  if (!oldWorker.acquired) return
+  await assert.rejects(() => assertBucketLease('lease.json', oldWorker, { now: '2026-07-11T00:01:00Z', config, client }), /lease-expired/)
+  const replacement = await acquireBucketLease('lease.json', { owner: 'new', now: '2026-07-11T00:01:01Z', ttlMs: 60_000, config, client })
+  assert.equal(replacement.acquired, true)
+  await assert.rejects(() => assertBucketLease('lease.json', oldWorker, { now: '2026-07-11T00:01:02Z', config, client }), /lease-changed/)
+  assert.equal(replacement.acquired && replacement.lease.fencingToken, 2)
+})
+
 test('generation publication uploads immutable data before promoting one pointer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-generation-'))
   const publicDir = join(root, 'public')
@@ -89,6 +116,49 @@ test('generation publication uploads immutable data before promoting one pointer
       client,
     }), /Stale refresh worker/)
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'run-2')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('lost lease leaves uploaded generation objects orphaned and active pointer unchanged', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-orphan-'))
+  const publicDir = join(root, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+  const backing = memoryS3()
+  let replaceAfterArtifact = false
+  const client = {
+    objects: backing.objects,
+    async send(command: unknown) {
+      const result = await backing.send(command)
+      const { name, input } = commandDetails(command)
+      if (replaceAfterArtifact && name === 'PutObjectCommand' && input.Key === 'rankings/generations/orphan/data/ranking-summary.json') {
+        backing.objects.set('rankings/lease.json', {
+          body: JSON.stringify({ owner: 'new', fencingToken: 2, expiresAt: '2026-07-11T00:02:00Z' }),
+          etag: 'replacement',
+        })
+      }
+      return result
+    },
+  }
+  const current = await acquireBucketLease('lease.json', { owner: 'old', now: '2026-07-11T00:00:00Z', ttlMs: 60_000, config, client })
+  assert.equal(current.acquired, true)
+  if (!current.acquired) return
+  await writeBucketJson('active-generation.json', { generationId: 'good', fencingToken: 2 }, { ifNoneMatch: '*', config, client })
+  replaceAfterArtifact = true
+  try {
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'orphan',
+      fencingToken: 1,
+      leaseAuthority: { key: 'lease.json', lease: current.lease },
+      now: () => new Date('2026-07-11T00:00:30Z'),
+      config,
+      client,
+    }), /no longer authoritative/)
+    assert.ok(client.objects.has('rankings/generations/orphan/data/ranking-summary.json'))
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'good')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

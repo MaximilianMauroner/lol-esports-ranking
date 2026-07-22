@@ -22,6 +22,7 @@ export type RefreshTriggerState = {
   lastProbe?: Record<string, unknown>
   fencingToken?: number
   lastCorrectionAuditAt?: string
+  lastRun?: Record<string, unknown>
 }
 
 export type ScheduleEvent = {
@@ -52,4 +53,6 @@ export function acknowledgeMatches(state: unknown, reconciliations: Array<{
   scoredGameIds?: string[]
 }>, acknowledgedAt?: string | Date): RefreshTriggerState
 export function shouldFetchScoredProviders(state: unknown, options?: { now?: string | Date; correctionAuditDue?: boolean; manual?: boolean }): boolean
+export function refreshTriggerCause(state: unknown, options?: { now?: string | Date; correctionAuditDue?: boolean; manual?: boolean }): 'pending-match' | 'daily-audit' | 'manual-force' | 'retry' | 'unchanged-scheduled-probe'
+export function assertRefreshCadence(options: { intervalMinutes: number; mode: TriggerMode; cheapExitProven?: boolean; leaseFencingConfigured?: boolean }): true
 export function retryDelayMs(attempts: number): number

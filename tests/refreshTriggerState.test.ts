@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   acknowledgeMatches,
   applyScheduleProbe,
+  assertRefreshCadence,
   completionEvidence,
   duePendingMatchIds,
   emptyTriggerState,
@@ -91,4 +92,12 @@ test('provider lag backs off and exact reconciliation alone acknowledges work', 
   }])
   assert.equal(acknowledged.pending['match-1'], undefined)
   assert.equal(acknowledged.acknowledged['match-1'].canonicalSeriesId, 'series-1')
+})
+
+test('five-minute cadence is gated by cheap-exit and lease evidence', () => {
+  assert.equal(assertRefreshCadence({ intervalMinutes: 5, mode: 'gated', cheapExitProven: true, leaseFencingConfigured: true }), true)
+  assert.throws(() => assertRefreshCadence({ intervalMinutes: 5, mode: 'legacy', cheapExitProven: true, leaseFencingConfigured: true }), /gated-mode/)
+  assert.throws(() => assertRefreshCadence({ intervalMinutes: 5, mode: 'gated', cheapExitProven: false, leaseFencingConfigured: true }), /proven-cheap-exit/)
+  assert.throws(() => assertRefreshCadence({ intervalMinutes: 5, mode: 'gated', cheapExitProven: true, leaseFencingConfigured: false }), /lease-fencing/)
+  assert.equal(assertRefreshCadence({ intervalMinutes: 360, mode: 'legacy' }), true)
 })

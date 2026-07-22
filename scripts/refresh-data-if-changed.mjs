@@ -6,6 +6,7 @@ import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, uploadRankingArtifacts } from './railway-bucket.mjs'
+import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -33,6 +34,16 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const args = parseArgs(rawArgs)
   const env = options.env ?? process.env
+  const wallNow = options.now ?? Date.now
+  const monotonicNow = options.monotonicNow ?? (() => performance.now())
+  const metricsPath = env.RANKING_REFRESH_METRICS_PATH
+  const metrics = createRefreshMetrics({
+    runId: env.RANKING_REFRESH_RUN_ID ?? `refresh-child-${process.pid}`,
+    mode: env.RANKING_REFRESH_MODE === 'shadow' || env.RANKING_REFRESH_MODE === 'gated' ? env.RANKING_REFRESH_MODE : 'legacy',
+    cause: env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match',
+    now: wallNow,
+    monotonicNow,
+  })
   const rawDir = resolve(stringArg(args.rawDir ?? env.RANKING_RAW_DIR ?? 'data/raw'))
   const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
@@ -52,6 +63,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     ...passThroughDownloadArgs(rawArgs),
     ...splitExtraArgs(env.RANKING_REFRESH_DOWNLOAD_ARGS),
   ]
+  const restoreStarted = monotonicNow()
   const localManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasUsableLocalRawBaseline = await manifestHasUsableSourceFiles(localManifest)
   const restoreResult = restoreRawEnabled && bucketConfig.enabled
@@ -64,6 +76,11 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         client: options.bucketClient,
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
+  metrics.recordStage('restore', {
+    durationMs: monotonicNow() - restoreStarted,
+    result: restoreResult.restored ? 'completed' : 'not-applicable',
+    output: restoreResult,
+  })
   const previousManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const configuredBootstrapStart = env.RANKING_REFRESH_BOOTSTRAP_START ?? env.RANKING_REFRESH_START
   const bootstrapStart = stringArg(configuredBootstrapStart ?? '2011-01-01')
@@ -83,7 +100,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   await rm(stagingDir, { recursive: true, force: true })
   await mkdir(stagingDir, { recursive: true })
 
+  let refreshError
   try {
+    const providerStarted = monotonicNow()
     await (options.run ?? runCommand)(process.execPath, [
       'scripts/download-local-data.mjs',
       '--start',
@@ -96,6 +115,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       stagingManifestPath,
       ...extraDownloadArgs,
     ])
+    metrics.recordStage('provider-fetch', {
+      durationMs: monotonicNow() - providerStarted,
+      output: { start, end },
+    })
 
     const stagingManifest = await readJson(stagingManifestPath)
     const previousState = await readJsonIfExists(statePath)
@@ -112,6 +135,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         restoreResult,
         healthFingerprint,
       })
+      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; preserving existing ranking artifacts.`)
@@ -124,7 +148,12 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       }
     }
 
+    const hashingStarted = monotonicNow()
     const fingerprint = await createSourceFingerprint(stagingManifest)
+    metrics.recordStage('hashing', {
+      durationMs: monotonicNow() - hashingStarted,
+      output: { fileCount: fingerprint.files.length },
+    })
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
 
     if (!changed) {
@@ -147,6 +176,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           reason: 'unchanged-source-data',
         },
       }
+      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.log(`No source-data changes detected for ${start} through ${end}; skipping crunch.`)
@@ -172,6 +202,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       await rename(stagingDir, rawDir)
     }
     await writeFile(manifestPath, `${JSON.stringify(finalManifest, null, 2)}\n`)
+    metrics.recordStage('fingerprint-import', {
+      durationMs: 0,
+      output: {
+        sourceFileCount: Object.values(finalManifest.files ?? {}).flatMap((paths) => arrayValue(paths)).length,
+        changed,
+      },
+    })
 
     const state = {
       schemaVersion: 1,
@@ -201,6 +238,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
 
     if (!skipCrunch) {
+      const crunchStarted = monotonicNow()
       await (options.run ?? runCommand)('pnpm', [
         'exec',
         'tsx',
@@ -214,6 +252,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         '--reconciliation-output',
         reconciliationOutput,
       ])
+      metrics.recordStage('crunch', { durationMs: monotonicNow() - crunchStarted })
     }
 
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
@@ -247,6 +286,18 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
           generationId,
           fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
+          leaseAuthority: env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
+            ? {
+                key: env.RANKING_REFRESH_LEASE_KEY ?? 'ops/refresh-lease.json',
+                lease: {
+                  owner: env.RANKING_REFRESH_LEASE_OWNER,
+                  fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+                },
+              }
+            : undefined,
+          refreshTelemetry: () => completeRefreshMetrics(metrics.snapshot({ result: 'running' })),
+          monotonicNow,
+          onStage: (name, stage) => metrics.recordStage(name, stage),
           refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped }) => {
             state.bucket = {
               enabled: true,
@@ -259,6 +310,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               unchangedBytes,
               skipped,
             }
+            state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'running' }))
             return state
           },
         })
@@ -283,6 +335,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       }
     }
 
+    state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
     console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
     return {
@@ -291,7 +344,15 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
     }
+  } catch (error) {
+    refreshError = error
+    throw error
   } finally {
+    if (metricsPath) {
+      const own = completeRefreshMetrics(metrics.snapshot({ result: refreshError ? 'failed' : 'completed', error: refreshError }))
+      const existing = await readRefreshMetrics(metricsPath)
+      await writeRefreshMetrics(metricsPath, existing ? mergeRefreshMetrics(existing, own) : own)
+    }
     await rm(stagingDir, { recursive: true, force: true })
   }
 }

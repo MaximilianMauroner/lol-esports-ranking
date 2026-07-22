@@ -14,6 +14,13 @@ import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib
 import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
+import { appendRefreshStages, createRefreshMetrics } from './refresh-metrics.mjs'
+
+const metrics = createRefreshMetrics({
+  runId: process.env.RANKING_REFRESH_RUN_ID ?? `snapshot-${process.pid}`,
+  mode: process.env.RANKING_REFRESH_MODE === 'shadow' || process.env.RANKING_REFRESH_MODE === 'gated' ? process.env.RANKING_REFRESH_MODE : 'legacy',
+  cause: process.env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match',
+})
 
 const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
 const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
@@ -154,6 +161,10 @@ if (reconciliationOutput) {
     matches: reconciliationEntries(importedMatches),
   }, null, 2)}\n`)
 }
+const serializationFinished = metrics.startStage('public-serialization', {
+  importedGameCount: importedMatches.length,
+  ratedGameCount: matches.length,
+})
 const publicPlan = createPublicArtifactWritePlan(snapshot)
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)
@@ -174,6 +185,13 @@ try {
 
   await replaceDirectory(publicDataDir, publicDataTargetDir, { publishLast: PUBLIC_ARTIFACT_PATHS.manifest })
   const publicDataBytes = await directorySize(publicDataTargetDir)
+  serializationFinished('completed', {
+    importedGameCount: importedMatches.length,
+    ratedGameCount: matches.length,
+    artifactCount: publicWrites.length,
+    outputBytes: publicDataBytes,
+  })
+  await appendRefreshStages(process.env.RANKING_REFRESH_METRICS_PATH, metrics.snapshot({ result: 'running' }))
 
   console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)
   console.log(`Wrote browser summary to ${summaryOutput}`)

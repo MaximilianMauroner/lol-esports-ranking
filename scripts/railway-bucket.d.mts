@@ -42,6 +42,23 @@ export function releaseBucketLease(relativeKey: string, lease: {
   config?: unknown
   client?: BucketClient
 }): Promise<{ released: boolean; reason?: string; etag?: string }>
+export type BucketLeaseAuthority = {
+  lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string; renewedAt?: string }
+  etag?: string
+}
+export function renewBucketLease(relativeKey: string, lease: BucketLeaseAuthority, options?: {
+  ttlMs?: number
+  now?: string | Date
+  config?: unknown
+  client?: BucketClient
+}): Promise<({ renewed: true } & BucketLeaseAuthority) | { renewed: false; reason: string }>
+export function assertBucketLease(relativeKey: string, lease: BucketLeaseAuthority, options?: {
+  now?: string | Date
+  config?: unknown
+  client?: BucketClient
+  throwOnFailure?: boolean
+  requireEtag?: boolean
+}): Promise<{ live: true; lease: Record<string, unknown>; etag?: string } | { live: false; reason: string }>
 export function uploadRankingArtifacts(options?: Record<string, unknown>): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>

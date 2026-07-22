@@ -69,6 +69,7 @@ type BucketModule = {
     config: BucketConfig
     client: BucketClient
     uploadFullSnapshot?: boolean
+    refreshTelemetry?: unknown
   }) => Promise<BucketUploadResult>
 }
 
@@ -1026,6 +1027,30 @@ test('bucket publisher skips full audit artifact upload by default', async () =>
   }
 })
 
+test('bucket publish receipt carries refresh telemetry without changing public artifacts', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-receipt-metrics-'))
+  const publicDataDir = join(tempDir, 'public-data')
+  const sent: Array<{ input: { Key: string; Body?: unknown } }> = []
+  const client = {
+    async send(command: { input: { Key: string; Body?: unknown } }) {
+      sent.push({ input: command.input })
+      return {}
+    },
+  }
+  const refreshTelemetry = { schemaVersion: 1, runId: 'refresh-run', stages: [{ name: 'probe', durationMs: 4 }] }
+  try {
+    await mkdir(publicDataDir, { recursive: true })
+    await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+    await uploadRankingArtifacts({ publicDataDir, config: bucketConfig(), client, refreshTelemetry })
+    const publicBody = sent.find((entry) => entry.input.Key === 'rankings/data/ranking-summary.json')?.input.Body
+    const receiptBody = sent.find((entry) => entry.input.Key === 'rankings/latest-publish.json')?.input.Body
+    assert.equal(await bodyText(publicBody), '{}\n')
+    assert.deepEqual(JSON.parse(String(receiptBody)).refreshTelemetry, refreshTelemetry)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('bucket publisher can opt in to full audit artifact upload', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-full-bucket-'))
   const publicDataDir = join(tempDir, 'public-data')
@@ -1275,4 +1300,13 @@ function bucketConfig() {
     prefix: 'rankings',
     forcePathStyle: false,
   }
+}
+
+async function bodyText(value: unknown) {
+  if (typeof value === 'string') return value
+  const chunks: Buffer[] = []
+  for await (const chunk of value as AsyncIterable<Buffer | string>) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks).toString('utf8')
 }
