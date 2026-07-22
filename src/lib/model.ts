@@ -62,6 +62,92 @@ import {
 export { buildPlayerModel } from './playerModel'
 export { factorLabel, transparentGprModelMetadata } from './modelConfig'
 
+export type RankingModelOutput = {
+  standings: TeamStanding[]
+  leagues: LeagueStrength[]
+  events: EventSummary[]
+  seasons: SeasonSummary[]
+  regions: Region[]
+  leagueHistory: LeagueStrengthHistoryPoint[]
+  predictions: PregamePrediction[]
+}
+
+export type RatingReplayContext = {
+  authoritativeMatches: MatchRecord[]
+  teams: Record<string, TeamProfile>
+  eventWeightContext: ReturnType<typeof eventWeightContextForMatches>
+  pregamePlayerRatingEdges: Map<string, PregamePlayerRatingEdge>
+  teamRosterBasis: Map<string, RosterBasis>
+  tournamentLifecycles: ReadonlyMap<string, PlacementTournamentLifecycle>
+  lastDate: string
+}
+
+export function createRatingReplayContext(
+  authoritativeMatches: readonly MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  { tournamentLifecycles = new Map() }: { tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle> } = {},
+): RatingReplayContext {
+  const sortedMatches = authoritativeMatches.toSorted(compareReplayMatches)
+  const eventWeightContext = eventWeightContextForMatches(sortedMatches)
+  return {
+    authoritativeMatches: sortedMatches,
+    teams,
+    eventWeightContext,
+    pregamePlayerRatingEdges: buildPregamePlayerRatingEdges(sortedMatches, { teams, eventWeightContext }),
+    teamRosterBasis: rosterBasisByTeam(sortedMatches),
+    tournamentLifecycles,
+    lastDate: sortedMatches.at(-1)?.date ?? new Date().toISOString().slice(0, 10),
+  }
+}
+
+export function replayRatingDates({
+  context,
+  state = createRatingRunState(
+    context.authoritativeMatches,
+    context.teams,
+    context.eventWeightContext,
+    context.tournamentLifecycles,
+  ),
+  replayMatches,
+}: {
+  context: RatingReplayContext
+  state?: RatingRunState
+  replayMatches: readonly MatchRecord[]
+}) {
+  const sortedReplayMatches = replayMatches.toSorted(compareReplayMatches)
+  const replayDates = new Set(sortedReplayMatches.map((match) => match.date))
+  if (state.processedThroughUtcDate && [...replayDates].some((date) => date <= state.processedThroughUtcDate!)) {
+    throw new Error(`Rating replay must start strictly after checkpoint ${state.processedThroughUtcDate}`)
+  }
+  for (const date of replayDates) {
+    const authoritativeIds = context.authoritativeMatches
+      .filter((match) => match.date === date)
+      .map((match) => replayMatchIdentity(match))
+      .sort()
+    const replayIds = sortedReplayMatches
+      .filter((match) => match.date === date)
+      .map((match) => replayMatchIdentity(match))
+      .sort()
+    if (authoritativeIds.join('\u0000') !== replayIds.join('\u0000')) {
+      throw new Error(`Rating replay for ${date} must contain the complete authoritative UTC date`)
+    }
+  }
+
+  for (const team of Object.keys(context.teams)) {
+    ensureLeague(context.teams[team]?.league ?? 'Unknown', state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
+  }
+  for (const dateMatches of matchesByDate(sortedReplayMatches)) {
+    processRatingUtcDateBoundary({
+      dateMatches,
+      teams: context.teams,
+      state,
+      lastDate: context.lastDate,
+      pregamePlayerRatingEdges: context.pregamePlayerRatingEdges,
+    })
+  }
+  return state
+}
+
 export type RatingUtcDateBoundaryInput = {
   dateMatches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -153,6 +239,9 @@ export function processRatingUtcDateBoundary({
     pregamePlayerRatingEdges,
   })
   state.processedThroughUtcDate = firstMatch.date
+  state.processedThroughUtcDateMatchIds = dateMatches
+    .map(replayMatchIdentity)
+    .sort()
 }
 
 export function finalizeRatingRunStateAtUtcBoundary(
@@ -189,20 +278,22 @@ export function buildRankingModel(
   matches: MatchRecord[],
   teams: Record<string, TeamProfile>,
   { tournamentLifecycles = new Map() }: { tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle> } = {},
-): {
-  standings: TeamStanding[]
-  leagues: LeagueStrength[]
-  events: EventSummary[]
-  seasons: SeasonSummary[]
-  regions: Region[]
-  leagueHistory: LeagueStrengthHistoryPoint[]
-  predictions: PregamePrediction[]
-} {
-  const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date))
-  const eventWeightContext = eventWeightContextForMatches(sortedMatches)
-  const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sortedMatches, { teams, eventWeightContext })
-  const teamRosterBasis = rosterBasisByTeam(sortedMatches)
-  const state = createRatingRunState(sortedMatches, teams, eventWeightContext, tournamentLifecycles)
+): RankingModelOutput {
+  const context = createRatingReplayContext(matches, teams, { tournamentLifecycles })
+  const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+  return materializeRankingModel({ context, state })
+}
+
+export function materializeRankingModel({
+  context,
+  state,
+}: {
+  context: RatingReplayContext
+  state: RatingRunState
+}): RankingModelOutput {
+  const sortedMatches = context.authoritativeMatches
+  const teams = context.teams
+  const teamRosterBasis = context.teamRosterBasis
   const {
     ratings,
     previousDisplayRatings,
@@ -230,15 +321,7 @@ export function buildRankingModel(
     predictions,
     currentRosterContinuity,
   } = state
-  const lastDate = sortedMatches.at(-1)?.date ?? new Date().toISOString().slice(0, 10)
-
-  for (const team of Object.keys(teams)) {
-    ensureLeague(teams[team]?.league ?? 'Unknown', state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
-  }
-
-  for (const dateMatches of matchesByDate(sortedMatches)) {
-    processRatingUtcDateBoundary({ dateMatches, teams, state, lastDate, pregamePlayerRatingEdges })
-  }
+  const lastDate = context.lastDate
 
   finalizeRatingRunStateAtUtcBoundary(state, teams)
 
@@ -387,6 +470,17 @@ export function buildRankingModel(
     leagueHistory,
     predictions,
   }
+}
+
+function compareReplayMatches(left: MatchRecord, right: MatchRecord) {
+  return left.date.localeCompare(right.date)
+    || (left.datetimeUtc ?? '').localeCompare(right.datetimeUtc ?? '')
+    || (left.gameNumber ?? 0) - (right.gameNumber ?? 0)
+    || replayMatchIdentity(left).localeCompare(replayMatchIdentity(right))
+}
+
+function replayMatchIdentity(match: MatchRecord) {
+  return match.officialGameId ?? match.sourceGameId ?? match.id
 }
 
 function averageFactors(sum?: FactorBreakdown, count = 0): FactorBreakdown {

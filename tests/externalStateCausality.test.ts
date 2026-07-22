@@ -357,7 +357,13 @@ test('player resume causality accepts append, catches historical series correcti
 })
 
 test('inventory exposes every external contract without activating production resume', () => {
-  assert.deepEqual(snapshotExternalCausalSurfaces, ['sourced-player', 'dss-team', 'dss-region'])
+  assert.deepEqual(snapshotExternalCausalSurfaces, [
+    'sourced-player',
+    'dss-team',
+    'dss-region',
+    'roster-era',
+    'player-resume-ledger',
+  ])
   assert.deepEqual(
     ratingCheckpointInventory.externalState.map((entry) => entry.status),
     [

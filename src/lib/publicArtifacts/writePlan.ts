@@ -101,9 +101,12 @@ export function createPublicArtifactWritePlan(
   {
     fullSnapshotUrl,
     urlForPath = localPublicDataUrl,
+    affectedLogicalPaths,
   }: {
     fullSnapshotUrl?: string
     urlForPath?: (relativePath: string) => string
+    /** Optional dependency plan; omitted for the authoritative full writer. */
+    affectedLogicalPaths?: ReadonlySet<string>
   } = {},
 ): PublicArtifactWritePlan {
   const artifactVersion = runIdForArtifact({
@@ -136,7 +139,7 @@ export function createPublicArtifactWritePlan(
     snapshotUrlForKey: (key) => versionedUrlForPath(publicScopeArtifactPath(key)),
   })
 
-  const writes: PublicArtifactWrite[] = [
+  const allWrites: PublicArtifactWrite[] = [
     write('entity', PUBLIC_ARTIFACT_PATHS.players, playerDirectory, parsePublicPlayerDirectory),
     write('entity', PUBLIC_ARTIFACT_PATHS.teams, teamDirectory, parsePublicTeamDirectory),
     write('history', PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, teamHistory.index, parsePublicTeamHistoryIndex),
@@ -161,7 +164,10 @@ export function createPublicArtifactWritePlan(
     write('manifest', PUBLIC_ARTIFACT_PATHS.manifest, summary.manifest, parsePublicRankingManifest, true),
   ]
 
-  assertPublicArtifactBudgets(writes, data.defaultSnapshotKey)
+  assertPublicArtifactBudgets(allWrites, data.defaultSnapshotKey)
+  const writes = affectedLogicalPaths
+    ? allWrites.filter((entry) => affectedLogicalPaths.has(entry.relativePath))
+    : allWrites
 
   return {
     manifest: summary.manifest,

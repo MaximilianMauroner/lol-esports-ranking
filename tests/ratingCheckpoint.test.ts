@@ -94,7 +94,7 @@ test('checkpoint validation fails closed for corruption and every invalidation i
   const serialized = encodeAtBoundary(completeRun(replayMatches()), '2026-01-03', replayMatches())
   assertInvalid(serialized.replace('"processedMatchCount":3', '"processedMatchCount":4'), checkpointIdentity, 'payload-digest')
   assertInvalid(
-    serialized.replace('"schemaVersion":2', '"schemaVersion":99'),
+    serialized.replace(`"schemaVersion":${RATING_CHECKPOINT_SCHEMA_VERSION}`, '"schemaVersion":99'),
     checkpointIdentity,
     'schema-version',
   )

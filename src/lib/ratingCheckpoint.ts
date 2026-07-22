@@ -6,7 +6,7 @@ import {
 } from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
 
-export const RATING_CHECKPOINT_SCHEMA_VERSION = 2 as const
+export const RATING_CHECKPOINT_SCHEMA_VERSION = 3 as const
 
 export type RatingCheckpointIdentity = {
   importerVersion: string
@@ -59,6 +59,99 @@ export type RatingCheckpointValidationResult =
   | { ok: true; checkpoint: DecodedRatingCheckpoint }
   | { ok: false; reason: RatingCheckpointInvalidationReason; requiresFullReplay: true; message: string }
 
+export type SafeRatingCheckpointCandidate = {
+  id: string
+  processedThroughUtcDate: string
+  serialized: string
+  expectedIdentity: RatingCheckpointIdentity
+}
+
+export type RatingCheckpointCausalProof =
+  | { status: 'ready' }
+  | {
+      status: 'replay-required'
+      replayFromUtcDate: string
+      requiresFullReplay: boolean
+      reason: string
+    }
+
+export type SafeRatingCheckpointSelection =
+  | {
+      status: 'selected'
+      candidateId: string
+      checkpoint: DecodedRatingCheckpoint
+      rejectedCandidateIds: string[]
+    }
+  | {
+      status: 'full-replay'
+      reason: 'no-safe-checkpoint' | 'external-causal-proof-missing' | 'causal-proof-requires-full-replay'
+      rejectedCandidateIds: string[]
+    }
+
+/**
+ * Walks newest-to-oldest and only returns a checkpoint after the serialized
+ * payload, compatibility, immutable raw prefix, event state, and all external
+ * causal surfaces have been proven safe by the caller.
+ */
+export function selectSafeCheckpoint({
+  candidates,
+  changedUtcDate,
+  reconcileCausalProof,
+}: {
+  candidates: readonly SafeRatingCheckpointCandidate[]
+  changedUtcDate: string
+  reconcileCausalProof?: (checkpoint: DecodedRatingCheckpoint) => RatingCheckpointCausalProof
+}): SafeRatingCheckpointSelection {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(changedUtcDate)) throw new Error(`Invalid changed UTC date ${changedUtcDate}`)
+  if (!reconcileCausalProof) {
+    return { status: 'full-replay', reason: 'external-causal-proof-missing', rejectedCandidateIds: [] }
+  }
+  const eligible = candidates
+    .filter((candidate) => candidate.processedThroughUtcDate < changedUtcDate)
+    .toSorted((left, right) => right.processedThroughUtcDate.localeCompare(left.processedThroughUtcDate))
+  const rejectedCandidateIds: string[] = []
+  let requiredEarlierThan = changedUtcDate
+
+  for (const candidate of eligible) {
+    if (candidate.processedThroughUtcDate >= requiredEarlierThan) continue
+    const validation = validateRatingCheckpoint(candidate.serialized, candidate.expectedIdentity)
+    if (!validation.ok
+      || validation.checkpoint.metadata.processedThroughUtcDate !== candidate.processedThroughUtcDate) {
+      rejectedCandidateIds.push(candidate.id)
+      continue
+    }
+    let proof: RatingCheckpointCausalProof
+    try {
+      proof = reconcileCausalProof(validation.checkpoint)
+    } catch {
+      rejectedCandidateIds.push(candidate.id)
+      return {
+        status: 'full-replay',
+        reason: 'causal-proof-requires-full-replay',
+        rejectedCandidateIds,
+      }
+    }
+    if (proof.status === 'ready') {
+      return {
+        status: 'selected',
+        candidateId: candidate.id,
+        checkpoint: validation.checkpoint,
+        rejectedCandidateIds,
+      }
+    }
+    rejectedCandidateIds.push(candidate.id)
+    if (proof.requiresFullReplay) {
+      return {
+        status: 'full-replay',
+        reason: 'causal-proof-requires-full-replay',
+        rejectedCandidateIds,
+      }
+    }
+    requiredEarlierThan = proof.replayFromUtcDate
+  }
+  return { status: 'full-replay', reason: 'no-safe-checkpoint', rejectedCandidateIds }
+}
+
 type CanonicalJson = null | boolean | number | string | CanonicalJson[] | { [key: string]: CanonicalJson }
 
 type ParsedRatingCheckpointMetadata = Omit<RatingCheckpointMetadata, 'schemaVersion'> & { schemaVersion: number }
@@ -89,6 +182,15 @@ export function encodeRatingCheckpoint(
     throw new InvalidRatingCheckpointError(
       'boundary-mismatch',
       'Checkpoint terminal match/date identity does not match RatingRunState.previousMatch',
+    )
+  }
+  if (
+    state.processedThroughUtcDateMatchIds.length === 0
+    || !state.processedThroughUtcDateMatchIds.includes(checkpointMatchIdentity(state.previousMatch))
+  ) {
+    throw new InvalidRatingCheckpointError(
+      'boundary-mismatch',
+      'Checkpoint does not prove a complete terminal UTC date boundary',
     )
   }
   assertIdentity(identity)
@@ -154,6 +256,12 @@ export function decodeRatingCheckpoint(
     || decoded.previousMatch.date !== metadata.processedThroughUtcDate
   ) {
     invalid('boundary-mismatch', 'Rating checkpoint terminal match/date identity does not match its state')
+  }
+  if (
+    decoded.processedThroughUtcDateMatchIds.length === 0
+    || !decoded.processedThroughUtcDateMatchIds.includes(checkpointMatchIdentity(decoded.previousMatch))
+  ) {
+    invalid('boundary-mismatch', 'Rating checkpoint does not prove a complete terminal UTC date boundary')
   }
   assertEventContract(decoded, metadata.processedThroughUtcDate, metadata.eventContract)
 
@@ -355,6 +463,7 @@ function isRatingRunState(value: unknown): value is RatingRunState {
     && isEventWeightContext(value.eventWeightContext)
     && (value.previousMatch === undefined || isMatchRecord(value.previousMatch))
     && (value.processedThroughUtcDate === undefined || typeof value.processedThroughUtcDate === 'string')
+    && isStringArray(value.processedThroughUtcDateMatchIds)
     && typeof value.processedMatchCount === 'number'
     && Number.isInteger(value.processedMatchCount)
     && value.processedMatchCount >= 0
@@ -448,6 +557,10 @@ function assertBoundary(date: string) {
   if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
     invalid('boundary-mismatch', `Invalid checkpoint UTC boundary ${date}`)
   }
+}
+
+function checkpointMatchIdentity(match: NonNullable<RatingRunState['previousMatch']>) {
+  return match.officialGameId ?? match.sourceGameId ?? match.id
 }
 
 function compareCodeUnits(left: string, right: string) {

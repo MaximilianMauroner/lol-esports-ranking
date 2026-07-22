@@ -120,6 +120,8 @@ export const snapshotExternalCausalSurfaces = [
   'sourced-player',
   'dss-team',
   'dss-region',
+  'roster-era',
+  'player-resume-ledger',
 ] as const
 
 export const rolePowerPlayerMetric: PlayerMetricInfo = {
@@ -1543,7 +1545,11 @@ export function createMatchHistoryArtifacts(
       const summary = games.findLast((game) => game.impact.unit === 'series-applied') ?? games.at(-1)
       if (!summary) throw new Error(`Cannot publish empty match history series ${id}`)
       return { id, games, summary }
-    })
+    }).toSorted(compareMatchHistorySeriesChronologically)
+    // Page identities are chronological and therefore stable for latest
+    // appends. The catalog remains newest-first for display and points each
+    // series at its stable storage page.
+    const stablePageBySeriesId = new Map(series.map((entry, index) => [entry.id, Math.floor(index / 25) + 1]))
     const pageGroups = chunk(series, 25)
     const artifactMeta = artifactMetaFor({ generatedAt: data.generatedAt, modelVersion: data.model.version, modelConfigHash: data.model.configHash })
     const pages: Record<number, PublicMatchHistoryPage> = Object.fromEntries(pageGroups.map((group, index) => {
@@ -1563,7 +1569,7 @@ export function createMatchHistoryArtifacts(
         matches: pageMatches,
       }]
     }))
-    const catalogSeries: PublicMatchHistorySeriesRef[] = series.map((entry, index) => ({
+    const catalogSeries: PublicMatchHistorySeriesRef[] = series.toReversed().map((entry) => ({
       id: entry.id,
       date: entry.summary.date,
       ...(entry.summary.datetimeUtc ? { datetimeUtc: entry.summary.datetimeUtc } : {}),
@@ -1571,7 +1577,7 @@ export function createMatchHistoryArtifacts(
       league: entry.summary.league,
       teamA: entry.summary.teamA,
       teamB: entry.summary.teamB,
-      page: Math.floor(index / 25) + 1,
+      page: stablePageBySeriesId.get(entry.id)!,
       gameCount: entry.games.length,
     }))
     const catalog: PublicMatchHistoryCatalog = {
@@ -1617,6 +1623,15 @@ export function createMatchHistoryArtifacts(
     catalogs,
     pages,
   }
+}
+
+function compareMatchHistorySeriesChronologically(
+  left: { id: string; summary: PublicMatchHistoryEntry },
+  right: { id: string; summary: PublicMatchHistoryEntry },
+) {
+  return (left.summary.datetimeUtc ?? `${left.summary.date}T00:00:00.000Z`)
+    .localeCompare(right.summary.datetimeUtc ?? `${right.summary.date}T00:00:00.000Z`)
+    || left.id.localeCompare(right.id)
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

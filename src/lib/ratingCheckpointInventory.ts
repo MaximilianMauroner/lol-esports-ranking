@@ -40,6 +40,7 @@ const includedRatingRunStateFields = [
   'eventWeightContext',
   'previousMatch',
   'processedThroughUtcDate',
+  'processedThroughUtcDateMatchIds',
   'processedMatchCount',
 ] as const satisfies readonly (keyof RatingRunState)[]
 
