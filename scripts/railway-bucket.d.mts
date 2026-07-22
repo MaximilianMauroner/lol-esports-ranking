@@ -65,6 +65,7 @@ export function getBucketObject(relativePath: string, options?: Record<string, u
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>
 export function downloadBucketObject(options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function uploadDirectory(...args: unknown[]): Promise<unknown[]>
+export function uploadContentAddressedPublicArtifacts(...args: unknown[]): Promise<Record<string, unknown>>
 export function uploadRawSourceFiles(...args: unknown[]): Promise<Record<string, unknown>>
 export function syncRawFile(...args: unknown[]): Promise<Record<string, unknown>>
 export function uploadFile(...args: unknown[]): Promise<Record<string, unknown>>

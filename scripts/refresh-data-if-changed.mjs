@@ -304,6 +304,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           config: bucketConfig,
           client: options.bucketClient,
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
+          contentAddressed: env.RANKING_BUCKET_CONTENT_ADDRESSED === 'true',
           generationId,
           fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
           leaseAuthority: env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
@@ -339,7 +340,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             if (name === 'promotion' && stage.output?.promotedAt) completedPromotionAt = stage.output.promotedAt
             if (name === 'promotion' && stage.output?.etag) completedPromotionEtag = stage.output.etag
           },
-          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped, refreshTelemetry }) => {
+          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped, refreshTelemetry, storage }) => {
             state.bucket = {
               enabled: true,
               bucket,
@@ -350,6 +351,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               unchangedCount,
               unchangedBytes,
               skipped,
+              ...(storage ? { storage } : {}),
             }
             state.lastRun = refreshTelemetry
             return state
@@ -365,6 +367,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           unchangedCount: bucketPublish.unchanged.length,
           unchangedBytes: bucketPublish.unchangedBytes,
           skipped: bucketPublish.skipped,
+          ...(bucketPublish.storage ? { storage: bucketPublish.storage } : {}),
         }
         state.lastRun = bucketPublish.refreshTelemetry
         canonicalMetrics = bucketPublish.refreshTelemetry

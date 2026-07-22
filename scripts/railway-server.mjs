@@ -5,7 +5,7 @@ import { createServer } from 'node:http'
 import { normalize, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { createGzip } from 'node:zlib'
+import { createGunzip, createGzip } from 'node:zlib'
 import { bucketConfigFromEnv, contentTypeForPath, getBucketObject, readBucketJson } from './railway-bucket.mjs'
 import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
 
@@ -313,6 +313,7 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
 
   const contentType = object.contentType ?? contentTypeForPath(relativePath)
   const compressible = isCompressibleContentType(contentType)
+  const storedGzip = object.contentEncoding === 'gzip'
   if (isFreshRequest(requestHeaders, object.etag, object.lastModified)) {
     destroyBody(object.body)
     sendNotModified(response, {
@@ -325,13 +326,19 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
     return true
   }
 
-  const gzip = shouldGzip(requestHeaders, contentType, object.contentLength, headOnly)
+  const gzip = storedGzip
+    ? acceptsGzip(requestHeaders?.['accept-encoding'])
+    : shouldGzip(requestHeaders, contentType, object.contentLength, headOnly)
   response.statusCode = 200
   response.setHeader('Content-Type', contentType)
   response.setHeader('Cache-Control', cacheControl)
   if (compressible) response.setHeader('Vary', 'Accept-Encoding')
-  if (gzip) response.setHeader('Content-Encoding', 'gzip')
-  else if (object.contentLength !== undefined) response.setHeader('Content-Length', String(object.contentLength))
+  if (gzip) {
+    response.setHeader('Content-Encoding', 'gzip')
+    if (storedGzip && object.contentLength !== undefined) response.setHeader('Content-Length', String(object.contentLength))
+  } else if (!storedGzip && object.contentLength !== undefined) {
+    response.setHeader('Content-Length', String(object.contentLength))
+  }
   if (object.etag) response.setHeader('ETag', object.etag)
   if (object.lastModified) response.setHeader('Last-Modified', object.lastModified.toUTCString())
   if (headOnly) {
@@ -339,7 +346,7 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
     return true
   }
 
-  await pipeBody(object.body, response, { gzip })
+  await pipeBody(object.body, response, { gzip: gzip && !storedGzip, gunzip: storedGzip && !gzip })
   return true
 }
 
@@ -513,13 +520,14 @@ function sendNotFound(response, { headOnly, requestHeaders }) {
   response.end(body)
 }
 
-async function pipeBody(body, response, { gzip = false } = {}) {
+async function pipeBody(body, response, { gzip = false, gunzip = false } = {}) {
   const stream = await readableBody(body)
   if (!stream) {
     response.end()
     return
   }
   if (gzip) await pipeline(stream, createGzip(), response)
+  else if (gunzip) await pipeline(stream, createGunzip(), response)
   else await pipeline(stream, response)
 }
 

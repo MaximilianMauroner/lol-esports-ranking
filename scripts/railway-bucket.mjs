@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
+import { CONTENT_ADDRESSED_STORAGE_MODE, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 
 let activeGenerationCache = { expiresAt: 0, value: null }
 
@@ -73,6 +74,7 @@ export async function uploadRankingArtifacts({
   onStage,
   refreshTelemetry,
   beforePromotionWrite,
+  contentAddressed = parseBoolean(process.env.RANKING_BUCKET_CONTENT_ADDRESSED),
 } = {}) {
   if (!config.enabled) {
     return {
@@ -92,6 +94,9 @@ export async function uploadRankingArtifacts({
   const uploads = []
   const unchanged = []
   const skipped = []
+  if (contentAddressed && !generationId) {
+    throw new Error('Content-addressed publication requires a generationId')
+  }
   const dataPrefix = generationId ? `generations/${safeObjectPath(generationId)}/data` : 'data'
   if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
     config,
@@ -100,11 +105,28 @@ export async function uploadRankingArtifacts({
     requireEtag: Boolean(leaseAuthority.etag),
   })
   let stageStarted = monotonicNow()
-  const publicUploads = await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json')
-  uploads.push(...publicUploads)
+  const publicSync = contentAddressed
+    ? await uploadContentAddressedPublicArtifacts(client, config, publicDataDir, generationId)
+    : { uploaded: await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json'), unchanged: [] }
+  uploads.push(...publicSync.uploaded)
+  unchanged.push(...publicSync.unchanged)
+  const storageMetrics = contentAddressed ? {
+    mode: CONTENT_ADDRESSED_STORAGE_MODE,
+    objectCount: publicSync.objectCount,
+    logicalArtifactCount: publicSync.logicalArtifactCount,
+    semanticLogicalBytes: publicSync.semanticLogicalBytes,
+    compressedLogicalBytes: publicSync.compressedLogicalBytes,
+    uniqueCompressedBytes: publicSync.uniqueCompressedBytes,
+  } : undefined
   onStage?.('artifact-upload', {
     durationMs: monotonicNow() - stageStarted,
-    output: byteCounts(publicUploads),
+    output: {
+      ...byteCounts(publicSync.uploaded),
+      reusedCount: publicSync.unchanged.length,
+      reusedBytes: sumBytes(publicSync.unchanged),
+      ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+      ...(storageMetrics ? { storage: storageMetrics } : {}),
+    },
   })
   if (rawDir) {
     if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
@@ -164,7 +186,10 @@ export async function uploadRankingArtifacts({
       generationId,
       fencingToken,
       promotedAt,
-      manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
+      manifestKey: bucketKey(config, contentAddressed
+        ? `generations/${safeObjectPath(generationId)}/manifest.json`
+        : `${dataPrefix}/ranking-summary.json`),
+      ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
     }, {
       config,
       client,
@@ -176,7 +201,14 @@ export async function uploadRankingArtifacts({
       durationMs: monotonicNow() - stageStarted,
       output: { generationId, fencingToken, promotedAt, etag: promotion.etag },
     })
-    promotionOutcome = { completed: true, generationId, fencingToken, promotedAt, etag: promotion.etag }
+    promotionOutcome = {
+      completed: true,
+      generationId,
+      fencingToken,
+      promotedAt,
+      etag: promotion.etag,
+      ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+    }
   }
 
   const telemetry = refreshTelemetry
@@ -196,6 +228,7 @@ export async function uploadRankingArtifacts({
         skipped,
         promotion: promotionOutcome,
         refreshTelemetry: telemetry,
+        storage: storageMetrics,
       }))
     } else {
       uploads.push(await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
@@ -208,6 +241,8 @@ export async function uploadRankingArtifacts({
     publishedAt: promotionOutcome?.promotedAt ?? new Date(now()).toISOString(),
     prefix: config.prefix,
     ...(generationId ? { generationId } : {}),
+    ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+    ...(storageMetrics ? { storage: storageMetrics } : {}),
     ...publishMetrics,
     artifacts: publishedArtifacts.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
     unchanged: unchanged.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, digest })),
@@ -231,6 +266,8 @@ export async function uploadRankingArtifacts({
     skipped,
     promotion: promotionOutcome,
     refreshTelemetry: telemetry,
+    ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+    ...(storageMetrics ? { storage: storageMetrics } : {}),
     ...publishMetrics,
   }
 }
@@ -242,12 +279,19 @@ export async function getBucketObject(relativePath, {
 } = {}) {
   if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
   const safePath = safeRequestedObjectPath(relativePath)
-  const generation = typeof generationId === 'string' && generationId.length > 0
-    ? generationId
-    : await activeGeneration(config, client)
+  const directContentObject = safePath.startsWith('objects/sha256/')
+  const generation = directContentObject
+    ? undefined
+    : typeof generationId === 'string' && generationId.length > 0
+      ? generationId
+      : await activeGeneration(config, client)
   const keys = [
+    ...(directContentObject ? [bucketKey(config, safePath)] : []),
+    ...(generation && safePath === 'ranking-summary.json'
+      ? [bucketKey(config, `generations/${safeObjectPath(generation)}/manifest.json`)]
+      : []),
     ...(generation ? [bucketKey(config, `generations/${safeObjectPath(generation)}/data/${safePath}`)] : []),
-    ...(generationId ? [] : [bucketKey(config, `data/${safePath}`)]),
+    ...(generationId || directContentObject ? [] : [bucketKey(config, `data/${safePath}`)]),
   ]
 
   for (const key of keys) {
@@ -262,6 +306,7 @@ export async function getBucketObject(relativePath, {
         body: object.Body,
         contentLength: object.ContentLength,
         contentType: object.ContentType ?? contentTypeForPath(relativePath),
+        contentEncoding: object.ContentEncoding,
         etag: object.ETag,
         lastModified: object.LastModified,
       }
@@ -569,6 +614,137 @@ export async function uploadDirectory(client, config, dir, destinationPrefix, pu
   return uploads
 }
 
+export async function uploadContentAddressedPublicArtifacts(client, config, dir, generationId) {
+  const root = resolve(dir)
+  const files = await listFiles(root)
+  files.sort((left, right) => relative(root, left).localeCompare(relative(root, right)))
+  const prepared = []
+  let rootManifest
+
+  for (const file of files) {
+    const relativePath = relative(root, file).split(sep).join('/')
+    if (extname(relativePath).toLowerCase() !== '.json') {
+      throw new Error(`Content-addressed public artifact must be JSON: ${relativePath}`)
+    }
+    const value = JSON.parse(await readFile(file, 'utf8'))
+    if (relativePath === 'ranking-summary.json') rootManifest = value
+    prepared.push({
+      logicalPath: logicalDataPath(relativePath),
+      ...prepareSemanticArtifact(value),
+    })
+  }
+  if (!rootManifest) throw new Error('Content-addressed publication requires ranking-summary.json')
+
+  const uploaded = []
+  const unchanged = []
+  const uniqueArtifacts = new Map()
+  for (const artifact of prepared) {
+    const existing = uniqueArtifacts.get(artifact.digest)
+    if (existing && existing.canonicalJson !== artifact.canonicalJson) {
+      throw new Error(`Local semantic SHA-256 collision: ${artifact.digest}`)
+    }
+    uniqueArtifacts.set(artifact.digest, existing ?? artifact)
+  }
+  for (const artifact of uniqueArtifacts.values()) {
+    const result = await syncContentAddressedObject(client, config, artifact)
+    if (result.status === 'unchanged') unchanged.push(result)
+    else uploaded.push(result)
+  }
+
+  const manifest = createGenerationManifest({ generationId, rootManifest, entries: prepared })
+  uploaded.push(await uploadJson(client, config, `generations/${safeObjectPath(generationId)}/manifest.json`, manifest))
+  return {
+    uploaded,
+    unchanged,
+    manifest,
+    objectCount: uniqueArtifacts.size,
+    logicalArtifactCount: prepared.length,
+    compressedLogicalBytes: prepared.reduce((total, artifact) => total + artifact.compressedBytes, 0),
+    semanticLogicalBytes: prepared.reduce((total, artifact) => total + artifact.bytes, 0),
+    uniqueCompressedBytes: [...uniqueArtifacts.values()].reduce((total, artifact) => total + artifact.compressedBytes, 0),
+  }
+}
+
+async function syncContentAddressedObject(client, config, artifact) {
+  const relativeKey = `objects/sha256/${artifact.digest}`
+  const key = bucketKey(config, relativeKey)
+  const expectedMetadata = {
+    sha256: artifact.digest,
+    'semantic-bytes': String(artifact.bytes),
+    encoding: 'gzip',
+  }
+  try {
+    const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
+    assertContentAddressedMetadata(remote, artifact, key)
+    return {
+      status: 'unchanged',
+      reason: 'content-addressed-object-reused',
+      key,
+      bytes: artifact.compressedBytes,
+      semanticBytes: artifact.bytes,
+      contentType: 'application/json; charset=utf-8',
+      contentEncoding: 'gzip',
+      digest: artifact.digest,
+    }
+  } catch (error) {
+    if (!isMissingObjectError(error)) throw error
+  }
+
+  try {
+    const result = await client.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: artifact.compressed,
+      ContentLength: artifact.compressedBytes,
+      ContentType: 'application/json; charset=utf-8',
+      ContentEncoding: 'gzip',
+      Metadata: expectedMetadata,
+      IfNoneMatch: '*',
+    }))
+    return {
+      status: 'uploaded',
+      key,
+      bytes: artifact.compressedBytes,
+      semanticBytes: artifact.bytes,
+      contentType: 'application/json; charset=utf-8',
+      contentEncoding: 'gzip',
+      digest: artifact.digest,
+      etag: result.ETag,
+    }
+  } catch (error) {
+    if (!isPreconditionError(error)) throw error
+    const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
+    assertContentAddressedMetadata(remote, artifact, key)
+    return {
+      status: 'unchanged',
+      reason: 'content-addressed-object-race-reused',
+      key,
+      bytes: artifact.compressedBytes,
+      semanticBytes: artifact.bytes,
+      contentType: 'application/json; charset=utf-8',
+      contentEncoding: 'gzip',
+      digest: artifact.digest,
+    }
+  }
+}
+
+function assertContentAddressedMetadata(remote, artifact, key) {
+  const matches = Number(remote.ContentLength) === artifact.compressedBytes
+    && remote.ContentEncoding === 'gzip'
+    && remote.Metadata?.sha256 === artifact.digest
+    && remote.Metadata?.['semantic-bytes'] === String(artifact.bytes)
+    && remote.Metadata?.encoding === 'gzip'
+  if (!matches) throw new Error(`Content-addressed object collision or metadata mismatch: ${key}`)
+}
+
+function logicalDataPath(relativePath) {
+  try {
+    return decodeURIComponent(`/data/${relativePath}`)
+  } catch {
+    throw new Error(`Invalid encoded public artifact path: ${relativePath}`)
+  }
+}
+
 export async function uploadRawSourceFiles(client, config, rawDir, manifestPath) {
   if (!manifestPath) return { uploaded: [], unchanged: [] }
 
@@ -678,7 +854,7 @@ async function uploadJsonBody(client, config, relativeKey, body) {
   }
 }
 
-async function uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped, promotion, refreshTelemetry }) {
+async function uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped, promotion, refreshTelemetry, storage }) {
   let stateBytes = 0
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const projectedState = {
@@ -693,6 +869,7 @@ async function uploadRefreshState(client, config, refreshStateForUpload, { uploa
       skipped,
       promotion,
       refreshTelemetry,
+      storage,
     }))
     const nextBytes = Buffer.byteLength(body)
     if (nextBytes === stateBytes) return uploadJsonBody(client, config, 'raw/refresh-state.json', body)

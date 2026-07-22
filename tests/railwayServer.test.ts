@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { gzipSync } from 'node:zlib'
 
 test('Railway server returns app shell only for known app routes', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
@@ -165,6 +166,64 @@ test('Railway server serves versioned data from the requested bucket generation'
     const missing = await httpRequest(server.port, '/data/history/tournament-moves/index.json?v=missing')
     assert.equal(missing.statusCode, 404)
     assert.doesNotMatch(missing.body, /bundled/)
+  } finally {
+    await server.close()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('Railway server resolves content-addressed manifests and decodes stored gzip for clients without gzip', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-content-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(dataDir, { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
+  const digest = 'a'.repeat(64)
+  const generationManifest = {
+    artifactKind: 'public-artifact-generation-manifest',
+    schemaVersion: 1,
+    generationId: 'fresh',
+    artifacts: {},
+  }
+  const semantic = { artifactKind: 'public-semantic-artifact', schemaVersion: 1, content: { artifactKind: 'example' } }
+  const bucket = createServer((request, response) => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+    if (pathname === '/test-bucket/rankings/active-generation.json') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ generationId: 'fresh', storageMode: 'content-addressed-gzip-v1' }))
+      return
+    }
+    if (pathname === '/test-bucket/rankings/generations/fresh/manifest.json') {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify(generationManifest))
+      return
+    }
+    if (pathname === `/test-bucket/rankings/objects/sha256/${digest}`) {
+      response.setHeader('Content-Type', 'application/json')
+      response.setHeader('Content-Encoding', 'gzip')
+      response.end(gzipSync(JSON.stringify(semantic)))
+      return
+    }
+    response.statusCode = 404
+    response.end()
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const bucketPort = (bucket.address() as AddressInfo).port
+  const server = await startRailwayServer(distDir, dataDir, {
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+  })
+  try {
+    const manifestResponse = await httpRequest(server.port, '/data/ranking-summary.json')
+    assert.equal(JSON.parse(manifestResponse.body).artifactKind, 'public-artifact-generation-manifest')
+    const objectResponse = await httpRequest(server.port, `/data/objects/sha256/${digest}`)
+    assert.equal(objectResponse.headers['content-encoding'], undefined)
+    assert.deepEqual(JSON.parse(objectResponse.body), semantic)
   } finally {
     await server.close()
     await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
