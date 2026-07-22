@@ -318,6 +318,7 @@ test('content-addressed generation reuses unchanged objects, uploads only change
       assert.equal(entry.storageEncoding, 'gzip')
       assert.deepEqual(entry.transportEncodings, ['identity', 'gzip'])
       assert.equal(object.contentEncoding, 'gzip')
+      assert.equal(object.cacheControl, 'public, max-age=31536000, immutable')
       assert.equal(object.metadata?.sha256, entry.sha256)
       assert.equal(object.metadata?.['semantic-bytes'], String(entry.bytes))
       assert.equal(object.metadata?.encoding, 'gzip')
@@ -347,11 +348,11 @@ test('content-addressed generation reuses unchanged objects, uploads only change
     const fetcher: typeof fetch = async (input) => {
       const url = new URL(String(input), 'https://reader.invalid')
       if (url.pathname === '/data/ranking-summary.json') {
-        return new Response(generationManifestObject.bytes, { headers: { 'Content-Type': 'application/json' } })
+        return new Response(new Uint8Array(generationManifestObject.bytes!), { headers: { 'Content-Type': 'application/json' } })
       }
       const object = client.objects.get(`rankings${url.pathname.replace(/^\/data/, '')}`)
       if (!object) return new Response(null, { status: 404 })
-      return new Response(gunzipSync(object.bytes!), {
+      return new Response(new Uint8Array(gunzipSync(object.bytes!)), {
         headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
       })
     }
@@ -715,6 +716,7 @@ function memoryS3() {
     etag: string
     contentType?: string
     contentEncoding?: string
+    cacheControl?: string
     metadata?: Record<string, string>
   }>()
   let version = 0
@@ -733,6 +735,7 @@ function memoryS3() {
           ContentLength: bytes.byteLength,
           ContentType: object.contentType,
           ContentEncoding: object.contentEncoding,
+          CacheControl: object.cacheControl,
           Metadata: object.metadata,
         }
       }
@@ -745,6 +748,7 @@ function memoryS3() {
           ContentLength: bytes.byteLength,
           ContentType: object.contentType,
           ContentEncoding: object.contentEncoding,
+          CacheControl: object.cacheControl,
           Metadata: object.metadata,
         }
       }
@@ -760,6 +764,7 @@ function memoryS3() {
           etag,
           contentType: typeof input.ContentType === 'string' ? input.ContentType : undefined,
           contentEncoding: typeof input.ContentEncoding === 'string' ? input.ContentEncoding : undefined,
+          cacheControl: typeof input.CacheControl === 'string' ? input.CacheControl : undefined,
           metadata: isStringRecord(input.Metadata) ? input.Metadata : undefined,
         })
         return { ETag: etag }

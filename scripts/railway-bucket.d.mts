@@ -10,6 +10,21 @@ export type BucketConfig = {
 }
 export type BucketStorageConfig = Omit<BucketConfig, 'enabled'> & { enabled?: boolean }
 export type BucketClient = { send(command: unknown): Promise<unknown> }
+export type PresignedBucketMethod = 'GET' | 'HEAD'
+export type ContentAddressedObjectPath = { path: string; sha256: string }
+export type BucketObjectHead = {
+  found: true
+  key: string
+  contentLength?: number
+  contentType?: string
+  contentEncoding?: string
+  cacheControl?: string
+  metadata?: Record<string, string>
+  etag?: string
+  lastModified?: Date
+}
+
+export const PRESIGNED_URL_EXPIRY_SECONDS: 3600
 
 export function bucketConfigFromEnv(env?: NodeJS.ProcessEnv): BucketConfig | { enabled: false; missing: string[] }
 export function createBucketClient(config?: unknown): BucketClient | null
@@ -82,6 +97,30 @@ export function uploadContentAddressedRawSourceGeneration(
   generation: import('./raw-source-generation.mjs').PreparedRawSourceGeneration,
 ): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
+export function headBucketObject(relativePath: string, options?: {
+  config?: BucketStorageConfig | { enabled: false; missing?: string[] }
+  client?: BucketClient | null
+}): Promise<BucketObjectHead | { found: false; key?: string; missingConfig?: string[] }>
+export function presignBucketObject(relativePath: string, options?: {
+  method?: PresignedBucketMethod
+  config?: BucketStorageConfig | { enabled: false; missing?: string[] }
+  client?: BucketClient | null
+  signer?: (client: BucketClient, command: unknown, options: { expiresIn: 3600 }) => Promise<string>
+}): Promise<string>
+export type PresignedBucketDelivery =
+  | { kind: 'redirect'; location: string }
+  | { kind: 'proxy'; bucketHead: BucketObjectHead | { found: false; key?: string } }
+  | { kind: 'head-failed' }
+  | { kind: 'sign-failed'; bucketHead: BucketObjectHead }
+export function preparePresignedBucketDelivery(relativePath: string, options: {
+  method?: PresignedBucketMethod
+  thresholdBytes: number
+  config?: BucketStorageConfig | { enabled: false; missing?: string[] }
+  client?: BucketClient | null
+  head?: typeof headBucketObject
+  presign?: typeof presignBucketObject
+}): Promise<PresignedBucketDelivery>
+export function parseContentAddressedObjectPath(path: string): ContentAddressedObjectPath
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>
 export function downloadBucketObject(options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function uploadDirectory(...args: unknown[]): Promise<unknown[]>

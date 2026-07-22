@@ -68,6 +68,57 @@ test('snapshot loading repairs a cached shard from an older publish', async () =
   assert.equal(requests[1]?.cache, 'reload')
 })
 
+test('generation-backed snapshot loading does not outer-retry abort, HTTP, or integrity failures', async (t) => {
+  for (const scenario of ['abort', 'http', 'integrity'] as const) {
+    await t.test(scenario, async () => {
+      let targetRequests = 0
+      const controller = new AbortController()
+      const fixture = await generationBackedSnapshotFixture(async () => {
+        targetRequests += 1
+        if (scenario === 'abort') {
+          controller.abort()
+          throw new DOMException('Aborted', 'AbortError')
+        }
+        if (scenario === 'http') return new Response(null, { status: 403 })
+        return jsonResponse(createPublicSemanticArtifact({ artifactKind: 'corrupt-generation-shard' }))
+      })
+
+      await assert.rejects(
+        fetchPublicSnapshotShard(
+          fixture.expected.url,
+          fixture.snapshotKey,
+          fixture.expected,
+          fixture.manifest,
+          { fetcher: fixture.fetcher, signal: controller.signal },
+        ),
+        scenario === 'abort' ? /Aborted/ : scenario === 'http' ? /403/ : /semantic digest mismatch/,
+      )
+      assert.equal(targetRequests, 1)
+    })
+  }
+})
+
+test('generation-backed network plus proxy failure makes exactly two requests', async () => {
+  let targetRequests = 0
+  const fixture = await generationBackedSnapshotFixture(async () => {
+    targetRequests += 1
+    if (targetRequests === 1) throw new TypeError('Failed to fetch')
+    return new Response(null, { status: 503 })
+  })
+
+  await assert.rejects(
+    fetchPublicSnapshotShard(
+      fixture.expected.url,
+      fixture.snapshotKey,
+      fixture.expected,
+      fixture.manifest,
+      { fetcher: fixture.fetcher },
+    ),
+    /503/,
+  )
+  assert.equal(targetRequests, 2)
+})
+
 test('generation manifest loads semantic artifacts through the manifest loader and snapshot resolver', async () => {
   const fixture = await generationFixture()
   const requests: string[] = []
@@ -231,6 +282,125 @@ test('generation manifest and semantic loading fail closed on integrity and gene
   )
 })
 
+test('redirected immutable-object failures retry the original same-origin URL once through the proxy', async () => {
+  const fixture = await presignedDeliveryFixture('v=generation-test&delivery=direct')
+  const requests: Array<{ url: string; init?: RequestInit }> = []
+  const redirectedForbidden = redirectedErrorResponse(403)
+  const fetcher: typeof fetch = async (input, init) => {
+    requests.push({ url: String(input), init })
+    return requests.length === 1 ? redirectedForbidden : jsonResponse(fixture.semantic)
+  }
+
+  const loaded = await fetchPublicArtifact(fixture.owner, fixture.logicalPath, '/data/generation.json', recordParser, {
+    fetcher,
+    cache: 'no-cache',
+  })
+
+  assert.equal(requests.length, 2)
+  assert.equal(requests[0]?.url, fixture.objectUrl)
+  const proxyUrl = new URL(requests[1]?.url ?? '', 'https://same-origin.invalid')
+  assert.equal(proxyUrl.pathname, `/data/objects/sha256/${fixture.identity.sha256}`)
+  assert.equal(proxyUrl.searchParams.get('v'), 'generation-test')
+  assert.equal(proxyUrl.searchParams.get('delivery'), 'proxy')
+  assert.equal(requests[0]?.init?.cache, 'no-cache')
+  assert.equal(requests[1]?.init?.cache, 'no-cache')
+  assert.equal(new Headers(requests[1]?.init?.headers).get('Accept'), 'application/json')
+  assert.equal((loaded.artifactMeta as Record<string, unknown>).runId, fixture.generation.runId)
+})
+
+test('immutable-object network rejection retries once, while proxy failure does not loop', async () => {
+  const fixture = await presignedDeliveryFixture()
+  const requests: string[] = []
+  const fetcher: typeof fetch = async (input) => {
+    requests.push(String(input))
+    if (requests.length === 1) throw new TypeError('Failed to fetch')
+    return new Response(null, { status: 503 })
+  }
+
+  await assert.rejects(
+    fetchPublicArtifact(fixture.owner, fixture.logicalPath, '/data/generation.json', recordParser, { fetcher }),
+    /503/,
+  )
+  assert.equal(requests.length, 2)
+  assert.match(requests[1] ?? '', /[?&]delivery=proxy(?:&|$)/)
+})
+
+test('ordinary same-origin HTTP failures do not trigger proxy fallback', async () => {
+  const fixture = await presignedDeliveryFixture()
+  let requests = 0
+  await assert.rejects(
+    fetchPublicArtifact(fixture.owner, fixture.logicalPath, '/data/generation.json', recordParser, {
+      fetcher: async () => {
+        requests += 1
+        return new Response(null, { status: 403 })
+      },
+    }),
+    /403/,
+  )
+  assert.equal(requests, 1)
+})
+
+test('aborted immutable-object requests never retry through the proxy', async () => {
+  const fixture = await presignedDeliveryFixture()
+  const controller = new AbortController()
+  controller.abort()
+  let requests = 0
+  const fetcher: typeof fetch = async () => {
+    requests += 1
+    throw new DOMException('Aborted', 'AbortError')
+  }
+
+  await assert.rejects(
+    fetchPublicArtifact(fixture.owner, fixture.logicalPath, '/data/generation.json', recordParser, {
+      fetcher,
+      signal: controller.signal,
+    }),
+    (error: unknown) => error instanceof DOMException && error.name === 'AbortError',
+  )
+  assert.equal(requests, 1)
+})
+
+test('direct and proxy immutable delivery share hydration and digest validation', async () => {
+  const direct = await presignedDeliveryFixture()
+  const proxied = await presignedDeliveryFixture()
+  const directLoaded = await fetchPublicArtifact(
+    direct.owner,
+    direct.logicalPath,
+    '/data/generation.json',
+    recordParser,
+    { fetcher: async () => jsonResponse(direct.semantic) },
+  )
+  let proxyRequests = 0
+  const proxyLoaded = await fetchPublicArtifact(
+    proxied.owner,
+    proxied.logicalPath,
+    '/data/generation.json',
+    recordParser,
+    {
+      fetcher: async () => {
+        proxyRequests += 1
+        return proxyRequests === 1 ? redirectedErrorResponse(403) : jsonResponse(proxied.semantic)
+      },
+    },
+  )
+  assert.deepEqual(proxyLoaded, directLoaded)
+
+  const corrupt = await presignedDeliveryFixture()
+  let corruptRequests = 0
+  await assert.rejects(
+    fetchPublicArtifact(corrupt.owner, corrupt.logicalPath, '/data/generation.json', recordParser, {
+      fetcher: async () => {
+        corruptRequests += 1
+        return corruptRequests === 1
+          ? redirectedErrorResponse(403)
+          : jsonResponse(createPublicSemanticArtifact({ artifactKind: 'corrupt-proxy-content' }))
+      },
+    }),
+    /semantic digest mismatch/,
+  )
+  assert.equal(corruptRequests, 2)
+})
+
 type GenerationFixture = {
   generation: PublicArtifactGenerationManifest
   legacyManifest: PublicRankingManifest
@@ -239,6 +409,62 @@ type GenerationFixture = {
   shardSemantic: PublicSemanticArtifact
   rootEntry: PublicGenerationArtifactEntry
   shardEntry: PublicGenerationArtifactEntry
+}
+
+async function presignedDeliveryFixture(query = '') {
+  const fixture = await generationFixture()
+  const generationSource = structuredClone(fixture.generation)
+  const root = generationSource.artifacts[fixture.rootEntry.logicalPath]!
+  root.objectUrl = `/data/objects/sha256/${root.sha256}${query ? `?${query}` : ''}`
+  root.encoding = 'gzip'
+  root.storageEncoding = 'gzip'
+  root.transportEncodings = ['identity', 'gzip']
+  const generation = parsePublicArtifactGenerationManifest(generationSource)
+  const owner = {}
+  registerGenerationContext(owner, generation, '/data/generation.json')
+  return {
+    owner,
+    generation,
+    logicalPath: fixture.rootEntry.logicalPath,
+    objectUrl: root.objectUrl,
+    semantic: fixture.rootSemantic,
+    identity: await semanticArtifactIdentity(fixture.rootSemantic),
+  }
+}
+
+async function generationBackedSnapshotFixture(targetResponse: () => Promise<Response>) {
+  const fixture = await generationFixture()
+  const generationSource = structuredClone(fixture.generation)
+  for (const logicalPath of [fixture.rootEntry.logicalPath, fixture.shardEntry.logicalPath]) {
+    const artifact = generationSource.artifacts[logicalPath]!
+    artifact.objectUrl = `/data/objects/sha256/${artifact.sha256}`
+    artifact.encoding = 'gzip'
+    artifact.storageEncoding = 'gzip'
+    artifact.transportEncodings = ['identity', 'gzip']
+  }
+  const generation = parsePublicArtifactGenerationManifest(generationSource)
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input)
+    if (url === '/data/generation.json') return jsonResponse(generation)
+    if (url === generation.artifacts[fixture.rootEntry.logicalPath]?.objectUrl) return jsonResponse(fixture.rootSemantic)
+    const targetUrl = generation.artifacts[fixture.shardEntry.logicalPath]?.objectUrl
+    if (url === targetUrl || url.startsWith(`${targetUrl}?`)) return targetResponse()
+    return new Response(null, { status: 404 })
+  }
+  const manifest = await createPublicRankingManifestLoader('/data/generation.json', fetcher)()
+  const snapshotKey = '2026__All__All'
+  return { manifest, snapshotKey, expected: manifest.snapshotIndex[snapshotKey], fetcher }
+}
+
+function recordParser(value: unknown) {
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value))
+  return value as Record<string, unknown>
+}
+
+function redirectedErrorResponse(status: number) {
+  const response = new Response(null, { status })
+  Object.defineProperty(response, 'redirected', { value: true })
+  return response
 }
 
 async function generationFixture(): Promise<GenerationFixture> {

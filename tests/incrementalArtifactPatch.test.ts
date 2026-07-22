@@ -83,6 +83,55 @@ test('partial artifact patch fails before manifest creation when a reused object
   }
 })
 
+test('partial artifact patch upgrades reused legacy object metadata once without changing its reference', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-patch-metadata-'))
+  const client = memoryS3()
+  try {
+    await writeFile(join(dir, 'ranking-summary.json'), JSON.stringify(root('base')))
+    await writeFile(join(dir, 'stable.json'), JSON.stringify({ artifactKind: 'fixture', value: 1 }))
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, 'base')
+    const stableBefore = record(record(base.manifest.artifacts)['/data/stable.json'])
+    const objectKey = `rankings/objects/sha256/${String(stableBefore.sha256)}`
+    const stored = client.objects.get(objectKey)
+    assert.ok(stored)
+    client.objects.set(objectKey, {
+      ...stored,
+      contentType: 'application/octet-stream',
+      contentEncoding: undefined,
+      cacheControl: undefined,
+    })
+    const putsBefore = client.putKeys.filter((key) => key === objectKey).length
+
+    const first = await uploadContentAddressedPublicArtifactPatch(client, config, {
+      generationId: 'metadata-next',
+      previousManifest: base.manifest,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: root('metadata-next') }],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json'],
+    })
+    assert.equal(client.putKeys.filter((key) => key === objectKey).length - putsBefore, 1)
+    assert.equal(first.uploaded.some((entry) => entry.reason === 'content-addressed-object-metadata-upgraded'), true)
+    const stableAfterFirst = record(record(first.manifest.artifacts)['/data/stable.json'])
+    assert.equal(stableAfterFirst.sha256, stableBefore.sha256)
+    assert.equal(stableAfterFirst.bytes, stableBefore.bytes)
+    assert.equal(stableAfterFirst.objectUrl, stableBefore.objectUrl)
+
+    const putsAfterUpgrade = client.putKeys.filter((key) => key === objectKey).length
+    const second = await uploadContentAddressedPublicArtifactPatch(client, config, {
+      generationId: 'metadata-final',
+      previousManifest: first.manifest,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: root('metadata-final') }],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json'],
+    })
+    assert.equal(client.putKeys.filter((key) => key === objectKey).length, putsAfterUpgrade)
+    const stableAfterSecond = record(record(second.manifest.artifacts)['/data/stable.json'])
+    assert.equal(stableAfterSecond.sha256, stableBefore.sha256)
+    assert.equal(stableAfterSecond.bytes, stableBefore.bytes)
+    assert.equal(stableAfterSecond.objectUrl, stableBefore.objectUrl)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('full uploads stream-verify same-length pre-existing content-addressed objects before reuse', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ranking-full-authority-'))
   const client = memoryS3()
@@ -109,7 +158,7 @@ function root(runId: string) {
   }
 }
 
-type Stored = { bytes: Buffer; etag: string; contentType?: string; contentEncoding?: string; metadata: Record<string, string> }
+type Stored = { bytes: Buffer; etag: string; contentType?: string; contentEncoding?: string; cacheControl?: string; metadata: Record<string, string> }
 function memoryS3() {
   const objects = new Map<string, Stored>()
   const putKeys: string[] = []
@@ -126,7 +175,8 @@ function memoryS3() {
         if (!stored) throw Object.assign(new Error('missing'), { name: name === 'HeadObjectCommand' ? 'NotFound' : 'NoSuchKey' })
         return {
           Body: Readable.from([stored.bytes]), ETag: stored.etag, ContentLength: stored.bytes.byteLength,
-          ContentType: stored.contentType, ContentEncoding: stored.contentEncoding, Metadata: stored.metadata,
+          ContentType: stored.contentType, ContentEncoding: stored.contentEncoding,
+          CacheControl: stored.cacheControl, Metadata: stored.metadata,
         }
       }
       if (name === 'PutObjectCommand') {
@@ -134,7 +184,10 @@ function memoryS3() {
         const bytes = await bodyBytes(input.Body)
         const etag = `"${++version}"`
         const metadata = isStringRecord(input.Metadata) ? input.Metadata : {}
-        objects.set(key, { bytes, etag, contentType: stringValue(input.ContentType), contentEncoding: stringValue(input.ContentEncoding), metadata })
+        objects.set(key, {
+          bytes, etag, contentType: stringValue(input.ContentType), contentEncoding: stringValue(input.ContentEncoding),
+          cacheControl: stringValue(input.CacheControl), metadata,
+        })
         putKeys.push(key)
         return { ETag: etag }
       }

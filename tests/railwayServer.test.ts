@@ -5,6 +5,7 @@ import { createServer, request, type IncomingHttpHeaders } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { gzipSync } from 'node:zlib'
 import test from 'node:test'
 import { canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
@@ -247,6 +248,245 @@ test('Railway server and production reader support identity and gzip delivery of
     }
   } finally {
     await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('Railway server hybrid delivery redirects only eligible immutable objects and preserves proxy recovery', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-presigned-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(dataDir, { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
+  await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify({ source: 'bundled' }))
+  const largeDigest = 'a'.repeat(64)
+  const smallDigest = 'b'.repeat(64)
+  const failingDigest = 'c'.repeat(64)
+  const bodies = new Map([
+    [largeDigest, gzipSync(JSON.stringify({ source: 'large' }))],
+    [smallDigest, gzipSync(JSON.stringify({ source: 'small' }))],
+    [failingDigest, gzipSync(JSON.stringify({ source: 'head-fallback' }))],
+  ])
+  const bucketCalls: Array<{ method: string; pathname: string }> = []
+  const bucket = createServer((request, response) => {
+    const url = new URL(request.url ?? '/', 'http://localhost')
+    const match = /^\/test-bucket\/rankings\/objects\/sha256\/([a-f0-9]{64})$/.exec(url.pathname)
+    bucketCalls.push({ method: request.method ?? 'GET', pathname: url.pathname })
+    if (!match) {
+      response.statusCode = 404
+      response.end()
+      return
+    }
+    const objectDigest = match[1]
+    const body = bodies.get(objectDigest)
+    if (!body) {
+      response.statusCode = 404
+      response.end()
+      return
+    }
+    if (request.method === 'HEAD' && objectDigest === failingDigest) {
+      response.statusCode = 500
+      response.end()
+      return
+    }
+    response.setHeader('Content-Type', 'application/json; charset=utf-8')
+    response.setHeader('Content-Encoding', 'gzip')
+    response.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    response.setHeader('ETag', `"${objectDigest.slice(0, 8)}"`)
+    response.setHeader('Access-Control-Allow-Origin', '*')
+    response.setHeader('Access-Control-Expose-Headers', 'Content-Encoding, ETag, Cache-Control')
+    response.setHeader('x-amz-meta-sha256', objectDigest)
+    response.setHeader('x-amz-meta-semantic-bytes', '140000')
+    response.setHeader('x-amz-meta-encoding', 'gzip')
+    response.setHeader('Content-Length', request.method === 'HEAD'
+      ? String(objectDigest === smallDigest ? 100 : 70_000)
+      : String(body.byteLength))
+    response.end(request.method === 'HEAD' ? undefined : body)
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const bucketPort = (bucket.address() as AddressInfo).port
+  const server = await startRailwayServer(distDir, dataDir, {
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+    RANKING_PRESIGNED_DELIVERY_ENABLED: 'true',
+    RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES: '65536',
+  })
+
+  try {
+    const largePath = `/data/objects/sha256/${largeDigest}`
+    const getRedirect = await httpRequest(server.port, largePath)
+    assert.equal(getRedirect.statusCode, 307)
+    assert.equal(getRedirect.headers['cache-control'], 'private, no-store')
+    assert.equal(getRedirect.body, '')
+    const getLocation = String(getRedirect.headers.location)
+    assert.equal(new URL(getLocation).searchParams.get('X-Amz-Expires'), '3600')
+    assert.deepEqual(bucketCalls.map((call) => call.method), ['HEAD'])
+
+    const headRedirect = await httpRequest(server.port, largePath, { method: 'HEAD' })
+    assert.equal(headRedirect.statusCode, 307)
+    assert.equal(headRedirect.body, '')
+    const headLocation = String(headRedirect.headers.location)
+    assert.equal(new URL(headLocation).searchParams.get('X-Amz-Expires'), '3600')
+    assert.notEqual(new URL(headLocation).searchParams.get('X-Amz-Signature'), new URL(getLocation).searchParams.get('X-Amz-Signature'))
+    assert.deepEqual(bucketCalls.map((call) => call.method), ['HEAD', 'HEAD'])
+
+    const callsBeforeCanonicalQuery = bucketCalls.length
+    const queryRedirect = await httpRequest(server.port, `${largePath}?v=generation-test&source=browser`)
+    assert.equal(queryRedirect.statusCode, 307)
+    assert.deepEqual(bucketCalls.slice(callsBeforeCanonicalQuery).map((call) => call.method), ['HEAD'])
+
+    const direct = await fetch(getLocation)
+    assert.equal(direct.status, 200)
+    assert.equal(direct.headers.get('content-encoding'), 'gzip')
+    assert.equal(direct.headers.get('etag'), `"${largeDigest.slice(0, 8)}"`)
+    assert.equal(direct.headers.get('cache-control'), 'public, max-age=31536000, immutable')
+    assert.equal(direct.headers.get('access-control-allow-origin'), '*')
+
+    const callsBeforeProxy = bucketCalls.length
+    const proxy = await httpRequest(server.port, `${largePath}?delivery=proxy`)
+    assert.equal(proxy.statusCode, 200)
+    assert.deepEqual(JSON.parse(proxy.body), { source: 'large' })
+    assert.deepEqual(bucketCalls.slice(callsBeforeProxy).map((call) => call.method), ['GET'])
+    assert.equal(proxy.headers['content-type'], 'application/json; charset=utf-8')
+    assert.equal(proxy.headers['cache-control'], 'public, max-age=31536000, immutable')
+    assert.equal(proxy.headers.etag, `"${largeDigest.slice(0, 8)}"`)
+
+    const callsBeforeProxyHead = bucketCalls.length
+    const proxyHead = await httpRequest(server.port, `${largePath}?delivery=proxy`, {
+      method: 'HEAD',
+      headers: { 'accept-encoding': 'gzip' },
+    })
+    assert.equal(proxyHead.statusCode, 200)
+    assert.equal(proxyHead.body, '')
+    assert.equal(proxyHead.headers['content-length'], '70000')
+    assert.equal(proxyHead.headers['content-encoding'], 'gzip')
+    assert.equal(proxyHead.headers['content-type'], 'application/json; charset=utf-8')
+    assert.equal(proxyHead.headers['cache-control'], 'public, max-age=31536000, immutable')
+    assert.equal(proxyHead.headers.etag, `"${largeDigest.slice(0, 8)}"`)
+    assert.deepEqual(bucketCalls.slice(callsBeforeProxyHead).map((call) => call.method), ['HEAD'])
+
+    const callsBeforeSmall = bucketCalls.length
+    const small = await httpRequest(server.port, `/data/objects/sha256/${smallDigest}`)
+    assert.equal(small.statusCode, 200)
+    assert.deepEqual(JSON.parse(small.body), { source: 'small' })
+    assert.deepEqual(bucketCalls.slice(callsBeforeSmall).map((call) => call.method), ['HEAD', 'GET'])
+
+    const callsBeforeSmallHead = bucketCalls.length
+    const smallHead = await httpRequest(server.port, `/data/objects/sha256/${smallDigest}`, {
+      method: 'HEAD',
+      headers: { 'accept-encoding': 'gzip' },
+    })
+    assert.equal(smallHead.statusCode, 200)
+    assert.equal(smallHead.body, '')
+    assert.equal(smallHead.headers['content-length'], '100')
+    assert.equal(smallHead.headers['content-encoding'], 'gzip')
+    assert.deepEqual(bucketCalls.slice(callsBeforeSmallHead).map((call) => call.method), ['HEAD'])
+
+    const callsBeforeFailure = bucketCalls.length
+    const headFailure = await httpRequest(server.port, `/data/objects/sha256/${failingDigest}`)
+    assert.equal(headFailure.statusCode, 200)
+    assert.deepEqual(JSON.parse(headFailure.body), { source: 'head-fallback' })
+    assert.equal(bucketCalls.slice(callsBeforeFailure).some((call) => call.method === 'HEAD'), true)
+    assert.equal(bucketCalls.slice(callsBeforeFailure).at(-1)?.method, 'GET')
+
+    const callsBeforeHeadFailure = bucketCalls.length
+    const failedHead = await httpRequest(server.port, `/data/objects/sha256/${failingDigest}`, { method: 'HEAD' })
+    assert.equal(failedHead.statusCode, 404)
+    assert.equal(failedHead.body, '')
+    assert.equal(bucketCalls.slice(callsBeforeHeadFailure).some((call) => call.method === 'GET'), false)
+
+    const callsBeforeInvalid = bucketCalls.length
+    const invalid = await httpRequest(server.port, `/data/objects/sha256/${'A'.repeat(64)}`)
+    assert.equal(invalid.statusCode, 404)
+    assert.equal(bucketCalls.length, callsBeforeInvalid)
+
+    for (const invalidPath of [
+      `/data/%2e%2e/data/objects/sha256/${largeDigest}`,
+      `/data/objects/sha256/%61${largeDigest.slice(2)}`,
+      `/data/%6fbjects/sha256/${largeDigest}`,
+      `/data//objects/sha256/${largeDigest}`,
+      `/data/objects/sha256/${largeDigest.toUpperCase()}`,
+      `/data/objects/sha256/${largeDigest}.json`,
+    ]) {
+      const callsBeforeMalformed = bucketCalls.length
+      const malformed = await httpRequest(server.port, invalidPath)
+      assert.notEqual(malformed.statusCode, 307)
+      assert.equal(bucketCalls.slice(callsBeforeMalformed).some((call) => call.method === 'HEAD'), false)
+      if (invalidPath.includes('%')) assert.equal(bucketCalls.length, callsBeforeMalformed)
+    }
+
+    const summary = await httpRequest(server.port, '/data/ranking-summary.json')
+    assert.equal(summary.statusCode, 200)
+    assert.deepEqual(JSON.parse(summary.body), { source: 'bundled' })
+    assert.equal(bucketCalls.at(-1)?.method, 'GET')
+
+    const health = JSON.parse((await httpRequest(server.port, '/api/health')).body)
+    assert.deepEqual(health.presignedDelivery, {
+      enabled: true,
+      mode: 'hybrid',
+      thresholdBytes: 65_536,
+      expiresInSeconds: 3600,
+    })
+
+    const proxyServer = await startRailwayServer(distDir, dataDir, {
+      RANKING_BUCKET_NAME: 'test-bucket',
+      RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+      RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+      RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+      RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+      RANKING_PRESIGNED_DELIVERY_ENABLED: 'false',
+    })
+    try {
+      const callsBeforeDefaultHead = bucketCalls.length
+      const defaultHead = await httpRequest(proxyServer.port, largePath, {
+        method: 'HEAD',
+        headers: { 'accept-encoding': 'gzip' },
+      })
+      assert.equal(defaultHead.statusCode, 200)
+      assert.equal(defaultHead.body, '')
+      assert.equal(defaultHead.headers['content-length'], '70000')
+      assert.deepEqual(bucketCalls.slice(callsBeforeDefaultHead).map((call) => call.method), ['HEAD'])
+
+      const [defaultLarge, defaultSmall, defaultManifest] = await Promise.all([
+        httpRequest(proxyServer.port, largePath),
+        httpRequest(proxyServer.port, `/data/objects/sha256/${smallDigest}`),
+        httpRequest(proxyServer.port, '/data/ranking-summary.json'),
+      ])
+      assertHttpRepresentationEqual(defaultLarge, proxy)
+      assertHttpRepresentationEqual(defaultSmall, small)
+      assertHttpRepresentationEqual(defaultManifest, summary)
+    } finally {
+      await proxyServer.close()
+    }
+  } finally {
+    await server.close()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('Railway server keeps presigned delivery disabled by default', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-proxy-default-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(dataDir, { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
+  const server = await startRailwayServer(distDir, dataDir)
+  try {
+    const health = JSON.parse((await httpRequest(server.port, '/api/health')).body)
+    assert.deepEqual(health.presignedDelivery, {
+      enabled: false,
+      mode: 'proxy',
+      thresholdBytes: 65_536,
+      expiresInSeconds: 3600,
+    })
+  } finally {
+    await server.close()
     await rm(tempDir, { recursive: true, force: true })
   }
 })
@@ -548,6 +788,14 @@ function httpRequest(
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function assertHttpRepresentationEqual(actual: HttpResponse, expected: HttpResponse) {
+  assert.equal(actual.statusCode, expected.statusCode)
+  assert.equal(actual.body, expected.body)
+  for (const name of ['content-type', 'content-encoding', 'content-length', 'cache-control', 'etag', 'last-modified', 'vary']) {
+    assert.equal(actual.headers[name], expected.headers[name], `${name} must remain byte/header compatible`)
+  }
 }
 
 async function writeCrawlerShard(path: string, team: string) {

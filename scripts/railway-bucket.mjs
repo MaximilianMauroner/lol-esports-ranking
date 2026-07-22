@@ -7,12 +7,17 @@ import { pipeline } from 'node:stream/promises'
 import { createGunzip, gunzipSync } from 'node:zlib'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { assertStateManifestAuthority } from './incremental-state-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
 
 let activeGenerationCache = { expiresAt: 0, value: null }
+
+export const PRESIGNED_URL_EXPIRY_SECONDS = 3600
+const IMMUTABLE_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+const PUBLIC_JSON_CONTENT_TYPE = 'application/json; charset=utf-8'
 
 export function bucketConfigFromEnv(env = process.env) {
   const bucket = env.RANKING_BUCKET_NAME ?? env.S3_BUCKET ?? env.BUCKET
@@ -396,6 +401,92 @@ export async function getBucketObject(relativePath, {
     }
   }
   return { found: false, key: keys[0] }
+}
+
+export async function headBucketObject(relativePath, {
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  const { path } = parseContentAddressedObjectPath(relativePath)
+  if (!config.enabled || !client) return { found: false, missingConfig: config.missing ?? [] }
+  const key = bucketKey(config, path)
+  try {
+    const object = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
+    return {
+      found: true,
+      key,
+      contentLength: object.ContentLength,
+      contentType: object.ContentType,
+      contentEncoding: object.ContentEncoding,
+      cacheControl: object.CacheControl,
+      metadata: object.Metadata,
+      etag: object.ETag,
+      lastModified: object.LastModified,
+    }
+  } catch (error) {
+    if (isMissingObjectError(error)) return { found: false, key }
+    throw error
+  }
+}
+
+export async function presignBucketObject(relativePath, {
+  method = 'GET',
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+  signer = getSignedUrl,
+} = {}) {
+  const { path } = parseContentAddressedObjectPath(relativePath)
+  if (method !== 'GET' && method !== 'HEAD') throw new Error('Invalid presigned bucket object method')
+  if (!config.enabled || !client) throw new Error('Bucket storage is not configured')
+  const input = { Bucket: config.bucket, Key: bucketKey(config, path) }
+  const command = method === 'HEAD' ? new HeadObjectCommand(input) : new GetObjectCommand(input)
+  return signer(client, command, { expiresIn: PRESIGNED_URL_EXPIRY_SECONDS })
+}
+
+export async function preparePresignedBucketDelivery(relativePath, {
+  method = 'GET',
+  thresholdBytes,
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+  head = headBucketObject,
+  presign = presignBucketObject,
+} = {}) {
+  const { sha256 } = parseContentAddressedObjectPath(relativePath)
+  let bucketHead
+  try {
+    bucketHead = await head(relativePath, { config, client })
+  } catch {
+    return { kind: 'head-failed' }
+  }
+  if (!bucketHead.found || !isPresignedDeliveryMetadata(bucketHead, sha256, thresholdBytes)) {
+    return { kind: 'proxy', bucketHead }
+  }
+  try {
+    return {
+      kind: 'redirect',
+      location: await presign(relativePath, { method, config, client }),
+    }
+  } catch {
+    return { kind: 'sign-failed', bucketHead }
+  }
+}
+
+function isPresignedDeliveryMetadata(object, digest, thresholdBytes) {
+  return Number.isSafeInteger(object.contentLength)
+    && object.contentLength >= thresholdBytes
+    && object.contentType?.toLowerCase() === PUBLIC_JSON_CONTENT_TYPE
+    && object.contentEncoding?.toLowerCase() === 'gzip'
+    && object.cacheControl?.toLowerCase() === IMMUTABLE_PUBLIC_CACHE_CONTROL
+    && object.metadata?.sha256 === digest
+    && object.metadata?.encoding === 'gzip'
+    && /^[1-9]\d*$/.test(object.metadata?.['semantic-bytes'] ?? '')
+}
+
+export function parseContentAddressedObjectPath(path) {
+  const value = String(path ?? '')
+  const match = /^objects\/sha256\/([a-f0-9]{64})$/.exec(value)
+  if (!match) throw new Error('Invalid content-addressed bucket object path')
+  return { path: value, sha256: match[1] }
 }
 
 export async function readBucketJson(relativeKey, {
@@ -1018,15 +1109,6 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
     }
     entriesByPath.set(canonical, { logicalPath: canonical, digest: identity.sha256, bytes: identity.bytes })
   }
-  const uniqueReused = new Map()
-  for (const entry of entriesByPath.values()) uniqueReused.set(entry.digest, entry)
-  for (const entry of uniqueReused.values()) {
-    await assertReferencedContentAddressedIntegrity(client, config, {
-      logicalPath: entry.logicalPath,
-      sha256: entry.digest,
-      bytes: entry.bytes,
-    }, entry.logicalPath)
-  }
   const actualPaths = [...new Set([...entriesByPath.keys(), ...changedByPath.keys()])].sort()
   if (expectedLogicalPaths) {
     const expectedPaths = [...new Set(expectedLogicalPaths.map((path) => canonicalPublicLogicalPath(path)))].sort()
@@ -1039,8 +1121,27 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   }
   if (!actualPaths.includes('/data/ranking-summary.json')) throw new Error('Public artifact patch removed the root manifest')
 
+  const uniqueReused = new Map()
+  for (const entry of entriesByPath.values()) uniqueReused.set(entry.digest, entry)
   const uploaded = []
   const unchanged = []
+  for (const entry of uniqueReused.values()) {
+    const verified = await assertReferencedContentAddressedIntegrity(client, config, {
+      logicalPath: entry.logicalPath,
+      sha256: entry.digest,
+      bytes: entry.bytes,
+    }, entry.logicalPath)
+    if (!hasImmutablePublicMetadata(verified)) {
+      uploaded.push(await putContentAddressedObject(client, config, bucketKey(config, `objects/sha256/${entry.digest}`), {
+        digest: entry.digest,
+        bytes: entry.bytes,
+        compressed: verified.compressed,
+        compressedBytes: verified.compressed.byteLength,
+      }, publicContentAddressedMetadata(entry.digest, entry.bytes), {
+        reason: 'content-addressed-object-metadata-upgraded',
+      }))
+    }
+  }
   const uniqueChanged = new Map()
   let compressedLogicalBytes = 0
   for (const artifact of changedByPath.values()) {
@@ -1142,16 +1243,13 @@ async function assertGenerationManifestAuthority(client, config, authority) {
 async function syncContentAddressedObject(client, config, artifact) {
   const relativeKey = `objects/sha256/${artifact.digest}`
   const key = bucketKey(config, relativeKey)
-  const expectedMetadata = {
-    sha256: artifact.digest,
-    'semantic-bytes': String(artifact.bytes),
-    encoding: 'gzip',
-  }
-  if (await assertReferencedContentAddressedIntegrity(client, config, {
+  const expectedMetadata = publicContentAddressedMetadata(artifact.digest, artifact.bytes)
+  const existing = await assertReferencedContentAddressedIntegrity(client, config, {
     sha256: artifact.digest,
     bytes: artifact.bytes,
     compressedBytes: artifact.compressedBytes,
-  }, key, { missingIsAbsent: true })) {
+  }, key, { missingIsAbsent: true })
+  if (existing && hasImmutablePublicMetadata(existing)) {
     return {
       status: 'unchanged',
       reason: 'content-addressed-object-reused',
@@ -1163,35 +1261,26 @@ async function syncContentAddressedObject(client, config, artifact) {
       digest: artifact.digest,
     }
   }
+  if (existing) {
+    return putContentAddressedObject(client, config, key, artifact, expectedMetadata, {
+      reason: 'content-addressed-object-metadata-upgraded',
+    })
+  }
 
   try {
-    const result = await client.send(new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-      Body: artifact.compressed,
-      ContentLength: artifact.compressedBytes,
-      ContentType: 'application/json; charset=utf-8',
-      ContentEncoding: 'gzip',
-      Metadata: expectedMetadata,
-      IfNoneMatch: '*',
-    }))
-    return {
-      status: 'uploaded',
-      key,
-      bytes: artifact.compressedBytes,
-      semanticBytes: artifact.bytes,
-      contentType: 'application/json; charset=utf-8',
-      contentEncoding: 'gzip',
-      digest: artifact.digest,
-      etag: result.ETag,
-    }
+    return await putContentAddressedObject(client, config, key, artifact, expectedMetadata, { ifNoneMatch: '*' })
   } catch (error) {
     if (!isPreconditionError(error)) throw error
-    await assertReferencedContentAddressedIntegrity(client, config, {
+    const raced = await assertReferencedContentAddressedIntegrity(client, config, {
       sha256: artifact.digest,
       bytes: artifact.bytes,
       compressedBytes: artifact.compressedBytes,
     }, key)
+    if (!hasImmutablePublicMetadata(raced)) {
+      return putContentAddressedObject(client, config, key, artifact, expectedMetadata, {
+        reason: 'content-addressed-object-metadata-upgraded',
+      })
+    }
     return {
       status: 'unchanged',
       reason: 'content-addressed-object-race-reused',
@@ -1203,6 +1292,44 @@ async function syncContentAddressedObject(client, config, artifact) {
       digest: artifact.digest,
     }
   }
+}
+
+async function putContentAddressedObject(client, config, key, artifact, metadata, {
+  ifNoneMatch,
+  reason,
+} = {}) {
+  const result = await client.send(new PutObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+    Body: artifact.compressed,
+    ContentLength: artifact.compressedBytes,
+    ContentType: PUBLIC_JSON_CONTENT_TYPE,
+    ContentEncoding: 'gzip',
+    CacheControl: IMMUTABLE_PUBLIC_CACHE_CONTROL,
+    Metadata: metadata,
+    ...(ifNoneMatch ? { IfNoneMatch: ifNoneMatch } : {}),
+  }))
+  return {
+    status: 'uploaded',
+    ...(reason ? { reason } : {}),
+    key,
+    bytes: artifact.compressedBytes,
+    semanticBytes: artifact.bytes,
+    contentType: PUBLIC_JSON_CONTENT_TYPE,
+    contentEncoding: 'gzip',
+    digest: artifact.digest,
+    etag: result.ETag,
+  }
+}
+
+function hasImmutablePublicMetadata(remote) {
+  return remote.contentType === PUBLIC_JSON_CONTENT_TYPE
+    && remote.contentEncoding === 'gzip'
+    && remote.cacheControl === IMMUTABLE_PUBLIC_CACHE_CONTROL
+}
+
+function publicContentAddressedMetadata(digest, bytes) {
+  return { sha256: digest, 'semantic-bytes': String(bytes), encoding: 'gzip' }
 }
 
 async function assertReferencedContentAddressedIntegrity(client, config, identity, logicalPath, { missingIsAbsent = false } = {}) {
@@ -1220,16 +1347,18 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
   }
   if (!Number.isSafeInteger(Number(remote.ContentLength)) || Number(remote.ContentLength) <= 0
     || (Number.isSafeInteger(identity.compressedBytes) && Number(remote.ContentLength) !== identity.compressedBytes)
-    || remote.ContentEncoding !== 'gzip' || remote.Metadata?.sha256 !== identity.sha256
+    || remote.Metadata?.sha256 !== identity.sha256
     || remote.Metadata?.['semantic-bytes'] !== String(identity.bytes) || remote.Metadata?.encoding !== 'gzip') {
     throw new Error(`Referenced content-addressed object metadata mismatch: ${logicalPath}`)
   }
   let compressedBytes = 0
   let semanticBytes = 0
+  const compressedChunks = []
   const digest = createHash('sha256')
   const countCompressed = new Transform({
     transform(chunk, _encoding, callback) {
       compressedBytes += chunk.length
+      compressedChunks.push(Buffer.from(chunk))
       callback(null, chunk)
     },
   })
@@ -1249,7 +1378,12 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
     || semanticBytes !== identity.bytes || digest.digest('hex') !== identity.sha256) {
     throw new Error(`Referenced content-addressed object digest mismatch: ${logicalPath}`)
   }
-  return true
+  return {
+    compressed: Buffer.concat(compressedChunks),
+    contentType: remote.ContentType,
+    contentEncoding: remote.ContentEncoding,
+    cacheControl: remote.CacheControl,
+  }
 }
 
 async function readVerifiedContentAddressedArtifact(client, config, identity, logicalPath) {

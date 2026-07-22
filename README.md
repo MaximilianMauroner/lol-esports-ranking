@@ -101,7 +101,11 @@ pnpm run railway:refresh-once
 
 For cost/speed-constrained production refreshes, set `RANKING_REFRESH_LOOKBACK_DAYS=7` and choose a practical `RANKING_REFRESH_BOOTSTRAP_START`, such as `2025-01-01`. With an existing raw baseline, each scheduled run downloads only the rolling 7-day source window and merges those files into `data/raw` before crunching, so the ranking model still sees the restored baseline plus the current lookback window. If a fresh Railway container has no raw baseline, the refresh first restores `rankings/raw/files/**` from the Bucket; if no bucket baseline exists yet, it bootstraps once from `RANKING_REFRESH_BOOTSTRAP_START` through today and then subsequent scheduled runs use the lookback window. Earlier bootstrap dates improve historical coverage at the cost of slower first runs and larger raw storage; later dates are faster and cheaper but intentionally narrow the ranking context.
 
-Use a Railway Storage Bucket for generated artifacts that should not live in Git. Railway Buckets are private S3-compatible storage, so the app proxies `/data/*` through the Railway server instead of exposing the bucket publicly. The refresh job uploads:
+Use a Railway Storage Bucket for generated artifacts that should not live in Git. Railway Buckets are private S3-compatible storage. The default delivery mode proxies `/data/*` through the Railway server. An opt-in hybrid mode redirects only large immutable `objects/sha256/<digest>` JSON/gzip objects to method-specific presigned bucket URLs that expire after exactly one hour; ranking summaries, generation manifests, non-content-addressed files, and objects below the configured compressed-size threshold remain proxied. `?delivery=proxy` explicitly bypasses direct delivery, and the browser retries the original same-origin immutable URL once with that parameter when a followed redirect fails or the cross-origin fetch is rejected.
+
+Before enabling hybrid delivery, configure and verify bucket CORS for browser `GET` and `HEAD`, including access to the response headers used by the artifact contract (`Content-Type`, `Content-Encoding`, `Cache-Control`, and `ETag`). This repository change does not modify bucket CORS, Railway variables, or deployment state.
+
+The refresh job uploads:
 
 - `rankings/data/**`: legacy browser artifacts retained as a fallback.
 - `rankings/generations/<run-id>/data/**` and `rankings/active-generation.json`: immutable gated browser generations and their active pointer.
@@ -112,7 +116,7 @@ Use a Railway Storage Bucket for generated artifacts that should not live in Git
 
 Raw source uploads are content-addressed. Before uploading a file under `rankings/raw/files/**`, the publisher computes its SHA-256 digest, compares it with the object's stored `sha256` metadata and content length, and skips the PUT when both match. Existing objects without digest metadata are uploaded once to establish metadata. Publish logs and `latest-publish.json` report uploaded and unchanged counts/bytes separately, so an operator can verify that an hourly refresh did not resend an unchanged historical baseline. A missing object, missing metadata, or failed comparison falls back to uploading the file so recovery correctness takes priority over egress savings.
 
-Railway Bucket egress is free only when clients download directly from the bucket, such as through presigned URLs. When the web service proxies bucket objects to users, Railway counts that as service egress. For this app, keep the same-origin `/data/*` proxy and enable Railway CDN caching on the web service so cache hits are served from the edge without reaching the service. Presigned GET URLs are useful for ad hoc large downloads, but they add URL-expiry and browser CORS concerns to the app's JSON contract.
+Content-addressed public object uploads use `application/json; charset=utf-8`, gzip content encoding, `public, max-age=31536000, immutable`, and SHA-256, semantic-byte-length, and encoding metadata. Generation manifests and raw-source uploads keep their existing semantics.
 
 Recommended Railway variables:
 
@@ -122,6 +126,8 @@ Recommended Railway variables:
 - `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT`: set to `true` only when you need the full audit snapshot in the Bucket. Defaults to disabled because this artifact is large and the browser does not use it.
 - `RANKING_BUCKET_REQUIRED`: set to `true` in production if refreshes should fail when bucket credentials are missing.
 - `RANKING_BUCKET_FORCE_PATH_STYLE`: set to `true` only if the Bucket credentials tab says this bucket needs path-style S3 URLs.
+- `RANKING_PRESIGNED_DELIVERY_ENABLED`: set to `true` only after bucket CORS is ready to enable hybrid delivery for eligible immutable objects. Defaults to `false`.
+- `RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES`: minimum compressed bucket `ContentLength` for presigned delivery. Defaults to `65536`; smaller objects remain proxied.
 - `RANKING_REFRESH_ENABLED`: set to `true` to enable the background scheduler. Defaults to disabled; manual `POST /api/refresh` still works when `CRON_SECRET` is configured.
 - `RANKING_REFRESH_MODE`: `legacy` (default), `shadow`, or `gated`. The web-process timer runs only in legacy mode; shadow/gated use the one-shot cron worker.
 - `RANKING_TRIGGER_STATE_KEY` and `RANKING_REFRESH_LEASE_KEY`: optional bucket keys for durable detector state and the fencing lease.
@@ -143,7 +149,7 @@ Recommended Railway variables:
 - `CRON_SECRET`: optional bearer token for manual `POST /api/refresh`.
 - `RANKING_RAW_DIR` and `RANKING_PUBLIC_DATA_DIR`: optional paths if you also mount a Railway volume for raw state or generated public data. Bucket storage is the durable default for deployable artifacts.
 
-`GET /api/live` reports process liveness, `GET /api/ready` verifies app and ranking data availability, and `GET /api/scheduler` exposes non-sensitive detector counts and timing. The legacy `GET /api/health` remains available. `POST /api/refresh` starts a manual recovery refresh when `Authorization: Bearer $CRON_SECRET` matches.
+`GET /api/live` reports process liveness, `GET /api/ready` verifies app and ranking data availability, and `GET /api/scheduler` exposes non-sensitive detector counts and timing. The legacy `GET /api/health` remains available; its `presignedDelivery` field contains only the mode, enabled state, compressed-byte threshold, and fixed 3600-second expiry—not bucket endpoints, credentials, or signed URLs. `POST /api/refresh` starts a manual recovery refresh when `Authorization: Bearer $CRON_SECRET` matches.
 
 Railway's dedicated cron service should run `pnpm run railway:refresh-once` every 6 hours. The bucket is the shared durable state and publish target, so the cron container can exit after each invocation and the web service can serve the promoted generation independently.
 

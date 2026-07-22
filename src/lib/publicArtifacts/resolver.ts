@@ -1,5 +1,5 @@
 import { parsePublicRankingShard, snapshotKey } from './schema'
-import { fetchPublicArtifact } from './artifactIdentity'
+import { fetchPublicArtifact, generationContextFor } from './artifactIdentity'
 import type {
   PublicRankingManifest,
   PublicRankingShard,
@@ -32,6 +32,12 @@ export async function fetchPublicSnapshotShard(
     fetcher?: typeof fetch
   } = {},
 ): Promise<PublicRankingShard> {
+  if (generationContextFor(manifest)) {
+    const shard = await fetchPublicArtifact(manifest, url, url, parsePublicRankingShard, { fetcher, signal })
+    validatePublicSnapshotShard(key, expected, shard, manifest)
+    return shard
+  }
+
   let validationError: unknown
 
   for (let attempt = 0; attempt < 2; attempt += 1) {

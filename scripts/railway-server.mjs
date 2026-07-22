@@ -6,7 +6,15 @@ import { normalize, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip, createGzip } from 'node:zlib'
-import { bucketConfigFromEnv, contentTypeForPath, getBucketObject, readBucketJson } from './railway-bucket.mjs'
+import {
+  PRESIGNED_URL_EXPIRY_SECONDS,
+  bucketConfigFromEnv,
+  contentTypeForPath,
+  getBucketObject,
+  headBucketObject,
+  preparePresignedBucketDelivery,
+  readBucketJson,
+} from './railway-bucket.mjs'
 import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
 import { refreshWorkerArgs } from './refresh-worker-memory.mjs'
 
@@ -24,6 +32,11 @@ const dataCacheControl = process.env.RANKING_DATA_CACHE_CONTROL ?? 'public, max-
 const dataManifestCacheControl = process.env.RANKING_DATA_MANIFEST_CACHE_CONTROL ?? 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400'
 const htmlCacheControl = process.env.RANKING_HTML_CACHE_CONTROL ?? 'no-store'
 const gzipEnabled = process.env.RANKING_GZIP_ENABLED !== 'false'
+const presignedDeliveryEnabled = process.env.RANKING_PRESIGNED_DELIVERY_ENABLED === 'true'
+const presignedDeliveryThresholdBytes = positiveIntegerOrDefault(
+  process.env.RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES,
+  65_536,
+)
 const cronSecret = process.env.CRON_SECRET
 const bucketConfig = bucketConfigFromEnv()
 
@@ -40,6 +53,9 @@ let lastRefresh = {
 
 const server = createServer(async (request, response) => {
   try {
+    const rawPathname = rawRequestPathname(request.url)
+    const canonicalPresignedPath = isImmutableDataObjectPath(rawPathname)
+    const encodedPresignedPath = isEncodedContentAddressedRequestPath(rawPathname)
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 
     if (url.pathname === '/api/live') {
@@ -72,6 +88,12 @@ const server = createServer(async (request, response) => {
         dataManifestCacheControl,
         htmlCacheControl,
         gzipEnabled,
+        presignedDelivery: {
+          enabled: presignedDeliveryEnabled,
+          mode: presignedDeliveryEnabled ? 'hybrid' : 'proxy',
+          thresholdBytes: presignedDeliveryThresholdBytes,
+          expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
+        },
       })
       return
     }
@@ -96,12 +118,19 @@ const server = createServer(async (request, response) => {
     }
 
     if (url.pathname.startsWith('/data/')) {
+      if (encodedPresignedPath || (isImmutableDataObjectPath(url.pathname) && !canonicalPresignedPath)) {
+        sendJson(response, 400, { ok: false, error: 'Invalid data path' })
+        return
+      }
       const relativeDataPath = url.pathname.slice('/data/'.length)
       await serveDataFile(response, relativeDataPath, {
         cacheControl: cacheControlForDataPath(relativeDataPath),
         headOnly: request.method === 'HEAD',
+        requestMethod: request.method,
         requestHeaders: request.headers,
         requestedGeneration: url.searchParams.get('v') || undefined,
+        forceProxy: url.searchParams.get('delivery') === 'proxy',
+        canonicalPresignedPath: canonicalPresignedPath && rawPathname === url.pathname,
       })
       return
     }
@@ -285,8 +314,14 @@ async function serveDataFile(response, relativePath, options) {
   }
 
   if (bucketConfig.enabled) {
+    const presigned = await tryRedirectToPresignedBucketObject(response, safePath, options)
+    if (presigned.redirected) return
     try {
-      const servedBucket = await tryServeBucketFile(response, safePath, options)
+      const servedBucket = await tryServeBucketFile(response, safePath, {
+        ...options,
+        bucketHead: presigned.bucketHead,
+        bucketHeadFailed: presigned.headFailed,
+      })
       if (servedBucket) return
       if (options.requestedGeneration) {
         sendJson(response, 404, { ok: false, error: 'Versioned data artifact not found' })
@@ -308,7 +343,48 @@ async function serveDataFile(response, relativePath, options) {
   sendJson(response, 404, { ok: false, error: 'Not found' })
 }
 
-async function tryServeBucketFile(response, relativePath, { cacheControl, headOnly, requestHeaders, requestedGeneration }) {
+async function tryRedirectToPresignedBucketObject(response, relativePath, options) {
+  if (!presignedDeliveryEnabled || options.forceProxy || !options.canonicalPresignedPath
+    || !isContentAddressedObjectPath(relativePath)) return { redirected: false }
+
+  const delivery = await preparePresignedBucketDelivery(relativePath, {
+    config: bucketConfig,
+    method: options.requestMethod === 'HEAD' ? 'HEAD' : 'GET',
+    thresholdBytes: presignedDeliveryThresholdBytes,
+  })
+  if (delivery.kind === 'head-failed') {
+    console.warn(`Presigned bucket delivery fallback used for ${relativePath}`)
+    return { redirected: false, headFailed: true }
+  }
+  if (delivery.kind === 'proxy') {
+    return { redirected: false, bucketHead: delivery.bucketHead }
+  }
+  if (delivery.kind === 'sign-failed') {
+    console.warn(`Presigned bucket delivery fallback used for ${relativePath}`)
+    return { redirected: false, bucketHead: delivery.bucketHead }
+  }
+  response.statusCode = 307
+  response.setHeader('Location', delivery.location)
+  response.setHeader('Cache-Control', 'private, no-store')
+  response.end()
+  return { redirected: true }
+}
+
+async function tryServeBucketFile(response, relativePath, {
+  cacheControl,
+  headOnly,
+  requestHeaders,
+  requestedGeneration,
+  bucketHead,
+  bucketHeadFailed,
+}) {
+  if (headOnly && isContentAddressedObjectPath(relativePath)) {
+    if (bucketHeadFailed) return false
+    const object = bucketHead ?? await headBucketObject(relativePath, { config: bucketConfig })
+    if (!object.found) return false
+    sendBucketHead(response, relativePath, object, { cacheControl, requestHeaders })
+    return true
+  }
   const object = await getBucketObject(relativePath, { config: bucketConfig, generationId: requestedGeneration })
   if (!object.found) return false
 
@@ -349,6 +425,38 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
 
   await pipeBody(object.body, response, { gzip: gzip && !storedGzip, gunzip: storedGzip && !gzip })
   return true
+}
+
+function sendBucketHead(response, relativePath, object, { cacheControl, requestHeaders }) {
+  const contentType = object.contentType ?? contentTypeForPath(relativePath)
+  const compressible = isCompressibleContentType(contentType)
+  if (isFreshRequest(requestHeaders, object.etag, object.lastModified)) {
+    sendNotModified(response, {
+      cacheControl,
+      contentType,
+      etag: object.etag,
+      lastModified: object.lastModified,
+      varyAcceptEncoding: compressible,
+    })
+    return
+  }
+
+  const storedGzip = object.contentEncoding === 'gzip'
+  const gzip = storedGzip && gzipEnabled && acceptsGzip(requestHeaders?.['accept-encoding'])
+  response.statusCode = 200
+  response.setHeader('Content-Type', contentType)
+  response.setHeader('Cache-Control', cacheControl)
+  if (compressible) response.setHeader('Vary', 'Accept-Encoding')
+  if (gzip) response.setHeader('Content-Encoding', 'gzip')
+  const contentLength = gzip
+    ? object.contentLength
+    : storedGzip
+      ? positiveIntegerOrDefault(object.metadata?.['semantic-bytes'], undefined)
+      : object.contentLength
+  if (contentLength !== undefined) response.setHeader('Content-Length', String(contentLength))
+  if (object.etag) response.setHeader('ETag', object.etag)
+  if (object.lastModified) response.setHeader('Last-Modified', object.lastModified.toUTCString())
+  response.end()
 }
 
 async function tryServeFile(response, rootDir, relativePath, { cacheControl, headOnly, requestHeaders }) {
@@ -424,6 +532,34 @@ function safeRequestPath(relativePath) {
   }
 
   return relativePath
+}
+
+function rawRequestPathname(requestTarget) {
+  const value = String(requestTarget ?? '/')
+  const queryIndex = value.indexOf('?')
+  return queryIndex === -1 ? value : value.slice(0, queryIndex)
+}
+
+function isImmutableDataObjectPath(pathname) {
+  return /^\/data\/objects\/sha256\/[a-f0-9]{64}$/.test(pathname)
+}
+
+function isEncodedContentAddressedRequestPath(pathname) {
+  if (!pathname.includes('%')) return false
+  let decoded = pathname
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      decoded = decodeURIComponent(decoded)
+    } catch {
+      return true
+    }
+    if (decoded.includes('/objects/sha256/')) return true
+  }
+  return false
+}
+
+function isContentAddressedObjectPath(relativePath) {
+  return /^objects\/sha256\/[a-f0-9]{64}$/.test(relativePath)
 }
 
 function runRefresh(reason) {
@@ -655,4 +791,9 @@ function sendNotModified(response, {
 
 function destroyBody(body) {
   if (body && typeof body.destroy === 'function') body.destroy()
+}
+
+function positiveIntegerOrDefault(value, fallback) {
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback
 }

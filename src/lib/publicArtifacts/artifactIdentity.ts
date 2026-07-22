@@ -196,11 +196,13 @@ export async function fetchPublicArtifact<T extends object>(
   if (entry.generationId !== context.manifest.generationId) {
     throw new Error(`Invalid public artifact: mixed generation mapping for ${logicalPath}`)
   }
-  const response = await fetcher(resolveUrl(entry.objectUrl, context.manifestUrl), {
+  const objectUrl = resolveUrl(entry.objectUrl, context.manifestUrl)
+  const requestInit: RequestInit = {
     signal,
     cache,
     headers: { Accept: 'application/json' },
-  })
+  }
+  const response = await fetchArtifactResponse(fetcher, objectUrl, context.manifestUrl, requestInit)
   if (!response.ok) throw new PublicArtifactRequestError(response.status)
   assertTransportEncoding(response, entry, logicalPath)
   const semanticArtifact = parsePublicSemanticArtifact(await parseSemanticResponse(response, logicalPath))
@@ -214,6 +216,86 @@ export async function fetchPublicArtifact<T extends object>(
   assertArtifactModelIdentity(parsed, context.manifest, logicalPath)
   registerGenerationContext(parsed, context.manifest, context.manifestUrl)
   return parsed
+}
+
+async function fetchArtifactResponse(
+  fetcher: typeof fetch,
+  objectUrl: string,
+  manifestUrl: string,
+  requestInit: RequestInit,
+) {
+  const proxyUrl = proxyFallbackUrl(objectUrl, manifestUrl)
+  let response: Response
+  try {
+    response = await fetcher(objectUrl, requestInit)
+  } catch (error) {
+    if (!proxyUrl || isAbortError(error, requestInit.signal) || !isNetworkError(error)) throw error
+    return fetcher(proxyUrl, requestInit)
+  }
+  if (!response.ok && proxyUrl && requestInit.signal?.aborted !== true
+    && followedRedirect(response, objectUrl, manifestUrl)) {
+    return fetcher(proxyUrl, requestInit)
+  }
+  return response
+}
+
+function proxyFallbackUrl(objectUrl: string, manifestUrl: string) {
+  const rootRelative = objectUrl.startsWith('/') && !objectUrl.startsWith('//')
+  const referenceOrigin = runtimeOrigin() ?? absoluteOrigin(manifestUrl)
+  if (!rootRelative && !referenceOrigin) return undefined
+
+  let parsed: URL
+  try {
+    parsed = new URL(objectUrl, referenceOrigin ?? 'https://same-origin.invalid')
+  } catch {
+    return undefined
+  }
+  if (!rootRelative && parsed.origin !== referenceOrigin) return undefined
+  if (!/^\/data\/objects\/sha256\/[a-f0-9]{64}$/.test(parsed.pathname)) return undefined
+  parsed.searchParams.set('delivery', 'proxy')
+  if (rootRelative) return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  return parsed.toString()
+}
+
+function followedRedirect(response: Response, objectUrl: string, manifestUrl: string) {
+  if (response.redirected) return true
+  if (!response.url) return false
+  const base = runtimeOrigin() ?? absoluteOrigin(manifestUrl)
+    ?? (objectUrl.startsWith('/') ? 'https://same-origin.invalid' : undefined)
+  if (!base) return false
+  try {
+    const finalUrl = new URL(response.url, base)
+    const originalUrl = new URL(objectUrl, base)
+    finalUrl.hash = ''
+    originalUrl.hash = ''
+    return finalUrl.toString() !== originalUrl.toString()
+  } catch {
+    return false
+  }
+}
+
+function runtimeOrigin() {
+  const runtime = globalThis as typeof globalThis & { location?: { origin?: unknown } }
+  return typeof runtime.location?.origin === 'string' ? runtime.location.origin : undefined
+}
+
+function absoluteOrigin(value: string) {
+  try {
+    return /^[a-z][a-z\d+.-]*:/i.test(value) ? new URL(value).origin : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function isAbortError(error: unknown, signal: AbortSignal | null | undefined) {
+  return signal?.aborted === true
+    || (error instanceof Error && error.name === 'AbortError')
+    || (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+}
+
+function isNetworkError(error: unknown) {
+  return error instanceof TypeError
+    || (typeof error === 'object' && error !== null && 'name' in error && error.name === 'TypeError')
 }
 
 function normalizeKnownLogicalUrls(content: Record<string, unknown>): Record<string, unknown> {
