@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord } from '../src/types.ts'
+import type { MatchRecord, MatchRosterSnapshot } from '../src/types.ts'
 import { buildCanonicalMatchLedger, classifyRankingChange } from '../src/lib/incremental/changeClassifier.ts'
 import type { CanonicalMatchLedgerContext } from '../src/lib/incremental/types.ts'
 
@@ -26,6 +26,27 @@ test('canonical ledger uses provider priority, deterministic ordering, and rejec
   ])
   assert.equal(ledger.rows.every((row) => row.scoringDigest === row.artifactDigest), true)
   assert.throws(() => buildCanonicalMatchLedger([matches[0]!, { ...matches[0]!, id: 'duplicate' }], context), /Duplicate/)
+})
+
+test('canonical ledger digests roster inputs without retaining or aliasing raw roster payloads', () => {
+  const roster: MatchRosterSnapshot = {
+    sourceProvider: 'oracles-elixir',
+    observedAt: '2026-01-01',
+    completeness: 'partial',
+    players: [{ id: 'alpha-mid', name: 'Alpha Mid', role: 'Mid' }],
+  }
+  const source = match({ id: 'roster-source', teamARoster: roster })
+  const ledger = buildCanonicalMatchLedger([source], context)
+  assert.notEqual(ledger.rows[0]?.match, source)
+  assert.equal(ledger.rows[0]?.match.teamARoster, undefined)
+
+  const corrected = buildCanonicalMatchLedger([{
+    ...source,
+    teamARoster: { ...roster, players: [{ ...roster.players[0]!, name: 'Corrected Mid' }] },
+  }], context)
+  assert.notEqual(ledger.rows[0]?.scoringDigest, corrected.rows[0]?.scoringDigest)
+  source.teamARoster = undefined
+  assert.equal(ledger.rows[0]?.match.teamARoster, undefined)
 })
 
 test('classifier exhaustively distinguishes receipts, append, insertion, correction, deletion, date move, and invalidation', () => {

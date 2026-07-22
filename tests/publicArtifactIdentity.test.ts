@@ -52,7 +52,10 @@ test('known logical URL fields have run identity normalized for every index fami
     }),
     (runId: string, target = 'all.json') => ({
       artifactKind: 'match-history-index', schemaVersion: 23, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
-      scopeIndex: { All__All__All: { url: `/data/matches/${target}?v=${runId}` } },
+      scopeIndex: { All__All__All: {
+        url: `/data/matches/${target}?v=${runId}`,
+        pages: [{ url: `/data/matches/pages/${target.replace('.json', '-1.json')}?v=${runId}` }],
+      } },
     }),
     (runId: string, target = 'all-1.json') => ({
       artifactKind: 'match-history-catalog', schemaVersion: 23, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),

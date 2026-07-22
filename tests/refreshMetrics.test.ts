@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
+import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, REFRESH_STAGE_NAMES } from '../scripts/refresh-metrics.mjs'
 
 test('refresh telemetry uses injected wall, monotonic, and RSS clocks deterministically', () => {
   const wall = values([Date.parse('2026-07-22T00:00:00Z'), Date.parse('2026-07-22T00:00:01Z'), Date.parse('2026-07-22T00:00:03Z'), Date.parse('2026-07-22T00:00:04Z')])
@@ -25,7 +25,7 @@ test('refresh telemetry uses injected wall, monotonic, and RSS clocks determinis
   assert.deepEqual(record.affected, { matchIds: ['a', 'b'], date: '2026-07-22' })
   assert.deepEqual(record.checkpoint, { applicable: false, reason: 'incremental-disabled-or-not-classified' })
   assert.equal(record.stages.find((stage) => stage.name === 'probe')?.durationMs, 250)
-  assert.equal(record.stages.length, 18)
+  assert.deepEqual(record.stages.map((stage) => stage.name), REFRESH_STAGE_NAMES)
 })
 
 test('real child stages replace not-applicable placeholders when records merge', () => {

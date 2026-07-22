@@ -1,4 +1,5 @@
-export const RAW_SOURCE_STORAGE_MODE: 'content-addressed-raw-gzip-v1'
+export const RAW_SOURCE_STORAGE_MODE: 'content-addressed-raw-gzip-v2'
+export const ORACLE_GAME_INVENTORY_DIGEST_SCHEME: 'oracle-game-inventory-v1'
 export const RAW_SOURCE_RECEIPT_KIND: 'raw-source-generation-receipt'
 export const ORACLE_BASELINE_KIND: 'oracle-complete-game-baseline'
 export const ORACLE_DELTA_KIND: 'oracle-date-league-delta'
@@ -20,6 +21,8 @@ export type PreparedRawObject<T extends object = Record<string, unknown>> = {
   bytes: number
   compressed: Buffer
   compressedBytes: number
+  compressedPath?: string
+  compressedSha256?: string
 }
 
 export type OraclePartition = { utcDate: string; league: string }
@@ -27,6 +30,7 @@ export type CanonicalOracleGame = {
   gameId: string
   date: string
   league: string
+  sourceOrder: number
   rows: string[][]
   digest: string
 }
@@ -82,10 +86,13 @@ export type NarrowSourceObject = {
 export type RawReceiptOracleSource = {
   sourceFileName: string
   headerDigest: string
+  digestScheme: 'oracle-game-inventory-v1'
   effectiveOracleDigest: string
+  gameInventory: OracleGameInventoryEntry[]
   baseline: RawObjectReference
   deltas: RawObjectReference[]
 }
+export type OracleGameInventoryEntry = Pick<CanonicalOracleGame, 'gameId' | 'digest' | 'date' | 'league' | 'sourceOrder'>
 export type RawReceiptNarrowSource = {
   sourceFileName: string
   contentSha256: string
@@ -94,7 +101,7 @@ export type RawReceiptNarrowSource = {
 export type RawSourceReceipt = {
   artifactKind: 'raw-source-generation-receipt'
   schemaVersion: 1
-  storageMode: 'content-addressed-raw-gzip-v1'
+  storageMode: 'content-addressed-raw-gzip-v2'
   generationId: string
   importerVersion: string
   coverage: { start: string; end: string }
@@ -131,6 +138,18 @@ export function prepareOracleMutationChain(options: {
   source: CanonicalOracleSource
   deltas: Array<{ value: OracleDeltaObject; prepared: PreparedRawObject<OracleDeltaObject>; reference: RawObjectReference }>
   mutations: Array<OracleDeltaMutation & { partition: OraclePartition }>
+}
+export function oracleGameInventory(source: CanonicalOracleSource): OracleGameInventoryEntry[]
+export function prepareOracleMutationChainFromInventory(options: {
+  previousReceipt: RawReceiptOracleSource
+  importerVersion: string
+  nextCsv?: string
+  nextSource?: CanonicalOracleSource
+}): {
+  source: CanonicalOracleSource
+  deltas: Array<{ value: OracleDeltaObject; prepared: PreparedRawObject<OracleDeltaObject>; reference: RawObjectReference }>
+  mutations: Array<OracleDeltaMutation & { partition: OraclePartition }>
+  gameInventory: OracleGameInventoryEntry[]
 }
 export function parseOracleDelta(value: unknown, compatibility?: {
   importerVersion?: string

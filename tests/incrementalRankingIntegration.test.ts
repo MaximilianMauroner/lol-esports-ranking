@@ -1,13 +1,106 @@
 import assert from 'node:assert/strict'
-import { access, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
-import { buildRankingIncrementally, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from '../scripts/incremental-ranking-orchestrator.ts'
+import type { MatchRecord, MatchRosterSnapshot, Role, Side, TeamProfile } from '../src/types.ts'
+import { buildRankingIncrementally, mergePartialPlayerDirectoryArtifact, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from '../scripts/incremental-ranking-orchestrator.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import type { RankingSourceImport } from '../scripts/ranking-source-import.ts'
 import { buildStaticSnapshot } from '../scripts/build-static-snapshot.ts'
+import { createStaticRankingData } from '../src/lib/snapshot.ts'
+import { buildPlayerModel } from '../src/lib/model.ts'
+import { runRefreshOnce } from '../scripts/refresh-once.mjs'
+
+test('partial player directory preserves valid unaffected season players and diagnostics', () => {
+  const merged = mergePartialPlayerDirectoryArtifact({
+    artifactKind: 'player-directory',
+    players: [{ id: 'current' }],
+    scopedPlayers: { '2026__All__All': [{ id: 'new-2026' }] },
+    diagnostics: {
+      sameTeamTopFiveClustering: { scope: 'All__All__All' },
+      scopedSameTeamTopFiveClustering: { '2026__All__All': { scope: 'new-2026' } },
+    },
+  }, {
+    scopedPlayers: {
+      '2025__All__All': [{ id: 'old-2025' }],
+      '2026__All__All': [{ id: 'old-2026' }],
+      '2024__All__All': [{ id: 'obsolete' }],
+    },
+    diagnostics: { scopedSameTeamTopFiveClustering: {
+      '2025__All__All': { scope: 'old-2025' },
+      '2026__All__All': { scope: 'old-2026' },
+      '2024__All__All': { scope: 'obsolete' },
+    } },
+  }, new Set(['2026__All__All']), new Set(['2025__All__All', '2026__All__All']))
+
+  assert.deepEqual(merged.scopedPlayers, {
+    '2025__All__All': [{ id: 'old-2025' }],
+    '2026__All__All': [{ id: 'new-2026' }],
+  })
+  assert.deepEqual((merged.diagnostics as Record<string, unknown>).scopedSameTeamTopFiveClustering, {
+    '2025__All__All': { scope: 'old-2025' },
+    '2026__All__All': { scope: 'new-2026' },
+  })
+})
+
+test('releasing import audit rows before snapshot preserves roster/player public semantics', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-lean-source-'))
+  try {
+    const normalSource = structuredClone(fixtureSource(sourcedPlayerMatchesWithSubstitutionAndCorrection()))
+    normalSource.importedMatches = structuredClone(normalSource.matches)
+    const leanSource = structuredClone(normalSource)
+    const normal = await buildStaticSnapshot({
+      sourceData: normalSource,
+      generatedAt: '2026-07-22T00:00:00.000Z',
+      publicDataDir: join(root, 'normal-public'),
+      output: join(root, 'normal-full.json'),
+      writeFullSnapshot: false,
+      compactPlayerDirectory: false,
+      silent: true,
+    })
+    const sourceReferences = new Set<unknown>(normalSource.matches.flatMap((entry) => [entry, entry.teamARoster, entry.teamBRoster]))
+    assert.equal(normal.publicPlan.writes.some((write) => containsReference(write.value, sourceReferences)), false)
+    const lean = await buildStaticSnapshot({
+      sourceData: leanSource,
+      generatedAt: '2026-07-22T00:00:00.000Z',
+      publicDataDir: join(root, 'lean-public'),
+      output: join(root, 'lean-full.json'),
+      writeFullSnapshot: false,
+      releaseImportAuditBeforeSnapshot: true,
+      compactPlayerDirectory: true,
+      silent: true,
+    })
+    const identities = (writes: typeof normal.publicPlan.writes) => Object.fromEntries(
+      writes.map((write) => [write.relativePath, prepareSemanticArtifact(write.value).digest]),
+    )
+    const normalIdentities = identities(normal.publicPlan.writes)
+    assert.deepEqual(identities(lean.publicPlan.writes), normalIdentities)
+    assert.equal(
+      prepareSemanticArtifact({
+        artifactKind: 'player-model-regression',
+        players: buildPlayerModel(normalSource.matches, {}, { teams: normalSource.teams }),
+      }).digest,
+      '8619633cd62e81ccf4549654dfe013298a2f421ec836d2597f2d99b1f33531f5',
+    )
+    assert.equal(normalIdentities['entities/players.json'], '5a0a99651117e85e2c4af847504168634fb7128abb614e154e85768695658e9e')
+    const compactSnapshot = createStaticRankingData({
+      matches: structuredClone(normalSource.matches),
+      teams: structuredClone(normalSource.teams),
+      rosters: {},
+      generatedAt: '2026-07-22T00:00:00.000Z',
+      compactPlayerDirectory: true,
+    })
+    assert.equal(Object.values(compactSnapshot.snapshots).every((snapshot) => snapshot.players.length === 0), true)
+    assert.ok(compactSnapshot.precomputedPlayerDirectory)
+    assert.ok(compactSnapshot.precomputedPlayerDirectory.players.length > 0)
+    assert.equal(leanSource.importedMatches.length, 0)
+    assert.deepEqual(leanSource.mergedTeams, {})
+    assert.ok(normalSource.importedMatches.length > 0)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('feature/mode matrix preserves legacy and daily/manual force full while canonical no-change exits before build', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-matrix-'))
@@ -43,6 +136,138 @@ test('feature/mode matrix preserves legacy and daily/manual force full while can
     await assert.rejects(access(join(root, 'metadata-full.json')))
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('retry no-change reconciliation acknowledges a match after publish-to-parent crash', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-reconciliation-'))
+  try {
+    const official = (entry: MatchRecord): MatchRecord => ({
+      ...entry,
+      officialMatchId: `official-${entry.id}`,
+      officialGameId: `official-game-${entry.id}`,
+    })
+    const baselineMatches = baseMatches().map(official)
+    const baseline = await run(root, 'reconciliation-base', fixtureSource(baselineMatches), {
+      mode: 'gated', cause: 'daily-audit', enabled: true,
+    })
+    const pendingMatchId = 'official-pending'
+    const pending = official(match('pending', '2026-01-05', 'Event C', {
+      officialMatchId: pendingMatchId,
+      officialGameId: 'official-game-pending',
+    }))
+    const source = fixtureSource([...baselineMatches, pending])
+    source.importedMatches = structuredClone(source.matches)
+    const reconciliationOutput = join(root, 'reconciliation.json')
+    const restored = restoreFrom(baseline)
+    const first = await buildRankingIncrementally({
+      mode: 'gated', cause: 'pending-match', enabled: true,
+      sourceData: source,
+      restored,
+      generatedAt: '2026-07-22T00:00:00.000Z',
+      manifestPath: join(root, 'unused-manifest.json'),
+      output: join(root, 'reconciliation-full.json'),
+      publicDataDir: join(root, 'reconciliation-public'),
+      reconciliationOutput,
+      silent: true,
+    })
+    assert.equal(first.action, 'publish-incremental')
+    if (first.action !== 'publish-incremental') throw new Error('incremental publication required')
+    const published = restoreIncremental(restored, first)
+    assert.equal(source.importedMatches.length, 0)
+    await rm(reconciliationOutput, { force: true })
+
+    const retrySource = fixtureSource([...baselineMatches, pending])
+    retrySource.importedMatches = structuredClone(retrySource.matches)
+    let retry: IncrementalRankingBuildResult | undefined
+    let writes = 0
+    const parent = await runRefreshOnce({
+      env: {
+        RANKING_REFRESH_MODE: 'gated',
+        RANKING_RECONCILIATION_OUTPUT: reconciliationOutput,
+        RANKING_REFRESH_METRICS_PATH: join(root, 'refresh-metrics.json'),
+      },
+      runId: 'reconciliation-parent',
+      owner: 'worker',
+      now: () => new Date('2026-07-22T00:00:00Z'),
+      monotonicNow: (() => { let value = 0; return () => ++value })(),
+      bucketConfig: { enabled: true },
+      bucketClient: {},
+      acquireLease: async () => ({
+        acquired: true as const,
+        lease: { owner: 'worker', fencingToken: 1, expiresAt: '2026-07-22T00:45:00Z' },
+        etag: 'lease',
+      }),
+      assertLease: async () => ({ live: true as const }),
+      renewLease: async (_key: string, authority: { lease: Record<string, unknown> }) => ({
+        renewed: true as const,
+        lease: { ...authority.lease, expiresAt: '2026-07-22T00:45:00Z' },
+        etag: 'renewed',
+        promotionEtag: 'renewed',
+      }),
+      releaseLease: async () => ({ released: true }),
+      readBucketJson: async () => ({ found: false }),
+      writeBucketJson: async () => ({ written: true, etag: `state-${++writes}` }),
+      readLocalState: async () => undefined,
+      writeLocalState: async () => undefined,
+      fetchProbe: async () => ({
+        checkedAt: '2026-07-22T00:00:00Z',
+        coverageComplete: true,
+        events: [{ matchId: pendingMatchId, state: 'completed', startTime: '2026-01-05T12:00:00Z', teams: [{ id: 'Alpha', gameWins: 1 }, { id: 'Beta', gameWins: 0 }] }],
+      }),
+      runChild: async () => {
+        retry = await buildRankingIncrementally({
+          mode: 'gated', cause: 'pending-match', enabled: true,
+          sourceData: retrySource,
+          restored: published,
+          generatedAt: '2026-07-22T00:00:00.000Z',
+          manifestPath: join(root, 'unused-manifest.json'),
+          output: join(root, 'reconciliation-full.json'),
+          publicDataDir: join(root, 'reconciliation-public'),
+          reconciliationOutput,
+          silent: true,
+        })
+      },
+      setInterval: () => ({ unref() {} }),
+      clearInterval: () => undefined,
+      logger: { log() {}, warn() {}, error() {} },
+    })
+    assert.equal(retry?.action, 'no-change')
+    const reconciliation = JSON.parse(await readFile(reconciliationOutput, 'utf8')) as {
+      matches: Array<{ matchId: string; status: string }>
+    }
+    assert.ok(reconciliation.matches.length > 0)
+    assert.deepEqual(reconciliation.matches.find((entry) => entry.matchId === pendingMatchId), {
+      matchId: pendingMatchId,
+      status: 'exact',
+      canonicalSeriesId: 'official-match\u0000official-pending',
+      scoredGameIds: ['official-game-pending'],
+    })
+    assert.ok(retrySource.importedMatches.length > 0)
+    assert.equal((parent.state as { pending: Record<string, unknown> }).pending[pendingMatchId], undefined)
+
+    const metadataOutput = join(root, 'metadata-reconciliation.json')
+    const metadataSource = structuredClone(retrySource)
+    metadataSource.externalSources = [{
+      name: 'retry metadata', kind: 'static-metadata', description: 'metadata-only reconciliation fixture',
+      status: 'active', retrievedAt: '2026-07-22T00:00:00.000Z', coverageStart: '2026-01-01', coverageEnd: '2026-01-05', rowCount: 1,
+    }]
+    const metadata = await buildRankingIncrementally({
+      mode: 'gated', cause: 'pending-match', enabled: true,
+      sourceData: metadataSource,
+      restored: published,
+      generatedAt: '2026-07-22T00:00:00.000Z',
+      manifestPath: join(root, 'unused-metadata-manifest.json'),
+      output: join(root, 'metadata-full.json'),
+      publicDataDir: join(root, 'metadata-public'),
+      reconciliationOutput: metadataOutput,
+      silent: true,
+    })
+    assert.equal(metadata.metrics.classification, 'metadata-only')
+    const metadataReconciliation = JSON.parse(await readFile(metadataOutput, 'utf8')) as { matches: Array<{ matchId: string }> }
+    assert.equal(metadataReconciliation.matches.some((entry) => entry.matchId === pendingMatchId), true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 
@@ -423,6 +648,64 @@ function baseMatches() {
     match('m3', '2026-01-03', 'Event B'),
     match('m4', '2026-01-04', 'Event B'),
   ]
+}
+
+function sourcedPlayerMatchesWithSubstitutionAndCorrection(): MatchRecord[] {
+  return Array.from({ length: 25 }, (_, index) => {
+    const day = String(index + 1).padStart(2, '0')
+    const entry = match(`player-${day}`, `2026-01-${day}`, 'Player Event')
+    const winner = index % 2 === 0 ? 'Alpha' : 'Beta'
+    return {
+      ...entry,
+      winner,
+      teamARoster: sourcedRoster('alpha', 'blue', winner === 'Alpha', entry.date, {
+        ...(index === 10 ? { Mid: { kills: 18 } } : {}),
+      }),
+      teamBRoster: sourcedRoster('beta', 'red', winner === 'Beta', entry.date, {}, {
+        ...(index === 24 ? { Bot: 'beta-sub-Bot' } : {}),
+      }),
+    }
+  })
+}
+
+function containsReference(value: unknown, references: ReadonlySet<unknown>, visited = new Set<object>()): boolean {
+  if (!value || typeof value !== 'object') return false
+  if (references.has(value)) return true
+  if (visited.has(value)) return false
+  visited.add(value)
+  return Object.values(value).some((entry) => containsReference(entry, references, visited))
+}
+
+function sourcedRoster(
+  prefix: string,
+  side: Side,
+  won: boolean,
+  observedAt: string,
+  statOverrides: Partial<Record<Role, { kills?: number }>> = {},
+  idOverrides: Partial<Record<Role, string>> = {},
+): MatchRosterSnapshot {
+  const roles: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+  return {
+    sourceProvider: 'oracles-elixir',
+    teamId: prefix,
+    observedAt,
+    completeness: 'complete-five-role',
+    players: roles.map((role) => ({
+      id: idOverrides[role] ?? `${prefix}-${role}`,
+      name: idOverrides[role] ?? `${prefix} ${role}`,
+      role,
+      stats: {
+        side,
+        won,
+        kills: statOverrides[role]?.kills ?? (won ? 4 : 2),
+        deaths: won ? 2 : 4,
+        assists: won ? 9 : 5,
+        damageShare: 0.2,
+        earnedGoldShare: 0.2,
+        vspm: role === 'Support' ? 2.2 : 1,
+      },
+    })),
+  }
 }
 function match(id: string, date: string, event: string, overrides: Partial<MatchRecord> = {}): MatchRecord {
   return {

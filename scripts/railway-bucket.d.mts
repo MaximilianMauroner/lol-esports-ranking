@@ -23,6 +23,12 @@ export function readActiveContentAddressedGeneration(options?: { config?: unknow
   | { found: false; reason: string; active?: Record<string, unknown>; etag?: string }
   | { found: true; active: Record<string, unknown>; etag?: string; manifest: Record<string, unknown>; rootArtifact: Record<string, unknown>; artifacts: Record<string, unknown>; loadArtifacts(paths: string[]): Promise<Record<string, unknown>> }
 >
+export function readActiveRawSourceAuthority(options?: { config?: unknown; client?: BucketClient }): Promise<
+  | { found: false; reason: string }
+  | ({ found: true; active: Record<string, unknown> } & import('./raw-source-generation.mjs').ActiveRawSourceAuthority & {
+      receiptReference: import('./raw-source-storage.mjs').RawObjectReference
+    })
+>
 export function writeBucketJson(relativeKey: string, value: unknown, options?: {
   ifMatch?: string
   ifNoneMatch?: string
@@ -68,7 +74,13 @@ export function assertBucketLease(relativeKey: string, lease: BucketLeaseAuthori
 export function uploadRankingArtifacts(options?: Record<string, unknown> & {
   stateManifestAuthority?: import('./incremental-state-storage.mjs').StateManifestAuthority
   publicArtifactPatch?: PublicArtifactPatch
+  rawSourceGeneration?: import('./raw-source-generation.mjs').PreparedRawSourceGeneration
 }): Promise<Record<string, unknown>>
+export function uploadContentAddressedRawSourceGeneration(
+  client: BucketClient,
+  config: BucketStorageConfig,
+  generation: import('./raw-source-generation.mjs').PreparedRawSourceGeneration,
+): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>
 export function downloadBucketObject(options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>

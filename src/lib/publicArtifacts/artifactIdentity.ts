@@ -263,17 +263,19 @@ function normalizeArrayEntryUrls(value: unknown) {
   return transformArrayEntryUrls(value, normalizeLogicalArtifactUrl)
 }
 
-function transformArrayEntryUrls(value: unknown, transform: (value: string) => string) {
+function transformArrayEntryUrls(value: unknown, transform: (value: string) => string): unknown {
   if (!Array.isArray(value)) return value
   return value.map((entry) => transformEntryUrl(entry, transform))
 }
 
-function transformEntryUrl(value: unknown, transform: (value: string) => string) {
+function transformEntryUrl(value: unknown, transform: (value: string) => string): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value
   const entry = value as Record<string, unknown>
-  return typeof entry.url === 'string'
-    ? { ...entry, url: transform(entry.url) }
-    : entry
+  return {
+    ...entry,
+    ...(typeof entry.url === 'string' ? { url: transform(entry.url) } : {}),
+    ...(Array.isArray(entry.pages) ? { pages: transformArrayEntryUrls(entry.pages, transform) } : {}),
+  }
 }
 
 function normalizeLogicalArtifactUrl(value: string) {

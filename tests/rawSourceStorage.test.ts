@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -7,6 +7,8 @@ import {
   applyOracleDelta,
   decodeRawObject,
   materializeRawSourceReceipt,
+  ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
+  oracleGameInventory,
   parseOracleBaseline,
   parseOracleCsv,
   parseOracleDelta,
@@ -15,6 +17,7 @@ import {
   prepareOracleBaseline,
   prepareOracleBaselineFromSource,
   prepareOracleMutationChain,
+  prepareOracleMutationChainFromInventory,
   prepareRawObject,
   prepareRawSourceReceipt,
   rawObjectReferenceFor,
@@ -96,7 +99,9 @@ function oracleReceipt(source: CanonicalOracleSource, baseline: RawObjectReferen
   return {
     sourceFileName: source.sourceFileName,
     headerDigest: source.headerDigest,
+    digestScheme: ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
     effectiveOracleDigest: source.digest,
+    gameInventory: oracleGameInventory(source),
     baseline,
     deltas,
   }
@@ -160,7 +165,11 @@ test('append deltas reconstruct and materialize importer-equivalent legacy sourc
   ]
   const appendedGames = [...baselineGames, { gameId: 'lck-3', date: '2026-01-12', blue: 'T1', red: 'Gen.G' }]
   const baseline = prepareOracleBaseline({ csv: oracleCsv(baselineGames), sourceFileName: ORACLE_FILE, importerVersion: IMPORTER_VERSION })
-  const chain = prepareOracleMutationChain({ previousSource: baseline.source, nextCsv: oracleCsv(appendedGames) })
+  const chain = prepareOracleMutationChainFromInventory({
+    previousReceipt: oracleReceipt(baseline.source, baseline.reference, []),
+    importerVersion: IMPORTER_VERSION,
+    nextCsv: oracleCsv(appendedGames),
+  })
   const leaguepediaContent = JSON.stringify({ source: 'fixture', fetchedAt: '2026-07-22T00:00:00.000Z', matches: [] })
   const lolesportsContent = JSON.stringify({ source: 'fixture', fetchedAt: '2026-07-22T00:00:00.000Z', events: [] })
   const leaguepedia = prepareNarrowSourceObject({ provider: 'leaguepedia', sourceFileName: 'leaguepedia.json', content: leaguepediaContent, importerVersion: IMPORTER_VERSION })
@@ -212,6 +221,49 @@ test('append deltas reconstruct and materialize importer-equivalent legacy sourc
   }
 })
 
+test('raw receipt restore swaps atomically, prunes orphans, and preserves prior authority on corruption', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'raw-source-atomic-restore-'))
+  const destination = join(root, 'raw')
+  const baseline = prepareOracleBaseline({
+    csv: oracleCsv([{ gameId: 'atomic-1', date: '2026-01-10' }]),
+    sourceFileName: ORACLE_FILE,
+    importerVersion: IMPORTER_VERSION,
+  })
+  const store = new Map<string, Buffer>()
+  addPrepared(store, baseline)
+  const receipt = receiptFor({ source: baseline.source, baseline: baseline.reference, deltas: [] })
+  try {
+    await mkdir(destination, { recursive: true })
+    await writeFile(join(destination, 'orphan.txt'), 'obsolete')
+    await writeFile(join(destination, 'manifest.json'), '{"authority":"old"}\n')
+    const restored = await materializeRawSourceReceipt({
+      receipt,
+      objectResolver: resolverFor(store),
+      destinationDir: destination,
+      generatedAt: '2026-07-22T00:00:00.000Z',
+    })
+    await assert.rejects(access(join(destination, 'orphan.txt')), { code: 'ENOENT' })
+    const manifestBeforeFailure = await readFile(restored.manifestPath, 'utf8')
+    const csvBeforeFailure = await readFile(join(destination, 'oracles-elixir', ORACLE_FILE), 'utf8')
+    const corrupt = new Map(store)
+    corrupt.set(baseline.reference.key, Buffer.from('corrupt'))
+
+    await assert.rejects(
+      materializeRawSourceReceipt({
+        receipt,
+        objectResolver: resolverFor(corrupt),
+        destinationDir: destination,
+        generatedAt: '2026-07-23T00:00:00.000Z',
+      }),
+      /compressed byte length|gzip is corrupt/,
+    )
+    assert.equal(await readFile(restored.manifestPath, 'utf8'), manifestBeforeFailure)
+    assert.equal(await readFile(join(destination, 'oracles-elixir', ORACLE_FILE), 'utf8'), csvBeforeFailure)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('ordered deltas support correction, delete, and date/league moves with prior digests', async () => {
   const before: GameFixture[] = [
     { gameId: 'correct-me', date: '2026-02-01' },
@@ -223,7 +275,12 @@ test('ordered deltas support correction, delete, and date/league moves with prio
     { gameId: 'move-me', date: '2026-03-04', league: 'MSI' },
   ]
   const baseline = prepareOracleBaseline({ csv: oracleCsv(before), sourceFileName: ORACLE_FILE, importerVersion: IMPORTER_VERSION })
-  const chain = prepareOracleMutationChain({ previousSource: baseline.source, nextCsv: oracleCsv(after) })
+  const previousReceipt = oracleReceipt(baseline.source, baseline.reference, [])
+  const chain = prepareOracleMutationChainFromInventory({
+    previousReceipt,
+    importerVersion: IMPORTER_VERSION,
+    nextCsv: oracleCsv(after),
+  })
   const previousDigests = new Map(baseline.source.games.map((game) => [game.gameId, game.digest]))
   const byId = new Map(chain.mutations.map((mutation) => [mutation.gameId, mutation]))
   const correction = byId.get('correct-me')
@@ -238,6 +295,11 @@ test('ordered deltas support correction, delete, and date/league moves with prio
   assert.equal(correction.expectedPreviousDigest, previousDigests.get('correct-me'))
   assert.equal(deletion.expectedPreviousDigest, previousDigests.get('delete-me'))
   assert.deepEqual(move?.partition, { utcDate: '2026-03-04', league: 'MSI' })
+  assert.equal(chain.deltas[0]?.value.previousOracleDigest, previousReceipt.effectiveOracleDigest)
+  for (let index = 1; index < chain.deltas.length; index += 1) {
+    assert.equal(chain.deltas[index]?.value.previousOracleDigest, chain.deltas[index - 1]?.value.nextOracleDigest)
+  }
+  assert.equal(chain.deltas.at(-1)?.value.nextOracleDigest, chain.source.digest)
 
   const store = new Map<string, Buffer>()
   addPrepared(store, baseline)
@@ -316,14 +378,21 @@ test('schema, compatibility, duplicate, missing, corrupt, and chain errors fail 
       : mutation),
   }), /prior digest mismatch/)
 
-  const mismatched = prepareRawSourceReceipt({
-    generationId: receipt.generationId,
-    importerVersion: receipt.importerVersion,
-    coverage: receipt.coverage,
-    sourceReceiptInputs: receipt.sourceReceiptInputs,
-    oracle: [{ ...receipt.oracle[0], effectiveOracleDigest: '0'.repeat(64) }],
-  }).receipt
-  await assert.rejects(reconstructRawSourceReceipt(mismatched, resolverFor(store)), /chain mismatch/)
+  assert.throws(
+    () => parseRawSourceReceipt({ ...receipt, oracle: [{ ...receipt.oracle[0], effectiveOracleDigest: '0'.repeat(64) }] }),
+    /inventory digest mismatch/,
+  )
+  const legacyOracle = Object.fromEntries(
+    Object.entries(receipt.oracle[0]).filter(([key]) => key !== 'digestScheme' && key !== 'gameInventory'),
+  )
+  assert.throws(
+    () => parseRawSourceReceipt({ ...receipt, storageMode: 'content-addressed-raw-gzip-v1', oracle: [legacyOracle] }),
+    /Unsupported raw source receipt schema/,
+  )
+  assert.throws(
+    () => parseRawSourceReceipt({ ...receipt, oracle: [legacyOracle] }),
+    /missing: digestScheme, gameInventory/,
+  )
   assert.throws(() => parseRawSourceReceipt({ ...receipt, schemaVersion: 2 }), /Unsupported raw source receipt schema/)
 })
 

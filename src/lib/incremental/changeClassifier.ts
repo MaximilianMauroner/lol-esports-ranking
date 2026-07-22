@@ -41,6 +41,11 @@ export function buildCanonicalMatchLedger(
           teamB: context.teams[match.teamB],
         }
       : undefined
+    const dependencyMatch: MatchRecord = {
+      ...match,
+      teamARoster: undefined,
+      teamBRoster: undefined,
+    }
     return {
       key,
       utcDate: match.date,
@@ -50,7 +55,10 @@ export function buildCanonicalMatchLedger(
       contextReceiptIdentity: context.contextReceiptIdentity,
       provenanceReceiptIdentity: context.provenanceReceiptIdentity,
       ...(context.providerAvailableAtForMatch?.(match) ? { providerAvailableAt: context.providerAvailableAtForMatch(match) } : {}),
-      match,
+      // Digests above bind the full scored input, including player/roster rows.
+      // The persisted dependency projection needs match scope fields, not the
+      // large raw roster payloads, and must not alias the live source object.
+      match: dependencyMatch,
     }
   }).sort(compareLedgerRows)
   const duplicate = rows.find((row, index) => row.key === rows[index - 1]?.key)

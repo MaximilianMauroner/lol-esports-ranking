@@ -142,9 +142,11 @@ function transformArrayEntryUrls(value) {
 
 function transformEntryUrl(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value
-  return typeof value.url === 'string'
-    ? { ...value, url: normalizeLogicalArtifactUrl(value.url) }
-    : value
+  return {
+    ...value,
+    ...(typeof value.url === 'string' ? { url: normalizeLogicalArtifactUrl(value.url) } : {}),
+    ...(Array.isArray(value.pages) ? { pages: transformArrayEntryUrls(value.pages) } : {}),
+  }
 }
 
 function normalizeLogicalArtifactUrl(value) {

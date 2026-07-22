@@ -136,6 +136,24 @@ test('sourced player histories retain a completed Bo2 tie through public compact
   assert.equal(alphaMid.history.every((entry) => entry.source?.seriesOutcome === 0.5), true)
 })
 
+test('sourced player histories share one immutable source trace per match and team side', () => {
+  const players = buildPlayerModel([matchFixture({
+    id: 'shared-player-source',
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: 'shared-player-source',
+    teamARoster: sourcedRosterFixture('alpha', 'blue', true),
+    teamBRoster: sourcedRosterFixture('beta', 'red', false),
+  })], {})
+  const alphaSources = players
+    .filter((player) => player.id.startsWith('alpha-'))
+    .map((player) => player.history[0]?.source)
+  assert.equal(alphaSources.length, 5)
+  assert.ok(alphaSources[0])
+  assert.equal(alphaSources.every((source) => source === alphaSources[0]), true)
+  assert.equal(Object.isFrozen(alphaSources[0]), true)
+  assert.notEqual(playerFor(players, 'beta-Mid').history[0]?.source, alphaSources[0])
+})
+
 test('an ambiguous fallback 1-1 prefix stays incomplete and does not count for eligibility', () => {
   const model = buildRankingModel([
     matchFixture({ id: 'fallback-prefix-a', sourceGameId: 'opaque-prefix-a', bestOf: 1, bestOfBasis: 'fallback', winner: 'Alpha' }),

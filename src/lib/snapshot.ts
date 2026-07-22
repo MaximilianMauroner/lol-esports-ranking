@@ -258,6 +258,16 @@ export type DataQualityAudit = {
 }
 
 export type PlayerDirectory = PublicPlayerDirectory
+
+export type PlayerLifecycleEvent = {
+  name: 'player-build' | 'player-compaction'
+  scope: 'global' | 'season' | 'directory'
+  scopeKey: string
+  durationMs: number
+  playerCount: number
+}
+
+export type PlayerLifecycleReleaseEvent = Pick<PlayerLifecycleEvent, 'scope' | 'scopeKey'>
 export type TeamDirectory = PublicTeamDirectory
 export type TeamHistoryPointCompact = PublicTeamHistoryPoint
 export type TeamHistorySeries = PublicTeamHistorySeries
@@ -959,6 +969,8 @@ export type StaticRankingData = {
   tournamentMovements: Record<TournamentInstanceId, PublicTournamentMovementShard>
   teams: Record<string, TeamProfile>
   matches: MatchRecord[]
+  /** Incremental builds may compact full player histories before public serialization. */
+  precomputedPlayerDirectory?: PlayerDirectory
 }
 
 export type RankingSummaryStanding = PublicTeamStanding
@@ -1016,6 +1028,7 @@ export function createStaticRankingSummaryData(
     tournamentMovements: _tournamentMovements,
     teams: _teams,
     matches: _matches,
+    precomputedPlayerDirectory: _precomputedPlayerDirectory,
     ...manifestBase
   } = data
   void _artifactKind
@@ -1023,6 +1036,7 @@ export function createStaticRankingSummaryData(
   void _tournamentMovements
   void _teams
   void _matches
+  void _precomputedPlayerDirectory
 
   return {
     manifest: {
@@ -1228,6 +1242,9 @@ export function createStaticRankingData({
   precomputedGlobalRanking,
   materializeSnapshotKeys,
   materializeTournamentIds,
+  compactPlayerDirectory = false,
+  onPlayerLifecycleStage,
+  onPlayerLifecycleRelease,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1244,6 +1261,12 @@ export function createStaticRankingData({
   materializeSnapshotKeys?: ReadonlySet<string>
   /** Incremental publication may materialize only tournament shards selected by the dependency graph. */
   materializeTournamentIds?: ReadonlySet<TournamentInstanceId>
+  /** Build and retain only public player rows for incremental publication. */
+  compactPlayerDirectory?: boolean
+  /** Observe bounded player work without retaining model history. */
+  onPlayerLifecycleStage?: (event: PlayerLifecycleEvent) => void
+  /** Release full player histories between independently materialized scopes. */
+  onPlayerLifecycleRelease?: (event: PlayerLifecycleReleaseEvent) => void
 }): StaticRankingData {
   const ratingUniverse = filterPublishedRatingUniverseInput(matches, teams)
   matches = ratingUniverse.matches
@@ -1300,24 +1323,48 @@ export function createStaticRankingData({
   }
   const hasObservedGameRosters = matches.some((match) => match.teamARoster || match.teamBRoster)
   const hasRosterProfiles = Object.keys(rosters).length > 0
-  const globalPlayers = hasObservedGameRosters || hasRosterProfiles
-    ? buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
-    : []
-  const seasonPlayerCache = new Map<string, PlayerStanding[]>()
+  const runPlayerLifecycleStage = <T extends PlayerStanding[] | CompactPlayer[] | PlayerDirectory>(
+    name: PlayerLifecycleEvent['name'],
+    scope: PlayerLifecycleEvent['scope'],
+    scopeKey: string,
+    operation: () => T,
+  ): T => {
+    const startedAt = performance.now()
+    const result = operation()
+    onPlayerLifecycleStage?.({
+      name,
+      scope,
+      scopeKey,
+      durationMs: Math.max(0, performance.now() - startedAt),
+      playerCount: Array.isArray(result) ? result.length : result.players.length,
+    })
+    return result
+  }
+  let globalPlayers = runPlayerLifecycleStage('player-build', 'global', 'All__All__All', () => (
+    hasObservedGameRosters || hasRosterProfiles
+      ? buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
+      : []
+  ))
+  const seasonPlayerCache = compactPlayerDirectory ? undefined : new Map<string, PlayerStanding[]>()
   const playersForFilter = (filter: SnapshotFilter, filteredMatches: MatchRecord[], scope: RankingScope): PlayerStanding[] => {
     if (filter.event !== 'All' || filter.region !== 'All') return []
     if (filter.season === 'All') return globalPlayers
     const cacheKey = snapshotKey(filter)
-    const cached = seasonPlayerCache.get(cacheKey)
+    const cached = seasonPlayerCache?.get(cacheKey)
     if (cached) return cached
-    const players = buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
-    seasonPlayerCache.set(cacheKey, players)
+    const players = runPlayerLifecycleStage('player-build', 'season', cacheKey, () => (
+      buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
+    ))
+    seasonPlayerCache?.set(cacheKey, players)
     return players
   }
   const hasRosters = hasRosterProfiles
   const playerRatingProof = buildPlayerRatingProof(globalPlayers)
   const seedMatches = matches.filter((match) => (match.sourceProvider ?? 'seed') === 'seed')
   const defaultFilter: SnapshotFilter = { season: 'All', event: 'All', region: 'All' }
+  const defaultPlayerSnapshotKey = snapshotKey(defaultFilter)
+  let precomputedDefaultPlayers: CompactPlayer[] | undefined
+  const precomputedScopedPlayers: Record<string, CompactPlayer[]> = {}
 
   for (const filter of buildSnapshotFilters(matches, teams, checkpointOptions)) {
     if (materializeSnapshotKeys && !materializeSnapshotKeys.has(snapshotKey(filter))) continue
@@ -1359,7 +1406,9 @@ export function createStaticRankingData({
       standingsWithDss,
       { contextStandings: dssContextStandings, useCheckpointBaseline: Boolean(checkpoint) },
     )
-    snapshots[snapshotKey(filter)] = {
+    const key = snapshotKey(filter)
+    let snapshotPlayers = playersForFilter(filter, filteredMatches, snapshotScope)
+    const snapshot: ComputedRankingSnapshot = {
       artifactKind: 'full-ranking-snapshot',
       filter,
       modelVersion: transparentGprModelMetadata.version,
@@ -1370,14 +1419,36 @@ export function createStaticRankingData({
       standings: rolling.standings,
       leagues: snapshotLeagues,
       leagueHistory: snapshotLeagueHistory,
-      players: playersForFilter(filter, filteredMatches, snapshotScope),
+      players: snapshotPlayers,
       events: filterEventSummaries(snapshotScope.ranking.events, filteredMatches),
       seasons: filterSeasonSummaries(snapshotScope.ranking.seasons, filteredMatches),
       regions: snapshotRegions,
     }
+    if (compactPlayerDirectory && key === defaultPlayerSnapshotKey) {
+      precomputedDefaultPlayers = runPlayerLifecycleStage('player-compaction', 'global', key, () => (
+        compactPlayersForSnapshot(snapshot, teams)
+      ))
+      snapshot.players = []
+      globalPlayers = []
+      // Drop the loop-local full history before the production release hook collects.
+      // eslint-disable-next-line no-useless-assignment
+      snapshotPlayers = []
+      onPlayerLifecycleRelease?.({ scope: 'global', scopeKey: key })
+    } else if (compactPlayerDirectory && isSeasonPlayerScope(filter)) {
+      const compact = runPlayerLifecycleStage('player-compaction', 'season', key, () => (
+        compactPlayersForSnapshot(snapshot, teams, { detail: 'scope' })
+      ))
+      if (compact.length > 0) precomputedScopedPlayers[key] = compact
+      snapshot.players = []
+      // Drop the loop-local full history before the production release hook collects.
+      // eslint-disable-next-line no-useless-assignment
+      snapshotPlayers = []
+      onPlayerLifecycleRelease?.({ scope: 'season', scopeKey: key })
+    }
+    snapshots[key] = snapshot
   }
 
-  return {
+  const result: StaticRankingData = {
     artifactKind: 'full-ranking-artifact',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     generatedAt,
@@ -1492,6 +1563,16 @@ export function createStaticRankingData({
     teams,
     matches,
   }
+  if (compactPlayerDirectory) {
+    result.precomputedPlayerDirectory = runPlayerLifecycleStage('player-compaction', 'directory', 'players', () => (
+      playerDirectoryFromCompact(
+        result,
+        precomputedDefaultPlayers ?? [],
+        precomputedScopedPlayers,
+      )
+    ))
+  }
+  return result
 }
 
 export function createMatchHistoryArtifacts(
@@ -1708,6 +1789,14 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
       .map(([key, snapshot]) => [key, compactPlayersForSnapshot(snapshot, data.teams, { detail: 'scope' })])
       .filter(([, rows]) => rows.length > 0),
   )
+  return playerDirectoryFromCompact(data, players, scopedPlayers)
+}
+
+function playerDirectoryFromCompact(
+  data: StaticRankingData,
+  players: CompactPlayer[],
+  scopedPlayers: Record<string, CompactPlayer[]>,
+): PlayerDirectory {
   const scopedSameTeamTopFiveClustering: Record<string, SameTeamTopFiveClusteringDiagnostic> = Object.fromEntries(
     Object.entries(scopedPlayers).map(([key, rows]) => [key, sameTeamTopFiveClustering(rows, key)]),
   )

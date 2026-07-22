@@ -27,6 +27,7 @@ import {
   shouldFetchScoredProviders,
 } from './refresh-trigger-state.mjs'
 import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
+import { refreshWorkerArgs } from './refresh-worker-memory.mjs'
 
 export async function runRefreshOnce(options = {}) {
   const env = options.env ?? process.env
@@ -450,7 +451,7 @@ function installChildCoordination(authority, metrics) {
 }
 
 async function defaultRunChild({ env, reconciliationPath, metricsPath, runId, leaseKey, owner, fencingToken, promotionEtag, cause, affectedIds, affectedDate }) {
-  await runChildProcess(process.execPath, ['--import', 'tsx', 'scripts/refresh-data-if-changed.mjs'], numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), {
+  await runChildProcess(process.execPath, refreshWorkerArgs('scripts/refresh-data-if-changed.mjs'), numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), {
     ...env,
     RANKING_RECONCILIATION_OUTPUT: reconciliationPath,
     RANKING_REFRESH_METRICS_PATH: metricsPath,

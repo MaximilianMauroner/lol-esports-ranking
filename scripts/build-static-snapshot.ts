@@ -4,7 +4,7 @@ import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { replaceDirectory } from './replace-directory.ts'
-import { createStaticRankingData } from '../src/lib/snapshot'
+import { createStaticRankingData, type PlayerLifecycleEvent, type PlayerLifecycleReleaseEvent } from '../src/lib/snapshot'
 import type { RankingModelOutput } from '../src/lib/model'
 import type { MatchRecord } from '../src/types'
 import type { TournamentInstanceId } from '../src/lib/internationalTournaments'
@@ -12,6 +12,7 @@ import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { appendRefreshStages, createRefreshMetrics } from './refresh-metrics.mjs'
 import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
+import { collectRefreshGarbage } from './refresh-worker-memory.mjs'
 
 export type StaticSnapshotBuildOptions = {
   output?: string
@@ -31,6 +32,9 @@ export type StaticSnapshotBuildOptions = {
   replacePublicDirectory?: boolean
   env?: NodeJS.ProcessEnv
   sourceData?: RankingSourceImport
+  importedMatchCount?: number
+  releaseImportAuditBeforeSnapshot?: boolean
+  compactPlayerDirectory?: boolean
   silent?: boolean
 }
 
@@ -53,6 +57,15 @@ const sourceData = options.sourceData ?? await importRankingSourceData({
   lolEsportsJsonPaths: options.lolEsportsJsonPaths,
 })
 const { importedMatches, matches, teams } = sourceData
+const importedMatchCount = options.importedMatchCount ?? importedMatches.length
+const generatedAt = options.generatedAt ?? new Date().toISOString()
+const playerLifecycleEvents: Array<PlayerLifecycleEvent & { rssBytes: number }> = []
+const playerReleaseCollections: Array<PlayerLifecycleReleaseEvent & ReturnType<typeof collectRefreshGarbage>> = []
+if (reconciliationOutput) await writeReconciliationOutput({ reconciliationOutput, importedMatches, generatedAt })
+if (options.releaseImportAuditBeforeSnapshot) {
+  if (importedMatches !== matches) importedMatches.length = 0
+  sourceData.mergedTeams = {}
+}
 const snapshot = createStaticRankingData({
   matches,
   teams,
@@ -61,27 +74,54 @@ const snapshot = createStaticRankingData({
   dataMode: sourceData.dataMode,
   externalSources: sourceData.externalSources,
   tournamentScheduleReferences: sourceData.tournamentScheduleReferences,
-  pipelineAudit: { importedMatchCount: importedMatches.length },
-  ...(options.generatedAt ? { generatedAt: options.generatedAt } : {}),
+  pipelineAudit: { importedMatchCount },
+  generatedAt,
   ...(options.precomputedGlobalRanking ? { precomputedGlobalRanking: options.precomputedGlobalRanking } : {}),
   ...(options.affectedSnapshotKeys ? { materializeSnapshotKeys: options.affectedSnapshotKeys } : {}),
   ...(options.affectedTournamentIds ? { materializeTournamentIds: options.affectedTournamentIds } : {}),
+  compactPlayerDirectory: options.compactPlayerDirectory ?? options.writeFullSnapshot === false,
+  onPlayerLifecycleStage: (event) => {
+    playerLifecycleEvents.push({
+      ...event,
+      rssBytes: Math.max(process.memoryUsage().rss, process.resourceUsage().maxRSS * 1024),
+    })
+  },
+  onPlayerLifecycleRelease: (event) => {
+    playerReleaseCollections.push({ ...event, ...collectRefreshGarbage() })
+  },
 })
+
+const playerLifecycleStages = (['player-build', 'player-compaction'] as const).flatMap((name) => {
+  const events = playerLifecycleEvents.filter((event) => event.name === name)
+  if (events.length === 0) return []
+  return [{
+    name,
+    durationMs: events.reduce((total, event) => total + event.durationMs, 0),
+    input: { operationCount: events.length },
+    output: {
+      peakRssBytes: Math.max(...events.map((event) => event.rssBytes)),
+      maxPlayerCount: Math.max(...events.map((event) => event.playerCount)),
+      scopes: events.map(({ scope, scopeKey, durationMs, playerCount, rssBytes }) => ({
+        scope,
+        scopeKey,
+        durationMs,
+        playerCount,
+        rssBytes,
+      })),
+      ...(name === 'player-compaction' ? { releaseCollections: playerReleaseCollections } : {}),
+    },
+  }]
+})
+for (const stage of playerLifecycleStages) {
+  metrics.recordStage(stage.name, stage)
+}
 
 if (options.writeFullSnapshot !== false) {
   await mkdir(dirname(output), { recursive: true })
   await writeJsonFile(output, snapshot)
 }
-if (reconciliationOutput) {
-  await mkdir(dirname(reconciliationOutput), { recursive: true })
-  await writeFile(reconciliationOutput, `${JSON.stringify({
-    schemaVersion: 1,
-    generatedAt: snapshot.generatedAt,
-    matches: reconciliationEntries(importedMatches),
-  }, null, 2)}\n`)
-}
 const serializationFinished = metrics.startStage('public-serialization', {
-  importedGameCount: importedMatches.length,
+  importedGameCount: importedMatchCount,
   ratedGameCount: matches.length,
 })
 const publicPlan = createPublicArtifactWritePlan(snapshot, {
@@ -113,7 +153,7 @@ try {
   }
   const publicDataBytes = await directorySize(publicDataTargetDir)
   serializationFinished('completed', {
-    importedGameCount: importedMatches.length,
+    importedGameCount: importedMatchCount,
     ratedGameCount: matches.length,
     artifactCount: publicWrites.length,
     outputBytes: publicDataBytes,
@@ -126,8 +166,12 @@ try {
     console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
     console.log(`Public data budget: ${publicDataBytes} bytes`)
   }
-  const result = { publicPlan, ...sourceData, publicDataBytes, publicDataDir: publicDataTargetDir }
-  return options.writeFullSnapshot === false ? result : { snapshot, ...result }
+  const result = { publicPlan, publicDataBytes, publicDataDir: publicDataTargetDir, playerLifecycleStages }
+  if (options.writeFullSnapshot === false) {
+    for (const write of publicPlan.writes) write.contents = ''
+    return result
+  }
+  return { snapshot, ...result, ...sourceData }
 } catch (error) {
   await rm(publicDataDir, { recursive: true, force: true })
   throw error
@@ -164,6 +208,20 @@ function readArgList(name: string) {
     values.push(...next.split(',').map((value) => value.trim()).filter(Boolean))
   }
   return values
+}
+
+export async function writeReconciliationOutput({
+  reconciliationOutput,
+  importedMatches,
+  generatedAt,
+}: {
+  reconciliationOutput: string
+  importedMatches: MatchRecord[]
+  generatedAt: string
+}) {
+  const matches = reconciliationEntries(importedMatches)
+  await atomicWriteFile(reconciliationOutput, `${JSON.stringify({ schemaVersion: 1, generatedAt, matches }, null, 2)}\n`)
+  return matches
 }
 
 function reconciliationEntries(importedMatches: MatchRecord[]) {

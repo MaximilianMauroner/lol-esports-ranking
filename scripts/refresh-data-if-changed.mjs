@@ -5,10 +5,11 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, createBucketClient, downloadBucketDirectory, downloadBucketObject, readActiveContentAddressedGeneration, uploadRankingArtifacts } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, createBucketClient, downloadBucketDirectory, downloadBucketObject, readActiveContentAddressedGeneration, readActiveRawSourceAuthority, uploadRankingArtifacts } from './railway-bucket.mjs'
 import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
 import { readActiveIncrementalState } from './incremental-state-storage.mjs'
-import { buildRankingIncrementally, persistIncrementalStateBuild, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
+import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
+import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -50,7 +51,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   })
   let inheritedMetrics = await readRefreshMetrics(metricsPath)
   const rawDir = resolve(stringArg(args.rawDir ?? env.RANKING_RAW_DIR ?? 'data/raw'))
-  const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
+  let manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
   const output = resolve(stringArg(args.output ?? env.RANKING_DERIVED_OUTPUT ?? 'data/derived/ranking-snapshot.full.json'))
   const reconciliationOutput = resolve(stringArg(args.reconciliationOutput ?? env.RANKING_RECONCILIATION_OUTPUT ?? `${rawDir}/reconciliation.json`))
@@ -65,6 +66,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
   const stagingDir = resolve(stringArg(args.stagingDir ?? `data/.refresh-staging-${process.pid}-${Date.now()}`))
   const stagingManifestPath = resolve(stagingDir, 'manifest.json')
+  const rawWorkerDir = `${stagingDir}-raw-worker`
+  await rm(rawWorkerDir, { recursive: true, force: true })
   const extraDownloadArgs = [
     ...passThroughDownloadArgs(rawArgs),
     ...splitExtraArgs(env.RANKING_REFRESH_DOWNLOAD_ARGS),
@@ -80,12 +83,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         hasUsableLocalRawBaseline,
         config: bucketConfig,
         client: bucketClient,
+        rawWorkerDir,
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
   metrics.recordStage('restore', {
     durationMs: monotonicNow() - restoreStarted,
     result: restoreResult.restored ? 'completed' : 'not-applicable',
-    output: restoreResult,
+    output: { ...restoreResult, rssBytes: process.memoryUsage().rss },
   })
   const previousManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const configuredBootstrapStart = env.RANKING_REFRESH_BOOTSTRAP_START ?? env.RANKING_REFRESH_START
@@ -111,9 +115,12 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   let terminalResult = 'completed'
   let completedPromotionAt
   let completedPromotionEtag
+  let publishedGenerationId
+  let publishedBucket
   let refreshState
   let incrementalBuild
   let restoredIncremental
+  let rawSourceGeneration
   let providerAvailableAt
   try {
     const providerStarted = monotonicNow()
@@ -260,6 +267,49 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
 
     const incrementalEnabled = env.RANKING_INCREMENTAL_ENABLED === 'true'
       && (metrics.snapshot().mode === 'shadow' || metrics.snapshot().mode === 'gated')
+    if (!skipCrunch && incrementalEnabled && env.RANKING_REFRESH_FENCING_TOKEN && bucketConfig.enabled && bucketClient) {
+      const rawAuthorityStarted = monotonicNow()
+      const activeRaw = await readActiveRawSourceAuthority({ config: bucketConfig, client: bucketClient })
+      metrics.recordStage('raw-authority-read', {
+        durationMs: monotonicNow() - rawAuthorityStarted,
+        result: activeRaw.found ? 'completed' : 'not-applicable',
+        output: {
+          found: activeRaw.found,
+          rssBytes: process.memoryUsage().rss,
+          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+        },
+      })
+      const rawWorkerStarted = monotonicNow()
+      const rawWorker = await runRawSourceWorker({
+        action: 'prepare',
+        manifestPath,
+        rawDir,
+        importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
+        generatedAt: finalManifest.generatedAt ?? new Date().toISOString(),
+        objectDir: resolve(rawWorkerDir, 'prepared-objects'),
+        ...(activeRaw.found ? { previousReceipt: activeRaw.receipt } : {}),
+      }, rawWorkerDir)
+      rawSourceGeneration = hydrateFileBackedRawSourceGeneration(rawWorker.generation)
+      manifestPath = rawWorker.manifestPath
+      metrics.recordStage('raw-prepare', {
+        durationMs: Number(rawWorker.prepareMs) || monotonicNow() - rawWorkerStarted,
+        output: {
+          objectCount: rawSourceGeneration.objects.length,
+          rssBytes: process.memoryUsage().rss,
+          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          childMaxRssBytes: rawWorker.childMaxRssBytes,
+          childTotalMs: rawWorker.totalMs,
+        },
+      })
+      metrics.recordStage('raw-materialization', {
+        durationMs: Number(rawWorker.materializeMs) || 0,
+        output: {
+          rssBytes: process.memoryUsage().rss,
+          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          childMaxRssBytes: rawWorker.childMaxRssBytes,
+        },
+      })
+    }
     if (!skipCrunch && incrementalEnabled) {
       const checkpointRestoreStarted = monotonicNow()
       if (bucketConfig.enabled && bucketClient) {
@@ -292,7 +342,11 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       metrics.recordStage('checkpoint-restore', {
         durationMs: monotonicNow() - checkpointRestoreStarted,
         result: restoredIncremental ? 'completed' : 'not-applicable',
-        output: { found: Boolean(restoredIncremental), candidateCount: restoredIncremental?.checkpoints.length ?? 0 },
+        output: {
+          found: Boolean(restoredIncremental),
+          candidateCount: restoredIncremental?.checkpoints.length ?? 0,
+          rssBytes: process.memoryUsage().rss,
+        },
       })
       const crunchStarted = monotonicNow()
       incrementalBuild = await buildRankingIncrementally({
@@ -306,6 +360,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         restored: restoredIncremental,
         diagnosticPath: resolve(rawDir, 'incremental-diagnostic.json'),
         env,
+        ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
       })
       providerAvailableAt = incrementalBuild.metrics.providerAvailableAt ?? null
       metrics.recordStage('classification', {
@@ -334,12 +389,16 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           replayedMatchCount: incrementalBuild.metrics.replayedMatchCount,
           suffixRows: incrementalBuild.metrics.suffixRows,
           suffixDates: incrementalBuild.metrics.suffixDates,
+          rssBytes: process.memoryUsage().rss,
         },
       })
       metrics.recordStage('external-causal-recompute', {
         durationMs: 0,
         result: incrementalBuild.action === 'no-change' ? 'not-applicable' : 'completed',
       })
+      for (const stage of incrementalBuild.metrics.playerLifecycleStages ?? []) {
+        metrics.recordStage(stage.name, stage)
+      }
       metrics.recordStage('dependency-materialization', {
         durationMs: 0,
         result: incrementalBuild.action === 'publish-incremental' ? 'completed' : 'not-applicable',
@@ -425,10 +484,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       } else {
         const browserManifest = incrementalBuild?.rootManifest
           ?? incrementalBuild?.build?.publicPlan.manifest
+          ?? incrementalBuild?.patch?.changedArtifacts?.find((artifact) => artifact.logicalPath === '/data/ranking-summary.json')?.value
           ?? await readJson(resolve(publicDataDir, 'ranking-summary.json'))
         const generationId = env.RANKING_REFRESH_FENCING_TOKEN
           ? stringArg(browserManifest?.artifactMeta?.runId)
           : undefined
+        publishedGenerationId = generationId
+        if (rawSourceGeneration && generationId) rawSourceGeneration = finalizeRawSourceGeneration(rawSourceGeneration, generationId)
         let incrementalState
         if (incrementalBuild && generationId && bucketClient) {
           const stateStarted = monotonicNow()
@@ -448,6 +510,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               ledgerBytes: incrementalState.ledgerBytes,
               ledgerCompressedBytes: incrementalState.ledgerCompressedBytes,
               checkpointCount: incrementalState.checkpointCount,
+              rssBytes: process.memoryUsage().rss,
             },
           })
           releasePersistedIncrementalInputs(incrementalBuild, restoredIncremental)
@@ -465,6 +528,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           contentAddressed: incrementalBuild ? true : env.RANKING_BUCKET_CONTENT_ADDRESSED === 'true',
           ...(incrementalBuild?.action === 'publish-incremental' ? { publicArtifactPatch: incrementalBuild.patch } : {}),
           ...(incrementalState ? { stateManifestAuthority: incrementalState.authority } : {}),
+          ...(rawSourceGeneration ? { rawSourceGeneration } : {}),
           generationId,
           fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
           leaseAuthority: env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
@@ -496,7 +560,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           },
           monotonicNow,
           onStage: (name, stage) => {
-            metrics.recordStage(name, stage)
+            metrics.recordStage(name, {
+              ...stage,
+              output: { ...(stage.output ?? {}), rssBytes: process.memoryUsage().rss },
+            })
             if (name === 'promotion' && stage.output?.promotedAt) completedPromotionAt = stage.output.promotedAt
             if (name === 'promotion' && stage.output?.etag) completedPromotionEtag = stage.output.etag
           },
@@ -517,6 +584,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             return state
           },
         })
+        publishedBucket = bucketPublish
         state.bucket = {
           enabled: true,
           bucket: bucketPublish.bucket,
@@ -549,6 +617,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       fingerprint: fingerprint.fingerprint,
       healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
+      ...(publishedGenerationId ? { generationId: publishedGenerationId } : {}),
+      ...(incrementalBuild ? { incrementalMetrics: incrementalBuild.metrics } : {}),
+      ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
+      ...(publishedBucket ? { bucketPublish: publishedBucket } : {}),
     }
   } catch (error) {
     refreshError = error
@@ -605,6 +677,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       await rm(temporaryPublicDir, { recursive: true, force: true })
     }
     await rm(stagingDir, { recursive: true, force: true })
+    await rm(rawWorkerDir, { recursive: true, force: true })
   }
 }
 
@@ -686,11 +759,33 @@ export function refreshDateWindow({
   }
 }
 
-async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config, client }) {
+async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config, client, rawWorkerDir }) {
   if (hasUsableLocalRawBaseline) {
     return {
       restored: false,
       reason: 'local-baseline-present',
+    }
+  }
+
+  const activeRaw = await readActiveRawSourceAuthority({ config, client })
+  if (activeRaw.found) {
+    if (typeof activeRaw.streamObjectToFile !== 'function') throw new Error('Active raw authority cannot stream objects for isolated restore')
+    const objectFiles = await stageRawAuthorityObjectFiles(activeRaw, resolve(rawWorkerDir, 'restore-objects'))
+    const materialized = await runRawSourceWorker({
+      action: 'restore',
+      receipt: activeRaw.receipt,
+      objectFiles,
+      destinationDir: rawDir,
+      generatedAt: new Date().toISOString(),
+    }, rawWorkerDir)
+    return {
+      restored: true,
+      mode: activeRaw.receipt.storageMode,
+      generationId: activeRaw.receipt.generationId,
+      manifestRestored: materialized.manifestPath === manifestPath,
+      sourceReceiptDigest: activeRaw.receipt.sourceReceiptDigest,
+      childMaxRssBytes: materialized.childMaxRssBytes,
+      childDurationMs: materialized.restoreMs,
     }
   }
 
@@ -959,6 +1054,57 @@ function runCommand(command, commandArgs) {
       else rejectRun(new Error(`${command} ${commandArgs.join(' ')} exited with ${code}`))
     })
   })
+}
+
+async function stageRawAuthorityObjectFiles(authority, destinationDir) {
+  const references = [
+    ...authority.receipt.oracle.flatMap((source) => [source.baseline, ...source.deltas]),
+    ...authority.receipt.leaguepedia.map((source) => source.object),
+    ...authority.receipt.lolesports.map((source) => source.object),
+  ]
+  const unique = new Map(references.map((reference) => [reference.key, reference]))
+  await rm(destinationDir, { recursive: true, force: true })
+  await mkdir(destinationDir, { recursive: true })
+  const objectFiles = {}
+  for (const [key, reference] of unique) {
+    const path = resolve(destinationDir, reference.sha256)
+    await authority.streamObjectToFile(reference, path)
+    objectFiles[key] = path
+  }
+  return objectFiles
+}
+
+async function runRawSourceWorker(input, workerDir) {
+  await mkdir(workerDir, { recursive: true })
+  const nonce = `${input.action}-${process.pid}-${Date.now()}`
+  const inputPath = resolve(workerDir, `${nonce}.input.json`)
+  const outputPath = resolve(workerDir, `${nonce}.output.json`)
+  await writeFile(inputPath, `${JSON.stringify(input)}\n`, { flag: 'wx' })
+  const stderr = []
+  try {
+    await new Promise((resolveRun, rejectRun) => {
+      const child = spawn(process.execPath, [
+        ...process.execArgv,
+        resolve('scripts/raw-source-worker.mjs'),
+        inputPath,
+        outputPath,
+      ], { stdio: ['ignore', 'ignore', 'pipe'] })
+      child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
+      child.on('error', rejectRun)
+      child.on('exit', (code) => {
+        if (code === 0) resolveRun()
+        else rejectRun(new Error(`Raw source worker ${input.action} exited with ${code}: ${Buffer.concat(stderr).toString('utf8')}`))
+      })
+    })
+    const output = await readJson(outputPath)
+    if (output?.action !== input.action || !Number.isSafeInteger(output.childMaxRssBytes) || output.childMaxRssBytes <= 0) {
+      throw new Error(`Raw source worker ${input.action} produced an invalid descriptor`)
+    }
+    return output
+  } finally {
+    await rm(inputPath, { force: true })
+    await rm(outputPath, { force: true })
+  }
 }
 
 async function readJson(path) {

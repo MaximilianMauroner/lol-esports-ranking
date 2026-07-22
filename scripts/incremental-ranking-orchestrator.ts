@@ -12,10 +12,11 @@ import { createRatingReplayContext, replayRatingDates, transparentGprModelMetada
 import { RATING_CHECKPOINT_SCHEMA_VERSION, encodeRatingCheckpoint, selectSafeCheckpoint } from '../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract, reconcileRatingCheckpointEvents } from '../src/lib/ratingCheckpointInventory'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, artifactMetaFor, snapshotKey } from '../src/lib/publicArtifacts/schema'
-import { PUBLIC_ARTIFACT_PATHS, publicMatchHistoryPagePath, publicMatchHistoryShardPath, publicScopeArtifactPath, publicTeamHistoryShardPath } from '../src/lib/publicArtifacts/writePlan'
+import { PUBLIC_ARTIFACT_PATHS, publicMatchHistoryPagePath, publicMatchHistoryShardPath, publicScopeArtifactPath, publicTeamHistoryShardPath, publicTournamentMovementShardPath } from '../src/lib/publicArtifacts/writePlan'
 import { deriveTournamentInstances, tournamentInstanceForEvent, type TournamentInstanceId } from '../src/lib/internationalTournaments'
+import type { MatchRecord } from '../src/types'
 import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
-import { buildStaticSnapshot } from './build-static-snapshot.ts'
+import { buildStaticSnapshot, writeReconciliationOutput } from './build-static-snapshot.ts'
 import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
 import {
   prepareContentAddressedState,
@@ -28,6 +29,7 @@ import {
   type StateObjectReference,
 } from './incremental-state-storage.mjs'
 import type { BucketClient, BucketStorageConfig } from './railway-bucket.mjs'
+import { collectRefreshGarbage } from './refresh-worker-memory.mjs'
 
 export const RANKING_INCREMENTAL_IMPORTER_VERSION = 'community-source-import-v1'
 
@@ -69,6 +71,16 @@ export type IncrementalBuildMetrics = {
   stateParity: boolean | null
   materializedScopeCount: number
   providerAvailableAt?: string
+  playerLifecycleStages?: Array<{
+    name: 'player-build' | 'player-compaction'
+    durationMs: number
+    input: Record<string, unknown>
+    output: Record<string, unknown>
+  }>
+  memoryCollections?: {
+    afterInputRelease?: { heapUsedBytes: number; heapTotalBytes: number; rssBytes: number }
+    afterReplayState?: { heapUsedBytes: number; heapTotalBytes: number; rssBytes: number }
+  }
 }
 
 export type IncrementalStateBuild = {
@@ -143,6 +155,12 @@ export function releasePersistedIncrementalInputs(
   }
 }
 
+function releaseRestoredReplayPayloads(restored: RestoredIncrementalAuthority) {
+  restored.checkpoints = []
+  restored.canonicalLedger = {}
+  restored.loadCheckpoints = undefined
+}
+
 export async function persistIncrementalStateBuild({
   state,
   generationId,
@@ -200,6 +218,7 @@ export async function buildRankingIncrementally({
   sourceData: providedSourceData,
   silent = false,
   buildSnapshot = buildStaticSnapshot,
+  sourceReceiptDigest,
 }: {
   mode: 'legacy' | 'shadow' | 'gated'
   cause: string
@@ -215,28 +234,28 @@ export async function buildRankingIncrementally({
   sourceData?: RankingSourceImport
   silent?: boolean
   buildSnapshot?: typeof buildStaticSnapshot
+  sourceReceiptDigest?: string
 }): Promise<IncrementalRankingBuildResult> {
   const sourceData = providedSourceData ?? await importRankingSourceData({ manifestPath })
-  let observationLedger: CanonicalMatchLedger | undefined
-  if (restored) {
-    try { observationLedger = parseCanonicalMatchLedger(restored.canonicalLedger) } catch { /* fail closed in the guarded path below */ }
-  }
-  const context = ledgerContext(sourceData, observationLedger)
-  const ledger = buildCanonicalMatchLedger(sourceData.matches, context)
+  const importedMatchCount = sourceData.importedMatches.length
+  restored = restored ? { ...restored } : undefined
+  const ledger = buildCurrentCanonicalLedger(sourceData, restored)
   const forceFull = !enabled || mode === 'legacy' || cause === 'daily-audit' || cause === 'manual-force'
   if (forceFull) {
     const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
-    const state = buildStateFromFullReplay(sourceData, ledger, generatedAt)
+    const state = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
     return { action: 'publish-full', sourceData, build: full, state, metrics: baseMetrics('full-invalidation', ledger, { fullSnapshotWritten: true }) }
   }
 
   let classification: RankingChangeClassification | undefined
   let candidateDir: string | undefined
+  const memoryCollections: NonNullable<IncrementalBuildMetrics['memoryCollections']> = {}
   try {
     if (!restored) throw new Error('incremental-state-missing')
-    const previousLedger = parseCanonicalMatchLedger(restored.canonicalLedger)
+    let previousLedger: CanonicalMatchLedger | undefined = parseCanonicalMatchLedger(restored.canonicalLedger)
     classification = classifyRankingChange(previousLedger, ledger, ledger.compatibility)
     if (classification.kind === 'no-change') {
+      await emitReconciliation(reconciliationOutput, sourceData.importedMatches, generatedAt)
       return { action: 'no-change', sourceData, metrics: baseMetrics('no-change', ledger) }
     }
     if (classification.kind === 'full-invalidation') throw new Error(classification.reasons.join(',') || 'full-invalidation')
@@ -244,9 +263,10 @@ export async function buildRankingIncrementally({
       if (!restored.rootArtifact) throw new Error('metadata-only-root-artifact-missing')
       const rootManifest = metadataOnlyRootArtifact(restored.rootArtifact, sourceData, generatedAt)
       const rootPrepared = prepareSemanticArtifact(rootManifest)
-      const state = buildMetadataOnlyState(sourceData, ledger, restored)
+      const state = buildMetadataOnlyState(sourceData, ledger, restored, sourceReceiptDigest)
       const expectedLogicalPaths = Object.keys(requiredRecord(restored.publicManifest.artifacts, 'public generation artifacts')).sort()
       const changedPath = '/data/ranking-summary.json'
+      await emitReconciliation(reconciliationOutput, sourceData.importedMatches, generatedAt)
       return {
         action: 'publish-incremental', sourceData, rootManifest, state,
         patch: {
@@ -264,6 +284,29 @@ export async function buildRankingIncrementally({
     }
 
     if (!restored.rootArtifact) throw new Error('verified-active-root-artifact-missing')
+    if (mode === 'gated') {
+      sourceData.mergedTeams = {}
+    }
+    const changes = changesForClassification(previousLedger, ledger, classification)
+    previousLedger = undefined
+    if (mode === 'gated') memoryCollections.afterInputRelease = collectRefreshGarbage()
+    const replay = await selectReplay(restored, sourceData, ledger, classification, generatedAt)
+    releaseRestoredReplayPayloads(restored)
+    const {
+      replayModel,
+      state,
+      replayedMatchCount,
+    } = replayAndBuildTerminalState(
+      sourceData,
+      ledger,
+      restored,
+      replay,
+      generatedAt,
+      mode === 'shadow',
+      sourceReceiptDigest,
+    )
+    replay.checkpointState = undefined
+    if (mode === 'gated') memoryCollections.afterReplayState = collectRefreshGarbage()
     const dependencyArtifacts = restored.loadArtifacts
       ? { ...restored.artifacts, ...await restored.loadArtifacts([
           `/data/${PUBLIC_ARTIFACT_PATHS.matchHistoryIndex}`,
@@ -271,7 +314,6 @@ export async function buildRankingIncrementally({
           `/data/${PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex}`,
         ]) }
       : restored.artifacts
-    const changes = changesForClassification(previousLedger, ledger, classification)
     const preliminaryPlan = scopedDependencyPlan(changes, classification, restored.rootArtifact, restored.publicManifest, dependencyArtifacts)
     const affectedLogicalPaths = new Set(preliminaryPlan.logicalPaths.map(stripDataPrefix))
     const affectedSnapshotKeys = snapshotKeysForPlan(restored.rootArtifact, preliminaryPlan.logicalPaths, changes)
@@ -280,14 +322,6 @@ export async function buildRankingIncrementally({
       ? { ...restored.artifacts, ...await restored.loadArtifacts(previousArtifactMergePaths(preliminaryPlan.logicalPaths)) }
       : restored.artifacts
     if (!previousArtifacts) throw new Error('verified-active-artifacts-missing')
-    const replay = await selectReplay(restored, sourceData, ledger, classification, generatedAt)
-    const replayResult = replayRankingState({
-      authoritativeMatches: sourceData.matches,
-      teams: sourceData.teams,
-      tournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt),
-      ...(replay.checkpointState ? { checkpointState: replay.checkpointState } : {}),
-      ...(replay.replayFromUtcDate ? { replayFromUtcDate: replay.replayFromUtcDate } : {}),
-    })
     candidateDir = `${publicDataDir}.incremental-${process.pid}-${Date.now()}`
     const candidate = await buildSnapshot({
       output,
@@ -295,11 +329,13 @@ export async function buildRankingIncrementally({
       reconciliationOutput,
       sourceData,
       generatedAt,
-      precomputedGlobalRanking: replayResult.model,
+      precomputedGlobalRanking: replayModel,
       affectedLogicalPaths,
       affectedSnapshotKeys,
       affectedTournamentIds,
       previousArtifacts,
+      importedMatchCount,
+      releaseImportAuditBeforeSnapshot: mode === 'gated',
       writeFullSnapshot: false,
       replacePublicDirectory: false,
       env,
@@ -311,6 +347,16 @@ export async function buildRankingIncrementally({
       scheduleReferences: sourceData.tournamentScheduleReferences,
       generatedAt,
     }).map((instance) => instance.id))
+    const playerDirectoryWrite = candidate.publicPlan.writes.find((write) => write.relativePath === PUBLIC_ARTIFACT_PATHS.players)
+    const previousPlayerDirectory = optionalRecord(previousArtifacts[`/data/${PUBLIC_ARTIFACT_PATHS.players}`])
+    if (playerDirectoryWrite && previousPlayerDirectory) {
+      playerDirectoryWrite.value = mergePartialPlayerDirectoryArtifact(
+        requiredRecord(playerDirectoryWrite.value, 'candidate player directory'),
+        previousPlayerDirectory,
+        affectedSnapshotKeys,
+        validScopeKeys,
+      )
+    }
     prunePartialPublicIndexes(candidate.publicPlan.writes, validScopeKeys, validTournamentIds)
     const previousSemantic = semanticMapFromGeneration(restored.publicManifest)
     const candidateSemantic = semanticMapFromWrites(candidate.publicPlan.writes)
@@ -335,19 +381,11 @@ export async function buildRankingIncrementally({
     const changedWrites = candidate.publicPlan.writes.filter((write) => changed.has(`/data/${write.relativePath}`))
     const root = candidate.publicPlan.writes.find((write) => write.relativePath === 'ranking-summary.json')
     if (root && !changedWrites.includes(root)) changedWrites.push(root)
-    const state = buildTerminalState(
-      sourceData,
-      ledger,
-      replayResult.state,
-      restored,
-      generatedAt,
-      mode === 'shadow' || replayResult.replayedMatchCount >= 100,
-    )
     let parity: boolean | null = null
 
     if (mode === 'shadow') {
       const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
-      const fullState = buildStateFromFullReplay(sourceData, ledger, generatedAt)
+      const fullState = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
       const report = compareSemanticArtifactMaps(
         semanticMapFromWrites(full.publicPlan.writes),
         currentSemantic,
@@ -362,16 +400,17 @@ export async function buildRankingIncrementally({
         await rm(candidateDir, { recursive: true, force: true })
         return {
           action: 'publish-full', sourceData, build: full, state: fullState, diagnostic,
-          metrics: withArtifactBytes(metricsFor(classification, ledger, replay, replayResult.replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidate.publicPlan.writes),
+          metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections),
         }
       }
       await rm(candidateDir, { recursive: true, force: true })
       return {
-        action: 'publish-full', sourceData, build: full, state: fullState, metrics: withArtifactBytes(metricsFor(classification, ledger, replay, replayResult.replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidate.publicPlan.writes),
+        action: 'publish-full', sourceData, build: full, state: fullState, metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections),
       }
     }
 
     await rm(candidateDir, { recursive: true, force: true })
+    releaseMatchRosterPayloads(sourceData.matches)
     return {
       action: 'publish-incremental', sourceData, state,
       patch: {
@@ -380,18 +419,87 @@ export async function buildRankingIncrementally({
         removedLogicalPaths: removedPaths,
         expectedLogicalPaths: currentPaths,
       },
-      metrics: withArtifactBytes(metricsFor(classification, ledger, replay, replayResult.replayedMatchCount, currentSemantic, changedWrites.map((write) => `/data/${write.relativePath}`).sort(), currentPaths.filter((path) => !changed.has(path)), removedPaths, false, parity, null, affectedSnapshotKeys.size), changedWrites),
+      metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, changedWrites.map((write) => `/data/${write.relativePath}`).sort(), currentPaths.filter((path) => !changed.has(path)), removedPaths, false, parity, null, affectedSnapshotKeys.size), changedWrites), candidate), memoryCollections),
     }
   } catch (error) {
     if (candidateDir) await rm(candidateDir, { recursive: true, force: true })
     const reason = error instanceof Error ? error.message : String(error)
     const diagnostic = await persistDiagnostic(diagnosticPath, {
-      schemaVersion: 1, kind: 'incremental-fallback', reason, ...(classification ? { classification: classification.kind } : {}),
+      schemaVersion: 1, kind: 'incremental-fallback', reason,
+      ...(classification ? {
+        classification: classification.kind,
+        classificationReasons: classification.reasons,
+        addedKeys: classification.addedKeys,
+        removedKeys: classification.removedKeys,
+        changedKeys: classification.changedKeys,
+      } : {}),
     })
-    const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
-    const state = buildStateFromFullReplay(sourceData, ledger, generatedAt)
+    const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, importedMatchCount, env, silent })
+    const state = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
     const metrics = baseMetrics(classification?.kind ?? 'full-invalidation', ledger, { fullSnapshotWritten: true, fallbackReason: reason })
     return { action: 'publish-full', sourceData, build: full, state, diagnostic, metrics }
+  }
+}
+
+async function emitReconciliation(
+  reconciliationOutput: string | undefined,
+  importedMatches: MatchRecord[],
+  generatedAt: string | undefined,
+) {
+  if (!reconciliationOutput) return
+  await writeReconciliationOutput({
+    reconciliationOutput,
+    importedMatches,
+    generatedAt: generatedAt ?? new Date().toISOString(),
+  })
+}
+
+function buildCurrentCanonicalLedger(
+  sourceData: RankingSourceImport,
+  restored: RestoredIncrementalAuthority | undefined,
+) {
+  let previous: CanonicalMatchLedger | undefined
+  if (restored) {
+    try { previous = parseCanonicalMatchLedger(restored.canonicalLedger) } catch { /* fail closed in the guarded path below */ }
+  }
+  return buildCanonicalMatchLedger(sourceData.matches, ledgerContext(sourceData, previous))
+}
+
+function replayAndBuildTerminalState(
+  sourceData: RankingSourceImport,
+  ledger: CanonicalMatchLedger,
+  restored: RestoredIncrementalAuthority,
+  replay: Awaited<ReturnType<typeof selectReplay>>,
+  generatedAt: string,
+  persistTerminalCheckpoint: boolean,
+  sourceReceiptDigest?: string,
+) {
+  const result = replayRankingState({
+    authoritativeMatches: sourceData.matches,
+    teams: sourceData.teams,
+    tournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt),
+    ...(replay.checkpointState ? { checkpointState: replay.checkpointState } : {}),
+    ...(replay.replayFromUtcDate ? { replayFromUtcDate: replay.replayFromUtcDate } : {}),
+  })
+  return {
+    replayModel: result.model,
+    replayedMatchCount: result.replayedMatchCount,
+    state: buildTerminalState(
+      sourceData,
+      ledger,
+      result.state,
+      restored,
+      generatedAt,
+      persistTerminalCheckpoint || result.replayedMatchCount >= 100,
+      sourceReceiptDigest,
+    ),
+  }
+}
+
+function releaseMatchRosterPayloads(matches: MatchRecord[]) {
+  for (const match of matches) {
+    match.teamARoster = undefined
+    match.teamBRoster = undefined
   }
 }
 
@@ -402,6 +510,7 @@ function previousArtifactMergePaths(logicalPaths: string[]) {
     `/data/${PUBLIC_ARTIFACT_PATHS.matchHistoryIndex}`,
     `/data/${PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex}`,
     `/data/${PUBLIC_ARTIFACT_PATHS.regionHistory}`,
+    `/data/${PUBLIC_ARTIFACT_PATHS.players}`,
   ])
   return logicalPaths.filter((path) => mergePaths.has(path))
 }
@@ -456,6 +565,49 @@ function pruneRecordEntries(value: Record<string, unknown>, key: string, allowed
   return { ...value, [key]: Object.fromEntries(Object.entries(entries).filter(([entryKey]) => allowed.has(entryKey))) }
 }
 
+export function mergePartialPlayerDirectoryArtifact(
+  candidate: Record<string, unknown>,
+  previous: Record<string, unknown>,
+  affectedScopeKeys: ReadonlySet<string>,
+  validScopeKeys: ReadonlySet<string>,
+) {
+  const merged = { ...candidate }
+  const scopedPlayers = mergeUnaffectedScopedRecords(
+    optionalRecord(previous.scopedPlayers),
+    optionalRecord(candidate.scopedPlayers),
+    affectedScopeKeys,
+    validScopeKeys,
+  )
+  if (Object.keys(scopedPlayers).length > 0) merged.scopedPlayers = scopedPlayers
+  else delete merged.scopedPlayers
+
+  const candidateDiagnostics = optionalRecord(candidate.diagnostics) ?? {}
+  const previousDiagnostics = optionalRecord(previous.diagnostics)
+  const scopedDiagnostics = mergeUnaffectedScopedRecords(
+    optionalRecord(previousDiagnostics?.scopedSameTeamTopFiveClustering),
+    optionalRecord(candidateDiagnostics.scopedSameTeamTopFiveClustering),
+    affectedScopeKeys,
+    validScopeKeys,
+  )
+  const diagnostics = { ...candidateDiagnostics }
+  if (Object.keys(scopedDiagnostics).length > 0) diagnostics.scopedSameTeamTopFiveClustering = scopedDiagnostics
+  else delete diagnostics.scopedSameTeamTopFiveClustering
+  merged.diagnostics = diagnostics
+  return merged
+}
+
+function mergeUnaffectedScopedRecords(
+  previous: Record<string, unknown> | undefined,
+  candidate: Record<string, unknown> | undefined,
+  affectedScopeKeys: ReadonlySet<string>,
+  validScopeKeys: ReadonlySet<string>,
+) {
+  return Object.fromEntries([
+    ...Object.entries(previous ?? {}).filter(([key]) => validScopeKeys.has(key) && !affectedScopeKeys.has(key)),
+    ...Object.entries(candidate ?? {}).filter(([key]) => validScopeKeys.has(key)),
+  ])
+}
+
 function obsoletePublicArtifactPaths({
   previousPaths,
   previousRoot,
@@ -477,13 +629,13 @@ function obsoletePublicArtifactPaths({
     removed.add(`/data/${publicTeamHistoryShardPath(key)}`)
     removed.add(`/data/${publicMatchHistoryShardPath(key)}`)
     const pagePrefix = `/data/${publicMatchHistoryPagePath(key, 1).replace(/-1\.json$/, '-')}`
-    for (const path of previousPaths) if (path.startsWith(pagePrefix)) removed.add(path)
+    for (const path of previousPaths) if (isNumberedPagePath(path, pagePrefix)) removed.add(path)
   }
   const tournamentPrefix = `/data/${PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir}/`
+  const validTournamentPaths = new Set([...validTournamentIds].map((id) => `/data/${publicTournamentMovementShardPath(id as TournamentInstanceId)}`))
   for (const path of previousPaths) {
     if (!path.startsWith(tournamentPrefix) || path.endsWith('/index.json')) continue
-    const id = decodeURIComponent(path.slice(tournamentPrefix.length).replace(/\.json$/, ''))
-    if (!validTournamentIds.has(id)) removed.add(path)
+    if (!validTournamentPaths.has(path)) removed.add(path)
   }
   for (const write of candidateWrites) {
     if (!write.relativePath.startsWith(`${PUBLIC_ARTIFACT_PATHS.matchHistoryShardDir}/`)
@@ -499,9 +651,13 @@ function obsoletePublicArtifactPaths({
       return path ? [path] : []
     }))
     const pagePrefix = `/data/${publicMatchHistoryPagePath(key, 1).replace(/-1\.json$/, '-')}`
-    for (const path of previousPaths) if (path.startsWith(pagePrefix) && !validPages.has(path)) removed.add(path)
+    for (const path of previousPaths) if (isNumberedPagePath(path, pagePrefix) && !validPages.has(path)) removed.add(path)
   }
   return [...removed].filter((path) => previousPaths.includes(path)).sort()
+}
+
+function isNumberedPagePath(path: string, prefix: string) {
+  return path.startsWith(prefix) && /^\d+\.json$/.test(path.slice(prefix.length))
 }
 
 function ledgerContext(sourceData: RankingSourceImport, previous?: CanonicalMatchLedger) {
@@ -634,7 +790,12 @@ async function selectReplay(
   throw new Error('checkpoint-no-safe-checkpoint')
 }
 
-function buildStateFromFullReplay(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, generatedAt = new Date().toISOString()): IncrementalStateBuild {
+function buildStateFromFullReplay(
+  sourceData: RankingSourceImport,
+  ledger: CanonicalMatchLedger,
+  generatedAt = new Date().toISOString(),
+  sourceReceiptDigest?: string,
+): IncrementalStateBuild {
   const lifecycles = tournamentLifecyclesFor(sourceData, generatedAt)
   const context = createRatingReplayContext(sourceData.matches, sourceData.teams, { tournamentLifecycles: lifecycles })
   const terminalDates = new Set<string>()
@@ -663,16 +824,21 @@ function buildStateFromFullReplay(sourceData: RankingSourceImport, ledger: Canon
   if (!state || checkpoints.length === 0) throw new Error('Cannot bootstrap incremental checkpoints without rated matches')
   return {
     ledger, compatibility: stateCompatibility(sourceData),
-    sourceReceiptDigest: sha256(stableJson({ schedule: ledger.scheduleReceiptIdentity, context: ledger.contextReceiptIdentity, provenance: ledger.provenanceReceiptIdentity })),
+    sourceReceiptDigest: resolvedSourceReceiptDigest(sourceReceiptDigest, ledger),
     checkpoints,
   }
 }
 
-function buildMetadataOnlyState(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, restored: RestoredIncrementalAuthority): IncrementalStateBuild {
+function buildMetadataOnlyState(
+  sourceData: RankingSourceImport,
+  ledger: CanonicalMatchLedger,
+  restored: RestoredIncrementalAuthority,
+  sourceReceiptDigest?: string,
+): IncrementalStateBuild {
   return {
     ledger,
     compatibility: stateCompatibility(sourceData),
-    sourceReceiptDigest: sha256(stableJson({ schedule: ledger.scheduleReceiptIdentity, context: ledger.contextReceiptIdentity, provenance: ledger.provenanceReceiptIdentity })),
+    sourceReceiptDigest: resolvedSourceReceiptDigest(sourceReceiptDigest, ledger),
     checkpoints: restored.stateManifest.checkpoints.map((candidate) => ({
       boundary: candidate.boundary,
       rawPrefix: candidate.rawPrefix,
@@ -705,6 +871,7 @@ function buildTerminalState(
   restored: RestoredIncrementalAuthority,
   generatedAt: string,
   persistTerminalCheckpoint: boolean,
+  sourceReceiptDigest?: string,
 ): IncrementalStateBuild {
   const previous = restored.stateManifest.checkpoints
     .filter((candidate) => rawPrefixMatchesLedger(candidate.rawPrefix, ledger, candidate.boundary.date))
@@ -725,9 +892,19 @@ function buildTerminalState(
   return {
     ledger,
     compatibility: stateCompatibility(sourceData),
-    sourceReceiptDigest: sha256(stableJson({ schedule: ledger.scheduleReceiptIdentity, context: ledger.contextReceiptIdentity, provenance: ledger.provenanceReceiptIdentity })),
+    sourceReceiptDigest: resolvedSourceReceiptDigest(sourceReceiptDigest, ledger),
     checkpoints: [...byBoundary.values()].sort((left, right) => left.boundary.date.localeCompare(right.boundary.date) || left.boundary.matchId.localeCompare(right.boundary.matchId)),
   }
+}
+
+function resolvedSourceReceiptDigest(provided: string | undefined, ledger: CanonicalMatchLedger) {
+  const digest = provided ?? sha256(stableJson({
+    schedule: ledger.scheduleReceiptIdentity,
+    context: ledger.contextReceiptIdentity,
+    provenance: ledger.provenanceReceiptIdentity,
+  }))
+  if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('sourceReceiptDigest must be a SHA-256 digest')
+  return digest
 }
 
 function checkpointFromState(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, state: ReturnType<typeof replayRatingDates>, generatedAt: string) {
@@ -1172,6 +1349,20 @@ function withArtifactBytes(metrics: IncrementalBuildMetrics, writes: SnapshotBui
     semanticBytes: prepared.reduce((sum, artifact) => sum + artifact.bytes, 0),
     compressedBytes: prepared.reduce((sum, artifact) => sum + artifact.compressedBytes, 0),
   }
+}
+
+function withPlayerLifecycle(metrics: IncrementalBuildMetrics, build: SnapshotBuild): IncrementalBuildMetrics {
+  return {
+    ...metrics,
+    playerLifecycleStages: build.playerLifecycleStages,
+  }
+}
+
+function withMemoryCollections(
+  metrics: IncrementalBuildMetrics,
+  memoryCollections: NonNullable<IncrementalBuildMetrics['memoryCollections']>,
+): IncrementalBuildMetrics {
+  return { ...metrics, memoryCollections }
 }
 
 function compareIncrementalState(expected: IncrementalStateBuild, actual: IncrementalStateBuild) {

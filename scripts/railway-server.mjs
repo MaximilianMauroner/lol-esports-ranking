@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream/promises'
 import { createGunzip, createGzip } from 'node:zlib'
 import { bucketConfigFromEnv, contentTypeForPath, getBucketObject, readBucketJson } from './railway-bucket.mjs'
 import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
+import { refreshWorkerArgs } from './refresh-worker-memory.mjs'
 
 const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
@@ -439,7 +440,7 @@ function runRefresh(reason) {
   }
 
   refreshInFlight = new Promise((resolveRefresh) => {
-    const child = spawn(process.execPath, [refreshScript], {
+    const child = spawn(process.execPath, refreshWorkerArgs(refreshScript), {
       env: process.env,
       stdio: 'inherit',
     })

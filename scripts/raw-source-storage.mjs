@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto'
-import { basename, join } from 'node:path'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { basename, join, resolve } from 'node:path'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
+import { replaceDirectory } from './replace-directory.ts'
 
-export const RAW_SOURCE_STORAGE_MODE = 'content-addressed-raw-gzip-v1'
+export const RAW_SOURCE_STORAGE_MODE = 'content-addressed-raw-gzip-v2'
+export const ORACLE_GAME_INVENTORY_DIGEST_SCHEME = 'oracle-game-inventory-v1'
 export const RAW_SOURCE_RECEIPT_KIND = 'raw-source-generation-receipt'
 export const ORACLE_BASELINE_KIND = 'oracle-complete-game-baseline'
 export const ORACLE_DELTA_KIND = 'oracle-date-league-delta'
@@ -81,7 +83,7 @@ export function parseOracleCsv(csv, { sourceFileName, importerVersion }) {
     const date = normalizeOracleDate(row[indexes.date])
     const league = row[indexes.league]?.trim()
     if (!gameId || !date || !league) throw new Error(`Oracle CSV row ${rowIndex + 2} has incomplete game identity`)
-    const current = byGame.get(gameId) ?? { gameId, date, league, rows: [] }
+    const current = byGame.get(gameId) ?? { gameId, date, league, sourceOrder: byGame.size, rows: [] }
     if (current.date !== date || current.league !== league) throw new Error(`Oracle game ${gameId} has ambiguous date or league`)
     current.rows.push(row)
     byGame.set(gameId, current)
@@ -175,6 +177,64 @@ export function prepareOracleMutationChain({ previousSource, nextCsv, nextSource
   return { source: current, deltas, mutations }
 }
 
+export function prepareOracleMutationChainFromInventory({ previousReceipt, importerVersion, nextCsv, nextSource }) {
+  const previous = parseOracleInventoryAuthority(previousReceipt, importerVersion)
+  const next = nextSource
+    ? parseOracleSource(nextSource, 'next Oracle source')
+    : parseOracleCsv(nextCsv, { sourceFileName: previous.sourceFileName, importerVersion })
+  if (next.sourceFileName !== previous.sourceFileName) throw new Error('Oracle source filename mismatch')
+  if (next.importerVersion !== importerVersion) throw new Error('Oracle source importer version mismatch')
+  if (next.headerDigest !== previous.headerDigest) throw new Error('Oracle source header mismatch')
+  const previousById = new Map(previous.gameInventory.map((game) => [game.gameId, game]))
+  const nextById = new Map(next.games.map((game) => [game.gameId, game]))
+  const mutations = []
+  for (const game of previous.gameInventory) {
+    const replacement = nextById.get(game.gameId)
+    if (!replacement) {
+      mutations.push({ partition: partitionFor(game), operation: 'delete', gameId: game.gameId, expectedPreviousDigest: game.digest })
+    } else if (replacement.digest !== game.digest) {
+      mutations.push({ partition: partitionFor(replacement), operation: 'replace', gameId: game.gameId, expectedPreviousDigest: game.digest, game: replacement })
+    }
+  }
+  for (const game of next.games) {
+    if (!previousById.has(game.gameId)) mutations.push({ partition: partitionFor(game), operation: 'add', gameId: game.gameId, game })
+  }
+  mutations.sort(comparePartitionedMutations)
+  let currentInventory = previous.gameInventory
+  let currentDigest = previous.effectiveOracleDigest
+  const deltas = []
+  for (const [partitionKey, grouped] of groupBy(mutations, (entry) => partitionKeyFor(entry.partition))) {
+    const partition = parsePartition(grouped[0].partition, `Oracle delta partition ${partitionKey}`)
+    const valueWithoutNext = {
+      artifactKind: ORACLE_DELTA_KIND,
+      schemaVersion: 1,
+      importerVersion,
+      sourceFileName: previous.sourceFileName,
+      header: next.header,
+      headerDigest: previous.headerDigest,
+      partition,
+      previousOracleDigest: currentDigest,
+      mutations: grouped.map(rawMutationFor),
+    }
+    currentInventory = applyInventoryMutations(currentInventory, grouped)
+    const nextOracleDigest = oracleSourceDigestFromInventory({
+      sourceFileName: previous.sourceFileName,
+      importerVersion,
+      headerDigest: previous.headerDigest,
+      gameInventory: currentInventory,
+    })
+    const value = { ...valueWithoutNext, nextOracleDigest }
+    const parsedValue = parseOracleDelta(value, { importerVersion, sourceFileName: previous.sourceFileName, headerDigest: previous.headerDigest })
+    const prepared = prepareRawObject(parsedValue)
+    deltas.push({ value: parsedValue, prepared, reference: rawObjectReferenceFor(prepared) })
+    currentDigest = nextOracleDigest
+  }
+  if (currentDigest !== next.digest || canonicalJsonFor(currentInventory) !== canonicalJsonFor(oracleGameInventory(next))) {
+    throw new Error('Oracle inventory mutation chain does not reconstruct the requested source')
+  }
+  return { source: next, deltas, mutations, gameInventory: currentInventory }
+}
+
 export function parseOracleDelta(value, compatibility = {}) {
   assertExactKeys(value, ['artifactKind', 'schemaVersion', 'importerVersion', 'sourceFileName', 'header', 'headerDigest', 'partition', 'previousOracleDigest', 'nextOracleDigest', 'mutations'], 'Oracle delta')
   if (value.artifactKind !== ORACLE_DELTA_KIND || value.schemaVersion !== 1) throw new Error('Unsupported Oracle delta schema')
@@ -215,6 +275,10 @@ export function parseOracleDelta(value, compatibility = {}) {
 
 export function applyOracleDelta(source, delta) {
   const current = parseOracleSource(source, 'Oracle source')
+  return applyParsedOracleDelta(current, delta)
+}
+
+function applyParsedOracleDelta(current, delta) {
   const parsed = parseOracleDelta(delta, current)
   return applyOracleDeltaValue(current, parsed)
 }
@@ -256,7 +320,7 @@ export function prepareRawSourceReceipt({ generationId, importerVersion, coverag
   assertNonEmptyString(importerVersion, 'raw receipt importerVersion')
   const parsedCoverage = parseCoverage(coverage)
   assertRecord(sourceReceiptInputs, 'sourceReceiptInputs')
-  const parsedOracle = parseOracleReceiptSources(oracle)
+  const parsedOracle = parseOracleReceiptSources(oracle, importerVersion)
   const parsedLeaguepedia = parseNarrowReceiptSources(leaguepedia, 'leaguepedia')
   const parsedLolEsports = parseNarrowReceiptSources(lolesports, 'lolesports')
   const identity = { importerVersion, coverage: parsedCoverage, oracle: parsedOracle, leaguepedia: parsedLeaguepedia, lolesports: parsedLolEsports }
@@ -291,7 +355,7 @@ export function parseRawSourceReceipt(value) {
   assertRecord(value.sourceReceiptInputs, 'raw receipt sourceReceiptInputs')
   assertDigest(value.rawIdentityDigest, 'raw receipt rawIdentityDigest')
   assertDigest(value.sourceReceiptDigest, 'raw receipt sourceReceiptDigest')
-  const oracle = parseOracleReceiptSources(value.oracle)
+  const oracle = parseOracleReceiptSources(value.oracle, value.importerVersion)
   const leaguepedia = parseNarrowReceiptSources(value.leaguepedia, 'leaguepedia')
   const lolesports = parseNarrowReceiptSources(value.lolesports, 'lolesports')
   const identity = { importerVersion: value.importerVersion, coverage, oracle, leaguepedia, lolesports }
@@ -327,9 +391,12 @@ export async function reconstructRawSourceReceipt(receiptValue, objectResolver) 
     }
     for (const [index, reference] of sourceReceipt.deltas.entries()) {
       const deltaValue = await resolveObject(reference, `Oracle delta ${sourceReceipt.sourceFileName}[${index}]`)
-      source = applyOracleDelta(source, deltaValue)
+      source = applyParsedOracleDelta(source, deltaValue)
     }
     if (source.digest !== sourceReceipt.effectiveOracleDigest) throw new Error(`Oracle receipt chain mismatch for ${sourceReceipt.sourceFileName}`)
+    if (canonicalJsonFor(oracleGameInventory(source)) !== canonicalJsonFor(sourceReceipt.gameInventory)) {
+      throw new Error(`Oracle receipt inventory mismatch for ${sourceReceipt.sourceFileName}`)
+    }
     oracle.push({ sourceFileName: source.sourceFileName, csv: oracleCsvForSource(source), source })
   }
   const resolveNarrow = async (entries, provider) => Promise.all(entries.map(async (entry) => {
@@ -352,39 +419,48 @@ export async function materializeRawSourceReceipt({ receipt, objectResolver, des
   assertNonEmptyString(destinationDir, 'raw materialization destinationDir')
   assertNonEmptyString(generatedAt, 'raw materialization generatedAt')
   const reconstructed = await reconstructRawSourceReceipt(receipt, objectResolver)
-  const files = { oracleCsv: [], leaguepediaJson: [], lolEsportsJson: [] }
-  const writeProviderFiles = async (directory, entries, contentFor, fileGroup) => {
-    await mkdir(join(destinationDir, directory), { recursive: true })
-    for (const entry of entries) {
-      const relativePath = `${directory}/${entry.sourceFileName}`
-      await writeFile(join(destinationDir, relativePath), contentFor(entry))
-      files[fileGroup].push(relativePath)
+  const destination = resolve(destinationDir)
+  const nextDir = `${destination}.receipt-next-${process.pid}-${Date.now()}`
+  await rm(nextDir, { recursive: true, force: true })
+  try {
+    const files = { oracleCsv: [], leaguepediaJson: [], lolEsportsJson: [] }
+    const writeProviderFiles = async (directory, entries, contentFor, fileGroup) => {
+      await mkdir(join(nextDir, directory), { recursive: true })
+      for (const entry of entries) {
+        const relativePath = `${directory}/${entry.sourceFileName}`
+        await writeFile(join(nextDir, relativePath), contentFor(entry))
+        files[fileGroup].push(relativePath)
+      }
     }
+    await writeProviderFiles('oracles-elixir', reconstructed.oracle, oracleContent, 'oracleCsv')
+    await writeProviderFiles('leaguepedia', reconstructed.leaguepedia, narrowContent, 'leaguepediaJson')
+    await writeProviderFiles('lolesports', reconstructed.lolesports, narrowContent, 'lolEsportsJson')
+    const manifest = {
+      schemaVersion: 1,
+      generatedAt,
+      start: reconstructed.receipt.coverage.start,
+      end: reconstructed.receipt.coverage.end,
+      files,
+      sourceReceipt: {
+        storageMode: RAW_SOURCE_STORAGE_MODE,
+        generationId: reconstructed.receipt.generationId,
+        rawIdentityDigest: reconstructed.receipt.rawIdentityDigest,
+        sourceReceiptDigest: reconstructed.receipt.sourceReceiptDigest,
+      },
+      sources: {
+        oracle: sourceStatus(reconstructed.oracle.length, 'primary'),
+        leaguepedia: sourceStatus(reconstructed.leaguepedia.length, 'backup-gap-fill'),
+        lolesports: sourceStatus(reconstructed.lolesports.length, 'schedule-results-reference'),
+      },
+      warnings: [],
+    }
+    await writeFile(join(nextDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+    await replaceDirectory(nextDir, destination, { publishLast: 'manifest.json' })
+    return { ...reconstructed, manifest, manifestPath: join(destination, 'manifest.json') }
+  } catch (error) {
+    await rm(nextDir, { recursive: true, force: true })
+    throw error
   }
-  await writeProviderFiles('oracles-elixir', reconstructed.oracle, oracleContent, 'oracleCsv')
-  await writeProviderFiles('leaguepedia', reconstructed.leaguepedia, narrowContent, 'leaguepediaJson')
-  await writeProviderFiles('lolesports', reconstructed.lolesports, narrowContent, 'lolEsportsJson')
-  const manifest = {
-    schemaVersion: 1,
-    generatedAt,
-    start: reconstructed.receipt.coverage.start,
-    end: reconstructed.receipt.coverage.end,
-    files,
-    sourceReceipt: {
-      storageMode: RAW_SOURCE_STORAGE_MODE,
-      generationId: reconstructed.receipt.generationId,
-      rawIdentityDigest: reconstructed.receipt.rawIdentityDigest,
-      sourceReceiptDigest: reconstructed.receipt.sourceReceiptDigest,
-    },
-    sources: {
-      oracle: sourceStatus(reconstructed.oracle.length, 'primary'),
-      leaguepedia: sourceStatus(reconstructed.leaguepedia.length, 'backup-gap-fill'),
-      lolesports: sourceStatus(reconstructed.lolesports.length, 'schedule-results-reference'),
-    },
-    warnings: [],
-  }
-  await writeFile(join(destinationDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  return { ...reconstructed, manifest, manifestPath: join(destinationDir, 'manifest.json') }
 }
 
 function applyOracleDeltaValue(current, delta, { verifyNextDigest = true } = {}) {
@@ -403,7 +479,8 @@ function applyOracleDeltaValue(current, delta, { verifyNextDigest = true } = {})
       byId.delete(mutation.gameId)
     }
   }
-  const source = parseOracleSource({ ...current, games: [...byId.values()].sort(compareGames) }, 'reconstructed Oracle source')
+  const sourceWithoutDigest = { ...current, games: [...byId.values()].sort(compareGames) }
+  const source = { ...sourceWithoutDigest, digest: oracleSourceDigest(sourceWithoutDigest) }
   if (verifyNextDigest && source.digest !== delta.nextOracleDigest) throw new Error('Oracle delta next digest mismatch')
   return source
 }
@@ -418,7 +495,7 @@ function parseOracleSource(value, label) {
   if (value.headerDigest !== undefined && value.headerDigest !== headerDigest) throw new Error(`${label} header digest mismatch`)
   if (!Array.isArray(value.games) || value.games.length === 0) throw new Error(`${label} games must be non-empty`)
   const seen = new Set()
-  const games = value.games.map((game, index) => parseOracleGame(game, value.header, undefined, `${label} game ${index}`))
+  const games = value.games.map((game, index) => parseOracleGame(game, value.header, undefined, `${label} game ${index}`, index))
   for (const game of games) {
     if (seen.has(game.gameId)) throw new Error(`${label} has duplicate or ambiguous game ${game.gameId}`)
     seen.add(game.gameId)
@@ -428,12 +505,14 @@ function parseOracleSource(value, label) {
   return { ...source, digest: oracleSourceDigest(source) }
 }
 
-function parseOracleGame(value, header, indexes, label = 'Oracle game') {
+function parseOracleGame(value, header, indexes, label = 'Oracle game', fallbackSourceOrder) {
   assertRecord(value, label)
   assertNonEmptyString(value.gameId, `${label} gameId`)
   assertUtcDate(value.date, `${label} date`)
   assertNonEmptyString(value.league, `${label} league`)
   if (!Array.isArray(value.rows) || value.rows.length < 2) throw new Error(`${label} does not contain a complete game row group`)
+  const sourceOrder = value.sourceOrder ?? fallbackSourceOrder
+  if (!Number.isSafeInteger(sourceOrder) || sourceOrder < 0) throw new Error(`${label} sourceOrder is invalid`)
   const resolvedIndexes = indexes ?? Object.fromEntries(header.map((name, index) => [name.trim().toLowerCase(), index]))
   const sides = new Set()
   const rows = value.rows.map((row, rowIndex) => {
@@ -445,7 +524,7 @@ function parseOracleGame(value, header, indexes, label = 'Oracle game') {
     return [...row]
   })
   if (!sides.has('blue') || !sides.has('red')) throw new Error(`${label} does not contain both sides`)
-  const game = { gameId: value.gameId, date: value.date, league: value.league, rows }
+  const game = { gameId: value.gameId, date: value.date, league: value.league, sourceOrder, rows }
   return { ...game, digest: oracleGameDigest(game) }
 }
 
@@ -469,17 +548,26 @@ function parseMutation(value, partition, header, label) {
     : { operation, gameId: value.gameId, expectedPreviousDigest: value.expectedPreviousDigest, game }
 }
 
-function parseOracleReceiptSources(value) {
+function parseOracleReceiptSources(value, importerVersion) {
   if (!Array.isArray(value) || value.length === 0) throw new Error('Raw receipt Oracle sources must be non-empty')
   const seenNames = new Set()
   const parsed = value.map((entry, index) => {
-    assertExactKeys(entry, ['sourceFileName', 'headerDigest', 'effectiveOracleDigest', 'baseline', 'deltas'], `raw receipt Oracle source ${index}`)
+    assertExactKeys(entry, ['sourceFileName', 'headerDigest', 'digestScheme', 'effectiveOracleDigest', 'gameInventory', 'baseline', 'deltas'], `raw receipt Oracle source ${index}`)
     assertFileName(entry.sourceFileName, `raw receipt Oracle source ${index} filename`)
     assertDigest(entry.headerDigest, `raw receipt Oracle source ${index} headerDigest`)
     assertDigest(entry.effectiveOracleDigest, `raw receipt Oracle source ${index} effectiveOracleDigest`)
+    if (entry.digestScheme !== ORACLE_GAME_INVENTORY_DIGEST_SCHEME) throw new Error(`raw receipt Oracle source ${index} digest scheme is incompatible`)
     if (seenNames.has(entry.sourceFileName)) throw new Error(`Raw receipt has duplicate Oracle source ${entry.sourceFileName}`)
     seenNames.add(entry.sourceFileName)
     const baseline = parseRawObjectReference(entry.baseline, `raw receipt Oracle source ${index} baseline`)
+    const gameInventory = parseOracleGameInventory(entry.gameInventory, `raw receipt Oracle source ${index} gameInventory`)
+    const effectiveOracleDigest = oracleSourceDigestFromInventory({
+      sourceFileName: entry.sourceFileName,
+      importerVersion,
+      headerDigest: entry.headerDigest,
+      gameInventory,
+    })
+    if (effectiveOracleDigest !== entry.effectiveOracleDigest) throw new Error(`raw receipt Oracle source ${index} inventory digest mismatch`)
     if (!Array.isArray(entry.deltas)) throw new Error(`raw receipt Oracle source ${index} deltas must be an array`)
     const seenDeltas = new Set()
     const deltas = entry.deltas.map((reference, deltaIndex) => {
@@ -488,7 +576,7 @@ function parseOracleReceiptSources(value) {
       seenDeltas.add(parsedReference.key)
       return parsedReference
     })
-    return { sourceFileName: entry.sourceFileName, headerDigest: entry.headerDigest, effectiveOracleDigest: entry.effectiveOracleDigest, baseline, deltas }
+    return { sourceFileName: entry.sourceFileName, headerDigest: entry.headerDigest, digestScheme: entry.digestScheme, effectiveOracleDigest, gameInventory, baseline, deltas }
   })
   parsed.sort((left, right) => left.sourceFileName.localeCompare(right.sourceFileName))
   return parsed
@@ -538,7 +626,86 @@ function oracleCsvForSource(source) {
 }
 
 function oracleSourceDigest(source) {
-  return sha256(Buffer.from(canonicalJsonFor({ sourceFileName: source.sourceFileName, importerVersion: source.importerVersion, header: source.header, games: source.games.map(stripGameDigest) })))
+  return oracleSourceDigestFromInventory({
+    sourceFileName: source.sourceFileName,
+    importerVersion: source.importerVersion,
+    headerDigest: source.headerDigest,
+    gameInventory: oracleGameInventory(source),
+  })
+}
+
+function oracleSourceDigestFromInventory({ sourceFileName, importerVersion, headerDigest, gameInventory }) {
+  return sha256(Buffer.from(canonicalJsonFor({
+    digestScheme: ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
+    sourceFileName,
+    importerVersion,
+    headerDigest,
+    gameInventory,
+  })))
+}
+
+export function oracleGameInventory(source) {
+  return source.games.map(({ gameId, digest, date, league, sourceOrder }) => ({ gameId, digest, date, league, sourceOrder }))
+}
+
+function parseOracleInventoryAuthority(value, importerVersion) {
+  assertRecord(value, 'previous Oracle inventory authority')
+  assertFileName(value.sourceFileName, 'previous Oracle inventory authority sourceFileName')
+  assertDigest(value.headerDigest, 'previous Oracle inventory authority headerDigest')
+  assertDigest(value.effectiveOracleDigest, 'previous Oracle inventory authority effectiveOracleDigest')
+  if (value.digestScheme !== ORACLE_GAME_INVENTORY_DIGEST_SCHEME) throw new Error('previous Oracle inventory digest scheme is incompatible')
+  const gameInventory = parseOracleGameInventory(value.gameInventory, 'previous Oracle gameInventory')
+  const effectiveOracleDigest = oracleSourceDigestFromInventory({
+    sourceFileName: value.sourceFileName,
+    importerVersion,
+    headerDigest: value.headerDigest,
+    gameInventory,
+  })
+  if (effectiveOracleDigest !== value.effectiveOracleDigest) throw new Error('previous Oracle inventory digest mismatch')
+  return { sourceFileName: value.sourceFileName, headerDigest: value.headerDigest, effectiveOracleDigest, gameInventory }
+}
+
+function parseOracleGameInventory(value, label) {
+  if (!Array.isArray(value) || value.length === 0) throw new Error(`${label} must be a non-empty array`)
+  const seenIds = new Set()
+  const seenOrders = new Set()
+  const inventory = value.map((game, index) => {
+    const gameLabel = `${label} game ${index}`
+    assertExactKeys(game, ['gameId', 'digest', 'date', 'league', 'sourceOrder'], gameLabel)
+    assertNonEmptyString(game.gameId, `${gameLabel} gameId`)
+    assertDigest(game.digest, `${gameLabel} digest`)
+    assertUtcDate(game.date, `${gameLabel} date`)
+    assertNonEmptyString(game.league, `${gameLabel} league`)
+    if (!Number.isSafeInteger(game.sourceOrder) || game.sourceOrder < 0) throw new Error(`${gameLabel} sourceOrder is invalid`)
+    if (seenIds.has(game.gameId) || seenOrders.has(game.sourceOrder)) throw new Error(`${label} has duplicate game identity or source order`)
+    seenIds.add(game.gameId)
+    seenOrders.add(game.sourceOrder)
+    return { gameId: game.gameId, digest: game.digest, date: game.date, league: game.league, sourceOrder: game.sourceOrder }
+  })
+  if (!isSorted(inventory, compareGames)) throw new Error(`${label} is not canonically ordered`)
+  return inventory
+}
+
+function applyInventoryMutations(inventory, mutations) {
+  const byId = new Map(inventory.map((game) => [game.gameId, game]))
+  for (const mutation of mutations) {
+    const existing = byId.get(mutation.gameId)
+    if (mutation.operation === 'add') {
+      if (existing) throw new Error(`Oracle inventory add is ambiguous because ${mutation.gameId} already exists`)
+      byId.set(mutation.gameId, inventoryGameFor(mutation.game))
+    } else if (mutation.operation === 'replace') {
+      if (!existing || existing.digest !== mutation.expectedPreviousDigest) throw new Error(`Oracle inventory replacement prior digest mismatch for ${mutation.gameId}`)
+      byId.set(mutation.gameId, inventoryGameFor(mutation.game))
+    } else {
+      if (!existing || existing.digest !== mutation.expectedPreviousDigest) throw new Error(`Oracle inventory deletion prior digest mismatch for ${mutation.gameId}`)
+      byId.delete(mutation.gameId)
+    }
+  }
+  return [...byId.values()].sort(compareGames)
+}
+
+function inventoryGameFor(game) {
+  return { gameId: game.gameId, digest: game.digest, date: game.date, league: game.league, sourceOrder: game.sourceOrder }
 }
 
 function oracleGameDigest(game) {
@@ -546,7 +713,7 @@ function oracleGameDigest(game) {
 }
 
 function stripGameDigest(game) {
-  return { gameId: game.gameId, date: game.date, league: game.league, rows: game.rows }
+  return { gameId: game.gameId, date: game.date, league: game.league, sourceOrder: game.sourceOrder, rows: game.rows }
 }
 
 function assertOracleCompatibility(left, right) {
@@ -562,7 +729,7 @@ function rawMutationFor(entry) {
   return { operation: entry.operation, gameId: entry.gameId, expectedPreviousDigest: entry.expectedPreviousDigest }
 }
 function partitionKeyFor(partition) { return `${partition.utcDate}\u0000${partition.league}` }
-function compareGames(left, right) { return left.date.localeCompare(right.date) || left.league.localeCompare(right.league) || left.gameId.localeCompare(right.gameId) }
+function compareGames(left, right) { return left.sourceOrder - right.sourceOrder || left.gameId.localeCompare(right.gameId) }
 function compareMutations(left, right) { return left.gameId.localeCompare(right.gameId) || left.operation.localeCompare(right.operation) }
 function comparePartitionedMutations(left, right) { return partitionKeyFor(left.partition).localeCompare(partitionKeyFor(right.partition)) || compareMutations(left, right) }
 
@@ -609,6 +776,13 @@ function narrowContent(entry) { return entry.content }
 function assertPreparedObject(value) {
   assertRecord(value, 'prepared raw object')
   assertDigest(value.digest, 'prepared raw object digest')
+  if (typeof value.compressedPath === 'string') {
+    assertDigest(value.compressedSha256, 'Prepared file-backed raw object compressedSha256')
+    if (!Number.isSafeInteger(value.bytes) || value.bytes <= 0 || !Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0) {
+      throw new Error('Prepared file-backed raw object lengths are invalid')
+    }
+    return
+  }
   if (!Buffer.isBuffer(value.canonicalBytes) || !Buffer.isBuffer(value.compressed)) throw new Error('Prepared raw object bytes are invalid')
   if (value.bytes !== value.canonicalBytes.byteLength || value.compressedBytes !== value.compressed.byteLength) throw new Error('Prepared raw object lengths are invalid')
 }

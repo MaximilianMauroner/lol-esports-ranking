@@ -123,7 +123,9 @@ export function createPublicArtifactWritePlan(
     || selected(indexPath)
     || [...affectedLogicalPaths].some((path) => path.startsWith(`${prefix}/`))
   const previous = (relativePath: string) => previousArtifacts?.[`/data/${relativePath}`]
-  const playerDirectory = selected(PUBLIC_ARTIFACT_PATHS.players) ? createPlayerDirectory(data) : undefined
+  const playerDirectory = selected(PUBLIC_ARTIFACT_PATHS.players)
+    ? data.precomputedPlayerDirectory ?? createPlayerDirectory(data)
+    : undefined
   const teamDirectory = selected(PUBLIC_ARTIFACT_PATHS.teams) ? createTeamDirectory(data) : undefined
   const teamHistory = selectedFamily(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, PUBLIC_ARTIFACT_PATHS.teamHistoryShardDir)
     ? createTeamHistoryArtifacts(data, {

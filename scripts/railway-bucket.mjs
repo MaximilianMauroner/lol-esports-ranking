@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { Transform } from 'node:stream'
+import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip, gunzipSync } from 'node:zlib'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
@@ -10,6 +10,7 @@ import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { assertStateManifestAuthority } from './incremental-state-storage.mjs'
+import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
 
 let activeGenerationCache = { expiresAt: 0, value: null }
 
@@ -79,6 +80,7 @@ export async function uploadRankingArtifacts({
   beforePromotionWrite,
   stateManifestAuthority,
   publicArtifactPatch,
+  rawSourceGeneration,
   contentAddressed = parseBoolean(process.env.RANKING_BUCKET_CONTENT_ADDRESSED),
 } = {}) {
   if (!config.enabled) {
@@ -138,7 +140,27 @@ export async function uploadRankingArtifacts({
       ...(storageMetrics ? { storage: storageMetrics } : {}),
     },
   })
-  if (rawDir) {
+  let rawAuthority
+  if (rawSourceGeneration) {
+    if (!generationId || rawSourceGeneration.receipt?.generationId !== generationId) {
+      throw new Error('Content-addressed raw generation must match the public generation')
+    }
+    stageStarted = monotonicNow()
+    const rawSync = await uploadContentAddressedRawSourceGeneration(client, config, rawSourceGeneration)
+    rawAuthority = rawSync.authority
+    uploads.push(...rawSync.uploaded)
+    unchanged.push(...rawSync.unchanged)
+    onStage?.('raw-synchronization', {
+      durationMs: monotonicNow() - stageStarted,
+      output: {
+        storageMode: rawSourceGeneration.receipt.storageMode,
+        uploadedCount: rawSync.uploaded.length,
+        uploadedBytes: sumBytes(rawSync.uploaded),
+        reusedCount: rawSync.unchanged.length,
+        reusedBytes: sumBytes(rawSync.unchanged),
+      },
+    })
+  } else if (rawDir) {
     if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
       config,
       client,
@@ -168,7 +190,7 @@ export async function uploadRankingArtifacts({
       reason: 'full-snapshot-upload-disabled',
     })
   }
-  if (manifestPath) {
+  if (manifestPath && !rawSourceGeneration) {
     uploads.push(await uploadFile(client, config, manifestPath, 'raw/manifest.json'))
   }
   let promotionOutcome
@@ -189,21 +211,37 @@ export async function uploadRankingArtifacts({
       throw new Error('Stale refresh worker cannot promote an active generation')
     }
     await beforePromotionWrite?.()
-    const [, verifiedState] = await Promise.all([
+    const [, verifiedState, verifiedRaw] = await Promise.all([
       contentAddressed
         ? assertGenerationManifestAuthority(client, config, publicSync.manifestAuthority)
         : undefined,
       stateManifestAuthority
         ? assertStateManifestAuthority(client, config, stateManifestAuthority)
         : undefined,
+      rawAuthority
+        ? assertRawSourceGenerationAuthority(client, config, rawAuthority)
+        : undefined,
     ])
     if (verifiedState && verifiedState.manifest.generationId !== generationId) {
       throw new Error('Incremental state generation does not match public generation')
+    }
+    if (verifiedRaw && verifiedRaw.receipt.generationId !== generationId) {
+      throw new Error('Raw source receipt generation does not match public generation')
+    }
+    if (verifiedRaw && verifiedState
+      && verifiedState.manifest.sourceReceiptDigest !== verifiedRaw.receipt.sourceReceiptDigest) {
+      throw new Error('Incremental state source receipt does not match raw source authority')
     }
     const promotedAt = new Date(now()).toISOString()
     const activePointerBase = { ...active.value }
     delete activePointerBase.stateManifestKey
     delete activePointerBase.stateManifestDigest
+    delete activePointerBase.rawReceiptKey
+    delete activePointerBase.rawReceiptDigest
+    delete activePointerBase.rawReceiptBytes
+    delete activePointerBase.rawReceiptCompressedBytes
+    delete activePointerBase.sourceReceiptDigest
+    delete activePointerBase.rawIdentityDigest
     const promotion = await writeBucketJson('active-generation.json', {
       ...activePointerBase,
       schemaVersion: 1,
@@ -222,6 +260,14 @@ export async function uploadRankingArtifacts({
       ...(verifiedState ? {
         stateManifestKey: verifiedState.key,
         stateManifestDigest: verifiedState.digest,
+      } : {}),
+      ...(verifiedRaw ? {
+        rawReceiptKey: verifiedRaw.key,
+        rawReceiptDigest: verifiedRaw.reference.sha256,
+        rawReceiptBytes: verifiedRaw.reference.bytes,
+        rawReceiptCompressedBytes: verifiedRaw.reference.compressedBytes,
+        sourceReceiptDigest: verifiedRaw.receipt.sourceReceiptDigest,
+        rawIdentityDigest: verifiedRaw.receipt.rawIdentityDigest,
       } : {}),
     }, {
       config,
@@ -425,6 +471,179 @@ export async function readActiveContentAddressedGeneration({
   const rootArtifact = artifacts['/data/ranking-summary.json']
   if (!rootArtifact) throw new Error('Active public generation has no valid root artifact')
   return { found: true, active: active.value, etag: active.etag, manifest, rootArtifact, artifacts, loadArtifacts }
+}
+
+export async function readActiveRawSourceAuthority({
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  const active = await readBucketJson('active-generation.json', { config, client })
+  if (!active.found || typeof active.value?.rawReceiptKey !== 'string') {
+    return { found: false, reason: active.found ? 'legacy-active-generation' : 'active-generation-missing' }
+  }
+  const reference = {
+    key: relativeBucketKey(config, active.value.rawReceiptKey),
+    sha256: active.value.rawReceiptDigest,
+    bytes: active.value.rawReceiptBytes,
+    compressedBytes: active.value.rawReceiptCompressedBytes,
+    storageEncoding: 'gzip',
+  }
+  const compressed = await readRawObjectBytes(client, config, reference)
+  const receipt = parseRawSourceReceipt(decodeRawObject(reference, compressed))
+  if (receipt.generationId !== active.value.generationId
+    || receipt.sourceReceiptDigest !== active.value.sourceReceiptDigest
+    || receipt.rawIdentityDigest !== active.value.rawIdentityDigest) {
+    throw new Error('Active raw source receipt authority mismatch')
+  }
+  return {
+    found: true,
+    active: active.value,
+    receipt,
+    receiptReference: reference,
+    objectResolver: (objectReference) => readRawObjectBytes(client, config, objectReference),
+    streamObjectToFile: (objectReference, destinationPath) => streamRawObjectToFile(client, config, objectReference, destinationPath),
+  }
+}
+
+export async function uploadContentAddressedRawSourceGeneration(client, config, generation) {
+  const uploaded = []
+  const unchanged = []
+  const unique = new Map()
+  for (const prepared of [...generation.objects, generation.receiptPrepared]) unique.set(prepared.digest, prepared)
+  for (const prepared of unique.values()) {
+    const result = await syncContentAddressedRawObject(client, config, prepared)
+    if (result.status === 'uploaded') uploaded.push(result)
+    else unchanged.push(result)
+  }
+  return {
+    uploaded,
+    unchanged,
+    authority: {
+      key: bucketKey(config, generation.receiptReference.key),
+      reference: generation.receiptReference,
+      receipt: generation.receipt,
+    },
+  }
+}
+
+async function syncContentAddressedRawObject(client, config, prepared) {
+  const reference = rawObjectReferenceFor(prepared)
+  const key = bucketKey(config, reference.key)
+  try {
+    await client.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: prepared.compressedPath ? verifiedFileBackedRawBody(prepared) : prepared.compressed,
+      ContentLength: prepared.compressedBytes,
+      ContentType: 'application/json; charset=utf-8',
+      ContentEncoding: 'gzip',
+      Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' },
+      IfNoneMatch: '*',
+    }))
+    return { status: 'uploaded', key, bytes: prepared.compressedBytes, contentType: 'application/json; charset=utf-8', digest: prepared.digest }
+  } catch (error) {
+    if (!isPreconditionError(error)) throw error
+    await readRawObjectBytes(client, config, reference)
+    return { status: 'unchanged', key, bytes: prepared.compressedBytes, contentType: 'application/json; charset=utf-8', digest: prepared.digest }
+  }
+}
+
+function verifiedFileBackedRawBody(prepared) {
+  const digest = createHash('sha256')
+  let bytes = 0
+  const verify = new Transform({
+    transform(chunk, _encoding, callback) {
+      bytes += chunk.length
+      digest.update(chunk)
+      callback(null, chunk)
+    },
+    flush(callback) {
+      if (bytes !== prepared.compressedBytes || digest.digest('hex') !== prepared.compressedSha256) {
+        callback(new Error(`File-backed raw source object changed before upload: ${prepared.digest}`))
+      } else {
+        callback()
+      }
+    },
+  })
+  return createReadStream(prepared.compressedPath).pipe(verify)
+}
+
+async function assertRawSourceGenerationAuthority(client, config, authority) {
+  const compressed = await readRawObjectBytes(client, config, authority.reference)
+  const receipt = parseRawSourceReceipt(decodeRawObject(authority.reference, compressed))
+  const references = [
+    ...receipt.oracle.flatMap((source) => [source.baseline, ...source.deltas]),
+    ...receipt.leaguepedia.map((source) => source.object),
+    ...receipt.lolesports.map((source) => source.object),
+  ]
+  for (const reference of references) await readRawObjectBytes(client, config, reference)
+  return { ...authority, receipt }
+}
+
+async function readRawObjectBytes(client, config, reference) {
+  const key = bucketKey(config, reference.key)
+  let object
+  try {
+    object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  } catch (error) {
+    if (isMissingObjectError(error)) throw new Error(`Referenced raw source object is missing: ${reference.key}`, { cause: error })
+    throw error
+  }
+  const compressed = await bodyBytes(object.Body)
+  if (object.ContentEncoding !== 'gzip' || object.Metadata?.sha256 !== reference.sha256
+    || object.Metadata?.['semantic-bytes'] !== String(reference.bytes) || object.Metadata?.encoding !== 'gzip'
+    || Number(object.ContentLength) !== reference.compressedBytes || compressed.byteLength !== reference.compressedBytes) {
+    throw new Error(`Referenced raw source object metadata mismatch: ${reference.key}`)
+  }
+  decodeRawObject(reference, compressed)
+  return compressed
+}
+
+async function streamRawObjectToFile(client, config, reference, destinationPath) {
+  const key = bucketKey(config, reference.key)
+  let object
+  try {
+    object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  } catch (error) {
+    if (isMissingObjectError(error)) throw new Error(`Referenced raw source object is missing: ${reference.key}`, { cause: error })
+    throw error
+  }
+  if (object.ContentEncoding !== 'gzip' || object.Metadata?.sha256 !== reference.sha256
+    || object.Metadata?.['semantic-bytes'] !== String(reference.bytes) || object.Metadata?.encoding !== 'gzip'
+    || Number(object.ContentLength) !== reference.compressedBytes) {
+    throw new Error(`Referenced raw source object metadata mismatch: ${reference.key}`)
+  }
+  const destination = resolve(destinationPath)
+  const temporary = `${destination}.${process.pid}.tmp`
+  let compressedBytes = 0
+  const count = new Transform({
+    transform(chunk, _encoding, callback) {
+      compressedBytes += chunk.length
+      callback(null, chunk)
+    },
+  })
+  const body = typeof object.Body?.pipe === 'function'
+    ? object.Body
+    : Readable.from([await bodyBytes(object.Body)])
+  await mkdir(dirname(destination), { recursive: true })
+  try {
+    await pipeline(body, count, createWriteStream(temporary, { flags: 'wx' }))
+    if (compressedBytes !== reference.compressedBytes) throw new Error(`Referenced raw source object length mismatch: ${reference.key}`)
+    await rename(temporary, destination)
+  } catch (error) {
+    await rm(temporary, { force: true })
+    throw error
+  }
+  return { path: destination, compressedBytes }
+}
+
+function relativeBucketKey(config, key) {
+  const prefix = normalizePrefix(config.prefix)
+  const expectedPrefix = prefix ? `${prefix}/` : ''
+  if (expectedPrefix && !key.startsWith(expectedPrefix)) throw new Error('Active raw receipt key is outside the configured prefix')
+  const relativeKey = expectedPrefix ? key.slice(expectedPrefix.length) : key
+  if (!relativeKey.startsWith('raw/objects/sha256/')) throw new Error('Active raw receipt key is not canonical')
+  return relativeKey
 }
 
 export async function writeBucketJson(relativeKey, value, {

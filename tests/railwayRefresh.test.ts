@@ -358,6 +358,11 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
   const client = {
     async send(command: { input: Record<string, unknown> }) {
       calls.push(command.input)
+      if (command.input.Key === 'rankings/active-generation.json') {
+        const error = new Error('NoSuchKey')
+        error.name = 'NoSuchKey'
+        throw error
+      }
       if (command.input.Prefix === 'rankings/raw/files/') {
         return {
           Contents: [

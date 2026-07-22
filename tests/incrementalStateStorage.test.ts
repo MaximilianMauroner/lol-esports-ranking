@@ -18,7 +18,8 @@ import {
   type StateCompatibility,
   type StateObjectReference,
 } from '../scripts/incremental-state-storage.mjs'
-import { uploadRankingArtifacts, writeBucketJson } from '../scripts/railway-bucket.mjs'
+import { readActiveRawSourceAuthority, readBucketJson, uploadRankingArtifacts, writeBucketJson } from '../scripts/railway-bucket.mjs'
+import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 
 const config = {
   enabled: true,
@@ -40,6 +41,8 @@ const compatibility: StateCompatibility = {
   publicArtifactSchemaVersion: 23,
 }
 
+type StateInputCheckpoint = Parameters<typeof prepareContentAddressedState>[0]['checkpoints'][number]
+
 test('state preparation hashes canonical JSON and creates deterministic gzip bytes', () => {
   const left = prepareStateObject({ z: [3, 2, 1], a: { y: true, x: 'value' } })
   const right = prepareStateObject({ a: { x: 'value', y: true }, z: [3, 2, 1] })
@@ -47,6 +50,78 @@ test('state preparation hashes canonical JSON and creates deterministic gzip byt
   assert.deepEqual(left.compressed, right.compressed)
   assert.equal(gunzipSync(left.compressed).toString('utf8'), left.canonicalJson)
   assert.equal(createHash('sha256').update(left.canonicalBytes).digest('hex'), left.digest)
+})
+
+test('one active CAS binds public, state, and raw receipt authorities', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'triple-authority-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    const generationId = 'triple_authority'
+    await writePublicFixture(publicDir, generationId)
+    const raw = rawGeneration(generationId)
+    const state = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
+    await syncAllStateObjects(client, state.objects)
+    const manifest = await writeIncrementalStateManifest(client, config, state)
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 1,
+      contentAddressed: true,
+      stateManifestAuthority: manifest.authority,
+      rawSourceGeneration: raw,
+      config,
+      client,
+    })
+
+    const active = (await readBucketJson('active-generation.json', { config, client })).value!
+    assert.equal(active.generationId, generationId)
+    assert.equal(active.sourceReceiptDigest, raw.sourceReceiptDigest)
+    assert.equal(active.stateManifestDigest, manifest.authority.digest)
+    assert.equal(active.rawReceiptDigest, raw.receiptReference.sha256)
+    const restored = await readActiveRawSourceAuthority({ config, client })
+    assert.equal(restored.found, true)
+    assert.equal(restored.found && restored.receipt.sourceReceiptDigest, raw.sourceReceiptDigest)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('raw/state receipt mismatch and corrupt raw references never promote', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'triple-authority-fail-closed-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    await writeBucketJson('active-generation.json', { schemaVersion: 1, generationId: 'current', fencingToken: 1 }, { config, client })
+    for (const failure of ['digest-mismatch', 'corrupt-reference'] as const) {
+      const generationId = `rejected_${failure.replace('-', '_')}`
+      await writePublicFixture(publicDir, generationId)
+      const raw = rawGeneration(generationId)
+      const state = preparedStateWithReceipt(generationId, failure === 'digest-mismatch' ? 'f'.repeat(64) : raw.sourceReceiptDigest)
+      await syncAllStateObjects(client, state.objects)
+      const manifest = await writeIncrementalStateManifest(client, config, state)
+      await assert.rejects(uploadRankingArtifacts({
+        publicDataDir: publicDir,
+        generationId,
+        fencingToken: 2,
+        contentAddressed: true,
+        stateManifestAuthority: manifest.authority,
+        rawSourceGeneration: raw,
+        ...(failure === 'corrupt-reference' ? {
+          beforePromotionWrite: () => {
+            const key = `custom-rankings/${raw.oracle[0]!.baseline.key}`
+            const stored = client.objects.get(key)!
+            stored.bytes = Buffer.alloc(stored.bytes.byteLength)
+          },
+        } : {}),
+        config,
+        client,
+      }), failure === 'digest-mismatch' ? /source receipt does not match/ : /gzip is corrupt|digest mismatch/)
+      assert.equal((await readBucketJson('active-generation.json', { config, client })).value?.generationId, 'current')
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('prepared state contains complete compatibility and ordered checkpoint candidates', () => {
@@ -204,10 +279,12 @@ test('old active pointers remain readable and state promotion atomically resolve
 
     const restored = await readActiveIncrementalState({ config, client })
     assert.equal(restored.found, true)
+    if (!restored.found) assert.fail('active incremental state was not restored')
     assert.equal(restored.manifest.generationId, generationId)
     assert.equal(restored.checkpoints.length, 2)
 
     const partiallyRestored = await readActiveIncrementalState({ config, client, checkpointLimit: 1 })
+    if (!partiallyRestored.found) assert.fail('partial incremental state was not restored')
     assert.equal(partiallyRestored.checkpoints.length, 1)
     assert.equal(typeof partiallyRestored.loadCheckpoints, 'function')
     assert.equal((await partiallyRestored.loadCheckpoints(partiallyRestored.manifest.checkpoints)).length, 2)
@@ -296,7 +373,61 @@ test('state-manifest mutation after preparation blocks public pointer promotion'
   }
 })
 
-function stateInput(generationId: string, checkpoints = [checkpoint('match-1'), checkpoint('match-2', 2)]) {
+function rawGeneration(generationId: string) {
+  const baseline = prepareOracleBaseline({
+    sourceFileName: 'oracle-current.csv',
+    importerVersion: compatibility.importerVersion,
+    csv: [
+      'gameid,date,league,side,position,teamname,result',
+      'game-1,2026-01-01,LCK,Blue,team,Alpha,1',
+      'game-1,2026-01-01,LCK,Red,team,Beta,0',
+    ].join('\n'),
+  })
+  const prepared = prepareRawSourceReceipt({
+    generationId,
+    importerVersion: compatibility.importerVersion,
+    coverage: { start: '2026-01-01', end: '2026-01-01' },
+    sourceReceiptInputs: { source: 'test' },
+    oracle: [{
+      sourceFileName: baseline.source.sourceFileName,
+      headerDigest: baseline.source.headerDigest,
+      digestScheme: ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
+      effectiveOracleDigest: baseline.source.digest,
+      gameInventory: oracleGameInventory(baseline.source),
+      baseline: baseline.reference,
+      deltas: [],
+    }],
+  })
+  return {
+    generationId,
+    importerVersion: compatibility.importerVersion,
+    coverage: { start: '2026-01-01', end: '2026-01-01' },
+    sourceReceiptInputs: { source: 'test' },
+    oracle: prepared.receipt.oracle,
+    leaguepedia: [],
+    lolesports: [],
+    objects: [baseline.prepared],
+    verifiedSourceFiles: [],
+    receipt: prepared.receipt,
+    receiptPrepared: prepared.prepared,
+    receiptReference: rawObjectReferenceFor(prepared.prepared),
+    sourceReceiptDigest: prepared.receipt.sourceReceiptDigest,
+    rawIdentityDigest: prepared.receipt.rawIdentityDigest,
+  }
+}
+
+function preparedStateWithReceipt(generationId: string, sourceReceiptDigest: string) {
+  const ledger = prepareStateObject({ artifactKind: 'canonical-match-ledger', schemaVersion: 1, rows: [] })
+  const prepared = prepareContentAddressedState({
+    ...stateInput(generationId),
+    runId: generationId,
+    canonicalLedgerReference: stateObjectReferenceFor(ledger),
+    sourceReceiptDigest,
+  })
+  return { ...prepared, objects: [ledger, ...prepared.objects] }
+}
+
+function stateInput(generationId: string, checkpoints: StateInputCheckpoint[] = [checkpoint('match-1'), checkpoint('match-2', 2)]) {
   return {
     generationId,
     runId: `${generationId}-run`,
@@ -309,7 +440,7 @@ function stateInput(generationId: string, checkpoints = [checkpoint('match-1'), 
   }
 }
 
-function preparedState(generationId: string, checkpoints = [checkpoint('match-1'), checkpoint('match-2', 2)]) {
+function preparedState(generationId: string, checkpoints: StateInputCheckpoint[] = [checkpoint('match-1'), checkpoint('match-2', 2)]) {
   const ledger = prepareStateObject({ artifactKind: 'canonical-match-ledger', schemaVersion: 1, rows: [] })
   const prepared = prepareContentAddressedState({
     ...stateInput(generationId, checkpoints),
