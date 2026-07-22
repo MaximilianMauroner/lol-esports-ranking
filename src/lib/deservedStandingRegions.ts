@@ -2,6 +2,7 @@ import { currentTopTierRegionForLeague, isMajorRegionPowerRegion } from '../data
 import type { MatchRecord, Region, TeamProfile } from '../types'
 import {
   deservedStandingModelParameters,
+  dssCausalInputsForMatches,
   dssGameWinProbability,
   dssRegionConnectivity,
   dssRegionInternationalResumePoints,
@@ -20,6 +21,13 @@ import {
   type DeservedStandingTeamSummary,
 } from './deservedStandingModel'
 import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
+import {
+  buildCausalPrefixSummary,
+  causalInputRow,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 export type DeservedStandingRegionSeedExpectationContext = {
   entry: DssSeriesLedgerEntry
@@ -158,6 +166,71 @@ export function buildDeservedStandingRegionModel(
     ledgerEntries,
     teamModel,
   }
+}
+
+export function buildDssRegionCausalSummary({
+  prefixMatches,
+  teams,
+  processedThroughUtcDate,
+  contextInputs = [],
+}: {
+  prefixMatches: readonly MatchRecord[]
+  teams: Record<string, TeamProfile>
+  processedThroughUtcDate: string
+  contextInputs?: readonly CausalInputRow[]
+}) {
+  return buildCausalPrefixSummary({
+    surface: 'dss-region',
+    processedThroughUtcDate,
+    inputs: dssRegionCausalInputs(prefixMatches, teams, contextInputs),
+  })
+}
+
+export function reconcileDssRegionCausality({
+  summary,
+  freshMatches,
+  teams,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: CausalPrefixSummary
+  freshMatches: readonly MatchRecord[]
+  teams: Record<string, TeamProfile>
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  if (summary.surface !== 'dss-region') throw new Error('Expected dss-region causal summary')
+  return reconcileCausalPrefix({
+    summary,
+    freshInputs: dssRegionCausalInputs(freshMatches, teams, contextInputs),
+    availableProcessedThroughUtcDates,
+  })
+}
+
+export function recomputeDssRegionCausalState(
+  matches: MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  options: DeservedStandingRegionModelOptions = {},
+) {
+  return buildDeservedStandingRegionModel(matches, teams, options)
+}
+
+function dssRegionCausalInputs(
+  matches: readonly MatchRecord[],
+  teams: Record<string, TeamProfile>,
+  contextInputs: readonly CausalInputRow[],
+) {
+  const earliestMatchByTeam = new Map<string, string>()
+  for (const match of matches) {
+    for (const team of [match.teamA, match.teamB]) {
+      const current = earliestMatchByTeam.get(team)
+      if (!current || match.date < current) earliestMatchByTeam.set(team, match.date)
+    }
+  }
+  const teamInputs = [...earliestMatchByTeam.entries()].map(([team, utcDate]) =>
+    causalInputRow(`team-profile:${team}`, utcDate, teams[team] ?? null),
+  )
+  return [...dssCausalInputsForMatches(matches), ...teamInputs, ...contextInputs]
 }
 
 function regionLedgerEntryFor(

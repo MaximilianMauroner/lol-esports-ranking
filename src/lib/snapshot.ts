@@ -113,6 +113,15 @@ import type {
 export type { CompactPlayer, CompactPlayerRating, PlayerRatingProof } from './publicArtifacts/schema'
 export { snapshotKey } from './publicArtifacts/schema'
 
+// Snapshot generation owns these derived outputs, but intentionally does not
+// activate checkpoint resume until orchestration persists and validates the
+// corresponding causal prefix summaries.
+export const snapshotExternalCausalSurfaces = [
+  'sourced-player',
+  'dss-team',
+  'dss-region',
+] as const
+
 export const rolePowerPlayerMetric: PlayerMetricInfo = {
   id: 'role-power',
   label: 'Role Power',

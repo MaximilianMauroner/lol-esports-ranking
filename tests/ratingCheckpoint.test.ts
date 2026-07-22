@@ -59,7 +59,14 @@ test('checkpoint exhaustively and losslessly round-trips every RatingRunState fi
   )
   assert.deepEqual(
     ratingCheckpointInventory.externalState.map((entry) => entry.status),
-    ['external-deferred', 'external-deferred', 'external-deferred'],
+    [
+      'causal-full-recompute',
+      'causal-full-recompute',
+      'causal-full-recompute',
+      'causal-full-recompute',
+      'causal-full-recompute',
+      'checkpoint-reconciled',
+    ],
   )
 })
 

@@ -24,6 +24,13 @@ import {
 } from './eventWeighting'
 import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
 import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam } from './seriesResolver'
+import {
+  buildCausalPrefixSummary,
+  causalInputRow,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 const initialPlayerRating = 100
 const sourcedPlayerKFactor = 8
@@ -117,7 +124,7 @@ export type PregamePlayerRatingEdge = {
   teamBCoverage: number
 }
 
-type PlayerRatingContext = {
+export type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
   leagueStrengths?: LeagueStrength[]
   eventWeightContext?: EventWeightContext
@@ -382,6 +389,62 @@ export function buildPregamePlayerRatingEdges(
   }
 
   return edges
+}
+
+export function sourcedPlayerCausalInputs(
+  matches: readonly MatchRecord[],
+  contextInputs: readonly CausalInputRow[] = [],
+) {
+  return [
+    ...matches.map((match) => causalInputRow(`match:${match.id}`, match.date, match)),
+    ...contextInputs,
+  ]
+}
+
+export function buildSourcedPlayerCausalSummary({
+  prefixMatches,
+  processedThroughUtcDate,
+  contextInputs = [],
+}: {
+  prefixMatches: readonly MatchRecord[]
+  processedThroughUtcDate: string
+  contextInputs?: readonly CausalInputRow[]
+}) {
+  return buildCausalPrefixSummary({
+    surface: 'sourced-player',
+    processedThroughUtcDate,
+    inputs: sourcedPlayerCausalInputs(prefixMatches, contextInputs),
+  })
+}
+
+export function reconcileSourcedPlayerCausality({
+  summary,
+  freshMatches,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: CausalPrefixSummary
+  freshMatches: readonly MatchRecord[]
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  if (summary.surface !== 'sourced-player') throw new Error('Expected sourced-player causal summary')
+  return reconcileCausalPrefix({
+    summary,
+    freshInputs: sourcedPlayerCausalInputs(freshMatches, contextInputs),
+    availableProcessedThroughUtcDates,
+  })
+}
+
+export function recomputeSourcedPlayerCausalOutputs(
+  matches: MatchRecord[],
+  rosters: Record<string, PlayerProfile[]>,
+  context: PlayerRatingContext = {},
+) {
+  return {
+    players: buildPlayerModel(matches, rosters, context),
+    pregameEdges: buildPregamePlayerRatingEdges(matches, context),
+  }
 }
 
 function hasObservedPlayerStats(matches: MatchRecord[]) {

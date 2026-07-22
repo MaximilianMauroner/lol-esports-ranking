@@ -12,6 +12,7 @@ import {
   eventWeightMultiplierForMatch,
   type EventWeightContext,
 } from './eventWeighting'
+import { causalInputRow, type CausalInputRow } from './causalRecompute'
 import type { NormalizedBestOf } from './matchFormat'
 import { clamp } from './ratingCalculations'
 import { resolveCanonicalSeries } from './seriesResolver'
@@ -200,6 +201,16 @@ export type DssSeriesLedgerOptions = {
   referenceStrengthFor?: (context: DssReferenceStrengthContext) => number
   contextAdjustmentFor?: (context: DssReferenceStrengthContext) => number
   eventWeightContext?: EventWeightContext
+}
+
+export function dssCausalInputsForMatches(
+  matches: readonly MatchRecord[],
+  contextInputs: readonly CausalInputRow[] = [],
+) {
+  return [
+    ...matches.map((match) => causalInputRow(`match:${match.id}`, match.date, match)),
+    ...contextInputs,
+  ]
 }
 
 export type DssSeriesLedgerEntry = {

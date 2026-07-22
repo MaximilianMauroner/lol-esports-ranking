@@ -1,5 +1,12 @@
 import type { DeservedStandingRosterEra, MatchRecord, MatchRosterSnapshot, Role, Side } from '../types'
 import { clamp } from './ratingCalculations'
+import {
+  buildCausalPrefixSummary,
+  causalInputRow,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 export const dssRosterEraModelParameters = {
   retainedSynergyWeights: {
@@ -250,6 +257,91 @@ export function buildDssRosterEras(
     ...era,
     uncertainty: options.uncertaintyFor?.(eraWithoutUncertainty(era)) ?? era.uncertainty,
   }))
+}
+
+export type DssRosterEraCausalSummary = {
+  prefix: CausalPrefixSummary
+  openEras: { team: string; startDate: string; signature: string }[]
+}
+
+export function buildDssRosterEraCausalSummary({
+  prefixMatches,
+  processedThroughUtcDate,
+  options = {},
+  contextInputs = [],
+}: {
+  prefixMatches: MatchRecord[]
+  processedThroughUtcDate: string
+  options?: BuildDssRosterErasOptions
+  contextInputs?: readonly CausalInputRow[]
+}): DssRosterEraCausalSummary {
+  const eras = buildDssRosterEras(prefixMatches, options)
+  return {
+    prefix: buildCausalPrefixSummary({
+      surface: 'roster-era',
+      processedThroughUtcDate,
+      inputs: rosterEraCausalInputs(prefixMatches, contextInputs),
+    }),
+    openEras: eras
+      .filter((era) => era.endDate === undefined)
+      .map((era) => ({
+        team: era.team,
+        startDate: era.startDate,
+        signature: dssRosterEraSignature(era.roster, era.coachId),
+      }))
+      .sort((left, right) => compareCodeUnits(left.team, right.team)),
+  }
+}
+
+export function reconcileDssRosterEraCausality({
+  summary,
+  freshMatches,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: DssRosterEraCausalSummary
+  freshMatches: MatchRecord[]
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  const appendedTeams = new Set(
+    freshMatches
+      .filter((match) => match.date > summary.prefix.processedThroughUtcDate)
+      .flatMap((match) => [match.teamA, match.teamB]),
+  )
+  const openEraBoundary = summary.openEras
+    .filter((era) => appendedTeams.has(era.team))
+    .map((era) => era.startDate)
+    .sort(compareCodeUnits)[0]
+  return reconcileCausalPrefix({
+    summary: summary.prefix,
+    freshInputs: rosterEraCausalInputs(freshMatches, contextInputs),
+    availableProcessedThroughUtcDates,
+    earliestRecomputeUtcDate: openEraBoundary,
+  })
+}
+
+export function recomputeDssRosterEraCausalState(
+  matches: MatchRecord[],
+  options: BuildDssRosterErasOptions = {},
+) {
+  return buildDssRosterEras(matches, options)
+}
+
+function rosterEraCausalInputs(
+  matches: readonly MatchRecord[],
+  contextInputs: readonly CausalInputRow[],
+) {
+  return [
+    ...matches
+      .filter((match) => match.teamARoster || match.teamBRoster)
+      .map((match) => causalInputRow(`match:${match.id}`, match.date, match)),
+    ...contextInputs,
+  ]
+}
+
+function compareCodeUnits(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 export function dssRosterEraSignature(roster: MatchRosterSnapshot, coachId?: string) {

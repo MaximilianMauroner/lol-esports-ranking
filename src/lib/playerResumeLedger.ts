@@ -1,4 +1,11 @@
 import type { DeservedStandingPlayerResumeLedger, EventTier, Role } from '../types'
+import {
+  buildCausalPrefixSummary,
+  causalInputRow,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 export type DssPlayerResumeSeriesPlayer = {
   id: string
@@ -71,6 +78,60 @@ export function buildDssPlayerResumeLedgers(
     ...(currentSeason === undefined ? {} : { currentSeason }),
     ...(currentSplitId === undefined ? {} : { currentSplitId }),
   }
+}
+
+export function playerResumeCausalInputs(
+  series: readonly DssPlayerResumeSeriesInput[],
+  contextInputs: readonly CausalInputRow[] = [],
+) {
+  return [
+    ...series.map((entry) => causalInputRow(`series:${entry.seriesKey}:${entry.team}`, entry.date, entry)),
+    ...contextInputs,
+  ]
+}
+
+export function buildDssPlayerResumeCausalSummary({
+  prefixSeries,
+  processedThroughUtcDate,
+  contextInputs = [],
+}: {
+  prefixSeries: readonly DssPlayerResumeSeriesInput[]
+  processedThroughUtcDate: string
+  contextInputs?: readonly CausalInputRow[]
+}) {
+  return buildCausalPrefixSummary({
+    surface: 'player-resume-ledger',
+    processedThroughUtcDate,
+    inputs: playerResumeCausalInputs(prefixSeries, contextInputs),
+  })
+}
+
+export function reconcileDssPlayerResumeCausality({
+  summary,
+  freshSeries,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: CausalPrefixSummary
+  freshSeries: readonly DssPlayerResumeSeriesInput[]
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  if (summary.surface !== 'player-resume-ledger') {
+    throw new Error('Expected player-resume-ledger causal summary')
+  }
+  return reconcileCausalPrefix({
+    summary,
+    freshInputs: playerResumeCausalInputs(freshSeries, contextInputs),
+    availableProcessedThroughUtcDates,
+  })
+}
+
+export function recomputeDssPlayerResumeCausalState(
+  series: DssPlayerResumeSeriesInput[],
+  options: BuildDssPlayerResumeLedgerOptions = {},
+) {
+  return buildDssPlayerResumeLedgers(series, options)
 }
 
 export function playerResumeCreditEntries(series: DssPlayerResumeSeriesInput[]): DssPlayerResumeCreditEntry[] {

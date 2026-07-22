@@ -1,6 +1,7 @@
 import type { DeservedStandingTeamComponents, MatchRecord } from '../types'
 import {
   deservedStandingModelParameters,
+  dssCausalInputsForMatches,
   dssCurrentRosterValidity,
   dssSeriesLedgerEntriesForMatches,
   dssTeamComponentsFromSeries,
@@ -8,6 +9,12 @@ import {
   type DssSeriesLedgerEntry,
   type DssSeriesLedgerOptions,
 } from './deservedStanding'
+import {
+  buildCausalPrefixSummary,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 export type DeservedStandingModelOptions = DssSeriesLedgerOptions & {
   baseScoreFor?: (team: string, entries: DssSeriesLedgerEntry[]) => number | undefined
@@ -58,6 +65,48 @@ export function buildDeservedStandingModel(
     teams,
     ledgerEntries,
   }
+}
+
+export function buildDssTeamCausalSummary({
+  prefixMatches,
+  processedThroughUtcDate,
+  contextInputs = [],
+}: {
+  prefixMatches: readonly MatchRecord[]
+  processedThroughUtcDate: string
+  contextInputs?: readonly CausalInputRow[]
+}) {
+  return buildCausalPrefixSummary({
+    surface: 'dss-team',
+    processedThroughUtcDate,
+    inputs: dssCausalInputsForMatches(prefixMatches, contextInputs),
+  })
+}
+
+export function reconcileDssTeamCausality({
+  summary,
+  freshMatches,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: CausalPrefixSummary
+  freshMatches: readonly MatchRecord[]
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  if (summary.surface !== 'dss-team') throw new Error('Expected dss-team causal summary')
+  return reconcileCausalPrefix({
+    summary,
+    freshInputs: dssCausalInputsForMatches(freshMatches, contextInputs),
+    availableProcessedThroughUtcDates,
+  })
+}
+
+export function recomputeDssTeamCausalState(
+  matches: MatchRecord[],
+  options: DeservedStandingModelOptions = {},
+) {
+  return buildDeservedStandingModel(matches, options)
 }
 
 function teamSummaryFor(
