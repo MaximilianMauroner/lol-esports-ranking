@@ -72,6 +72,7 @@ export async function uploadRankingArtifacts({
   monotonicNow = () => performance.now(),
   onStage,
   refreshTelemetry,
+  beforePromotionWrite,
 } = {}) {
   if (!config.enabled) {
     return {
@@ -138,51 +139,31 @@ export async function uploadRankingArtifacts({
   if (manifestPath) {
     uploads.push(await uploadFile(client, config, manifestPath, 'raw/manifest.json'))
   }
-  if (statePath) {
-    if (refreshStateForUpload) {
-      uploads.push(await uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped }))
-    } else {
-      uploads.push(await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
-    }
-  }
-  const publishedArtifacts = [...uploads]
-  const publishMetrics = publishMetricsFor(publishedArtifacts, unchanged)
-
-  if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
-    config,
-    client,
-    now: now(),
-    requireEtag: Boolean(leaseAuthority.etag),
-  })
-  const publishReceipt = {
-    schemaVersion: 1,
-    publishedAt: new Date().toISOString(),
-    prefix: config.prefix,
-    ...(generationId ? { generationId } : {}),
-    ...publishMetrics,
-    artifacts: publishedArtifacts.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
-    unchanged: unchanged.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, digest })),
-    skipped,
-    ...(refreshTelemetry ? { refreshTelemetry: typeof refreshTelemetry === 'function' ? refreshTelemetry() : refreshTelemetry } : {}),
-  }
-  await uploadJson(client, config, generationId ? `generations/${safeObjectPath(generationId)}/publish.json` : 'latest-publish.json', publishReceipt)
+  let promotionOutcome
   if (generationId) {
     stageStarted = monotonicNow()
-    if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
-      config,
-      client,
-      now: now(),
-      requireEtag: Boolean(leaseAuthority.etag),
-    })
-    const active = await readBucketJson('active-generation.json', { config, client })
+    const liveAuthority = leaseAuthority
+      ? await assertBucketLease(leaseAuthority.key, leaseAuthority, {
+          config,
+          client,
+          now: now(),
+          requireEtag: false,
+        })
+      : undefined
+    const active = liveAuthority
+      ? { found: true, value: liveAuthority.lease, etag: liveAuthority.etag }
+      : await readBucketJson('active-generation.json', { config, client })
     if (Number(active.value?.fencingToken ?? 0) > Number(fencingToken ?? 0)) {
       throw new Error('Stale refresh worker cannot promote an active generation')
     }
+    await beforePromotionWrite?.()
+    const promotedAt = new Date(now()).toISOString()
     const promotion = await writeBucketJson('active-generation.json', {
+      ...active.value,
       schemaVersion: 1,
       generationId,
       fencingToken,
-      promotedAt: new Date(now()).toISOString(),
+      promotedAt,
       manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
     }, {
       config,
@@ -193,9 +174,53 @@ export async function uploadRankingArtifacts({
     activeGenerationCache = { expiresAt: Date.now() + 30_000, value: generationId }
     onStage?.('promotion', {
       durationMs: monotonicNow() - stageStarted,
-      output: { generationId, fencingToken },
+      output: { generationId, fencingToken, promotedAt },
     })
+    promotionOutcome = { completed: true, generationId, fencingToken, promotedAt, etag: promotion.etag }
   }
+
+  const telemetry = refreshTelemetry
+    ? await (typeof refreshTelemetry === 'function' ? refreshTelemetry(promotionOutcome) : refreshTelemetry)
+    : undefined
+  if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
+    config,
+    client,
+    now: now(),
+    requireEtag: false,
+  })
+  if (statePath) {
+    if (refreshStateForUpload) {
+      uploads.push(await uploadRefreshState(client, config, refreshStateForUpload, {
+        uploads,
+        unchanged,
+        skipped,
+        promotion: promotionOutcome,
+        refreshTelemetry: telemetry,
+      }))
+    } else {
+      uploads.push(await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
+    }
+  }
+  const publishedArtifacts = [...uploads]
+  const publishMetrics = publishMetricsFor(publishedArtifacts, unchanged)
+  const publishReceipt = {
+    schemaVersion: 1,
+    publishedAt: promotionOutcome?.promotedAt ?? new Date(now()).toISOString(),
+    prefix: config.prefix,
+    ...(generationId ? { generationId } : {}),
+    ...publishMetrics,
+    artifacts: publishedArtifacts.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
+    unchanged: unchanged.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, digest })),
+    skipped,
+    ...(telemetry ? { refreshTelemetry: telemetry } : {}),
+  }
+  if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
+    config,
+    client,
+    now: now(),
+    requireEtag: false,
+  })
+  await uploadJson(client, config, generationId ? `generations/${safeObjectPath(generationId)}/publish.json` : 'latest-publish.json', publishReceipt)
 
   return {
     enabled: true,
@@ -204,6 +229,8 @@ export async function uploadRankingArtifacts({
     uploaded: uploads,
     unchanged,
     skipped,
+    promotion: promotionOutcome,
+    refreshTelemetry: telemetry,
     ...publishMetrics,
   }
 }
@@ -297,25 +324,49 @@ export async function acquireBucketLease(relativeKey, {
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
 } = {}) {
-  const current = await readBucketJson(relativeKey, { config, client })
+  const active = await readBucketJson('active-generation.json', { config, client })
+  const legacy = active.value?.leaseFencingToken === undefined
+    ? await readBucketJson(relativeKey, { config, client })
+    : { found: false }
   const nowMs = new Date(now).getTime()
-  if (current.found && new Date(current.value?.expiresAt).getTime() > nowMs && current.value?.owner !== owner) {
-    return { acquired: false, reason: 'active-lease', lease: current.value }
+  const currentLease = active.value?.leaseFencingToken !== undefined
+    ? {
+        owner: active.value.leaseOwner,
+        fencingToken: active.value.leaseFencingToken,
+        acquiredAt: active.value.leaseAcquiredAt,
+        expiresAt: active.value.leaseExpiresAt,
+      }
+    : legacy.value
+  if (new Date(currentLease?.expiresAt).getTime() > nowMs && currentLease?.owner !== owner) {
+    return { acquired: false, reason: 'active-lease', lease: currentLease }
   }
   const lease = {
     schemaVersion: 1,
     owner,
-    fencingToken: Number(current.value?.fencingToken ?? 0) + 1,
+    fencingToken: Math.max(
+      Number(active.value?.leaseFencingToken ?? 0),
+      Number(active.value?.fencingToken ?? 0),
+      Number(legacy.value?.fencingToken ?? 0),
+    ) + 1,
     acquiredAt: new Date(nowMs).toISOString(),
     expiresAt: new Date(nowMs + ttlMs).toISOString(),
   }
-  const write = await writeBucketJson(relativeKey, lease, {
+  const write = await writeBucketJson('active-generation.json', {
+    ...(active.value ?? {}),
+    schemaVersion: 1,
+    leaseKey: relativeKey,
+    leaseOwner: lease.owner,
+    leaseFencingToken: lease.fencingToken,
+    leaseAcquiredAt: lease.acquiredAt,
+    leaseExpiresAt: lease.expiresAt,
+    fencingToken: Math.max(Number(active.value?.fencingToken ?? 0), lease.fencingToken),
+  }, {
     config,
     client,
-    ...(current.found ? { ifMatch: current.etag } : { ifNoneMatch: '*' }),
+    ...(active.found ? { ifMatch: active.etag } : { ifNoneMatch: '*' }),
   })
   return write.written
-    ? { acquired: true, lease, etag: write.etag }
+    ? { acquired: true, lease, etag: write.etag, promotionEtag: write.etag }
     : { acquired: false, reason: write.conflict ? 'lease-race' : 'bucket-unavailable' }
 }
 
@@ -334,13 +385,18 @@ export async function renewBucketLease(relativeKey, authority, {
     expiresAt: new Date(nowMs + ttlMs).toISOString(),
     renewedAt: new Date(nowMs).toISOString(),
   }
-  const write = await writeBucketJson(relativeKey, lease, {
+  const active = current.lease
+  const write = await writeBucketJson('active-generation.json', {
+    ...active,
+    leaseExpiresAt: lease.expiresAt,
+    leaseRenewedAt: lease.renewedAt,
+  }, {
     config,
     client,
     ifMatch: authority.etag,
   })
   return write.written
-    ? { renewed: true, lease, etag: write.etag }
+    ? { renewed: true, lease, etag: write.etag, promotionEtag: write.etag }
     : { renewed: false, reason: write.conflict ? 'lease-changed' : 'bucket-unavailable' }
 }
 
@@ -351,18 +407,20 @@ export async function assertBucketLease(relativeKey, authority, {
   throwOnFailure = true,
   requireEtag = true,
 } = {}) {
-  const current = await readBucketJson(relativeKey, { config, client })
+  const current = await readBucketJson('active-generation.json', { config, client })
   const reason = !authority?.lease || (requireEtag && !authority?.etag)
     ? 'invalid-lease'
     : !current.found
       ? 'lease-missing'
-      : authority.etag && current.etag !== authority.etag
+      : requireEtag && authority.etag && current.etag !== authority.etag
         ? 'lease-changed'
-        : current.value?.owner !== authority.lease.owner
+        : current.value?.leaseKey !== relativeKey
+          ? 'lease-key-changed'
+          : current.value?.leaseOwner !== authority.lease.owner
           ? 'lease-owner-changed'
-          : Number(current.value?.fencingToken) !== Number(authority.lease.fencingToken)
+          : Number(current.value?.leaseFencingToken) !== Number(authority.lease.fencingToken)
             ? 'lease-token-changed'
-            : new Date(current.value?.expiresAt).getTime() <= new Date(now).getTime()
+            : new Date(current.value?.leaseExpiresAt).getTime() <= new Date(now).getTime()
               ? 'lease-expired'
               : undefined
   if (!reason) return { live: true, lease: current.value, etag: current.etag }
@@ -376,11 +434,13 @@ export async function releaseBucketLease(relativeKey, lease, {
   client = createBucketClient(config),
 } = {}) {
   if (!lease?.etag || !lease?.lease) return { released: false, reason: 'invalid-lease' }
+  const current = await assertBucketLease(relativeKey, lease, { now, config, client, throwOnFailure: false })
+  if (!current.live) return { released: false, reason: current.reason }
   const releasedAt = new Date(now).toISOString()
-  const write = await writeBucketJson(relativeKey, {
-    ...lease.lease,
-    expiresAt: releasedAt,
-    releasedAt,
+  const write = await writeBucketJson('active-generation.json', {
+    ...current.lease,
+    leaseExpiresAt: releasedAt,
+    leaseReleasedAt: releasedAt,
   }, {
     config,
     client,
@@ -618,7 +678,7 @@ async function uploadJsonBody(client, config, relativeKey, body) {
   }
 }
 
-async function uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped }) {
+async function uploadRefreshState(client, config, refreshStateForUpload, { uploads, unchanged, skipped, promotion, refreshTelemetry }) {
   let stateBytes = 0
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const projectedState = {
@@ -631,6 +691,8 @@ async function uploadRefreshState(client, config, refreshStateForUpload, { uploa
       prefix: config.prefix,
       ...metrics,
       skipped,
+      promotion,
+      refreshTelemetry,
     }))
     const nextBytes = Buffer.byteLength(body)
     if (nextBytes === stateBytes) return uploadJsonBody(client, config, 'raw/refresh-state.json', body)

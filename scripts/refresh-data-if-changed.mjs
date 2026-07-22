@@ -40,7 +40,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const metrics = createRefreshMetrics({
     runId: env.RANKING_REFRESH_RUN_ID ?? `refresh-child-${process.pid}`,
     mode: env.RANKING_REFRESH_MODE === 'shadow' || env.RANKING_REFRESH_MODE === 'gated' ? env.RANKING_REFRESH_MODE : 'legacy',
-    cause: env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match',
+    cause: env.RANKING_REFRESH_CAUSE ?? (env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match'),
+    affectedIds: parseAffectedIds(env.RANKING_REFRESH_AFFECTED_IDS),
+    affectedDate: env.RANKING_REFRESH_AFFECTED_DATE,
     now: wallNow,
     monotonicNow,
   })
@@ -101,6 +103,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   await mkdir(stagingDir, { recursive: true })
 
   let refreshError
+  let canonicalMetrics
+  let terminalResult = 'completed'
+  let completedPromotionAt
   try {
     const providerStarted = monotonicNow()
     await (options.run ?? runCommand)(process.execPath, [
@@ -135,7 +140,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         restoreResult,
         healthFingerprint,
       })
-      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
+      terminalResult = 'stale-source'
+      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: terminalResult }))
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; preserving existing ranking artifacts.`)
@@ -176,7 +182,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           reason: 'unchanged-source-data',
         },
       }
-      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
+      terminalResult = 'unchanged'
+      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: terminalResult }))
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.log(`No source-data changes detected for ${start} through ${end}; skipping crunch.`)
@@ -255,6 +262,11 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       metrics.recordStage('crunch', { durationMs: monotonicNow() - crunchStarted })
     }
 
+    const inheritedMetrics = await readRefreshMetrics(metricsPath)
+    for (const stage of inheritedMetrics?.stages ?? []) {
+      if (stage.result !== 'not-applicable') metrics.recordStage(stage.name, stage)
+    }
+
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
 
     if (!skipCrunch && bucketUploadEnabled) {
@@ -293,12 +305,19 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
                   owner: env.RANKING_REFRESH_LEASE_OWNER,
                   fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
                 },
+                promotionEtag: env.RANKING_REFRESH_PROMOTION_ETAG,
               }
             : undefined,
-          refreshTelemetry: () => completeRefreshMetrics(metrics.snapshot({ result: 'running' })),
+          refreshTelemetry: (promotion) => completeRefreshMetrics(metrics.snapshot({
+            result: promotion?.completed ? 'completed' : 'no-promotion',
+            freshness: { publishedAt: promotion?.promotedAt ?? null },
+          })),
           monotonicNow,
-          onStage: (name, stage) => metrics.recordStage(name, stage),
-          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped }) => {
+          onStage: (name, stage) => {
+            metrics.recordStage(name, stage)
+            if (name === 'promotion' && stage.output?.promotedAt) completedPromotionAt = stage.output.promotedAt
+          },
+          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped, refreshTelemetry }) => {
             state.bucket = {
               enabled: true,
               bucket,
@@ -310,7 +329,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               unchangedBytes,
               skipped,
             }
-            state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'running' }))
+            state.lastRun = refreshTelemetry
             return state
           },
         })
@@ -325,6 +344,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           unchangedBytes: bucketPublish.unchangedBytes,
           skipped: bucketPublish.skipped,
         }
+        state.lastRun = bucketPublish.refreshTelemetry
+        canonicalMetrics = bucketPublish.refreshTelemetry
         const optionalSkippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
         console.log(`Uploaded ${bucketPublish.uploadedCount} ranking artifact(s) (${bucketPublish.uploadedBytes} bytes); reused ${bucketPublish.unchangedCount} unchanged artifact(s) (${bucketPublish.unchangedBytes} bytes) in Railway bucket prefix ${bucketPublish.prefix || '(root)'}${optionalSkippedMessage}.`)
       }
@@ -335,7 +356,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       }
     }
 
-    state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
+    state.lastRun ??= completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
     console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
     return {
@@ -349,9 +370,17 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     throw error
   } finally {
     if (metricsPath) {
-      const own = completeRefreshMetrics(metrics.snapshot({ result: refreshError ? 'failed' : 'completed', error: refreshError }))
-      const existing = await readRefreshMetrics(metricsPath)
-      await writeRefreshMetrics(metricsPath, existing ? mergeRefreshMetrics(existing, own) : own)
+      if (canonicalMetrics) {
+        await writeRefreshMetrics(metricsPath, canonicalMetrics)
+      } else {
+        const own = completeRefreshMetrics(metrics.snapshot({
+          result: refreshError ? 'failed' : terminalResult,
+          error: refreshError,
+          freshness: { publishedAt: completedPromotionAt ?? null },
+        }))
+        const existing = await readRefreshMetrics(metricsPath)
+        await writeRefreshMetrics(metricsPath, existing ? mergeRefreshMetrics(existing, own) : own)
+      }
     }
     await rm(stagingDir, { recursive: true, force: true })
   }
@@ -802,6 +831,17 @@ function maxDate(left, right) {
 
 function arrayValue(value) {
   return Array.isArray(value) ? value : []
+}
+
+function parseAffectedIds(value) {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed.map(String)
+  } catch {
+    // Accept a compact comma-separated fallback for manual runs.
+  }
+  return String(value).split(',').map((entry) => entry.trim()).filter(Boolean)
 }
 
 function uniqueValues(values) {

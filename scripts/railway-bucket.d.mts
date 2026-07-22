@@ -31,7 +31,7 @@ export function acquireBucketLease(relativeKey: string, options: {
   config?: unknown
   client?: BucketClient
 }): Promise<
-  | { acquired: true; lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string }; etag?: string }
+  | { acquired: true; lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string }; etag?: string; promotionEtag?: string }
   | { acquired: false; reason: string; lease?: unknown }
 >
 export function releaseBucketLease(relativeKey: string, lease: {
@@ -45,6 +45,7 @@ export function releaseBucketLease(relativeKey: string, lease: {
 export type BucketLeaseAuthority = {
   lease: { owner: string; fencingToken: number; acquiredAt: string; expiresAt: string; renewedAt?: string }
   etag?: string
+  promotionEtag?: string
 }
 export function renewBucketLease(relativeKey: string, lease: BucketLeaseAuthority, options?: {
   ttlMs?: number

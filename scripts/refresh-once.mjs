@@ -18,6 +18,7 @@ import {
   acknowledgeMatches,
   applyProbeFailure,
   applyScheduleProbe,
+  assertRefreshCadence,
   duePendingMatchIds,
   emptyTriggerState,
   parseTriggerState,
@@ -25,7 +26,7 @@ import {
   refreshTriggerCause,
   shouldFetchScoredProviders,
 } from './refresh-trigger-state.mjs'
-import { completeRefreshMetrics, createRefreshMetrics, readRefreshMetrics } from './refresh-metrics.mjs'
+import { completeRefreshMetrics, createRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
 
 export async function runRefreshOnce(options = {}) {
   const env = options.env ?? process.env
@@ -54,6 +55,13 @@ export async function runRefreshOnce(options = {}) {
     rss,
   })
   let finalRecord
+
+  assertRefreshCadence({
+    intervalMinutes: numberEnv(env, 'RANKING_REFRESH_INTERVAL_MINUTES', 360),
+    mode,
+    cheapExitProven: env.RANKING_CHEAP_EXIT_PROVEN === 'true',
+    leaseFencingConfigured: env.RANKING_LEASE_FENCING_ENABLED === 'true',
+  })
 
   if (mode === 'legacy') {
     const finish = tracker.startStage('provider-fetch')
@@ -89,7 +97,7 @@ export async function runRefreshOnce(options = {}) {
     return { status: 'skipped', reason: acquired.reason, metrics: finalRecord }
   }
 
-  const authority = { lease: { ...acquired.lease }, etag: acquired.etag }
+  const authority = { lease: { ...acquired.lease }, etag: acquired.etag, promotionEtag: acquired.promotionEtag }
   const heartbeat = startLeaseHeartbeat({
     authority,
     leaseKey,
@@ -102,34 +110,35 @@ export async function runRefreshOnce(options = {}) {
     clearIntervalFn: options.clearInterval ?? clearInterval,
   })
   const assertLive = async () => {
-    if (heartbeat.error) throw heartbeat.error
-    await (options.assertLease ?? assertBucketLease)(leaseKey, authority, { now: now(), config, client })
-  }
-
-  const readRemote = options.readBucketJson ?? readBucketJson
-  const writeRemote = options.writeBucketJson ?? writeBucketJson
-  const remoteState = await readRemote(stateKey, { config, client })
-  let state = parseTriggerState(remoteState.found
-    ? remoteState.value
-    : await (options.readLocalState ?? readLocalState)(statePath, mode), { mode })
-  state.mode = mode
-  state.fencingToken = authority.lease.fencingToken
-  let stateEtag = remoteState.etag
-  let fetchedScoredProviders = false
-
-  const persistState = async (nextState) => {
-    await assertLive()
-    await (options.writeLocalState ?? writeLocalState)(statePath, nextState)
-    const result = await writeRemote(stateKey, nextState, {
-      config,
-      client,
-      ...(stateEtag ? { ifMatch: stateEtag } : { ifNoneMatch: '*' }),
+    await heartbeat.runExclusive(async () => {
+      if (heartbeat.error) throw heartbeat.error
+      await (options.assertLease ?? assertBucketLease)(leaseKey, authority, { now: now(), config, client })
     })
-    if (!result.written) throw new Error(result.conflict ? 'Trigger state changed concurrently' : 'Unable to persist trigger state')
-    stateEtag = result.etag
   }
 
   try {
+    const readRemote = options.readBucketJson ?? readBucketJson
+    const writeRemote = options.writeBucketJson ?? writeBucketJson
+    const remoteState = await readRemote(stateKey, { config, client })
+    let state = parseTriggerState(remoteState.found
+      ? remoteState.value
+      : await (options.readLocalState ?? readLocalState)(statePath, mode), { mode })
+    state.mode = mode
+    state.fencingToken = authority.lease.fencingToken
+    let stateEtag = remoteState.etag
+
+    const persistState = async (nextState) => {
+      await assertLive()
+      await (options.writeLocalState ?? writeLocalState)(statePath, nextState)
+      const result = await writeRemote(stateKey, nextState, {
+        config,
+        client,
+        ...(stateEtag ? { ifMatch: stateEtag } : { ifNoneMatch: '*' }),
+      })
+      if (!result.written) throw new Error(result.conflict ? 'Trigger state changed concurrently' : 'Unable to persist trigger state')
+      stateEtag = result.etag
+    }
+
     const probeStarted = monotonicNow()
     try {
       const probe = await (options.fetchProbe ?? fetchScheduleProbe)({
@@ -158,16 +167,20 @@ export async function runRefreshOnce(options = {}) {
     const correctionAuditDue = auditDue(env, state, now())
     const cause = refreshTriggerCause(state, { correctionAuditDue, manual, now: now() })
     const affectedIds = duePendingMatchIds(state, now())
-    tracker.setContext({ cause, affectedIds, affectedDate: state.checkedAt?.slice(0, 10) })
+    const affectedDate = pendingAffectedDate(state, affectedIds)
+    tracker.setContext({ cause, affectedIds, affectedDate })
 
     if (!shouldFetchScoredProviders(state, { correctionAuditDue, manual, now: now() })) {
       logger.log(`Refresh probe complete: mode=${mode} pending=${Object.keys(state.pending).length}; scored providers skipped`)
     } else {
-      fetchedScoredProviders = true
       const dueMatchIds = duePendingMatchIds(state, now())
       const finishProviderFetch = tracker.startStage('provider-fetch', { pendingMatchCount: dueMatchIds.length })
       try {
         await assertLive()
+        await writeRefreshMetrics(childMetricsPath, completeRefreshMetrics(tracker.snapshot({
+          result: 'running',
+          freshness: { detectedAt: pendingDetectedAt(state, dueMatchIds) },
+        })))
         await (options.runChild ?? defaultRunChild)({
           env,
           reconciliationPath,
@@ -176,6 +189,10 @@ export async function runRefreshOnce(options = {}) {
           leaseKey,
           owner: authority.lease.owner,
           fencingToken: authority.lease.fencingToken,
+          promotionEtag: authority.promotionEtag,
+          cause,
+          affectedIds: dueMatchIds,
+          affectedDate,
         })
         await assertLive()
         finishProviderFetch('completed')
@@ -188,6 +205,7 @@ export async function runRefreshOnce(options = {}) {
         state = acknowledgeMatches(state, ledger?.matches ?? [], now())
         if (correctionAuditDue) state.lastCorrectionAuditAt = new Date(now()).toISOString()
         state.fencingToken = authority.lease.fencingToken
+        if (childMetrics && childMetrics.result !== 'running') finalRecord = childMetrics
         await persistState(state)
         logger.log(`Refresh ingestion complete: attempted=${dueMatchIds.length} remaining=${Object.keys(state.pending).length}`)
         await (options.alertIfPendingIsOld ?? defaultAlertIfPendingIsOld)(env, state, now(), logger)
@@ -202,12 +220,9 @@ export async function runRefreshOnce(options = {}) {
       }
     }
 
-    finalRecord = completeRefreshMetrics(tracker.snapshot({
+    finalRecord ??= completeRefreshMetrics(tracker.snapshot({
       result: 'completed',
-      freshness: {
-        detectedAt: state.checkedAt,
-        publishedAt: fetchedScoredProviders ? new Date(now()).toISOString() : null,
-      },
+      freshness: { detectedAt: pendingDetectedAt(state, affectedIds), publishedAt: null },
     }))
     state.lastRun = finalRecord
     await persistState(state)
@@ -216,28 +231,50 @@ export async function runRefreshOnce(options = {}) {
     finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
     throw error
   } finally {
-    await heartbeat.stop()
-    const released = await (options.releaseLease ?? releaseBucketLease)(leaseKey, authority, { now: now(), config, client })
-    if (!released.released) logger.warn(`Refresh lease release skipped: ${released.reason}`)
-    if (!finalRecord) finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed' }))
-    logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
+    const finalizationErrors = []
+    try {
+      await heartbeat.stop()
+    } catch (error) {
+      finalizationErrors.push(`heartbeat-stop: ${errorMessage(error)}`)
+    }
+    try {
+      const released = await (options.releaseLease ?? releaseBucketLease)(leaseKey, authority, { now: now(), config, client })
+      if (!released.released) {
+        finalizationErrors.push(`lease-release: ${released.reason}`)
+        logger.warn(`Refresh lease release skipped: ${released.reason}`)
+      }
+    } catch (error) {
+      finalizationErrors.push(`lease-release: ${errorMessage(error)}`)
+      logger.warn(`Refresh lease release failed: ${errorMessage(error)}`)
+    } finally {
+      if (!finalRecord) finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed' }))
+      if (finalizationErrors.length > 0) finalRecord = { ...finalRecord, finalizationErrors }
+      logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
+    }
   }
 }
 
 export function startLeaseHeartbeat({ authority, leaseKey, ttlMs, now, renew, config, client, setIntervalFn, clearIntervalFn }) {
-  let inFlight
+  let queue = Promise.resolve()
   let stopped = false
+  const runExclusive = (operation) => {
+    const result = queue.then(operation, operation)
+    queue = result.catch(() => undefined)
+    return result
+  }
   const heartbeat = {
     error: undefined,
+    runExclusive,
     async stop() {
       stopped = true
       clearIntervalFn(timer)
-      if (inFlight) await inFlight
+      await queue
     },
   }
   const tick = () => {
-    if (stopped || inFlight || heartbeat.error) return
-    inFlight = (async () => {
+    if (stopped || heartbeat.error) return
+    void runExclusive(async () => {
+      if (heartbeat.error) return
       const result = await renew(leaseKey, authority, { ttlMs, now: now(), config, client })
       if (!result.renewed) {
         heartbeat.error = new Error(`Refresh lease renewal failed: ${result.reason}`)
@@ -245,10 +282,9 @@ export function startLeaseHeartbeat({ authority, leaseKey, ttlMs, now, renew, co
       }
       authority.lease = result.lease
       authority.etag = result.etag
-    })().catch((error) => {
+      authority.promotionEtag = result.promotionEtag ?? authority.promotionEtag
+    }).catch((error) => {
       heartbeat.error = error instanceof Error ? error : new Error(String(error))
-    }).finally(() => {
-      inFlight = undefined
     })
   }
   const timer = setIntervalFn(tick, Math.max(1_000, Math.floor(ttlMs / 3)))
@@ -256,8 +292,8 @@ export function startLeaseHeartbeat({ authority, leaseKey, ttlMs, now, renew, co
   return heartbeat
 }
 
-async function defaultRunChild({ env, reconciliationPath, metricsPath, runId, leaseKey, owner, fencingToken }) {
-  await run(process.execPath, ['scripts/refresh-data-if-changed.mjs'], numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), {
+async function defaultRunChild({ env, reconciliationPath, metricsPath, runId, leaseKey, owner, fencingToken, promotionEtag, cause, affectedIds, affectedDate }) {
+  await runChildProcess(process.execPath, ['scripts/refresh-data-if-changed.mjs'], numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), {
     ...env,
     RANKING_RECONCILIATION_OUTPUT: reconciliationPath,
     RANKING_REFRESH_METRICS_PATH: metricsPath,
@@ -266,28 +302,58 @@ async function defaultRunChild({ env, reconciliationPath, metricsPath, runId, le
       RANKING_REFRESH_FENCING_TOKEN: String(fencingToken),
       RANKING_REFRESH_LEASE_KEY: leaseKey,
       RANKING_REFRESH_LEASE_OWNER: owner,
+      RANKING_REFRESH_PROMOTION_ETAG: promotionEtag,
+      RANKING_REFRESH_CAUSE: cause,
+      RANKING_REFRESH_AFFECTED_IDS: JSON.stringify(affectedIds ?? []),
+      ...(affectedDate ? { RANKING_REFRESH_AFFECTED_DATE: affectedDate } : {}),
     } : {}),
   })
 }
 
-async function run(command, args, timeoutMs, env) {
+export async function runChildProcess(command, args, timeoutMs, env, options = {}) {
+  const spawnFn = options.spawn ?? spawn
+  const setTimeoutFn = options.setTimeout ?? setTimeout
+  const clearTimeoutFn = options.clearTimeout ?? clearTimeout
   await new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, { env, stdio: 'inherit' })
-    const timeout = setTimeout(() => {
-      child.kill('SIGTERM')
-      rejectRun(new Error(`Refresh job exceeded ${timeoutMs}ms`))
+    const child = spawnFn(command, args, {
+      env,
+      stdio: 'inherit',
+      detached: process.platform !== 'win32',
+    })
+    let timedOut = false
+    let killTimeout
+    const timeout = setTimeoutFn(() => {
+      timedOut = true
+      terminateProcessTree(child, 'SIGTERM')
+      killTimeout = setTimeoutFn(() => terminateProcessTree(child, 'SIGKILL'), 5_000)
+      killTimeout?.unref?.()
     }, timeoutMs)
     timeout.unref()
     child.on('error', (error) => {
-      clearTimeout(timeout)
+      clearTimeoutFn(timeout)
+      if (killTimeout) clearTimeoutFn(killTimeout)
       rejectRun(error)
     })
     child.on('exit', (code, signal) => {
-      clearTimeout(timeout)
-      if (code === 0) resolveRun()
+      clearTimeoutFn(timeout)
+      if (killTimeout) clearTimeoutFn(killTimeout)
+      if (timedOut) rejectRun(new Error(`Refresh job exceeded ${timeoutMs}ms; process tree exited with ${code ?? signal}`))
+      else if (code === 0) resolveRun()
       else rejectRun(new Error(`Refresh job exited with ${code ?? signal}`))
     })
   })
+}
+
+function terminateProcessTree(child, signal) {
+  if (process.platform !== 'win32' && child.pid) {
+    try {
+      process.kill(-child.pid, signal)
+      return
+    } catch {
+      // Fall back to the direct child if the process group is already gone.
+    }
+  }
+  child.kill(signal)
 }
 
 async function readLocalState(path, mode) {
@@ -307,6 +373,21 @@ async function writeLocalState(path, value) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
+}
+
+function pendingAffectedDate(state, matchIds) {
+  const completed = matchIds
+    .map((matchId) => state.pending?.[matchId]?.completedAt)
+    .filter(Boolean)
+    .sort()[0]
+  return completed?.slice(0, 10)
+}
+
+function pendingDetectedAt(state, matchIds) {
+  return matchIds
+    .map((matchId) => state.pending?.[matchId]?.detectedAt)
+    .filter(Boolean)
+    .sort()[0] ?? null
 }
 
 function auditDue(env, value, now) {

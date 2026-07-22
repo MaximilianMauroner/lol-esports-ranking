@@ -134,18 +134,24 @@ test('lost lease leaves uploaded generation objects orphaned and active pointer 
       const result = await backing.send(command)
       const { name, input } = commandDetails(command)
       if (replaceAfterArtifact && name === 'PutObjectCommand' && input.Key === 'rankings/generations/orphan/data/ranking-summary.json') {
-        backing.objects.set('rankings/lease.json', {
-          body: JSON.stringify({ owner: 'new', fencingToken: 2, expiresAt: '2026-07-11T00:02:00Z' }),
+        const active = JSON.parse(backing.objects.get('rankings/active-generation.json')!.body)
+        backing.objects.set('rankings/active-generation.json', {
+          body: JSON.stringify({
+            ...active,
+            leaseOwner: 'new',
+            leaseFencingToken: Number(active.leaseFencingToken) + 1,
+            leaseExpiresAt: '2026-07-11T00:02:00Z',
+          }),
           etag: 'replacement',
         })
       }
       return result
     },
   }
+  await writeBucketJson('active-generation.json', { generationId: 'good', fencingToken: 2 }, { ifNoneMatch: '*', config, client })
   const current = await acquireBucketLease('lease.json', { owner: 'old', now: '2026-07-11T00:00:00Z', ttlMs: 60_000, config, client })
   assert.equal(current.acquired, true)
   if (!current.acquired) return
-  await writeBucketJson('active-generation.json', { generationId: 'good', fencingToken: 2 }, { ifNoneMatch: '*', config, client })
   replaceAfterArtifact = true
   try {
     await assert.rejects(() => uploadRankingArtifacts({
@@ -159,6 +165,84 @@ test('lost lease leaves uploaded generation objects orphaned and active pointer 
     }), /no longer authoritative/)
     assert.ok(client.objects.has('rankings/generations/orphan/data/ranking-summary.json'))
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'good')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('takeover between final assertion and active-pointer write invalidates the exact promotion CAS', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-promotion-race-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+  await writeBucketJson('active-generation.json', { generationId: 'current', fencingToken: 0 }, { ifNoneMatch: '*', config, client })
+  const oldWorker = await acquireBucketLease('lease.json', { owner: 'old', now: '2026-07-11T00:00:00Z', ttlMs: 60_000, config, client })
+  assert.equal(oldWorker.acquired, true)
+  if (!oldWorker.acquired) return
+
+  try {
+    await assert.rejects(() => uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'stale-generation',
+      fencingToken: oldWorker.lease.fencingToken,
+      leaseAuthority: { key: 'lease.json', lease: oldWorker.lease, promotionEtag: oldWorker.promotionEtag },
+      now: () => new Date('2026-07-11T00:00:30Z'),
+      beforePromotionWrite: async () => {
+        const replacement = await acquireBucketLease('lease.json', { owner: 'new', now: '2026-07-11T00:01:01Z', ttlMs: 60_000, config, client })
+        assert.equal(replacement.acquired, true)
+      },
+      config,
+      client,
+    }), /Active generation changed during promotion/)
+    assert.ok(client.objects.has('rankings/generations/stale-generation/data/ranking-summary.json'))
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'current')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('post-promotion refresh state and receipt contain the same canonical telemetry', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-canonical-metrics-'))
+  const publicDir = join(root, 'public')
+  const statePath = join(root, 'refresh-state.json')
+  const client = memoryS3()
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+  await writeFile(statePath, '{}\n')
+  const lease = await acquireBucketLease('lease.json', { owner: 'worker', now: '2026-07-11T00:00:00Z', ttlMs: 60_000, config, client })
+  assert.equal(lease.acquired, true)
+  if (!lease.acquired) return
+  const base = {
+    schemaVersion: 1,
+    runId: 'run-canonical',
+    mode: 'gated',
+    cause: 'pending-match',
+    affected: { matchIds: ['match-1'], date: '2026-07-10' },
+    freshness: { providerAvailableAt: null, detectedAt: '2026-07-11T00:00:00Z', publishedAt: null },
+    stages: [{ name: 'public-serialization', result: 'completed', durationMs: 5, input: {}, output: { outputBytes: 3 } }],
+  }
+  try {
+    const result = await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      statePath,
+      generationId: 'generation-canonical',
+      fencingToken: lease.lease.fencingToken,
+      leaseAuthority: { key: 'lease.json', lease: lease.lease, promotionEtag: lease.promotionEtag },
+      now: () => new Date('2026-07-11T00:00:30Z'),
+      refreshTelemetry: (promotion: { promotedAt: string }) => ({ ...base, freshness: { ...base.freshness, publishedAt: promotion.promotedAt } }),
+      refreshStateForUpload: ({ refreshTelemetry }: { refreshTelemetry: unknown }) => ({ lastRun: refreshTelemetry }),
+      config,
+      client,
+    })
+    const receipt = JSON.parse(client.objects.get('rankings/generations/generation-canonical/publish.json')!.body)
+    const refreshState = JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body)
+    assert.deepEqual(receipt.refreshTelemetry, refreshState.lastRun)
+    assert.deepEqual(receipt.refreshTelemetry, result.refreshTelemetry)
+    assert.equal(receipt.refreshTelemetry.cause, 'pending-match')
+    assert.deepEqual(receipt.refreshTelemetry.affected, { matchIds: ['match-1'], date: '2026-07-10' })
+    assert.equal(receipt.refreshTelemetry.stages[0].name, 'public-serialization')
+    assert.equal(receipt.refreshTelemetry.freshness.publishedAt, (result.promotion as { promotedAt: string }).promotedAt)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
