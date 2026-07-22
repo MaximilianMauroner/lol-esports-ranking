@@ -74,8 +74,8 @@ export function prepareContentAddressedState(options: {
     boundary: StateBoundary
     rawPrefix: StateRawPrefix
     compatibility?: StateCompatibility
-    ratingCheckpoint: Record<string, unknown>
-    causalSummaries: StateCausalSummaries
+    ratingCheckpoint?: Record<string, unknown>
+    causalSummaries?: StateCausalSummaries
     storedObjectReference?: StateObjectReference
   }>
 }): { manifest: IncrementalStateManifest; manifestPrepared: PreparedStateObject; objects: PreparedStateObject[] }
@@ -114,6 +114,10 @@ export function readActiveIncrementalState(options: {
       candidate: IncrementalStateManifest['checkpoints'][number]
       bundle: Record<string, unknown>
     }>
+    loadCheckpoints: (candidates?: IncrementalStateManifest['checkpoints']) => Promise<Array<{
+      candidate: IncrementalStateManifest['checkpoints'][number]
+      bundle: Record<string, unknown>
+    }>>
   }
 >
 export function parseIncrementalStateManifest(value: unknown): IncrementalStateManifest

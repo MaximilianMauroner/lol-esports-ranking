@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { buildCausalContextIdentity, causalInputRow, CAUSAL_PREFIX_SCHEMA_VERSION, type CausalInputRow, type CausalSurfaceId } from '../src/lib/causalRecompute'
-import { affectedPublicArtifacts, assertArtifactDependencyPlanMatchesSemanticChanges, type PublicArtifactChange } from '../src/lib/incremental/artifactDependencies'
+import { affectedPublicArtifacts, assertArtifactDependencyPlanMatchesSemanticChanges, type ArtifactScopeDependency, type PublicArtifactChange } from '../src/lib/incremental/artifactDependencies'
 import { buildCanonicalMatchLedger, canonicalMatchLedgerKey, classifyRankingChange, parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier'
 import { buildExternalCausalBundle, reconcileExternalCausalBundle, REQUIRED_EXTERNAL_CAUSAL_SURFACES, type ExternalCausalBundle, type ExternalCausalSurfaceInput } from '../src/lib/incremental/externalCausalState'
 import { replayRankingState } from '../src/lib/incremental/replayOrchestrator'
@@ -44,6 +44,7 @@ export type RestoredIncrementalAuthority = {
   rootArtifact?: Record<string, unknown>
   artifacts?: Record<string, unknown>
   loadArtifacts?: (paths: string[]) => Promise<Record<string, unknown>>
+  loadCheckpoints?: (candidates?: IncrementalStateManifest['checkpoints']) => Promise<RestoredCheckpoint[]>
 }
 
 export type IncrementalBuildMetrics = {
@@ -77,9 +78,9 @@ export type IncrementalStateBuild = {
   checkpoints: Array<{
     boundary: { date: string; matchId: string }
     rawPrefix: { matchCount: number; digest: string }
-    ratingCheckpoint: Record<string, unknown>
+    ratingCheckpoint?: Record<string, unknown>
     storedObjectReference?: StateObjectReference
-    causalSummaries: {
+    causalSummaries?: {
       sourcedPlayer: Record<string, unknown>
       dssTeam: Record<string, unknown>
       dssRegion: Record<string, unknown>
@@ -243,7 +244,7 @@ export async function buildRankingIncrementally({
       if (!restored.rootArtifact) throw new Error('metadata-only-root-artifact-missing')
       const rootManifest = metadataOnlyRootArtifact(restored.rootArtifact, sourceData, generatedAt)
       const rootPrepared = prepareSemanticArtifact(rootManifest)
-      const state = buildMetadataOnlyState(sourceData, ledger, restored.checkpoints)
+      const state = buildMetadataOnlyState(sourceData, ledger, restored)
       const expectedLogicalPaths = Object.keys(requiredRecord(restored.publicManifest.artifacts, 'public generation artifacts')).sort()
       const changedPath = '/data/ranking-summary.json'
       return {
@@ -263,8 +264,15 @@ export async function buildRankingIncrementally({
     }
 
     if (!restored.rootArtifact) throw new Error('verified-active-root-artifact-missing')
+    const dependencyArtifacts = restored.loadArtifacts
+      ? { ...restored.artifacts, ...await restored.loadArtifacts([
+          `/data/${PUBLIC_ARTIFACT_PATHS.matchHistoryIndex}`,
+          `/data/${PUBLIC_ARTIFACT_PATHS.teamHistoryIndex}`,
+          `/data/${PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex}`,
+        ]) }
+      : restored.artifacts
     const changes = changesForClassification(previousLedger, ledger, classification)
-    const preliminaryPlan = scopedDependencyPlan(changes, classification, restored.rootArtifact, restored.publicManifest)
+    const preliminaryPlan = scopedDependencyPlan(changes, classification, restored.rootArtifact, restored.publicManifest, dependencyArtifacts)
     const affectedLogicalPaths = new Set(preliminaryPlan.logicalPaths.map(stripDataPrefix))
     const affectedSnapshotKeys = snapshotKeysForPlan(restored.rootArtifact, preliminaryPlan.logicalPaths, changes)
     const affectedTournamentIds = tournamentIdsForPlan(preliminaryPlan.logicalPaths, changes)
@@ -272,7 +280,7 @@ export async function buildRankingIncrementally({
       ? { ...restored.artifacts, ...await restored.loadArtifacts(previousArtifactMergePaths(preliminaryPlan.logicalPaths)) }
       : restored.artifacts
     if (!previousArtifacts) throw new Error('verified-active-artifacts-missing')
-    const replay = selectReplay(restored.checkpoints, sourceData, classification, generatedAt)
+    const replay = await selectReplay(restored, sourceData, ledger, classification, generatedAt)
     const replayResult = replayRankingState({
       authoritativeMatches: sourceData.matches,
       teams: sourceData.teams,
@@ -297,19 +305,33 @@ export async function buildRankingIncrementally({
       env,
       silent,
     })
+    const validScopeKeys = publishedScopeKeys(candidate.publicPlan.manifest)
+    const validTournamentIds = new Set(deriveTournamentInstances({
+      matches: sourceData.matches,
+      scheduleReferences: sourceData.tournamentScheduleReferences,
+      generatedAt,
+    }).map((instance) => instance.id))
+    prunePartialPublicIndexes(candidate.publicPlan.writes, validScopeKeys, validTournamentIds)
     const previousSemantic = semanticMapFromGeneration(restored.publicManifest)
     const candidateSemantic = semanticMapFromWrites(candidate.publicPlan.writes)
     const currentSemantic = { ...previousSemantic, ...candidateSemantic }
+    const removedPaths = obsoletePublicArtifactPaths({
+      previousPaths: Object.keys(previousSemantic),
+      previousRoot: restored.rootArtifact,
+      candidateWrites: candidate.publicPlan.writes,
+      validScopeKeys,
+      validTournamentIds,
+    })
+    for (const path of removedPaths) delete currentSemantic[path]
     const dependencyPlan = affectedPublicArtifacts({
       changes,
-      inventory: dependencyInventory(restored.rootArtifact, restored.publicManifest),
+      inventory: dependencyInventory(restored.rootArtifact, restored.publicManifest, changes, previousArtifacts),
       previousSemanticArtifacts: previousSemantic,
       currentSemanticArtifacts: currentSemantic,
     })
     assertArtifactDependencyPlanMatchesSemanticChanges(dependencyPlan, previousSemantic, currentSemantic)
     const changed = new Set(dependencyPlan.logicalPaths)
     const currentPaths = Object.keys(currentSemantic).sort()
-    const removedPaths: string[] = []
     const changedWrites = candidate.publicPlan.writes.filter((write) => changed.has(`/data/${write.relativePath}`))
     const root = candidate.publicPlan.writes.find((write) => write.relativePath === 'ranking-summary.json')
     if (root && !changedWrites.includes(root)) changedWrites.push(root)
@@ -317,7 +339,7 @@ export async function buildRankingIncrementally({
       sourceData,
       ledger,
       replayResult.state,
-      restored.checkpoints,
+      restored,
       generatedAt,
       mode === 'shadow' || replayResult.replayedMatchCount >= 100,
     )
@@ -384,6 +406,104 @@ function previousArtifactMergePaths(logicalPaths: string[]) {
   return logicalPaths.filter((path) => mergePaths.has(path))
 }
 
+function publishedScopeKeys(manifest: Record<string, unknown>) {
+  const keys = new Set([snapshotKey({ season: 'All', event: 'All', region: 'All' })])
+  const options = optionalRecord(manifest.filterOptions)
+  for (const season of Array.isArray(options?.seasons) ? options.seasons : []) {
+    if (typeof season === 'string' && season !== 'All') keys.add(snapshotKey({ season, event: 'All', region: 'All' }))
+  }
+  const checkpoints = optionalRecord(options?.checkpoints)
+  for (const [season, values] of Object.entries(checkpoints ?? {})) {
+    if (!Array.isArray(values)) continue
+    for (const value of values) {
+      const checkpoint = optionalRecord(value)
+      if (typeof checkpoint?.id === 'string') keys.add(snapshotKey({ season, event: 'All', region: 'All', checkpoint: checkpoint.id }))
+    }
+  }
+  return keys
+}
+
+function prunePartialPublicIndexes(
+  writes: SnapshotBuild['publicPlan']['writes'],
+  validScopeKeys: ReadonlySet<string>,
+  validTournamentIds: ReadonlySet<string>,
+) {
+  for (const write of writes) {
+    const value = optionalRecord(write.value)
+    if (!value) continue
+    if (write.relativePath === PUBLIC_ARTIFACT_PATHS.manifest) {
+      write.value = pruneRecordEntries(value, 'snapshotIndex', validScopeKeys)
+    } else if (write.relativePath === PUBLIC_ARTIFACT_PATHS.teamHistoryIndex
+      || write.relativePath === PUBLIC_ARTIFACT_PATHS.matchHistoryIndex) {
+      write.value = pruneRecordEntries(value, 'scopeIndex', validScopeKeys)
+    } else if (write.relativePath === PUBLIC_ARTIFACT_PATHS.regionHistory) {
+      write.value = pruneRecordEntries(value, 'scopes', validScopeKeys)
+    } else if (write.relativePath === PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex && Array.isArray(value.tournaments)) {
+      write.value = {
+        ...value,
+        tournaments: value.tournaments.filter((entry) => {
+          const tournament = optionalRecord(entry)
+          return typeof tournament?.id === 'string' && validTournamentIds.has(tournament.id)
+        }),
+      }
+    }
+  }
+}
+
+function pruneRecordEntries(value: Record<string, unknown>, key: string, allowed: ReadonlySet<string>) {
+  const entries = optionalRecord(value[key])
+  if (!entries) return value
+  return { ...value, [key]: Object.fromEntries(Object.entries(entries).filter(([entryKey]) => allowed.has(entryKey))) }
+}
+
+function obsoletePublicArtifactPaths({
+  previousPaths,
+  previousRoot,
+  candidateWrites,
+  validScopeKeys,
+  validTournamentIds,
+}: {
+  previousPaths: string[]
+  previousRoot: Record<string, unknown>
+  candidateWrites: SnapshotBuild['publicPlan']['writes']
+  validScopeKeys: ReadonlySet<string>
+  validTournamentIds: ReadonlySet<string>
+}) {
+  const removed = new Set<string>()
+  const previousScopeKeys = Object.keys(requiredRecord(previousRoot.snapshotIndex, 'ranking root snapshot index'))
+  for (const key of previousScopeKeys) {
+    if (validScopeKeys.has(key)) continue
+    removed.add(`/data/${publicScopeArtifactPath(key)}`)
+    removed.add(`/data/${publicTeamHistoryShardPath(key)}`)
+    removed.add(`/data/${publicMatchHistoryShardPath(key)}`)
+    const pagePrefix = `/data/${publicMatchHistoryPagePath(key, 1).replace(/-1\.json$/, '-')}`
+    for (const path of previousPaths) if (path.startsWith(pagePrefix)) removed.add(path)
+  }
+  const tournamentPrefix = `/data/${PUBLIC_ARTIFACT_PATHS.tournamentMovementShardDir}/`
+  for (const path of previousPaths) {
+    if (!path.startsWith(tournamentPrefix) || path.endsWith('/index.json')) continue
+    const id = decodeURIComponent(path.slice(tournamentPrefix.length).replace(/\.json$/, ''))
+    if (!validTournamentIds.has(id)) removed.add(path)
+  }
+  for (const write of candidateWrites) {
+    if (!write.relativePath.startsWith(`${PUBLIC_ARTIFACT_PATHS.matchHistoryShardDir}/`)
+      || write.relativePath === PUBLIC_ARTIFACT_PATHS.matchHistoryIndex
+      || write.relativePath.startsWith(`${PUBLIC_ARTIFACT_PATHS.matchHistoryPageDir}/`)) continue
+    const catalog = optionalRecord(write.value)
+    const filter = optionalRecord(catalog?.filter)
+    if (!filter || !Array.isArray(catalog?.pages)) continue
+    const key = snapshotKey(filter as Parameters<typeof snapshotKey>[0])
+    const validPages = new Set(catalog.pages.flatMap((page) => {
+      const entry = optionalRecord(page)
+      const path = logicalUrlPath(entry?.url)
+      return path ? [path] : []
+    }))
+    const pagePrefix = `/data/${publicMatchHistoryPagePath(key, 1).replace(/-1\.json$/, '-')}`
+    for (const path of previousPaths) if (path.startsWith(pagePrefix) && !validPages.has(path)) removed.add(path)
+  }
+  return [...removed].filter((path) => previousPaths.includes(path)).sort()
+}
+
 function ledgerContext(sourceData: RankingSourceImport, previous?: CanonicalMatchLedger) {
   const previousByKey = new Map(previous?.rows.map((row) => [row.key, row]) ?? [])
   const scheduleCausalRows = scheduleCausalRowsFor(sourceData)
@@ -418,10 +538,24 @@ function stateCompatibility(sourceData: RankingSourceImport): StateCompatibility
   }
 }
 
-function selectReplay(checkpoints: RestoredCheckpoint[], sourceData: RankingSourceImport, classification: RankingChangeClassification, generatedAt: string) {
+async function selectReplay(
+  restored: RestoredIncrementalAuthority,
+  sourceData: RankingSourceImport,
+  ledger: CanonicalMatchLedger,
+  classification: RankingChangeClassification,
+  generatedAt: string,
+) {
   const changedDate = classification.earliestChangedUtcDate
-  if (!changedDate) return { replayFromUtcDate: undefined, rejectedCandidates: [], candidateCount: checkpoints.length }
-  const selected = selectSafeCheckpoint({
+  if (!changedDate) return { replayFromUtcDate: undefined, rejectedCandidates: [], candidateCount: restored.stateManifest.checkpoints.length }
+  const eligibleReferences = restored.stateManifest.checkpoints
+    .filter((candidate) => candidate.boundary.date < changedDate && rawPrefixMatchesLedger(candidate.rawPrefix, ledger, candidate.boundary.date))
+    .toReversed()
+  const checkpointIdentity = (candidate: IncrementalStateManifest['checkpoints'][number]) =>
+    `${candidate.boundary.date}\u0000${candidate.boundary.matchId}\u0000${candidate.object.sha256}`
+  const loadedByObject = new Map(restored.checkpoints.map((checkpoint) => [checkpointIdentity(checkpoint.candidate), checkpoint]))
+  const checkpoints: RestoredCheckpoint[] = []
+  const availableProcessedThroughUtcDates = eligibleReferences.map((candidate) => candidate.boundary.date)
+  const selectLoadedCheckpoint = () => selectSafeCheckpoint({
     changedUtcDate: changedDate,
     candidates: checkpoints.map(({ candidate, bundle }) => ({
       id: `${candidate.boundary.date}/${candidate.boundary.matchId}`,
@@ -447,7 +581,7 @@ function selectReplay(checkpoints: RestoredCheckpoint[], sourceData: RankingSour
           freshMatches: freshContext.authoritativeMatches,
           freshEventWeightContext: freshContext.eventWeightContext,
           freshTournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
-          availableProcessedThroughUtcDates: checkpoints.map(({ candidate }) => candidate.boundary.date),
+          availableProcessedThroughUtcDates,
         })
         if (eventReconciliation.status === 'replay-required') {
           return {
@@ -463,7 +597,7 @@ function selectReplay(checkpoints: RestoredCheckpoint[], sourceData: RankingSour
           eventWeightContext: checkpoint.state.eventWeightContext,
           tournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
           surfaces: externalCausalSurfacesFor(sourceData, throughDate),
-          availableProcessedThroughUtcDates: checkpoints.map(({ candidate }) => candidate.boundary.date),
+          availableProcessedThroughUtcDates,
         })
         return reconciliation.status === 'ready'
           ? { status: 'ready' }
@@ -476,14 +610,28 @@ function selectReplay(checkpoints: RestoredCheckpoint[], sourceData: RankingSour
       }
     },
   })
-  if (selected.status !== 'selected') throw new Error(`checkpoint-${selected.reason}`)
-  return {
-    checkpointState: selected.checkpoint.state,
-    replayFromUtcDate: utcDateAfter(selected.checkpoint.metadata.processedThroughUtcDate),
-    selectedBoundary: selected.checkpoint.metadata.processedThroughUtcDate,
-    rejectedCandidates: selected.rejectedCandidateIds,
-    candidateCount: checkpoints.length,
+  for (const candidate of eligibleReferences) {
+    const identity = checkpointIdentity(candidate)
+    let loaded = loadedByObject.get(identity)
+    if (!loaded && restored.loadCheckpoints) {
+      loaded = (await restored.loadCheckpoints([candidate]))[0]
+      if (loaded) loadedByObject.set(identity, loaded)
+    }
+    if (!loaded) continue
+    checkpoints.push(loaded)
+    const selected = selectLoadedCheckpoint()
+    if (selected.status === 'selected') {
+      return {
+        checkpointState: selected.checkpoint.state,
+        replayFromUtcDate: utcDateAfter(selected.checkpoint.metadata.processedThroughUtcDate),
+        selectedBoundary: selected.checkpoint.metadata.processedThroughUtcDate,
+        rejectedCandidates: selected.rejectedCandidateIds,
+        candidateCount: eligibleReferences.length,
+      }
+    }
+    if (selected.reason !== 'no-safe-checkpoint') throw new Error(`checkpoint-${selected.reason}`)
   }
+  throw new Error('checkpoint-no-safe-checkpoint')
 }
 
 function buildStateFromFullReplay(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, generatedAt = new Date().toISOString()): IncrementalStateBuild {
@@ -520,17 +668,15 @@ function buildStateFromFullReplay(sourceData: RankingSourceImport, ledger: Canon
   }
 }
 
-function buildMetadataOnlyState(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, restored: RestoredCheckpoint[]): IncrementalStateBuild {
+function buildMetadataOnlyState(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, restored: RestoredIncrementalAuthority): IncrementalStateBuild {
   return {
     ledger,
     compatibility: stateCompatibility(sourceData),
     sourceReceiptDigest: sha256(stableJson({ schedule: ledger.scheduleReceiptIdentity, context: ledger.contextReceiptIdentity, provenance: ledger.provenanceReceiptIdentity })),
-    checkpoints: restored.map(({ candidate, bundle }) => ({
+    checkpoints: restored.stateManifest.checkpoints.map((candidate) => ({
       boundary: candidate.boundary,
       rawPrefix: candidate.rawPrefix,
-      ratingCheckpoint: requiredRecord(bundle.ratingCheckpoint, 'restored rating checkpoint'),
       storedObjectReference: candidate.object,
-      causalSummaries: parseCausalSummaries(bundle.causalSummaries),
     })),
   }
 }
@@ -556,23 +702,23 @@ function buildTerminalState(
   sourceData: RankingSourceImport,
   ledger: CanonicalMatchLedger,
   state: ReturnType<typeof replayRankingState>['state'],
-  restored: RestoredCheckpoint[],
+  restored: RestoredIncrementalAuthority,
   generatedAt: string,
   persistTerminalCheckpoint: boolean,
 ): IncrementalStateBuild {
-  const previous = restored.map(({ candidate, bundle }) => ({
+  const previous = restored.stateManifest.checkpoints
+    .filter((candidate) => rawPrefixMatchesLedger(candidate.rawPrefix, ledger, candidate.boundary.date))
+    .map((candidate) => ({
     boundary: candidate.boundary,
     rawPrefix: candidate.rawPrefix,
-    ratingCheckpoint: requiredRecord(bundle.ratingCheckpoint, 'restored rating checkpoint'),
     storedObjectReference: candidate.object,
-    causalSummaries: parseCausalSummaries(bundle.causalSummaries),
   }))
   const final = ledger.rows.at(-1)
   if (!final || !state.processedThroughUtcDate || !state.previousMatch) throw new Error('Cannot persist incremental state without a terminal rated match')
   const byBoundary = new Map<string, IncrementalStateBuild['checkpoints'][number]>(
     previous.map((checkpoint) => [`${checkpoint.boundary.date}\u0000${checkpoint.boundary.matchId}`, checkpoint]),
   )
-  if (persistTerminalCheckpoint) {
+  if (persistTerminalCheckpoint || previous.length === 0) {
     const terminal = checkpointFromState(sourceData, ledger, state, generatedAt)
     byBoundary.set(`${terminal.boundary.date}\u0000${terminal.boundary.matchId}`, terminal)
   }
@@ -630,7 +776,7 @@ function tournamentLifecyclesFor(sourceData: RankingSourceImport, generatedAt: s
   }] as const))
 }
 
-function parseCausalSummaries(value: unknown): IncrementalStateBuild['checkpoints'][number]['causalSummaries'] {
+function parseCausalSummaries(value: unknown): NonNullable<IncrementalStateBuild['checkpoints'][number]['causalSummaries']> {
   const record = requiredRecord(value, 'causal summaries')
   return {
     sourcedPlayer: requiredRecord(record.sourcedPlayer, 'sourcedPlayer'),
@@ -641,7 +787,7 @@ function parseCausalSummaries(value: unknown): IncrementalStateBuild['checkpoint
   }
 }
 
-function causalSummariesForBundle(bundle: ExternalCausalBundle): IncrementalStateBuild['checkpoints'][number]['causalSummaries'] {
+function causalSummariesForBundle(bundle: ExternalCausalBundle): NonNullable<IncrementalStateBuild['checkpoints'][number]['causalSummaries']> {
   return {
     sourcedPlayer: { summary: bundle.surfaces['sourced-player'], eventContract: bundle.eventContract, bundleDigest: bundle.digest },
     dssTeam: { summary: bundle.surfaces['dss-team'] },
@@ -715,6 +861,11 @@ function rawPrefix(ledger: CanonicalMatchLedger, throughDate: string) {
   return { matchCount: rows.length, digest: sha256(stableJson(rows.map((row) => ({ key: row.key, scoringDigest: row.scoringDigest, utcDate: row.utcDate })))) }
 }
 
+function rawPrefixMatchesLedger(prefix: { matchCount: number; digest: string }, ledger: CanonicalMatchLedger, throughDate: string) {
+  const current = rawPrefix(ledger, throughDate)
+  return current.matchCount === prefix.matchCount && current.digest === prefix.digest
+}
+
 function semanticMapFromWrites(writes: SnapshotBuild['publicPlan']['writes'], includeProvenance = false): SemanticArtifactMap {
   return Object.fromEntries(writes.map((write) => {
     const prepared = prepareSemanticArtifact(write.value)
@@ -757,8 +908,9 @@ function scopedDependencyPlan(
   classification: RankingChangeClassification,
   rootArtifact: Record<string, unknown>,
   publicManifest: Record<string, unknown>,
+  artifacts?: Record<string, unknown>,
 ) {
-  const inventory = dependencyInventory(rootArtifact, publicManifest, changes)
+  const inventory = dependencyInventory(rootArtifact, publicManifest, changes, artifacts)
   const plan = affectedPublicArtifacts({ changes, inventory })
   if (classification.kind === 'latest-append') {
     for (const scope of inventory.scopes) {
@@ -786,14 +938,22 @@ function dependencyInventory(
   rootArtifact: Record<string, unknown>,
   publicManifest: Record<string, unknown>,
   changes: ReturnType<typeof changesForClassification> = [],
+  artifacts?: Record<string, unknown>,
 ) {
   const artifactPaths = Object.keys(requiredRecord(publicManifest.artifacts, 'public generation artifacts'))
   const snapshotIndex = requiredRecord(rootArtifact.snapshotIndex, 'ranking root snapshot index')
+  const matchHistoryIndex = optionalRecord(artifacts?.[`/data/${PUBLIC_ARTIFACT_PATHS.matchHistoryIndex}`])
+  const matchScopeIndex = optionalRecord(matchHistoryIndex?.scopeIndex)
   const scopes = Object.entries(snapshotIndex).flatMap(([key, value]) => {
     const entry = requiredRecord(value, `snapshot index ${key}`)
     const filter = requiredRecord(entry.filter, `snapshot index ${key} filter`)
     if (typeof filter.season !== 'string' || typeof filter.event !== 'string' || typeof filter.region !== 'string') return []
     const pagePrefix = `/data/${publicMatchHistoryPagePath(key, 1).replace(/-1\.json$/, '-')}`
+    const checkpoint = typeof filter.checkpoint === 'string'
+      ? checkpointBounds(rootArtifact, filter.season, filter.checkpoint)
+      : undefined
+    const scopeMatchInventory = optionalRecord(matchScopeIndex?.[key])
+    const indexedPages = Array.isArray(scopeMatchInventory?.pages) ? scopeMatchInventory.pages : []
     return [{
       key,
       filter: {
@@ -804,16 +964,29 @@ function dependencyInventory(
       },
       rankingPath: logicalUrlPath(entry.url) ?? `/data/${publicScopeArtifactPath(key)}`,
       matchCatalogPath: `/data/${publicMatchHistoryShardPath(key)}`,
-      matchPages: artifactPaths
-        .filter((path) => path.startsWith(pagePrefix))
-        .sort((left, right) => matchPageNumber(left) - matchPageNumber(right) || left.localeCompare(right))
-        .map((path) => ({ path, seriesIds: [] })),
+      ...(checkpoint ? { checkpointStartUtcDate: checkpoint.startDate, checkpointEndUtcDate: checkpoint.endDate } : {}),
+      matchPages: indexedPages.length > 0
+        ? indexedPages.flatMap((page) => {
+            const entry = optionalRecord(page)
+            const path = logicalUrlPath(entry?.url)
+            if (!path || !Array.isArray(entry?.seriesIds)) return []
+            return [{
+              path,
+              seriesIds: entry.seriesIds.filter(isString),
+              ...(typeof entry.startUtcDate === 'string' ? { startUtcDate: entry.startUtcDate } : {}),
+              ...(typeof entry.endUtcDate === 'string' ? { endUtcDate: entry.endUtcDate } : {}),
+            }]
+          }).sort((left, right) => matchPageNumber(left.path) - matchPageNumber(right.path) || left.path.localeCompare(right.path))
+        : artifactPaths
+          .filter((path) => path.startsWith(pagePrefix))
+          .sort((left, right) => matchPageNumber(left) - matchPageNumber(right) || left.localeCompare(right))
+          .map((path) => ({ path, seriesIds: [] })),
     }]
   })
-  const changedMatches = changes.flatMap((change) => [change.before, change.after]
-    .filter((match): match is RankingSourceImport['matches'][number] => Boolean(match)))
   const historyPaths = scopes
-    .filter((scope) => changedMatches.length === 0 || changedMatches.some((match) => matchTouchesSnapshotFilter(match, scope.filter)))
+    .filter((scope) => changes.length === 0 || changes.some((change) => [change.before, change.after]
+      .filter((match): match is RankingSourceImport['matches'][number] => Boolean(match))
+      .some((match) => changeTouchesSnapshotScope(match, scope, change.kind))))
     .map((scope) => `/data/${publicTeamHistoryShardPath(scope.key)}`)
   const changedTeams = new Set(changes.flatMap((change) => [change.before?.teamA, change.before?.teamB, change.after?.teamA, change.after?.teamB].filter(isString)))
   const tournamentMovementPaths = Object.fromEntries(artifactPaths
@@ -829,16 +1002,46 @@ function dependencyInventory(
   }
 }
 
-function matchTouchesSnapshotFilter(
+function changeTouchesSnapshotScope(
   match: RankingSourceImport['matches'][number],
-  filter: { season: string; event: string; region: Parameters<typeof snapshotKey>[0]['region'] },
+  scope: ArtifactScopeDependency,
+  kind?: RankingChangeClassification['kind'],
 ) {
+  const filter = scope.filter
+  const scopeSeason = filter.season === 'All' ? undefined : Number(filter.season)
+  if (kind === 'historical-correction' && scopeSeason !== undefined && Number.isFinite(scopeSeason)) {
+    if (scopeSeason > match.season) return true
+    if (scopeSeason === match.season && filter.checkpoint && scope.checkpointEndUtcDate && match.date <= scope.checkpointEndUtcDate) return true
+  }
   if (filter.season !== 'All' && Number(filter.season) !== match.season) return false
   if (filter.event !== 'All' && filter.event !== match.event) return false
+  if (filter.region !== 'All'
+    && filter.region !== match.region
+    && filter.region !== match.teamARegion
+    && filter.region !== match.teamBRegion) return false
+  if (filter.checkpoint) {
+    return Boolean(scope.checkpointStartUtcDate && scope.checkpointEndUtcDate
+      && match.date >= scope.checkpointStartUtcDate && match.date <= scope.checkpointEndUtcDate)
+  }
   return filter.region === 'All'
     || filter.region === match.region
     || filter.region === match.teamARegion
     || filter.region === match.teamBRegion
+}
+
+function checkpointBounds(rootArtifact: Record<string, unknown>, season: unknown, checkpointId: string) {
+  if (typeof season !== 'string') return undefined
+  const filterOptions = optionalRecord(rootArtifact.filterOptions)
+  const checkpoints = optionalRecord(filterOptions?.checkpoints)
+  const entries = checkpoints?.[season]
+  if (!Array.isArray(entries)) return undefined
+  for (const value of entries) {
+    const entry = optionalRecord(value)
+    if (entry?.id === checkpointId && typeof entry.startDate === 'string' && typeof entry.endDate === 'string') {
+      return { startDate: entry.startDate, endDate: entry.endDate }
+    }
+  }
+  return undefined
 }
 
 function matchPageNumber(path: string) {
@@ -941,7 +1144,7 @@ function providerAvailabilityForClassification(ledger: CanonicalMatchLedger, cla
   return ledger.rows.filter((row) => affected.has(row.key)).map((row) => row.providerAvailableAt).filter(isString).sort()[0]
 }
 
-function metricsFor(classification: RankingChangeClassification, ledger: CanonicalMatchLedger, replay: ReturnType<typeof selectReplay>, replayedMatchCount: number, semantic: SemanticArtifactMap, changedPaths: string[], reusedPaths: string[], removedPaths: string[], fullSnapshotWritten: boolean, parity: boolean | null, stateParity: boolean | null, materializedScopeCount: number): IncrementalBuildMetrics {
+function metricsFor(classification: RankingChangeClassification, ledger: CanonicalMatchLedger, replay: Awaited<ReturnType<typeof selectReplay>>, replayedMatchCount: number, semantic: SemanticArtifactMap, changedPaths: string[], reusedPaths: string[], removedPaths: string[], fullSnapshotWritten: boolean, parity: boolean | null, stateParity: boolean | null, materializedScopeCount: number): IncrementalBuildMetrics {
   const base = baseMetrics(classification.kind, ledger, { fullSnapshotWritten })
   const suffixRows = replay.replayFromUtcDate ? ledger.rows.filter((row) => row.utcDate >= replay.replayFromUtcDate) : ledger.rows
   return {
@@ -996,6 +1199,10 @@ async function persistDiagnostic(path: string | undefined, diagnostic: Increment
 function requiredRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object`)
   return value as Record<string, unknown>
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
 function sha256(value: string) { return createHash('sha256').update(value).digest('hex') }

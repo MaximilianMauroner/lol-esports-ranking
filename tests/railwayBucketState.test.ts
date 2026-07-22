@@ -468,7 +468,7 @@ test('content-addressed collisions and partial uploads fail before promotion', a
     collisionClient.objects.get(objectKey)!.metadata = { sha256: '0'.repeat(64), 'semantic-bytes': '1', encoding: 'gzip' }
     await assert.rejects(
       uploadRankingArtifacts({ publicDataDir: publicDir, generationId, fencingToken: 2, contentAddressed: true, config, client: collisionClient }),
-      /collision or metadata mismatch/,
+      /collision|metadata mismatch/,
     )
     assert.equal(JSON.parse(collisionClient.objects.get('rankings/active-generation.json')!.body).fencingToken, 1)
 

@@ -278,6 +278,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               rootArtifact: activePublic.rootArtifact,
               artifacts: activePublic.artifacts,
               loadArtifacts: activePublic.loadArtifacts,
+              loadCheckpoints: activeState.loadCheckpoints,
             }
           }
         } catch (error) {

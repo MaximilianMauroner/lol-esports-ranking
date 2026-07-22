@@ -68,6 +68,18 @@ test('prepared state contains complete compatibility and ordered checkpoint cand
   }), /generationId is unsafe/)
 })
 
+test('state preparation preserves ref-only checkpoints without re-materializing their bundles', () => {
+  const original = preparedState('ref-source')
+  const refs = original.manifest.checkpoints.map((candidate) => ({
+    boundary: candidate.boundary,
+    rawPrefix: candidate.rawPrefix,
+    storedObjectReference: candidate.object,
+  }))
+  const prepared = prepareContentAddressedState({ ...stateInput('ref-target', refs), checkpoints: refs })
+  assert.deepEqual(prepared.manifest.checkpoints.map((candidate) => candidate.object), original.manifest.checkpoints.map((candidate) => candidate.object))
+  assert.equal(prepared.objects.length, 0)
+})
+
 test('state objects conditionally create, reuse identical bytes, and reject collisions', async () => {
   const client = memoryS3()
   const object = preparedState('object-sync').objects[0]
@@ -194,6 +206,11 @@ test('old active pointers remain readable and state promotion atomically resolve
     assert.equal(restored.found, true)
     assert.equal(restored.manifest.generationId, generationId)
     assert.equal(restored.checkpoints.length, 2)
+
+    const partiallyRestored = await readActiveIncrementalState({ config, client, checkpointLimit: 1 })
+    assert.equal(partiallyRestored.checkpoints.length, 1)
+    assert.equal(typeof partiallyRestored.loadCheckpoints, 'function')
+    assert.equal((await partiallyRestored.loadCheckpoints(partiallyRestored.manifest.checkpoints)).length, 2)
 
     await uploadRankingArtifacts({
       publicDataDir: publicDir,

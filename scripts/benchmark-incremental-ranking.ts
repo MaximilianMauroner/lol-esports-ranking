@@ -282,6 +282,7 @@ async function restoreFromStorage(client: Awaited<ReturnType<typeof fileBackedS3
     rootArtifact: publicGeneration.rootArtifact,
     artifacts: publicGeneration.artifacts,
     loadArtifacts: publicGeneration.loadArtifacts,
+    loadCheckpoints: state.loadCheckpoints,
   }
 }
 

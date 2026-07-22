@@ -39,10 +39,15 @@ export function prepareContentAddressedState({
     assertRecord(checkpoint, `checkpoints[${index}]`)
     const boundary = parseBoundary(checkpoint.boundary, `checkpoints[${index}].boundary`)
     const rawPrefix = parseRawPrefix(checkpoint.rawPrefix, `checkpoints[${index}].rawPrefix`)
-    assertRecord(checkpoint.ratingCheckpoint, `checkpoints[${index}].ratingCheckpoint`)
-    assertExactKeys(checkpoint.causalSummaries, CAUSAL_SUMMARY_KEYS, `checkpoints[${index}].causalSummaries`)
-    for (const key of CAUSAL_SUMMARY_KEYS) {
-      assertRecord(checkpoint.causalSummaries[key], `checkpoints[${index}].causalSummaries.${key}`)
+    const storedObject = checkpoint.storedObjectReference
+      ? parseObjectReference(checkpoint.storedObjectReference, `checkpoints[${index}].storedObjectReference`)
+      : undefined
+    if (!storedObject) {
+      assertRecord(checkpoint.ratingCheckpoint, `checkpoints[${index}].ratingCheckpoint`)
+      assertExactKeys(checkpoint.causalSummaries, CAUSAL_SUMMARY_KEYS, `checkpoints[${index}].causalSummaries`)
+      for (const key of CAUSAL_SUMMARY_KEYS) {
+        assertRecord(checkpoint.causalSummaries[key], `checkpoints[${index}].causalSummaries.${key}`)
+      }
     }
     const checkpointCompatibility = parseCompatibility(
       checkpoint.compatibility ?? parsedCompatibility,
@@ -51,7 +56,7 @@ export function prepareContentAddressedState({
     if (canonicalJsonFor(checkpointCompatibility) !== canonicalJsonFor(parsedCompatibility)) {
       throw new Error(`Invalid incremental state: checkpoints[${index}] compatibility differs from manifest compatibility`)
     }
-    const bundle = {
+    const bundle = storedObject ? undefined : {
       artifactKind: INCREMENTAL_STATE_CHECKPOINT_KIND,
       schemaVersion: 1,
       boundary,
@@ -60,9 +65,6 @@ export function prepareContentAddressedState({
       ratingCheckpoint: checkpoint.ratingCheckpoint,
       causalSummaries: checkpoint.causalSummaries,
     }
-    const storedObject = checkpoint.storedObjectReference
-      ? parseObjectReference(checkpoint.storedObjectReference, `checkpoints[${index}].storedObjectReference`)
-      : undefined
     const prepared = storedObject ? undefined : prepareStateObject(bundle)
     if (prepared) objects.push(prepared)
     return {
@@ -273,19 +275,24 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
   }
   const expectedKey = stateBucketKey(config, `state/generations/${safeStatePath(manifest.generationId)}.json`)
   if (expectedKey !== active.stateManifestKey) throw new Error('Active incremental state manifest key is not canonical')
-  const checkpoints = []
+  const loadCheckpoints = async (candidates = manifest.checkpoints) => {
+    const loaded = []
+    for (const candidate of candidates) {
+      const bundle = await readStoredStateObject(client, config, candidate)
+      assertMatchingCompatibility(bundle.compatibility, manifest.compatibility)
+      loaded.push({ candidate, bundle })
+    }
+    return loaded
+  }
+  let checkpoints = []
   const canonicalLedger = await readStoredJsonStateObject(client, config, manifest.canonicalLedger)
   if (verifyObjects) {
     const candidates = Number.isSafeInteger(checkpointLimit) && checkpointLimit > 0
       ? manifest.checkpoints.slice(-checkpointLimit)
       : manifest.checkpoints
-    for (const candidate of candidates) {
-      const bundle = await readStoredStateObject(client, config, candidate)
-      assertMatchingCompatibility(bundle.compatibility, manifest.compatibility)
-      checkpoints.push({ candidate, bundle })
-    }
+    checkpoints = await loadCheckpoints(candidates)
   }
-  return { found: true, active, etag: activeObject.ETag, manifest, canonicalLedger, checkpoints }
+  return { found: true, active, etag: activeObject.ETag, manifest, canonicalLedger, checkpoints, loadCheckpoints }
 }
 
 export async function readStoredJsonStateObject(client, config, reference) {

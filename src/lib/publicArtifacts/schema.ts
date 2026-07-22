@@ -687,6 +687,7 @@ export type PublicMatchHistoryScopeIndexEntry = {
   gameCount: number
   seriesCount: number
   pageCount: number
+  pages?: PublicMatchHistoryPageRef[]
 }
 
 export type PublicMatchHistoryIndex = {
@@ -717,6 +718,9 @@ export type PublicMatchHistoryPageRef = {
   url: string
   seriesCount: number
   gameCount: number
+  seriesIds?: string[]
+  startUtcDate?: string
+  endUtcDate?: string
 }
 
 export type PublicMatchHistoryCatalog = {
@@ -1408,6 +1412,10 @@ export function parsePublicMatchHistoryIndex(value: unknown): PublicMatchHistory
     assertNonNegativeInteger(entry.gameCount, `match history index scopeIndex ${key} gameCount`)
     assertNonNegativeInteger(entry.seriesCount, `match history index scopeIndex ${key} seriesCount`)
     assertNonNegativeInteger(entry.pageCount, `match history index scopeIndex ${key} pageCount`)
+    if (entry.pages !== undefined) {
+      assertArray(entry.pages, `match history index scopeIndex ${key} pages`)
+      entry.pages.forEach((page, index) => assertPublicMatchHistoryPageRef(page, `match history index scopeIndex ${key} pages[${index}]`))
+    }
     if (snapshotKey(entry.filter as SnapshotFilter) !== key) throw new Error(`Invalid public artifact: match history index scopeIndex key ${key} must match its filter`)
   }
   if (!value.scopeIndex[value.defaultScopeKey as string]) throw new Error('Invalid public artifact: match history index defaultScopeKey must exist in scopeIndex')
@@ -1421,17 +1429,22 @@ export function parsePublicMatchHistoryCatalog(value: unknown): PublicMatchHisto
   assertNonNegativeInteger(value.gameCount, 'match history catalog gameCount')
   assertNonNegativeInteger(value.seriesCount, 'match history catalog seriesCount')
   assertArray(value.pages, 'match history catalog pages')
-  value.pages.forEach((page, index) => {
-    assertObject(page, `match history catalog pages[${index}]`)
-    assertNonNegativeInteger(page.page, `match history catalog pages[${index}] page`)
-    assertArtifactUrl(page.url, `match history catalog pages[${index}] url`, '/data/matches')
-    assertNonNegativeInteger(page.seriesCount, `match history catalog pages[${index}] seriesCount`)
-    assertNonNegativeInteger(page.gameCount, `match history catalog pages[${index}] gameCount`)
-  })
+  value.pages.forEach((page, index) => assertPublicMatchHistoryPageRef(page, `match history catalog pages[${index}]`))
   assertArray(value.series, 'match history catalog series')
   value.series.forEach((entry, index) => assertPublicMatchHistorySeriesRef(entry, `match history catalog series[${index}]`))
   if (value.series.length !== value.seriesCount) throw new Error('Invalid public artifact: match history catalog seriesCount must match series length')
   return value as PublicMatchHistoryCatalog
+}
+
+function assertPublicMatchHistoryPageRef(value: unknown, label: string) {
+  assertObject(value, label)
+  assertNonNegativeInteger(value.page, `${label} page`)
+  assertArtifactUrl(value.url, `${label} url`, '/data/matches')
+  assertNonNegativeInteger(value.seriesCount, `${label} seriesCount`)
+  assertNonNegativeInteger(value.gameCount, `${label} gameCount`)
+  if (value.seriesIds !== undefined) assertStringArray(value.seriesIds, `${label} seriesIds`)
+  if (value.startUtcDate !== undefined) assertString(value.startUtcDate, `${label} startUtcDate`)
+  if (value.endUtcDate !== undefined) assertString(value.endUtcDate, `${label} endUtcDate`)
 }
 
 export function parsePublicMatchHistoryPage(value: unknown): PublicMatchHistoryPage {

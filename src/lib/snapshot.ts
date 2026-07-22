@@ -1612,6 +1612,9 @@ export function createMatchHistoryArtifacts(
         url: matchHistoryPageUrlForKey(key, page.page),
         seriesCount: page.seriesCount,
         gameCount: page.gameCount,
+        seriesIds: [...new Set(page.matches.map((match) => match.seriesId))],
+        startUtcDate: page.matches.map((match) => match.date).sort()[0]!,
+        endUtcDate: page.matches.map((match) => match.date).sort().at(-1)!,
       })),
       series: catalogSeries,
     }
@@ -1625,6 +1628,7 @@ export function createMatchHistoryArtifacts(
     gameCount: catalog.gameCount,
     seriesCount: catalog.seriesCount,
     pageCount: catalog.pages.length,
+    pages: catalog.pages,
   }]))
   return {
     index: {

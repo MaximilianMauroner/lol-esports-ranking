@@ -8,6 +8,8 @@ export type ArtifactScopeDependency = {
   filter: SnapshotFilter
   rankingPath: string
   matchCatalogPath: string
+  checkpointStartUtcDate?: string
+  checkpointEndUtcDate?: string
   matchPages: readonly {
     path: string
     seriesIds: readonly string[]
@@ -96,7 +98,7 @@ export function affectedPublicArtifacts({
       if (path) add(path, `tournament:${tournamentId}`)
     }
     for (const scope of inventory.scopes) {
-      if (!matches.some((match) => matchTouchesScope(match, scope.filter))) continue
+      if (!matches.some((match) => matchTouchesScope(match, scope, change.kind))) continue
       add(scope.rankingPath, `scope:${scope.key}`)
       add(scope.matchCatalogPath, `match-catalog:${scope.key}`)
       const matchedPageIndexes = scope.matchPages.flatMap((page, index) => (
@@ -148,15 +150,23 @@ export function assertArtifactDependencyPlanMatchesSemanticChanges(
   return { expected, covered: actual }
 }
 
-function matchTouchesScope(match: MatchRecord, filter: SnapshotFilter) {
+function matchTouchesScope(match: MatchRecord, scope: ArtifactScopeDependency, kind?: RankingChangeKind) {
+  const filter = scope.filter
+  const scopeSeason = filter.season === 'All' ? undefined : Number(filter.season)
+  if (kind === 'historical-correction' && scopeSeason !== undefined && Number.isFinite(scopeSeason)) {
+    if (scopeSeason > match.season) return true
+    if (scopeSeason === match.season && filter.checkpoint && scope.checkpointEndUtcDate && match.date <= scope.checkpointEndUtcDate) return true
+  }
   if (filter.season !== 'All' && Number(filter.season) !== match.season) return false
   if (filter.event !== 'All' && filter.event !== match.event) return false
   if (filter.region !== 'All'
     && filter.region !== match.region
     && filter.region !== match.teamARegion
     && filter.region !== match.teamBRegion) return false
-  // Checkpoint scopes are conservatively regenerated because checkpoint date
-  // ranges are owned by snapshot configuration rather than this graph.
+  if (filter.checkpoint) {
+    if (!scope.checkpointStartUtcDate || !scope.checkpointEndUtcDate) return false
+    if (match.date < scope.checkpointStartUtcDate || match.date > scope.checkpointEndUtcDate) return false
+  }
   return true
 }
 

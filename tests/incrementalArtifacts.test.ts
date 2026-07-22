@@ -48,6 +48,8 @@ test('dependency graph covers global, season/checkpoint, team/player/tournament,
       }, {
         key: 'checkpoint',
         filter: { season: '2026', event: 'All', region: 'LCK', checkpoint: 'spring' },
+        checkpointStartUtcDate: '2026-01-01',
+        checkpointEndUtcDate: '2026-01-31',
         rankingPath: 'scopes/checkpoint.json',
         matchCatalogPath: 'matches/checkpoint.json',
         matchPages: [{ path: 'matches/pages/checkpoint-1.json', seriesIds: ['series-1'] }],
@@ -90,6 +92,36 @@ test('dependency graph covers global, season/checkpoint, team/player/tournament,
   })
   assert.deepEqual(verifiedPlan.logicalPaths, semanticPaths.toSorted())
   assert.doesNotThrow(() => assertArtifactDependencyPlanMatchesSemanticChanges(verifiedPlan, previous, current))
+})
+
+test('early corrections rewrite every subsequent inventoried page while post-checkpoint appends skip closed checkpoint scopes', () => {
+  const before = match({ id: 'early', sourceMatchId: 'series-early', date: '2026-01-02' })
+  const pages = Array.from({ length: 30 }, (_, index) => ({
+    path: `matches/pages/global-${index + 1}.json`,
+    seriesIds: index === 1 ? ['series-early'] : [`series-${index}`],
+    startUtcDate: `2026-01-${String(Math.min(28, index + 1)).padStart(2, '0')}`,
+    endUtcDate: `2026-01-${String(Math.min(28, index + 1)).padStart(2, '0')}`,
+  }))
+  const inventory = {
+    manifestPath: 'ranking-summary.json', playerDirectoryPath: 'entities/players.json', teamDirectoryPath: 'entities/teams.json',
+    regionHistoryPath: 'history/regions.json', teamHistoryIndexPath: 'history/teams/index.json',
+    tournamentMovementIndexPath: 'history/tournaments/index.json', matchHistoryIndexPath: 'matches/index.json',
+    scopes: [{
+      key: 'global', filter: { season: 'All', event: 'All', region: 'All' } as const,
+      rankingPath: 'scopes/global.json', matchCatalogPath: 'matches/global.json', matchPages: pages,
+    }, {
+      key: 'closed', filter: { season: '2026', event: 'All', region: 'LCK', checkpoint: 'spring' } as const,
+      checkpointStartUtcDate: '2026-01-01', checkpointEndUtcDate: '2026-01-31',
+      rankingPath: 'scopes/closed.json', matchCatalogPath: 'matches/closed.json', matchPages: [],
+    }],
+    teamHistoryPaths: {}, tournamentMovementPaths: {},
+  }
+  const correction = affectedPublicArtifacts({ changes: [{ before, after: { ...before, winner: 'Beta' }, kind: 'historical-correction' }], inventory })
+  assert.deepEqual(correction.logicalPaths.filter((path) => path.startsWith('matches/pages/global-')), pages.slice(1).map((page) => page.path).toSorted())
+
+  const appended = match({ id: 'late', sourceMatchId: 'series-late', date: '2026-02-01' })
+  const append = affectedPublicArtifacts({ changes: [{ after: appended, kind: 'latest-append' }], inventory })
+  assert.equal(append.logicalPaths.includes('scopes/closed.json'), false)
 })
 
 function match(overrides: Partial<MatchRecord>): MatchRecord {

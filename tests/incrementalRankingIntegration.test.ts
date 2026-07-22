@@ -182,6 +182,111 @@ test('provider availability is attributed to the receipt covering the newly obse
   }
 })
 
+test('a correction can be promoted and followed by an append without losing predecessor checkpoint authority', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-correction-append-'))
+  try {
+    const baseline = await run(root, 'sequence-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const baselineAuthority = restoreFrom(baseline)
+    const correctedMatches = baseMatches().map((entry) => entry.id === 'm3' ? { ...entry, winner: 'Beta' } : entry)
+    const corrected = await run(root, 'sequence-correction', fixtureSource(correctedMatches), {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored: baselineAuthority,
+    })
+    assert.equal(corrected.action, 'publish-incremental', corrected.metrics.fallbackReason)
+    const correctedAuthority = restoreIncremental(baselineAuthority, corrected)
+    const appendedSource = fixtureSource([...correctedMatches, match('m5', '2026-01-05', 'Event C')])
+    const appended = await run(root, 'sequence-append', appendedSource, {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored: correctedAuthority,
+    })
+    assert.equal(appended.action, 'publish-incremental', appended.metrics.fallbackReason)
+    const full = await run(root, 'sequence-full', appendedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    assert.deepEqual(semanticMap(appended), semanticMap(full))
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('replay lazily loads only the newest eligible predecessor checkpoint', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-lazy-checkpoint-'))
+  try {
+    const baseline = await run(root, 'lazy-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(baseline)
+    const stored = restored.checkpoints
+    const requested: string[][] = []
+    restored.checkpoints = []
+    restored.loadCheckpoints = async (candidates = restored.stateManifest.checkpoints) => {
+      requested.push(candidates.map((candidate) => `${candidate.boundary.date}/${candidate.boundary.matchId}`))
+      return stored.filter((checkpoint) => candidates.some((candidate) => candidate.boundary.date === checkpoint.candidate.boundary.date
+        && candidate.boundary.matchId === checkpoint.candidate.boundary.matchId))
+    }
+    const appended = await run(root, 'lazy-append', fixtureSource([...baseMatches(), match('m5', '2026-01-05', 'Event C')]), {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored,
+    })
+    assert.equal(appended.action, 'publish-incremental', appended.metrics.fallbackReason)
+    assert.equal(requested.length, 1)
+    assert.equal(requested[0]?.length, 1)
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('cross-season corrections and whole-season deletion subtract extinct scope artifacts exactly', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-season-removal-'))
+  try {
+    const matches = [
+      match('m-1', '2024-12-31', 'Event 2024'),
+      match('m0', '2025-01-01', 'Event 2025'),
+      match('m1', '2025-01-02', 'Event 2025'),
+      match('m2', '2026-01-01', 'Event 2026'),
+      match('m3', '2026-01-02', 'Event 2026'),
+    ]
+    const baseline = await run(root, 'season-base', fixtureSource(matches), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const authority = restoreFrom(baseline)
+    const correctedSource = fixtureSource(matches.map((entry) => entry.id === 'm1' ? { ...entry, winner: 'Beta' } : entry))
+    const corrected = await run(root, 'season-correction', correctedSource, {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored: authority,
+    })
+    assert.equal(corrected.action, 'publish-incremental', corrected.metrics.fallbackReason)
+    assert.ok(corrected.metrics.changedPaths.some((path) => path.startsWith('/data/scopes/') && path.includes('2026')))
+    const correctionFull = await run(root, 'season-correction-full', correctedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    assert.deepEqual(semanticMap(corrected), semanticMap(correctionFull))
+
+    const removedSource = fixtureSource(matches.filter((entry) => entry.season !== 2025))
+    const removed = await run(root, 'season-removed', removedSource, {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored: authority,
+    })
+    assert.equal(removed.action, 'publish-incremental', removed.metrics.fallbackReason)
+    assert.ok(removed.metrics.removedPaths.some((path) => path.startsWith('/data/scopes/') && path.includes('2025')))
+    assert.ok(removed.metrics.removedPaths.some((path) => path.startsWith('/data/matches/') && path.includes('2025')))
+    const removalFull = await run(root, 'season-removed-full', removedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    assert.deepEqual(semanticMap(removed), semanticMap(removalFull))
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('match-page contraction removes obsolete trailing page objects', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-page-contraction-'))
+  try {
+    const series = Array.from({ length: 30 }, (_, index) => match(
+      `series-${index + 1}`,
+      `2026-01-${String(index + 1).padStart(2, '0')}`,
+      'Long Event',
+    ))
+    const baselineMatches = [match('predecessor', '2025-12-31', 'Predecessor Event'), ...series]
+    const baseline = await run(root, 'pages-base', fixtureSource(baselineMatches), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const contractedSource = fixtureSource(baselineMatches.filter((entry) => entry.id === 'predecessor' || Number(entry.date.slice(-2)) <= 24))
+    const contracted = await run(root, 'pages-contracted', contractedSource, {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreFrom(baseline),
+    })
+    assert.equal(contracted.action, 'publish-incremental', contracted.metrics.fallbackReason)
+    assert.ok(contracted.metrics.removedPaths.filter((path) => path.includes('/matches/pages/')).some((path) => /-2\.json$/.test(path)))
+    const full = await run(root, 'pages-full', contractedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    assert.deepEqual(semanticMap(contracted), semanticMap(full))
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
 function run(
   root: string,
   name: string,
@@ -237,6 +342,47 @@ function restoreFrom(result: IncrementalRankingBuildResult): RestoredIncremental
     publicManifest,
     rootArtifact: root,
     artifacts: Object.fromEntries(result.build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, write.value])),
+  }
+}
+
+function restoreIncremental(previous: RestoredIncrementalAuthority, result: IncrementalRankingBuildResult): RestoredIncrementalAuthority {
+  assert.equal(result.action, 'publish-incremental')
+  if (result.action !== 'publish-incremental') throw new Error('incremental result required')
+  const artifacts = { ...previous.artifacts }
+  for (const path of result.patch.removedLogicalPaths) delete artifacts[path]
+  for (const artifact of result.patch.changedArtifacts) artifacts[artifact.logicalPath] = artifact.value
+  const rootArtifact = artifacts['/data/ranking-summary.json'] as Record<string, unknown>
+  const artifactMeta = rootArtifact.artifactMeta as { runId: string }
+  const entries = Object.entries(artifacts).map(([logicalPath, value]) => {
+    const prepared = prepareSemanticArtifact(value)
+    return { logicalPath, digest: prepared.digest, bytes: prepared.bytes }
+  })
+  const priorByBoundary = new Map(previous.checkpoints.map((checkpoint) => [
+    `${checkpoint.candidate.boundary.date}\u0000${checkpoint.candidate.boundary.matchId}`,
+    checkpoint,
+  ]))
+  const checkpoints = result.state.checkpoints.map((checkpoint, index) => {
+    const key = `${checkpoint.boundary.date}\u0000${checkpoint.boundary.matchId}`
+    const prior = priorByBoundary.get(key)
+    if (checkpoint.storedObjectReference && prior) return { candidate: { boundary: checkpoint.boundary, rawPrefix: checkpoint.rawPrefix, object: checkpoint.storedObjectReference }, bundle: prior.bundle }
+    const digest = String(index + 1).padStart(64, 'c').slice(-64)
+    const object = checkpoint.storedObjectReference ?? { key: `state/objects/sha256/${digest}`, sha256: digest, bytes: 1, compressedBytes: 1, storageEncoding: 'gzip' as const }
+    return {
+      candidate: { boundary: checkpoint.boundary, rawPrefix: checkpoint.rawPrefix, object },
+      bundle: { artifactKind: 'incremental-state-checkpoint-bundle', schemaVersion: 1, boundary: checkpoint.boundary, rawPrefix: checkpoint.rawPrefix, compatibility: result.state.compatibility, ratingCheckpoint: checkpoint.ratingCheckpoint, causalSummaries: checkpoint.causalSummaries },
+    }
+  })
+  return {
+    stateManifest: {
+      artifactKind: 'incremental-state-generation-manifest', schemaVersion: 1, storageMode: 'content-addressed-state-gzip-v1',
+      generationId: artifactMeta.runId, runId: artifactMeta.runId, baseGenerationId: previous.stateManifest.generationId,
+      baseRunId: previous.stateManifest.runId, canonicalLedger: previous.stateManifest.canonicalLedger,
+      sourceReceiptDigest: result.state.sourceReceiptDigest, compatibility: result.state.compatibility,
+      checkpoints: checkpoints.map((checkpoint) => checkpoint.candidate),
+    },
+    canonicalLedger: result.state.ledger, checkpoints,
+    publicManifest: createGenerationManifest({ generationId: artifactMeta.runId, rootManifest: rootArtifact, entries }),
+    rootArtifact, artifacts,
   }
 }
 

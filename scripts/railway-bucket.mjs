@@ -928,9 +928,11 @@ async function syncContentAddressedObject(client, config, artifact) {
     'semantic-bytes': String(artifact.bytes),
     encoding: 'gzip',
   }
-  try {
-    const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
-    assertContentAddressedMetadata(remote, artifact, key)
+  if (await assertReferencedContentAddressedIntegrity(client, config, {
+    sha256: artifact.digest,
+    bytes: artifact.bytes,
+    compressedBytes: artifact.compressedBytes,
+  }, key, { missingIsAbsent: true })) {
     return {
       status: 'unchanged',
       reason: 'content-addressed-object-reused',
@@ -941,8 +943,6 @@ async function syncContentAddressedObject(client, config, artifact) {
       contentEncoding: 'gzip',
       digest: artifact.digest,
     }
-  } catch (error) {
-    if (!isMissingObjectError(error)) throw error
   }
 
   try {
@@ -968,8 +968,11 @@ async function syncContentAddressedObject(client, config, artifact) {
     }
   } catch (error) {
     if (!isPreconditionError(error)) throw error
-    const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
-    assertContentAddressedMetadata(remote, artifact, key)
+    await assertReferencedContentAddressedIntegrity(client, config, {
+      sha256: artifact.digest,
+      bytes: artifact.bytes,
+      compressedBytes: artifact.compressedBytes,
+    }, key)
     return {
       status: 'unchanged',
       reason: 'content-addressed-object-race-reused',
@@ -983,16 +986,7 @@ async function syncContentAddressedObject(client, config, artifact) {
   }
 }
 
-function assertContentAddressedMetadata(remote, artifact, key) {
-  const matches = Number(remote.ContentLength) === artifact.compressedBytes
-    && remote.ContentEncoding === 'gzip'
-    && remote.Metadata?.sha256 === artifact.digest
-    && remote.Metadata?.['semantic-bytes'] === String(artifact.bytes)
-    && remote.Metadata?.encoding === 'gzip'
-  if (!matches) throw new Error(`Content-addressed object collision or metadata mismatch: ${key}`)
-}
-
-async function assertReferencedContentAddressedIntegrity(client, config, identity, logicalPath) {
+async function assertReferencedContentAddressedIntegrity(client, config, identity, logicalPath, { missingIsAbsent = false } = {}) {
   if (!/^[a-f0-9]{64}$/.test(identity?.sha256 ?? '') || !Number.isSafeInteger(identity?.bytes) || identity.bytes <= 0) {
     throw new Error(`Invalid content-addressed object identity for ${logicalPath}`)
   }
@@ -1001,10 +995,12 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
   try {
     remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
   } catch (error) {
+    if (missingIsAbsent && isMissingObjectError(error)) return false
     if (isMissingObjectError(error)) throw new Error(`Referenced content-addressed object is missing: ${logicalPath}`, { cause: error })
     throw error
   }
   if (!Number.isSafeInteger(Number(remote.ContentLength)) || Number(remote.ContentLength) <= 0
+    || (Number.isSafeInteger(identity.compressedBytes) && Number(remote.ContentLength) !== identity.compressedBytes)
     || remote.ContentEncoding !== 'gzip' || remote.Metadata?.sha256 !== identity.sha256
     || remote.Metadata?.['semantic-bytes'] !== String(identity.bytes) || remote.Metadata?.encoding !== 'gzip') {
     throw new Error(`Referenced content-addressed object metadata mismatch: ${logicalPath}`)
@@ -1034,6 +1030,7 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
     || semanticBytes !== identity.bytes || digest.digest('hex') !== identity.sha256) {
     throw new Error(`Referenced content-addressed object digest mismatch: ${logicalPath}`)
   }
+  return true
 }
 
 async function readVerifiedContentAddressedArtifact(client, config, identity, logicalPath) {

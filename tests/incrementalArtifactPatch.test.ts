@@ -70,7 +70,7 @@ test('partial artifact patch fails before manifest creation when a reused object
     }), /Referenced content-addressed object is missing/)
     assert.equal(client.objects.has('rankings/generations/missing-reuse/manifest.json'), false)
 
-    client.objects.set(objectKey, { ...stored, bytes: Buffer.from('not-gzip') })
+    client.objects.set(objectKey, { ...stored, bytes: Buffer.alloc(stored.bytes.length) })
     await assert.rejects(uploadContentAddressedPublicArtifactPatch(client, config, {
       generationId: 'corrupt-reuse',
       previousManifest: base.manifest,
@@ -78,6 +78,24 @@ test('partial artifact patch fails before manifest creation when a reused object
       expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json'],
     }), /Referenced content-addressed object gzip is corrupt/)
     assert.equal(client.objects.has('rankings/generations/corrupt-reuse/manifest.json'), false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('full uploads stream-verify same-length pre-existing content-addressed objects before reuse', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-full-authority-'))
+  const client = memoryS3()
+  try {
+    await writeFile(join(dir, 'ranking-summary.json'), JSON.stringify(root('base')))
+    await writeFile(join(dir, 'stable.json'), JSON.stringify({ artifactKind: 'fixture', value: 1 }))
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, 'base')
+    const stableIdentity = record(record(base.manifest.artifacts)['/data/stable.json'])
+    const objectKey = `rankings/objects/sha256/${String(stableIdentity.sha256)}`
+    const stored = client.objects.get(objectKey)
+    assert.ok(stored)
+    client.objects.set(objectKey, { ...stored, bytes: Buffer.alloc(stored.bytes.length) })
+    await assert.rejects(uploadContentAddressedPublicArtifacts(client, config, dir, 'base'), /gzip is corrupt|digest mismatch/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
