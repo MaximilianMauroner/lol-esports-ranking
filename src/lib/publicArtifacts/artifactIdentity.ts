@@ -7,6 +7,7 @@ export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 1 as const
 export const PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION = 1 as const
 
 export type PublicArtifactEncoding = 'identity' | 'gzip'
+type PublicArtifactCacheMode = 'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached'
 
 export type PublicGenerationArtifactEntry = {
   logicalPath: string
@@ -53,8 +54,11 @@ const generationContexts = new WeakMap<object, GenerationContext>()
 const volatileArtifactKeys = new Set(['artifactMeta', 'generatedAt', 'modelVersion', 'modelConfigHash', 'schemaVersion'])
 
 export class PublicArtifactRequestError extends Error {
-  constructor(public readonly status: number) {
+  readonly status: number
+
+  constructor(status: number) {
     super(`Public artifact request failed with ${status}`)
+    this.status = status
   }
 }
 
@@ -158,7 +162,7 @@ export async function fetchPublicArtifact<T extends object>(
   }: {
     fetcher?: typeof fetch
     signal?: AbortSignal
-    cache?: RequestCache
+    cache?: PublicArtifactCacheMode
   } = {},
 ): Promise<T> {
   const context = generationContexts.get(owner)
@@ -480,7 +484,8 @@ function assertObjectUrlDigest(value: string, digest: string, label: string) {
 
 function resolveUrl(value: string, baseUrl: string) {
   if (/^[a-z][a-z\d+.-]*:/i.test(value) || value.startsWith('/')) return value
-  const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+  const runtime = globalThis as typeof globalThis & { location?: { origin?: unknown } }
+  const origin = typeof runtime.location?.origin === 'string' ? runtime.location.origin : 'http://localhost'
   const base = /^[a-z][a-z\d+.-]*:/i.test(baseUrl) ? baseUrl : new URL(baseUrl, origin).toString()
   return new URL(value, base).toString()
 }
