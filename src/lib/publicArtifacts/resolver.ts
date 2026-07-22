@@ -1,4 +1,5 @@
 import { parsePublicRankingShard, snapshotKey } from './schema'
+import { fetchPublicArtifact } from './artifactIdentity'
 import type {
   PublicRankingManifest,
   PublicRankingShard,
@@ -34,15 +35,14 @@ export async function fetchPublicSnapshotShard(
   let validationError: unknown
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const response = await fetcher(attempt === 0 ? url : cacheRepairUrl(url), {
-      signal,
-      headers: { Accept: 'application/json' },
-      ...(attempt === 1 ? { cache: 'reload' as const } : {}),
-    })
-    if (!response.ok) throw new Error(`Filter snapshot failed with ${response.status}`)
-
     try {
-      const shard = parsePublicRankingShard(await response.json())
+      const shard = await fetchPublicArtifact(
+        manifest,
+        attempt === 0 ? url : cacheRepairUrl(url),
+        url,
+        parsePublicRankingShard,
+        { fetcher, signal, ...(attempt === 1 ? { cache: 'reload' as const } : {}) },
+      )
       validatePublicSnapshotShard(key, expected, shard, manifest)
       return shard
     } catch (error) {
