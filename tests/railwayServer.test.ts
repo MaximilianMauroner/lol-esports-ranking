@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, request, type IncomingHttpHeaders } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { gzipSync } from 'node:zlib'
+import { canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
+import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
+import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
 
 test('Railway server returns app shell only for known app routes', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
@@ -173,37 +176,31 @@ test('Railway server serves versioned data from the requested bucket generation'
   }
 })
 
-test('Railway server resolves content-addressed manifests and decodes stored gzip for clients without gzip', async () => {
+test('Railway server and production reader support identity and gzip delivery of gzip-stored artifacts', async (t) => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-content-'))
   const distDir = join(tempDir, 'dist')
   const dataDir = join(tempDir, 'data')
   await mkdir(distDir, { recursive: true })
   await mkdir(dataDir, { recursive: true })
   await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
-  const digest = 'a'.repeat(64)
-  const generationManifest = {
-    artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 1,
-    generationId: 'fresh',
-    artifacts: {},
-  }
-  const semantic = { artifactKind: 'public-semantic-artifact', schemaVersion: 1, content: { artifactKind: 'example' } }
+  const fixture = await contentAddressedReaderFixture()
   const bucket = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
     if (pathname === '/test-bucket/rankings/active-generation.json') {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ generationId: 'fresh', storageMode: 'content-addressed-gzip-v1' }))
+      response.end(JSON.stringify({ generationId: fixture.generationId, storageMode: 'content-addressed-gzip-v1' }))
       return
     }
-    if (pathname === '/test-bucket/rankings/generations/fresh/manifest.json') {
+    if (pathname === `/test-bucket/rankings/generations/${fixture.generationId}/manifest.json`) {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify(generationManifest))
+      response.end(JSON.stringify(fixture.generationManifest))
       return
     }
-    if (pathname === `/test-bucket/rankings/objects/sha256/${digest}`) {
+    const stored = fixture.objects.get(pathname)
+    if (stored) {
       response.setHeader('Content-Type', 'application/json')
       response.setHeader('Content-Encoding', 'gzip')
-      response.end(gzipSync(JSON.stringify(semantic)))
+      response.end(stored)
       return
     }
     response.statusCode = 404
@@ -211,29 +208,44 @@ test('Railway server resolves content-addressed manifests and decodes stored gzi
   })
   await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
   const bucketPort = (bucket.address() as AddressInfo).port
-  const server = await startRailwayServer(distDir, dataDir, {
-    RANKING_BUCKET_NAME: 'test-bucket',
-    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
-    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
-    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
-    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
-    RANKING_GZIP_ENABLED: 'false',
-  })
   try {
-    const manifestResponse = await httpRequest(server.port, '/data/ranking-summary.json')
-    assert.equal(JSON.parse(manifestResponse.body).artifactKind, 'public-artifact-generation-manifest')
-    assert.match(String(manifestResponse.headers['cache-control']), /max-age=0/)
-    const objectResponse = await httpRequest(server.port, `/data/objects/sha256/${digest}`, {
-      headers: { 'accept-encoding': 'gzip' },
-    })
-    assert.equal(objectResponse.headers['content-encoding'], undefined)
-    assert.equal(objectResponse.headers['cache-control'], 'public, max-age=31536000, immutable')
-    assert.deepEqual(JSON.parse(objectResponse.body), semantic)
-    const invalidObject = await httpRequest(server.port, '/data/objects/sha256/not-a-digest')
-    assert.equal(invalidObject.statusCode, 404)
-    assert.notEqual(invalidObject.headers['cache-control'], 'public, max-age=31536000, immutable')
+    for (const gzipEnabled of [false, true]) {
+      await t.test(gzipEnabled ? 'passes stored gzip through' : 'delivers decoded identity', async () => {
+        const server = await startRailwayServer(distDir, dataDir, {
+          RANKING_BUCKET_NAME: 'test-bucket',
+          RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+          RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+          RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+          RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+          RANKING_GZIP_ENABLED: String(gzipEnabled),
+        })
+        try {
+          const objectResponseEncodings: Array<string | null> = []
+          const baseUrl = `http://127.0.0.1:${server.port}`
+          const fetcher: typeof fetch = async (input, init) => {
+            const response = await fetch(new URL(String(input), baseUrl), init)
+            if (new URL(response.url).pathname.startsWith('/data/objects/sha256/')) {
+              objectResponseEncodings.push(response.headers.get('content-encoding'))
+              assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable')
+            }
+            return response
+          }
+          const manifest = await createPublicRankingManifestLoader(`${baseUrl}/data/ranking-summary.json`, fetcher)()
+          const expected = manifest.snapshotIndex[fixture.snapshotKey]
+          const shard = await fetchPublicSnapshotShard(expected.url, fixture.snapshotKey, expected, manifest, { fetcher })
+
+          assert.equal(shard.matchCount, fixture.expectedMatchCount)
+          assert.deepEqual(objectResponseEncodings, gzipEnabled ? ['gzip', 'gzip'] : [null, null])
+
+          const invalidObject = await httpRequest(server.port, '/data/objects/sha256/not-a-digest')
+          assert.equal(invalidObject.statusCode, 404)
+          assert.notEqual(invalidObject.headers['cache-control'], 'public, max-age=31536000, immutable')
+        } finally {
+          await server.close()
+        }
+      })
+    }
   } finally {
-    await server.close()
     await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
     await rm(tempDir, { recursive: true, force: true })
   }
@@ -337,6 +349,63 @@ test('Railway server injects the latest current-season crawler snapshot on each 
 type TestServer = {
   port: number
   close: () => Promise<void>
+}
+
+async function contentAddressedReaderFixture() {
+  const rootSource: unknown = JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8'))
+  const rankingManifest = parsePublicRankingManifest(rootSource)
+  const generationId = rankingManifest.artifactMeta?.runId
+  if (!generationId) throw new Error('Expected ranking fixture to declare an artifact runId')
+  const snapshotKey = rankingManifest.defaultSnapshotKey
+  const snapshotEntry = rankingManifest.snapshotIndex[snapshotKey]
+  const snapshotPath = new URL(snapshotEntry.url, 'https://fixture.invalid').pathname
+  const shardSource: unknown = JSON.parse(await readFile(join('public', snapshotPath.replace(/^\//, '')), 'utf8'))
+  const rootArtifact = prepareSemanticArtifact(rootSource)
+  const shardArtifact = prepareSemanticArtifact(shardSource)
+  const logicalPaths = rankingManifestLogicalPaths(rankingManifest)
+  const entries = logicalPaths.map((logicalPath, index) => {
+    const artifact = logicalPath === '/data/ranking-summary.json'
+      ? rootArtifact
+      : logicalPath === canonicalPublicLogicalPath(snapshotEntry.url)
+        ? shardArtifact
+        : undefined
+    return {
+      logicalPath,
+      digest: artifact?.digest ?? (index + 1).toString(16).padStart(64, '0'),
+      bytes: artifact?.bytes ?? 0,
+    }
+  })
+  const generationManifest = createGenerationManifest({
+    generationId,
+    rootManifest: rootSource as Record<string, unknown>,
+    entries,
+  })
+  return {
+    generationId,
+    generationManifest,
+    snapshotKey,
+    expectedMatchCount: snapshotEntry.matchCount,
+    objects: new Map([
+      [`/test-bucket/rankings/objects/sha256/${rootArtifact.digest}`, rootArtifact.compressed],
+      [`/test-bucket/rankings/objects/sha256/${shardArtifact.digest}`, shardArtifact.compressed],
+    ]),
+  }
+}
+
+function rankingManifestLogicalPaths(manifest: ReturnType<typeof parsePublicRankingManifest>) {
+  const urls = [
+    '/data/ranking-summary.json',
+    manifest.playerDirectoryUrl,
+    manifest.fullSnapshotUrl,
+    manifest.teamDirectoryUrl,
+    manifest.teamHistoryIndexUrl,
+    manifest.teamHistoryUrl,
+    manifest.regionHistoryUrl,
+    manifest.tournamentMovementIndexUrl,
+    manifest.matchHistoryIndexUrl,
+    ...Object.values(manifest.snapshotIndex).map((entry) => entry.url),
+  ].filter((value): value is string => Boolean(value))
+  return [...new Set(urls.map(canonicalPublicLogicalPath))]
 }
 
 type HttpResponse = {

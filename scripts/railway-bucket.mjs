@@ -657,13 +657,13 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
     }
     uniqueArtifacts.set(artifact.digest, existing ?? artifact)
   }
+  const manifest = createGenerationManifest({ generationId, rootManifest, entries: prepared })
   for (const artifact of uniqueArtifacts.values()) {
     const result = await syncContentAddressedObject(client, config, artifact)
     if (result.status === 'unchanged') unchanged.push(result)
     else uploaded.push(result)
   }
 
-  const manifest = createGenerationManifest({ generationId, rootManifest, entries: prepared })
   const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
   if (manifestSync.result.status === 'unchanged') unchanged.push(manifestSync.result)
   else uploaded.push(manifestSync.result)

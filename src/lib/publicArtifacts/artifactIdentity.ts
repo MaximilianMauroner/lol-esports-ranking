@@ -2,7 +2,7 @@ import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   type PublicRankingManifest,
 } from './schema'
-import { assertPublicLogicalPath, canonicalPublicLogicalPath } from './logicalPath.mjs'
+import { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from './logicalPath.mjs'
 
 export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 1 as const
 export const PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION = 1 as const
@@ -17,8 +17,12 @@ export type PublicGenerationArtifactEntry = {
   sha256: string
   /** Canonical UTF-8 byte length of the uncompressed semantic JSON. */
   bytes: number
-  /** HTTP transport encoding. Digest and bytes always describe uncompressed semantic JSON. */
+  /** Legacy expected transport encoding for schema-v1 manifests. */
   encoding: PublicArtifactEncoding
+  /** Encoding of the immutable object stored in the bucket. */
+  storageEncoding?: PublicArtifactEncoding
+  /** HTTP encodings the serving layer may use after reading the stored object. */
+  transportEncodings?: PublicArtifactEncoding[]
 }
 
 export type PublicArtifactGenerationManifest = {
@@ -77,13 +81,13 @@ export function parsePublicArtifactGenerationManifest(value: unknown): PublicArt
   assertString(value.provenance.source, 'generation manifest provenance source')
   assertOneOf(value.provenance.dataMode, ['no-data', 'seeded-sample', 'scheduled-public-data'], 'generation manifest provenance dataMode')
   assertStringArray(value.provenance.sourceProviders, 'generation manifest provenance sourceProviders')
-  assertPublicLogicalPath(value.rootArtifact, 'generation manifest rootArtifact')
+  assertCanonicalPublicLogicalPath(value.rootArtifact, 'generation manifest rootArtifact')
   assertRecord(value.artifacts, 'generation manifest artifacts')
 
   const entries = Object.entries(value.artifacts)
   if (entries.length === 0) throw new Error('Invalid public artifact: generation manifest artifacts must not be empty')
   for (const [logicalPath, candidate] of entries) {
-    assertPublicLogicalPath(logicalPath, `generation manifest artifact key ${logicalPath}`)
+    assertCanonicalPublicLogicalPath(logicalPath, `generation manifest artifact key ${logicalPath}`)
     assertRecord(candidate, `generation manifest artifact ${logicalPath}`)
     assertEqual(candidate.logicalPath, logicalPath, `generation manifest artifact ${logicalPath} logicalPath`)
     assertEqual(candidate.generationId, value.generationId, `generation manifest artifact ${logicalPath} generationId`)
@@ -92,6 +96,15 @@ export function parsePublicArtifactGenerationManifest(value: unknown): PublicArt
     assertObjectUrlDigest(candidate.objectUrl, candidate.sha256, `generation manifest artifact ${logicalPath} objectUrl`)
     assertNonNegativeInteger(candidate.bytes, `generation manifest artifact ${logicalPath} bytes`)
     assertOneOf(candidate.encoding, ['identity', 'gzip'], `generation manifest artifact ${logicalPath} encoding`)
+    if (candidate.storageEncoding !== undefined) {
+      assertOneOf(candidate.storageEncoding, ['identity', 'gzip'], `generation manifest artifact ${logicalPath} storageEncoding`)
+    }
+    if (candidate.transportEncodings !== undefined) {
+      assertArtifactTransportEncodings(candidate.transportEncodings, `generation manifest artifact ${logicalPath} transportEncodings`)
+      if (candidate.storageEncoding === undefined) {
+        throw new Error(`Invalid public artifact: generation manifest artifact ${logicalPath} storageEncoding is required with transportEncodings`)
+      }
+    }
   }
   if (!Object.hasOwn(value.artifacts, value.rootArtifact)) {
     throw new Error('Invalid public artifact: generation manifest rootArtifact mapping is incomplete')
@@ -190,7 +203,7 @@ export async function fetchPublicArtifact<T extends object>(
   })
   if (!response.ok) throw new PublicArtifactRequestError(response.status)
   assertTransportEncoding(response, entry, logicalPath)
-  const semanticArtifact = parsePublicSemanticArtifact(await parseSemanticResponse(response, entry, logicalPath))
+  const semanticArtifact = parsePublicSemanticArtifact(await parseSemanticResponse(response, logicalPath))
   const identity = await semanticArtifactIdentity(semanticArtifact)
   if (identity.sha256 !== entry.sha256 || identity.bytes !== entry.bytes) {
     throw new Error(`Invalid public artifact: semantic digest mismatch for ${logicalPath}`)
@@ -286,31 +299,41 @@ function assertTransportEncoding(
   entry: PublicGenerationArtifactEntry,
   logicalPath: string,
 ) {
-  const actual = response.headers.get('content-encoding')?.trim().toLowerCase()
-  if (entry.encoding === 'identity') {
-    if (actual && actual !== 'identity') {
-      throw new Error(`Invalid public artifact: identity transport has unexpected Content-Encoding ${actual} for ${logicalPath}`)
-    }
-    return
+  const header = response.headers.get('content-encoding')?.trim().toLowerCase()
+  const actual = !header || header === 'identity' ? 'identity' : header
+  if (actual !== 'identity' && actual !== 'gzip') {
+    throw new Error(`Invalid public artifact: unsupported Content-Encoding ${actual} for ${logicalPath}`)
   }
-  if (actual !== 'gzip') {
-    throw new Error(`Invalid public artifact: gzip transport requires a CORS-visible Content-Encoding: gzip for ${logicalPath}`)
+  const allowed = entry.transportEncodings ?? [entry.encoding]
+  if (!allowed.includes(actual)) {
+    throw new Error(`Invalid public artifact: ${actual} transport is not allowed for ${logicalPath}`)
   }
 }
 
 async function parseSemanticResponse(
   response: Response,
-  entry: PublicGenerationArtifactEntry,
   logicalPath: string,
 ) {
   const text = await response.text()
   try {
     return JSON.parse(text) as unknown
   } catch (error) {
-    if (entry.encoding === 'gzip') {
+    if (response.headers.get('content-encoding')?.trim().toLowerCase() === 'gzip') {
       throw new Error(`Invalid public artifact: gzip transport was not decoded by fetch for ${logicalPath}`, { cause: error })
     }
     throw new Error(`Invalid public artifact: identity transport is not valid JSON for ${logicalPath}`, { cause: error })
+  }
+}
+
+function assertArtifactTransportEncodings(value: unknown, label: string): asserts value is PublicArtifactEncoding[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Invalid public artifact: ${label} must be a non-empty array`)
+  }
+  const seen = new Set<PublicArtifactEncoding>()
+  for (const encoding of value) {
+    assertOneOf(encoding, ['identity', 'gzip'], `${label} entry`)
+    if (seen.has(encoding)) throw new Error(`Invalid public artifact: ${label} must not contain duplicates`)
+    seen.add(encoding)
   }
 }
 

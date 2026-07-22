@@ -39,6 +39,13 @@ export function assertPublicLogicalPath(value, label = 'artifact logical path') 
   }
 }
 
+export function assertCanonicalPublicLogicalPath(value, label = 'artifact logical path') {
+  assertString(value, label)
+  if (!value.startsWith('/data/') || value.includes('\\') || /(?:^|\/)\.\.?(?:\/|$)/.test(value)) {
+    throw new Error(`Invalid public artifact: ${label} must be a safe canonical /data/ path`)
+  }
+}
+
 function assertString(value, label) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`Invalid public artifact: ${label} must be a non-empty string`)

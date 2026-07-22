@@ -308,10 +308,14 @@ test('content-addressed generation reuses unchanged objects, uploads only change
       sha256: string
       bytes: number
       encoding: string
+      storageEncoding: string
+      transportEncodings: string[]
     }]>) {
       const object = client.objects.get(`rankings/objects/sha256/${entry.sha256}`)
       assert.ok(object, logicalPath)
       assert.equal(entry.encoding, 'gzip')
+      assert.equal(entry.storageEncoding, 'gzip')
+      assert.deepEqual(entry.transportEncodings, ['identity', 'gzip'])
       assert.equal(object.contentEncoding, 'gzip')
       assert.equal(object.metadata?.sha256, entry.sha256)
       assert.equal(object.metadata?.['semantic-bytes'], String(entry.bytes))
@@ -533,6 +537,9 @@ test('concurrent identical generation publishers conditionally create or reuse o
 
 test('logical path aliases and encoded traversal fail before any bucket upload', async () => {
   assert.equal(canonicalPublicLogicalPath('/data/scopes/%C3%81.json?v=run'), '/data/scopes/Á.json')
+  assert.equal(canonicalPublicLogicalPath('/data/%2520.json'), '/data/%20.json')
+  assert.equal(canonicalPublicLogicalPath('/data/%252F.json'), '/data/%2F.json')
+  assert.equal(canonicalPublicLogicalPath('/data/%252e%252e.json'), '/data/%2e%2e.json')
   assert.throws(() => canonicalPublicLogicalPath('/data/a%2Fb.json'), /encoded path separators/)
   assert.throws(() => canonicalPublicLogicalPath('/data/%2e%2e/private.json'), /path traversal/)
   assert.throws(() => canonicalPublicLogicalPath('/data/%ZZ.json'), /invalid percent encoding/)
@@ -561,6 +568,45 @@ test('logical path aliases and encoded traversal fail before any bucket upload',
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  }
+})
+
+test('double-encoded filenames are canonicalized exactly once before manifest assembly', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-content-single-canonicalization-'))
+  const publicDir = join(root, 'public')
+  const generationId = 'run_single_canonicalization'
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    for (const artifactPath of ['%2520.json', '%252F.json', '%252e%252e.json']) {
+      await writeFile(join(publicDir, artifactPath), '{"artifactKind":"test-artifact"}\n')
+    }
+    const result = await uploadContentAddressedPublicArtifacts(client, config, publicDir, generationId)
+    const artifacts = result.manifest.artifacts as Record<string, unknown>
+    assert.equal(Object.hasOwn(artifacts, '/data/%20.json'), true)
+    assert.equal(Object.hasOwn(artifacts, '/data/%2F.json'), true)
+    assert.equal(Object.hasOwn(artifacts, '/data/%2e%2e.json'), true)
+    assert.equal(Object.hasOwn(artifacts, '/data/ .json'), false)
+    assert.equal(Object.hasOwn(artifacts, '/data//.json'), false)
+    assert.equal(Object.hasOwn(artifacts, '/data/...json'), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('generation manifest validation finishes before any content object upload', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-content-preflight-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, 'run_manifest_source')
+    await assert.rejects(
+      uploadContentAddressedPublicArtifacts(client, config, publicDir, 'run_manifest_mismatch'),
+      /generationId must match ranking root runId/,
+    )
+    assert.equal(client.objects.size, 0)
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 

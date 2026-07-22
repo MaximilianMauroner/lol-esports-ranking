@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
-import { canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
+import { assertCanonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
 
-export { canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
+export { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
 
 export const CONTENT_ADDRESSED_STORAGE_MODE = 'content-addressed-gzip-v1'
 
@@ -44,7 +44,8 @@ export function createGenerationManifest({ generationId, rootManifest, entries }
   if (runId !== generationId) throw new Error('Invalid public artifact: generationId must match ranking root runId')
   const artifacts = {}
   for (const entry of entries) {
-    const logicalPath = canonicalPublicLogicalPath(entry.logicalPath)
+    assertCanonicalPublicLogicalPath(entry.logicalPath, 'generation manifest logical path')
+    const logicalPath = entry.logicalPath
     if (Object.hasOwn(artifacts, logicalPath)) {
       throw new Error(`Invalid public artifact: duplicate logical path alias ${logicalPath}`)
     }
@@ -54,6 +55,8 @@ export function createGenerationManifest({ generationId, rootManifest, entries }
       generationId,
       sha256: entry.digest,
       bytes: entry.bytes,
+      storageEncoding: 'gzip',
+      transportEncodings: ['identity', 'gzip'],
       encoding: 'gzip',
     }
   }

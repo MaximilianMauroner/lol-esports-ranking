@@ -6,7 +6,9 @@ import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/lib/
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
 import {
   createPublicSemanticArtifact,
+  fetchPublicArtifact,
   parsePublicArtifactGenerationManifest,
+  registerGenerationContext,
   semanticArtifactIdentity,
   type PublicArtifactGenerationManifest,
   type PublicGenerationArtifactEntry,
@@ -116,6 +118,55 @@ test('semantic identity excludes volatile run metadata and uses deterministic ke
   assert.deepEqual(second, first)
 })
 
+test('reader mapping canonicalizes double-encoded logical paths exactly once', async () => {
+  for (const [logicalUrl, logicalPath] of [
+    ['/data/%2520.json', '/data/%20.json'],
+    ['/data/%252F.json', '/data/%2F.json'],
+    ['/data/%252e%252e.json', '/data/%2e%2e.json'],
+  ] as const) {
+    const semantic = createPublicSemanticArtifact({ artifactKind: 'mapping-test', logicalUrl })
+    const identity = await semanticArtifactIdentity(semantic)
+    const generationId = 'generation-path-mapping'
+    const objectUrl = `/objects/${identity.sha256}.json`
+    const entry: PublicGenerationArtifactEntry = {
+      logicalPath,
+      objectUrl,
+      generationId,
+      sha256: identity.sha256,
+      bytes: identity.bytes,
+      encoding: 'identity',
+    }
+    const generation = parsePublicArtifactGenerationManifest({
+      artifactKind: 'public-artifact-generation-manifest',
+      schemaVersion: 1,
+      generationId,
+      runId: generationId,
+      generatedAt: '2026-07-22T00:00:00.000Z',
+      model: { version: 'mapping-test', configHash: 'mapping-test' },
+      provenance: { source: 'test', dataMode: 'no-data', sourceProviders: [] },
+      rootArtifact: logicalPath,
+      artifacts: { [logicalPath]: entry },
+    })
+    const owner = {}
+    registerGenerationContext(owner, generation, '/data/generation.json')
+    let requested = ''
+    const loaded = await fetchPublicArtifact(
+      owner,
+      logicalUrl,
+      '/data/fallback.json',
+      (value) => value as Record<string, unknown>,
+      {
+        fetcher: async (input) => {
+          requested = String(input)
+          return jsonResponse(semantic)
+        },
+      },
+    )
+    assert.equal(requested, objectUrl)
+    assert.equal(loaded.logicalUrl, logicalUrl)
+  }
+})
+
 test('generation manifest and semantic loading fail closed on integrity and generation errors', async () => {
   const fixture = await generationFixture()
   const mixedGeneration = structuredClone(fixture.generation)
@@ -136,6 +187,26 @@ test('generation manifest and semantic loading fail closed on integrity and gene
   delete incomplete.artifacts[fixture.shardEntry.logicalPath]
   const incompleteLoader = createPublicRankingManifestLoader('/data/generation.json', generationFetcher(incomplete, fixture))
   await assert.rejects(incompleteLoader(), /mapping is incomplete/)
+
+  const claimedGzip = structuredClone(fixture.generation)
+  claimedGzip.artifacts[fixture.shardEntry.logicalPath]!.encoding = 'gzip'
+  const claimedGzipFetcher = generationFetcher(claimedGzip, fixture)
+  const claimedGzipManifest = await createPublicRankingManifestLoader('/data/generation.json', claimedGzipFetcher)()
+  const claimedGzipExpected = claimedGzipManifest.snapshotIndex['2026__All__All']
+  await assert.rejects(
+    fetchPublicSnapshotShard(
+      claimedGzipExpected.url,
+      '2026__All__All',
+      claimedGzipExpected,
+      claimedGzipManifest,
+      { fetcher: claimedGzipFetcher },
+    ),
+    /identity transport is not allowed/,
+  )
+
+  const missingStorageEncoding = structuredClone(fixture.generation)
+  missingStorageEncoding.artifacts[fixture.rootEntry.logicalPath]!.transportEncodings = ['identity', 'gzip']
+  assert.throws(() => parsePublicArtifactGenerationManifest(missingStorageEncoding), /storageEncoding is required/)
 
   const wrongModel = structuredClone(fixture.generation)
   wrongModel.model.version = 'wrong-model'
