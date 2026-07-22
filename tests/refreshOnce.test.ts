@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { Readable } from 'node:stream'
 import { runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
-import { writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
+import { mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
+import { uploadRankingArtifacts } from '../scripts/railway-bucket.mjs'
 
 test('unchanged gated probe performs no broad provider fetch, crunch, or artifact upload', async () => {
   let childRuns = 0
@@ -180,6 +182,9 @@ test('startup enforces five-minute evidence flags while six-hour legacy stays co
   await assert.rejects(() => runRefreshOnce({
     env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_INTERVAL_MINUTES: '5' },
   }), /proven-cheap-exit, lease-fencing/)
+  await assert.rejects(() => runRefreshOnce({
+    env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_LEASE_TTL_MS: '60000', RANKING_REFRESH_JOB_TIMEOUT_MS: '60000' },
+  }), /lease TTL/)
   const safe = await runRefreshOnce({
     env: { RANKING_REFRESH_MODE: 'legacy', RANKING_REFRESH_INTERVAL_MINUTES: '360' },
     runChild: async () => undefined,
@@ -198,7 +203,17 @@ test('release failure cannot replace the primary failure and terminal metric is 
   const terminal = metricLog(logs)
   assert.equal(terminal.result, 'failed')
   assert.match(String(terminal.error), /primary-read-error/)
-  assert.deepEqual(terminal.finalizationErrors, ['lease-release: release-error'])
+  assert.deepEqual(finalizationLog(logs).errors, ['lease-release: release-error'])
+})
+
+test('release failure leaves successful canonical metric immutable and emits separate evidence', async () => {
+  const logs: string[] = []
+  const result = await runRefreshOnce({
+    ...baseOptions(logs),
+    releaseLease: async () => { throw new Error('release-after-success') },
+  })
+  assert.deepEqual(metricLog(logs), result.metrics)
+  assert.deepEqual(finalizationLog(logs).errors, ['lease-release: release-after-success'])
 })
 
 test('timeout waits for child-tree exit before rejecting and permitting lease release', async () => {
@@ -261,6 +276,129 @@ test('published child telemetry remains canonical in result, trigger state, and 
   }
 })
 
+test('real bucket child promotion hands authoritative ETag to parent before queued renewal and release', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-parent-child-etag-'))
+  const publicDir = join(root, 'public')
+  const metricsPath = join(root, 'metrics.json')
+  const client = memoryS3()
+  const config = bucketConfig()
+  let heartbeatTick: (() => void) | undefined
+  try {
+    await mkdir(publicDir, { recursive: true })
+    await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+    const result = await runRefreshOnce({
+      env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_METRICS_PATH: metricsPath },
+      runId: 'parent-child-etag',
+      owner: 'worker',
+      now: () => new Date('2026-07-22T00:00:30Z'),
+      monotonicNow: increasingClock(),
+      bucketConfig: config,
+      bucketClient: client,
+      readLocalState: async () => undefined,
+      writeLocalState: async () => undefined,
+      fetchProbe: async () => ({
+        checkedAt: '2026-07-22T00:00:30Z',
+        coverageComplete: true,
+        events: [{ matchId: 'match-1', state: 'completed', startTime: '2026-07-21T23:50:00Z', teams: [{ id: 'a', gameWins: 1 }, { id: 'b', gameWins: 0 }] }],
+      }),
+      readJson: async () => ({ matches: [] }),
+      runChild: async ({ leaseKey, owner, fencingToken }: { leaseKey: string; owner: string; fencingToken: number }) => {
+        const seed = await readRefreshMetrics(metricsPath)
+        assert.ok(seed)
+        const uploaded = await uploadRankingArtifacts({
+          publicDataDir: publicDir,
+          generationId: 'generation-1',
+          fencingToken,
+          leaseAuthority: { key: leaseKey, lease: { owner, fencingToken } },
+          now: () => new Date('2026-07-22T00:00:30Z'),
+          beforePromotionWrite: async () => { heartbeatTick?.() },
+          refreshTelemetry: (promotion: { promotedAt: string; etag: string }) => ({
+            ...seed,
+            result: 'completed',
+            finishedAt: '2026-07-22T00:00:31.000Z',
+            freshness: { ...seed.freshness, publishedAt: promotion.promotedAt },
+            stages: seed.stages.map((stage) => stage.name === 'promotion'
+              ? { ...stage, result: 'completed', output: { promotedAt: promotion.promotedAt, etag: promotion.etag } }
+              : stage),
+            coordination: { owner, fencingToken, etag: promotion.etag },
+          }),
+          config,
+          client,
+        })
+        await writeRefreshMetrics(metricsPath, uploaded.refreshTelemetry as Awaited<ReturnType<typeof readRefreshMetrics>> & {})
+      },
+      setInterval: (callback: () => void) => { heartbeatTick = callback; return { unref() {} } },
+      clearInterval: () => undefined,
+      logger: { log() {}, warn() {}, error() {} },
+    })
+    const activeObject = client.objects.get('rankings/active-generation.json')!
+    const active = JSON.parse(activeObject.body)
+    assert.equal(result.status, 'completed')
+    assert.equal(active.generationId, 'generation-1')
+    assert.equal(typeof active.leaseRenewedAt, 'string')
+    assert.equal(typeof active.leaseReleasedAt, 'string')
+    assert.notEqual((result.metrics as { coordination?: { etag: string } }).coordination?.etag, activeObject.etag)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('legacy parent returns the same finalized child record stored in state, receipt, file, and log', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-legacy-canonical-'))
+  const publicDir = join(root, 'public')
+  const statePath = join(root, 'refresh-state.json')
+  const metricsPath = join(root, 'metrics.json')
+  const client = memoryS3()
+  const config = bucketConfig()
+  const logs: string[] = []
+  try {
+    await mkdir(publicDir, { recursive: true })
+    await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
+    await writeFile(statePath, '{}\n')
+    const result = await runRefreshOnce({
+      env: { RANKING_REFRESH_MODE: 'legacy', RANKING_REFRESH_METRICS_PATH: metricsPath },
+      runId: 'legacy-canonical',
+      runChild: async ({ cause }: { cause: string }) => {
+        assert.equal(cause, 'daily-audit')
+        const seed = await readRefreshMetrics(metricsPath)
+        assert.ok(seed)
+        const child = {
+          ...seed,
+          cause: 'daily-audit' as const,
+          finishedAt: '2026-07-22T00:00:10.000Z',
+          result: 'no-promotion',
+          peakRssBytes: seed.peakRssBytes + 100,
+          stages: seed.stages.map((stage) => stage.name === 'public-serialization' || stage.name === 'provider-fetch'
+            ? { ...stage, result: 'completed', output: { outputBytes: 3 } }
+            : stage),
+        }
+        const canonical = mergeRefreshMetrics(seed, child)
+        const uploaded = await uploadRankingArtifacts({
+          publicDataDir: publicDir,
+          statePath,
+          refreshTelemetry: canonical,
+          refreshStateForUpload: ({ refreshTelemetry }: { refreshTelemetry: unknown }) => ({ lastRun: refreshTelemetry }),
+          config,
+          client,
+        })
+        await writeRefreshMetrics(metricsPath, uploaded.refreshTelemetry as typeof canonical)
+      },
+      logger: { log: (value: string) => logs.push(value), warn() {}, error: (value: string) => logs.push(value) },
+    })
+    const receipt = JSON.parse(client.objects.get('rankings/latest-publish.json')!.body)
+    const refreshState = JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body)
+    const fileRecord = JSON.parse(await readFile(metricsPath, 'utf8'))
+    assert.deepEqual(result.metrics, receipt.refreshTelemetry)
+    assert.deepEqual(result.metrics, refreshState.lastRun)
+    assert.deepEqual(result.metrics, fileRecord)
+    assert.deepEqual(result.metrics, metricLog(logs))
+    assert.equal(result.metrics?.cause, 'daily-audit')
+    assert.equal(result.metrics?.freshness.publishedAt, null)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function increasingClock() {
   let value = 0
   return () => ++value
@@ -285,7 +423,7 @@ function baseOptions(logs: string[]) {
     fetchProbe: async () => ({ checkedAt: '2026-07-22T00:00:00Z', coverageComplete: true, events: [] }),
     setInterval: () => ({ unref() {} }),
     clearInterval: () => undefined,
-    logger: { log: (value: string) => logs.push(value), warn() {}, error() {} },
+    logger: { log: (value: string) => logs.push(value), warn() {}, error: (value: string) => logs.push(value) },
   }
 }
 
@@ -293,4 +431,56 @@ function metricLog(logs: string[]) {
   const line = logs.findLast((entry) => entry.startsWith('REFRESH_RUN_METRIC '))
   assert.ok(line)
   return JSON.parse(line.slice('REFRESH_RUN_METRIC '.length))
+}
+
+function finalizationLog(logs: string[]) {
+  const line = logs.findLast((entry) => entry.startsWith('REFRESH_FINALIZATION_ERROR '))
+  assert.ok(line)
+  return JSON.parse(line.slice('REFRESH_FINALIZATION_ERROR '.length))
+}
+
+function bucketConfig() {
+  return {
+    enabled: true,
+    bucket: 'bucket',
+    endpoint: 'https://example.invalid',
+    region: 'auto',
+    accessKeyId: 'key',
+    secretAccessKey: 'secret',
+    prefix: 'rankings',
+  }
+}
+
+function memoryS3() {
+  const objects = new Map<string, { body: string; etag: string }>()
+  let version = 0
+  return {
+    objects,
+    async send(command: unknown) {
+      const value = command as { constructor: { name: string }; input: Record<string, unknown> }
+      const key = String(value.input.Key)
+      if (value.constructor.name === 'GetObjectCommand') {
+        const object = objects.get(key)
+        if (!object) throw Object.assign(new Error('missing'), { name: 'NoSuchKey' })
+        return { Body: Readable.from([object.body]), ETag: object.etag, ContentLength: Buffer.byteLength(object.body) }
+      }
+      if (value.constructor.name === 'PutObjectCommand') {
+        const current = objects.get(key)
+        if (value.input.IfNoneMatch === '*' && current) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
+        if (value.input.IfMatch && value.input.IfMatch !== current?.etag) throw Object.assign(new Error('conflict'), { name: 'PreconditionFailed' })
+        const body = await streamText(value.input.Body)
+        const etag = `"${++version}"`
+        objects.set(key, { body, etag })
+        return { ETag: etag }
+      }
+      throw new Error(`Unsupported command ${value.constructor.name}`)
+    },
+  }
+}
+
+async function streamText(value: unknown) {
+  if (typeof value === 'string') return value
+  const chunks: Buffer[] = []
+  for await (const chunk of value as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks).toString('utf8')
 }

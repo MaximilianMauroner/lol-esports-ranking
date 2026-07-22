@@ -45,6 +45,7 @@ export async function runRefreshOnce(options = {}) {
   const config = options.bucketConfig ?? bucketConfigFromEnv(env)
   const client = options.bucketClient ?? createBucketClient(config)
   const ttlMs = numberEnv(env, 'RANKING_REFRESH_LEASE_TTL_MS', 45 * 60_000)
+  const jobTimeoutMs = numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000)
   const manual = env.RANKING_FORCE_REFRESH === 'true'
   const tracker = createRefreshMetrics({
     runId,
@@ -62,13 +63,27 @@ export async function runRefreshOnce(options = {}) {
     cheapExitProven: env.RANKING_CHEAP_EXIT_PROVEN === 'true',
     leaseFencingConfigured: env.RANKING_LEASE_FENCING_ENABLED === 'true',
   })
+  if (mode !== 'legacy' && ttlMs <= jobTimeoutMs + 60_000) {
+    throw new Error('Refresh lease TTL must exceed the child timeout by at least 60000ms')
+  }
 
   if (mode === 'legacy') {
     const finish = tracker.startStage('provider-fetch')
     try {
-      await (options.runChild ?? defaultRunChild)({ env, reconciliationPath, metricsPath: childMetricsPath, runId })
+      await writeRefreshMetrics(childMetricsPath, completeRefreshMetrics(tracker.snapshot({ result: 'running' })))
+      await (options.runChild ?? defaultRunChild)({
+        env,
+        reconciliationPath,
+        metricsPath: childMetricsPath,
+        runId,
+        cause: manual ? 'manual-force' : 'daily-audit',
+        affectedIds: [],
+      })
       finish('completed')
-      finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'completed' }))
+      const childMetrics = await readRefreshMetrics(childMetricsPath)
+      finalRecord = childMetrics && childMetrics.result !== 'running'
+        ? childMetrics
+        : completeRefreshMetrics(tracker.snapshot({ result: 'completed' }))
       logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
       return { status: 'completed', metrics: finalRecord }
     } catch (error) {
@@ -181,22 +196,46 @@ export async function runRefreshOnce(options = {}) {
           result: 'running',
           freshness: { detectedAt: pendingDetectedAt(state, dueMatchIds) },
         })))
-        await (options.runChild ?? defaultRunChild)({
-          env,
-          reconciliationPath,
-          metricsPath: childMetricsPath,
-          runId,
-          leaseKey,
-          owner: authority.lease.owner,
-          fencingToken: authority.lease.fencingToken,
-          promotionEtag: authority.promotionEtag,
-          cause,
-          affectedIds: dueMatchIds,
-          affectedDate,
+        let childMetrics
+        await heartbeat.runExclusive(async () => {
+          if (heartbeat.error) throw heartbeat.error
+          let childError
+          try {
+            await (options.runChild ?? defaultRunChild)({
+              env,
+              reconciliationPath,
+              metricsPath: childMetricsPath,
+              runId,
+              leaseKey,
+              owner: authority.lease.owner,
+              fencingToken: authority.lease.fencingToken,
+              promotionEtag: authority.promotionEtag,
+              cause,
+              affectedIds: dueMatchIds,
+              affectedDate,
+            })
+          } catch (error) {
+            childError = error
+          }
+          childMetrics = await readRefreshMetrics(childMetricsPath)
+          installChildCoordination(authority, childMetrics)
+          const live = await (options.assertLease ?? assertBucketLease)(leaseKey, authority, {
+            now: now(),
+            config,
+            client,
+            requireEtag: false,
+          })
+          if (live?.etag) {
+            if (childMetrics?.coordination?.etag && childMetrics.coordination.etag !== live.etag) {
+              throw new Error('Child coordination ETag does not match the authoritative lease record')
+            }
+            authority.etag = live.etag
+            authority.promotionEtag = live.etag
+          }
+          if (childError) throw childError
         })
         await assertLive()
         finishProviderFetch('completed')
-        const childMetrics = await readRefreshMetrics(childMetricsPath)
         for (const stage of childMetrics?.stages ?? []) {
           if (stage.result !== 'not-applicable') tracker.recordStage(stage.name, stage)
         }
@@ -248,8 +287,15 @@ export async function runRefreshOnce(options = {}) {
       logger.warn(`Refresh lease release failed: ${errorMessage(error)}`)
     } finally {
       if (!finalRecord) finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed' }))
-      if (finalizationErrors.length > 0) finalRecord = { ...finalRecord, finalizationErrors }
       logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
+      if (finalizationErrors.length > 0) {
+        logger.error(`REFRESH_FINALIZATION_ERROR ${JSON.stringify({
+          schemaVersion: 1,
+          runId,
+          at: new Date(now()).toISOString(),
+          errors: finalizationErrors,
+        })}`)
+      }
     }
   }
 }
@@ -292,20 +338,35 @@ export function startLeaseHeartbeat({ authority, leaseKey, ttlMs, now, renew, co
   return heartbeat
 }
 
+function installChildCoordination(authority, metrics) {
+  const promoted = metrics?.stages?.some((stage) => stage.name === 'promotion' && stage.result === 'completed')
+  if (!promoted) return
+  const coordination = metrics?.coordination
+  if (!coordination
+    || coordination.owner !== authority.lease.owner
+    || Number(coordination.fencingToken) !== Number(authority.lease.fencingToken)
+    || typeof coordination.etag !== 'string'
+    || coordination.etag.length === 0) {
+    throw new Error('Promoted child did not return valid lease coordination')
+  }
+  authority.etag = coordination.etag
+  authority.promotionEtag = coordination.etag
+}
+
 async function defaultRunChild({ env, reconciliationPath, metricsPath, runId, leaseKey, owner, fencingToken, promotionEtag, cause, affectedIds, affectedDate }) {
   await runChildProcess(process.execPath, ['scripts/refresh-data-if-changed.mjs'], numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), {
     ...env,
     RANKING_RECONCILIATION_OUTPUT: reconciliationPath,
     RANKING_REFRESH_METRICS_PATH: metricsPath,
     RANKING_REFRESH_RUN_ID: runId,
+    RANKING_REFRESH_CAUSE: cause,
+    RANKING_REFRESH_AFFECTED_IDS: JSON.stringify(affectedIds ?? []),
+    ...(affectedDate ? { RANKING_REFRESH_AFFECTED_DATE: affectedDate } : {}),
     ...(fencingToken ? {
       RANKING_REFRESH_FENCING_TOKEN: String(fencingToken),
       RANKING_REFRESH_LEASE_KEY: leaseKey,
       RANKING_REFRESH_LEASE_OWNER: owner,
       RANKING_REFRESH_PROMOTION_ETAG: promotionEtag,
-      RANKING_REFRESH_CAUSE: cause,
-      RANKING_REFRESH_AFFECTED_IDS: JSON.stringify(affectedIds ?? []),
-      ...(affectedDate ? { RANKING_REFRESH_AFFECTED_DATE: affectedDate } : {}),
     } : {}),
   })
 }

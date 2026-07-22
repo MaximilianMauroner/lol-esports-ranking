@@ -25,7 +25,7 @@ export type RefreshRunMetrics = {
   checkpoint: { applicable: false; reason: string }
   stages: RefreshStage[]
   error?: string
-  finalizationErrors?: string[]
+  coordination?: { owner: string; fencingToken: number; etag: string }
 }
 export function createRefreshMetrics(options: {
   runId: string

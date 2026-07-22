@@ -174,7 +174,7 @@ export async function uploadRankingArtifacts({
     activeGenerationCache = { expiresAt: Date.now() + 30_000, value: generationId }
     onStage?.('promotion', {
       durationMs: monotonicNow() - stageStarted,
-      output: { generationId, fencingToken, promotedAt },
+      output: { generationId, fencingToken, promotedAt, etag: promotion.etag },
     })
     promotionOutcome = { completed: true, generationId, fencingToken, promotedAt, etag: promotion.etag }
   }

@@ -35,6 +35,46 @@ test('real child stages replace not-applicable placeholders when records merge',
   assert.equal(mergeRefreshMetrics(child, parent).stages[0].result, 'completed')
 })
 
+test('record aggregation preserves whole-run envelope, freshness, promotion, and peak RSS', () => {
+  const parent = {
+    ...fixture('completed'),
+    startedAt: '2026-07-22T00:00:00.000Z',
+    finishedAt: null,
+    peakRssBytes: 100,
+    freshness: { providerAvailableAt: null, detectedAt: '2026-07-22T00:00:02.000Z', publishedAt: null },
+  }
+  const build = {
+    ...fixture('completed'),
+    startedAt: '2026-07-22T00:00:03.000Z',
+    finishedAt: '2026-07-22T00:00:08.000Z',
+    peakRssBytes: 500,
+    freshness: { providerAvailableAt: null, detectedAt: null, publishedAt: null },
+    stages: [{ name: 'public-serialization' as const, durationMs: 5000, result: 'completed', input: {}, output: { outputBytes: 20 } }],
+  }
+  const promotion = {
+    ...fixture('completed'),
+    startedAt: '2026-07-22T00:00:01.000Z',
+    finishedAt: '2026-07-22T00:00:10.000Z',
+    peakRssBytes: 300,
+    freshness: { providerAvailableAt: null, detectedAt: null, publishedAt: '2026-07-22T00:00:10.000Z' },
+    stages: [{
+      name: 'promotion' as const,
+      durationMs: 10,
+      result: 'completed',
+      input: {},
+      output: { promotedAt: '2026-07-22T00:00:09.000Z' },
+    }],
+  }
+  const merged = mergeRefreshMetrics(mergeRefreshMetrics(parent, build), promotion)
+  assert.equal(merged.startedAt, '2026-07-22T00:00:00.000Z')
+  assert.equal(merged.finishedAt, '2026-07-22T00:00:10.000Z')
+  assert.equal(merged.durationMs, 10_000)
+  assert.equal(merged.peakRssBytes, 500)
+  assert.equal(merged.freshness.detectedAt, '2026-07-22T00:00:02.000Z')
+  assert.equal(merged.freshness.publishedAt, '2026-07-22T00:00:09.000Z')
+  assert.ok(merged.stages.some((stage) => stage.name === 'public-serialization'))
+})
+
 function fixture(result: string) {
   return {
     schemaVersion: 1 as const,

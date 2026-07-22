@@ -106,6 +106,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   let canonicalMetrics
   let terminalResult = 'completed'
   let completedPromotionAt
+  let completedPromotionEtag
+  let inheritedMetrics
   try {
     const providerStarted = monotonicNow()
     await (options.run ?? runCommand)(process.execPath, [
@@ -262,7 +264,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       metrics.recordStage('crunch', { durationMs: monotonicNow() - crunchStarted })
     }
 
-    const inheritedMetrics = await readRefreshMetrics(metricsPath)
+    inheritedMetrics = await readRefreshMetrics(metricsPath)
     for (const stage of inheritedMetrics?.stages ?? []) {
       if (stage.result !== 'not-applicable') metrics.recordStage(stage.name, stage)
     }
@@ -308,14 +310,28 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
                 promotionEtag: env.RANKING_REFRESH_PROMOTION_ETAG,
               }
             : undefined,
-          refreshTelemetry: (promotion) => completeRefreshMetrics(metrics.snapshot({
-            result: promotion?.completed ? 'completed' : 'no-promotion',
-            freshness: { publishedAt: promotion?.promotedAt ?? null },
-          })),
+          refreshTelemetry: (promotion) => {
+            const own = completeRefreshMetrics(metrics.snapshot({
+              result: promotion?.completed ? 'completed' : 'no-promotion',
+              freshness: { publishedAt: promotion?.promotedAt ?? null },
+            }))
+            const aggregated = inheritedMetrics ? mergeRefreshMetrics(inheritedMetrics, own) : own
+            return promotion?.etag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
+              ? {
+                  ...aggregated,
+                  coordination: {
+                    owner: env.RANKING_REFRESH_LEASE_OWNER,
+                    fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+                    etag: promotion.etag,
+                  },
+                }
+              : aggregated
+          },
           monotonicNow,
           onStage: (name, stage) => {
             metrics.recordStage(name, stage)
             if (name === 'promotion' && stage.output?.promotedAt) completedPromotionAt = stage.output.promotedAt
+            if (name === 'promotion' && stage.output?.etag) completedPromotionEtag = stage.output.etag
           },
           refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped, refreshTelemetry }) => {
             state.bucket = {
@@ -373,11 +389,21 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       if (canonicalMetrics) {
         await writeRefreshMetrics(metricsPath, canonicalMetrics)
       } else {
-        const own = completeRefreshMetrics(metrics.snapshot({
+        let own = completeRefreshMetrics(metrics.snapshot({
           result: refreshError ? 'failed' : terminalResult,
           error: refreshError,
           freshness: { publishedAt: completedPromotionAt ?? null },
         }))
+        if (completedPromotionEtag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN) {
+          own = {
+            ...own,
+            coordination: {
+              owner: env.RANKING_REFRESH_LEASE_OWNER,
+              fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+              etag: completedPromotionEtag,
+            },
+          }
+        }
         const existing = await readRefreshMetrics(metricsPath)
         await writeRefreshMetrics(metricsPath, existing ? mergeRefreshMetrics(existing, own) : own)
       }

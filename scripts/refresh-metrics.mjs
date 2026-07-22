@@ -116,11 +116,41 @@ export function mergeRefreshMetrics(parent, child) {
     if (stage.result === 'not-applicable' && current && current.result !== 'not-applicable') continue
     byName.set(stage.name, stage)
   }
+  const startedAt = earliestTimestamp(parent.startedAt, child.startedAt)
+  const finishedAt = latestTimestamp(parent.finishedAt, child.finishedAt)
+  const promotion = [...(parent.stages ?? []), ...(child.stages ?? [])]
+    .findLast((stage) => stage.name === 'promotion' && stage.result === 'completed')
+  const publishedAt = promotion?.output?.promotedAt
+    ?? (promotion ? latestTimestamp(parent.freshness?.publishedAt, child.freshness?.publishedAt) : null)
   return {
     ...parent,
+    ...child,
+    cause: parent.cause,
+    startedAt,
+    finishedAt,
+    durationMs: startedAt && finishedAt
+      ? Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime())
+      : Math.max(Number(parent.durationMs) || 0, Number(child.durationMs) || 0),
     peakRssBytes: Math.max(Number(parent.peakRssBytes) || 0, Number(child.peakRssBytes) || 0),
+    affected: {
+      matchIds: [...new Set([...(parent.affected?.matchIds ?? []), ...(child.affected?.matchIds ?? [])])].sort(),
+      ...(parent.affected?.date ?? child.affected?.date ? { date: parent.affected?.date ?? child.affected?.date } : {}),
+    },
+    freshness: {
+      providerAvailableAt: earliestTimestamp(parent.freshness?.providerAvailableAt, child.freshness?.providerAvailableAt),
+      detectedAt: earliestTimestamp(parent.freshness?.detectedAt, child.freshness?.detectedAt),
+      publishedAt,
+    },
     stages: [...byName.values()],
   }
+}
+
+function earliestTimestamp(...values) {
+  return values.filter(Boolean).sort()[0] ?? null
+}
+
+function latestTimestamp(...values) {
+  return values.filter(Boolean).sort().at(-1) ?? null
 }
 
 export function completeRefreshMetrics(record) {
