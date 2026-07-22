@@ -122,10 +122,10 @@ test('transport encoding mismatches and non-decoded gzip fail closed', async () 
   const logicalPath = '/data/example.json'
 
   for (const [label, encoding, response, message] of [
-    ['missing CORS-visible header', 'gzip', jsonResponse(semantic), /CORS-visible Content-Encoding: gzip/],
-    ['wrong gzip header', 'gzip', jsonResponse(semantic, { 'Content-Encoding': 'br' }), /requires a CORS-visible Content-Encoding: gzip/],
-    ['unexpected identity encoding', 'identity', jsonResponse(semantic, { 'Content-Encoding': 'gzip' }), /identity transport has unexpected Content-Encoding gzip/],
-    ['gzip bytes not decoded by fetch', 'gzip', new Response(gzipSync(JSON.stringify(semantic)), { headers: { 'Content-Encoding': 'gzip' } }), /was not decoded by fetch/],
+    ['missing CORS-visible header', 'gzip', jsonResponse(semantic), /identity transport is not allowed for \/data\/example\.json/],
+    ['wrong gzip header', 'gzip', jsonResponse(semantic, { 'Content-Encoding': 'br' }), /unsupported Content-Encoding br for \/data\/example\.json/],
+    ['unexpected identity encoding', 'identity', jsonResponse(semantic, { 'Content-Encoding': 'gzip' }), /gzip transport is not allowed for \/data\/example\.json/],
+    ['gzip bytes not decoded by fetch', 'gzip', new Response(gzipSync(JSON.stringify(semantic)), { headers: { 'Content-Encoding': 'gzip' } }), /gzip transport was not decoded by fetch for \/data\/example\.json/],
   ] as const) {
     const generation = generationFor(logicalPath, identity, encoding, `/objects/${identity.sha256}.json`)
     registerGenerationContext(generation, generation, '/data/generation.json')
