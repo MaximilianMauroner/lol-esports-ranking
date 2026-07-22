@@ -7,6 +7,7 @@ import { basename, dirname, extname, join, posix, relative, resolve, sep } from 
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
+import { assertStateManifestAuthority } from './incremental-state-storage.mjs'
 
 let activeGenerationCache = { expiresAt: 0, value: null }
 
@@ -74,6 +75,7 @@ export async function uploadRankingArtifacts({
   onStage,
   refreshTelemetry,
   beforePromotionWrite,
+  stateManifestAuthority,
   contentAddressed = parseBoolean(process.env.RANKING_BUCKET_CONTENT_ADDRESSED),
 } = {}) {
   if (!config.enabled) {
@@ -179,12 +181,23 @@ export async function uploadRankingArtifacts({
       throw new Error('Stale refresh worker cannot promote an active generation')
     }
     await beforePromotionWrite?.()
-    if (contentAddressed) {
-      await assertGenerationManifestAuthority(client, config, publicSync.manifestAuthority)
+    const [, verifiedState] = await Promise.all([
+      contentAddressed
+        ? assertGenerationManifestAuthority(client, config, publicSync.manifestAuthority)
+        : undefined,
+      stateManifestAuthority
+        ? assertStateManifestAuthority(client, config, stateManifestAuthority)
+        : undefined,
+    ])
+    if (verifiedState && verifiedState.manifest.generationId !== generationId) {
+      throw new Error('Incremental state generation does not match public generation')
     }
     const promotedAt = new Date(now()).toISOString()
+    const activePointerBase = { ...active.value }
+    delete activePointerBase.stateManifestKey
+    delete activePointerBase.stateManifestDigest
     const promotion = await writeBucketJson('active-generation.json', {
-      ...active.value,
+      ...activePointerBase,
       schemaVersion: 1,
       generationId,
       fencingToken,
@@ -193,6 +206,10 @@ export async function uploadRankingArtifacts({
         ? `generations/${safeObjectPath(generationId)}/manifest.json`
         : `${dataPrefix}/ranking-summary.json`),
       ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+      ...(verifiedState ? {
+        stateManifestKey: verifiedState.key,
+        stateManifestDigest: verifiedState.digest,
+      } : {}),
     }, {
       config,
       client,

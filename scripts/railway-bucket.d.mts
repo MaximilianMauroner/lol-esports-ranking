@@ -61,7 +61,9 @@ export function assertBucketLease(relativeKey: string, lease: BucketLeaseAuthori
   throwOnFailure?: boolean
   requireEtag?: boolean
 }): Promise<{ live: true; lease: Record<string, unknown>; etag?: string } | { live: false; reason: string }>
-export function uploadRankingArtifacts(options?: Record<string, unknown>): Promise<Record<string, unknown>>
+export function uploadRankingArtifacts(options?: Record<string, unknown> & {
+  stateManifestAuthority?: import('./incremental-state-storage.mjs').StateManifestAuthority
+}): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>
 export function downloadBucketObject(options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
