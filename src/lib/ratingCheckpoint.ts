@@ -1,7 +1,12 @@
 import { transparentGprModelMetadata } from './modelConfig'
+import {
+  isRatingCheckpointEventContract,
+  validateRatingCheckpointEventContract,
+  type RatingCheckpointEventContract,
+} from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
 
-export const RATING_CHECKPOINT_SCHEMA_VERSION = 1 as const
+export const RATING_CHECKPOINT_SCHEMA_VERSION = 2 as const
 
 export type RatingCheckpointIdentity = {
   importerVersion: string
@@ -11,12 +16,14 @@ export type RatingCheckpointIdentity = {
 
 export type RatingCheckpointBoundary = {
   processedThroughUtcDate: string
-  processedThroughSeriesId: string | null
+  processedThroughMatchId: string
 }
 
 export type RatingCheckpointMetadata = RatingCheckpointIdentity & RatingCheckpointBoundary & {
   schemaVersion: typeof RATING_CHECKPOINT_SCHEMA_VERSION
+  modelVersion: string
   modelConfigHash: string
+  eventContract: RatingCheckpointEventContract
   payloadDigest: string
 }
 
@@ -28,10 +35,12 @@ export type DecodedRatingCheckpoint = {
 export type RatingCheckpointInvalidationReason =
   | 'malformed'
   | 'schema-version'
+  | 'model-version'
   | 'model-config'
   | 'importer-version'
   | 'identity-taxonomy'
   | 'raw-ledger-prefix'
+  | 'event-contract'
   | 'payload-digest'
   | 'boundary-mismatch'
 
@@ -63,6 +72,7 @@ export function encodeRatingCheckpoint(
   state: RatingRunState,
   identity: RatingCheckpointIdentity,
   boundary: RatingCheckpointBoundary,
+  eventContract: RatingCheckpointEventContract,
 ) {
   assertBoundary(boundary.processedThroughUtcDate)
   if (state.processedThroughUtcDate !== boundary.processedThroughUtcDate) {
@@ -71,17 +81,30 @@ export function encodeRatingCheckpoint(
       `State boundary ${state.processedThroughUtcDate ?? 'unset'} does not match checkpoint boundary ${boundary.processedThroughUtcDate}`,
     )
   }
+  if (
+    !state.previousMatch
+    || state.previousMatch.id !== boundary.processedThroughMatchId
+    || state.previousMatch.date !== boundary.processedThroughUtcDate
+  ) {
+    throw new InvalidRatingCheckpointError(
+      'boundary-mismatch',
+      'Checkpoint terminal match/date identity does not match RatingRunState.previousMatch',
+    )
+  }
   assertIdentity(identity)
+  assertEventContract(state, boundary.processedThroughUtcDate, eventContract)
 
   const payload = encodeCanonical(state)
   const metadata: RatingCheckpointMetadata = {
     schemaVersion: RATING_CHECKPOINT_SCHEMA_VERSION,
+    modelVersion: transparentGprModelMetadata.version,
     modelConfigHash: transparentGprModelMetadata.configHash,
     importerVersion: identity.importerVersion,
     identityTaxonomyHash: identity.identityTaxonomyHash,
     rawLedgerPrefixHash: identity.rawLedgerPrefixHash,
     processedThroughUtcDate: boundary.processedThroughUtcDate,
-    processedThroughSeriesId: boundary.processedThroughSeriesId,
+    processedThroughMatchId: boundary.processedThroughMatchId,
+    eventContract,
     payloadDigest: digestCanonical(payload),
   }
   return stringifyCanonical({ metadata, payload })
@@ -97,6 +120,9 @@ export function decodeRatingCheckpoint(
 
   if (metadata.schemaVersion !== RATING_CHECKPOINT_SCHEMA_VERSION) {
     invalid('schema-version', `Unsupported rating checkpoint schema ${String(metadata.schemaVersion)}`)
+  }
+  if (metadata.modelVersion !== transparentGprModelMetadata.version) {
+    invalid('model-version', 'Rating checkpoint model implementation version does not match the running model')
   }
   if (metadata.modelConfigHash !== transparentGprModelMetadata.configHash) {
     invalid('model-config', 'Rating checkpoint model configuration does not match the running model')
@@ -122,9 +148,14 @@ export function decodeRatingCheckpoint(
   if (decoded.processedThroughUtcDate !== metadata.processedThroughUtcDate) {
     invalid('boundary-mismatch', 'Rating checkpoint state and metadata boundaries differ')
   }
-  if (decoded.previousMatch && decoded.previousMatch.date > metadata.processedThroughUtcDate) {
-    invalid('boundary-mismatch', 'Rating checkpoint previous match is after its UTC boundary')
+  if (
+    !decoded.previousMatch
+    || decoded.previousMatch.id !== metadata.processedThroughMatchId
+    || decoded.previousMatch.date !== metadata.processedThroughUtcDate
+  ) {
+    invalid('boundary-mismatch', 'Rating checkpoint terminal match/date identity does not match its state')
   }
+  assertEventContract(decoded, metadata.processedThroughUtcDate, metadata.eventContract)
 
   return {
     metadata: { ...metadata, schemaVersion: RATING_CHECKPOINT_SCHEMA_VERSION },
@@ -168,21 +199,25 @@ function parseEnvelope(serialized: string): CheckpointEnvelope {
   }
   const metadata = parsed.metadata
   const schemaVersion = metadata.schemaVersion
+  const modelVersion = metadata.modelVersion
   const modelConfigHash = metadata.modelConfigHash
   const importerVersion = metadata.importerVersion
   const identityTaxonomyHash = metadata.identityTaxonomyHash
   const rawLedgerPrefixHash = metadata.rawLedgerPrefixHash
   const processedThroughUtcDate = metadata.processedThroughUtcDate
-  const processedThroughSeriesId = metadata.processedThroughSeriesId
+  const processedThroughMatchId = metadata.processedThroughMatchId
+  const eventContract = metadata.eventContract
   const payloadDigest = metadata.payloadDigest
   if (
     typeof schemaVersion !== 'number'
+    || typeof modelVersion !== 'string'
     || typeof modelConfigHash !== 'string'
     || typeof importerVersion !== 'string'
     || typeof identityTaxonomyHash !== 'string'
     || typeof rawLedgerPrefixHash !== 'string'
     || typeof processedThroughUtcDate !== 'string'
-    || (processedThroughSeriesId !== null && typeof processedThroughSeriesId !== 'string')
+    || typeof processedThroughMatchId !== 'string'
+    || !isRatingCheckpointEventContract(eventContract)
     || typeof payloadDigest !== 'string'
   ) {
     return invalid('malformed', 'Rating checkpoint metadata is malformed')
@@ -190,12 +225,14 @@ function parseEnvelope(serialized: string): CheckpointEnvelope {
   return {
     metadata: {
       schemaVersion,
+      modelVersion,
       modelConfigHash,
       importerVersion,
       identityTaxonomyHash,
       rawLedgerPrefixHash,
       processedThroughUtcDate,
-      processedThroughSeriesId,
+      processedThroughMatchId,
+      eventContract,
       payloadDigest,
     },
     payload: parsed.payload,
@@ -216,12 +253,12 @@ function encodeCanonical(value: unknown): CanonicalJson {
       encodeCanonical(key),
       encodeCanonical(item),
     ] satisfies CanonicalJson[])
-      .sort((left, right) => stringifyCanonical(left[0] ?? null).localeCompare(stringifyCanonical(right[0] ?? null)))
+      .sort((left, right) => compareCodeUnits(stringifyCanonical(left[0] ?? null), stringifyCanonical(right[0] ?? null)))
     return { $checkpointType: 'map', entries }
   }
   if (value instanceof Set) {
     const values = Array.from(value.values(), encodeCanonical)
-      .sort((left, right) => stringifyCanonical(left).localeCompare(stringifyCanonical(right)))
+      .sort((left, right) => compareCodeUnits(stringifyCanonical(left), stringifyCanonical(right)))
     return { $checkpointType: 'set', values }
   }
   if (isRecord(value)) {
@@ -407,14 +444,31 @@ function isCanonicalJson(value: unknown): value is CanonicalJson {
 }
 
 function assertBoundary(date: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00.000Z`) : undefined
+  if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
     invalid('boundary-mismatch', `Invalid checkpoint UTC boundary ${date}`)
   }
+}
+
+function compareCodeUnits(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function assertIdentity(identity: RatingCheckpointIdentity) {
   if (!identity.importerVersion || !identity.identityTaxonomyHash || !identity.rawLedgerPrefixHash) {
     invalid('malformed', 'Checkpoint identity values must be non-empty')
+  }
+}
+
+function assertEventContract(
+  state: RatingRunState,
+  processedThroughUtcDate: string,
+  eventContract: RatingCheckpointEventContract,
+) {
+  try {
+    validateRatingCheckpointEventContract(state, processedThroughUtcDate, eventContract)
+  } catch (error) {
+    invalid('event-contract', error instanceof Error ? error.message : String(error))
   }
 }
 

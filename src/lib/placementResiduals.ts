@@ -193,7 +193,7 @@ export function applyCompletedPlacementResiduals({
   }
 }
 
-function eventTrackerKey(match: MatchRecord) {
+export function eventTrackerKey(match: MatchRecord) {
   return tournamentInstanceForEvent(match.event, match.season)?.id ?? `${match.season}\u0000${match.event}`
 }
 
