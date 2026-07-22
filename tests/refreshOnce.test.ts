@@ -428,6 +428,7 @@ for (const terminal of ['unchanged', 'stale-source'] as const) {
     assert.deepEqual(outcome.result.metrics, outcome.metricsFile)
     assert.deepEqual(outcome.result.metrics, outcome.result.state && (outcome.result.state as { lastRun: unknown }).lastRun)
     assert.deepEqual(outcome.result.metrics, outcome.triggerState.lastRun)
+    assert.deepEqual(outcome.result.metrics, outcome.remoteRefreshState.lastRun)
     assert.deepEqual(outcome.result.metrics, metricLog(outcome.logs))
     assert.equal(outcome.result.metrics?.result, terminal)
     assert.equal(outcome.result.metrics?.cause, 'pending-match')
@@ -473,6 +474,51 @@ test('child error preserves one canonical failed record across refresh, metrics,
   }
 })
 
+test('child telemetry error remains primary when the subprocess wrapper is generic', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-child-process-error-'))
+  const paths = refreshPaths(root)
+  const client = memoryS3()
+  const logs: string[] = []
+  let caught: Error & { refreshMetrics?: RefreshRunMetrics } | undefined
+  try {
+    await runRefreshOnce({
+      ...realParentOptions(paths, client, logs),
+      runId: 'child-process-error',
+      runChild: async () => {
+        const seed = await readRefreshMetrics(paths.metrics)
+        assert.ok(seed)
+        await writeRefreshMetrics(paths.metrics, {
+          ...seed,
+          finishedAt: '2026-07-22T00:00:31.000Z',
+          result: 'failed',
+          error: 'Leaguepedia provider request failed',
+        })
+        throw new Error('Refresh job exited with 1')
+      },
+    })
+  } catch (error) {
+    caught = error as Error & { refreshMetrics?: RefreshRunMetrics }
+  }
+  try {
+    assert.ok(caught)
+    assert.equal(caught.message, 'Leaguepedia provider request failed')
+    assert.equal((caught.cause as Error).message, 'Refresh job exited with 1')
+    assert.equal(caught.refreshMetrics?.error, 'Leaguepedia provider request failed')
+    assert.equal(caught.refreshMetrics?.processError, 'Refresh job exited with 1')
+    const refreshState = JSON.parse(await readFile(paths.refreshState, 'utf8'))
+    const metricsFile = JSON.parse(await readFile(paths.metrics, 'utf8'))
+    const triggerState = JSON.parse(client.objects.get('rankings/raw/refresh-trigger-state.json')!.body)
+    const remoteRefreshState = JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body)
+    assert.deepEqual(caught.refreshMetrics, refreshState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, remoteRefreshState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, metricsFile)
+    assert.deepEqual(caught.refreshMetrics, triggerState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, metricLog(logs))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function increasingClock() {
   let value = 0
   return () => ++value
@@ -500,6 +546,7 @@ async function runNonPublishingCase(terminal: 'unchanged' | 'stale-source') {
     refreshState: JSON.parse(await readFile(paths.refreshState, 'utf8')),
     metricsFile: JSON.parse(await readFile(paths.metrics, 'utf8')),
     triggerState: JSON.parse(client.objects.get('rankings/raw/refresh-trigger-state.json')!.body),
+    remoteRefreshState: JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body),
     cleanup: () => rm(root, { recursive: true, force: true }),
   }
 }

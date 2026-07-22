@@ -156,6 +156,7 @@ export async function runRefreshOnce(options = {}) {
     }
 
     const persistRefreshTelemetry = async (record) => {
+      await assertLive()
       const local = await readJsonIfExists(refreshStatePath) ?? { schemaVersion: 1, status: 'failed' }
       local.lastRun = record
       await writeLocalState(refreshStatePath, local)
@@ -284,13 +285,23 @@ export async function runRefreshOnce(options = {}) {
         finishProviderFetch('failed')
         childMetrics ??= await readRefreshMetrics(childMetricsPath)
         const parentFailure = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
+        const processError = errorMessage(error)
+        const childPrimaryError = childMetrics?.result === 'failed' && typeof childMetrics.error === 'string' && childMetrics.error.trim()
+          ? childMetrics.error
+          : undefined
+        const primaryError = childPrimaryError ?? processError
         finalRecord = childMetrics && childMetrics.result === 'failed'
           ? childMetrics
           : childMetrics ? completeRefreshMetrics(mergeRefreshMetrics(parentFailure, childMetrics)) : parentFailure
-        finalRecord = { ...finalRecord, result: 'failed', error: errorMessage(error) }
+        finalRecord = {
+          ...finalRecord,
+          result: 'failed',
+          error: primaryError,
+          ...(childPrimaryError && childPrimaryError !== processError ? { processError } : {}),
+        }
         try {
           await assertLive()
-          state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now(), reason: errorMessage(error) })
+          state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now(), reason: primaryError })
           state.fencingToken = authority.lease.fencingToken
           state.lastRun = finalRecord
           await persistRefreshTelemetry(finalRecord)
@@ -299,8 +310,10 @@ export async function runRefreshOnce(options = {}) {
         } catch (persistenceError) {
           logger.warn(`Unable to persist canonical refresh failure: ${errorMessage(persistenceError)}`)
         }
-        await (options.sendAlert ?? defaultSendAlert)(env, 'refresh-ingestion-failed', errorMessage(error), now, logger)
-        throw error
+        await (options.sendAlert ?? defaultSendAlert)(env, 'refresh-ingestion-failed', primaryError, now, logger)
+        throw childPrimaryError && childPrimaryError !== processError
+          ? new Error(childPrimaryError, { cause: error })
+          : error
       }
     }
 
@@ -309,6 +322,9 @@ export async function runRefreshOnce(options = {}) {
       freshness: { detectedAt: pendingDetectedAt(state, affectedIds), publishedAt: null },
     }))
     state.lastRun = finalRecord
+    if (finalRecord.result === 'unchanged' || finalRecord.result === 'stale-source') {
+      await persistRefreshTelemetry(finalRecord)
+    }
     await persistState(state)
     return { status: 'completed', state, metrics: finalRecord }
   } catch (error) {
