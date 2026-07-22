@@ -8,6 +8,11 @@ import { Readable } from 'node:stream'
 import { runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
 import { mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
 import { uploadRankingArtifacts } from '../scripts/railway-bucket.mjs'
+import type { RefreshRunMetrics } from '../scripts/refresh-metrics.mjs'
+
+type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
+const refreshDataScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
+const { refreshDataIfChanged } = await import(refreshDataScriptPath) as unknown as { refreshDataIfChanged: RefreshDataIfChanged }
 
 test('unchanged gated probe performs no broad provider fetch, crunch, or artifact upload', async () => {
   let childRuns = 0
@@ -64,6 +69,12 @@ test('lease loss during child work prevents trigger-state mutation after the chi
       if (assertions >= 3) throw new Error('Refresh lease is no longer authoritative: lease-changed')
       return { live: true as const }
     },
+    renewLease: async (_key: string, authority: { lease: Record<string, unknown> }) => ({
+      renewed: true as const,
+      lease: { ...authority.lease, expiresAt: '2026-07-22T00:45:00Z' },
+      etag: 'renewed',
+      promotionEtag: 'renewed',
+    }),
     releaseLease: async () => ({ released: false, reason: 'lease-changed' }),
     readBucketJson: async () => ({ found: false }),
     writeBucketJson: async () => ({ written: true, etag: `state-${++writes}` }),
@@ -282,6 +293,9 @@ test('real bucket child promotion hands authoritative ETag to parent before queu
   const metricsPath = join(root, 'metrics.json')
   const client = memoryS3()
   const config = bucketConfig()
+  const acquiredAt = Date.parse('2026-07-22T00:00:00Z')
+  let currentMs = acquiredAt
+  let childLeaseRemainingMs = 0
   let heartbeatTick: (() => void) | undefined
   try {
     await mkdir(publicDir, { recursive: true })
@@ -290,19 +304,26 @@ test('real bucket child promotion hands authoritative ETag to parent before queu
       env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_METRICS_PATH: metricsPath },
       runId: 'parent-child-etag',
       owner: 'worker',
-      now: () => new Date('2026-07-22T00:00:30Z'),
+      now: () => new Date(currentMs),
       monotonicNow: increasingClock(),
       bucketConfig: config,
       bucketClient: client,
       readLocalState: async () => undefined,
       writeLocalState: async () => undefined,
-      fetchProbe: async () => ({
-        checkedAt: '2026-07-22T00:00:30Z',
-        coverageComplete: true,
-        events: [{ matchId: 'match-1', state: 'completed', startTime: '2026-07-21T23:50:00Z', teams: [{ id: 'a', gameWins: 1 }, { id: 'b', gameWins: 0 }] }],
-      }),
+      fetchProbe: async () => {
+        currentMs = acquiredAt + (14 * 60_000) + 59_000
+        return {
+          checkedAt: new Date(currentMs).toISOString(),
+          coverageComplete: true,
+          events: [{ matchId: 'match-1', state: 'completed', startTime: '2026-07-21T23:50:00Z', teams: [{ id: 'a', gameWins: 1 }, { id: 'b', gameWins: 0 }] }],
+        }
+      },
       readJson: async () => ({ matches: [] }),
-      runChild: async ({ leaseKey, owner, fencingToken }: { leaseKey: string; owner: string; fencingToken: number }) => {
+      runChild: async ({ leaseKey, owner, fencingToken, promotionEtag }: { leaseKey: string; owner: string; fencingToken: number; promotionEtag: string }) => {
+        const leaseAtChildStart = client.objects.get('rankings/active-generation.json')!
+        const activeLease = JSON.parse(leaseAtChildStart.body) as { leaseExpiresAt: string }
+        childLeaseRemainingMs = Date.parse(activeLease.leaseExpiresAt) - currentMs
+        assert.equal(promotionEtag, leaseAtChildStart.etag)
         const seed = await readRefreshMetrics(metricsPath)
         assert.ok(seed)
         const uploaded = await uploadRankingArtifacts({
@@ -335,6 +356,7 @@ test('real bucket child promotion hands authoritative ETag to parent before queu
     const active = JSON.parse(activeObject.body)
     assert.equal(result.status, 'completed')
     assert.equal(active.generationId, 'generation-1')
+    assert.ok(childLeaseRemainingMs >= (30 * 60_000) + 60_000)
     assert.equal(typeof active.leaseRenewedAt, 'string')
     assert.equal(typeof active.leaseReleasedAt, 'string')
     assert.notEqual((result.metrics as { coordination?: { etag: string } }).coordination?.etag, activeObject.etag)
@@ -399,9 +421,185 @@ test('legacy parent returns the same finalized child record stored in state, rec
   }
 })
 
+for (const terminal of ['unchanged', 'stale-source'] as const) {
+  test(`${terminal} child record is identical across applicable non-publishing surfaces`, async () => {
+    const outcome = await runNonPublishingCase(terminal)
+    assert.deepEqual(outcome.result.metrics, outcome.refreshState.lastRun)
+    assert.deepEqual(outcome.result.metrics, outcome.metricsFile)
+    assert.deepEqual(outcome.result.metrics, outcome.result.state && (outcome.result.state as { lastRun: unknown }).lastRun)
+    assert.deepEqual(outcome.result.metrics, outcome.triggerState.lastRun)
+    assert.deepEqual(outcome.result.metrics, metricLog(outcome.logs))
+    assert.equal(outcome.result.metrics?.result, terminal)
+    assert.equal(outcome.result.metrics?.cause, 'pending-match')
+    assert.equal(outcome.result.metrics?.freshness.publishedAt, null)
+    assert.equal(outcome.client.objects.has('rankings/latest-publish.json'), false, 'non-publishing runs intentionally have no receipt')
+    await outcome.cleanup()
+  })
+}
+
+test('child error preserves one canonical failed record across refresh, metrics, trigger, error, and log surfaces', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-child-error-canonical-'))
+  const paths = refreshPaths(root)
+  const client = memoryS3()
+  const logs: string[] = []
+  let caught: Error & { refreshMetrics?: unknown } | undefined
+  try {
+    await runRefreshOnce({
+      ...realParentOptions(paths, client, logs),
+      runId: 'child-error-canonical',
+      runChild: async (context: Record<string, unknown>) => {
+        await runRefreshChildCase('error', paths, context)
+      },
+    })
+  } catch (error) {
+    caught = error as Error & { refreshMetrics?: unknown }
+  }
+  try {
+    assert.ok(caught)
+    assert.match(caught.message, /provider-child-error/)
+    const refreshState = JSON.parse(await readFile(paths.refreshState, 'utf8'))
+    const metricsFile = JSON.parse(await readFile(paths.metrics, 'utf8'))
+    const triggerState = JSON.parse(client.objects.get('rankings/raw/refresh-trigger-state.json')!.body)
+    const remoteRefreshState = JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body)
+    assert.deepEqual(caught.refreshMetrics, refreshState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, remoteRefreshState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, metricsFile)
+    assert.deepEqual(caught.refreshMetrics, triggerState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, metricLog(logs))
+    assert.equal((caught.refreshMetrics as { result: string }).result, 'failed')
+    assert.equal(client.objects.has('rankings/latest-publish.json'), false, 'failed pre-publish runs intentionally have no receipt')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function increasingClock() {
   let value = 0
   return () => ++value
+}
+
+type RefreshTestPaths = ReturnType<typeof refreshPaths>
+type ParentResult = { status: string; metrics?: RefreshRunMetrics; state?: unknown }
+
+async function runNonPublishingCase(terminal: 'unchanged' | 'stale-source') {
+  const root = await mkdtemp(join(tmpdir(), `refresh-${terminal}-canonical-`))
+  const paths = refreshPaths(root)
+  const client = memoryS3()
+  const logs: string[] = []
+  const result = await runRefreshOnce({
+    ...realParentOptions(paths, client, logs),
+    runId: `${terminal}-canonical`,
+    runChild: async (context: Record<string, unknown>) => {
+      await runRefreshChildCase(terminal, paths, context)
+    },
+  }) as ParentResult
+  return {
+    result,
+    client,
+    logs,
+    refreshState: JSON.parse(await readFile(paths.refreshState, 'utf8')),
+    metricsFile: JSON.parse(await readFile(paths.metrics, 'utf8')),
+    triggerState: JSON.parse(client.objects.get('rankings/raw/refresh-trigger-state.json')!.body),
+    cleanup: () => rm(root, { recursive: true, force: true }),
+  }
+}
+
+function realParentOptions(paths: RefreshTestPaths, client: ReturnType<typeof memoryS3>, logs: string[]) {
+  return {
+    env: {
+      RANKING_REFRESH_MODE: 'gated',
+      RANKING_REFRESH_METRICS_PATH: paths.metrics,
+      RANKING_REFRESH_STATE: paths.refreshState,
+    },
+    owner: 'worker',
+    now: () => new Date('2026-07-22T00:00:30Z'),
+    monotonicNow: increasingClock(),
+    bucketConfig: bucketConfig(),
+    bucketClient: client,
+    readLocalState: async () => undefined,
+    writeLocalState: async () => undefined,
+    fetchProbe: async () => ({
+      checkedAt: '2026-07-22T00:00:30Z',
+      coverageComplete: true,
+      events: [{ matchId: 'match-1', state: 'completed', startTime: '2026-07-21T23:50:00Z', teams: [{ id: 'a', gameWins: 1 }, { id: 'b', gameWins: 0 }] }],
+    }),
+    readJson: async () => ({ matches: [] }),
+    setInterval: () => ({ unref() {} }),
+    clearInterval: () => undefined,
+    logger: { log: (value: string) => logs.push(value), warn() {}, error: (value: string) => logs.push(value) },
+  }
+}
+
+async function runRefreshChildCase(kind: 'unchanged' | 'stale-source' | 'error', paths: RefreshTestPaths, context: Record<string, unknown>) {
+  let downloadCount = 0
+  const fakeRun = async (_command: string, args: string[]) => {
+    if (!args.includes('scripts/download-local-data.mjs')) throw new Error(`Unexpected child command ${args.join(' ')}`)
+    if (kind === 'error') throw new Error('provider-child-error')
+    downloadCount += 1
+    const outDir = argValue(args, '--out-dir')
+    const manifestPath = argValue(args, '--manifest')
+    if (kind === 'stale-source') {
+      await writeFile(manifestPath, `${JSON.stringify({
+        schemaVersion: 1,
+        start: '2026-07-21',
+        end: '2026-07-22',
+        files: { leaguepediaJson: [], oracleCsv: [], lolEsportsJson: [] },
+        sources: { leaguepedia: { status: 'failed' }, oracle: { status: 'failed' } },
+        warnings: ['provider unavailable'],
+      })}\n`)
+      return
+    }
+    const sourcePath = join(outDir, 'leaguepedia', 'scoreboard-games.json')
+    await mkdir(join(outDir, 'leaguepedia'), { recursive: true })
+    await writeFile(sourcePath, JSON.stringify({ fetchedAt: `2026-07-22T00:00:0${downloadCount}Z`, matches: [{ id: 'same', winner: 'Blue' }] }))
+    await writeFile(manifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      start: '2026-07-21',
+      end: '2026-07-22',
+      files: { leaguepediaJson: [sourcePath], oracleCsv: [], lolEsportsJson: [] },
+      sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'skipped' } },
+      warnings: [],
+    })}\n`)
+  }
+  const env = {
+    RANKING_REFRESH_MODE: 'gated',
+    RANKING_REFRESH_RUN_ID: String(context.runId),
+    RANKING_REFRESH_CAUSE: String(context.cause),
+    RANKING_REFRESH_AFFECTED_IDS: JSON.stringify(context.affectedIds ?? []),
+    ...(context.affectedDate ? { RANKING_REFRESH_AFFECTED_DATE: String(context.affectedDate) } : {}),
+    RANKING_REFRESH_METRICS_PATH: paths.metrics,
+    RANKING_REFRESH_STATE: paths.refreshState,
+    RANKING_BUCKET_RESTORE_RAW: 'false',
+    RANKING_BUCKET_UPLOAD_ENABLED: 'false',
+  }
+  const args = [
+    '--raw-dir', paths.raw,
+    '--manifest', paths.manifest,
+    '--state', paths.refreshState,
+    '--staging-dir', paths.staging,
+    '--skip-crunch',
+    '--end', '2026-07-22',
+  ]
+  await refreshDataIfChanged(args, { run: fakeRun, env })
+  if (kind === 'unchanged') await refreshDataIfChanged(args, { run: fakeRun, env })
+}
+
+function refreshPaths(root: string) {
+  const raw = join(root, 'raw')
+  return {
+    root,
+    raw,
+    manifest: join(raw, 'manifest.json'),
+    refreshState: join(raw, 'refresh-state.json'),
+    staging: join(root, 'staging'),
+    metrics: join(root, 'metrics.json'),
+  }
+}
+
+function argValue(args: string[], flag: string) {
+  const index = args.indexOf(flag)
+  assert.notEqual(index, -1)
+  return args[index + 1]
 }
 
 function baseOptions(logs: string[]) {
@@ -415,6 +613,12 @@ function baseOptions(logs: string[]) {
     bucketClient: {},
     acquireLease: async () => ({ acquired: true as const, lease: { owner: 'worker', fencingToken: 1, expiresAt: '2026-07-22T00:45:00Z' }, etag: 'lease' }),
     assertLease: async () => ({ live: true as const }),
+    renewLease: async (_key: string, authority: { lease: Record<string, unknown> }) => ({
+      renewed: true as const,
+      lease: { ...authority.lease, expiresAt: '2026-07-22T00:45:00Z' },
+      etag: 'renewed',
+      promotionEtag: 'renewed',
+    }),
     releaseLease: async () => ({ released: true }),
     readBucketJson: async () => ({ found: false }),
     readLocalState: async () => undefined,

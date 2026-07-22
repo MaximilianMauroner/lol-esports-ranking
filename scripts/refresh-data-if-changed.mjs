@@ -46,6 +46,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     now: wallNow,
     monotonicNow,
   })
+  let inheritedMetrics = await readRefreshMetrics(metricsPath)
   const rawDir = resolve(stringArg(args.rawDir ?? env.RANKING_RAW_DIR ?? 'data/raw'))
   const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
@@ -107,7 +108,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   let terminalResult = 'completed'
   let completedPromotionAt
   let completedPromotionEtag
-  let inheritedMetrics
+  let refreshState
   try {
     const providerStarted = monotonicNow()
     await (options.run ?? runCommand)(process.execPath, [
@@ -142,8 +143,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         restoreResult,
         healthFingerprint,
       })
+      refreshState = state
       terminalResult = 'stale-source'
-      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: terminalResult }))
+      canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, { result: terminalResult })
+      state.lastRun = canonicalMetrics
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; preserving existing ranking artifacts.`)
@@ -184,8 +187,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           reason: 'unchanged-source-data',
         },
       }
+      refreshState = state
       terminalResult = 'unchanged'
-      state.lastRun = completeRefreshMetrics(metrics.snapshot({ result: terminalResult }))
+      canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, { result: terminalResult })
+      state.lastRun = canonicalMetrics
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.log(`No source-data changes detected for ${start} through ${end}; skipping crunch.`)
@@ -245,6 +250,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             publicDataDir,
           },
     }
+    refreshState = state
 
     if (!skipCrunch) {
       const crunchStarted = monotonicNow()
@@ -264,7 +270,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       metrics.recordStage('crunch', { durationMs: monotonicNow() - crunchStarted })
     }
 
-    inheritedMetrics = await readRefreshMetrics(metricsPath)
+    inheritedMetrics = await readRefreshMetrics(metricsPath) ?? inheritedMetrics
     for (const stage of inheritedMetrics?.stages ?? []) {
       if (stage.result !== 'not-applicable') metrics.recordStage(stage.name, stage)
     }
@@ -383,6 +389,29 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
   } catch (error) {
     refreshError = error
+    canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, {
+      result: 'failed',
+      error,
+      freshness: { publishedAt: completedPromotionAt ?? null },
+    })
+    if (completedPromotionEtag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN) {
+      canonicalMetrics = {
+        ...canonicalMetrics,
+        coordination: {
+          owner: env.RANKING_REFRESH_LEASE_OWNER,
+          fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+          etag: completedPromotionEtag,
+        },
+      }
+    }
+    try {
+      const state = refreshState ?? await readJsonIfExists(statePath) ?? { schemaVersion: 1, status: 'failed' }
+      state.lastRun = canonicalMetrics
+      await mkdir(dirname(statePath), { recursive: true })
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+    } catch (stateError) {
+      console.warn(`Unable to persist failed refresh telemetry: ${errorMessage(stateError)}`)
+    }
     throw error
   } finally {
     if (metricsPath) {
@@ -410,6 +439,11 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
     await rm(stagingDir, { recursive: true, force: true })
   }
+}
+
+function aggregateMetrics(inherited, metrics, options) {
+  const own = completeRefreshMetrics(metrics.snapshot(options))
+  return inherited ? completeRefreshMetrics(mergeRefreshMetrics(inherited, own)) : own
 }
 
 export async function createSourceFingerprint(manifest) {
@@ -868,6 +902,10 @@ function parseAffectedIds(value) {
     // Accept a compact comma-separated fallback for manual runs.
   }
   return String(value).split(',').map((entry) => entry.trim()).filter(Boolean)
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function uniqueValues(values) {

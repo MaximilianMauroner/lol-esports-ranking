@@ -26,7 +26,7 @@ import {
   refreshTriggerCause,
   shouldFetchScoredProviders,
 } from './refresh-trigger-state.mjs'
-import { completeRefreshMetrics, createRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
+import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
 
 export async function runRefreshOnce(options = {}) {
   const env = options.env ?? process.env
@@ -37,6 +37,7 @@ export async function runRefreshOnce(options = {}) {
   const mode = refreshMode(env.RANKING_REFRESH_MODE)
   const runId = options.runId ?? randomUUID()
   const statePath = resolve(env.RANKING_TRIGGER_STATE ?? 'data/raw/refresh-trigger-state.json')
+  const refreshStatePath = resolve(env.RANKING_REFRESH_STATE ?? 'data/raw/refresh-state.json')
   const reconciliationPath = resolve(env.RANKING_RECONCILIATION_OUTPUT ?? 'data/raw/reconciliation.json')
   const childMetricsPath = resolve(env.RANKING_REFRESH_METRICS_PATH ?? `data/.refresh-metrics-${runId}.json`)
   const stateKey = env.RANKING_TRIGGER_STATE_KEY ?? 'raw/refresh-trigger-state.json'
@@ -154,6 +155,23 @@ export async function runRefreshOnce(options = {}) {
       stateEtag = result.etag
     }
 
+    const persistRefreshTelemetry = async (record) => {
+      const local = await readJsonIfExists(refreshStatePath) ?? { schemaVersion: 1, status: 'failed' }
+      local.lastRun = record
+      await writeLocalState(refreshStatePath, local)
+      const remote = await readRemote('raw/refresh-state.json', { config, client })
+      const remoteValue = {
+        ...(remote.found && remote.value && typeof remote.value === 'object' ? remote.value : local),
+        lastRun: record,
+      }
+      const result = await writeRemote('raw/refresh-state.json', remoteValue, {
+        config,
+        client,
+        ...(remote.found ? { ifMatch: remote.etag } : { ifNoneMatch: '*' }),
+      })
+      if (!result.written) throw new Error(result.conflict ? 'Refresh state changed concurrently' : 'Unable to persist refresh telemetry')
+    }
+
     const probeStarted = monotonicNow()
     try {
       const probe = await (options.fetchProbe ?? fetchScheduleProbe)({
@@ -190,15 +208,29 @@ export async function runRefreshOnce(options = {}) {
     } else {
       const dueMatchIds = duePendingMatchIds(state, now())
       const finishProviderFetch = tracker.startStage('provider-fetch', { pendingMatchCount: dueMatchIds.length })
+      let childMetrics
       try {
         await assertLive()
         await writeRefreshMetrics(childMetricsPath, completeRefreshMetrics(tracker.snapshot({
           result: 'running',
           freshness: { detectedAt: pendingDetectedAt(state, dueMatchIds) },
         })))
-        let childMetrics
         await heartbeat.runExclusive(async () => {
           if (heartbeat.error) throw heartbeat.error
+          const renewed = await (options.renewLease ?? renewBucketLease)(leaseKey, authority, {
+            ttlMs,
+            now: now(),
+            config,
+            client,
+          })
+          if (!renewed.renewed) throw new Error(`Refresh lease renewal before child failed: ${renewed.reason}`)
+          authority.lease = renewed.lease
+          authority.etag = renewed.etag
+          authority.promotionEtag = renewed.promotionEtag ?? renewed.etag
+          const remainingMs = new Date(authority.lease.expiresAt).getTime() - new Date(now()).getTime()
+          if (remainingMs < jobTimeoutMs + 60_000) {
+            throw new Error(`Renewed refresh lease has only ${remainingMs}ms remaining; ${jobTimeoutMs + 60_000}ms required`)
+          }
           let childError
           try {
             await (options.runChild ?? defaultRunChild)({
@@ -250,10 +282,23 @@ export async function runRefreshOnce(options = {}) {
         await (options.alertIfPendingIsOld ?? defaultAlertIfPendingIsOld)(env, state, now(), logger)
       } catch (error) {
         finishProviderFetch('failed')
-        await assertLive()
-        state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now(), reason: errorMessage(error) })
-        state.fencingToken = authority.lease.fencingToken
-        await persistState(state)
+        childMetrics ??= await readRefreshMetrics(childMetricsPath)
+        const parentFailure = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
+        finalRecord = childMetrics && childMetrics.result === 'failed'
+          ? childMetrics
+          : childMetrics ? completeRefreshMetrics(mergeRefreshMetrics(parentFailure, childMetrics)) : parentFailure
+        finalRecord = { ...finalRecord, result: 'failed', error: errorMessage(error) }
+        try {
+          await assertLive()
+          state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now(), reason: errorMessage(error) })
+          state.fencingToken = authority.lease.fencingToken
+          state.lastRun = finalRecord
+          await persistRefreshTelemetry(finalRecord)
+          await writeRefreshMetrics(childMetricsPath, finalRecord)
+          await persistState(state)
+        } catch (persistenceError) {
+          logger.warn(`Unable to persist canonical refresh failure: ${errorMessage(persistenceError)}`)
+        }
         await (options.sendAlert ?? defaultSendAlert)(env, 'refresh-ingestion-failed', errorMessage(error), now, logger)
         throw error
       }
@@ -267,7 +312,8 @@ export async function runRefreshOnce(options = {}) {
     await persistState(state)
     return { status: 'completed', state, metrics: finalRecord }
   } catch (error) {
-    finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
+    finalRecord ??= completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
+    if (error instanceof Error) error.refreshMetrics = finalRecord
     throw error
   } finally {
     const finalizationErrors = []
@@ -434,6 +480,14 @@ async function writeLocalState(path, value) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
+}
+
+async function readJsonIfExists(path) {
+  try {
+    return await readJson(path)
+  } catch {
+    return undefined
+  }
 }
 
 function pendingAffectedDate(state, matchIds) {
