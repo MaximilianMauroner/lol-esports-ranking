@@ -6,6 +6,14 @@ export const REFRESH_STAGE_NAMES = [
   'probe',
   'provider-fetch',
   'fingerprint-import',
+  'classification',
+  'checkpoint-restore',
+  'checkpoint-validation',
+  'replay',
+  'external-causal-recompute',
+  'dependency-materialization',
+  'semantic-parity',
+  'state-persistence',
   'crunch',
   'public-serialization',
   'hashing',
@@ -30,6 +38,7 @@ export function createRefreshMetrics({
   let currentCause = cause
   let currentAffectedIds = affectedIds
   let currentAffectedDate = affectedDate
+  let checkpoint = { applicable: false, reason: 'incremental-disabled-or-not-classified' }
   const stages = []
 
   function sampleRss() {
@@ -42,6 +51,9 @@ export function createRefreshMetrics({
       if (nextCause) currentCause = nextCause
       if (nextAffectedIds) currentAffectedIds = nextAffectedIds
       if (nextAffectedDate) currentAffectedDate = nextAffectedDate
+    },
+    setCheckpoint(nextCheckpoint = {}) {
+      checkpoint = { ...nextCheckpoint }
     },
     startStage(name, input = {}) {
       const stageStartedAtMs = now()
@@ -97,10 +109,7 @@ export function createRefreshMetrics({
           detectedAt: freshness.detectedAt ?? null,
           publishedAt: freshness.publishedAt ?? null,
         },
-        checkpoint: {
-          applicable: false,
-          reason: 'incremental-rating-checkpoints-not-implemented',
-        },
+        checkpoint,
         stages: stages.map((stage) => ({ ...stage })),
         ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
       }
@@ -141,6 +150,7 @@ export function mergeRefreshMetrics(parent, child) {
       detectedAt: earliestTimestamp(parent.freshness?.detectedAt, child.freshness?.detectedAt),
       publishedAt,
     },
+    checkpoint: child.checkpoint?.applicable ? child.checkpoint : parent.checkpoint,
     stages: [...byName.values()],
   }
 }

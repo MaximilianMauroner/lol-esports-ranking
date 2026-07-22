@@ -59,7 +59,9 @@ export type StateManifestAuthority = {
   manifest?: IncrementalStateManifest
 }
 
-export function prepareStateObject(value: Record<string, unknown>): PreparedStateObject
+export function prepareStateObject(value: object): PreparedStateObject
+export function stateObjectReferenceFor(prepared: PreparedStateObject): StateObjectReference
+export function readStoredJsonStateObject(client: BucketClient, config: BucketStorageConfig, reference: StateObjectReference): Promise<Record<string, unknown>>
 export function prepareContentAddressedState(options: {
   generationId: string
   runId?: string
@@ -104,6 +106,7 @@ export function readActiveIncrementalState(options: {
     active: Record<string, unknown>
     etag?: string
     manifest: IncrementalStateManifest
+    canonicalLedger: Record<string, unknown>
     checkpoints: Array<{
       candidate: IncrementalStateManifest['checkpoints'][number]
       bundle: Record<string, unknown>

@@ -147,6 +147,7 @@ export async function writeIncrementalStateManifest(client, config, preparedStat
   if (canonicalJsonFor(manifest) !== prepared.canonicalJson) {
     throw new Error('Invalid incremental state: prepared manifest bytes do not match manifest')
   }
+  await readStoredJsonStateObject(client, config, manifest.canonicalLedger)
   for (const candidate of manifest.checkpoints) await assertStoredStateObject(client, config, candidate)
   const relativeKey = `state/generations/${safeStatePath(manifest.generationId)}.json`
   const key = stateBucketKey(config, relativeKey)
@@ -217,6 +218,7 @@ export async function assertStateManifestAuthority(client, config, authority, { 
     throw new Error('Incremental state manifest authority does not match stored manifest')
   }
   if (verifyObjects) {
+    await readStoredJsonStateObject(client, config, parsed.canonicalLedger)
     for (const candidate of parsed.checkpoints) {
       const bundle = await readStoredStateObject(client, config, candidate)
       assertMatchingCompatibility(bundle.compatibility, parsed.compatibility)
@@ -266,6 +268,7 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
   const expectedKey = stateBucketKey(config, `state/generations/${safeStatePath(manifest.generationId)}.json`)
   if (expectedKey !== active.stateManifestKey) throw new Error('Active incremental state manifest key is not canonical')
   const checkpoints = []
+  const canonicalLedger = await readStoredJsonStateObject(client, config, manifest.canonicalLedger)
   if (verifyObjects) {
     for (const candidate of manifest.checkpoints) {
       const bundle = await readStoredStateObject(client, config, candidate)
@@ -273,7 +276,49 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
       checkpoints.push({ candidate, bundle })
     }
   }
-  return { found: true, active, etag: activeObject.ETag, manifest, checkpoints }
+  return { found: true, active, etag: activeObject.ETag, manifest, canonicalLedger, checkpoints }
+}
+
+export async function readStoredJsonStateObject(client, config, reference) {
+  const parsedReference = parseObjectReference(reference, 'state object reference')
+  const expectedReferenceKey = `state/objects/sha256/${parsedReference.sha256}`
+  if (parsedReference.key !== expectedReferenceKey) throw new Error('Incremental state object key is not canonical')
+  const expectedKey = stateBucketKey(config, expectedReferenceKey)
+  const remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
+  const compressed = await bodyBytes(remote.Body)
+  if (Number(remote.ContentLength) !== parsedReference.compressedBytes
+    || compressed.byteLength !== parsedReference.compressedBytes
+    || remote.ContentType !== 'application/json; charset=utf-8'
+    || remote.ContentEncoding !== 'gzip'
+    || remote.Metadata?.sha256 !== parsedReference.sha256
+    || remote.Metadata?.['semantic-bytes'] !== String(parsedReference.bytes)
+    || remote.Metadata?.encoding !== 'gzip') {
+    throw new Error(`Incremental state object metadata mismatch: ${expectedKey}`)
+  }
+  let canonicalBytes
+  try {
+    canonicalBytes = gunzipSync(compressed)
+  } catch (error) {
+    throw new Error(`Incremental state object gzip is corrupt: ${expectedKey}`, { cause: error })
+  }
+  const digest = createHash('sha256').update(canonicalBytes).digest('hex')
+  if (canonicalBytes.byteLength !== parsedReference.bytes || digest !== parsedReference.sha256) {
+    throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
+  }
+  try {
+    const value = JSON.parse(canonicalBytes.toString('utf8'))
+    if (canonicalJsonFor(value) !== canonicalBytes.toString('utf8')) {
+      throw new Error(`Incremental state object is not canonical JSON: ${expectedKey}`)
+    }
+    return value
+  } catch (error) {
+    throw new Error(`Incremental state object JSON is corrupt: ${expectedKey}`, { cause: error })
+  }
+}
+
+export function stateObjectReferenceFor(prepared) {
+  assertPreparedObject(prepared)
+  return stateObjectReference(prepared)
 }
 
 export function parseIncrementalStateManifest(value) {
@@ -355,42 +400,8 @@ async function assertStoredStateObject(client, config, candidate) {
 }
 
 async function readStoredStateObject(client, config, candidate) {
-  const reference = candidate.object
-  const parsedReference = parseObjectReference(reference, 'state object reference')
-  const expectedReferenceKey = `state/objects/sha256/${parsedReference.sha256}`
-  if (parsedReference.key !== expectedReferenceKey) throw new Error('Incremental state object key is not canonical')
-  const expectedKey = stateBucketKey(config, expectedReferenceKey)
-  const remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
-  const compressed = await bodyBytes(remote.Body)
-  if (Number(remote.ContentLength) !== parsedReference.compressedBytes
-    || compressed.byteLength !== parsedReference.compressedBytes
-    || remote.ContentType !== 'application/json; charset=utf-8'
-    || remote.ContentEncoding !== 'gzip'
-    || remote.Metadata?.sha256 !== parsedReference.sha256
-    || remote.Metadata?.['semantic-bytes'] !== String(parsedReference.bytes)
-    || remote.Metadata?.encoding !== 'gzip') {
-    throw new Error(`Incremental state object metadata mismatch: ${expectedKey}`)
-  }
-  let canonicalBytes
-  try {
-    canonicalBytes = gunzipSync(compressed)
-  } catch (error) {
-    throw new Error(`Incremental state object gzip is corrupt: ${expectedKey}`, { cause: error })
-  }
-  const digest = createHash('sha256').update(canonicalBytes).digest('hex')
-  if (canonicalBytes.byteLength !== parsedReference.bytes || digest !== parsedReference.sha256) {
-    throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
-  }
-  let value
-  try {
-    value = JSON.parse(canonicalBytes.toString('utf8'))
-  } catch (error) {
-    throw new Error(`Incremental state object JSON is corrupt: ${expectedKey}`, { cause: error })
-  }
+  const value = await readStoredJsonStateObject(client, config, candidate.object)
   const bundle = parseCheckpointBundle(value, candidate)
-  if (canonicalJsonFor(bundle) !== canonicalBytes.toString('utf8')) {
-    throw new Error(`Incremental state object is not canonical JSON: ${expectedKey}`)
-  }
   return bundle
 }
 

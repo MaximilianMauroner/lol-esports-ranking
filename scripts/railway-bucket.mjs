@@ -3,6 +3,7 @@ import { createReadStream, createWriteStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { pipeline } from 'node:stream/promises'
+import { gunzipSync } from 'node:zlib'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -76,6 +77,7 @@ export async function uploadRankingArtifacts({
   refreshTelemetry,
   beforePromotionWrite,
   stateManifestAuthority,
+  publicArtifactPatch,
   contentAddressed = parseBoolean(process.env.RANKING_BUCKET_CONTENT_ADDRESSED),
 } = {}) {
   if (!config.enabled) {
@@ -108,7 +110,9 @@ export async function uploadRankingArtifacts({
   })
   let stageStarted = monotonicNow()
   const publicSync = contentAddressed
-    ? await uploadContentAddressedPublicArtifacts(client, config, publicDataDir, generationId)
+    ? publicArtifactPatch
+      ? await uploadContentAddressedPublicArtifactPatch(client, config, { generationId, ...publicArtifactPatch })
+      : await uploadContentAddressedPublicArtifacts(client, config, publicDataDir, generationId)
     : { uploaded: await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json'), unchanged: [] }
   uploads.push(...publicSync.uploaded)
   unchanged.push(...publicSync.unchanged)
@@ -119,6 +123,9 @@ export async function uploadRankingArtifacts({
     semanticLogicalBytes: publicSync.semanticLogicalBytes,
     compressedLogicalBytes: publicSync.compressedLogicalBytes,
     uniqueCompressedBytes: publicSync.uniqueCompressedBytes,
+    ...(publicSync.changedLogicalPaths ? { changedLogicalPaths: publicSync.changedLogicalPaths } : {}),
+    ...(publicSync.reusedLogicalPaths ? { reusedLogicalPaths: publicSync.reusedLogicalPaths } : {}),
+    ...(publicSync.removedLogicalPaths ? { removedLogicalPaths: publicSync.removedLogicalPaths } : {}),
   } : undefined
   onStage?.('artifact-upload', {
     durationMs: monotonicNow() - stageStarted,
@@ -357,6 +364,36 @@ export async function readBucketJson(relativeKey, {
     if (isMissingObjectError(error)) return { found: false, key }
     throw error
   }
+}
+
+export async function readActiveContentAddressedGeneration({
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+} = {}) {
+  const active = await readBucketJson('active-generation.json', { config, client })
+  if (!active.found || active.value?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE) {
+    return { found: false, reason: active.found ? 'legacy-active-generation' : 'active-generation-missing', active: active.value, etag: active.etag }
+  }
+  const generationId = active.value.generationId
+  const expectedKey = bucketKey(config, `generations/${safeObjectPath(generationId)}/manifest.json`)
+  if (active.value.manifestKey !== expectedKey) throw new Error('Active public generation manifest key is not canonical')
+  const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
+  const body = await bodyText(object.Body)
+  const manifest = JSON.parse(body)
+  if (manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== generationId
+    || !manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) {
+    throw new Error('Active public generation manifest is invalid')
+  }
+  const rootIdentity = manifest.artifacts['/data/ranking-summary.json']
+  if (!rootIdentity || !/^[a-f0-9]{64}$/.test(rootIdentity.sha256 ?? '')) throw new Error('Active public generation has no valid root artifact')
+  const rootObject = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: bucketKey(config, `objects/sha256/${rootIdentity.sha256}`) }))
+  const compressed = await bodyBytes(rootObject.Body)
+  const decoded = rootObject.ContentEncoding === 'gzip' ? gunzipSync(compressed) : compressed
+  const rootEnvelope = JSON.parse(decoded.toString('utf8'))
+  if (rootEnvelope.artifactKind !== 'public-semantic-artifact' || !rootEnvelope.content || typeof rootEnvelope.content !== 'object') {
+    throw new Error('Active public root semantic artifact is invalid')
+  }
+  return { found: true, active: active.value, etag: active.etag, manifest, rootArtifact: rootEnvelope.content }
 }
 
 export async function writeBucketJson(relativeKey, value, {
@@ -694,6 +731,98 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
     compressedLogicalBytes: prepared.reduce((total, artifact) => total + artifact.compressedBytes, 0),
     semanticLogicalBytes: prepared.reduce((total, artifact) => total + artifact.bytes, 0),
     uniqueCompressedBytes: [...uniqueArtifacts.values()].reduce((total, artifact) => total + artifact.compressedBytes, 0),
+  }
+}
+
+/**
+ * Composes a complete immutable generation from the prior logical mapping and
+ * a validated set of changed values. Only content hashes absent from storage
+ * are uploaded; removed logical paths are deliberately omitted.
+ */
+export async function uploadContentAddressedPublicArtifactPatch(client, config, {
+  generationId,
+  previousManifest,
+  changedArtifacts,
+  removedLogicalPaths = [],
+  expectedLogicalPaths,
+}) {
+  if (previousManifest?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || !previousManifest?.artifacts) {
+    throw new Error('Content-addressed artifact patch requires a compatible previous generation manifest')
+  }
+  const changedByPath = new Map()
+  for (const entry of changedArtifacts ?? []) {
+    const logicalPath = canonicalPublicLogicalPath(entry.logicalPath)
+    if (changedByPath.has(logicalPath)) throw new Error(`Duplicate changed public artifact logical path: ${logicalPath}`)
+    changedByPath.set(logicalPath, { logicalPath, value: entry.value, ...prepareSemanticArtifact(entry.value) })
+  }
+  const root = changedByPath.get('/data/ranking-summary.json')
+  if (!root) throw new Error('Content-addressed artifact patch must include ranking-summary.json for generation provenance')
+  const removed = new Set(removedLogicalPaths.map((path) => canonicalPublicLogicalPath(path)))
+  const entriesByPath = new Map()
+  for (const [logicalPath, identity] of Object.entries(previousManifest.artifacts)) {
+    const canonical = canonicalPublicLogicalPath(logicalPath)
+    if (removed.has(canonical) || changedByPath.has(canonical)) continue
+    if (identity?.logicalPath !== canonical || !/^[a-f0-9]{64}$/.test(identity?.sha256 ?? '')
+      || !Number.isSafeInteger(identity?.bytes) || identity.bytes <= 0) {
+      throw new Error(`Previous generation has an invalid logical mapping for ${canonical}`)
+    }
+    entriesByPath.set(canonical, { logicalPath: canonical, digest: identity.sha256, bytes: identity.bytes })
+  }
+  for (const artifact of changedByPath.values()) {
+    entriesByPath.set(artifact.logicalPath, {
+      logicalPath: artifact.logicalPath,
+      digest: artifact.digest,
+      bytes: artifact.bytes,
+    })
+  }
+  const actualPaths = [...entriesByPath.keys()].sort()
+  if (expectedLogicalPaths) {
+    const expectedPaths = [...new Set(expectedLogicalPaths.map((path) => canonicalPublicLogicalPath(path)))].sort()
+    if (actualPaths.join('\u0000') !== expectedPaths.join('\u0000')) {
+      const missing = expectedPaths.filter((path) => !entriesByPath.has(path))
+      const unexpected = actualPaths.filter((path) => !expectedPaths.includes(path))
+      throw new Error(`Incomplete public artifact patch mapping; missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}`)
+    }
+  }
+  if (!entriesByPath.has('/data/ranking-summary.json')) throw new Error('Public artifact patch removed the root manifest')
+
+  const uploaded = []
+  const unchanged = []
+  const uniqueChanged = new Map()
+  for (const artifact of changedByPath.values()) {
+    const existing = uniqueChanged.get(artifact.digest)
+    if (existing && existing.canonicalJson !== artifact.canonicalJson) {
+      throw new Error(`Local semantic SHA-256 collision: ${artifact.digest}`)
+    }
+    uniqueChanged.set(artifact.digest, existing ?? artifact)
+  }
+  for (const artifact of uniqueChanged.values()) {
+    const result = await syncContentAddressedObject(client, config, artifact)
+    if (result.status === 'unchanged') unchanged.push(result)
+    else uploaded.push(result)
+  }
+  const manifest = createGenerationManifest({
+    generationId,
+    rootManifest: root.value,
+    entries: [...entriesByPath.values()],
+  })
+  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
+  if (manifestSync.result.status === 'unchanged') unchanged.push(manifestSync.result)
+  else uploaded.push(manifestSync.result)
+  const semanticLogicalBytes = [...entriesByPath.values()].reduce((sum, entry) => sum + entry.bytes, 0)
+  return {
+    uploaded,
+    unchanged,
+    manifest,
+    manifestAuthority: manifestSync.authority,
+    objectCount: new Set([...entriesByPath.values()].map((entry) => entry.digest)).size,
+    logicalArtifactCount: entriesByPath.size,
+    compressedLogicalBytes: [...changedByPath.values()].reduce((sum, entry) => sum + entry.compressedBytes, 0),
+    semanticLogicalBytes,
+    uniqueCompressedBytes: [...uniqueChanged.values()].reduce((sum, entry) => sum + entry.compressedBytes, 0),
+    changedLogicalPaths: [...changedByPath.keys()].sort(),
+    reusedLogicalPaths: actualPaths.filter((path) => !changedByPath.has(path)),
+    removedLogicalPaths: [...removed].sort(),
   }
 }
 
@@ -1117,8 +1246,13 @@ function isPreconditionError(error) {
 
 async function bodyText(body) {
   if (typeof body?.transformToString === 'function') return body.transformToString()
-  if (typeof body === 'string' || Buffer.isBuffer(body) || body instanceof Uint8Array) return Buffer.from(body).toString('utf8')
+  return (await bodyBytes(body)).toString('utf8')
+}
+
+async function bodyBytes(body) {
+  if (typeof body?.transformToByteArray === 'function') return Buffer.from(await body.transformToByteArray())
+  if (typeof body === 'string' || Buffer.isBuffer(body) || body instanceof Uint8Array) return Buffer.from(body)
   const chunks = []
   for await (const chunk of body ?? []) chunks.push(Buffer.from(chunk))
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks)
 }

@@ -80,6 +80,60 @@ export function buildCanonicalMatchLedger(
   }
 }
 
+export function parseCanonicalMatchLedger(value: unknown): CanonicalMatchLedger {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Canonical match ledger must be an object')
+  const record = value as Record<string, unknown>
+  if (record.schemaVersion !== CANONICAL_MATCH_LEDGER_SCHEMA_VERSION || !Array.isArray(record.rows)
+    || typeof record.digest !== 'string') throw new Error('Canonical match ledger schema is invalid')
+  const context = record.compatibility
+  if (!context || typeof context !== 'object' || Array.isArray(context)) throw new Error('Canonical match ledger compatibility is invalid')
+  const compatibilityRecord = context as Record<string, unknown>
+  const compatibility: RankingCompatibility = {
+    modelVersion: requiredString(compatibilityRecord.modelVersion, 'modelVersion'),
+    modelConfigHash: requiredString(compatibilityRecord.modelConfigHash, 'modelConfigHash'),
+    importerVersion: requiredString(compatibilityRecord.importerVersion, 'importerVersion'),
+    identityTaxonomyHash: requiredString(compatibilityRecord.identityTaxonomyHash, 'identityTaxonomyHash'),
+  }
+  const rows = record.rows.map((row, index): CanonicalMatchLedgerRow => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error(`Canonical ledger row ${index} is invalid`)
+    const item = row as Record<string, unknown>
+    const match = item.match
+    if (!match || typeof match !== 'object' || Array.isArray(match)) throw new Error(`Canonical ledger row ${index} match is invalid`)
+    return {
+      key: requiredString(item.key, `rows[${index}].key`),
+      utcDate: requiredString(item.utcDate, `rows[${index}].utcDate`),
+      scoringDigest: requiredString(item.scoringDigest, `rows[${index}].scoringDigest`),
+      artifactDigest: requiredString(item.artifactDigest, `rows[${index}].artifactDigest`),
+      scheduleReceiptIdentity: requiredString(item.scheduleReceiptIdentity, `rows[${index}].scheduleReceiptIdentity`),
+      contextReceiptIdentity: requiredString(item.contextReceiptIdentity, `rows[${index}].contextReceiptIdentity`),
+      provenanceReceiptIdentity: requiredString(item.provenanceReceiptIdentity, `rows[${index}].provenanceReceiptIdentity`),
+      match: match as MatchRecord,
+    }
+  }).sort(compareLedgerRows)
+  const parsed: CanonicalMatchLedger = {
+    schemaVersion: CANONICAL_MATCH_LEDGER_SCHEMA_VERSION,
+    compatibility,
+    scheduleReceiptIdentity: requiredString(record.scheduleReceiptIdentity, 'scheduleReceiptIdentity'),
+    contextReceiptIdentity: requiredString(record.contextReceiptIdentity, 'contextReceiptIdentity'),
+    provenanceReceiptIdentity: requiredString(record.provenanceReceiptIdentity, 'provenanceReceiptIdentity'),
+    rows,
+    digest: requiredString(record.digest, 'digest'),
+  }
+  const rebuilt = stableDigest({
+    compatibility,
+    scheduleReceiptIdentity: parsed.scheduleReceiptIdentity,
+    contextReceiptIdentity: parsed.contextReceiptIdentity,
+    provenanceReceiptIdentity: parsed.provenanceReceiptIdentity,
+    rows: rows.map((row) => ({
+      key: row.key, utcDate: row.utcDate, scoringDigest: row.scoringDigest, artifactDigest: row.artifactDigest,
+      scheduleReceiptIdentity: row.scheduleReceiptIdentity, contextReceiptIdentity: row.contextReceiptIdentity,
+      provenanceReceiptIdentity: row.provenanceReceiptIdentity,
+    })),
+  })
+  if (rebuilt !== parsed.digest) throw new Error('Canonical match ledger digest mismatch')
+  return parsed
+}
+
 export function classifyRankingChange(
   previous: CanonicalMatchLedger,
   current: CanonicalMatchLedger,
@@ -205,4 +259,9 @@ function earliestDate(...groups: readonly CanonicalMatchLedgerRow[][]) {
 
 function isString(value: string | undefined): value is string {
   return value !== undefined
+}
+
+function requiredString(value: unknown, label: string) {
+  if (typeof value !== 'string' || !value) throw new Error(`Canonical match ledger ${label} must be a non-empty string`)
+  return value
 }

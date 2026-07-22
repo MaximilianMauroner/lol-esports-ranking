@@ -19,6 +19,10 @@ export function readBucketJson(relativeKey: string, options?: { config?: unknown
   etag?: string
   value?: Record<string, unknown>
 }>
+export function readActiveContentAddressedGeneration(options?: { config?: unknown; client?: BucketClient }): Promise<
+  | { found: false; reason: string; active?: Record<string, unknown>; etag?: string }
+  | { found: true; active: Record<string, unknown>; etag?: string; manifest: Record<string, unknown>; rootArtifact: Record<string, unknown> }
+>
 export function writeBucketJson(relativeKey: string, value: unknown, options?: {
   ifMatch?: string
   ifNoneMatch?: string
@@ -63,6 +67,7 @@ export function assertBucketLease(relativeKey: string, lease: BucketLeaseAuthori
 }): Promise<{ live: true; lease: Record<string, unknown>; etag?: string } | { live: false; reason: string }>
 export function uploadRankingArtifacts(options?: Record<string, unknown> & {
   stateManifestAuthority?: import('./incremental-state-storage.mjs').StateManifestAuthority
+  publicArtifactPatch?: PublicArtifactPatch
 }): Promise<Record<string, unknown>>
 export function getBucketObject(relativePath: string, options?: Record<string, unknown>): Promise<Record<string, unknown> & { found: boolean }>
 export function downloadBucketDirectory(options?: Record<string, unknown>): Promise<Record<string, unknown>>
@@ -84,6 +89,30 @@ export function uploadContentAddressedPublicArtifacts(
   compressedLogicalBytes: number
   semanticLogicalBytes: number
   uniqueCompressedBytes: number
+}>
+export type PublicArtifactPatch = {
+  previousManifest: Record<string, unknown>
+  changedArtifacts: Array<{ logicalPath: string; value: unknown }>
+  removedLogicalPaths?: string[]
+  expectedLogicalPaths?: string[]
+}
+export function uploadContentAddressedPublicArtifactPatch(
+  client: BucketClient,
+  config: BucketStorageConfig,
+  patch: PublicArtifactPatch & { generationId: string },
+): Promise<{
+  uploaded: SyncedArtifact[]
+  unchanged: SyncedArtifact[]
+  manifest: Record<string, unknown>
+  manifestAuthority: { key: string; etag?: string; bytes: number; digest: string }
+  objectCount: number
+  logicalArtifactCount: number
+  compressedLogicalBytes: number
+  semanticLogicalBytes: number
+  uniqueCompressedBytes: number
+  changedLogicalPaths: string[]
+  reusedLogicalPaths: string[]
+  removedLogicalPaths: string[]
 }>
 export function uploadRawSourceFiles(...args: unknown[]): Promise<Record<string, unknown>>
 export function syncRawFile(...args: unknown[]): Promise<Record<string, unknown>>

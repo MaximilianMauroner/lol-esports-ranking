@@ -98,7 +98,7 @@ export const ratingCheckpointInventory = {
     },
   ],
   causalContextRequirement: 'Each summary binds a canonical fingerprint of all serializable non-row inputs. Custom functions require caller-supplied semantic ids; missing or mismatched proof always requires a full replay.',
-  activation: 'foundation-only-production-disabled',
+  activation: 'feature-gated-production-disabled',
 } as const
 
 export type RatingCheckpointEventInventoryEntry = {

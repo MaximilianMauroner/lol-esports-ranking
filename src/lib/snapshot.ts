@@ -21,7 +21,7 @@ import { leagueTierFor } from '../data/leagueTiers'
 import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../data/regionTaxonomy'
 import { canonicalTeamNameFor, regionForLeague } from '../data/teamIdentity'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
-import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
+import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata, type RankingModelOutput } from './model'
 import { publishedRatingScale } from './modelConfig'
 import {
   teamNamesForDssContext,
@@ -1219,6 +1219,7 @@ export function createStaticRankingData({
   externalSources = [],
   tournamentScheduleReferences = [],
   pipelineAudit,
+  precomputedGlobalRanking,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1229,6 +1230,8 @@ export function createStaticRankingData({
   externalSources?: DataSourceInfo[]
   tournamentScheduleReferences?: TournamentScheduleReference[]
   pipelineAudit?: { importedMatchCount: number }
+  /** A rating-checkpoint replay may provide the authoritative global model. */
+  precomputedGlobalRanking?: RankingModelOutput
 }): StaticRankingData {
   const ratingUniverse = filterPublishedRatingUniverseInput(matches, teams)
   matches = ratingUniverse.matches
@@ -1263,7 +1266,7 @@ export function createStaticRankingData({
   )
   const regions = ['All', ...currentTopTierRegions.filter((region) => observedCurrentRegions.has(region))] as Array<Region | 'All'>
   const snapshots: Record<string, ComputedRankingSnapshot> = {}
-  const globalRanking = buildRankingModel(matches, teams, rankingOptions)
+  const globalRanking = precomputedGlobalRanking ?? buildRankingModel(matches, teams, rankingOptions)
   const globalRankingScope: RankingScope = { ranking: globalRanking, teams }
   const seasonRankingCache = new Map<string, RankingScope>()
   const rollingBaselineCache = new Map<string, RollingRankingState>()

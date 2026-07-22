@@ -5,8 +5,10 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, uploadRankingArtifacts } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, createBucketClient, downloadBucketDirectory, downloadBucketObject, readActiveContentAddressedGeneration, uploadRankingArtifacts } from './railway-bucket.mjs'
 import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
+import { readActiveIncrementalState } from './incremental-state-storage.mjs'
+import { buildRankingIncrementally, persistIncrementalStateBuild } from './incremental-ranking-orchestrator.ts'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -27,7 +29,7 @@ const wrapperOnlyArgs = new Set([
   'state',
 ])
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await refreshDataIfChanged(process.argv.slice(2))
 }
 
@@ -59,6 +61,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const bucketUploadEnabled = !booleanArg(args.skipBucketUpload) && env.RANKING_BUCKET_UPLOAD_ENABLED !== 'false'
   const bucketRequired = booleanArg(args.bucketRequired) || env.RANKING_BUCKET_REQUIRED === 'true'
   const bucketConfig = options.bucketConfig ?? bucketConfigFromEnv(env)
+  const bucketClient = options.bucketClient ?? createBucketClient(bucketConfig)
   const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
   const stagingDir = resolve(stringArg(args.stagingDir ?? `data/.refresh-staging-${process.pid}-${Date.now()}`))
   const stagingManifestPath = resolve(stagingDir, 'manifest.json')
@@ -76,7 +79,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         statePath,
         hasUsableLocalRawBaseline,
         config: bucketConfig,
-        client: options.bucketClient,
+        client: bucketClient,
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
   metrics.recordStage('restore', {
@@ -109,6 +112,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   let completedPromotionAt
   let completedPromotionEtag
   let refreshState
+  let incrementalBuild
+  let restoredIncremental
+  let providerAvailableAt
   try {
     const providerStarted = monotonicNow()
     await (options.run ?? runCommand)(process.execPath, [
@@ -252,7 +258,119 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
     refreshState = state
 
-    if (!skipCrunch) {
+    const incrementalEnabled = env.RANKING_INCREMENTAL_ENABLED === 'true'
+      && (metrics.snapshot().mode === 'shadow' || metrics.snapshot().mode === 'gated')
+    if (!skipCrunch && incrementalEnabled) {
+      const checkpointRestoreStarted = monotonicNow()
+      if (bucketConfig.enabled && bucketClient) {
+        try {
+          const [activeState, activePublic] = await Promise.all([
+            readActiveIncrementalState({ config: bucketConfig, client: bucketClient }),
+            readActiveContentAddressedGeneration({ config: bucketConfig, client: bucketClient }),
+          ])
+          if (activeState.found && activePublic.found
+            && activeState.manifest.generationId === activePublic.active.generationId) {
+            restoredIncremental = {
+              stateManifest: activeState.manifest,
+              canonicalLedger: activeState.canonicalLedger,
+              checkpoints: activeState.checkpoints,
+              publicManifest: activePublic.manifest,
+              rootArtifact: activePublic.rootArtifact,
+            }
+          }
+        } catch (error) {
+          metrics.recordStage('checkpoint-validation', {
+            durationMs: 0,
+            result: 'failed',
+            output: { reason: errorMessage(error) },
+          })
+        }
+      }
+      metrics.recordStage('checkpoint-restore', {
+        durationMs: monotonicNow() - checkpointRestoreStarted,
+        result: restoredIncremental ? 'completed' : 'not-applicable',
+        output: { found: Boolean(restoredIncremental), candidateCount: restoredIncremental?.checkpoints.length ?? 0 },
+      })
+      const crunchStarted = monotonicNow()
+      incrementalBuild = await buildRankingIncrementally({
+        mode: metrics.snapshot().mode,
+        cause: metrics.snapshot().cause,
+        enabled: true,
+        manifestPath,
+        output,
+        publicDataDir,
+        reconciliationOutput,
+        restored: restoredIncremental,
+        diagnosticPath: resolve(rawDir, 'incremental-diagnostic.json'),
+        env,
+      })
+      providerAvailableAt = incrementalBuild.metrics.classification !== 'no-change'
+        && incrementalBuild.metrics.classification !== 'metadata-only'
+        ? firstScoredProviderResultAt(incrementalBuild.sourceData) ?? null
+        : null
+      metrics.recordStage('classification', {
+        durationMs: 0,
+        output: {
+          classification: incrementalBuild.metrics.classification,
+          canonicalRows: incrementalBuild.metrics.canonicalRows,
+          canonicalBytes: incrementalBuild.metrics.canonicalBytes,
+        },
+      })
+      metrics.recordStage('checkpoint-validation', {
+        durationMs: 0,
+        result: incrementalBuild.metrics.fallbackReason ? 'failed' : 'completed',
+        output: {
+          candidateCount: incrementalBuild.metrics.candidateCount,
+          rejectedCandidates: incrementalBuild.metrics.rejectedCandidates,
+          selectedBoundary: incrementalBuild.metrics.selectedBoundary,
+          fallbackReason: incrementalBuild.metrics.fallbackReason,
+        },
+      })
+      metrics.recordStage('replay', {
+        durationMs: monotonicNow() - crunchStarted,
+        result: incrementalBuild.action === 'no-change' ? 'not-applicable' : 'completed',
+        output: {
+          replayFromUtcDate: incrementalBuild.metrics.replayFromUtcDate,
+          replayedMatchCount: incrementalBuild.metrics.replayedMatchCount,
+          suffixRows: incrementalBuild.metrics.suffixRows,
+          suffixDates: incrementalBuild.metrics.suffixDates,
+        },
+      })
+      metrics.recordStage('external-causal-recompute', {
+        durationMs: 0,
+        result: incrementalBuild.action === 'no-change' ? 'not-applicable' : 'completed',
+      })
+      metrics.recordStage('dependency-materialization', {
+        durationMs: 0,
+        result: incrementalBuild.action === 'publish-incremental' ? 'completed' : 'not-applicable',
+        output: {
+          changedPaths: incrementalBuild.metrics.changedPaths,
+          reusedPaths: incrementalBuild.metrics.reusedPaths,
+          removedPaths: incrementalBuild.metrics.removedPaths,
+          semanticBytes: incrementalBuild.metrics.semanticBytes,
+          compressedBytes: incrementalBuild.metrics.compressedBytes,
+        },
+      })
+      metrics.recordStage('semantic-parity', {
+        durationMs: 0,
+        result: incrementalBuild.metrics.parity === null ? 'not-applicable' : incrementalBuild.metrics.parity ? 'completed' : 'failed',
+        output: { parity: incrementalBuild.metrics.parity },
+      })
+      metrics.setCheckpoint({
+        applicable: incrementalBuild.metrics.classification !== 'no-change',
+        classification: incrementalBuild.metrics.classification,
+        selectedBoundary: incrementalBuild.metrics.selectedBoundary,
+        replayFromUtcDate: incrementalBuild.metrics.replayFromUtcDate,
+        replayedMatchCount: incrementalBuild.metrics.replayedMatchCount,
+        candidateCount: incrementalBuild.metrics.candidateCount,
+        rejectedCandidates: incrementalBuild.metrics.rejectedCandidates,
+        fallbackReason: incrementalBuild.metrics.fallbackReason,
+      })
+      metrics.recordStage('crunch', {
+        durationMs: monotonicNow() - crunchStarted,
+        output: { incremental: incrementalBuild.action === 'publish-incremental', fullSnapshotWritten: incrementalBuild.metrics.fullSnapshotWritten },
+      })
+    } else if (!skipCrunch) {
       const crunchStarted = monotonicNow()
       await (options.run ?? runCommand)('pnpm', [
         'exec',
@@ -277,6 +395,19 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
 
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
 
+    if (incrementalBuild?.action === 'no-change') {
+      state.crunch = { skipped: true, reason: 'canonical-ledger-unchanged' }
+      state.publish = { skipped: true, reason: 'canonical-ledger-unchanged' }
+      terminalResult = 'unchanged'
+      canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, {
+        result: terminalResult,
+        freshness: { providerAvailableAt, publishedAt: null },
+      })
+      state.lastRun = canonicalMetrics
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+      return { changed: false, status: 'canonical-no-change', fingerprint: fingerprint.fingerprint }
+    }
+
     if (!skipCrunch && bucketUploadEnabled) {
       if (!bucketConfig.enabled && bucketRequired) {
         throw new Error(`Railway bucket upload is required but missing: ${bucketConfig.missing.join(', ')}`)
@@ -291,20 +422,46 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           console.warn(`Railway bucket upload skipped; missing ${bucketConfig.missing.join(', ')}.`)
         }
       } else {
-        const browserManifest = await readJson(resolve(publicDataDir, 'ranking-summary.json'))
+        const browserManifest = incrementalBuild?.rootManifest
+          ?? incrementalBuild?.build?.publicPlan.manifest
+          ?? await readJson(resolve(publicDataDir, 'ranking-summary.json'))
         const generationId = env.RANKING_REFRESH_FENCING_TOKEN
           ? stringArg(browserManifest?.artifactMeta?.runId)
           : undefined
+        let incrementalState
+        if (incrementalBuild && generationId && bucketClient) {
+          const stateStarted = monotonicNow()
+          incrementalState = await persistIncrementalStateBuild({
+            state: incrementalBuild.state,
+            generationId,
+            baseGenerationId: restoredIncremental?.stateManifest.generationId ?? null,
+            baseRunId: restoredIncremental?.stateManifest.runId ?? null,
+            config: bucketConfig,
+            client: bucketClient,
+          })
+          metrics.recordStage('state-persistence', {
+            durationMs: monotonicNow() - stateStarted,
+            output: {
+              uploadedBytes: incrementalState.uploadedBytes,
+              objectCount: incrementalState.objectCount,
+              ledgerBytes: incrementalState.ledgerBytes,
+              ledgerCompressedBytes: incrementalState.ledgerCompressedBytes,
+              checkpointCount: incrementalState.checkpointCount,
+            },
+          })
+        }
         const bucketPublish = await uploadRankingArtifacts({
-          publicDataDir,
+          publicDataDir: incrementalBuild?.build?.publicDataDir ?? publicDataDir,
           rawDir,
-          fullSnapshotPath: output,
+          fullSnapshotPath: incrementalBuild?.action === 'publish-incremental' ? undefined : output,
           manifestPath,
           statePath,
           config: bucketConfig,
-          client: options.bucketClient,
+          client: bucketClient,
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
-          contentAddressed: env.RANKING_BUCKET_CONTENT_ADDRESSED === 'true',
+          contentAddressed: incrementalBuild ? true : env.RANKING_BUCKET_CONTENT_ADDRESSED === 'true',
+          ...(incrementalBuild?.action === 'publish-incremental' ? { publicArtifactPatch: incrementalBuild.patch } : {}),
+          ...(incrementalState ? { stateManifestAuthority: incrementalState.authority } : {}),
           generationId,
           fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
           leaseAuthority: env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
@@ -320,7 +477,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           refreshTelemetry: (promotion) => {
             const own = completeRefreshMetrics(metrics.snapshot({
               result: promotion?.completed ? 'completed' : 'no-promotion',
-              freshness: { publishedAt: promotion?.promotedAt ?? null },
+              freshness: { providerAvailableAt, publishedAt: promotion?.promotedAt ?? null },
             }))
             const aggregated = inheritedMetrics ? mergeRefreshMetrics(inheritedMetrics, own) : own
             return promotion?.etag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
@@ -395,7 +552,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, {
       result: 'failed',
       error,
-      freshness: { publishedAt: completedPromotionAt ?? null },
+      freshness: { providerAvailableAt, publishedAt: completedPromotionAt ?? null },
     })
     if (completedPromotionEtag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN) {
       canonicalMetrics = {
@@ -424,7 +581,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         let own = completeRefreshMetrics(metrics.snapshot({
           result: refreshError ? 'failed' : terminalResult,
           error: refreshError,
-          freshness: { publishedAt: completedPromotionAt ?? null },
+          freshness: { providerAvailableAt, publishedAt: completedPromotionAt ?? null },
         }))
         if (completedPromotionEtag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN) {
           own = {
@@ -439,6 +596,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         const existing = await readRefreshMetrics(metricsPath)
         await writeRefreshMetrics(metricsPath, existing ? mergeRefreshMetrics(existing, own) : own)
       }
+    }
+    const temporaryPublicDir = incrementalBuild?.build?.publicDataDir
+    if (temporaryPublicDir && temporaryPublicDir !== publicDataDir) {
+      await rm(temporaryPublicDir, { recursive: true, force: true })
     }
     await rm(stagingDir, { recursive: true, force: true })
   }
@@ -909,6 +1070,15 @@ function parseAffectedIds(value) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function firstScoredProviderResultAt(sourceData) {
+  return sourceData.externalSources
+    .filter((source) => source.status === 'active' && source.kind !== 'official-reference' && Number(source.rowCount) > 0)
+    .map((source) => source.retrievedAt)
+    .filter(Boolean)
+    .sort()[0]
+    ?? sourceData.manifest?.generatedAt
 }
 
 function uniqueValues(values) {

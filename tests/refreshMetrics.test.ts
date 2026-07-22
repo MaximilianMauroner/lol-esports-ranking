@@ -23,9 +23,9 @@ test('refresh telemetry uses injected wall, monotonic, and RSS clocks determinis
   assert.equal(record.durationMs, 400)
   assert.equal(record.peakRssBytes, 1600)
   assert.deepEqual(record.affected, { matchIds: ['a', 'b'], date: '2026-07-22' })
-  assert.deepEqual(record.checkpoint, { applicable: false, reason: 'incremental-rating-checkpoints-not-implemented' })
+  assert.deepEqual(record.checkpoint, { applicable: false, reason: 'incremental-disabled-or-not-classified' })
   assert.equal(record.stages.find((stage) => stage.name === 'probe')?.durationMs, 250)
-  assert.equal(record.stages.length, 10)
+  assert.equal(record.stages.length, 18)
 })
 
 test('real child stages replace not-applicable placeholders when records merge', () => {

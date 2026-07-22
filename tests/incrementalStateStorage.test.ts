@@ -10,6 +10,7 @@ import {
   assertStateManifestAuthority,
   prepareContentAddressedState,
   prepareStateObject,
+  stateObjectReferenceFor,
   readActiveIncrementalState,
   syncContentAddressedStateObject,
   writeIncrementalStateManifest,
@@ -57,7 +58,7 @@ test('prepared state contains complete compatibility and ordered checkpoint cand
     { date: '2026-01-01', matchId: 'match-2' },
   ])
   assert.ok(prepared.manifest.checkpoints.every((entry) => entry.object.key.startsWith('state/objects/sha256/')))
-  assert.ok(prepared.objects.every((entry) => entry.value.artifactKind === 'incremental-state-checkpoint-bundle'))
+  assert.ok(prepared.objects.slice(1).every((entry) => entry.value.artifactKind === 'incremental-state-checkpoint-bundle'))
 
   assert.throws(() => preparedState('duplicate', [checkpoint('match-1'), checkpoint('match-1')]), /duplicate checkpoint boundary/)
   assert.throws(() => preparedState('unordered', [checkpoint('match-2'), checkpoint('match-1')]), /must be ordered/)
@@ -292,7 +293,12 @@ function stateInput(generationId: string, checkpoints = [checkpoint('match-1'), 
 }
 
 function preparedState(generationId: string, checkpoints = [checkpoint('match-1'), checkpoint('match-2', 2)]) {
-  return prepareContentAddressedState(stateInput(generationId, checkpoints))
+  const ledger = prepareStateObject({ artifactKind: 'canonical-match-ledger', schemaVersion: 1, rows: [] })
+  const prepared = prepareContentAddressedState({
+    ...stateInput(generationId, checkpoints),
+    canonicalLedgerReference: stateObjectReferenceFor(ledger),
+  })
+  return { ...prepared, objects: [ledger, ...prepared.objects] }
 }
 
 function checkpoint(matchId: string, matchCount = 1) {

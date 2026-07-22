@@ -33,6 +33,7 @@ import {
   leagueAdjustment,
   publishedLeagueAnchorContextAdjustment,
   publishedRosterPriorOffset,
+  recencyWeight,
   ratingComponents,
   ratingFromComponents,
 } from './ratingCalculations'
@@ -115,6 +116,7 @@ export function replayRatingDates({
   replayMatches: readonly MatchRecord[]
 }) {
   const sortedReplayMatches = replayMatches.toSorted(compareReplayMatches)
+  if (state.processedThroughUtcDate) rebaseCheckpointRecencyFactors(state, context.lastDate)
   const replayDates = new Set(sortedReplayMatches.map((match) => match.date))
   if (state.processedThroughUtcDate && [...replayDates].some((date) => date <= state.processedThroughUtcDate!)) {
     throw new Error(`Rating replay must start strictly after checkpoint ${state.processedThroughUtcDate}`)
@@ -146,6 +148,17 @@ export function replayRatingDates({
     })
   }
   return state
+}
+
+/** Checkpoint factor sums were evaluated against the prior corpus end date. */
+function rebaseCheckpointRecencyFactors(state: RatingRunState, lastDate: string) {
+  for (const [team, factors] of state.factorSums) {
+    const history = state.histories.get(team) ?? []
+    state.factorSums.set(team, {
+      ...factors,
+      recency: history.reduce((sum, point) => sum + recencyWeight(point.date, lastDate), 0),
+    })
+  }
 }
 
 export type RatingUtcDateBoundaryInput = {

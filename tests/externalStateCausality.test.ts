@@ -375,7 +375,7 @@ test('inventory exposes every external contract without activating production re
       'checkpoint-reconciled',
     ],
   )
-  assert.equal(ratingCheckpointInventory.activation, 'foundation-only-production-disabled')
+  assert.equal(ratingCheckpointInventory.activation, 'feature-gated-production-disabled')
 })
 
 function assertFullContextReplay(

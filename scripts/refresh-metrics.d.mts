@@ -1,6 +1,6 @@
 export type RefreshMode = 'legacy' | 'shadow' | 'gated'
 export type RefreshCause = 'pending-match' | 'daily-audit' | 'manual-force' | 'retry' | 'unchanged-scheduled-probe'
-export type RefreshStageName = 'restore' | 'probe' | 'provider-fetch' | 'fingerprint-import' | 'crunch' | 'public-serialization' | 'hashing' | 'raw-synchronization' | 'artifact-upload' | 'promotion'
+export type RefreshStageName = 'restore' | 'probe' | 'provider-fetch' | 'fingerprint-import' | 'classification' | 'checkpoint-restore' | 'checkpoint-validation' | 'replay' | 'external-causal-recompute' | 'dependency-materialization' | 'semantic-parity' | 'state-persistence' | 'crunch' | 'public-serialization' | 'hashing' | 'raw-synchronization' | 'artifact-upload' | 'promotion'
 export type RefreshStage = {
   name: RefreshStageName
   startedAt?: string
@@ -22,7 +22,17 @@ export type RefreshRunMetrics = {
   peakRssBytes: number
   affected: { matchIds: string[]; date?: string }
   freshness: { providerAvailableAt: string | null; detectedAt: string | null; publishedAt: string | null }
-  checkpoint: { applicable: false; reason: string }
+  checkpoint: {
+    applicable: boolean
+    classification?: string
+    selectedBoundary?: string
+    replayFromUtcDate?: string
+    replayedMatchCount?: number
+    candidateCount?: number
+    rejectedCandidates?: string[]
+    fallbackReason?: string
+    reason?: string
+  }
   stages: RefreshStage[]
   error?: string
   processError?: string
@@ -39,6 +49,7 @@ export function createRefreshMetrics(options: {
   rss?: () => number
 }): {
   setContext(context: { cause?: RefreshCause; affectedIds?: string[]; affectedDate?: string }): void
+  setCheckpoint(checkpoint: RefreshRunMetrics['checkpoint']): void
   startStage(name: RefreshStageName, input?: Record<string, unknown>): (result?: string, output?: Record<string, unknown>) => void
   recordStage(name: RefreshStageName, stage?: Partial<Omit<RefreshStage, 'name'>>): void
   snapshot(options?: { result?: string; freshness?: Partial<RefreshRunMetrics['freshness']>; error?: unknown }): RefreshRunMetrics
