@@ -100,10 +100,12 @@ export function publicMatchHistoryPagePath(key: string, page: number) {
 export function createPublicArtifactWritePlan(
   data: StaticRankingData,
   {
+    enforceBudgets = true,
     fullSnapshotUrl,
     urlForPath = localPublicDataUrl,
     runMetadata,
   }: {
+    enforceBudgets?: boolean
     fullSnapshotUrl?: string
     urlForPath?: (relativePath: string) => string
     runMetadata?: CrunchRunMetadata
@@ -168,7 +170,7 @@ export function createPublicArtifactWritePlan(
     write('manifest', PUBLIC_ARTIFACT_PATHS.manifest, summary.manifest, parsePublicRankingManifest, true),
   ]
 
-  assertPublicArtifactBudgets(writes, data.defaultSnapshotKey)
+  if (enforceBudgets) assertPublicArtifactBudgets(writes, data.defaultSnapshotKey)
 
   return {
     manifest: summary.manifest,
@@ -182,7 +184,10 @@ const semanticEnvelopeGeneratedAt = '1970-01-01T00:00:00.000Z'
 const semanticEnvelopeRunId = 'semantic-public-artifact-v1'
 
 /** Rehydrates known public run envelopes with constants so DAG hashes contain domain semantics only. */
-export function createSemanticPublicArtifactWritePlan(data: StaticRankingData): PublicArtifactWritePlan {
+export function createSemanticPublicArtifactWritePlan(
+  data: StaticRankingData,
+  { enforceBudgets = true }: { enforceBudgets?: boolean } = {},
+): PublicArtifactWritePlan {
   const normalized: StaticRankingData = {
     ...data,
     generatedAt: semanticEnvelopeGeneratedAt,
@@ -197,6 +202,7 @@ export function createSemanticPublicArtifactWritePlan(data: StaticRankingData): 
     }])) as StaticRankingData['tournamentMovements'],
   }
   return createPublicArtifactWritePlan(normalized, {
+    enforceBudgets,
     runMetadata: { generatedAt: semanticEnvelopeGeneratedAt, runId: semanticEnvelopeRunId },
   })
 }

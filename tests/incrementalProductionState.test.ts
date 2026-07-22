@@ -35,6 +35,7 @@ import {
   type IncrementalReducerCheckpoint,
 } from '../src/lib/incremental/reducerCheckpoint.ts'
 import { runIncrementalPlayerReducer } from '../src/lib/incremental/playerReducer.ts'
+import { runIncrementalRankingReducers } from '../src/lib/incremental/rankingReducer.ts'
 import type { PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
 import {
   finalizeTeamReducer,
@@ -163,6 +164,103 @@ test('production generation reads unchanged source files zero times after atomic
   const active = await activeGeneration(fixture.stateDir)
   assert.equal(Object.keys(record(active.generation.providers)).length, 1)
   assert.ok(await readFile(resolve(fixture.stateDir, 'canonical', 'objects', `${stringField(record(active.generation.canonical), 'ledgerHash')}.json`), 'utf8'))
+})
+
+test('provider identity survives raw path relocation and reuses unchanged observations', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  await promoteIncrementalState(first.promotion)
+
+  const relocatedDir = resolve(fixture.root, 'fresh-container', 'oracles-elixir')
+  const relocatedPath = resolve(relocatedDir, '2026.csv')
+  await mkdir(relocatedDir, { recursive: true })
+  await writeFile(relocatedPath, fixture.contents)
+  const relocated = await loadIncrementalCommunityImports({ ...fixture.input, oracleCsvPaths: [relocatedPath] })
+  assert.equal(relocated.fallback, undefined)
+  assert.equal(relocated.metrics.observationsReused, 1)
+  assert.equal(relocated.metrics.observationsNormalized, 0)
+  assert.deepEqual(relocated.imports?.canonical, first.imports?.canonical)
+  assert.ok(relocated.promotion)
+  await promoteIncrementalState(relocated.promotion)
+
+  await writeFile(relocatedPath, [fixture.contents, ...secondGame].join('\n'))
+  const appended = await loadIncrementalCommunityImports({ ...fixture.input, oracleCsvPaths: [relocatedPath] })
+  assert.equal(appended.fallback, undefined)
+  assert.equal(appended.metrics.observationsReused, 1)
+  assert.equal(appended.metrics.observationsNormalized, 1)
+})
+
+test('manifest-relative provider identities survive input reorder without collisions', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const secondPath = resolve(fixture.root, 'history', '2025.csv')
+  await mkdir(dirname(secondPath), { recursive: true })
+  await writeFile(secondPath, [header, ...secondGame].join('\n'))
+  const firstInput = {
+    ...fixture.input,
+    oracleCsvPaths: [fixture.sourcePath, secondPath],
+    sourceIds: { 'oracles-elixir': ['oracles-elixir/2026.csv', 'oracles-elixir/history/2025.csv'] },
+  }
+  const first = await loadIncrementalCommunityImports(firstInput)
+  assert.ok(first.promotion)
+  await promoteIncrementalState(first.promotion)
+
+  const reordered = await loadIncrementalCommunityImports({
+    ...fixture.input,
+    oracleCsvPaths: [secondPath, fixture.sourcePath],
+    sourceIds: { 'oracles-elixir': ['oracles-elixir/history/2025.csv', 'oracles-elixir/2026.csv'] },
+  })
+  assert.equal(reordered.fallback, undefined)
+  assert.equal(reordered.metrics.filesScanned, 0)
+  assert.equal(reordered.metrics.observationsReused, 2)
+  assert.deepEqual(reordered.imports?.canonical, first.imports?.canonical)
+})
+
+test('duplicate direct-input basenames require explicit logical source IDs', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const duplicatePath = resolve(fixture.root, 'duplicate', '2026.csv')
+  await mkdir(dirname(duplicatePath), { recursive: true })
+  await writeFile(duplicatePath, [header, ...secondGame].join('\n'))
+  await assert.rejects(
+    loadIncrementalCommunityImports({ ...fixture.input, oracleCsvPaths: [fixture.sourcePath, duplicatePath] }),
+    /duplicate logical source ID 2026\.csv/,
+  )
+
+  const explicit = await loadIncrementalCommunityImports({
+    ...fixture.input,
+    oracleCsvPaths: [fixture.sourcePath, duplicatePath],
+    sourceIds: { 'oracles-elixir': ['current/2026.csv', 'archive/2026.csv'] },
+  })
+  assert.ok(explicit.imports)
+  assert.equal(explicit.metrics.observationsNormalized, 2)
+})
+
+test('legacy basename ordinal identity migrates to a stable logical source ID', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  await promoteIncrementalState(first.promotion)
+  const active = await activeGeneration(fixture.stateDir)
+  const providers = record(active.generation.providers)
+  const rawEntry = record(Object.values(providers)[0])
+  const legacyId = '2026.csv#1'
+  const legacyKey = stableHash({ provider: 'oracles-elixir', path: legacyId })
+  await installGeneration(fixture.stateDir, {
+    ...active.generation,
+    providers: { [legacyKey]: { ...rawEntry, sourcePath: legacyId } },
+    fileSet: {
+      ...record(active.generation.fileSet),
+      paths: { ...record(record(active.generation.fileSet).paths), 'oracles-elixir': [legacyId] },
+    },
+  })
+
+  const migrated = await loadIncrementalCommunityImports({
+    ...fixture.input,
+    sourceIds: { 'oracles-elixir': ['oracles-elixir/2026.csv'] },
+  })
+  assert.equal(migrated.fallback, undefined)
+  assert.equal(migrated.metrics.filesScanned, 0)
+  assert.equal(migrated.metrics.observationsReused, 1)
 })
 
 test('production generation restores scoped snapshot results across fresh providers and append', async () => {
@@ -450,7 +548,11 @@ test('reducer checkpoint is promoted and restored with the canonical generation'
 
   const restored = await loadIncrementalCommunityImports(fixture.input)
   assert.equal(restored.fallback, undefined)
-  assert.deepEqual(restored.reducerCheckpoint, checkpoint)
+  assert.ok(restored.checkpointLoader)
+  assert.deepEqual(
+    await restored.checkpointLoader.loadReducerCheckpoints(restored.imports!.canonical.matches, checkpoint.dependencyPlan),
+    [checkpoint],
+  )
   assert.equal(restored.metrics.filesScanned, 0)
   const active = await activeGeneration(fixture.stateDir)
   const [checkpointEntry] = arrayField(active.generation, 'reducerCheckpoints').map(record)
@@ -495,7 +597,11 @@ test('player checkpoint and immutable history journal share atomic generation pr
   const promoted = await promoteIncrementalState(promotion)
 
   const restored = await loadIncrementalCommunityImports(fixture.input)
-  assert.deepEqual(restored.playerCheckpoints, playerRun.checkpoints)
+  assert.ok(restored.checkpointLoader)
+  assert.deepEqual(
+    await restored.checkpointLoader.loadPlayerCheckpoints(restored.imports!.canonical.matches, playerRun.checkpoints[0]!.dependencyHash),
+    playerRun.checkpoints,
+  )
   const active = await activeGeneration(fixture.stateDir)
   assert.equal(arrayField(active.generation, 'reducerCheckpoints').length, 1)
   const [playerEntry] = arrayField(active.generation, 'playerCheckpoints').map(record)
@@ -511,7 +617,8 @@ test('player checkpoint and immutable history journal share atomic generation pr
   const historyEnvelope = record(decodePrivateState(await readFile(historyPath, 'utf8')))
   assert.deepEqual(historyEnvelope.payload, playerRun.checkpoints[0]?.player.history)
   assert.ok(promoted.reducerStateBytesWritten > 0)
-  assert.equal(restored.metrics.reducerStateBytesRead, promoted.reducerStateBytesWritten)
+  assert.ok(restored.metrics.reducerStateBytesRead > 0)
+  assert.ok(restored.metrics.reducerStateBytesRead < promoted.reducerStateBytesWritten)
 })
 
 test('player checkpoint and history journal reject independent parseable tampering', async () => {
@@ -548,12 +655,18 @@ test('player checkpoint and history journal reject independent parseable tamperi
       envelope.payload.set('tampered-player', [])
     }
     await writePrivate(path, envelope)
-    const result = await loadIncrementalCommunityImports(fixture.input)
-    assert.equal(result.fallback?.kind, 'checkpoint-corrupt')
-    assert.match(
-      result.fallback?.kind === 'checkpoint-corrupt' ? result.fallback.detail : '',
-      new RegExp(`${target === 'checkpoint' ? 'player-checkpoint' : 'player-history-journal'} semantic hash mismatch`),
-    )
+    if (target === 'checkpoint') {
+      const result = await loadIncrementalCommunityImports(fixture.input)
+      assert.equal(result.fallback?.kind, 'checkpoint-corrupt')
+      assert.match(result.fallback?.kind === 'checkpoint-corrupt' ? result.fallback.detail : '', /player-checkpoint semantic hash mismatch/)
+    } else {
+      const result = await loadIncrementalCommunityImports(fixture.input)
+      assert.ok(result.checkpointLoader)
+      await assert.rejects(
+        () => result.checkpointLoader!.loadPlayerCheckpoints(result.imports!.canonical.matches, playerRun.checkpoints[0]!.dependencyHash),
+        /player-history-journal semantic hash mismatch/,
+      )
+    }
   }
 })
 
@@ -594,11 +707,12 @@ test('artifact DAG cache shares atomic generation promotion and rejects tamperin
     fixture.stateDir,
     cache,
   )
-  const promoted = await promoteIncrementalState(promotion)
+  await promoteIncrementalState(promotion)
   const restored = await loadIncrementalCommunityImports(fixture.input)
   assert.deepEqual(restored.artifactCache, cache)
-  assert.deepEqual(restored.snapshotModelCache, snapshotModelCache)
-  assert.equal(restored.metrics.reducerStateBytesRead, promoted.reducerStateBytesWritten)
+  assert.equal(restored.snapshotModelCache?.compatibilityHash, snapshotModelCache.compatibilityHash)
+  assert.equal(restored.snapshotModelCache?.schemaVersion, 2)
+  assert.ok(restored.metrics.reducerStateBytesRead > 0)
 
   const active = await activeGeneration(fixture.stateDir)
   const cacheEntry = record(active.generation.artifactCache)
@@ -611,6 +725,104 @@ test('artifact DAG cache shares atomic generation promotion and rejects tamperin
   const corrupt = await loadIncrementalCommunityImports(fixture.input)
   assert.equal(corrupt.fallback?.kind, 'checkpoint-corrupt')
   assert.match(corrupt.fallback?.kind === 'checkpoint-corrupt' ? corrupt.fallback.detail : '', /artifact-cache semantic hash mismatch/)
+})
+
+test('snapshot model cache v2 shards semantic entries, deduplicates, and fails closed on swapped refs', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  const cache: PersistedSnapshotModelState = {
+    schemaVersion: 1,
+    compatibilityHash: compatibility.hash,
+    rankingCatalogs: new Map([['scope-a', []], ['scope-b', []]]),
+    playerCatalogs: new Map(),
+    rankingResults: new Map(),
+    playerResults: new Map(),
+  }
+  const firstPromotion = attachIncrementalSnapshotModelCache(first.promotion, fixture.stateDir, cache)
+  const firstEntryPaths = firstPromotion.stagedWrites.filter((write) => write.path.includes('/snapshot-models/entries/')).map((write) => write.path).sort()
+  assert.equal(firstEntryPaths.length, 2)
+  await promoteIncrementalState(firstPromotion)
+
+  const unchanged = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(unchanged.promotion)
+  const unchangedPromotion = attachIncrementalSnapshotModelCache(unchanged.promotion, fixture.stateDir, cache)
+  const unchangedEntryPaths = unchangedPromotion.stagedWrites.filter((write) => write.path.includes('/snapshot-models/entries/')).map((write) => write.path).sort()
+  assert.deepEqual(unchangedEntryPaths, firstEntryPaths)
+
+  const changedCache: PersistedSnapshotModelState = {
+    ...cache,
+    rankingCatalogs: new Map([['scope-a', []], ['scope-b', [{} as IncrementalReducerCheckpoint]]]),
+  }
+  const changedPromotion = attachIncrementalSnapshotModelCache(unchanged.promotion, fixture.stateDir, changedCache)
+  const changedEntryPaths = changedPromotion.stagedWrites.filter((write) => write.path.includes('/snapshot-models/entries/')).map((write) => write.path).sort()
+  assert.equal(changedEntryPaths.filter((path) => !firstEntryPaths.includes(path)).length, 1)
+  assert.equal(changedEntryPaths.filter((path) => firstEntryPaths.includes(path)).length, 1)
+  await promoteIncrementalState(changedPromotion)
+
+  const active = await activeGeneration(fixture.stateDir)
+  const cacheGeneration = record(active.generation.snapshotModelCache)
+  assert.equal(cacheGeneration.schemaVersion, 2)
+  const indexHash = stringField(cacheGeneration, 'indexHash')
+  const indexPath = resolve(fixture.stateDir, 'snapshot-models', 'indexes', `${indexHash}.json`)
+  const envelope = record(decodePrivateState(await readFile(indexPath, 'utf8')))
+  const index = record(envelope.payload)
+  const entries = arrayField(index, 'entries').map(record)
+  assert.equal(entries.length, 2)
+  const swappedEntries = entries.map((entry, index) => {
+    const other = entries[index === 0 ? 1 : 0]!
+    return { ...entry, hash: stringField(other, 'hash'), bytes: numberField(other, 'bytes') }
+  })
+  const swappedIndex = { ...index, entries: swappedEntries }
+  const swappedIndexHash = privateStateHash(swappedIndex)
+  await writePrivate(resolve(fixture.stateDir, 'snapshot-models', 'indexes', `${swappedIndexHash}.json`), {
+    schemaVersion: 2,
+    kind: 'snapshot-model-cache-index',
+    contentHash: swappedIndexHash,
+    payload: swappedIndex,
+  })
+  await installGeneration(fixture.stateDir, {
+    ...active.generation,
+    snapshotModelCache: { ...cacheGeneration, indexHash: swappedIndexHash },
+  })
+  const corrupt = await loadIncrementalCommunityImports(fixture.input)
+  assert.equal(corrupt.fallback, undefined)
+  assert.ok(corrupt.snapshotModelCache && 'get' in corrupt.snapshotModelCache)
+  assert.throws(() => corrupt.snapshotModelCache!.get('rankingCatalogs', 'scope-a'), /entry reference mismatch/)
+})
+
+test('snapshot model cache v1 restores and migrates to v2 on the next promotion', async () => {
+  const fixture = await createFixture([header, ...firstGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion)
+  await promoteIncrementalState(first.promotion)
+  const cache: PersistedSnapshotModelState = {
+    schemaVersion: 1,
+    compatibilityHash: compatibility.hash,
+    rankingCatalogs: new Map([['legacy-scope', []]]),
+    playerCatalogs: new Map(),
+    rankingResults: new Map(),
+    playerResults: new Map(),
+  }
+  const cacheHash = privateStateHash(cache)
+  await writePrivate(resolve(fixture.stateDir, 'snapshot-models', 'caches', `${cacheHash}.json`), {
+    schemaVersion: 2,
+    kind: 'snapshot-model-cache',
+    contentHash: cacheHash,
+    payload: cache,
+  })
+  const active = await activeGeneration(fixture.stateDir)
+  await installGeneration(fixture.stateDir, {
+    ...active.generation,
+    snapshotModelCache: { schemaVersion: 1, cacheHash, rankingResults: 0, playerResults: 0 },
+  })
+
+  const restored = await loadIncrementalCommunityImports(fixture.input)
+  assert.deepEqual(restored.snapshotModelCache, cache)
+  assert.ok(restored.promotion)
+  await promoteIncrementalState(attachIncrementalSnapshotModelCache(restored.promotion, fixture.stateDir, cache))
+  const migrated = await activeGeneration(fixture.stateDir)
+  assert.equal(record(migrated.generation.snapshotModelCache).schemaVersion, 2)
 })
 
 test('each reducer journal object rejects independent parseable tampering', async () => {
@@ -638,9 +850,45 @@ test('each reducer journal object rejects independent parseable tampering', asyn
     }
     await writePrivate(path, envelope)
     const result = await loadIncrementalCommunityImports(fixture.input)
-    assert.equal(result.fallback?.kind, 'checkpoint-corrupt')
-    assert.match(result.fallback?.kind === 'checkpoint-corrupt' ? result.fallback.detail : '', /reducer-journal semantic hash mismatch/)
+    assert.ok(result.checkpointLoader)
+    const checkpoint = reducerCheckpointFor(result.imports!.canonical)
+    await assert.rejects(
+      () => result.checkpointLoader!.loadReducerCheckpoints(result.imports!.canonical.matches, checkpoint.dependencyPlan),
+      /reducer-journal semantic hash mismatch/,
+    )
   }
+})
+
+test('lazy checkpoint restore ignores unselected journals and decodes only the selected shard', async () => {
+  const fixture = await createFixture([header, ...firstGame, ...secondGame].join('\n'))
+  const first = await loadIncrementalCommunityImports(fixture.input)
+  assert.ok(first.promotion && first.imports)
+  const run = runIncrementalRankingReducers({
+    matches: first.imports.canonical.matches,
+    teams: first.imports.canonical.teams,
+  })
+  assert.ok(run.checkpoints.length >= 2)
+  await promoteIncrementalState(attachIncrementalReducerCheckpoint(first.promotion, fixture.stateDir, run.checkpoints))
+  const active = await activeGeneration(fixture.stateDir)
+  const entries = arrayField(active.generation, 'reducerCheckpoints').map(record)
+  const unselected = entries[0]!
+  const hashes = record(unselected.journalHashes)
+  const unselectedPath = resolve(fixture.stateDir, 'reducers', 'journals', 'predictions', `${stringField(hashes, 'predictions')}.json`)
+  const envelope = record(decodePrivateState(await readFile(unselectedPath, 'utf8')))
+  assert.ok(Array.isArray(envelope.payload))
+  envelope.payload.push({ tampered: true })
+  await writePrivate(unselectedPath, envelope)
+
+  const restored = await loadIncrementalCommunityImports(fixture.input)
+  assert.equal(restored.fallback, undefined)
+  assert.ok(restored.checkpointLoader && restored.imports)
+  const bytesBeforeSelected = restored.metrics.reducerStateBytesRead
+  const selected = await restored.checkpointLoader.loadReducerCheckpoints(
+    restored.imports.canonical.matches,
+    buildReducerDependencyPlan({ matches: restored.imports.canonical.matches, teams: restored.imports.canonical.teams }),
+  )
+  assert.equal(selected[0]?.processedDate, secondGame[0]!.split(',')[1])
+  assert.ok(restored.metrics.reducerStateBytesRead > bytesBeforeSelected)
 })
 
 test('parseable reducer Map mutation cannot bypass its private-state semantic hash', async () => {
@@ -785,6 +1033,11 @@ function closureHash(selfHash: string, dependencies: Array<[string, string]>) {
 function stringField(value: Record<string, unknown>, field: string): string {
   assert.equal(typeof value[field], 'string')
   return value[field] as string
+}
+
+function numberField(value: Record<string, unknown>, field: string): number {
+  assert.equal(typeof value[field], 'number')
+  return value[field] as number
 }
 
 function arrayField(value: Record<string, unknown>, field: string): unknown[] {

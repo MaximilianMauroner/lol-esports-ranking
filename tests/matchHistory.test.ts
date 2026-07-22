@@ -30,12 +30,23 @@ test('match history publishes scoped game rows and series-atomic impact', () => 
   assert.equal(shard.matches.length, 2)
   assert.equal(shard.matches[0].gameNumber, 1)
   assert.equal(shard.matches[0].impact.unit, 'held')
+  assert.deepEqual(shard.matches[0].weighting, { tier: 'regional-regular', multiplier: 1 })
   assert.equal(shard.matches[1].impact.unit, 'series-applied')
   assert.equal(typeof shard.matches[1].impact.teamA, 'number')
   assert.equal(typeof shard.matches[1].impact.teamB, 'number')
   assert.equal(shard.matches[1].winnerId, shard.matches[1].teamA.id)
   assert.deepEqual([shard.matches[1].seriesWinsA, shard.matches[1].seriesWinsB], [2, 0])
   assert.equal(shard.matches.every((match) => match.teamA.name === 'Gen.G' && match.teamB.name === 'T1'), true)
+})
+
+test('match history provenance publishes the applied KeSPA tier and multiplier', () => {
+  const kespa = game(1, 'Gen.G')
+  kespa.event = 'KeSPA 2026'
+  kespa.league = 'KeSPA'
+  kespa.tier = 'minor-international'
+  const data = createStaticRankingData({ matches: [kespa], teams, rosters: {} })
+  const entry = createMatchHistoryArtifacts(data).pages[data.defaultSnapshotKey][1]!.matches[0]
+  assert.deepEqual(entry?.weighting, { tier: 'minor-international', multiplier: 0.5 })
 })
 
 test('match history parser rejects a winner outside the two teams', () => {

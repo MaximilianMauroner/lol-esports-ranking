@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { knownTeamIdentities } from '../src/data/teamIdentity.ts'
 import type { OracleImportResult } from '../src/lib/importers/oraclesElixir.ts'
@@ -26,6 +27,7 @@ import { scanLeaguepediaJson, scanLolEsportsJson } from '../src/lib/incremental/
 import type { IncrementalFallbackReason } from '../src/lib/incremental/types.ts'
 import {
   isIncrementalReducerCheckpoint,
+  reducerDependencyChange,
   canonicalPrefixHash,
   fullMatchCanonicalPrefixHash,
   privateStateHash,
@@ -33,6 +35,7 @@ import {
   type PersistedReducerCheckpointCore,
   type ReducerJournalHashes,
   type ReducerCheckpointRetention,
+  type ReducerDependencyPlan,
 } from '../src/lib/incremental/reducerCheckpoint.ts'
 import {
   isIncrementalPlayerCheckpoint,
@@ -46,6 +49,7 @@ import {
 import {
   validatePersistedSnapshotModelState,
   type PersistedSnapshotModelState,
+  type SnapshotModelCacheLookup,
 } from '../src/lib/incremental/snapshotInputs.ts'
 
 const LOCAL_STATE_SCHEMA_VERSION = 2 as const
@@ -73,6 +77,8 @@ type ProviderGenerationEntry = {
   ledgerHash: string
   authority: ProviderAuthority
   authorityHash: string
+  trustedDigest?: string
+  trustedBytes?: number
 }
 
 type CanonicalGenerationEntry = {
@@ -110,7 +116,36 @@ type StateGeneration = {
   reducerCheckpoints?: ReducerCheckpointGenerationEntry[]
   playerCheckpoints?: PlayerCheckpointGenerationEntry[]
   artifactCache?: { cacheHash: string; nodeCount: number }
-  snapshotModelCache?: { cacheHash: string; rankingResults: number; playerResults: number }
+  snapshotModelCache?: SnapshotModelCacheGenerationEntry
+}
+
+type SnapshotModelCacheGenerationEntry =
+  | { schemaVersion?: 1; cacheHash: string; rankingResults: number; playerResults: number }
+  | { schemaVersion: 2; indexHash: string; rankingResults: number; playerResults: number; entryCount: number; entryHashes: string[] }
+
+type SnapshotModelCollection = 'rankingCatalogs' | 'playerCatalogs' | 'rankingResults' | 'playerResults'
+
+type SnapshotModelCacheEntryPayload = {
+  schemaVersion: 2
+  kind: 'snapshot-model-cache-entry'
+  compatibilityHash: string
+  collection: SnapshotModelCollection
+  key: string
+  value: unknown
+}
+
+type SnapshotModelCacheEntryReference = {
+  collection: SnapshotModelCollection
+  key: string
+  hash: string
+  bytes: number
+}
+
+type SnapshotModelCacheIndexV2 = {
+  schemaVersion: 2
+  kind: 'snapshot-model-cache-index'
+  compatibilityHash: string
+  entries: SnapshotModelCacheEntryReference[]
 }
 
 export type IncrementalStateTreeSummary = {
@@ -134,7 +169,7 @@ type ActiveGenerationPointer = {
 
 type ContentEnvelope = {
   schemaVersion: typeof LOCAL_STATE_SCHEMA_VERSION
-  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation' | 'reducer-checkpoint' | 'reducer-journal' | 'player-checkpoint' | 'player-history-journal' | 'artifact-cache' | 'snapshot-model-cache'
+  kind: 'provider-ledger' | 'canonical-ledger' | 'state-generation' | 'reducer-checkpoint' | 'reducer-journal' | 'player-checkpoint' | 'player-history-journal' | 'artifact-cache' | 'snapshot-model-cache' | 'snapshot-model-cache-index' | 'snapshot-model-cache-entry'
   contentHash: string
   payload: unknown
 }
@@ -159,10 +194,15 @@ type LoadedGeneration = {
   reducerCheckpoints: IncrementalReducerCheckpoint[]
   playerCheckpoints: IncrementalPlayerCheckpoint[]
   artifactCache: PersistedArtifactNode[]
-  snapshotModelCache?: PersistedSnapshotModelState
+  snapshotModelCache?: PersistedSnapshotModelState | LazySnapshotModelCacheLookup
+  checkpointLoader?: IncrementalCheckpointLoader
 }
 
-type ReducerStateIOMetrics = { bytesRead: number }
+type ReducerStateIOMetrics = { bytesRead: number; objectsRead: number; objectsDecoded: number }
+
+type LazySnapshotModelCacheLookup = SnapshotModelCacheLookup & {
+  bindMetrics(metrics: IncrementalLoadMetrics): void
+}
 
 export type IncrementalStatePromotion = {
   stagedWrites: PendingIncrementalStateWrite[]
@@ -194,7 +234,14 @@ export type IncrementalCommunityLoadResult = {
   playerCheckpoint?: IncrementalPlayerCheckpoint
   playerCheckpoints?: IncrementalPlayerCheckpoint[]
   artifactCache?: PersistedArtifactNode[]
-  snapshotModelCache?: PersistedSnapshotModelState
+  snapshotModelCache?: PersistedSnapshotModelState | SnapshotModelCacheLookup
+  checkpointLoader?: IncrementalCheckpointLoader
+}
+
+export type IncrementalCheckpointLoader = {
+  bindMetrics(metrics: IncrementalLoadMetrics): void
+  loadReducerCheckpoints(matches: CanonicalRankingInput['matches'], dependencyPlan: ReducerDependencyPlan): Promise<IncrementalReducerCheckpoint[]>
+  loadPlayerCheckpoints(matches: CanonicalRankingInput['matches'], dependencyHash: string): Promise<IncrementalPlayerCheckpoint[]>
 }
 
 export async function loadIncrementalCommunityImports({
@@ -206,6 +253,8 @@ export async function loadIncrementalCommunityImports({
   now,
   authorities,
   compatibility,
+  sourceIds,
+  trustedSources,
 }: {
   stateDir: string
   oracleCsvPaths: string[]
@@ -215,8 +264,10 @@ export async function loadIncrementalCommunityImports({
   now: string
   authorities: ProviderAuthorities
   compatibility: CrunchCompatibility
+  sourceIds?: Partial<Record<ProviderId, string[]>>
+  trustedSources?: Partial<Record<ProviderId, Record<string, { digest: string; bytes: number }>>>
 }): Promise<IncrementalCommunityLoadResult> {
-  const reducerStateIO: ReducerStateIOMetrics = { bytesRead: 0 }
+  const reducerStateIO: ReducerStateIOMetrics = { bytesRead: 0, objectsRead: 0, objectsDecoded: 0 }
   let active: LoadedGeneration | undefined
   let restoreFallback: IncrementalFallbackReason | undefined
   try {
@@ -235,44 +286,54 @@ export async function loadIncrementalCommunityImports({
     }
   }
 
-  const currentFileSet = fileSetFor({ oracleCsvPaths, leaguepediaJsonPaths, lolEsportsJsonPaths, authorities })
+  const oracleSources = providerSources('oracles-elixir', oracleCsvPaths, sourceIds?.['oracles-elixir'], trustedSources?.['oracles-elixir'])
+  const leaguepediaSources = providerSources('leaguepedia-cargo', leaguepediaJsonPaths, sourceIds?.['leaguepedia-cargo'], trustedSources?.['leaguepedia-cargo'])
+  const lolEsportsSources = providerSources('lol-esports-api', lolEsportsJsonPaths, sourceIds?.['lol-esports-api'], trustedSources?.['lol-esports-api'])
+  const currentFileSet = fileSetFor({ oracleSources, leaguepediaSources, lolEsportsSources, authorities })
   const removedFallback = active ? removedFileFallback(active.generation.fileSet, currentFileSet) : undefined
   try {
-    const oracle = await Promise.all(oracleCsvPaths.map((path) => loadProviderPath({
-      path,
+    const oracle = await Promise.all(oracleSources.map(({ path, sourceId, trusted }) => loadProviderPath({
+      path, sourceId,
+      trusted,
       provider: 'oracles-elixir',
       stateDir,
       oracleRetrievedAt,
       now,
       authority: authorities['oracles-elixir'],
-      previous: active?.providers.get(providerKey('oracles-elixir', path)),
+      previous: active ? previousProviderState(active, 'oracles-elixir', sourceId, path) : undefined,
     })))
-    const leaguepedia = await Promise.all(leaguepediaJsonPaths.map((path) => loadProviderPath({
-      path,
+    const leaguepedia = await Promise.all(leaguepediaSources.map(({ path, sourceId, trusted }) => loadProviderPath({
+      path, sourceId,
+      trusted,
       provider: 'leaguepedia-cargo',
       stateDir,
       oracleRetrievedAt,
       now,
       authority: authorities['leaguepedia-cargo'],
-      previous: active?.providers.get(providerKey('leaguepedia-cargo', path)),
+      previous: active ? previousProviderState(active, 'leaguepedia-cargo', sourceId, path) : undefined,
     })))
-    const lolEsports = await Promise.all(lolEsportsJsonPaths.map((path) => loadProviderPath({
-      path,
+    const lolEsports = await Promise.all(lolEsportsSources.map(({ path, sourceId, trusted }) => loadProviderPath({
+      path, sourceId,
+      trusted,
       provider: 'lol-esports-api',
       stateDir,
       oracleRetrievedAt,
       now,
       authority: authorities['lol-esports-api'],
-      previous: active?.providers.get(providerKey('lol-esports-api', path)),
+      previous: active ? previousProviderState(active, 'lol-esports-api', sourceId, path) : undefined,
     })))
     const results = [...oracle, ...leaguepedia, ...lolEsports]
     const metrics = { ...aggregateMetrics(results), reducerStateBytesRead: reducerStateIO.bytesRead }
+    if (active?.snapshotModelCache && 'bindMetrics' in active.snapshotModelCache) {
+      active.snapshotModelCache.bindMetrics(metrics)
+    }
+    active?.checkpointLoader?.bindMetrics(metrics)
     const providerFallback = results.find((result) => result.fallback)?.fallback
     if (removedFallback || providerFallback) return { fallback: removedFallback ?? providerFallback, metrics }
 
     const successful = results
       .filter((result): result is ProviderPathResult & { ledger: ProviderFileLedger; entry: ProviderGenerationEntry } => Boolean(result.ledger && result.entry))
-      .toSorted((left, right) => providerKey(left.entry.provider, left.entry.sourcePath).localeCompare(providerKey(right.entry.provider, right.entry.sourcePath)))
+      .toSorted((left, right) => providerIdentity(left.entry).localeCompare(providerIdentity(right.entry)))
     const ledgers = successful.map((result) => result.ledger)
     const canonical = loadCanonicalState({ stateDir, ledgers, previous: active })
     const generation: StateGeneration = {
@@ -284,6 +345,10 @@ export async function loadIncrementalCommunityImports({
       canonical: canonical.entry,
       fileSet: currentFileSet,
       compatibility,
+      ...(active?.generation.reducerCheckpoints ? { reducerCheckpoints: active.generation.reducerCheckpoints } : {}),
+      ...(active?.generation.playerCheckpoints ? { playerCheckpoints: active.generation.playerCheckpoints } : {}),
+      ...(active?.generation.artifactCache ? { artifactCache: active.generation.artifactCache } : {}),
+      ...(active?.generation.snapshotModelCache ? { snapshotModelCache: active.generation.snapshotModelCache } : {}),
     }
     const generationHash = stableHash(generation)
     const stagedWrites = uniqueWrites([
@@ -321,6 +386,7 @@ export async function loadIncrementalCommunityImports({
       } : {}),
       ...(active?.artifactCache.length ? { artifactCache: active.artifactCache } : {}),
       ...(active?.snapshotModelCache ? { snapshotModelCache: active.snapshotModelCache } : {}),
+      ...(active?.checkpointLoader ? { checkpointLoader: active.checkpointLoader } : {}),
       ...(restoreFallback ? { fallback: restoreFallback } : {}),
     }
   } catch (error) {
@@ -417,7 +483,7 @@ export function attachIncrementalReducerCheckpoint(
   verifyGeneration(generation)
   const checkpoints = Array.isArray(checkpointOrHistory) ? checkpointOrHistory : [checkpointOrHistory]
   const checkpointWrites: PendingIncrementalStateWrite[] = []
-  const reducerCheckpoints = checkpoints.map((checkpoint): ReducerCheckpointGenerationEntry => {
+  const newReducerCheckpoints = checkpoints.map((checkpoint): ReducerCheckpointGenerationEntry => {
     const journalHashes: ReducerJournalHashes = {
       histories: privateStateHash(checkpoint.team.journals.histories),
       predictions: privateStateHash(checkpoint.team.journals.predictions),
@@ -447,6 +513,7 @@ export function attachIncrementalReducerCheckpoint(
     )
     return { processedDate: checkpoint.processedDate, checkpointHash, journalHashes, retention: checkpoint.retention }
   })
+  const reducerCheckpoints = mergeCheckpointEntries(generation.reducerCheckpoints ?? [], newReducerCheckpoints)
   const nextGeneration: StateGeneration = { ...generation, reducerCheckpoints }
   const generationHash = stableHash(nextGeneration)
   const reducerWrites = uniqueWrites(checkpointWrites)
@@ -482,7 +549,7 @@ export function attachIncrementalPlayerCheckpoints(
   verifyGeneration(generation)
   const checkpoints = Array.isArray(checkpointOrHistory) ? checkpointOrHistory : [checkpointOrHistory]
   const checkpointWrites: PendingIncrementalStateWrite[] = []
-  const playerCheckpoints = checkpoints.map((checkpoint): PlayerCheckpointGenerationEntry => {
+  const newPlayerCheckpoints = checkpoints.map((checkpoint): PlayerCheckpointGenerationEntry => {
     const historyHash = privateStateHash(checkpoint.player.history)
     const core: PersistedPlayerCheckpointCore = {
       schemaVersion: checkpoint.schemaVersion,
@@ -518,6 +585,7 @@ export function attachIncrementalPlayerCheckpoints(
     )
     return { processedDate: checkpoint.processedDate, checkpointHash, historyHash, retention: checkpoint.retention }
   })
+  const playerCheckpoints = mergeCheckpointEntries(generation.playerCheckpoints ?? [], newPlayerCheckpoints)
   const nextGeneration: StateGeneration = { ...generation, playerCheckpoints }
   const generationHash = stableHash(nextGeneration)
   const playerWrites = uniqueWrites(checkpointWrites)
@@ -580,6 +648,11 @@ export function attachIncrementalArtifactCache(
   }
 }
 
+function mergeCheckpointEntries<T extends { processedDate?: string }>(previous: T[], next: T[]): T[] {
+  return [...new Map([...previous, ...next].map((entry) => [entry.processedDate ?? '', entry])).values()]
+    .toSorted((left, right) => (left.processedDate ?? '').localeCompare(right.processedDate ?? ''))
+}
+
 export function attachIncrementalSnapshotModelCache(
   promotion: IncrementalStatePromotion,
   stateDir: string,
@@ -596,26 +669,60 @@ export function attachIncrementalSnapshotModelCache(
   }
   const generation = envelope.payload as StateGeneration
   verifyGeneration(generation)
-  const cacheHash = privateStateHash(snapshotModelCache)
-  const cacheWrite = contentWrite(
-    resolve(stateDir, 'snapshot-models', 'caches', `${cacheHash}.json`),
-    'snapshot-model-cache',
-    cacheHash,
-    snapshotModelCache,
+  const entryWrites: PendingIncrementalStateWrite[] = []
+  const entries: SnapshotModelCacheEntryReference[] = []
+  for (const collection of snapshotModelCollections()) {
+    for (const [key, value] of [...snapshotModelCache[collection]].sort(([left], [right]) => left.localeCompare(right))) {
+      const payload: SnapshotModelCacheEntryPayload = {
+        schemaVersion: 2,
+        kind: 'snapshot-model-cache-entry',
+        compatibilityHash: snapshotModelCache.compatibilityHash,
+        collection,
+        key,
+        value,
+      }
+      const hash = privateStateHash(payload)
+      const write = contentWrite(
+        resolve(stateDir, 'snapshot-models', 'entries', `${hash}.json`),
+        'snapshot-model-cache-entry',
+        hash,
+        payload,
+      )
+      entryWrites.push(write)
+      entries.push({ collection, key, hash, bytes: encodedByteLength(write.contents) })
+    }
+  }
+  const index: SnapshotModelCacheIndexV2 = {
+    schemaVersion: 2,
+    kind: 'snapshot-model-cache-index',
+    compatibilityHash: snapshotModelCache.compatibilityHash,
+    entries,
+  }
+  validateSnapshotModelCacheIndex(index, snapshotModelCache.compatibilityHash)
+  const indexHash = privateStateHash(index)
+  const indexWrite = contentWrite(
+    resolve(stateDir, 'snapshot-models', 'indexes', `${indexHash}.json`),
+    'snapshot-model-cache-index',
+    indexHash,
+    index,
   )
   const nextGeneration: StateGeneration = {
     ...generation,
     snapshotModelCache: {
-      cacheHash,
+      schemaVersion: 2,
+      indexHash,
       rankingResults: snapshotModelCache.rankingResults.size,
       playerResults: snapshotModelCache.playerResults.size,
+      entryCount: entries.length,
+      entryHashes: entries.map((entry) => entry.hash).toSorted(),
     },
   }
   const generationHash = stableHash(nextGeneration)
   return {
     stagedWrites: uniqueWrites([
       ...promotion.stagedWrites.filter((write) => write.path !== generationPath),
-      cacheWrite,
+      ...entryWrites,
+      indexWrite,
       contentWrite(resolve(stateDir, 'generations', `${generationHash}.json`), 'state-generation', generationHash, nextGeneration),
     ]),
     pointerWrite: privateWrite(resolve(stateDir, 'active-generation.json'), {
@@ -623,7 +730,9 @@ export function attachIncrementalSnapshotModelCache(
       kind: 'active-generation',
       generationHash,
     } satisfies ActiveGenerationPointer),
-    reducerStateBytesWritten: promotion.reducerStateBytesWritten + encodedByteLength(cacheWrite.contents),
+    reducerStateBytesWritten: promotion.reducerStateBytesWritten
+      + entryWrites.reduce((sum, write) => sum + encodedByteLength(write.contents), 0)
+      + encodedByteLength(indexWrite.contents),
   }
 }
 
@@ -652,7 +761,7 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
   )
   verifyCanonicalLedger(canonicalLedger)
   validateGenerationLinkage(generation, providers, canonicalLedger)
-  const reducerCheckpoints: IncrementalReducerCheckpoint[] = []
+  const reducerCores: Array<{ entry: ReducerCheckpointGenerationEntry; core: PersistedReducerCheckpointCore }> = []
   for (const entry of generation.reducerCheckpoints ?? []) {
     const core = await readContentObject<PersistedReducerCheckpointCore>(
       resolve(stateDir, 'reducers', 'checkpoints', `${entry.checkpointHash}.json`),
@@ -661,43 +770,16 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
       reducerStateIO,
     )
     if (stableHash(core.teamJournalHashes) !== stableHash(entry.journalHashes)) throw new Error('Reducer checkpoint journal reference mismatch')
-    const histories = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['histories']>(
-      resolve(stateDir, 'reducers', 'journals', 'histories', `${entry.journalHashes.histories}.json`),
-      'reducer-journal',
-      entry.journalHashes.histories,
-      reducerStateIO,
-    )
-    const predictions = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['predictions']>(
-      resolve(stateDir, 'reducers', 'journals', 'predictions', `${entry.journalHashes.predictions}.json`),
-      'reducer-journal',
-      entry.journalHashes.predictions,
-      reducerStateIO,
-    )
-    const leagueHistory = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['leagueHistory']>(
-      resolve(stateDir, 'reducers', 'journals', 'league-history', `${entry.journalHashes.leagueHistory}.json`),
-      'reducer-journal',
-      entry.journalHashes.leagueHistory,
-      reducerStateIO,
-    )
-    const journals = { histories, predictions, leagueHistory }
-    const checkpoint: IncrementalReducerCheckpoint = {
-      schemaVersion: core.schemaVersion,
-      processedDate: core.processedDate,
-      canonicalPrefixHash: core.canonicalPrefixHash,
-      dependencyHash: core.dependencyHash,
-      dependencyPlan: core.dependencyPlan,
-      retention: core.retention,
-      livePlayerEdge: core.livePlayerEdge,
-      team: { ...core.team, journals },
-    }
-    if (!isIncrementalReducerCheckpoint(checkpoint)
-      || checkpoint.processedDate !== entry.processedDate
-      || stableHash(checkpoint.retention) !== stableHash(entry.retention)) {
+    if (core.processedDate !== entry.processedDate
+      || core.processedDate !== core.livePlayerEdge.processedDate
+      || core.processedDate !== core.team.processedDate
+      || stableHash(core.retention) !== stableHash(entry.retention)
+      || core.canonicalPrefixHash !== canonicalPrefixHash(canonicalLedger.matches, core.processedDate)) {
       throw new Error('Incompatible reducer checkpoint object')
     }
-    reducerCheckpoints.push(checkpoint)
+    reducerCores.push({ entry, core })
   }
-  const playerCheckpoints: IncrementalPlayerCheckpoint[] = []
+  const playerCores: Array<{ entry: PlayerCheckpointGenerationEntry; core: PersistedPlayerCheckpointCore }> = []
   for (const entry of generation.playerCheckpoints ?? []) {
     const core = await readContentObject<PersistedPlayerCheckpointCore>(
       resolve(stateDir, 'players', 'checkpoints', `${entry.checkpointHash}.json`),
@@ -706,29 +788,15 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
       reducerStateIO,
     )
     if (core.historyHash !== entry.historyHash) throw new Error('Player checkpoint history reference mismatch')
-    const history = await readContentObject<IncrementalPlayerCheckpoint['player']['history']>(
-      resolve(stateDir, 'players', 'journals', 'history', `${entry.historyHash}.json`),
-      'player-history-journal',
-      entry.historyHash,
-      reducerStateIO,
-    )
-    const checkpoint: IncrementalPlayerCheckpoint = {
-      schemaVersion: core.schemaVersion,
-      processedDate: core.processedDate,
-      canonicalPrefixHash: core.canonicalPrefixHash,
-      dependencyHash: core.dependencyHash,
-      residualControlHash: core.residualControlHash,
-      retention: core.retention,
-      player: { ...core.player, history },
-    }
-    if (!isIncrementalPlayerCheckpoint(checkpoint)
-      || checkpoint.processedDate !== entry.processedDate
-      || stableHash(checkpoint.retention) !== stableHash(entry.retention)) {
+    if (core.processedDate !== entry.processedDate
+      || core.processedDate !== core.player.processedDate
+      || stableHash(core.retention) !== stableHash(entry.retention)
+      || core.canonicalPrefixHash !== fullMatchCanonicalPrefixHash(canonicalLedger.matches, core.processedDate)) {
       throw new Error('Incompatible player checkpoint object')
     }
-    playerCheckpoints.push(checkpoint)
+    playerCores.push({ entry, core })
   }
-  validateCheckpointLinkage(canonicalLedger, reducerCheckpoints, playerCheckpoints)
+  const checkpointLoader = createCheckpointLoader(stateDir, reducerCores, playerCores, reducerStateIO)
   const artifactCache = generation.artifactCache
     ? await readContentObject<PersistedArtifactNode[]>(
         resolve(stateDir, 'artifacts', 'caches', `${generation.artifactCache.cacheHash}.json`),
@@ -742,21 +810,194 @@ async function loadActiveGeneration(stateDir: string, reducerStateIO: ReducerSta
     throw new Error('Artifact cache node count mismatch')
   }
   const snapshotModelCache = generation.snapshotModelCache
-    ? await readContentObject<PersistedSnapshotModelState>(
-        resolve(stateDir, 'snapshot-models', 'caches', `${generation.snapshotModelCache.cacheHash}.json`),
-        'snapshot-model-cache',
-        generation.snapshotModelCache.cacheHash,
-        reducerStateIO,
-      )
+    ? await loadSnapshotModelCache(stateDir, generation.snapshotModelCache, generation.compatibility.hash, reducerStateIO)
     : undefined
-  if (snapshotModelCache) {
+  if (snapshotModelCache && 'rankingCatalogs' in snapshotModelCache) {
     validatePersistedSnapshotModelState(snapshotModelCache, generation.compatibility.hash)
     if (snapshotModelCache.rankingResults.size !== generation.snapshotModelCache?.rankingResults
       || snapshotModelCache.playerResults.size !== generation.snapshotModelCache?.playerResults) {
       throw new Error('Snapshot model cache result count mismatch')
     }
   }
-  return { generation, providers, canonicalLedger, reducerCheckpoints, playerCheckpoints, artifactCache, snapshotModelCache }
+  return {
+    generation,
+    providers,
+    canonicalLedger,
+    reducerCheckpoints: [],
+    playerCheckpoints: [],
+    artifactCache,
+    snapshotModelCache,
+    checkpointLoader,
+  }
+}
+
+async function loadSnapshotModelCache(
+  stateDir: string,
+  generationEntry: SnapshotModelCacheGenerationEntry,
+  compatibilityHash: string,
+  reducerStateIO: ReducerStateIOMetrics,
+): Promise<PersistedSnapshotModelState | LazySnapshotModelCacheLookup> {
+  if (!('schemaVersion' in generationEntry) || generationEntry.schemaVersion === undefined || generationEntry.schemaVersion === 1) {
+    return readContentObject<PersistedSnapshotModelState>(
+      resolve(stateDir, 'snapshot-models', 'caches', `${generationEntry.cacheHash}.json`),
+      'snapshot-model-cache',
+      generationEntry.cacheHash,
+      reducerStateIO,
+    )
+  }
+  const index = await readContentObject<SnapshotModelCacheIndexV2>(
+    resolve(stateDir, 'snapshot-models', 'indexes', `${generationEntry.indexHash}.json`),
+    'snapshot-model-cache-index',
+    generationEntry.indexHash,
+    reducerStateIO,
+  )
+  validateSnapshotModelCacheIndex(index, compatibilityHash)
+  if (index.entries.length !== generationEntry.entryCount) throw new Error('Snapshot model cache entry count mismatch')
+  if (stableHash(index.entries.map((entry) => entry.hash).toSorted()) !== stableHash(generationEntry.entryHashes)) {
+    throw new Error('Snapshot model cache generation entry references do not match its index')
+  }
+  if (index.entries.filter((entry) => entry.collection === 'rankingResults').length !== generationEntry.rankingResults
+    || index.entries.filter((entry) => entry.collection === 'playerResults').length !== generationEntry.playerResults) {
+    throw new Error('Snapshot model cache result count mismatch')
+  }
+  const references = new Map(index.entries.map((entry) => [`${entry.collection}\u0000${entry.key}`, entry]))
+  let metricsTarget: IncrementalLoadMetrics | undefined
+  return {
+    schemaVersion: 2,
+    compatibilityHash,
+    bindMetrics(metrics) {
+      metricsTarget = metrics
+    },
+    get<T>(collection: SnapshotModelCollection, key: string): T | undefined {
+      const reference = references.get(`${collection}\u0000${key}`)
+      if (!reference) return undefined
+      const payload = readContentObjectSync<SnapshotModelCacheEntryPayload>(
+        resolve(stateDir, 'snapshot-models', 'entries', `${reference.hash}.json`),
+        'snapshot-model-cache-entry',
+        reference.hash,
+        reducerStateIO,
+        reference.bytes,
+      )
+      if (payload.schemaVersion !== 2 || payload.kind !== 'snapshot-model-cache-entry'
+        || payload.compatibilityHash !== compatibilityHash
+        || payload.collection !== reference.collection || payload.key !== reference.key) {
+        throw new Error('Snapshot model cache entry reference mismatch')
+      }
+      if (metricsTarget) metricsTarget.reducerStateBytesRead = reducerStateIO.bytesRead
+      return payload.value as T
+    },
+  }
+}
+
+function createCheckpointLoader(
+  stateDir: string,
+  reducerCores: Array<{ entry: ReducerCheckpointGenerationEntry; core: PersistedReducerCheckpointCore }>,
+  playerCores: Array<{ entry: PlayerCheckpointGenerationEntry; core: PersistedPlayerCheckpointCore }>,
+  reducerStateIO: ReducerStateIOMetrics,
+): IncrementalCheckpointLoader {
+  let metricsTarget: IncrementalLoadMetrics | undefined
+  const syncMetrics = () => {
+    if (metricsTarget) metricsTarget.reducerStateBytesRead = reducerStateIO.bytesRead
+  }
+  return {
+    bindMetrics(metrics) {
+      metricsTarget = metrics
+    },
+    async loadReducerCheckpoints(matches, dependencyPlan) {
+      const selected = reducerCores
+        .filter(({ core }) => reducerCoreCanResume(core, matches, dependencyPlan))
+        .toSorted((left, right) => (left.core.processedDate ?? '').localeCompare(right.core.processedDate ?? ''))
+        .at(-1)
+      if (!selected) return []
+      const { entry, core } = selected
+      const histories = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['histories']>(
+        resolve(stateDir, 'reducers', 'journals', 'histories', `${entry.journalHashes.histories}.json`),
+        'reducer-journal', entry.journalHashes.histories, reducerStateIO,
+      )
+      const predictions = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['predictions']>(
+        resolve(stateDir, 'reducers', 'journals', 'predictions', `${entry.journalHashes.predictions}.json`),
+        'reducer-journal', entry.journalHashes.predictions, reducerStateIO,
+      )
+      const leagueHistory = await readContentObject<IncrementalReducerCheckpoint['team']['journals']['leagueHistory']>(
+        resolve(stateDir, 'reducers', 'journals', 'league-history', `${entry.journalHashes.leagueHistory}.json`),
+        'reducer-journal', entry.journalHashes.leagueHistory, reducerStateIO,
+      )
+      const checkpoint: IncrementalReducerCheckpoint = {
+        schemaVersion: core.schemaVersion,
+        processedDate: core.processedDate,
+        canonicalPrefixHash: core.canonicalPrefixHash,
+        dependencyHash: core.dependencyHash,
+        dependencyPlan: core.dependencyPlan,
+        retention: core.retention,
+        livePlayerEdge: core.livePlayerEdge,
+        team: { ...core.team, journals: { histories, predictions, leagueHistory } },
+      }
+      if (!isIncrementalReducerCheckpoint(checkpoint)) throw new Error('Incompatible selected reducer checkpoint object')
+      syncMetrics()
+      return [checkpoint]
+    },
+    async loadPlayerCheckpoints(matches, dependencyHash) {
+      const selected = playerCores
+        .filter(({ core }) => core.dependencyHash === dependencyHash
+          && core.processedDate === core.player.processedDate
+          && (!core.processedDate || matches.some((match) => match.date === core.processedDate))
+          && core.canonicalPrefixHash === fullMatchCanonicalPrefixHash(matches, core.processedDate))
+        .toSorted((left, right) => (left.core.processedDate ?? '').localeCompare(right.core.processedDate ?? ''))
+        .at(-1)
+      if (!selected) return []
+      const { entry, core } = selected
+      const history = await readContentObject<IncrementalPlayerCheckpoint['player']['history']>(
+        resolve(stateDir, 'players', 'journals', 'history', `${entry.historyHash}.json`),
+        'player-history-journal', entry.historyHash, reducerStateIO,
+      )
+      const checkpoint: IncrementalPlayerCheckpoint = {
+        schemaVersion: core.schemaVersion,
+        processedDate: core.processedDate,
+        canonicalPrefixHash: core.canonicalPrefixHash,
+        dependencyHash: core.dependencyHash,
+        residualControlHash: core.residualControlHash,
+        retention: core.retention,
+        player: { ...core.player, history },
+      }
+      if (!isIncrementalPlayerCheckpoint(checkpoint)) throw new Error('Incompatible selected player checkpoint object')
+      syncMetrics()
+      return [checkpoint]
+    },
+  }
+}
+
+function reducerCoreCanResume(
+  checkpoint: PersistedReducerCheckpointCore,
+  matches: CanonicalRankingInput['matches'],
+  dependencyPlan: ReducerDependencyPlan,
+) {
+  const dependencyChange = reducerDependencyChange(checkpoint.dependencyPlan, dependencyPlan)
+  if (!dependencyChange.stableCompatible) return false
+  if (dependencyChange.influenceDate && (!checkpoint.processedDate || checkpoint.processedDate >= dependencyChange.influenceDate)) return false
+  if (checkpoint.processedDate !== checkpoint.livePlayerEdge.processedDate
+    || checkpoint.processedDate !== checkpoint.team.processedDate) return false
+  if (checkpoint.processedDate && !matches.some((match) => match.date === checkpoint.processedDate)) return false
+  return checkpoint.canonicalPrefixHash === canonicalPrefixHash(matches, checkpoint.processedDate)
+}
+
+function snapshotModelCollections(): SnapshotModelCollection[] {
+  return ['rankingCatalogs', 'playerCatalogs', 'rankingResults', 'playerResults']
+}
+
+function validateSnapshotModelCacheIndex(index: SnapshotModelCacheIndexV2, compatibilityHash: string) {
+  if (index.schemaVersion !== 2 || index.kind !== 'snapshot-model-cache-index'
+    || index.compatibilityHash !== compatibilityHash || !Array.isArray(index.entries)) {
+    throw new Error('Invalid snapshot model cache v2 index')
+  }
+  const keys = new Set<string>()
+  for (const entry of index.entries) {
+    const identity = `${entry.collection}\u0000${entry.key}`
+    if (!snapshotModelCollections().includes(entry.collection) || !entry.key || !entry.hash
+      || !Number.isSafeInteger(entry.bytes) || entry.bytes <= 0 || keys.has(identity)) {
+      throw new Error('Invalid or duplicate snapshot model cache v2 entry')
+    }
+    keys.add(identity)
+  }
 }
 
 function loadCanonicalState({
@@ -802,21 +1043,38 @@ function providerCanonicalState(ledger: ProviderFileLedger) {
 
 async function loadProviderPath({
   path,
+  sourceId,
   provider,
   stateDir,
   oracleRetrievedAt,
   now,
   authority,
   previous,
+  trusted,
 }: {
   path: string
+  sourceId: string
   provider: ProviderId
   stateDir: string
   oracleRetrievedAt: string
   now: string
   authority: ProviderAuthority
   previous?: LoadedProviderState
+  trusted?: { digest: string; bytes: number }
 }): Promise<ProviderPathResult> {
+  if (trusted && previous?.entry.trustedDigest === trusted.digest && previous.entry.trustedBytes === trusted.bytes) {
+    const ledger = provider === 'oracles-elixir'
+      ? { ...previous.ledger, source: { ...previous.ledger.source, retrievedAt: oracleRetrievedAt } }
+      : previous.ledger
+    const ledgerHash = stableHash(ledger)
+    return {
+      ledger,
+      entry: providerEntry({ sourceId, provider, signature: previous.entry.signature, ledgerHash, authority, trusted }),
+      contentRead: false,
+      metrics: { bytesScanned: 0, rowsParsed: 0, observationsNormalized: 0, observationsReused: ledger.observations.length },
+      ...(ledgerHash === previous.entry.ledgerHash ? {} : { objectWrite: providerObjectWrite(stateDir, ledgerHash, ledger) }),
+    }
+  }
   const signature = await signatureFor(path)
   const previousLedger = previous?.ledger
   if (previous && equalSignature(previous.entry.signature, signature)) {
@@ -826,7 +1084,7 @@ async function loadProviderPath({
     const ledgerHash = stableHash(ledger)
     return {
       ledger,
-      entry: providerEntry({ path, provider, signature, ledgerHash, authority }),
+      entry: providerEntry({ sourceId, provider, signature, ledgerHash, authority, trusted }),
       contentRead: false,
       metrics: { bytesScanned: 0, rowsParsed: 0, observationsNormalized: 0, observationsReused: ledger.observations.length },
       ...(ledgerHash === previous.entry.ledgerHash ? {} : { objectWrite: providerObjectWrite(stateDir, ledgerHash, ledger) }),
@@ -834,7 +1092,11 @@ async function loadProviderPath({
   }
 
   const contents = await readFile(path, 'utf8')
-  const fingerprint: ProviderFileFingerprint = { provider, fileId: basename(path), byteLength: signature.byteLength, contentHash: sha256Hex(contents) }
+  const contentHash = sha256Hex(contents)
+  if (trusted && (signature.byteLength !== trusted.bytes || contentHash !== trusted.digest)) {
+    throw new Error(`Trusted provider chunk mismatch for ${sourceId}`)
+  }
+  const fingerprint: ProviderFileFingerprint = { provider, fileId: sourceId, byteLength: signature.byteLength, contentHash }
   if (previousLedger && compatibleFingerprint(previousLedger.fingerprint, fingerprint)) {
     const ledger = provider === 'oracles-elixir'
       ? { ...previousLedger, source: { ...previousLedger.source, retrievedAt: oracleRetrievedAt } }
@@ -842,7 +1104,7 @@ async function loadProviderPath({
     const ledgerHash = stableHash(ledger)
     return {
       ledger,
-      entry: providerEntry({ path, provider, signature, ledgerHash, authority }),
+      entry: providerEntry({ sourceId, provider, signature, ledgerHash, authority, trusted }),
       contentRead: true,
       metrics: { bytesScanned: signature.byteLength, rowsParsed: 0, observationsNormalized: 0, observationsReused: ledger.observations.length },
       ...(ledgerHash === previous?.entry.ledgerHash ? {} : { objectWrite: providerObjectWrite(stateDir, ledgerHash, ledger) }),
@@ -866,7 +1128,7 @@ async function loadProviderPath({
   const ledgerHash = stableHash(result.ledger)
   return {
     ledger: result.ledger,
-    entry: providerEntry({ path, provider, signature, ledgerHash, authority }),
+    entry: providerEntry({ sourceId, provider, signature, ledgerHash, authority, trusted }),
     contentRead: true,
     metrics: result.metrics,
     objectWrite: providerObjectWrite(stateDir, ledgerHash, result.ledger),
@@ -874,19 +1136,29 @@ async function loadProviderPath({
 }
 
 function providerEntry({
-  path,
+  sourceId,
   provider,
   signature,
   ledgerHash,
   authority,
+  trusted,
 }: {
-  path: string
+  sourceId: string
   provider: ProviderId
   signature: FileSignature
   ledgerHash: string
   authority: ProviderAuthority
+  trusted?: { digest: string; bytes: number }
 }): ProviderGenerationEntry {
-  return { sourcePath: path, provider, signature, ledgerHash, authority, authorityHash: stableHash(authority) }
+  return {
+    sourcePath: sourceId,
+    provider,
+    signature,
+    ledgerHash,
+    authority,
+    authorityHash: stableHash(authority),
+    ...(trusted ? { trustedDigest: trusted.digest, trustedBytes: trusted.bytes } : {}),
+  }
 }
 
 function providerObjectWrite(stateDir: string, ledgerHash: string, ledger: ProviderFileLedger) {
@@ -915,11 +1187,19 @@ function verifyGeneration(generation: StateGeneration) {
     || typeof generation.artifactCache.nodeCount !== 'number')) {
     throw new Error('Invalid artifact cache index in state generation')
   }
-  if (generation.snapshotModelCache !== undefined && (!isRecord(generation.snapshotModelCache)
-    || typeof generation.snapshotModelCache.cacheHash !== 'string'
-    || typeof generation.snapshotModelCache.rankingResults !== 'number'
-    || typeof generation.snapshotModelCache.playerResults !== 'number')) {
-    throw new Error('Invalid snapshot model cache index in state generation')
+  if (generation.snapshotModelCache !== undefined) {
+    const cache = generation.snapshotModelCache
+    const commonValid = isRecord(cache)
+      && typeof cache.rankingResults === 'number'
+      && typeof cache.playerResults === 'number'
+    const v1Valid = commonValid && (cache.schemaVersion === undefined || cache.schemaVersion === 1)
+      && typeof cache.cacheHash === 'string'
+    const v2Valid = commonValid && cache.schemaVersion === 2
+      && typeof cache.indexHash === 'string'
+      && typeof cache.entryCount === 'number'
+      && Array.isArray(cache.entryHashes)
+      && cache.entryHashes.every((hash) => typeof hash === 'string')
+    if (!v1Valid && !v2Valid) throw new Error('Invalid snapshot model cache index in state generation')
   }
   if (generation.fileSet.authorityHash !== stableHash(generation.fileSet.authorities)) throw new Error('Provider file-set authority receipt hash mismatch')
   const compatibilityIntegrity = compatibilityFallback(generation.compatibility, generation.compatibility)
@@ -947,9 +1227,9 @@ function validateGenerationLinkage(
   providers: Map<string, LoadedProviderState>,
   canonicalLedger: CanonicalLedger,
 ) {
-  const ledgers = [...providers.values()].map(({ entry, ledger }) => {
+  const ledgers = [...providers.values()].toSorted((left, right) => providerIdentity(left.entry).localeCompare(providerIdentity(right.entry))).map(({ entry, ledger }) => {
     if (entry.provider !== ledger.fingerprint.provider
-      || basename(entry.sourcePath) !== ledger.fingerprint.fileId
+      || !sameProviderIdentity(entry.sourcePath, ledger.fingerprint.fileId)
       || entry.signature.byteLength !== ledger.fingerprint.byteLength) {
       throw new Error(`Provider ledger identity mismatch for ${entry.sourcePath}`)
     }
@@ -965,23 +1245,6 @@ function validateGenerationLinkage(
   const rebuilt = buildCanonicalLedger({ canonical, observations, contextDigests })
   if (stableHash(rebuilt) !== generation.canonical.ledgerHash || stableHash(rebuilt) !== stableHash(canonicalLedger)) {
     throw new Error('Canonical reconciliation linkage mismatch')
-  }
-}
-
-function validateCheckpointLinkage(
-  canonicalLedger: CanonicalLedger,
-  reducerCheckpoints: IncrementalReducerCheckpoint[],
-  playerCheckpoints: IncrementalPlayerCheckpoint[],
-) {
-  for (const checkpoint of reducerCheckpoints) {
-    if (checkpoint.canonicalPrefixHash !== canonicalPrefixHash(canonicalLedger.matches, checkpoint.processedDate)) {
-      throw new Error('Reducer checkpoint canonical linkage mismatch')
-    }
-  }
-  for (const checkpoint of playerCheckpoints) {
-    if (checkpoint.canonicalPrefixHash !== fullMatchCanonicalPrefixHash(canonicalLedger.matches, checkpoint.processedDate)) {
-      throw new Error('Player checkpoint canonical linkage mismatch')
-    }
   }
 }
 
@@ -1012,7 +1275,7 @@ function stateTreeSummary(generationHash: string, generation: StateGeneration, c
       `players/journals/history/${entry.historyHash}.json`,
     ]),
     ...(generation.artifactCache ? [`artifacts/caches/${generation.artifactCache.cacheHash}.json`] : []),
-    ...(generation.snapshotModelCache ? [`snapshot-models/caches/${generation.snapshotModelCache.cacheHash}.json`] : []),
+    ...snapshotModelCacheReachablePaths(generation.snapshotModelCache),
   ]
   const retention = [...new Set([
     ...(generation.reducerCheckpoints ?? []).flatMap((entry) => entry.retention),
@@ -1048,22 +1311,33 @@ function recomputeCanonicalRoot(ledger: CanonicalLedger) {
   })
 }
 
+function snapshotModelCacheReachablePaths(entry: SnapshotModelCacheGenerationEntry | undefined) {
+  if (!entry) return []
+  if (!('schemaVersion' in entry) || entry.schemaVersion === undefined || entry.schemaVersion === 1) {
+    return [`snapshot-models/caches/${entry.cacheHash}.json`]
+  }
+  return [
+    `snapshot-models/indexes/${entry.indexHash}.json`,
+    ...entry.entryHashes.map((hash) => `snapshot-models/entries/${hash}.json`),
+  ]
+}
+
 function fileSetFor({
-  oracleCsvPaths,
-  leaguepediaJsonPaths,
-  lolEsportsJsonPaths,
+  oracleSources,
+  leaguepediaSources,
+  lolEsportsSources,
   authorities,
 }: {
-  oracleCsvPaths: string[]
-  leaguepediaJsonPaths: string[]
-  lolEsportsJsonPaths: string[]
+  oracleSources: Array<{ sourceId: string }>
+  leaguepediaSources: Array<{ sourceId: string }>
+  lolEsportsSources: Array<{ sourceId: string }>
   authorities: ProviderAuthorities
 }): GenerationFileSet {
   return {
     paths: {
-      'oracles-elixir': [...oracleCsvPaths].sort(),
-      'leaguepedia-cargo': [...leaguepediaJsonPaths].sort(),
-      'lol-esports-api': [...lolEsportsJsonPaths].sort(),
+      'oracles-elixir': oracleSources.map(({ sourceId }) => sourceId).sort(),
+      'leaguepedia-cargo': leaguepediaSources.map(({ sourceId }) => sourceId).sort(),
+      'lol-esports-api': lolEsportsSources.map(({ sourceId }) => sourceId).sort(),
     },
     authorities,
     authorityHash: stableHash(authorities),
@@ -1072,7 +1346,14 @@ function fileSetFor({
 
 function removedFileFallback(previous: GenerationFileSet, current: GenerationFileSet): IncrementalFallbackReason | undefined {
   for (const provider of ['oracles-elixir', 'leaguepedia-cargo', 'lol-esports-api'] as const) {
-    const removed = previous.paths[provider].filter((path) => !current.paths[provider].includes(path))
+    const currentNames = logicalFileNameCounts(current.paths[provider])
+    const seen = new Map<string, number>()
+    const removed = previous.paths[provider].filter((path) => {
+      const name = logicalFileName(path)
+      const occurrence = (seen.get(name) ?? 0) + 1
+      seen.set(name, occurrence)
+      return occurrence > (currentNames.get(name) ?? 0)
+    })
     if (removed.length > 0 && !current.authorities[provider].fileSetAuthoritative) {
       return { kind: 'dependency-unknown', dependency: `ambiguous-provider-file-removal:${provider}:${removed.join(',')}` }
     }
@@ -1094,6 +1375,10 @@ function parseProviderEntry(value: unknown): ProviderGenerationEntry {
   const entry = value as ProviderGenerationEntry
   if (!isProviderId(entry.provider)) throw new Error(`Invalid provider ID for ${entry.sourcePath}`)
   if (entry.authorityHash !== stableHash(entry.authority)) throw new Error(`Provider authority receipt hash mismatch for ${entry.sourcePath}`)
+  if ((entry.trustedDigest !== undefined || entry.trustedBytes !== undefined)
+    && (typeof entry.trustedDigest !== 'string' || !Number.isSafeInteger(entry.trustedBytes) || (entry.trustedBytes ?? 0) <= 0)) {
+    throw new Error(`Invalid trusted provider chunk reference for ${entry.sourcePath}`)
+  }
   return entry
 }
 
@@ -1106,17 +1391,25 @@ async function readContentObject<T>(
   kind: ContentEnvelope['kind'],
   expectedHash: string,
   reducerStateIO?: ReducerStateIOMetrics,
+  expectedBytes?: number,
 ): Promise<T> {
   const contents = await readFile(path, 'utf8')
+  if (expectedBytes !== undefined && encodedByteLength(contents) !== expectedBytes) {
+    throw new Error(`${kind} byte length mismatch`)
+  }
   if (reducerStateIO && (kind === 'reducer-checkpoint'
     || kind === 'reducer-journal'
     || kind === 'player-checkpoint'
     || kind === 'player-history-journal'
     || kind === 'artifact-cache'
-    || kind === 'snapshot-model-cache')) {
+    || kind === 'snapshot-model-cache'
+    || kind === 'snapshot-model-cache-index'
+    || kind === 'snapshot-model-cache-entry')) {
     reducerStateIO.bytesRead += encodedByteLength(contents)
+    reducerStateIO.objectsRead += 1
   }
   const value = decodePrivateState(contents)
+  if (reducerStateIO) reducerStateIO.objectsDecoded += 1
   if (!isRecord(value) || value.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION || value.kind !== kind || value.contentHash !== expectedHash) {
     throw new Error(`Invalid ${kind} envelope`)
   }
@@ -1126,9 +1419,32 @@ async function readContentObject<T>(
     || kind === 'player-history-journal'
     || kind === 'artifact-cache'
     || kind === 'snapshot-model-cache'
+    || kind === 'snapshot-model-cache-index'
+    || kind === 'snapshot-model-cache-entry'
     ? privateStateHash(value.payload)
     : stableHash(value.payload)
   if (payloadHash !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
+  return value.payload as T
+}
+
+function readContentObjectSync<T>(
+  path: string,
+  kind: ContentEnvelope['kind'],
+  expectedHash: string,
+  reducerStateIO: ReducerStateIOMetrics,
+  expectedBytes?: number,
+): T {
+  const contents = readFileSync(path, 'utf8')
+  const bytes = encodedByteLength(contents)
+  if (expectedBytes !== undefined && bytes !== expectedBytes) throw new Error(`${kind} byte length mismatch`)
+  reducerStateIO.bytesRead += bytes
+  reducerStateIO.objectsRead += 1
+  const value = decodePrivateState(contents)
+  reducerStateIO.objectsDecoded += 1
+  if (!isRecord(value) || value.schemaVersion !== LOCAL_STATE_SCHEMA_VERSION || value.kind !== kind || value.contentHash !== expectedHash) {
+    throw new Error(`Invalid ${kind} envelope`)
+  }
+  if (privateStateHash(value.payload) !== expectedHash) throw new Error(`${kind} semantic hash mismatch`)
   return value.payload as T
 }
 
@@ -1237,6 +1553,66 @@ function checkpointCorrupt(error: unknown): IncrementalFallbackReason {
 
 function providerKey(provider: ProviderId, path: string) {
   return stableHash({ provider, path })
+}
+
+function providerIdentity(entry: Pick<ProviderGenerationEntry, 'provider' | 'sourcePath'>) {
+  return `${entry.provider}\u0000${entry.sourcePath}`
+}
+
+function providerSources(
+  provider: ProviderId,
+  paths: string[],
+  explicitSourceIds?: string[],
+  trustedSources?: Record<string, { digest: string; bytes: number }>,
+) {
+  if (explicitSourceIds && explicitSourceIds.length !== paths.length) {
+    throw new Error(`${provider} source ID count must match its source path count`)
+  }
+  const sourceIds = explicitSourceIds?.map(normalizeSourceId) ?? paths.map((path) => normalizeSourceId(basename(path)))
+  const duplicate = sourceIds.find((sourceId, index) => sourceIds.indexOf(sourceId) !== index)
+  if (duplicate) {
+    throw new Error(`${provider} has duplicate logical source ID ${duplicate}; provide explicit manifest-relative source IDs`)
+  }
+  return paths.map((path, index) => {
+    const sourceId = sourceIds[index]!
+    return { path, sourceId, trusted: trustedSources?.[sourceId] }
+  })
+}
+
+function previousProviderState(active: LoadedGeneration, provider: ProviderId, sourceId: string, runtimePath: string) {
+  const direct = active.providers.get(providerKey(provider, sourceId))
+    ?? active.providers.get(providerKey(provider, runtimePath))
+  if (direct) return direct
+  const matches = [...active.providers.values()].filter(({ entry }) => (
+    entry.provider === provider && logicalFileName(entry.sourcePath) === logicalFileName(sourceId)
+  ))
+  return matches.length === 1 ? matches[0] : undefined
+}
+
+function logicalFileName(value: string) {
+  return basename(value).replace(/#\d+$/, '')
+}
+
+function normalizeSourceId(value: string) {
+  const normalized = value.normalize('NFKC').replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/{2,}/g, '/').trim()
+  if (!normalized || normalized.startsWith('/') || normalized.split('/').includes('..')) {
+    throw new Error(`Invalid logical provider source ID: ${value}`)
+  }
+  return normalized
+}
+
+function sameProviderIdentity(entrySourceId: string, ledgerFileId: string) {
+  return entrySourceId === ledgerFileId
+    || logicalFileName(entrySourceId) === logicalFileName(ledgerFileId)
+}
+
+function logicalFileNameCounts(values: string[]) {
+  const counts = new Map<string, number>()
+  for (const value of values) {
+    const name = logicalFileName(value)
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return counts
 }
 
 function oracleImportFor(ledger: ProviderFileLedger): OracleImportResult {

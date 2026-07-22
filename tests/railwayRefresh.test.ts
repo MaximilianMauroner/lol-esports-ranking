@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
+import { mkdtemp, readFile, rename, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -26,6 +26,13 @@ type RefreshWindow = {
   mode: string
 }
 type RefreshModule = {
+  compareRawBaselineManifests: (options: {
+    localManifest: unknown
+    remoteManifest: unknown
+    localUsable: boolean
+    remoteUsable: boolean
+    bootstrapStart: string
+  }) => { preferred: 'local' | 'remote' | 'none'; reason: string }
   createSourceFingerprint: (manifest: unknown) => Promise<{ fingerprint: string; healthFingerprint: string }>
   manifestHasBootstrapCoverage: (manifest: unknown, bootstrapStart: string) => boolean
   refreshDataIfChanged: (rawArgs?: string[], options?: {
@@ -33,6 +40,9 @@ type RefreshModule = {
     bucketClient?: BucketClient
     bucketConfig?: BucketConfig
     env?: Record<string, string | undefined>
+    rawPromotionOperations?: {
+      renameDirectory?: typeof rename
+    }
   }) => Promise<RefreshResult>
   refreshDateWindow: (options?: {
     args?: Record<string, string | undefined>
@@ -77,7 +87,7 @@ type BucketModule = {
 
 const refreshScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
 const bucketScriptPath: string = '../scripts/railway-bucket.mjs'
-const { createSourceFingerprint, manifestHasBootstrapCoverage, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
+const { compareRawBaselineManifests, createSourceFingerprint, manifestHasBootstrapCoverage, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
 const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import(bucketScriptPath) as unknown as BucketModule
 const isolatedRefreshEnv = {
   RANKING_BUCKET_RESTORE_RAW: 'false',
@@ -461,6 +471,634 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
   }
 })
 
+test('refresh prefers a healthier active raw baseline before a degraded rolling refresh', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-preferred-raw-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const localOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const localLeaguepediaPath = join(rawDir, 'leaguepedia', 'scoreboard-games-2025-01-01_to_2026-07-10.json')
+  const remoteOracle = 'gameid,result\nremote-through-july-19,1\n'
+  const fixture = rawGenerationFixture({
+    schemaVersion: 1,
+    generatedAt: '2026-07-19T06:00:00.000Z',
+    start: '2025-01-01',
+    end: '2026-07-19',
+    files: {
+      leaguepediaJson: ['leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json'],
+      oracleCsv: ['oracles-elixir/2026.csv'],
+    },
+    sources: {
+      leaguepedia: { role: 'backup-gap-fill', status: 'downloaded', downloadedCount: 1 },
+      oracle: { role: 'primary', status: 'downloaded', downloadedCount: 1 },
+    },
+    warnings: [],
+  }, {
+    'leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json': '{"matches":[]}\n',
+    'oracles-elixir/2026.csv': remoteOracle,
+  })
+  const requestedKeys: string[] = []
+  const client = rawGenerationClient(fixture, requestedKeys)
+
+  async function fakeRun(command: string, commandArgs: string[]) {
+    if (!commandArgs.includes('scripts/download-local-data.mjs')) {
+      throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
+    }
+    const outDir = valueAfter(commandArgs, '--out-dir')
+    const nextManifestPath = valueAfter(commandArgs, '--manifest')
+    const leaguepediaPath = join(outDir, 'leaguepedia', 'scoreboard-games-2026-07-13_to_2026-07-20.json')
+    await mkdir(dirname(leaguepediaPath), { recursive: true })
+    await writeFile(leaguepediaPath, '{"matches":[{"id":"new-game"}]}\n')
+    await writeFile(nextManifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-07-20T06:00:00.000Z',
+      start: '2026-07-13',
+      end: '2026-07-20',
+      files: { leaguepediaJson: [leaguepediaPath], oracleCsv: [] },
+      sources: {
+        leaguepedia: { role: 'backup-gap-fill', status: 'downloaded', downloadedCount: 1 },
+        oracle: { role: 'primary', status: 'failed', downloadedCount: 0, failedCount: 1 },
+      },
+      warnings: ['Oracle source 2026.csv was not downloaded: download returned HTML (Google Drive - Quota exceeded)'],
+    }, null, 2)}\n`)
+  }
+
+  try {
+    await mkdir(dirname(localOraclePath), { recursive: true })
+    await mkdir(dirname(localLeaguepediaPath), { recursive: true })
+    await writeFile(localOraclePath, 'gameid,result\nlocal-through-july-10,1\n')
+    await writeFile(localLeaguepediaPath, '{"matches":[]}\n')
+    await writeFile(manifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-07-10T06:00:00.000Z',
+      start: '2025-01-01',
+      end: '2026-07-10',
+      files: { leaguepediaJson: [localLeaguepediaPath], oracleCsv: [localOraclePath] },
+      sources: {
+        leaguepedia: { role: 'backup-gap-fill', status: 'downloaded', downloadedCount: 1 },
+        oracle: { role: 'primary', status: 'failed', downloadedCount: 0, failedCount: 1 },
+      },
+      warnings: ['Oracle refresh failed.'],
+    }, null, 2)}\n`)
+
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', join(tempDir, 'staging'),
+      '--lookback-days', '7',
+      '--end', '2026-07-20',
+      '--skip-crunch',
+    ], {
+      run: fakeRun,
+      bucketClient: client,
+      bucketConfig: bucketConfig(),
+      env: {
+        RANKING_BUCKET_RESTORE_RAW: 'true',
+        RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01',
+      },
+    })
+
+    const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    const state = JSON.parse(await readFile(statePath, 'utf8'))
+    assert.equal(await readFile(join(rawDir, 'oracles-elixir', '2026.csv'), 'utf8'), remoteOracle)
+    assert.equal(finalManifest.end, '2026-07-20')
+    assert.deepEqual(finalManifest.files.oracleCsv, [join(rawDir, 'oracles-elixir', '2026.csv')])
+    assert.equal(finalManifest.files.leaguepediaJson.length, 2)
+    assert.equal(finalManifest.sources.oracle.latestStatus, 'failed')
+    assert.equal(finalManifest.sources.oracle.previousStatus, 'downloaded')
+    assert.match(finalManifest.warnings.join('\n'), /Oracle source preserved from previous raw baseline/)
+    assert.equal(state.restoredRaw.restored, true)
+    assert.equal(state.restoredRaw.comparison.reason, 'remote-baseline-dominates')
+    assert.equal(requestedKeys.includes(`rankings/${fixture.sourceKeys[0]}`), true)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh supports nested custom raw manifest and state paths through remote baseline promotion', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-nested-raw-metadata-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'metadata', 'current.json')
+  const statePath = join(rawDir, 'metadata', 'refresh-state.json')
+  const localOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const localLeaguepediaPath = join(rawDir, 'leaguepedia', 'scoreboard-games-2025-01-01_to_2026-07-10.json')
+  const fixture = rawGenerationFixture({
+    schemaVersion: 1,
+    generatedAt: '2026-07-19T06:00:00.000Z',
+    start: '2025-01-01',
+    end: '2026-07-19',
+    files: {
+      leaguepediaJson: ['leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json'],
+      oracleCsv: ['oracles-elixir/2026.csv'],
+    },
+    sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'downloaded' } },
+  }, {
+    'leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json': '{"matches":[]}\n',
+    'oracles-elixir/2026.csv': 'gameid,result\nremote,1\n',
+  })
+
+  try {
+    await mkdir(dirname(localOraclePath), { recursive: true })
+    await mkdir(dirname(localLeaguepediaPath), { recursive: true })
+    await mkdir(dirname(manifestPath), { recursive: true })
+    await writeFile(localOraclePath, 'gameid,result\nlocal,1\n')
+    await writeFile(localLeaguepediaPath, '{"matches":[]}\n')
+    await writeFile(manifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-07-10T06:00:00.000Z',
+      start: '2025-01-01',
+      end: '2026-07-10',
+      files: { leaguepediaJson: [localLeaguepediaPath], oracleCsv: [localOraclePath] },
+      sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'failed' } },
+    })}\n`)
+    await writeFile(statePath, '{"fingerprint":"old-local"}\n')
+
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', join(tempDir, 'staging'),
+      '--lookback-days', '7',
+      '--end', '2026-07-20',
+      '--skip-crunch',
+    ], {
+      bucketClient: rawGenerationClient(fixture, []),
+      bucketConfig: bucketConfig(),
+      env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01' },
+      run: async (_command, args) => {
+        const outDir = valueAfter(args, '--out-dir')
+        const nextPath = join(outDir, 'leaguepedia', 'scoreboard-games-2026-07-13_to_2026-07-20.json')
+        await mkdir(dirname(nextPath), { recursive: true })
+        await writeFile(nextPath, '{"matches":[]}\n')
+        await writeFile(valueAfter(args, '--manifest'), `${JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-07-20T06:00:00.000Z',
+          start: '2026-07-13',
+          end: '2026-07-20',
+          files: { leaguepediaJson: [nextPath], oracleCsv: [] },
+          sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'failed' } },
+        })}\n`)
+      },
+    })
+
+    const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    const finalState = JSON.parse(await readFile(statePath, 'utf8'))
+    assert.equal(await readFile(join(rawDir, 'oracles-elixir', '2026.csv'), 'utf8'), 'gameid,result\nremote,1\n')
+    assert.equal(finalManifest.end, '2026-07-20')
+    assert.deepEqual(finalManifest.files.oracleCsv, [join(rawDir, 'oracles-elixir', '2026.csv')])
+    assert.equal(finalState.restoredRaw.restored, true)
+    assert.equal(finalState.restoredRaw.comparison.reason, 'remote-baseline-dominates')
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh preserves a newer healthy local baseline without downloading remote source payloads', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-local-raw-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const localOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const localLeaguepediaPath = join(rawDir, 'leaguepedia', 'scoreboard-games-2025-01-01_to_2026-07-20.json')
+  const fixture = rawGenerationFixture({
+    schemaVersion: 1,
+    generatedAt: '2026-07-19T06:00:00.000Z',
+    start: '2025-01-01',
+    end: '2026-07-19',
+    files: {
+      leaguepediaJson: ['leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json'],
+      oracleCsv: ['oracles-elixir/2026.csv'],
+    },
+    sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'downloaded' } },
+  }, {
+    'leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json': '{"matches":[]}\n',
+    'oracles-elixir/2026.csv': 'gameid,result\nremote,1\n',
+  })
+  const requestedKeys: string[] = []
+
+  try {
+    await mkdir(dirname(localOraclePath), { recursive: true })
+    await mkdir(dirname(localLeaguepediaPath), { recursive: true })
+    await writeFile(localOraclePath, 'gameid,result\nlocal,1\n')
+    await writeFile(localLeaguepediaPath, '{"matches":[]}\n')
+    await writeFile(manifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-07-20T06:00:00.000Z',
+      start: '2025-01-01',
+      end: '2026-07-20',
+      files: { leaguepediaJson: [localLeaguepediaPath], oracleCsv: [localOraclePath] },
+      sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'downloaded' } },
+    })}\n`)
+
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', join(rawDir, 'refresh-state.json'),
+      '--staging-dir', join(tempDir, 'staging'),
+      '--lookback-days', '7',
+      '--end', '2026-07-20',
+      '--skip-crunch',
+    ], {
+      bucketClient: rawGenerationClient(fixture, requestedKeys),
+      bucketConfig: bucketConfig(),
+      env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01' },
+      run: async (_command, args) => {
+        const outDir = valueAfter(args, '--out-dir')
+        const nextPath = join(outDir, 'leaguepedia', 'scoreboard-games-2026-07-13_to_2026-07-20.json')
+        await mkdir(dirname(nextPath), { recursive: true })
+        await writeFile(nextPath, '{"matches":[]}\n')
+        await writeFile(valueAfter(args, '--manifest'), `${JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-07-20T07:00:00.000Z',
+          start: '2026-07-13',
+          end: '2026-07-20',
+          files: { leaguepediaJson: [nextPath], oracleCsv: [] },
+          sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'failed' } },
+        })}\n`)
+      },
+    })
+
+    assert.equal(await readFile(localOraclePath, 'utf8'), 'gameid,result\nlocal,1\n')
+    assert.equal(fixture.sourceKeys.some((key) => requestedKeys.includes(`rankings/${key}`)), false)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh preserves usable local raw when active-generation inspection throws', async () => {
+  for (const failure of ['malformed-json', 'read-error'] as const) {
+    const tempDir = await mkdtemp(join(tmpdir(), `lol-ranking-inspection-${failure}-`))
+    const rawDir = join(tempDir, 'raw')
+    const manifestPath = join(rawDir, 'manifest.json')
+    const statePath = join(rawDir, 'refresh-state.json')
+    const oraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+    const leaguepediaPath = join(rawDir, 'leaguepedia', 'scoreboard-games-2025-01-01_to_2026-07-18.json')
+    const client = {
+      async send(command: { input: Record<string, unknown> }) {
+        assert.equal(command.input.Key, 'rankings/active-generation.json')
+        if (failure === 'read-error') throw new Error('injected active pointer read failure')
+        return { Body: Readable.from(['{not-json']), ContentLength: 9 }
+      },
+    }
+
+    try {
+      await mkdir(dirname(oraclePath), { recursive: true })
+      await mkdir(dirname(leaguepediaPath), { recursive: true })
+      await writeFile(oraclePath, 'gameid,result\nlocal,1\n')
+      await writeFile(leaguepediaPath, '{"matches":[]}\n')
+      await writeFile(manifestPath, `${JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-07-18T00:00:00.000Z',
+        start: '2025-01-01',
+        end: '2026-07-18',
+        files: { leaguepediaJson: [leaguepediaPath], oracleCsv: [oraclePath] },
+        sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'downloaded' } },
+      })}\n`)
+
+      await refreshDataIfChanged([
+        '--raw-dir', rawDir,
+        '--manifest', manifestPath,
+        '--state', statePath,
+        '--staging-dir', join(tempDir, 'staging'),
+        '--lookback-days', '7',
+        '--end', '2026-07-19',
+        '--skip-crunch',
+      ], {
+        bucketClient: client,
+        bucketConfig: bucketConfig(),
+        env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01' },
+        run: async (_command, args) => {
+          const outDir = valueAfter(args, '--out-dir')
+          const nextPath = join(outDir, 'leaguepedia', 'scoreboard-games-2026-07-12_to_2026-07-19.json')
+          await mkdir(dirname(nextPath), { recursive: true })
+          await writeFile(nextPath, '{"matches":[]}\n')
+          await writeFile(valueAfter(args, '--manifest'), `${JSON.stringify({
+            schemaVersion: 1,
+            generatedAt: '2026-07-19T00:00:00.000Z',
+            start: '2026-07-12',
+            end: '2026-07-19',
+            files: { leaguepediaJson: [nextPath], oracleCsv: [] },
+            sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'failed' } },
+          })}\n`)
+        },
+      })
+
+      const state = JSON.parse(await readFile(statePath, 'utf8'))
+      assert.equal(await readFile(oraclePath, 'utf8'), 'gameid,result\nlocal,1\n')
+      assert.equal(state.restoredRaw.selection, 'local')
+      assert.equal(state.restoredRaw.reason, 'remote-inspection-failed')
+      assert.equal(state.restoredRaw.inspection.status, 'failed')
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  }
+})
+
+test('refresh preserves usable local raw when a selected remote source payload read throws', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-source-read-failure-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const oraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const leaguepediaPath = join(rawDir, 'leaguepedia', 'scoreboard-games-2025-01-01_to_2026-07-10.json')
+  const fixture = rawGenerationFixture({
+    schemaVersion: 1,
+    generatedAt: '2026-07-19T00:00:00.000Z',
+    start: '2025-01-01',
+    end: '2026-07-19',
+    files: {
+      leaguepediaJson: ['leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json'],
+      oracleCsv: ['oracles-elixir/2026.csv'],
+    },
+    sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'downloaded' } },
+  }, {
+    'leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json': '{"matches":[]}\n',
+    'oracles-elixir/2026.csv': 'gameid,result\nremote,1\n',
+  })
+  const baseClient = rawGenerationClient(fixture, [])
+  const client = {
+    async send(command: { input: Record<string, unknown> }) {
+      const relativeKey = String(command.input.Key).replace(/^rankings\//, '')
+      if (fixture.sourceKeys.includes(relativeKey)) throw new Error('injected selected source read failure')
+      return baseClient.send(command)
+    },
+  }
+
+  try {
+    await mkdir(dirname(oraclePath), { recursive: true })
+    await mkdir(dirname(leaguepediaPath), { recursive: true })
+    await writeFile(oraclePath, 'gameid,result\nlocal,1\n')
+    await writeFile(leaguepediaPath, '{"matches":[]}\n')
+    await writeFile(manifestPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-07-10T00:00:00.000Z',
+      start: '2025-01-01',
+      end: '2026-07-10',
+      files: { leaguepediaJson: [leaguepediaPath], oracleCsv: [oraclePath] },
+      sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'failed' } },
+    })}\n`)
+
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', join(tempDir, 'staging'),
+      '--lookback-days', '7',
+      '--end', '2026-07-20',
+      '--skip-crunch',
+    ], {
+      bucketClient: client,
+      bucketConfig: bucketConfig(),
+      env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01' },
+      run: async (_command, args) => {
+        const outDir = valueAfter(args, '--out-dir')
+        const nextPath = join(outDir, 'leaguepedia', 'scoreboard-games-2026-07-13_to_2026-07-20.json')
+        await mkdir(dirname(nextPath), { recursive: true })
+        await writeFile(nextPath, '{"matches":[]}\n')
+        await writeFile(valueAfter(args, '--manifest'), `${JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-07-20T00:00:00.000Z',
+          start: '2026-07-13',
+          end: '2026-07-20',
+          files: { leaguepediaJson: [nextPath], oracleCsv: [] },
+          sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'failed' } },
+        })}\n`)
+      },
+    })
+
+    const state = JSON.parse(await readFile(statePath, 'utf8'))
+    assert.equal(await readFile(oraclePath, 'utf8'), 'gameid,result\nlocal,1\n')
+    assert.equal(state.restoredRaw.selection, 'local')
+    assert.equal(state.restoredRaw.reason, 'remote-restore-failed')
+    assert.match(state.restoredRaw.restore.message, /injected selected source read failure/)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('raw generation promotion rolls back the local baseline when the final directory swap fails', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-raw-promotion-rollback-'))
+  const rawDir = join(tempDir, 'raw')
+  const manifestPath = join(tempDir, 'metadata', 'manifest.json')
+  const statePath = join(tempDir, 'metadata', 'refresh-state.json')
+  const oraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const leaguepediaPath = join(rawDir, 'leaguepedia', 'scoreboard-games-2025-01-01_to_2026-07-10.json')
+  const localManifest = `${JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: '2026-07-10T00:00:00.000Z',
+    start: '2025-01-01',
+    end: '2026-07-10',
+    files: { leaguepediaJson: [leaguepediaPath], oracleCsv: [oraclePath] },
+    sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'failed' } },
+  })}\n`
+  const localState = '{"fingerprint":"local-state"}\n'
+  const fixture = rawGenerationFixture({
+    schemaVersion: 1,
+    generatedAt: '2026-07-19T00:00:00.000Z',
+    start: '2025-01-01',
+    end: '2026-07-19',
+    files: {
+      leaguepediaJson: ['leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json'],
+      oracleCsv: ['oracles-elixir/2026.csv'],
+    },
+    sources: { leaguepedia: { status: 'downloaded' }, oracle: { status: 'downloaded' } },
+  }, {
+    'leaguepedia/scoreboard-games-2025-01-01_to_2026-07-19.json': '{"matches":[]}\n',
+    'oracles-elixir/2026.csv': 'gameid,result\nremote,1\n',
+  })
+  let renameCalls = 0
+  const failFinalSwap: typeof rename = async (from, to) => {
+    renameCalls += 1
+    if (renameCalls === 2) throw Object.assign(new Error('injected raw promotion failure'), { code: 'EIO' })
+    await rename(from, to)
+  }
+
+  try {
+    await mkdir(dirname(oraclePath), { recursive: true })
+    await mkdir(dirname(leaguepediaPath), { recursive: true })
+    await mkdir(dirname(manifestPath), { recursive: true })
+    await writeFile(oraclePath, 'gameid,result\nlocal,1\n')
+    await writeFile(leaguepediaPath, '{"matches":[]}\n')
+    await writeFile(manifestPath, localManifest)
+    await writeFile(statePath, localState)
+
+    await assert.rejects(refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', join(tempDir, 'staging'),
+      '--lookback-days', '7',
+      '--end', '2026-07-20',
+      '--skip-crunch',
+    ], {
+      bucketClient: rawGenerationClient(fixture, []),
+      bucketConfig: bucketConfig(),
+      env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01' },
+      rawPromotionOperations: { renameDirectory: failFinalSwap },
+      run: async () => {
+        throw new Error('download must not run after failed raw promotion')
+      },
+    }), /injected raw promotion failure/)
+
+    assert.equal(renameCalls, 3)
+    assert.equal(await readFile(oraclePath, 'utf8'), 'gameid,result\nlocal,1\n')
+    assert.equal(await readFile(manifestPath, 'utf8'), localManifest)
+    assert.equal(await readFile(statePath, 'utf8'), localState)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('raw baseline comparison preserves usable local data for malformed or crossed remote evidence', () => {
+  const local = comparableManifest({ generatedAt: '2026-07-18T00:00:00.000Z', end: '2026-07-18', oracleStatus: 'downloaded', oracleFiles: true })
+  const malformed = comparableManifest({ generatedAt: 'not-a-date', end: '2026-07-19', oracleStatus: 'downloaded', oracleFiles: true })
+  const crossed = comparableManifest({ generatedAt: '2026-07-19T00:00:00.000Z', end: '2026-07-19', oracleStatus: 'failed', oracleFiles: true })
+
+  const malformedComparison = compareRawBaselineManifests({
+    localManifest: local,
+    remoteManifest: malformed,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+  const crossedComparison = compareRawBaselineManifests({
+    localManifest: local,
+    remoteManifest: crossed,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+  const noUsableBaseline = compareRawBaselineManifests({
+    localManifest: undefined,
+    remoteManifest: malformed,
+    localUsable: false,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+
+  assert.equal(malformedComparison.preferred, 'local')
+  assert.equal(malformedComparison.reason, 'remote-baseline-malformed')
+  assert.equal(crossedComparison.preferred, 'local')
+  assert.equal(crossedComparison.reason, 'baseline-evidence-incomparable')
+  assert.equal(noUsableBaseline.preferred, 'none')
+  assert.equal(noUsableBaseline.reason, 'remote-baseline-malformed')
+})
+
+test('raw baseline comparison prefers complete coverage and uses generation time only as a tie-breaker', () => {
+  const complete = comparableManifest({ generatedAt: '2026-07-18T00:00:00.000Z', end: '2026-07-18', oracleStatus: 'downloaded', oracleFiles: true })
+  const incomplete = {
+    ...complete,
+    files: {
+      ...complete.files,
+      leaguepediaJson: ['leaguepedia/scoreboard-games-2026-07-01_to_2026-07-18.json'],
+    },
+  }
+  const newer = { ...complete, generatedAt: '2026-07-19T00:00:00.000Z' }
+
+  const coverage = compareRawBaselineManifests({
+    localManifest: incomplete,
+    remoteManifest: complete,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+  const recency = compareRawBaselineManifests({
+    localManifest: complete,
+    remoteManifest: newer,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+  const onlyUsable = compareRawBaselineManifests({
+    localManifest: undefined,
+    remoteManifest: complete,
+    localUsable: false,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+
+  assert.equal(coverage.reason, 'remote-baseline-dominates')
+  assert.equal(recency.reason, 'remote-baseline-newer')
+  assert.equal(onlyUsable.reason, 'remote-only-usable-baseline')
+})
+
+test('raw baseline comparison does not trade away Oracle files or historical coverage for provider health', () => {
+  const local = comparableManifest({ generatedAt: '2026-07-18T00:00:00.000Z', end: '2026-07-18', oracleStatus: 'failed', oracleFiles: true })
+  local.files.oracleCsv = ['oracles-elixir/2025.csv', 'oracles-elixir/2026.csv']
+  const missingOracleYear = comparableManifest({ generatedAt: '2026-07-19T00:00:00.000Z', end: '2026-07-18', oracleStatus: 'downloaded', oracleFiles: true })
+  const narrowerStart = {
+    ...local,
+    generatedAt: '2026-07-19T00:00:00.000Z',
+    start: '2025-06-01',
+  }
+
+  const missingFiles = compareRawBaselineManifests({
+    localManifest: local,
+    remoteManifest: missingOracleYear,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+  const narrower = compareRawBaselineManifests({
+    localManifest: local,
+    remoteManifest: narrowerStart,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+
+  assert.equal(missingFiles.preferred, 'local')
+  assert.equal(missingFiles.reason, 'baseline-evidence-incomparable')
+  assert.equal(narrower.preferred, 'local')
+  assert.equal(narrower.reason, 'local-baseline-dominates')
+})
+
+test('raw baseline comparison preserves interior match coverage and accepts equivalent interval chunking', () => {
+  const local = comparableManifest({ generatedAt: '2026-07-10T00:00:00.000Z', end: '2026-07-10', oracleStatus: 'downloaded', oracleFiles: true })
+  local.files.leaguepediaJson = ['leaguepedia/scoreboard-games-2026-07-01_to_2026-07-10.json']
+  const missingInteriorDates = {
+    ...local,
+    generatedAt: '2026-07-11T00:00:00.000Z',
+    files: {
+      ...local.files,
+      leaguepediaJson: [
+        'leaguepedia/scoreboard-games-2026-07-01_to_2026-07-05.json',
+        'leaguepedia/scoreboard-games-2026-07-09_to_2026-07-10.json',
+      ],
+    },
+  }
+  const equivalentChunking = {
+    ...missingInteriorDates,
+    files: {
+      ...missingInteriorDates.files,
+      leaguepediaJson: [
+        'leaguepedia/scoreboard-games-2026-07-01_to_2026-07-05.json',
+        'leaguepedia/scoreboard-games-2026-07-06_to_2026-07-10.json',
+      ],
+    },
+  }
+
+  const missing = compareRawBaselineManifests({
+    localManifest: local,
+    remoteManifest: missingInteriorDates,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+  const equivalent = compareRawBaselineManifests({
+    localManifest: local,
+    remoteManifest: equivalentChunking,
+    localUsable: true,
+    remoteUsable: true,
+    bootstrapStart: '2025-01-01',
+  })
+
+  assert.equal(missing.preferred, 'local')
+  assert.equal(missing.reason, 'local-baseline-dominates')
+  assert.equal(equivalent.preferred, 'remote')
+  assert.equal(equivalent.reason, 'remote-baseline-newer')
+})
+
 test('same-length raw generation corruption fails cold restore and forces a full bootstrap', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-corrupt-generation-'))
   const rawDir = join(tempDir, 'raw')
@@ -472,6 +1110,16 @@ test('same-length raw generation corruption fails cold restore and forces a full
   corruptSource[0] = corruptSource[0] === 120 ? 121 : 120
   const sourceDigest = createHash('sha256').update(expectedSource).digest('hex')
   const sourceKey = `raw/objects/${sourceDigest}`
+  const rawManifest = Buffer.from(`${JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: '2026-06-21T00:00:00.000Z',
+    start: '2025-01-01',
+    end: '2026-06-21',
+    files: { leaguepediaJson: [], oracleCsv: ['oracles-elixir/2025.csv'] },
+    sources: { leaguepedia: { status: 'skipped' }, oracle: { status: 'downloaded' } },
+  })}\n`)
+  const manifestDigest = createHash('sha256').update(rawManifest).digest('hex')
+  const manifestKey = `raw/objects/${manifestDigest}`
   const descriptor = Buffer.from(`${JSON.stringify({
     schemaVersion: 1,
     kind: 'raw-generation',
@@ -483,6 +1131,12 @@ test('same-length raw generation corruption fails cold restore and forces a full
       key: sourceKey,
       digest: sourceDigest,
       bytes: expectedSource.byteLength,
+    }, {
+      kind: 'manifest',
+      logicalPath: 'manifest.json',
+      key: manifestKey,
+      digest: manifestDigest,
+      bytes: rawManifest.byteLength,
     }],
   })}\n`)
   const descriptorDigest = createHash('sha256').update(descriptor).digest('hex')
@@ -502,6 +1156,7 @@ test('same-length raw generation corruption fails cold restore and forces a full
       if (key) payloadGets.push(key)
       if (key === 'rankings/active-generation.json') return { Body: Readable.from([active]), ContentLength: Buffer.byteLength(active) }
       if (key === `rankings/${descriptorKey}`) return { Body: Readable.from([descriptor]), ContentLength: descriptor.byteLength }
+      if (key === `rankings/${manifestKey}`) return { Body: Readable.from([rawManifest]), ContentLength: rawManifest.byteLength }
       if (key === `rankings/${sourceKey}`) return { Body: Readable.from([corruptSource]), ContentLength: corruptSource.byteLength }
       throw new Error(`Unexpected bucket command: ${JSON.stringify(command.input)}`)
     },
@@ -1429,6 +2084,98 @@ async function runRawSyncCase(head: 'matching' | 'mismatch' | 'legacy' | 'error'
     return { result, rawPut, rawBytes, digest }
   } finally {
     await rm(tempDir, { recursive: true, force: true })
+  }
+}
+
+function rawGenerationFixture(manifestValue: Record<string, unknown>, sources: Record<string, string>) {
+  const objects = Object.entries(sources).map(([logicalPath, content]) => {
+    const bytes = Buffer.from(content)
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    return {
+      ref: { kind: 'source', logicalPath, key: `raw/objects/${digest}`, digest, bytes: bytes.byteLength },
+      bytes,
+    }
+  })
+  const manifestBytes = Buffer.from(`${JSON.stringify(manifestValue)}\n`)
+  const manifestDigest = createHash('sha256').update(manifestBytes).digest('hex')
+  const descriptorBytes = Buffer.from(`${JSON.stringify({
+    schemaVersion: 1,
+    kind: 'raw-generation',
+    createdAt: '2026-07-19T06:00:00.000Z',
+    retention: { date: '2026-07-19', boundaries: [] },
+    objects: [
+      ...objects.map(({ ref }) => ref),
+      {
+        kind: 'manifest',
+        logicalPath: 'manifest.json',
+        key: `raw/objects/${manifestDigest}`,
+        digest: manifestDigest,
+        bytes: manifestBytes.byteLength,
+      },
+    ],
+  })}\n`)
+  const descriptorDigest = createHash('sha256').update(descriptorBytes).digest('hex')
+  const descriptorKey = `raw/generations/${descriptorDigest}.json`
+  const activeBytes = Buffer.from(JSON.stringify({
+    schemaVersion: 1,
+    rawState: {
+      descriptorKey,
+      descriptorDigest,
+      descriptorBytes: descriptorBytes.byteLength,
+    },
+  }))
+  return {
+    activeBytes,
+    descriptorBytes,
+    descriptorKey,
+    manifestBytes,
+    manifestKey: `raw/objects/${manifestDigest}`,
+    sourceKeys: objects.map(({ ref }) => ref.key),
+    sourceObjects: new Map(objects.map(({ ref, bytes }) => [ref.key, bytes])),
+  }
+}
+
+function rawGenerationClient(fixture: ReturnType<typeof rawGenerationFixture>, requestedKeys: string[]) {
+  return {
+    async send(command: { input: Record<string, unknown> }) {
+      const key = String(command.input.Key)
+      requestedKeys.push(key)
+      if (key === 'rankings/active-generation.json') {
+        return { Body: Readable.from([fixture.activeBytes]), ContentLength: fixture.activeBytes.byteLength }
+      }
+      if (key === `rankings/${fixture.descriptorKey}`) {
+        return { Body: Readable.from([fixture.descriptorBytes]), ContentLength: fixture.descriptorBytes.byteLength }
+      }
+      if (key === `rankings/${fixture.manifestKey}`) {
+        return { Body: Readable.from([fixture.manifestBytes]), ContentLength: fixture.manifestBytes.byteLength }
+      }
+      const relativeKey = key.replace(/^rankings\//, '')
+      const source = fixture.sourceObjects.get(relativeKey)
+      if (source) return { Body: Readable.from([source]), ContentLength: source.byteLength }
+      throw new Error(`Unexpected bucket command: ${JSON.stringify(command.input)}`)
+    },
+  }
+}
+
+function comparableManifest({ generatedAt, end, oracleStatus, oracleFiles }: {
+  generatedAt: string
+  end: string
+  oracleStatus: string
+  oracleFiles: boolean
+}) {
+  return {
+    schemaVersion: 1,
+    generatedAt,
+    start: '2025-01-01',
+    end,
+    files: {
+      leaguepediaJson: [`leaguepedia/scoreboard-games-2025-01-01_to_${end}.json`],
+      oracleCsv: oracleFiles ? ['oracles-elixir/2026.csv'] : [],
+    },
+    sources: {
+      leaguepedia: { status: 'downloaded' },
+      oracle: { status: oracleStatus },
+    },
   }
 }
 

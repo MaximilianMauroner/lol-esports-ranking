@@ -39,6 +39,7 @@ import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibi
 import { playerModelParameters } from './playerModel'
 import { summarizePredictions, type WalkForwardMetrics } from './predictionModel'
 import { filterPublishedRatingUniverseInput } from './ratingUniverse'
+import { eventWeightContextForMatches, eventWeightMultiplierForMatch } from './eventWeighting'
 import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   artifactMetaFor,
@@ -54,7 +55,12 @@ import {
   tournamentMovementShardUrlPathForId,
 } from './publicArtifacts/schema'
 import type { CrunchRunMetadata } from './incremental/types'
-import type { SnapshotModelProvider } from './incremental/snapshotInputs'
+import type {
+  SnapshotInputMetrics,
+  SnapshotModelProvider,
+  SnapshotPlayerInput,
+  SnapshotRankingInput,
+} from './incremental/snapshotInputs'
 import { isCompetitionOnlyLeague, isUnknownLeague } from './teamProfiles'
 import {
   deriveTournamentInstances,
@@ -1101,6 +1107,24 @@ function shouldPublishPublicScope(key: string, snapshot: ComputedRankingSnapshot
   return key === defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter)
 }
 
+function measuredReferenceRanking(input: SnapshotRankingInput, metrics?: SnapshotInputMetrics) {
+  if (metrics) {
+    metrics.rankingRequests += 1
+    metrics.directRankingBuilds += 1
+    metrics.rankingRows += input.matches.length * 2
+  }
+  return buildRankingModel(input.matches, input.teams, { tournamentLifecycles: input.tournamentLifecycles })
+}
+
+function measuredReferencePlayers(input: SnapshotPlayerInput, metrics?: SnapshotInputMetrics) {
+  if (metrics) {
+    metrics.playerRequests += 1
+    metrics.directPlayerBuilds += 1
+    metrics.playerRows += input.matches.length
+  }
+  return buildPlayerModel(input.matches, input.rosters, { teams: input.teams, leagueStrengths: input.leagueStrengths })
+}
+
 function createTournamentMovementShards({
   matches,
   teams,
@@ -1108,6 +1132,7 @@ function createTournamentMovementShards({
   runId,
   scheduleReferences,
   modelProvider,
+  modelMetrics,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1115,6 +1140,7 @@ function createTournamentMovementShards({
   runId: string
   scheduleReferences: TournamentScheduleReference[]
   modelProvider?: SnapshotModelProvider
+  modelMetrics?: SnapshotInputMetrics
 }): Record<TournamentInstanceId, PublicTournamentMovementShard> {
   const instances = deriveTournamentInstances({ matches, scheduleReferences, generatedAt })
   const rankingOptions = {
@@ -1145,16 +1171,20 @@ function createTournamentMovementShards({
     const endpointMatches = matches.filter((match) => match.date <= instance.boundaryDate && isCalendarAlignedSeasonMatch(match))
     const baselineTeams = teamProfilesForRankingScope(baselineMatches, teams)
     const endpointTeams = teamProfilesForRankingScope(endpointMatches, teams)
-    const baseline = modelProvider?.ranking({
+    const baselineInput = {
       matches: baselineMatches,
       teams: baselineTeams,
       tournamentLifecycles: rankingOptions.tournamentLifecycles,
-    }) ?? buildRankingModel(baselineMatches, baselineTeams, rankingOptions)
-    const endpoint = modelProvider?.ranking({
+    }
+    const baseline = modelProvider?.ranking(baselineInput)
+      ?? measuredReferenceRanking(baselineInput, modelMetrics)
+    const endpointInput = {
       matches: endpointMatches,
       teams: endpointTeams,
       tournamentLifecycles: rankingOptions.tournamentLifecycles,
-    }) ?? buildRankingModel(endpointMatches, endpointTeams, rankingOptions)
+    }
+    const endpoint = modelProvider?.ranking(endpointInput)
+      ?? measuredReferenceRanking(endpointInput, modelMetrics)
     const baselineByTeam = new Map(baseline.standings.map((standing) => [standing.team, standing]))
     const endpointByTeam = new Map(endpoint.standings.map((standing) => [standing.team, standing]))
     const movementTeams = [...entrantNames]
@@ -1247,6 +1277,7 @@ export function createStaticRankingData({
   precomputedGlobalRanking,
   precomputedGlobalPlayers,
   modelProvider,
+  modelMetrics,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1261,6 +1292,7 @@ export function createStaticRankingData({
   precomputedGlobalRanking?: RankingModelResult
   precomputedGlobalPlayers?: PlayerStanding[]
   modelProvider?: SnapshotModelProvider
+  modelMetrics?: SnapshotInputMetrics
 }): StaticRankingData {
   const generatedAt = runMetadata?.generatedAt ?? requestedGeneratedAt ?? new Date().toISOString()
   const resolvedRunMetadata: CrunchRunMetadata = runMetadata ?? {
@@ -1285,15 +1317,17 @@ export function createStaticRankingData({
         resultCoverageComplete: instance.resultCoverageComplete,
       }] as const),
   )
-  const rankingOptions = { tournamentLifecycles }
   const rankingFor = (
     rankingMatches: MatchRecord[],
     rankingTeams: Record<string, TeamProfile>,
-  ) => modelProvider?.ranking({
+  ) => {
+    const input = {
     matches: rankingMatches,
     teams: rankingTeams,
     tournamentLifecycles,
-  }) ?? buildRankingModel(rankingMatches, rankingTeams, rankingOptions)
+    }
+    return modelProvider?.ranking(input) ?? measuredReferenceRanking(input, modelMetrics)
+  }
   const hasOracleSource = matches.some((match) => match.sourceProvider === 'oracles-elixir')
   const hasLeaguepediaSource = matches.some((match) => match.sourceProvider === 'leaguepedia-cargo')
   const hasExternalSource = (sourceName: string) => externalSources.some((source) => source.name.toLowerCase().includes(sourceName))
@@ -1331,7 +1365,7 @@ export function createStaticRankingData({
   }
   const globalPlayers = precomputedGlobalPlayers
     ?? modelProvider?.players({ matches, rosters, teams, leagueStrengths: globalRanking.leagues })
-    ?? buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
+    ?? measuredReferencePlayers({ matches, rosters, teams, leagueStrengths: globalRanking.leagues }, modelMetrics)
   const seasonPlayerCache = new Map<string, PlayerStanding[]>()
   const playersForFilter = (filter: SnapshotFilter, filteredMatches: MatchRecord[], scope: RankingScope): PlayerStanding[] => {
     if (filter.event !== 'All' || filter.region !== 'All') return []
@@ -1344,7 +1378,7 @@ export function createStaticRankingData({
       rosters,
       teams: scope.teams,
       leagueStrengths: scope.ranking.leagues,
-    }) ?? buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
+    }) ?? measuredReferencePlayers({ matches: filteredMatches, rosters, teams: scope.teams, leagueStrengths: scope.ranking.leagues }, modelMetrics)
     seasonPlayerCache.set(cacheKey, players)
     return players
   }
@@ -1531,6 +1565,7 @@ export function createStaticRankingData({
       runId: resolvedRunMetadata.runId,
       scheduleReferences: tournamentScheduleReferences,
       modelProvider,
+      modelMetrics,
     }),
     teams,
     matches,
@@ -1550,6 +1585,7 @@ export function createMatchHistoryArtifacts(
   } = {},
 ): { index: PublicMatchHistoryIndex; catalogs: Record<string, PublicMatchHistoryCatalog>; pages: Record<string, Record<number, PublicMatchHistoryPage>> } {
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
+  const eventWeightContext = eventWeightContextForMatches(data.matches)
   const publishedScopes = Object.entries(data.snapshots)
     .filter(([key, snapshot]) => shouldPublishPublicScope(key, snapshot, data.defaultSnapshotKey))
   const artifacts = publishedScopes.map(([key, snapshot]) => {
@@ -1586,6 +1622,10 @@ export function createMatchHistoryArtifacts(
           teamA: { id: teamIdFor({ team: teamA, region: profileA?.region, code: profileA?.code }), name: teamA, code: profileA?.code ?? teamA.slice(0, 4).toUpperCase() },
           teamB: { id: teamIdFor({ team: teamB, region: profileB?.region, code: profileB?.code }), name: teamB, code: profileB?.code ?? teamB.slice(0, 4).toUpperCase() },
           winnerId: teamIdFor({ team: canonicalTeamNameFor(match.winner), region: data.teams[canonicalTeamNameFor(match.winner)]?.region, code: data.teams[canonicalTeamNameFor(match.winner)]?.code }),
+          weighting: {
+            tier: match.tier,
+            multiplier: eventWeightMultiplierForMatch(match, eventWeightContext),
+          },
           impact: finalGame && (impactA || impactB)
             ? { unit: 'series-applied', ...(impactA ? { teamA: impactA.delta, expectedTeamA: impactA.expected, eventWeight: impactA.eventWeight } : {}), ...(impactB ? { teamB: impactB.delta } : {}) }
             : { unit: 'held' },

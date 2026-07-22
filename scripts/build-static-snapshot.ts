@@ -1,7 +1,8 @@
 import { once } from 'node:events'
+import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import { replaceDirectory } from './replace-directory.ts'
 import {
@@ -13,16 +14,18 @@ import {
   describeIncrementalStateTransition,
   loadIncrementalCommunityImports,
   promoteIncrementalState,
+  stageIncrementalState,
   validateIncrementalStateTree,
   type IncrementalCommunityImports,
+  type IncrementalCheckpointLoader,
   type IncrementalStatePromotion,
   type ProviderAuthorities,
 } from './incremental-provider-state.ts'
 import { knownTeamIdentities } from '../src/data/teamIdentity'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
-import { importLeaguepediaSnapshot, type LeaguepediaImportResult } from '../src/lib/importers/leaguepedia'
+import { importLeaguepediaSnapshot, type LeaguepediaImportResult, type LeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importLolEsportsScheduleSnapshot, type LolEsportsReferenceImportResult } from '../src/lib/importers/lolEsports'
-import { importOraclesElixirCsv, type OracleImportResult } from '../src/lib/importers/oraclesElixir'
+import { importOraclesElixirRecords, parseOraclesElixirCsvRecords, type OracleImportResult } from '../src/lib/importers/oraclesElixir'
 import { createStaticRankingData, type DataSourceWarning } from '../src/lib/snapshot'
 import {
   createPublicArtifactWritePlan,
@@ -42,7 +45,11 @@ import {
   recordSnapshotInputMetrics,
   type IncrementalCrunchReceipt,
 } from '../src/lib/incremental/metrics'
-import { crunchModeFrom, orchestrateCrunch } from '../src/lib/incremental/orchestrator'
+import {
+  crunchModeFrom,
+  orchestrateCrunch,
+  type CrunchOrchestrationResult,
+} from '../src/lib/incremental/orchestrator'
 import type { CrunchRunMetadata } from '../src/lib/incremental/types'
 import { incrementalStateDirectory } from '../src/lib/incremental/canonicalState'
 import { assertCrunchParity } from '../src/lib/incremental/parity'
@@ -56,9 +63,11 @@ import type { RankingModelResult } from '../src/lib/model.ts'
 import type { PlayerProfile, PlayerStanding } from '../src/types.ts'
 import { deriveTournamentInstances } from '../src/lib/internationalTournaments.ts'
 import { runIncrementalRankingReducers } from '../src/lib/incremental/rankingReducer.ts'
-import type { IncrementalReducerCheckpoint } from '../src/lib/incremental/reducerCheckpoint.ts'
-import { runIncrementalPlayerReducer } from '../src/lib/incremental/playerReducer.ts'
+import { buildReducerDependencyPlan, type IncrementalReducerCheckpoint } from '../src/lib/incremental/reducerCheckpoint.ts'
+import { playerReducerDependencyHash, runIncrementalPlayerReducer } from '../src/lib/incremental/playerReducer.ts'
 import type { IncrementalPlayerCheckpoint } from '../src/lib/incremental/playerReducer.ts'
+import { eventWeightContextForMatches } from '../src/lib/eventWeighting.ts'
+import { playerModelModeForMatches, sortPlayerModelMatches } from '../src/lib/playerModel.ts'
 import {
   createIncrementalSnapshotModelProvider,
   type SnapshotInputMetrics,
@@ -67,6 +76,14 @@ import {
 } from '../src/lib/incremental/snapshotInputs.ts'
 import { buildPublicArtifactDag, type PersistedArtifactNode } from '../src/lib/incremental/artifactDag.ts'
 import { stableHash } from '../src/lib/incremental/hash.ts'
+import { decodePrivateState } from '../src/lib/incremental/canonicalCodec.ts'
+import { assertExternalShadowParity } from './external-shadow-parity.ts'
+import {
+  cleanupStagedShadowModelState,
+  readStagedShadowModelState,
+  stageShadowModelState,
+  type StagedShadowModelState,
+} from './shadow-model-state.ts'
 import {
   createIncrementalSemanticInputRoot,
   deriveRankingTemporalContext,
@@ -99,6 +116,15 @@ const requestedMode = process.argv.includes('--full')
   ? 'full'
   : crunchModeFrom(readArg('mode') ?? process.env.RANKING_CRUNCH_MODE)
 let mode = requestedMode
+const enforcePublicArtifactBudgets = !process.argv.includes('--allow-public-artifact-budget-overage')
+const externalShadowReference = mode === 'incremental-shadow'
+  && process.env.RANKING_EXTERNAL_SHADOW_REFERENCE_SNAPSHOT
+  && process.env.RANKING_EXTERNAL_SHADOW_REFERENCE_PUBLIC_DIR
+  ? {
+      snapshot: resolve(process.env.RANKING_EXTERNAL_SHADOW_REFERENCE_SNAPSHOT),
+      publicDir: resolve(process.env.RANKING_EXTERNAL_SHADOW_REFERENCE_PUBLIC_DIR),
+    }
+  : undefined
 const receipt = createIncrementalCrunchReceipt({ run: runMetadata, requestedMode })
 const privateStateDir = resolve(incrementalStateDirectory(readArg('incremental-state-dir') ?? process.env.RANKING_INCREMENTAL_STATE_DIR))
 const durableCandidateOutput = readArg('durable-candidate-output') ?? process.env.RANKING_DURABLE_CANDIDATE_OUTPUT
@@ -108,9 +134,21 @@ const manifest = resolvedManifestPath
   ? manifestWithResolvedFiles(JSON.parse(await readFile(resolvedManifestPath, 'utf8')) as LocalDataManifest, dirname(resolvedManifestPath)) as LocalDataManifest
   : undefined
 const staticPlayerRosters = await loadStaticPlayerRosters(readArg('static-player-json') ?? process.env.RANKING_STATIC_PLAYER_JSON)
-const oracleCsvPaths = uniquePaths([...readArgList('oracle-csv'), ...(manifest?.files.oracleCsv ?? [])])
+const normalizedOracleChunks = normalizedChunksFor(manifest, resolvedManifestPath, 'oracles-elixir')
+const oracleCsvPaths = uniquePaths([
+  ...readArgList('oracle-csv'),
+  ...(normalizedOracleChunks.length > 0 ? normalizedOracleChunks.map((chunk) => chunk.path) : manifest?.files.oracleCsv ?? []),
+])
 const leaguepediaJsonPaths = uniquePaths([...readArgList('leaguepedia-json'), ...(manifest?.files.leaguepediaJson ?? [])])
 const lolEsportsJsonPaths = uniquePaths([...readArgList('lolesports-json'), ...(manifest?.files.lolEsportsJson ?? [])])
+const providerSourceIds = {
+  'oracles-elixir': logicalSourceIds(oracleCsvPaths, resolvedManifestPath, 'oracle-source-id', readArgList('oracle-source-id')),
+  'leaguepedia-cargo': logicalSourceIds(leaguepediaJsonPaths, resolvedManifestPath, 'leaguepedia-source-id', readArgList('leaguepedia-source-id')),
+  'lol-esports-api': logicalSourceIds(lolEsportsJsonPaths, resolvedManifestPath, 'lolesports-source-id', readArgList('lolesports-source-id')),
+}
+const trustedProviderSources = {
+  'oracles-elixir': Object.fromEntries(normalizedOracleChunks.map((chunk) => [chunk.logicalId, { digest: chunk.digest, bytes: chunk.bytes }])),
+}
 const oracleWarnings = manifestSourceWarnings('oracle', manifest?.warnings)
 const leaguepediaWarnings = manifestSourceWarnings('leaguepedia', manifest?.warnings)
 const lolEsportsWarnings = manifestSourceWarnings('lolesports', manifest?.warnings)
@@ -204,6 +242,7 @@ function buildCrunchOutput({
   metrics,
   canonical,
 }: CommunityImports, precomputedGlobalRanking?: RankingModelResult, precomputedGlobalPlayers?: PlayerStanding[], reducerRows?: ReducerRows, selectedCheckpointDate?: string, selectedPlayerCheckpointDate?: string, modelProvider?: SnapshotModelProvider): CrunchOutput {
+const directSnapshotInputMetrics = modelProvider ? undefined : emptySnapshotInputMetrics()
 const directImportedMatches = canonical ? undefined : mergeCommunityMatchSources({
   oracleMatches: oracleImports.flatMap((result) => result.matches),
   leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
@@ -287,6 +326,7 @@ const snapshot = createStaticRankingData({
   precomputedGlobalRanking,
   precomputedGlobalPlayers: Object.keys(staticPlayerRosters).length > 0 ? undefined : precomputedGlobalPlayers,
   modelProvider,
+  modelMetrics: directSnapshotInputMetrics,
 })
   return {
     snapshot,
@@ -295,10 +335,10 @@ const snapshot = createStaticRankingData({
     ...(reducerRows ? { reducerRows } : {}),
     ...(selectedCheckpointDate ? { selectedCheckpointDate } : {}),
     ...(selectedPlayerCheckpointDate ? { selectedPlayerCheckpointDate } : {}),
-    ...(modelProvider ? { snapshotInputMetrics: modelProvider.metrics() } : {}),
-    ...(modelProvider && mode === 'incremental' ? { snapshotModelState: modelProvider.persistedState() } : {}),
-    ...(modelProvider && mode !== 'incremental'
-      ? { snapshotModelStateFactory: () => modelProvider.persistedState() }
+    snapshotInputMetrics: modelProvider?.metrics() ?? directSnapshotInputMetrics,
+    ...(modelProvider?.persistedState && mode === 'incremental' ? { snapshotModelState: modelProvider.persistedState() } : {}),
+    ...(modelProvider?.persistedState && mode !== 'incremental'
+      ? { snapshotModelStateFactory: () => modelProvider.persistedState!() }
       : {}),
   }
 }
@@ -307,7 +347,7 @@ const crunchStartedAt = performance.now()
 const runFull = async () => buildCrunchOutput(await loadFullCommunityImports())
 let pendingPromotion: IncrementalStatePromotion | undefined
 let incrementalAttemptMetrics: SourceMetrics | undefined
-let incrementalImports: IncrementalCommunityImports | undefined
+let incrementalTemporalContext: ReturnType<typeof rankingTemporalContext> | undefined
 let previousArtifactCache: PersistedArtifactNode[] = []
 let preloadedIncrementalResult: Awaited<ReturnType<typeof loadIncrementalCommunityImports>> | undefined
 const loadIncrementalResult = () => loadIncrementalCommunityImports({
@@ -319,19 +359,32 @@ const loadIncrementalResult = () => loadIncrementalCommunityImports({
   now: runMetadata.generatedAt,
   authorities,
   compatibility,
+  sourceIds: providerSourceIds,
+  trustedSources: trustedProviderSources,
 })
 const runIncremental = async () => {
   const result = preloadedIncrementalResult ?? await loadIncrementalResult()
   preloadedIncrementalResult = undefined
   incrementalAttemptMetrics = result.metrics
-  incrementalImports = result.imports
+  incrementalTemporalContext = result.imports ? rankingTemporalContext(result.imports) : undefined
   previousArtifactCache = result.artifactCache ?? []
   assertLateIncrementalWorkAllowed('reducers-and-models')
-  const modelRun = result.imports
-    ? incrementalGlobalModels(result.imports, result.reducerCheckpoints, result.playerCheckpoints)
-    : undefined
+  let modelRun: Awaited<ReturnType<typeof incrementalGlobalModels>> | undefined
+  try {
+    modelRun = result.imports
+      ? await incrementalGlobalModels(result.imports, result.reducerCheckpoints, result.playerCheckpoints, result.checkpointLoader)
+      : undefined
+  } catch (error) {
+    return {
+      fallback: {
+        kind: 'checkpoint-corrupt' as const,
+        detail: error instanceof Error ? error.message : String(error),
+      },
+    }
+  }
   const modelProvider = modelRun
-    ? createIncrementalSnapshotModelProvider({
+      ? createIncrementalSnapshotModelProvider({
+        cloneResults: false,
         compatibilityHash: compatibility.hash,
         previous: result.snapshotModelCache,
       })
@@ -343,6 +396,11 @@ const runIncremental = async () => {
   } else {
     pendingPromotion = result.promotion
   }
+  if (pendingPromotion && externalShadowReference) {
+    await stageIncrementalState(pendingPromotion)
+    pendingPromotion = compactStagedPromotion(pendingPromotion, privateStateDir)
+  }
+  Reflect.deleteProperty(result, 'promotion')
   const incrementalOutput = result.imports && modelRun
     ? buildCrunchOutput(
         result.imports,
@@ -354,6 +412,16 @@ const runIncremental = async () => {
         modelProvider,
       )
     : undefined
+  if (externalShadowReference && pendingPromotion && incrementalOutput?.snapshotModelStateFactory) {
+    pendingPromotion = attachIncrementalSnapshotModelCache(
+      pendingPromotion,
+      privateStateDir,
+      incrementalOutput.snapshotModelStateFactory(),
+    )
+    await stageIncrementalState(pendingPromotion)
+    pendingPromotion = compactStagedPromotion(pendingPromotion, privateStateDir)
+    Reflect.deleteProperty(incrementalOutput, 'snapshotModelStateFactory')
+  }
   if (result.fallback) return {
     fallback: result.fallback,
     ...(incrementalOutput ? { output: incrementalOutput } : {}),
@@ -381,14 +449,24 @@ if (mode === 'incremental'
     }
   }
 }
-const orchestration = await orchestrateCrunch<CrunchOutput, PreparedCrunchOutput>({
-  mode,
+const orchestration: CrunchOrchestrationResult<CrunchOutput, PreparedCrunchOutput> = await orchestrateCrunch<CrunchOutput, PreparedCrunchOutput>({
+  mode: externalShadowReference ? 'incremental' : mode,
   receipt,
   runFull,
   runIncremental,
   requireReferenceParity: mode !== 'incremental',
-  prepareShadow: prepareCrunchOutputForParity,
+  acceptFallbackCandidate: Boolean(externalShadowReference),
+  prepareShadow: async (output) => {
+    const prepared = prepareCrunchOutputForParity(output)
+    if (pendingPromotion) {
+      await stageIncrementalState(pendingPromotion)
+      pendingPromotion = compactStagedPromotion(pendingPromotion, privateStateDir)
+    }
+    return prepared
+  },
 })
+const stagedShadowModelState = orchestration.shadowOutput?.snapshotModelStateStage
+try {
 receipt.requestedMode = requestedMode
 const { snapshot, importedMatches, metrics } = orchestration.output
 recordCrunchTiming(receipt, 'crunch-total', crunchStartedAt, performance.now())
@@ -411,8 +489,9 @@ if (incrementalCandidate?.reducerRows) {
     selectedPlayerCheckpoint: incrementalCandidate.selectedPlayerCheckpointDate,
   })
 }
-if (incrementalCandidate?.snapshotInputMetrics) {
-  recordSnapshotInputMetrics(receipt, incrementalCandidate.snapshotInputMetrics)
+const selectedSnapshotInputMetrics = orchestration.output.snapshotInputMetrics ?? incrementalCandidate?.snapshotInputMetrics
+if (selectedSnapshotInputMetrics) {
+  recordSnapshotInputMetrics(receipt, selectedSnapshotInputMetrics)
 }
 const selectedAttempt = receipt.attempts.findLast((attempt) => (
   orchestration.executedMode === 'incremental' ? attempt.engine === 'incremental' : attempt.engine === 'reference'
@@ -459,28 +538,45 @@ if (reconciliationOutput) {
   }, null, 2)}\n`)
 }
 assertLateIncrementalWorkAllowed('public-artifact-serialization')
-const publicPlan = createPublicArtifactWritePlan(snapshot, { runMetadata })
+const publicPlan = createPublicArtifactWritePlan(snapshot, { enforceBudgets: enforcePublicArtifactBudgets, runMetadata })
 let incrementalPlan = orchestration.shadowOutput?.publicPlan
   ?? (orchestration.executedMode === 'incremental'
-    ? createPublicArtifactWritePlan(orchestration.output.snapshot, { runMetadata })
+    ? publicPlan
     : undefined)
 let durableParity: { result: 'match' | 'mismatch'; audit?: boolean; detail?: string } | undefined
-if (orchestration.shadowOutput) {
+if (externalShadowReference) {
+  try {
+    if (process.env.RANKING_TEST_FORCE_PARITY_MISMATCH === 'true') throw new Error('injected incremental parity mismatch')
+    await assertExternalShadowParity({
+      expectedSnapshot: externalShadowReference.snapshot,
+      actualSnapshot: output,
+      expectedPublicDir: externalShadowReference.publicDir,
+      actualPublicWrites: publicPlan.writes,
+    })
+    durableParity = { result: 'match' }
+    receipt.durable.parity = 'match'
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    durableParity = { result: 'mismatch', detail }
+    receipt.durable.parity = 'mismatch'
+    receipt.checkpoint.fallback = { kind: 'dependency-unknown', dependency: `external-shadow-parity:${detail}` }
+    pendingPromotion = undefined
+    incrementalPlan = undefined
+    await sendDurableAlert('incremental-parity-mismatch', detail)
+  }
+} else if (orchestration.shadowOutput) {
   try {
     if (process.env.RANKING_TEST_FORCE_PARITY_MISMATCH === 'true') {
       throw new Error('injected incremental parity mismatch')
     }
-    const referenceFullSnapshot = JSON.stringify(snapshot)
-    if (referenceFullSnapshot !== orchestration.shadowOutput.fullSnapshot) {
-      assertCrunchParity(
-        { fullSnapshot: referenceFullSnapshot, publicWrites: [] },
-        { fullSnapshot: orchestration.shadowOutput.fullSnapshot, publicWrites: [] },
-      )
-    }
+    const referenceFullSnapshotHash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
     assertCrunchParity(
       { fullSnapshot: '', publicWrites: publicPlan.writes },
       { fullSnapshot: '', publicWrites: incrementalPlan!.writes },
     )
+    if (referenceFullSnapshotHash !== orchestration.shadowOutput.fullSnapshotHash) {
+      throw new Error(`Full snapshot hash mismatch (${referenceFullSnapshotHash} != ${orchestration.shadowOutput.fullSnapshotHash})`)
+    }
     durableParity = { result: 'match', ...(receipt.durable.audit === 'scheduled' || receipt.durable.audit === 'forced' ? { audit: true } : {}) }
     receipt.durable.parity = 'match'
     if (durableParity.audit) receipt.durable.audit = 'match'
@@ -502,7 +598,7 @@ if (incrementalPlan && incrementalCandidate) {
   const dagResult = buildPublicArtifactDag({
     actual: incrementalPlan,
     semantic: orchestration.shadowOutput?.semanticPlan
-      ?? createSemanticPublicArtifactWritePlan(orchestration.output.snapshot),
+      ?? createSemanticPublicArtifactWritePlan(orchestration.output.snapshot, { enforceBudgets: enforcePublicArtifactBudgets }),
     previous: previousArtifactCache,
   })
   if (dagResult.fallback) {
@@ -522,6 +618,13 @@ if (incrementalPlan && incrementalCandidate) {
           pendingPromotion,
           privateStateDir,
           incrementalCandidate.snapshotModelState,
+        )
+      } else if ('snapshotModelStateStage' in incrementalCandidate && incrementalCandidate.snapshotModelStateStage) {
+        const isolatedState = readStagedShadowModelState(incrementalCandidate.snapshotModelStateStage, compatibility.hash)
+        pendingPromotion = attachIncrementalSnapshotModelCache(
+          pendingPromotion,
+          privateStateDir,
+          isolatedState,
         )
       }
       pendingPromotion = attachIncrementalArtifactCache(pendingPromotion, privateStateDir, dagResult.dag.cache)
@@ -590,7 +693,7 @@ try {
     throw new Error('Eligible incremental state was not promoted locally')
   }
   if (durableStore && incrementalOutcomeEligible && !semanticNoChange && await isDirectory(privateStateDir)) {
-    if (!incrementalImports) throw new Error('Eligible incremental output is missing its semantic input context')
+    if (!incrementalTemporalContext) throw new Error('Eligible incremental output is missing its semantic input context')
     const validatedState = await validateIncrementalStateTree(privateStateDir, durableIdentity.compatibilityHash)
     const staticPlayerRoot = stableHash(staticPlayerRosters)
     const semanticInput = createIncrementalSemanticInputRoot({
@@ -598,7 +701,7 @@ try {
       canonicalRoot: validatedState.canonicalRoot,
       contextRoot: validatedState.contextRoot,
       staticPlayerRoot,
-      temporalContext: rankingTemporalContext(incrementalImports),
+      temporalContext: incrementalTemporalContext,
     })
     const stateSummary = {
       ...validatedState,
@@ -655,9 +758,8 @@ try {
     receipt.artifacts.reused,
   ])
   receipt.durable.replayedUnits = sumInstrumented([
-    receipt.reducers.livePlayerEdgeRows,
-    receipt.reducers.teamRows,
-    receipt.reducers.playerRows,
+    receipt.snapshotInputs.rankingRows,
+    receipt.snapshotInputs.playerRows,
   ])
   const publicDataBytes = await directorySize(publicDataTargetDir)
   if (receiptOutput) {
@@ -672,6 +774,9 @@ try {
 } catch (error) {
   if (publicWrites.length > 0) await rm(publicDataDir, { recursive: true, force: true })
   throw error
+}
+} finally {
+  cleanupStagedShadowModelState(stagedShadowModelState)
 }
 
 type SourceMetrics = {
@@ -788,33 +893,41 @@ type CrunchOutput = {
 }
 
 type PreparedCrunchOutput = Omit<CrunchOutput, 'snapshot' | 'importedMatches' | 'snapshotModelStateFactory'> & {
-  fullSnapshot: string
+  fullSnapshotHash: string
   publicPlan: ReturnType<typeof createPublicArtifactWritePlan>
   semanticPlan: ReturnType<typeof createSemanticPublicArtifactWritePlan>
+  snapshotModelStateStage?: StagedShadowModelState
 }
 
+function compactStagedPromotion(promotion: IncrementalStatePromotion, stateDir: string): IncrementalStatePromotion {
+  const decodedPointer = decodePrivateState(promotion.pointerWrite.contents)
+  if (typeof decodedPointer !== 'object' || decodedPointer === null || !('generationHash' in decodedPointer)
+    || typeof decodedPointer.generationHash !== 'string') throw new Error('Pending incremental generation pointer is invalid')
+  const pointer = decodedPointer
+  const generationPath = resolve(stateDir, 'generations', `${pointer.generationHash}.json`)
+  const generationWrite = promotion.stagedWrites.find((write) => write.path === generationPath)
+  if (!generationWrite) throw new Error('Pending incremental generation is unavailable after staging')
+  return { ...promotion, stagedWrites: [generationWrite] }
+}
+
+
 function prepareCrunchOutputForParity(output: CrunchOutput): PreparedCrunchOutput {
-  const { fullSnapshot, publicPlan, semanticPlan } = (() => {
+  const { fullSnapshotHash, publicPlan, semanticPlan } = (() => {
     const snapshot = output.snapshot
     return {
-      fullSnapshot: JSON.stringify(snapshot),
-      publicPlan: createPublicArtifactWritePlan(snapshot, { runMetadata }),
-      semanticPlan: createSemanticPublicArtifactWritePlan(snapshot),
+      fullSnapshotHash: createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),
+      publicPlan: createPublicArtifactWritePlan(snapshot, { enforceBudgets: enforcePublicArtifactBudgets, runMetadata }),
+      semanticPlan: createSemanticPublicArtifactWritePlan(snapshot, { enforceBudgets: enforcePublicArtifactBudgets }),
     }
   })()
-  const snapshotModelStateFactory = output.snapshotModelStateFactory
+  const snapshotModelStateStage = output.snapshotModelStateFactory
+    ? stageShadowModelState(privateStateDir, output.snapshotModelStateFactory())
+    : undefined
   Reflect.deleteProperty(output, 'snapshot')
   Reflect.deleteProperty(output, 'importedMatches')
   Reflect.deleteProperty(output, 'snapshotModelStateFactory')
-  if (snapshotModelStateFactory && pendingPromotion) {
-    pendingPromotion = attachIncrementalSnapshotModelCache(
-      pendingPromotion,
-      privateStateDir,
-      snapshotModelStateFactory(),
-    )
-  }
   const metadata = output as Omit<CrunchOutput, 'snapshot' | 'importedMatches' | 'snapshotModelStateFactory'>
-  return { ...metadata, fullSnapshot, publicPlan, semanticPlan }
+  return { ...metadata, fullSnapshotHash, publicPlan, semanticPlan, ...(snapshotModelStateStage ? { snapshotModelStateStage } : {}) }
 }
 
 type ReducerRows = {
@@ -823,18 +936,53 @@ type ReducerRows = {
   playerRows: number
 }
 
-function incrementalGlobalModels(
+function emptySnapshotInputMetrics(): SnapshotInputMetrics {
+  return {
+    rankingRequests: 0,
+    rankingResultCacheHits: 0,
+    rankingReducerRuns: 0,
+    rankingRows: 0,
+    playerRequests: 0,
+    playerResultCacheHits: 0,
+    playerReducerRuns: 0,
+    playerRows: 0,
+    directRankingBuilds: 0,
+    directPlayerBuilds: 0,
+  }
+}
+
+async function incrementalGlobalModels(
   imports: IncrementalCommunityImports,
   rankingCheckpointHistory: IncrementalReducerCheckpoint[] = [],
   playerCheckpointHistory: IncrementalPlayerCheckpoint[] = [],
+  checkpointLoader?: IncrementalCheckpointLoader,
 ) {
-  const ranking = incrementalGlobalRanking(imports, rankingCheckpointHistory)
+  const tournamentLifecycles = tournamentLifecyclesFor(imports)
+  const dependencyPlan = buildReducerDependencyPlan({
+    matches: imports.canonical.matches,
+    teams: imports.canonical.teams,
+    tournamentLifecycles,
+  })
+  const loadedRankingHistory = checkpointLoader
+    ? await checkpointLoader.loadReducerCheckpoints(imports.canonical.matches, dependencyPlan)
+    : rankingCheckpointHistory
+  const ranking = incrementalGlobalRanking(imports, loadedRankingHistory, tournamentLifecycles)
+  const sortedPlayerMatches = sortPlayerModelMatches(imports.canonical.matches, playerModelModeForMatches(imports.canonical.matches))
+  const playerContext = {
+    teams: imports.canonical.teams,
+    leagueStrengths: ranking.ranking.leagues,
+    eventWeightContext: eventWeightContextForMatches(sortedPlayerMatches),
+  }
+  const playerDependency = playerReducerDependencyHash({ matches: sortedPlayerMatches, rosters: {}, context: playerContext })
+  const loadedPlayerHistory = checkpointLoader
+    ? await checkpointLoader.loadPlayerCheckpoints(sortedPlayerMatches, playerDependency)
+    : playerCheckpointHistory
   const players = runIncrementalPlayerReducer({
     matches: imports.canonical.matches,
     rosters: {},
     teams: imports.canonical.teams,
     leagueStrengths: ranking.ranking.leagues,
-    checkpointHistory: playerCheckpointHistory,
+    checkpointHistory: loadedPlayerHistory,
   })
   return { ranking, players }
 }
@@ -842,11 +990,21 @@ function incrementalGlobalModels(
 function incrementalGlobalRanking(
   imports: IncrementalCommunityImports,
   checkpointHistory: IncrementalReducerCheckpoint[] = [],
+  tournamentLifecycles = tournamentLifecyclesFor(imports),
 ) {
   const canonical = imports.canonical
-  const tournamentLifecycles = new Map(
+  return runIncrementalRankingReducers({
+    matches: canonical.matches,
+    teams: canonical.teams,
+    tournamentLifecycles,
+    checkpointHistory,
+  })
+}
+
+function tournamentLifecyclesFor(imports: IncrementalCommunityImports) {
+  return new Map(
     deriveTournamentInstances({
-      matches: canonical.matches,
+      matches: imports.canonical.matches,
       scheduleReferences: tournamentScheduleReferencesFor(imports.lolEsportsImports),
       generatedAt: runMetadata.generatedAt,
     }).map((instance) => [instance.id, {
@@ -857,12 +1015,6 @@ function incrementalGlobalRanking(
       resultCoverageComplete: instance.resultCoverageComplete,
     }] as const),
   )
-  return runIncrementalRankingReducers({
-    matches: canonical.matches,
-    teams: canonical.teams,
-    tournamentLifecycles,
-    checkpointHistory,
-  })
 }
 
 function tournamentScheduleReferencesFor(imports: LolEsportsReferenceImportResult[]) {
@@ -900,23 +1052,37 @@ async function loadFullCommunityImports(): Promise<CommunityImports> {
   const leaguepediaImports: LeaguepediaImportResult[] = []
   const lolEsportsImports: LolEsportsReferenceImportResult[] = []
   let bytesScanned = 0
-  for (const csvPath of oracleCsvPaths) {
+  let rowsParsed = 0
+  let observationsNormalized = 0
+  for (const [index, csvPath] of oracleCsvPaths.entries()) {
     const csvText = await readFile(csvPath, 'utf8')
+    assertTrustedSource(providerSourceIds['oracles-elixir'][index], csvText, trustedProviderSources['oracles-elixir'])
     bytesScanned += Buffer.byteLength(csvText)
-    oracleImports.push(importOraclesElixirCsv(csvText, {
-      sourceFileName: basename(csvPath),
+    const records = parseOraclesElixirCsvRecords(csvText)
+    rowsParsed += records.length
+    const imported = importOraclesElixirRecords(records, {
+      sourceFileName: providerSourceIds['oracles-elixir'][index] ?? basename(csvPath),
       retrievedAt: manifest?.generatedAt ?? runMetadata.generatedAt,
-    }))
+    })
+    observationsNormalized += imported.matches.length
+    oracleImports.push(imported)
   }
-  for (const jsonPath of leaguepediaJsonPaths) {
+  for (const [index, jsonPath] of leaguepediaJsonPaths.entries()) {
     const jsonText = await readFile(jsonPath, 'utf8')
     bytesScanned += Buffer.byteLength(jsonText)
-    leaguepediaImports.push(importLeaguepediaSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
+    const parsed = JSON.parse(jsonText) as LeaguepediaSnapshot
+    rowsParsed += parsed.matches?.length ?? 0
+    const imported = importLeaguepediaSnapshot(parsed, { sourceFileName: providerSourceIds['leaguepedia-cargo'][index] ?? basename(jsonPath) })
+    observationsNormalized += imported.matches.length
+    leaguepediaImports.push(imported)
   }
-  for (const jsonPath of lolEsportsJsonPaths) {
+  for (const [index, jsonPath] of lolEsportsJsonPaths.entries()) {
     const jsonText = await readFile(jsonPath, 'utf8')
     bytesScanned += Buffer.byteLength(jsonText)
-    lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
+    const imported = importLolEsportsScheduleSnapshot(JSON.parse(jsonText), { sourceFileName: providerSourceIds['lol-esports-api'][index] ?? basename(jsonPath) })
+    rowsParsed += imported.events.length
+    observationsNormalized += imported.events.length
+    lolEsportsImports.push(imported)
   }
   return {
     oracleImports,
@@ -925,13 +1091,26 @@ async function loadFullCommunityImports(): Promise<CommunityImports> {
     metrics: {
       filesScanned: oracleCsvPaths.length + leaguepediaJsonPaths.length + lolEsportsJsonPaths.length,
       bytesScanned,
-      rowsParsed: null,
-      observationsNormalized: null,
-      observationsReused: null,
+      rowsParsed,
+      observationsNormalized,
+      observationsReused: 0,
       reducerStateBytesRead: 0,
       reducerStateBytesWritten: 0,
     },
   }
+}
+
+function assertTrustedSource(
+  sourceId: string | undefined,
+  contents: string,
+  trustedSources: Record<string, { digest: string; bytes: number }>,
+) {
+  if (!sourceId) return
+  const trusted = trustedSources[sourceId]
+  if (!trusted) return
+  const bytes = Buffer.byteLength(contents)
+  const digest = createHash('sha256').update(contents).digest('hex')
+  if (bytes !== trusted.bytes || digest !== trusted.digest) throw new Error(`Trusted provider chunk mismatch for ${sourceId}`)
 }
 
 function readArg(name: string) {
@@ -949,6 +1128,51 @@ function readArgList(name: string) {
     values.push(...next.split(',').map((value) => value.trim()).filter(Boolean))
   }
   return values
+}
+
+function logicalSourceIds(paths: string[], manifestFile: string | undefined, flag: string, explicit: string[]) {
+  if (explicit.length > 0) {
+    if (explicit.length !== paths.length) throw new Error(`--${flag} count must match source path count`)
+    return explicit
+  }
+  const manifestRoot = manifestFile ? dirname(manifestFile) : undefined
+  return paths.map((path) => {
+    if (manifestRoot) {
+      const candidate = relative(manifestRoot, path)
+      if (candidate && candidate !== '..' && !candidate.startsWith(`..${sep}`)) return candidate.replaceAll(sep, '/')
+    }
+    return basename(path)
+  })
+}
+
+function normalizedChunksFor(
+  value: LocalDataManifest | undefined,
+  manifestFile: string | undefined,
+  provider: NormalizedProviderChunk['provider'],
+) {
+  const descriptor = value?.normalizedProviderChunks
+  if (!descriptor) return []
+  if (descriptor.schemaVersion !== 1 || !Array.isArray(descriptor.chunks) || !manifestFile) {
+    throw new Error('Invalid normalized provider chunk descriptor')
+  }
+  const root = dirname(manifestFile)
+  const chunks = descriptor.chunks.filter((chunk) => chunk.provider === provider).map((chunk) => {
+    if (!chunk.logicalId || chunk.logicalId.startsWith('/') || chunk.logicalId.split('/').includes('..')
+      || !/^[a-f0-9]{64}$/.test(chunk.digest) || !Number.isSafeInteger(chunk.bytes) || chunk.bytes <= 0
+      || !Number.isSafeInteger(chunk.rows) || chunk.rows < 0 || chunk.start > chunk.end) {
+      throw new Error(`Invalid normalized provider chunk: ${chunk.logicalId || '<missing>'}`)
+    }
+    return { ...chunk, path: resolve(root, chunk.logicalId) }
+  })
+  if (new Set(chunks.map((chunk) => chunk.logicalId)).size !== chunks.length) {
+    throw new Error(`Duplicate normalized ${provider} logical chunk path`)
+  }
+  if (provider === 'oracles-elixir') {
+    const declared = (value?.files.normalizedOracleCsv ?? []).map((path) => resolve(path)).toSorted()
+    const described = chunks.map((chunk) => chunk.path).toSorted()
+    if (stableHash(declared) !== stableHash(described)) throw new Error('Normalized Oracle chunk files do not match their descriptor')
+  }
+  return chunks
 }
 
 function uniquePaths(paths: string[]) {
@@ -974,8 +1198,14 @@ type LocalDataManifest = {
   generatedAt?: string
   files: {
     oracleCsv?: string[]
+    normalizedOracleCsv?: string[]
     leaguepediaJson?: string[]
     lolEsportsJson?: string[]
+  }
+  normalizedProviderChunks?: {
+    schemaVersion: 1
+    generatedAt: string
+    chunks: NormalizedProviderChunk[]
   }
   warnings?: string[]
   sources?: Partial<Record<'oracle' | 'leaguepedia' | 'lolesports', {
@@ -984,6 +1214,17 @@ type LocalDataManifest = {
     reusedCount?: number
     failedCount?: number
   }>>
+}
+
+type NormalizedProviderChunk = {
+  provider: 'oracles-elixir' | 'leaguepedia-cargo' | 'lol-esports-api'
+  logicalId: string
+  path: string
+  digest: string
+  bytes: number
+  start: string
+  end: string
+  rows: number
 }
 
 function sourceRefreshReceipt(provider: 'oracle' | 'leaguepedia' | 'lolesports', value: LocalDataManifest | undefined) {

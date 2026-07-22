@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { effectiveLeagueRating, leagueEffectiveRatingCapsByTier } from '../src/data/leagueTiers.ts'
-import { preseasonEventWeightMultiplier } from '../src/data/rankingConfig.ts'
+import { kespaCupEventWeightMultiplier, preseasonEventWeightMultiplier } from '../src/data/rankingConfig.ts'
 import {
   eventKFactorForMatch,
   eventWeightContextForMatches,
   eventWeightForMatch,
+  isKespaCupMatch,
   isPostWorldsPreseasonMatch,
   leagueKFactorForMatch,
 } from '../src/lib/eventWeighting.ts'
@@ -560,11 +561,70 @@ test('post-Worlds preseason games use discounted event weight until the next cal
   assert.equal(isPostWorldsPreseasonMatch(nextYearMatch, context), false)
   assert.equal(eventKFactorForMatch(demaciaCup, context), 14 * preseasonEventWeightMultiplier)
   assert.equal(eventWeightForMatch(demaciaCup, context), preseasonEventWeightMultiplier)
-  assert.equal(leagueKFactorForMatch(kespaCup, context), 12 * preseasonEventWeightMultiplier)
+  assert.equal(eventKFactorForMatch(kespaCup, context), 20 * preseasonEventWeightMultiplier * kespaCupEventWeightMultiplier)
+  assert.equal(leagueKFactorForMatch(kespaCup, context), 12 * preseasonEventWeightMultiplier * kespaCupEventWeightMultiplier)
+  assert.equal(eventWeightForMatch(kespaCup, context), (20 / 14) * preseasonEventWeightMultiplier * kespaCupEventWeightMultiplier)
 
   const ranking = buildRankingModel([worldsFinal, demaciaCup], { ...teams })
   const demaciaHistory = standingFor(ranking, 'Alpha').history.find((point) => point.event === demaciaCup.event)
   assert.equal(demaciaHistory?.ratingUpdate.eventWeight, preseasonEventWeightMultiplier)
+})
+
+test('KeSPA Cup uses its own precise composable event multiplier', () => {
+  const kespaCup = matchFixture({
+    id: 'kespa-cup-ordinary',
+    date: '2026-07-20',
+    event: 'KeSPA 2026',
+    league: 'KeSPA',
+    region: 'International',
+    tier: 'minor-international',
+    teamB: 'Gamma',
+    teamBHomeLeague: 'LPL',
+    teamBRegion: 'LPL',
+  })
+  const unrelatedMinor = matchFixture({
+    id: 'not-kespa',
+    event: 'NotKeSPA Invitational',
+    league: 'EWC',
+    region: 'International',
+    tier: 'minor-international',
+  })
+  const kespaAllStar = matchFixture({
+    id: 'kespa-all-star',
+    event: 'KeSPA All-Star 2026',
+    league: 'KeSPA',
+    region: 'International',
+    tier: 'minor-international',
+  })
+  const kespaQualifier = matchFixture({
+    id: 'kespa-qualifier',
+    event: 'Korean Invitational Qualifier',
+    league: 'KeSPA',
+    region: 'International',
+    tier: 'minor-international',
+  })
+  const misleadingCup = matchFixture({
+    id: 'misleading-kespa-cup',
+    event: 'KeSPA Cup 2026',
+    league: 'LCK',
+    tier: 'minor-international',
+  })
+
+  assert.equal(isKespaCupMatch(kespaCup), true)
+  assert.equal(isKespaCupMatch(unrelatedMinor), false)
+  assert.equal(isKespaCupMatch(kespaAllStar), false)
+  assert.equal(isKespaCupMatch(kespaQualifier), false)
+  assert.equal(isKespaCupMatch(misleadingCup), false)
+  assert.equal(eventKFactorForMatch(kespaCup), 10)
+  assert.equal(leagueKFactorForMatch(kespaCup), 6)
+  assert.equal(Number(eventWeightForMatch(kespaCup).toFixed(7)), 0.7142857)
+  assert.equal(eventKFactorForMatch(unrelatedMinor), 20)
+  assert.equal(leagueKFactorForMatch(unrelatedMinor), 12)
+  assert.equal(eventWeightForMatch(unrelatedMinor), 20 / 14)
+
+  const ranking = buildRankingModel([kespaCup], { ...teams })
+  const history = standingFor(ranking, 'Alpha').history.find((point) => point.event === kespaCup.event)
+  assert.equal(history?.ratingUpdate.eventWeight, 0.714)
 })
 
 test('Esports World Cup does not start the post-Worlds preseason window', () => {
@@ -935,6 +995,38 @@ test('ongoing tournaments keep match movement but do not apply placement residua
 
   assert.notEqual(standingFor(model, 'Alpha').ratingUpdate.teamStableDelta, 0)
   assert.equal(standingFor(model, 'Alpha').ratingUpdate.leaguePlacementDelta, 0)
+})
+
+test('KeSPA multiplier also discounts completed minor-tournament placement residuals', () => {
+  const completed = (event: string) => ({
+    tournamentLifecycles: new Map([[`2026\u0000${event}`, {
+      status: 'completed' as const,
+      boundaryDate: '2026-07-20',
+      ratedThroughDate: '2026-07-20',
+      dataLag: false,
+      resultCoverageComplete: true,
+    }]]),
+  })
+  const matchFor = (event: string, id: string) => matchFixture({
+    id,
+    date: '2026-07-20',
+    event,
+    league: event.includes('KeSPA') ? 'KeSPA' : 'Asia Master',
+    region: 'International',
+    tier: 'minor-international',
+    teamB: 'Gamma',
+    teamBHomeLeague: 'LPL',
+    teamBRegion: 'LPL',
+  })
+  const kespaEvent = 'KeSPA 2026'
+  const ordinaryEvent = 'Asia Masters 2026'
+  const kespa = buildRankingModel([matchFor(kespaEvent, 'kespa-placement')], { ...teams }, completed(kespaEvent))
+  const ordinary = buildRankingModel([matchFor(ordinaryEvent, 'ordinary-placement')], { ...teams }, completed(ordinaryEvent))
+  const kespaDelta = standingFor(kespa, 'Alpha').ratingUpdate.leaguePlacementDelta
+  const ordinaryDelta = standingFor(ordinary, 'Alpha').ratingUpdate.leaguePlacementDelta
+
+  assert.notEqual(ordinaryDelta, 0)
+  assert.ok(Math.abs(kespaDelta) < Math.abs(ordinaryDelta))
 })
 
 test('completed tournaments wait for official result coverage before placement residuals', () => {

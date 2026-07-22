@@ -1,5 +1,6 @@
 import {
   eventTierConfig,
+  kespaCupEventWeightMultiplier,
   preseasonEventWeightMultiplier,
 } from '../data/rankingConfig'
 import type { MatchRecord } from '../types'
@@ -30,7 +31,9 @@ export function eventWeightMultiplierForMatch(
   match: MatchRecord,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
-  return isPostWorldsPreseasonMatch(match, context) ? preseasonEventWeightMultiplier : 1
+  const preseasonMultiplier = isPostWorldsPreseasonMatch(match, context) ? preseasonEventWeightMultiplier : 1
+  const kespaMultiplier = isKespaCupMatch(match) ? kespaCupEventWeightMultiplier : 1
+  return preseasonMultiplier * kespaMultiplier
 }
 
 export function eventKFactorForMatch(
@@ -69,6 +72,16 @@ export function isPostWorldsPreseasonMatch(
 export function isWorldsEventMatch(match: MatchRecord) {
   if (match.tier === 'worlds-playoffs' || match.tier === 'worlds-main') return true
   return /\b(?:wlds?|worlds|world championship)\b/i.test(`${match.league} ${match.event}`)
+}
+
+export function isKespaCupMatch(match: MatchRecord) {
+  return isKespaCupIdentity(match.event, match.league)
+}
+
+export function isKespaCupIdentity(eventName: string, leagueName: string) {
+  const event = eventName.normalize('NFKC').replace(/\s+/g, ' ').trim()
+  const league = leagueName.normalize('NFKC').replace(/\s+/g, ' ').trim()
+  return /^KeSPA$/i.test(league) && /^KeSPA (?:Cup )?\d{4}$/i.test(event)
 }
 
 function calendarYearForDate(date: string) {

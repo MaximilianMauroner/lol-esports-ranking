@@ -164,6 +164,25 @@ test('typed fallback preserves a faulty cold candidate for mandatory parity reje
   ), /Incremental candidate mismatch/)
 })
 
+test('externally verified shadow protocol can isolate a cold fallback candidate', async () => {
+  let fullCalls = 0
+  const fallback = { kind: 'dependency-unknown' as const, dependency: 'cold-state' }
+  const result = await orchestrateCrunch({
+    mode: 'incremental',
+    acceptFallbackCandidate: true,
+    runIncremental: () => ({ output: { snapshot: 'candidate' }, fallback }),
+    runFull: () => {
+      fullCalls += 1
+      return { snapshot: 'reference' }
+    },
+  })
+
+  assert.equal(fullCalls, 0)
+  assert.equal(result.executedMode, 'incremental')
+  assert.deepEqual(result.output, { snapshot: 'candidate' })
+  assert.deepEqual(result.fallback, fallback)
+})
+
 test('fallback receipts retain exact incremental scan metrics independently of reference work', async () => {
   const receipt = createIncrementalCrunchReceipt({ run, requestedMode: 'incremental' })
   await orchestrateCrunch({

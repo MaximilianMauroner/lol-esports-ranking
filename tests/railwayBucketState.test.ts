@@ -8,6 +8,7 @@ import test from 'node:test'
 import {
   acquireBucketLease,
   acquireBucketMaintenance,
+  getBucketObject,
   readBucketJson,
   releaseBucketLease,
   recoverBucketMaintenance,
@@ -656,7 +657,7 @@ test('generation publication uploads immutable data before promoting one pointer
   const client = memoryS3()
   try {
     const firstLease = await acquireRefreshAuthority(client, 'run-1')
-    await uploadRankingArtifacts({
+    const first = await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'run-1',
       fencingToken: firstLease.lease.fencingToken,
@@ -664,15 +665,21 @@ test('generation publication uploads immutable data before promoting one pointer
       config,
       client,
     })
-    assert.ok(client.objects.has('rankings/generations/run-1/data/scopes/all.json'))
-    assert.ok(client.objects.has('rankings/generations/run-1/data/ranking-summary.json'))
+    assert.ok(client.objects.has('rankings/generations/run-1/public-manifest.json'))
+    assert.equal((first as { uploadedCount: number }).uploadedCount, 3)
     const active = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
     assert.equal(active.generationId, 'run-1')
     assert.equal(active.fencingToken, firstLease.lease.fencingToken)
+    const firstManifest = JSON.parse(client.objects.get('rankings/generations/run-1/public-manifest.json')!.body)
+    assert.equal(firstManifest.entries.length, 2)
+    assert.ok(firstManifest.entries.every((entry: { objectKey: string }) => client.objects.has(`rankings/${entry.objectKey}`)))
+    const resolved = await getBucketObject('scopes/all.json', { generationId: 'run-1', config, client })
+    assert.equal(resolved.found, true)
+    assert.equal(await streamText((resolved as { body: unknown }).body), '{"matchCount":1}\n')
 
     assert.equal((await releaseBucketLease('ops/refresh-lease.json', firstLease, { config, client })).released, true)
     const secondLease = await acquireRefreshAuthority(client, 'run-2')
-    await uploadRankingArtifacts({
+    const second = await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'run-2',
       fencingToken: secondLease.lease.fencingToken,
@@ -680,6 +687,8 @@ test('generation publication uploads immutable data before promoting one pointer
       config,
       client,
     })
+    assert.equal((second as { uploadedCount: number }).uploadedCount, 1)
+    assert.equal((second as { unchangedCount: number }).unchangedCount, 2)
     const retry = await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'run-2',
@@ -697,16 +706,70 @@ test('generation publication uploads immutable data before promoting one pointer
       leaseGuard: refreshGuard(secondLease),
       config,
       client,
-    }), /Immutable generation object collision/)
+    }), /Immutable raw object collision/)
+    assert.equal((await releaseBucketLease('ops/refresh-lease.json', secondLease, { config, client })).released, true)
+    const thirdLease = await acquireRefreshAuthority(client, 'run-3')
+    const third = await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'run-3',
+      fencingToken: thirdLease.lease.fencingToken,
+      leaseGuard: refreshGuard(thirdLease),
+      config,
+      client,
+    })
+    // The failed same-generation attempt staged the changed content-addressed
+    // payload before its immutable manifest collision; the next generation
+    // safely reuses that orphan and uploads only its small manifest.
+    assert.equal((third as { uploadedCount: number }).uploadedCount, 1)
+    assert.equal((third as { unchangedCount: number }).unchangedCount, 2)
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'stale-run',
       fencingToken: firstLease.lease.fencingToken,
-      leaseGuard: refreshGuard(secondLease),
+      leaseGuard: refreshGuard(thirdLease),
       config,
       client,
     }), /Stale refresh worker/)
-    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'run-2')
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'run-3')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('public generation reader supports legacy paths and rejects tampered content references', async () => {
+  const client = memoryS3()
+  client.objects.set('rankings/generations/legacy/data/scopes/all.json', { body: '{"legacy":true}\n', etag: '"legacy"' })
+  const legacy = await getBucketObject('scopes/all.json', { generationId: 'legacy', config, client })
+  assert.equal(legacy.found, true)
+  assert.equal(await streamText((legacy as { body: unknown }).body), '{"legacy":true}\n')
+
+  const root = await mkdtemp(join(tmpdir(), 'ranking-public-tamper-'))
+  await mkdir(join(root, 'scopes'), { recursive: true })
+  await writeFile(join(root, 'scopes', 'all.json'), '{"matchCount":1}\n')
+  await writeFile(join(root, 'ranking-summary.json'), '{}\n')
+  try {
+    const lease = await acquireRefreshAuthority(client, 'tamper-run')
+    await uploadRankingArtifacts({
+      publicDataDir: root,
+      generationId: 'tamper-run',
+      fencingToken: lease.lease.fencingToken,
+      leaseGuard: refreshGuard(lease),
+      config,
+      client,
+    })
+    const manifest = JSON.parse(client.objects.get('rankings/generations/tamper-run/public-manifest.json')!.body)
+    const entry = manifest.entries.find((candidate: { path: string }) => candidate.path === 'scopes/all.json')
+    assert.ok(entry)
+    client.objects.set(`rankings/${entry.objectKey}`, { body: '{"tampered":true}\n', etag: '"tampered"' })
+    await assert.rejects(
+      () => getBucketObject('scopes/all.json', { generationId: 'tamper-run', config, client }),
+      /integrity mismatch/,
+    )
+    client.objects.delete(`rankings/${entry.objectKey}`)
+    await assert.rejects(
+      () => getBucketObject('scopes/all.json', { generationId: 'tamper-run', config, client }),
+      /object missing/,
+    )
   } finally {
     await rm(root, { recursive: true, force: true })
   }

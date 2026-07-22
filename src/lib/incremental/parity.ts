@@ -55,7 +55,15 @@ export function compareCrunchOutputs(expected: ComparableCrunchOutput, actual: C
 
 export function assertCrunchParity(expected: ComparableCrunchOutput, actual: ComparableCrunchOutput): void {
   const parity = compareCrunchOutputs(expected, actual)
-  if (!parity.equal) throw new Error(`Incremental candidate mismatch in ${parity.path} at byte ${parity.byteOffset}`)
+  if (!parity.equal) {
+    const expectedContents = expected.publicWrites.find((write) => write.relativePath === parity.path)?.contents
+    const actualContents = actual.publicWrites.find((write) => write.relativePath === parity.path)?.contents
+    const start = Math.max(0, parity.byteOffset - 40)
+    const detail = expectedContents !== undefined && actualContents !== undefined
+      ? `; expected ${JSON.stringify(expectedContents.slice(start, parity.byteOffset + 80))}; actual ${JSON.stringify(actualContents.slice(start, parity.byteOffset + 80))}`
+      : ''
+    throw new Error(`Incremental candidate mismatch in ${parity.path} at byte ${parity.byteOffset}${detail}`)
+  }
 }
 
 function assertUniquePaths(writes: ComparablePublicWrite[], side: 'expected' | 'actual'): void {

@@ -4,6 +4,7 @@ import {
   calculateAttemptCost,
   classifyAttemptOutcome,
   decideIncrementalCostGate,
+  modelVolumeLedgerFromBucket,
   projectMonthlyCost,
   railwayRates,
   type AttemptLedger,
@@ -74,4 +75,15 @@ test('a missing publish is unknown without explicit no-change evidence', () => {
   assert.equal(classifyAttemptOutcome({ published: false, explicitNoChange: false, failed: false }), 'unknown')
   assert.equal(classifyAttemptOutcome({ published: false, explicitNoChange: true, failed: false }), 'no-change')
   assert.equal(classifyAttemptOutcome({ published: false, explicitNoChange: true, failed: true }), 'failed')
+})
+
+test('modeled volume ledger is explicitly modeled and moves every private byte', () => {
+  const volume = modelVolumeLedgerFromBucket(ledger({
+    retainedBytes: { bucketAuthoritative: 10, bucketPrivate: 20, volumePrivate: 5 },
+  }))
+  assert.equal(volume.workflow, 'incremental-volume')
+  assert.equal(volume.evidence, 'modeled')
+  assert.deepEqual(volume.retainedBytes, { bucketAuthoritative: 10, bucketPrivate: 0, volumePrivate: 25 })
+  assert.equal(volume.phases.crunch?.serviceUploadBytes.privateCache, 0)
+  assert.match(volume.provenance, /modeled/)
 })

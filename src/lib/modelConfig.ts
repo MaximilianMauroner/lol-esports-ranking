@@ -1,5 +1,8 @@
 import {
   eventTierConfig,
+  kespaCupEventWeightMatcher,
+  kespaCupEventWeightMultiplier,
+  kespaCupEventWeightPolicy,
   preseasonEventWeightMultiplier,
   preseasonEventWeightPolicy,
   preseasonEventWeightWindow,
@@ -234,6 +237,9 @@ export const transparentGprModelParameters = {
   preseasonEventWeightPolicy,
   preseasonEventWeightMultiplier,
   preseasonEventWeightWindow,
+  kespaCupEventWeightPolicy,
+  kespaCupEventWeightMultiplier,
+  kespaCupEventWeightMatcher,
   executionResidual: executionResidualModelParameters,
   playerModel: playerModelParameters,
   eligibility: defaultEligibilityConfig,

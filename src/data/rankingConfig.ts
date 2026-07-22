@@ -3,6 +3,9 @@ import type { EventTier } from '../types'
 export const preseasonEventWeightPolicy = 'post-worlds-before-next-calendar-year-discount-v1'
 export const preseasonEventWeightMultiplier = 0.35
 export const preseasonEventWeightWindow = 'after latest Worlds match in a calendar year and before Jan 1 of the next calendar year'
+export const kespaCupEventWeightPolicy = 'oracle-normalized-kespa-cup-identity-discount-v3'
+export const kespaCupEventWeightMultiplier = 0.5
+export const kespaCupEventWeightMatcher = 'league is exactly KeSPA and normalized event is exactly KeSPA YYYY or KeSPA Cup YYYY'
 
 export const eventTierConfig: Record<
   EventTier,
@@ -76,7 +79,7 @@ export const modelFactors = [
   {
     key: 'context',
     label: 'Context of play',
-    description: 'Worlds playoffs count more than MSI, playoffs, and regular season; post-Worlds preseason games are discounted.',
+    description: 'Worlds playoffs count more than MSI, playoffs, and regular season. KeSPA Cup is 0.5×; post-Worlds preseason is 0.35×; together they compose to 0.175×.',
   },
   {
     key: 'recency',

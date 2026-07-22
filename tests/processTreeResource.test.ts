@@ -37,3 +37,17 @@ test('process-tree integration trapezoids RSS and retains CPU from exited childr
   assert.equal(usage.peakRssBytes, 50_000)
   assert.equal(usage.sampleCount, 3)
 })
+
+test('process-tree integration does not recount a vanished process identity', () => {
+  const root0 = parseLinuxProcessStat(stat(1, 0, 0, 0, 1, 1))
+  const child1 = parseLinuxProcessStat(stat(2, 1, 20, 0, 2, 1))
+  const child3 = parseLinuxProcessStat(stat(2, 1, 30, 0, 2, 1))
+  const usage = integrateProcessTreePoints([
+    { monotonicSeconds: 0, processes: [root0] },
+    { monotonicSeconds: 1, processes: [root0, child1] },
+    { monotonicSeconds: 2, processes: [root0] },
+    { monotonicSeconds: 3, processes: [root0, child3] },
+  ], { clockTicksPerSecond: 100, pageSizeBytes: 1_000, sampleIntervalMs: 20 })
+  assert.equal(usage.vcpuSeconds, 0.3)
+  assert.equal(usage.rssByteSeconds, 4_500)
+})

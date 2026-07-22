@@ -652,6 +652,11 @@ export type PublicMatchHistoryImpact = {
   eventWeight?: number
 }
 
+export type PublicMatchHistoryWeighting = {
+  tier: string
+  multiplier: number
+}
+
 export type PublicMatchHistoryEntry = {
   id: string
   date: string
@@ -670,6 +675,7 @@ export type PublicMatchHistoryEntry = {
   teamA: PublicMatchHistoryTeam
   teamB: PublicMatchHistoryTeam
   winnerId: string
+  weighting?: PublicMatchHistoryWeighting
   impact: PublicMatchHistoryImpact
   source: {
     provider: NonNullable<MatchRecord['sourceProvider']>
@@ -1500,6 +1506,11 @@ function assertPublicMatchHistoryEntry(value: unknown, label: string) {
   assertOptionalNumber(value.impact.teamB, `${label} impact teamB`)
   assertOptionalNumber(value.impact.expectedTeamA, `${label} impact expectedTeamA`)
   assertOptionalNumber(value.impact.eventWeight, `${label} impact eventWeight`)
+  if (value.weighting !== undefined) {
+    assertObject(value.weighting, `${label} weighting`)
+    assertString(value.weighting.tier, `${label} weighting tier`)
+    assertNumber(value.weighting.multiplier, `${label} weighting multiplier`)
+  }
   assertObject(value.source, `${label} source`)
   assertEnum(value.source.provider, ['oracles-elixir', 'leaguepedia-cargo', 'seed'], `${label} source provider`)
   for (const key of ['completeness', 'gameId', 'matchId', 'officialGameId', 'url'] as const) assertOptionalString(value.source[key], `${label} source ${key}`)

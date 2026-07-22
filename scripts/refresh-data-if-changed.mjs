@@ -9,6 +9,7 @@ import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, rea
 import {
   recordRolloutOutcome,
 } from './durable-ranking-state.mjs'
+import { createNormalizedOracleChunks } from './normalized-provider-chunks.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -58,6 +59,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
   const stagingDir = resolve(stringArg(args.stagingDir ?? `data/.refresh-staging-${process.pid}-${Date.now()}`))
   const stagingManifestPath = resolve(stagingDir, 'manifest.json')
+  const configuredBootstrapStart = env.RANKING_REFRESH_BOOTSTRAP_START ?? env.RANKING_REFRESH_START
+  const bootstrapStart = stringArg(configuredBootstrapStart ?? '2011-01-01')
   const extraDownloadArgs = [
     ...passThroughDownloadArgs(rawArgs),
     ...splitExtraArgs(env.RANKING_REFRESH_DOWNLOAD_ARGS),
@@ -65,18 +68,19 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const localManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasUsableLocalRawBaseline = await manifestHasUsableSourceFiles(localManifest)
   const restoreResult = restoreRawEnabled && bucketConfig.enabled
-    ? await restoreRawFromBucketIfMissing({
+    ? await selectPreferredRawBaseline({
         rawDir,
         manifestPath,
         statePath,
+        localManifest,
         hasUsableLocalRawBaseline,
+        bootstrapStart,
         config: bucketConfig,
         client: options.bucketClient,
+        promotionOperations: options.rawPromotionOperations,
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
   const previousManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
-  const configuredBootstrapStart = env.RANKING_REFRESH_BOOTSTRAP_START ?? env.RANKING_REFRESH_START
-  const bootstrapStart = stringArg(configuredBootstrapStart ?? '2011-01-01')
   const hasExistingRawBaseline = await manifestHasUsableSourceFiles(previousManifest)
     && (configuredBootstrapStart === undefined || manifestHasBootstrapCoverage(previousManifest, bootstrapStart))
   const window = refreshDateWindow({
@@ -143,9 +147,26 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
 
     const stagedManifestForRawDir = rewriteManifestPaths(stagingManifest, stagingDir, rawDir)
-    const finalManifest = mergeExistingRaw
+    const mergedManifest = mergeExistingRaw
       ? mergeRawManifests(previousManifest, stagedManifestForRawDir)
       : stagedManifestForRawDir
+    const normalizedOracle = await createNormalizedOracleChunks({
+      manifest: mergedManifest,
+      rawDir,
+      stagingDir,
+    })
+    const finalManifest = {
+      ...mergedManifest,
+      files: {
+        ...mergedManifest.files,
+        normalizedOracleCsv: normalizedOracle.files,
+      },
+      normalizedProviderChunks: {
+        schemaVersion: 1,
+        generatedAt: stagingManifest.generatedAt ?? new Date().toISOString(),
+        chunks: normalizedOracle.chunks,
+      },
+    }
 
     if (mergeExistingRaw) {
       await mkdir(rawDir, { recursive: true })
@@ -430,24 +451,125 @@ export function refreshDateWindow({
   }
 }
 
-async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config, client }) {
+async function selectPreferredRawBaseline({ rawDir, manifestPath, statePath, localManifest, hasUsableLocalRawBaseline, bootstrapStart, config, client, promotionOperations }) {
+  let active
+  try {
+    active = await readBucketJson('active-generation.json', { config, client })
+  } catch (error) {
+    return handleRawInspectionFailure({
+      error,
+      hasUsableLocalRawBaseline,
+      rawDir,
+      manifestPath,
+      statePath,
+      config,
+      client,
+    })
+  }
+  if (active.found && active.value?.rawState) {
+    let inspected
+    try {
+      inspected = await inspectRawGeneration({ rawDir, rawState: active.value.rawState, config, client })
+    } catch (error) {
+      return handleRawInspectionFailure({
+        error,
+        hasUsableLocalRawBaseline,
+        rawDir,
+        manifestPath,
+        statePath,
+        config,
+        client,
+      })
+    }
+    if (!inspected.valid) {
+      return {
+        restored: false,
+        reason: inspected.reason,
+        selection: hasUsableLocalRawBaseline ? 'local' : 'none',
+      }
+    }
+    const comparison = compareRawBaselineManifests({
+      localManifest,
+      remoteManifest: inspected.manifest,
+      localUsable: hasUsableLocalRawBaseline,
+      remoteUsable: true,
+      bootstrapStart,
+    })
+    if (comparison.preferred !== 'remote') {
+      return {
+        restored: false,
+        reason: comparison.reason,
+        selection: comparison.preferred,
+        comparison,
+      }
+    }
+    let restored
+    try {
+      restored = await restoreRawGeneration({
+        rawDir,
+        manifestPath,
+        statePath,
+        rawState: active.value.rawState,
+        inspected,
+        config,
+        client,
+        promotionOperations,
+      })
+    } catch (error) {
+      if (!(error instanceof RawGenerationSourceReadError)
+        || !hasUsableLocalRawBaseline
+        || !await manifestHasUsableSourceFiles(localManifest)) throw error
+      return {
+        restored: false,
+        reason: 'remote-restore-failed',
+        selection: 'local',
+        restore: {
+          status: 'failed',
+          message: error instanceof Error ? error.message : String(error),
+        },
+        comparison,
+      }
+    }
+    if (restored.restored) {
+      console.log(`Restored ${restored.downloadedCount} raw baseline file(s) from active Railway raw generation.`)
+      return { ...restored, comparison }
+    }
+    return {
+      ...restored,
+      ...(hasUsableLocalRawBaseline ? { selection: 'local' } : {}),
+      comparison,
+    }
+  }
+
   if (hasUsableLocalRawBaseline) {
     return {
       restored: false,
-      reason: 'local-baseline-present',
+      reason: 'active-raw-generation-missing',
+      selection: 'local',
     }
   }
 
-  const active = await readBucketJson('active-generation.json', { config, client })
-  if (active.found && active.value?.rawState) {
-    const restored = await restoreRawGeneration({ rawDir, manifestPath, statePath, rawState: active.value.rawState, config, client })
-    if (restored.restored) {
-      console.log(`Restored ${restored.downloadedCount} raw baseline file(s) from active Railway raw generation.`)
-      return restored
-    }
-    return restored
-  }
+  return restoreLegacyRawBaseline({ rawDir, manifestPath, statePath, config, client })
+}
 
+async function handleRawInspectionFailure({ error, hasUsableLocalRawBaseline, rawDir, manifestPath, statePath, config, client }) {
+  const inspection = {
+    status: 'failed',
+    message: error instanceof Error ? error.message : String(error),
+  }
+  if (hasUsableLocalRawBaseline) {
+    return {
+      restored: false,
+      reason: 'remote-inspection-failed',
+      selection: 'local',
+      inspection,
+    }
+  }
+  const fallback = await restoreLegacyRawBaseline({ rawDir, manifestPath, statePath, config, client })
+  return { ...fallback, inspection }
+}
+
+async function restoreLegacyRawBaseline({ rawDir, manifestPath, statePath, config, client }) {
   const result = await downloadBucketDirectory({
     destinationDir: rawDir,
     sourcePrefix: 'raw/files',
@@ -496,36 +618,90 @@ async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, 
   }
 }
 
-async function restoreRawGeneration({ rawDir, manifestPath, statePath, rawState, config, client }) {
+async function inspectRawGeneration({ rawDir, rawState, config, client }) {
   if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)
     || typeof rawState.descriptorKey !== 'string'
     || typeof rawState.descriptorDigest !== 'string'
-    || typeof rawState.descriptorBytes !== 'number') return { restored: false, reason: 'raw-generation-pointer-invalid' }
+    || !isSha256(rawState.descriptorDigest)
+    || !Number.isSafeInteger(rawState.descriptorBytes) || rawState.descriptorBytes <= 0
+    || rawState.descriptorKey !== `raw/generations/${rawState.descriptorDigest}.json`) {
+    return { valid: false, reason: 'raw-generation-pointer-invalid' }
+  }
   const descriptorObject = await readBucketBytes(rawState.descriptorKey, { config, client })
   if (!descriptorObject.found || descriptorObject.contentLength !== rawState.descriptorBytes
-    || sha256(descriptorObject.bytes) !== rawState.descriptorDigest) return { restored: false, reason: 'raw-generation-descriptor-invalid' }
+    || sha256(descriptorObject.bytes) !== rawState.descriptorDigest) {
+    return { valid: false, reason: 'raw-generation-descriptor-invalid' }
+  }
   let descriptor
   try {
     descriptor = JSON.parse(Buffer.from(descriptorObject.bytes).toString('utf8'))
   } catch {
-    return { restored: false, reason: 'raw-generation-descriptor-invalid' }
+    return { valid: false, reason: 'raw-generation-descriptor-invalid' }
   }
   if (descriptor?.schemaVersion !== 1 || descriptor?.kind !== 'raw-generation' || !Array.isArray(descriptor.objects)) {
-    return { restored: false, reason: 'raw-generation-descriptor-invalid' }
+    return { valid: false, reason: 'raw-generation-descriptor-invalid' }
   }
+  const manifestRefs = descriptor.objects.filter((ref) => ref?.kind === 'manifest')
+  const sourceRefs = descriptor.objects.filter((ref) => ref?.kind === 'source')
+  const stateRefs = descriptor.objects.filter((ref) => ref?.kind === 'refresh-state')
+  if (manifestRefs.length !== 1 || sourceRefs.length === 0 || stateRefs.length > 1
+    || !descriptor.objects.every(validRawGenerationReference)
+    || stateRefs.some((ref) => ref.logicalPath !== 'refresh-state.json')) {
+    return { valid: false, reason: 'raw-generation-reference-invalid' }
+  }
+  const logicalPaths = sourceRefs.map((ref) => ref.logicalPath)
+  if (new Set(descriptor.objects.map((ref) => ref.logicalPath)).size !== descriptor.objects.length
+    || logicalPaths.some((path) => ['manifest.json', 'refresh-state.json'].includes(path))) {
+    return { valid: false, reason: 'raw-generation-reference-invalid' }
+  }
+  const manifestRef = manifestRefs[0]
+  if (manifestRef.logicalPath !== 'manifest.json') {
+    return { valid: false, reason: 'raw-generation-reference-invalid' }
+  }
+  const manifestObject = await readBucketBytes(manifestRef.key, { config, client })
+  if (!manifestObject.found || manifestObject.contentLength !== manifestRef.bytes
+    || sha256(manifestObject.bytes) !== manifestRef.digest) {
+    return { valid: false, reason: 'raw-generation-manifest-invalid' }
+  }
+  let manifest
+  try {
+    manifest = JSON.parse(Buffer.from(manifestObject.bytes).toString('utf8'))
+  } catch {
+    return { valid: false, reason: 'raw-generation-manifest-invalid' }
+  }
+  if (manifest?.schemaVersion !== 1 || !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files)) {
+    return { valid: false, reason: 'raw-generation-manifest-invalid' }
+  }
+  const manifestFileGroups = Object.values(manifest.files)
+  if (manifestFileGroups.some((paths) => !Array.isArray(paths))) {
+    return { valid: false, reason: 'raw-generation-manifest-invalid' }
+  }
+  const manifestPaths = manifestFileGroups.flat()
+  if (manifestPaths.some((path) => typeof path !== 'string' || !safeRawLogicalPath(path, rawDir))
+    || new Set(manifestPaths).size !== manifestPaths.length
+    || !sameStringSet(manifestPaths, logicalPaths)) {
+    return { valid: false, reason: 'raw-generation-manifest-invalid' }
+  }
+  return { valid: true, descriptor, manifest, manifestObject }
+}
+
+async function restoreRawGeneration({ rawDir, manifestPath, statePath, rawState, inspected, config, client, promotionOperations }) {
+  const generation = inspected ?? await inspectRawGeneration({ rawDir, rawState, config, client })
+  if (!generation.valid) return { restored: false, reason: generation.reason }
+  const descriptor = generation.descriptor
   const staging = `${rawDir}.restore-${process.pid}-${Date.now()}`
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
   let downloadedCount = 0
   try {
     for (const ref of descriptor.objects) {
-      if (!ref || typeof ref !== 'object' || Array.isArray(ref)
-        || typeof ref.kind !== 'string' || typeof ref.logicalPath !== 'string'
-        || typeof ref.key !== 'string' || typeof ref.digest !== 'string' || typeof ref.bytes !== 'number'
-        || !resolve(staging, ref.logicalPath).startsWith(`${resolve(staging)}${sep}`)) {
-        return { restored: false, reason: 'raw-generation-reference-invalid' }
+      let object
+      try {
+        object = ref.kind === 'manifest' ? generation.manifestObject : await readBucketBytes(ref.key, { config, client })
+      } catch (error) {
+        if (ref.kind === 'source') throw new RawGenerationSourceReadError(error)
+        throw error
       }
-      const object = await readBucketBytes(ref.key, { config, client })
       if (!object.found || object.contentLength !== ref.bytes || sha256(object.bytes) !== ref.digest) {
         return { restored: false, reason: 'raw-generation-object-invalid' }
       }
@@ -536,10 +712,9 @@ async function restoreRawGeneration({ rawDir, manifestPath, statePath, rawState,
         await writeFile(destination, object.bytes)
         downloadedCount += 1
       } else if (ref.kind === 'manifest') {
-        const manifest = JSON.parse(Buffer.from(object.bytes).toString('utf8'))
         const restoredManifest = {
-          ...manifest,
-          files: Object.fromEntries(Object.entries(manifest.files ?? {}).map(([kind, paths]) => [
+          ...generation.manifest,
+          files: Object.fromEntries(Object.entries(generation.manifest.files ?? {}).map(([kind, paths]) => [
             kind,
             Array.isArray(paths) ? paths.map((path) => resolve(rawDir, String(path))) : [],
           ])),
@@ -550,16 +725,315 @@ async function restoreRawGeneration({ rawDir, manifestPath, statePath, rawState,
       }
     }
     if (downloadedCount === 0) return { restored: false, reason: 'raw-generation-empty' }
-    await rm(rawDir, { recursive: true, force: true })
-    await rename(staging, rawDir)
-    if (resolve(manifestPath) !== resolve(rawDir, 'manifest.json')) await cp(resolve(rawDir, 'manifest.json'), manifestPath)
-    if (resolve(statePath) !== resolve(rawDir, 'refresh-state.json')) {
-      try { await cp(resolve(rawDir, 'refresh-state.json'), statePath) } catch { /* optional state */ }
-    }
+    await promoteRawGenerationDirectory({ staging, rawDir, manifestPath, statePath }, promotionOperations)
     return { restored: true, source: 'active-raw-generation', downloadedCount, manifestRestored: true, stateRestored: await pathExists(statePath) }
   } finally {
     await rm(staging, { recursive: true, force: true })
   }
+}
+
+async function promoteRawGenerationDirectory({ staging, rawDir, manifestPath, statePath }, {
+  renameDirectory = rename,
+  copyFile = cp,
+  removePath = rm,
+} = {}) {
+  const transactionId = `${process.pid}-${Date.now()}`
+  const previousDir = `${rawDir}.previous-${transactionId}`
+  const defaultManifestPath = resolve(rawDir, 'manifest.json')
+  const defaultStatePath = resolve(rawDir, 'refresh-state.json')
+  const metadataBackupDir = `${rawDir}.metadata-previous-${transactionId}`
+  const customMetadataPaths = [
+    ...(resolve(manifestPath) === defaultManifestPath ? [] : [manifestPath]),
+    ...(resolve(statePath) === defaultStatePath ? [] : [statePath]),
+  ]
+  const externalBackups = []
+  await bestEffortRemove(removePath, previousDir)
+  await bestEffortRemove(removePath, metadataBackupDir)
+  for (const [index, path] of customMetadataPaths.entries()) {
+    const backupPath = join(metadataBackupDir, `${index}.json`)
+    const existed = await pathExists(path)
+    if (existed) {
+      await mkdir(dirname(backupPath), { recursive: true })
+      await copyFile(path, backupPath)
+    }
+    externalBackups.push({ path, backupPath, existed })
+  }
+
+  let hasPrevious = false
+  let promoted = false
+  try {
+    try {
+      await renameDirectory(rawDir, previousDir)
+      hasPrevious = true
+    } catch (error) {
+      if (filesystemErrorCode(error) !== 'ENOENT') throw error
+    }
+    await renameDirectory(staging, rawDir)
+    promoted = true
+
+    if (resolve(manifestPath) !== defaultManifestPath) {
+      await mkdir(dirname(manifestPath), { recursive: true })
+      await copyFile(defaultManifestPath, manifestPath)
+    }
+    if (resolve(statePath) !== defaultStatePath) {
+      if (await pathExists(defaultStatePath)) {
+        await mkdir(dirname(statePath), { recursive: true })
+        await copyFile(defaultStatePath, statePath)
+      } else {
+        await removePath(statePath, { force: true })
+      }
+    }
+  } catch (error) {
+    let rollbackSucceeded = true
+    if (promoted) {
+      if (!await rollbackWithoutMasking(() => renameDirectory(rawDir, staging), 'evacuate failed raw promotion')) rollbackSucceeded = false
+    }
+    if (hasPrevious) {
+      if (!await rollbackWithoutMasking(() => renameDirectory(previousDir, rawDir), 'restore previous raw baseline')) rollbackSucceeded = false
+    }
+    for (const backup of externalBackups) {
+      if (!await rollbackWithoutMasking(async () => {
+        if (backup.existed) await copyFile(backup.backupPath, backup.path)
+        else await removePath(backup.path, { force: true })
+      }, `restore external raw metadata ${backup.path}`)) rollbackSucceeded = false
+    }
+    if (rollbackSucceeded) {
+      await bestEffortRemove(removePath, previousDir)
+      await bestEffortRemove(removePath, metadataBackupDir)
+    }
+    throw error
+  }
+
+  await bestEffortRemove(removePath, previousDir)
+  await bestEffortRemove(removePath, metadataBackupDir)
+}
+
+export function compareRawBaselineManifests({ localManifest, remoteManifest, localUsable, remoteUsable, bootstrapStart }) {
+  if (remoteUsable && !localUsable) {
+    const remote = rawBaselineEvidence(remoteManifest, bootstrapStart)
+    return remote.valid
+      ? { preferred: 'remote', reason: 'remote-only-usable-baseline', local: { usable: false }, remote }
+      : { preferred: 'none', reason: 'remote-baseline-malformed', local: { usable: false }, remote }
+  }
+  if (localUsable && !remoteUsable) {
+    return { preferred: 'local', reason: 'remote-baseline-unusable', local: rawBaselineEvidence(localManifest, bootstrapStart), remote: { usable: false } }
+  }
+  if (!localUsable && !remoteUsable) {
+    return { preferred: 'none', reason: 'no-usable-raw-baseline', local: { usable: false }, remote: { usable: false } }
+  }
+
+  const local = rawBaselineEvidence(localManifest, bootstrapStart)
+  const remote = rawBaselineEvidence(remoteManifest, bootstrapStart)
+  if (!remote.valid) return { preferred: 'local', reason: 'remote-baseline-malformed', local, remote }
+  if (!local.valid) return { preferred: 'local', reason: 'baseline-evidence-incomparable', local, remote }
+  if (!remote.matchCoverageKnown || !local.matchCoverageKnown) {
+    return { preferred: 'local', reason: 'baseline-evidence-incomparable', local, remote }
+  }
+
+  const coverageComparison = compareCoverage(remote, local)
+  const oracleComparison = Math.sign(remote.oracleQuality - local.oracleQuality)
+  const remoteHasOracleSuperset = setContains(remote.oracleFileIdentities, local.oracleFileIdentities)
+  const localHasOracleSuperset = setContains(local.oracleFileIdentities, remote.oracleFileIdentities)
+  const oracleFilesEquivalent = remoteHasOracleSuperset && localHasOracleSuperset
+  const remoteHasMatchCoverageSuperset = intervalsContain(remote.matchCoverageIntervals, local.matchCoverageIntervals)
+  const localHasMatchCoverageSuperset = intervalsContain(local.matchCoverageIntervals, remote.matchCoverageIntervals)
+  const matchCoverageEquivalent = remoteHasMatchCoverageSuperset && localHasMatchCoverageSuperset
+  const remoteNonWorse = coverageComparison.bootstrap >= 0
+    && coverageComparison.start >= 0
+    && coverageComparison.end >= 0
+    && remoteHasOracleSuperset
+    && remoteHasMatchCoverageSuperset
+    && oracleComparison >= 0
+  const localNonWorse = coverageComparison.bootstrap <= 0
+    && coverageComparison.start <= 0
+    && coverageComparison.end <= 0
+    && localHasOracleSuperset
+    && localHasMatchCoverageSuperset
+    && oracleComparison <= 0
+  const remoteStrictlyBetter = coverageComparison.bootstrap > 0
+    || coverageComparison.start > 0
+    || coverageComparison.end > 0
+    || !localHasOracleSuperset
+    || !localHasMatchCoverageSuperset
+    || oracleComparison > 0
+  const localStrictlyBetter = coverageComparison.bootstrap < 0
+    || coverageComparison.start < 0
+    || coverageComparison.end < 0
+    || !remoteHasOracleSuperset
+    || !remoteHasMatchCoverageSuperset
+    || oracleComparison < 0
+
+  if (remoteNonWorse && remoteStrictlyBetter) {
+    return { preferred: 'remote', reason: 'remote-baseline-dominates', local, remote }
+  }
+  if (localNonWorse && localStrictlyBetter) {
+    return { preferred: 'local', reason: 'local-baseline-dominates', local, remote }
+  }
+  const equivalentEvidence = coverageComparison.bootstrap === 0
+    && coverageComparison.start === 0
+    && coverageComparison.end === 0
+    && oracleFilesEquivalent
+    && matchCoverageEquivalent
+    && oracleComparison === 0
+  if (equivalentEvidence) {
+    if (remote.generatedAtMs > local.generatedAtMs) {
+      return { preferred: 'remote', reason: 'remote-baseline-newer', local, remote }
+    }
+    return { preferred: 'local', reason: 'local-baseline-current', local, remote }
+  }
+  return { preferred: 'local', reason: 'baseline-evidence-incomparable', local, remote }
+}
+
+function rawBaselineEvidence(manifest, bootstrapStart) {
+  const end = validDate(manifest?.end)
+  const generatedAtMs = validTimestamp(manifest?.generatedAt)
+  const start = validDate(manifest?.start)
+  const oracleFiles = arrayValue(manifest?.files?.oracleCsv)
+  const oracleFileIdentities = uniqueValues(oracleFiles.map(oracleFileIdentity).filter(Boolean)).sort()
+  const leaguepediaFiles = arrayValue(manifest?.files?.leaguepediaJson)
+  const leaguepediaStatus = String(manifest?.sources?.leaguepedia?.latestStatus ?? manifest?.sources?.leaguepedia?.status ?? '').toLowerCase()
+  const parsedMatchCoverage = leaguepediaFiles.map(matchCoverageInterval)
+  const matchCoverageKnown = parsedMatchCoverage.every(Boolean)
+    && (leaguepediaFiles.length > 0 || leaguepediaStatus === 'skipped')
+  const matchCoverageIntervals = matchCoverageKnown ? normalizeCoverageIntervals(parsedMatchCoverage) : []
+  const oracle = manifest?.sources?.oracle
+  const oracleStatus = String(oracle?.latestStatus ?? oracle?.status ?? '').toLowerCase()
+  const hasOracleFiles = oracleFiles.length > 0
+  const knownOracleStatus = ['', 'downloaded', 'partial', 'reused', 'preserved', 'failed', 'skipped', 'unavailable'].includes(oracleStatus)
+  const oracleStatusRequiresFiles = ['downloaded', 'partial', 'reused', 'preserved'].includes(oracleStatus)
+  const valid = Boolean(manifest?.schemaVersion === 1 && manifest?.files && typeof manifest.files === 'object'
+    && !Array.isArray(manifest.files) && start && end && start <= end && generatedAtMs !== null && knownOracleStatus
+    && !(oracleStatusRequiresFiles && !hasOracleFiles))
+  const oracleQuality = oracleStatus === 'downloaded' && hasOracleFiles
+    ? 2
+    : hasOracleFiles ? 1 : 0
+  return {
+    usable: true,
+    valid,
+    fullBootstrapCoverage: valid ? manifestHasBootstrapCoverage(manifest, bootstrapStart) : false,
+    start,
+    end,
+    generatedAt: generatedAtMs === null ? undefined : new Date(generatedAtMs).toISOString(),
+    generatedAtMs,
+    oracleQuality,
+    oracleStatus: oracleStatus || 'unknown',
+    hasOracleFiles,
+    oracleFileIdentities,
+    matchCoverageKnown,
+    matchCoverageIntervals,
+  }
+}
+
+function compareCoverage(left, right) {
+  return {
+    bootstrap: Number(left.fullBootstrapCoverage) - Number(right.fullBootstrapCoverage),
+    start: right.start.localeCompare(left.start),
+    end: left.end.localeCompare(right.end),
+  }
+}
+
+function oracleFileIdentity(path) {
+  const normalized = String(path).replaceAll('\\', '/')
+  const marker = 'oracles-elixir/'
+  const markerIndex = normalized.lastIndexOf(`/${marker}`)
+  if (markerIndex >= 0) return normalized.slice(markerIndex + 1)
+  if (normalized.startsWith(marker)) return normalized
+  return basename(normalized)
+}
+
+function setContains(superset, subset) {
+  const values = new Set(superset)
+  return subset.every((value) => values.has(value))
+}
+
+function matchCoverageInterval(path) {
+  const match = basename(String(path)).match(/^scoreboard-games-(\d{4}-\d{2}-\d{2})_to_(\d{4}-\d{2}-\d{2})\.json$/)
+  if (!match) return undefined
+  const start = validDate(match[1])
+  const end = validDate(match[2])
+  return start && end && start <= end ? { start, end } : undefined
+}
+
+function normalizeCoverageIntervals(intervals) {
+  const normalized = []
+  for (const interval of intervals.toSorted((left, right) => `${left.start}:${left.end}`.localeCompare(`${right.start}:${right.end}`))) {
+    const previous = normalized.at(-1)
+    if (!previous || interval.start > dateDaysBefore(previous.end, -1)) {
+      normalized.push({ ...interval })
+    } else if (interval.end > previous.end) {
+      previous.end = interval.end
+    }
+  }
+  return normalized
+}
+
+function intervalsContain(superset, subset) {
+  return subset.every((required) => superset.some((available) => available.start <= required.start && available.end >= required.end))
+}
+
+class RawGenerationSourceReadError extends Error {
+  constructor(cause) {
+    super(`Remote raw source payload read failed: ${cause instanceof Error ? cause.message : String(cause)}`, { cause })
+    this.name = 'RawGenerationSourceReadError'
+  }
+}
+
+function validRawGenerationReference(ref) {
+  return Boolean(ref && typeof ref === 'object' && !Array.isArray(ref)
+    && ['source', 'manifest', 'refresh-state'].includes(ref.kind)
+    && typeof ref.logicalPath === 'string' && safeRawLogicalPath(ref.logicalPath)
+    && typeof ref.key === 'string' && ref.key === `raw/objects/${ref.digest}`
+    && isSha256(ref.digest)
+    && Number.isSafeInteger(ref.bytes) && ref.bytes >= 0)
+}
+
+function safeRawLogicalPath(path, root = '/raw-baseline-root') {
+  if (!path || path.includes('\\') || path.includes('\0') || path.startsWith('/')) return false
+  if (path.split('/').some((part) => !part || part === '.' || part === '..')) return false
+  const destination = resolve(root, path)
+  return destination.startsWith(`${resolve(root)}${sep}`)
+}
+
+function sameStringSet(left, right) {
+  return left.length === right.length && left.every((value) => right.includes(value))
+}
+
+function filesystemErrorCode(error) {
+  return error && typeof error === 'object' && 'code' in error ? error.code : undefined
+}
+
+async function bestEffortRemove(removePath, path) {
+  try {
+    await removePath(path, { recursive: true, force: true })
+  } catch {
+    // Cleanup is secondary to the completed or rolled-back promotion.
+  }
+}
+
+async function rollbackWithoutMasking(operation, description) {
+  try {
+    await operation()
+    return true
+  } catch (error) {
+    console.warn(`Raw baseline rollback could not ${description}: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+}
+
+function isSha256(value) {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+}
+
+function validDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`)
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value ? value : undefined
+}
+
+function validTimestamp(value) {
+  if (typeof value !== 'string') return null
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : null
 }
 
 function mergeRawManifests(previousManifest, nextManifest) {

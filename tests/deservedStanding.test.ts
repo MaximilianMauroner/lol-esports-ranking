@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { preseasonEventWeightMultiplier } from '../src/data/rankingConfig.ts'
+import { kespaCupEventWeightMultiplier, preseasonEventWeightMultiplier } from '../src/data/rankingConfig.ts'
 import {
   deservedStandingModelParameters,
   dssConservativeScore,
@@ -97,6 +97,63 @@ test('DSS discounts post-Worlds preseason series weight', () => {
 
   assert.ok(demaciaCup)
   near(demaciaCup.seriesWeight, dssSeriesWeight('regional-regular', 3) * preseasonEventWeightMultiplier)
+})
+
+test('DSS composes KeSPA Cup and post-Worlds discounts without changing unrelated minor events', () => {
+  const worlds = seriesFixture({
+    id: 'worlds-final-before-kespa',
+    winners: ['Alpha', 'Alpha', 'Alpha'],
+    date: '2025-11-09',
+    season: 2025,
+    event: 'Worlds 2025',
+    league: 'Worlds',
+    region: 'International',
+    tier: 'worlds-main',
+    bestOf: 5,
+  })
+  const ordinaryKespa = seriesFixture({
+    id: 'ordinary-kespa',
+    winners: ['Alpha', 'Alpha'],
+    date: '2026-07-20',
+    event: 'KeSPA 2026',
+    league: 'KeSPA',
+    region: 'International',
+    tier: 'minor-international',
+    bestOf: 3,
+  })
+  const preseasonKespa = seriesFixture({
+    id: 'preseason-kespa',
+    winners: ['Alpha', 'Alpha'],
+    date: '2025-12-06',
+    season: 2025,
+    event: 'KeSPA 2025',
+    league: 'KeSPA',
+    region: 'International',
+    tier: 'minor-international',
+    bestOf: 3,
+  })
+  const unrelatedMinor = seriesFixture({
+    id: 'unrelated-minor',
+    winners: ['Alpha', 'Alpha'],
+    date: '2026-07-21',
+    event: 'Esports World Cup 2026',
+    league: 'EWC',
+    region: 'International',
+    tier: 'minor-international',
+    bestOf: 3,
+  })
+  const ledger = dssSeriesLedgerEntriesForMatches([
+    ...worlds,
+    ...ordinaryKespa,
+    ...preseasonKespa,
+    ...unrelatedMinor,
+  ])
+  const weightFor = (finalMatchId: string) => ledger.find((entry) => entry.finalMatchId === finalMatchId)?.seriesWeight ?? 0
+  const minorBo3 = dssSeriesWeight('minor-international', 3)
+
+  near(weightFor('ordinary-kespa-game-2'), minorBo3 * kespaCupEventWeightMultiplier)
+  near(weightFor('preseason-kespa-game-2'), minorBo3 * kespaCupEventWeightMultiplier * preseasonEventWeightMultiplier)
+  near(weightFor('unrelated-minor-game-2'), minorBo3)
 })
 
 test('DSS probability helpers implement the PDF logistic and series formulas', () => {

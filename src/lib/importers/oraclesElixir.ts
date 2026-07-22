@@ -48,6 +48,17 @@ export function importOraclesElixirCsv(
   } = {},
 ): OracleImportResult {
   const records = parseOraclesElixirCsvRecords(csvText)
+  return importOraclesElixirRecords(records, options)
+}
+
+export function importOraclesElixirRecords(
+  records: OracleCsvRecord[],
+  options: {
+    sourceUrl?: string
+    sourceFileName?: string
+    retrievedAt?: string
+  } = {},
+): OracleImportResult {
   const byGame = new Map<string, CsvRecord[]>()
 
   for (const record of records) {

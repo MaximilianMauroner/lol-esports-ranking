@@ -22,6 +22,7 @@ type OrchestrateCrunchOptions<T, TShadow> = {
   receipt?: IncrementalCrunchReceipt
   requireReferenceParity?: boolean
   prepareShadow?: (output: T) => TShadow | Promise<TShadow>
+  acceptFallbackCandidate?: boolean
 }
 
 export function orchestrateCrunch<T>(
@@ -37,6 +38,7 @@ export async function orchestrateCrunch<T, TShadow>({
   receipt,
   requireReferenceParity = false,
   prepareShadow,
+  acceptFallbackCandidate = false,
 }: OrchestrateCrunchOptions<T, TShadow>): Promise<CrunchOrchestrationResult<T, T | TShadow>> {
   if (mode === 'full') {
     if (receipt) {
@@ -71,6 +73,16 @@ export async function orchestrateCrunch<T, TShadow>({
     receipt.checkpoint = fallback ? { fallback } : {}
   }
   if (fallback) {
+    if (acceptFallbackCandidate && candidate.output !== undefined) {
+      if (receipt) receipt.executedMode = 'incremental'
+      return {
+        output: candidate.output,
+        requestedMode: mode,
+        executedMode: 'incremental',
+        fallback,
+        ...(receipt ? { receipt } : {}),
+      }
+    }
     const shadowOutput = candidate.output === undefined
       ? undefined
       : prepareShadow ? await prepareShadow(candidate.output) : candidate.output

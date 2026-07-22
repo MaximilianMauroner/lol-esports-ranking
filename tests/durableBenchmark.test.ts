@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { runDurableBenchmark, runParityMismatchRolloutScenario } from '../scripts/benchmark-incremental-durable.ts'
+import {
+  classifyBucketObjectKey,
+  classifyRetainedObjectKey,
+  productionMonthlyProjectionAssumptions,
+  runDurableBenchmark,
+  runParityMismatchRolloutScenario,
+  runSuccessiveAppendColdRestoreScenario,
+} from '../scripts/benchmark-incremental-durable.ts'
+
+test('cost benchmark attributes complete private, raw, public, and metadata key families', () => {
+  assert.equal(productionMonthlyProjectionAssumptions.attemptsPerMonth, 120)
+  assert.equal(classifyBucketObjectKey('bucket/rankings/durable/generations/manifest.json'), 'private-content')
+  assert.equal(classifyBucketObjectKey('bucket/rankings/durable/audits/audit.json'), 'private-content')
+  assert.equal(classifyBucketObjectKey('bucket/rankings/raw/generations/manifest.json'), 'raw-content')
+  assert.equal(classifyBucketObjectKey('bucket/rankings/generations/g1/public-manifest.json'), 'public-content')
+  assert.equal(classifyBucketObjectKey('bucket/rankings/generations/g1/data/ranking.json'), 'public-content')
+  assert.equal(classifyBucketObjectKey('bucket/rankings/active-generation.json'), 'metadata-pointers')
+  assert.equal(classifyRetainedObjectKey('bucket/rankings/durable/generations/manifest.json'), 'bucketPrivate')
+  assert.equal(classifyRetainedObjectKey('bucket/rankings/raw/objects/hash'), 'bucketAuthoritative')
+})
 
 test('production mismatch rollout alerts, preserves private authority, is retry-idempotent, and forces full', async () => {
   const result = await runParityMismatchRolloutScenario()
@@ -43,4 +62,12 @@ test('durable benchmark covers every Phase 5 change class with public parity', a
   assert.ok(result.scenarios
     .filter((scenario) => scenario.scenario !== 'no-change' && scenario.scenario !== 'cold-restore')
     .every((scenario) => scenario.cacheHits > 0))
+})
+
+test('cold-restored successive appends advance checkpoints and replay only the newest delta', async () => {
+  const rows = await runSuccessiveAppendColdRestoreScenario()
+  assert.equal(rows.length, 3)
+  assert.ok(rows[0]!.checkpoint < rows[1]!.checkpoint)
+  assert.ok(rows[1]!.checkpoint < rows[2]!.checkpoint)
+  assert.ok(rows.every((row) => row.rankingRows <= rows[0]!.rankingRows))
 })

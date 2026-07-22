@@ -222,16 +222,6 @@ export async function restoreDurableGeneration({
     }
     const auditValidation = validateAudit(parseJsonBytes(auditObject.bytes), manifest)
     if (auditValidation) return restoreFallback('checkpoint-corrupt', auditValidation, metrics)
-    const loaded = []
-    for (const ref of manifest.objects) {
-      const object = await store.get(ref.key)
-      if (!object.found) return restoreFallback('checkpoint-unavailable', `durable-object-missing:${ref.path}`, metrics)
-      metrics.cacheMisses += 1
-      if (!validBytes(object.bytes, ref.bytes, ref.digest)) {
-        return restoreFallback('checkpoint-corrupt', `durable-object-integrity:${ref.path}`, metrics)
-      }
-      loaded.push({ path: ref.path, bytes: Buffer.from(object.bytes) })
-    }
     const target = resolve(stateDir)
     targetPath = target
     const next = `${target}.restore-${process.pid}-${Date.now()}`
@@ -240,11 +230,25 @@ export async function restoreDurableGeneration({
     previousPath = previous
     await bestEffortRemove(next)
     await bestEffortRemove(previous)
-    for (const object of loaded) {
-      const path = resolve(next, object.path)
+    for (const ref of manifest.objects) {
+      const object = await store.get(ref.key)
+      if (!object.found) {
+        await bestEffortRemove(next)
+        restorationPath = undefined
+        return restoreFallback('checkpoint-unavailable', `durable-object-missing:${ref.path}`, metrics)
+      }
+      metrics.cacheMisses += 1
+      if (!validBytes(object.bytes, ref.bytes, ref.digest)) {
+        await bestEffortRemove(next)
+        restorationPath = undefined
+        return restoreFallback('checkpoint-corrupt', `durable-object-integrity:${ref.path}`, metrics)
+      }
+      const path = resolve(next, ref.path)
       assertInside(next, path)
       await mkdir(dirname(path), { recursive: true })
       await writeRestoredFile(path, object.bytes)
+      metrics.restoredObjects += 1
+      metrics.restoredBytes += object.bytes.byteLength
     }
     if (validateStateDir) {
       const stateSummary = await validateStateDir(next, expectedIdentity)
@@ -279,8 +283,6 @@ export async function restoreDurableGeneration({
     }
     await bestEffortRemove(previous)
     previousPath = undefined
-    metrics.restoredObjects = loaded.length
-    metrics.restoredBytes = loaded.reduce((sum, object) => sum + object.bytes.byteLength, 0)
     return { restored: true, active, manifest, metrics }
   } catch (error) {
     if (restorationPath) await bestEffortRemove(restorationPath)

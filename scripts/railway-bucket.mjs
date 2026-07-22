@@ -3,6 +3,7 @@ import { createReadStream, createWriteStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { pipeline } from 'node:stream/promises'
+import { Readable } from 'node:stream'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -98,6 +99,7 @@ export async function uploadRankingArtifacts({
   const dataPrefix = generationId ? `generations/${safeObjectPath(generationId)}/data` : 'data'
   let active
   let idempotentGeneration = false
+  let publicState
   if (!publishGeneration && rolloutForActive && fencingToken) {
     await requirePromotionLease(leaseGuard, { config, client, now: clock() })
   }
@@ -135,9 +137,20 @@ export async function uploadRankingArtifacts({
     }
   }
   if (publishGeneration) {
-    const publicSync = await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json', { immutable: Boolean(generationId) })
-    uploads.push(...publicSync.filter((entry) => entry.status !== 'unchanged'))
-    unchanged.push(...publicSync.filter((entry) => entry.status === 'unchanged'))
+    if (generationId) {
+      const publicSync = await stagePublicGeneration(client, config, {
+        publicDataDir,
+        generationId,
+        previousPublicState: active.value?.publicState,
+      })
+      publicState = publicSync.publicState
+      uploads.push(...publicSync.uploaded)
+      unchanged.push(...publicSync.unchanged)
+    } else {
+      const publicSync = await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json')
+      uploads.push(...publicSync.filter((entry) => entry.status !== 'unchanged'))
+      unchanged.push(...publicSync.filter((entry) => entry.status === 'unchanged'))
+    }
   }
   let rawState
   if (rawDir && generationId && manifestPath) {
@@ -228,7 +241,10 @@ export async function uploadRankingArtifacts({
       generationId,
       fencingToken,
       promotedAt,
-      manifestKey: bucketKey(config, `${dataPrefix}/ranking-summary.json`),
+      manifestKey: publicState
+        ? bucketKey(config, publicState.manifestKey)
+        : bucketKey(config, `${dataPrefix}/ranking-summary.json`),
+      ...(publicState ? { publicState } : {}),
       ...(privateState ? { privateState } : {}),
       ...(rawState ? { rawState } : {}),
       ...(rawState ? { rawHistory: activatedRawHistory(active.value, rawState, promotedAt, rawRetentionDays) } : {}),
@@ -239,7 +255,8 @@ export async function uploadRankingArtifacts({
     if (idempotentGeneration) {
       if (active.value?.manifestKey !== nextPointer.manifestKey
         || (privateState && stableObjectJson(active.value?.privateState) !== stableObjectJson(privateState))
-        || (rawState && stableObjectJson(active.value?.rawState) !== stableObjectJson(rawState))) {
+        || (rawState && stableObjectJson(active.value?.rawState) !== stableObjectJson(rawState))
+        || (publicState && stableObjectJson(active.value?.publicState) !== stableObjectJson(publicState))) {
         throw new Error('Same-generation retry does not match the active generation identity')
       }
       setActiveGenerationCache(config, client, generationId)
@@ -332,6 +349,37 @@ export async function getBucketObject(relativePath, {
       }
     } catch (error) {
       if (!isMissingObjectError(error)) throw error
+    }
+  }
+  if (generation) {
+    const manifestKey = `generations/${safeObjectPath(generation)}/public-manifest.json`
+    const manifestObject = await readBucketBytes(manifestKey, { config, client })
+    if (manifestObject.found) {
+      const manifest = JSON.parse(Buffer.from(manifestObject.bytes).toString('utf8'))
+      validatePublicGenerationManifest(manifest, generation)
+      if (!generationId) {
+        const active = await readBucketJson('active-generation.json', { config, client })
+        const publicState = active.value?.publicState
+        if (active.value?.generationId !== generation || publicState?.manifestKey !== manifestKey
+          || publicState?.manifestBytes !== manifestObject.bytes.byteLength
+          || publicState?.manifestDigest !== sha256Bytes(manifestObject.bytes)) {
+          throw new Error('Active public generation manifest integrity mismatch')
+        }
+      }
+      const entry = manifest.entries.find((candidate) => candidate.path === safePath)
+      if (!entry) return { found: false, key: bucketKey(config, manifestKey) }
+      const object = await readBucketBytes(entry.objectKey, { config, client })
+      if (!object.found) throw new Error(`Public generation object missing: ${entry.path}`)
+      if (object.bytes.byteLength !== entry.bytes || sha256Bytes(object.bytes) !== entry.digest) {
+        throw new Error(`Public generation object integrity mismatch: ${entry.path}`)
+      }
+      return {
+        found: true,
+        key: object.key,
+        body: Readable.from([object.bytes]),
+        contentLength: object.bytes.byteLength,
+        contentType: contentTypeForPath(relativePath),
+      }
     }
   }
   return { found: false, key: keys[0] }
@@ -802,6 +850,101 @@ export async function downloadBucketObject({
   }
 }
 
+async function stagePublicGeneration(client, config, { publicDataDir, generationId, previousPublicState }) {
+  const previous = await readPublicGenerationManifest(client, config, previousPublicState)
+  const previousByPath = new Map((previous?.entries ?? []).map((entry) => [entry.path, entry]))
+  const root = resolve(publicDataDir)
+  const uploaded = []
+  const unchanged = []
+  const entries = []
+  for (const file of await listFiles(root)) {
+    const path = relative(root, file).split(sep).join('/')
+    const bytes = await readFile(file)
+    const digest = sha256Bytes(bytes)
+    const prior = previousByPath.get(path)
+    let objectKey
+    if (prior?.digest === digest && prior.bytes === bytes.byteLength && typeof prior.objectKey === 'string') {
+      objectKey = prior.objectKey
+      await validatePublicObjectReference(client, config, prior)
+      unchanged.push({ status: 'unchanged', key: bucketKey(config, objectKey), bytes: bytes.byteLength, digest, contentType: contentTypeForPath(path) })
+    } else {
+      objectKey = `public/objects/${digest}`
+      const result = await uploadImmutableBytes(client, config, objectKey, bytes, contentTypeForPath(path), digest)
+      ;(result.status === 'unchanged' ? unchanged : uploaded).push(result)
+    }
+    entries.push({ path, digest, bytes: bytes.byteLength, objectKey })
+  }
+  entries.sort((left, right) => left.path.localeCompare(right.path))
+  const manifest = {
+    schemaVersion: 1,
+    kind: 'public-generation-manifest',
+    generationId,
+    entries,
+  }
+  const manifestBytes = Buffer.from(jsonBody(manifest))
+  const manifestDigest = sha256Bytes(manifestBytes)
+  const manifestKey = `generations/${safeObjectPath(generationId)}/public-manifest.json`
+  const manifestResult = await uploadImmutableBytes(
+    client,
+    config,
+    manifestKey,
+    manifestBytes,
+    'application/json; charset=utf-8',
+    manifestDigest,
+  )
+  ;(manifestResult.status === 'unchanged' ? unchanged : uploaded).push(manifestResult)
+  return {
+    uploaded,
+    unchanged,
+    publicState: { manifestKey, manifestDigest, manifestBytes: manifestBytes.byteLength, entryCount: entries.length },
+  }
+}
+
+async function validatePublicObjectReference(client, config, entry) {
+  const head = await headBucketObject(entry.objectKey, { config, client })
+  if (!head.found || head.contentLength !== entry.bytes) throw new Error(`Public generation object missing: ${entry.path}`)
+  if (head.storageVerifiedSha256 === entry.digest) return
+  const object = await readBucketBytes(entry.objectKey, { config, client })
+  if (!object.found || object.bytes.byteLength !== entry.bytes || sha256Bytes(object.bytes) !== entry.digest) {
+    throw new Error(`Public generation object integrity mismatch: ${entry.path}`)
+  }
+}
+
+async function readPublicGenerationManifest(client, config, state) {
+  if (!state) return undefined
+  if (typeof state.manifestKey !== 'string' || typeof state.manifestDigest !== 'string'
+    || !Number.isSafeInteger(state.manifestBytes) || state.manifestBytes <= 0) {
+    throw new Error('Invalid public generation pointer')
+  }
+  const object = await readBucketBytes(state.manifestKey, { config, client })
+  if (!object.found) throw new Error('Public generation manifest is missing')
+  if (object.bytes.byteLength !== state.manifestBytes || sha256Bytes(object.bytes) !== state.manifestDigest) {
+    throw new Error('Public generation manifest integrity mismatch')
+  }
+  const manifest = JSON.parse(Buffer.from(object.bytes).toString('utf8'))
+  validatePublicGenerationManifest(manifest)
+  return manifest
+}
+
+function validatePublicGenerationManifest(manifest, generationId) {
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
+    || manifest.schemaVersion !== 1 || manifest.kind !== 'public-generation-manifest'
+    || typeof manifest.generationId !== 'string' || !Array.isArray(manifest.entries)
+    || (generationId !== undefined && manifest.generationId !== generationId)) {
+    throw new Error('Invalid public generation manifest')
+  }
+  const paths = new Set()
+  for (const entry of manifest.entries) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)
+      || typeof entry.path !== 'string' || safeRequestedObjectPath(entry.path) !== entry.path
+      || typeof entry.digest !== 'string' || !Number.isSafeInteger(entry.bytes) || entry.bytes < 0
+      || typeof entry.objectKey !== 'string' || paths.has(entry.path)) {
+      throw new Error('Invalid public generation manifest entry')
+    }
+    paths.add(entry.path)
+  }
+}
+
 export async function uploadDirectory(client, config, dir, destinationPrefix, publishLast, { immutable = false } = {}) {
   const root = resolve(dir)
   const files = await listFiles(root)
@@ -866,7 +1009,18 @@ async function stageRawGeneration(client, config, { rawDir, manifestPath, stateP
       logicalFiles[kind].push(logicalPath)
     }
   }
-  const logicalManifest = { ...manifest, files: logicalFiles }
+  const logicalManifest = {
+    ...manifest,
+    files: logicalFiles,
+    ...(manifest.normalizedProviderChunks ? {
+      normalizedProviderChunks: {
+        ...manifest.normalizedProviderChunks,
+        chunks: Array.isArray(manifest.normalizedProviderChunks.chunks)
+          ? manifest.normalizedProviderChunks.chunks.map((chunk) => ({ ...chunk, path: chunk.logicalId }))
+          : [],
+      },
+    } : {}),
+  }
   const manifestBytes = Buffer.from(jsonBody(logicalManifest))
   const manifestDigest = sha256Bytes(manifestBytes)
   const manifestResult = await uploadImmutableBytes(client, config, `raw/objects/${manifestDigest}`, manifestBytes, 'application/json; charset=utf-8', manifestDigest, createdAt)

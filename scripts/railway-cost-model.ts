@@ -193,6 +193,32 @@ export function medianCostLedger(ledgers: AttemptLedger[]): AttemptLedger {
   }
 }
 
+export function modelVolumeLedgerFromBucket(ledger: AttemptLedger): AttemptLedger {
+  if (ledger.workflow !== 'incremental-bucket' || ledger.evidence !== 'measured') {
+    throw new Error('Volume modeling requires a measured incremental-bucket ledger')
+  }
+  const phases: AttemptLedger['phases'] = {}
+  for (const [name, phase] of Object.entries(ledger.phases) as Array<[PhaseName, PhaseUsage | undefined]>) {
+    if (!phase) continue
+    phases[name] = {
+      ...phase,
+      serviceUploadBytes: { ...phase.serviceUploadBytes, privateCache: 0 },
+    }
+  }
+  return {
+    ...ledger,
+    workflow: 'incremental-volume',
+    evidence: 'modeled',
+    provenance: `${ledger.provenance}; modeled by zeroing private cache uploads and moving retained private bytes to a Railway volume`,
+    phases,
+    retainedBytes: {
+      bucketAuthoritative: ledger.retainedBytes.bucketAuthoritative,
+      bucketPrivate: 0,
+      volumePrivate: ledger.retainedBytes.volumePrivate + ledger.retainedBytes.bucketPrivate,
+    },
+  }
+}
+
 function median(values: number[]) {
   const ordered = [...values].sort((left, right) => left - right)
   const middle = Math.floor(ordered.length / 2)

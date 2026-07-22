@@ -38,7 +38,7 @@ export type SnapshotModelProvider = {
   ranking(input: SnapshotRankingInput): RankingModelResult
   players(input: SnapshotPlayerInput): PlayerStanding[]
   metrics(): SnapshotInputMetrics
-  persistedState(): PersistedSnapshotModelState
+  persistedState?(): PersistedSnapshotModelState
 }
 
 export type PersistedSnapshotModelState = {
@@ -50,19 +50,36 @@ export type PersistedSnapshotModelState = {
   playerResults: Map<string, PlayerStanding[]>
 }
 
+export type SnapshotModelCacheLookup = {
+  schemaVersion: 2
+  compatibilityHash: string
+  get<T>(collection: keyof Omit<PersistedSnapshotModelState, 'schemaVersion' | 'compatibilityHash'>, key: string): T | undefined
+}
+
 export function createIncrementalSnapshotModelProvider({
   compatibilityHash,
+  cloneResults = true,
   previous,
+  persistNewResults = true,
+  persistCatalogUpdates = true,
 }: {
   compatibilityHash: string
-  previous?: PersistedSnapshotModelState
+  cloneResults?: boolean
+  previous?: PersistedSnapshotModelState | SnapshotModelCacheLookup
+  persistNewResults?: boolean
+  persistCatalogUpdates?: boolean
 }): SnapshotModelProvider {
-  if (previous) validatePersistedSnapshotModelState(previous, compatibilityHash)
-  const restored = previous ? structuredClone(previous) : undefined
-  const rankingCatalogs = restored?.rankingCatalogs ?? new Map<string, IncrementalReducerCheckpoint[]>()
-  const playerCatalogs = restored?.playerCatalogs ?? new Map<string, IncrementalPlayerCheckpoint[]>()
-  const rankingResults = restored?.rankingResults ?? new Map<string, RankingModelResult>()
-  const playerResults = restored?.playerResults ?? new Map<string, PlayerStanding[]>()
+  if (previous && 'rankingCatalogs' in previous) validatePersistedSnapshotModelState(previous, compatibilityHash)
+  if (previous && previous.compatibilityHash !== compatibilityHash) throw new Error('Snapshot model state compatibility hash mismatch')
+  const lookup = previous && !('rankingCatalogs' in previous) ? previous : undefined
+  const initialRankingCatalogs = previous && 'rankingCatalogs' in previous ? previous.rankingCatalogs : new Map<string, IncrementalReducerCheckpoint[]>()
+  const initialPlayerCatalogs = previous && 'playerCatalogs' in previous ? previous.playerCatalogs : new Map<string, IncrementalPlayerCheckpoint[]>()
+  const initialRankingResults = previous && 'rankingResults' in previous ? previous.rankingResults : new Map<string, RankingModelResult>()
+  const initialPlayerResults = previous && 'playerResults' in previous ? previous.playerResults : new Map<string, PlayerStanding[]>()
+  const rankingCatalogs = new Map(initialRankingCatalogs)
+  const playerCatalogs = new Map(initialPlayerCatalogs)
+  const rankingResults = new Map(initialRankingResults)
+  const playerResults = new Map(initialPlayerResults)
   const touchedRankingStreams = new Set<string>()
   const touchedPlayerStreams = new Set<string>()
   const touchedRankingResults = new Set<string>()
@@ -98,22 +115,22 @@ export function createIncrementalSnapshotModelProvider({
       })
       touchedRankingResults.add(resultKey)
       touchedRankingStreams.add(streamKey)
-      const cached = rankingResults.get(resultKey)
+      const cached = cachedValue<RankingModelResult>(rankingResults, lookup, 'rankingResults', resultKey)
       if (cached) {
         counters.rankingResultCacheHits += 1
-        return structuredClone(cached)
+        return cloneResults ? structuredClone(cached) : cached
       }
       const run = runIncrementalRankingReducers({
         matches: input.matches,
         teams: input.teams,
         tournamentLifecycles: input.tournamentLifecycles,
-        checkpointHistory: rankingCatalogs.get(streamKey) ?? [],
+        checkpointHistory: cachedValue<IncrementalReducerCheckpoint[]>(rankingCatalogs, lookup, 'rankingCatalogs', streamKey) ?? [],
       })
       rankingCatalogs.set(streamKey, run.checkpoints)
       rankingResults.set(resultKey, run.ranking)
       counters.rankingReducerRuns += 1
       counters.rankingRows += run.rows.livePlayerEdgeRows + run.rows.teamRows
-      return structuredClone(run.ranking)
+      return cloneResults ? structuredClone(run.ranking) : run.ranking
     },
     players(input) {
       counters.playerRequests += 1
@@ -138,35 +155,47 @@ export function createIncrementalSnapshotModelProvider({
       })
       touchedPlayerResults.add(resultKey)
       touchedPlayerStreams.add(streamKey)
-      const cached = playerResults.get(resultKey)
+      const cached = cachedValue<PlayerStanding[]>(playerResults, lookup, 'playerResults', resultKey)
       if (cached) {
         counters.playerResultCacheHits += 1
-        return structuredClone(cached)
+        return cloneResults ? structuredClone(cached) : cached
       }
       const run = runIncrementalPlayerReducer({
         ...input,
-        checkpointHistory: playerCatalogs.get(streamKey) ?? [],
+        checkpointHistory: cachedValue<IncrementalPlayerCheckpoint[]>(playerCatalogs, lookup, 'playerCatalogs', streamKey) ?? [],
       })
       playerCatalogs.set(streamKey, run.checkpoints)
       playerResults.set(resultKey, run.players)
       counters.playerReducerRuns += 1
       counters.playerRows += run.rows
-      return structuredClone(run.players)
+      return cloneResults ? structuredClone(run.players) : run.players
     },
     metrics() {
       return { ...counters }
     },
     persistedState() {
-      return structuredClone({
+      return {
         schemaVersion: 1 as const,
         compatibilityHash,
-        rankingCatalogs: selectedEntries(rankingCatalogs, touchedRankingStreams),
-        playerCatalogs: selectedEntries(playerCatalogs, touchedPlayerStreams),
-        rankingResults: selectedEntries(rankingResults, touchedRankingResults),
-        playerResults: selectedEntries(playerResults, touchedPlayerResults),
-      })
+        rankingCatalogs: selectedEntries(persistCatalogUpdates ? rankingCatalogs : initialRankingCatalogs, touchedRankingStreams),
+        playerCatalogs: selectedEntries(persistCatalogUpdates ? playerCatalogs : initialPlayerCatalogs, touchedPlayerStreams),
+        rankingResults: selectedEntries(persistNewResults ? rankingResults : initialRankingResults, touchedRankingResults),
+        playerResults: selectedEntries(persistNewResults ? playerResults : initialPlayerResults, touchedPlayerResults),
+      }
     },
   }
+}
+
+function cachedValue<T>(
+  map: Map<string, T>,
+  lookup: SnapshotModelCacheLookup | undefined,
+  collection: keyof Omit<PersistedSnapshotModelState, 'schemaVersion' | 'compatibilityHash'>,
+  key: string,
+): T | undefined {
+  if (map.has(key)) return map.get(key)
+  const value = lookup?.get<T>(collection, key)
+  if (value !== undefined) map.set(key, value)
+  return value
 }
 
 function selectedEntries<T>(source: Map<string, T>, selected: Set<string>): Map<string, T> {
