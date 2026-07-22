@@ -421,6 +421,97 @@ test('legacy parent returns the same finalized child record stored in state, rec
   }
 })
 
+test('legacy child telemetry error remains primary when the subprocess wrapper is generic', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-legacy-process-error-'))
+  const paths = refreshPaths(root)
+  const logs: string[] = []
+  let caught: Error & { refreshMetrics?: RefreshRunMetrics } | undefined
+  try {
+    await runRefreshOnce({
+      env: {
+        RANKING_REFRESH_MODE: 'legacy',
+        RANKING_REFRESH_METRICS_PATH: paths.metrics,
+        RANKING_REFRESH_STATE: paths.refreshState,
+      },
+      runId: 'legacy-process-error',
+      runChild: async () => {
+        const seed = await readRefreshMetrics(paths.metrics)
+        assert.ok(seed)
+        const childFailure = {
+          ...seed,
+          finishedAt: '2026-07-22T00:00:31.000Z',
+          result: 'failed',
+          error: 'Oracle provider request failed',
+        }
+        await writeRefreshMetrics(paths.metrics, childFailure)
+        await mkdir(paths.raw, { recursive: true })
+        await writeFile(paths.refreshState, `${JSON.stringify({ schemaVersion: 1, status: 'failed', lastRun: childFailure })}\n`)
+        throw new Error('Refresh job exited with 1')
+      },
+      logger: { log: (value: string) => logs.push(value), warn() {}, error() {} },
+    })
+  } catch (error) {
+    caught = error as Error & { refreshMetrics?: RefreshRunMetrics }
+  }
+  try {
+    assert.ok(caught)
+    assert.equal(caught.message, 'Oracle provider request failed')
+    assert.equal((caught.cause as Error).message, 'Refresh job exited with 1')
+    assert.equal(caught.refreshMetrics?.error, 'Oracle provider request failed')
+    assert.equal(caught.refreshMetrics?.processError, 'Refresh job exited with 1')
+    const refreshState = JSON.parse(await readFile(paths.refreshState, 'utf8'))
+    const metricsFile = JSON.parse(await readFile(paths.metrics, 'utf8'))
+    assert.deepEqual(caught.refreshMetrics, refreshState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, metricsFile)
+    assert.deepEqual(caught.refreshMetrics, metricLog(logs))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('gated probe failure persists one canonical record without a publish receipt', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-probe-error-canonical-'))
+  const paths = refreshPaths(root)
+  const client = memoryS3()
+  const logs: string[] = []
+  let caught: Error & { refreshMetrics?: RefreshRunMetrics } | undefined
+  const options = realParentOptions(paths, client, logs)
+  try {
+    await runRefreshOnce({
+      ...options,
+      env: { ...options.env, RANKING_TRIGGER_STATE: paths.triggerState },
+      runId: 'probe-error-canonical',
+      fetchProbe: async () => { throw new Error('schedule-provider-unavailable') },
+      writeLocalState: async (path: string, value: unknown) => {
+        await mkdir(paths.raw, { recursive: true })
+        await writeFile(path, `${JSON.stringify(value, null, 2)}\n`)
+      },
+    })
+  } catch (error) {
+    caught = error as Error & { refreshMetrics?: RefreshRunMetrics }
+  }
+  try {
+    assert.ok(caught)
+    assert.equal(caught.message, 'schedule-provider-unavailable')
+    const metricsFile = JSON.parse(await readFile(paths.metrics, 'utf8'))
+    const localTriggerState = JSON.parse(await readFile(paths.triggerState, 'utf8'))
+    const localRefreshState = JSON.parse(await readFile(paths.refreshState, 'utf8'))
+    const triggerState = JSON.parse(client.objects.get('rankings/raw/refresh-trigger-state.json')!.body)
+    const remoteRefreshState = JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body)
+    assert.deepEqual(caught.refreshMetrics, metricsFile)
+    assert.deepEqual(caught.refreshMetrics, localTriggerState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, localRefreshState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, triggerState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, remoteRefreshState.lastRun)
+    assert.deepEqual(caught.refreshMetrics, metricLog(logs))
+    assert.equal(caught.refreshMetrics?.result, 'failed')
+    assert.equal(caught.refreshMetrics?.error, 'schedule-provider-unavailable')
+    assert.equal(client.objects.has('rankings/latest-publish.json'), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 for (const terminal of ['unchanged', 'stale-source'] as const) {
   test(`${terminal} child record is identical across applicable non-publishing surfaces`, async () => {
     const outcome = await runNonPublishingCase(terminal)
@@ -637,6 +728,7 @@ function refreshPaths(root: string) {
     root,
     raw,
     manifest: join(raw, 'manifest.json'),
+    triggerState: join(raw, 'refresh-trigger-state.json'),
     refreshState: join(raw, 'refresh-state.json'),
     staging: join(root, 'staging'),
     metrics: join(root, 'metrics.json'),

@@ -89,9 +89,30 @@ export async function runRefreshOnce(options = {}) {
       return { status: 'completed', metrics: finalRecord }
     } catch (error) {
       finish('failed')
-      finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
+      const childMetrics = await readRefreshMetrics(childMetricsPath)
+      const failure = canonicalChildFailure(
+        childMetrics,
+        completeRefreshMetrics(tracker.snapshot({ result: 'failed', error })),
+        error,
+      )
+      finalRecord = failure.record
+      const persistenceErrors = []
+      try {
+        const local = await readJsonIfExists(refreshStatePath) ?? { schemaVersion: 1, status: 'failed' }
+        local.lastRun = finalRecord
+        await (options.writeLocalState ?? writeLocalState)(refreshStatePath, local)
+      } catch (persistenceError) {
+        persistenceErrors.push(`refresh-state: ${errorMessage(persistenceError)}`)
+      }
+      try {
+        await writeRefreshMetrics(childMetricsPath, finalRecord)
+      } catch (persistenceError) {
+        persistenceErrors.push(`metrics: ${errorMessage(persistenceError)}`)
+      }
+      if (persistenceErrors.length > 0) logger.warn(`Unable to persist canonical legacy refresh failure: ${persistenceErrors.join('; ')}`)
       logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
-      throw error
+      if (failure.error instanceof Error) failure.error.refreshMetrics = finalRecord
+      throw failure.error
     }
   }
 
@@ -191,10 +212,29 @@ export async function runRefreshOnce(options = {}) {
       await persistState(state)
     } catch (error) {
       tracker.recordStage('probe', { durationMs: monotonicNow() - probeStarted, result: 'failed' })
+      finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
       state = applyProbeFailure(state, { checkedAt: now(), reason: errorMessage(error) })
       state.fencingToken = authority.lease.fencingToken
-      await persistState(state)
+      state.lastRun = finalRecord
+      const persistenceErrors = []
+      try {
+        await writeRefreshMetrics(childMetricsPath, finalRecord)
+      } catch (persistenceError) {
+        persistenceErrors.push(`metrics: ${errorMessage(persistenceError)}`)
+      }
+      try {
+        await persistRefreshTelemetry(finalRecord)
+      } catch (persistenceError) {
+        persistenceErrors.push(`refresh-state: ${errorMessage(persistenceError)}`)
+      }
+      try {
+        await persistState(state)
+      } catch (persistenceError) {
+        persistenceErrors.push(`trigger-state: ${errorMessage(persistenceError)}`)
+      }
+      if (persistenceErrors.length > 0) logger.warn(`Unable to persist canonical probe failure: ${persistenceErrors.join('; ')}`)
       await (options.sendAlert ?? defaultSendAlert)(env, 'schedule-probe-failed', errorMessage(error), now, logger)
+      if (error instanceof Error) error.refreshMetrics = finalRecord
       throw error
     }
 
@@ -284,24 +324,15 @@ export async function runRefreshOnce(options = {}) {
       } catch (error) {
         finishProviderFetch('failed')
         childMetrics ??= await readRefreshMetrics(childMetricsPath)
-        const parentFailure = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
-        const processError = errorMessage(error)
-        const childPrimaryError = childMetrics?.result === 'failed' && typeof childMetrics.error === 'string' && childMetrics.error.trim()
-          ? childMetrics.error
-          : undefined
-        const primaryError = childPrimaryError ?? processError
-        finalRecord = childMetrics && childMetrics.result === 'failed'
-          ? childMetrics
-          : childMetrics ? completeRefreshMetrics(mergeRefreshMetrics(parentFailure, childMetrics)) : parentFailure
-        finalRecord = {
-          ...finalRecord,
-          result: 'failed',
-          error: primaryError,
-          ...(childPrimaryError && childPrimaryError !== processError ? { processError } : {}),
-        }
+        const failure = canonicalChildFailure(
+          childMetrics,
+          completeRefreshMetrics(tracker.snapshot({ result: 'failed', error })),
+          error,
+        )
+        finalRecord = failure.record
         try {
           await assertLive()
-          state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now(), reason: primaryError })
+          state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now(), reason: failure.primaryError })
           state.fencingToken = authority.lease.fencingToken
           state.lastRun = finalRecord
           await persistRefreshTelemetry(finalRecord)
@@ -310,10 +341,8 @@ export async function runRefreshOnce(options = {}) {
         } catch (persistenceError) {
           logger.warn(`Unable to persist canonical refresh failure: ${errorMessage(persistenceError)}`)
         }
-        await (options.sendAlert ?? defaultSendAlert)(env, 'refresh-ingestion-failed', primaryError, now, logger)
-        throw childPrimaryError && childPrimaryError !== processError
-          ? new Error(childPrimaryError, { cause: error })
-          : error
+        await (options.sendAlert ?? defaultSendAlert)(env, 'refresh-ingestion-failed', failure.primaryError, now, logger)
+        throw failure.error
       }
     }
 
@@ -538,6 +567,30 @@ function numberEnv(env, name, fallback) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function canonicalChildFailure(childMetrics, parentFailure, error) {
+  const processError = errorMessage(error)
+  const childPrimaryError = childMetrics?.result === 'failed' && typeof childMetrics.error === 'string' && childMetrics.error.trim()
+    ? childMetrics.error
+    : undefined
+  const primaryError = childPrimaryError ?? processError
+  const base = childMetrics && childMetrics.result === 'failed'
+    ? childMetrics
+    : childMetrics ? completeRefreshMetrics(mergeRefreshMetrics(parentFailure, childMetrics)) : parentFailure
+  const record = {
+    ...base,
+    result: 'failed',
+    error: primaryError,
+    ...(childPrimaryError && childPrimaryError !== processError ? { processError } : {}),
+  }
+  return {
+    record,
+    primaryError,
+    error: childPrimaryError && childPrimaryError !== processError
+      ? new Error(childPrimaryError, { cause: error })
+      : error,
+  }
 }
 
 async function defaultAlertIfPendingIsOld(env, value, now, logger) {
