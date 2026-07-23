@@ -65,23 +65,47 @@ export async function runRefreshOnce(options = {}) {
     rss,
   })
   let finalRecord
+  const finalizePreRunTerminal = async ({ result, error } = {}) => {
+    finalRecord = completeRefreshMetrics(tracker.snapshot({ result, ...(error ? { error } : {}) }))
+    if (mode === 'legacy' || !config.enabled || !client) return { status: 'storage-unavailable' }
+    try {
+      return await publishRefreshRolloutEvidence(finalRecord, {
+        env,
+        now: now(),
+        runId,
+        config,
+        client,
+        publish: options.publishRolloutEvidence ?? publishRolloutEvidence,
+      })
+    } catch (publicationError) {
+      logger.warn(`Rollout evidence publication failed: ${errorMessage(publicationError)}`)
+      return { status: 'publication-failed' }
+    }
+  }
 
   const intervalMinutes = numberEnv(env, 'RANKING_REFRESH_INTERVAL_MINUTES', 360)
   const resolveGateReference = options.readBucketJson ?? readBucketJson
-  const rolloutGateReceipt = intervalMinutes <= 5
-    ? await readRolloutGateReceipt(env.RANKING_ROLLOUT_GATE_RECEIPT, { config, client, readJson: resolveGateReference })
-    : undefined
-  await assertRefreshCadence({
-    intervalMinutes,
-    mode,
-    commit: env.RAILWAY_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA,
-    deploymentId: env.RAILWAY_DEPLOYMENT_ID,
-    receiptAuthority: rolloutGateReceipt,
-    resolveReference: (key) => resolveGateReference(key, { config, client }),
-    now: now(),
-  })
+  try {
+    const rolloutGateReceipt = intervalMinutes <= 5
+      ? await readRolloutGateReceipt(env.RANKING_ROLLOUT_GATE_RECEIPT, { config, client, readJson: resolveGateReference })
+      : undefined
+    await assertRefreshCadence({
+      intervalMinutes,
+      mode,
+      commit: env.RAILWAY_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA,
+      deploymentId: env.RAILWAY_DEPLOYMENT_ID,
+      receiptAuthority: rolloutGateReceipt,
+      resolveReference: (key) => resolveGateReference(key, { config, client }),
+      now: now(),
+    })
+  } catch (error) {
+    await finalizePreRunTerminal({ result: 'failed', error })
+    throw error
+  }
   if (mode !== 'legacy' && ttlMs <= jobTimeoutMs + 60_000) {
-    throw new Error('Refresh lease TTL must exceed the child timeout by at least 60000ms')
+    const error = new Error('Refresh lease TTL must exceed the child timeout by at least 60000ms')
+    await finalizePreRunTerminal({ result: 'failed', error })
+    throw error
   }
 
   if (mode === 'legacy') {
@@ -133,18 +157,26 @@ export async function runRefreshOnce(options = {}) {
   }
 
   if (!config.enabled || !client) {
-    throw new Error(`Bucket configuration is required in ${mode} mode: ${(config.missing ?? []).join(', ')}`)
+    const error = new Error(`Bucket configuration is required in ${mode} mode: ${(config.missing ?? []).join(', ')}`)
+    await finalizePreRunTerminal({ result: 'failed', error })
+    throw error
   }
 
-  const acquired = await (options.acquireLease ?? acquireBucketLease)(leaseKey, {
-    owner,
-    ttlMs,
-    now: now(),
-    config,
-    client,
-  })
+  let acquired
+  try {
+    acquired = await (options.acquireLease ?? acquireBucketLease)(leaseKey, {
+      owner,
+      ttlMs,
+      now: now(),
+      config,
+      client,
+    })
+  } catch (error) {
+    await finalizePreRunTerminal({ result: 'failed', error })
+    throw error
+  }
   if (!acquired.acquired) {
-    finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'skipped' }))
+    await finalizePreRunTerminal({ result: 'skipped' })
     logger.log(`Refresh skipped: ${acquired.reason}`)
     logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
     return { status: 'skipped', reason: acquired.reason, metrics: finalRecord }

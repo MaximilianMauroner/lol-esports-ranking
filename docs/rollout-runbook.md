@@ -31,3 +31,22 @@ Service uploads to a bucket count as service egress even though bucket egress is
 ## Completion audit
 
 `docs/rollout-acceptance.json` supplies the versioned acceptance identity, while the required requirement IDs and their allowed proof kinds are fixed in `audit-plan-completion.mjs` so an edited input cannot weaken the audit. Completion evidence must be an array of immutable `ops/**` `{key, sha256}` references; the audit re-reads and digest-checks each object and validates it against the expected commit and deployment. Prose, inline bodies, missing objects, and fixtures cannot prove a live requirement. Live seven-day, deployment, coordination, rollback, and usage requirements remain `live-pending`; cadence, configuration, and cutover remain `authorization-gated` until separately authorized. `audit-plan-completion.mjs` exits nonzero unless every required item is proved.
+
+The two repository-only requirements use a separate local authority and never count as live evidence. Commit the implementation and its focused tests first, then generate ignored evidence for that exact clean commit:
+
+```sh
+COMMIT=<40-character-lowercase-commit>
+pnpm rollout:implementation-evidence -- --subject-commit "$COMMIT" --authority-dir "$PWD/.rollout-evidence" --repository-root "$PWD"
+```
+
+The producer runs the fixed native provider-retry/call-site and early-terminal-receipt test contracts. It writes canonical, create-only objects under `.rollout-evidence/objects/sha256/<digest>` and a canonical `.rollout-evidence/subjects/<commit>/manifest.json`. The artifacts contain no deployment, expiry, timestamp, or absolute-path claims. Their source digests must match both the checked-out files and the named committed revision, including the producer and completion-audit machinery, so generated evidence is intentionally ignored rather than committed and cannot refer to a commit that contains itself.
+
+Validate that explicit local authority with:
+
+```sh
+pnpm validate:rollout -- --subject-commit "$COMMIT" --implementation-authority "$PWD/.rollout-evidence" --repository-root "$PWD"
+```
+
+Before live evidence is supplied, the expected result is a nonzero exit with `2 proved`, `0 missing`, `5 live-pending`, and `3 authorization-gated`. Local objects can resolve only `provider-request-retry` and `complete-immutable-receipts`; local/inline values cannot prove an `ops/**` live requirement, and bucket objects cannot impersonate repository authority. The reader rejects relative authority roots, traversal, symlinks, non-regular files, noncanonical JSON, digest mismatches, stale source digests, and a subject commit different from the producer/source revision.
+
+In gated or shadow refresh mode, cadence rejection, invalid lease configuration, lease-acquisition failure, and lease-acquisition skip are terminal runs too. When bucket storage and rollout identity are available they pass through the same immutable rollout-evidence hook as post-lease outcomes. If storage itself is unavailable, startup still fails closed and does not claim that a receipt was written.

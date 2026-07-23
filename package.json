@@ -38,6 +38,7 @@
     "fetch:riot-gpr": "node scripts/fetch-riot-gpr-snapshot.mjs",
     "bucket:gc": "node scripts/ranking-bucket-gc.mjs",
     "rollout:evidence": "node scripts/rollout-evidence.mjs",
+    "rollout:implementation-evidence": "node scripts/rollout-implementation-evidence.mjs",
     "rollout:shadow-gate": "node scripts/rollout-shadow-gate.mjs",
     "rollout:gate": "node scripts/validate-rollout-gate.mjs",
     "rollout:cost": "node scripts/railway-cost-report.mjs",

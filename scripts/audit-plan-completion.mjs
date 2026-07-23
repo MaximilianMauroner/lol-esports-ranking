@@ -5,6 +5,10 @@ import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import { parseProbeCoordinationEvidence } from './probe-refresh-coordination.mjs'
 import { bucketConfigFromEnv, createBucketClient, readBucketJson } from './railway-bucket.mjs'
 import { hasMeasuredProductionUsage, parseRailwayCostReport } from './railway-cost-report.mjs'
+import {
+  parseImplementationEvidence,
+  resolveImplementationAuthority,
+} from './rollout-implementation-evidence.mjs'
 import { parseRolloutEvidence } from './rollout-evidence.mjs'
 import {
   parseImmutableReference,
@@ -33,21 +37,34 @@ export async function auditPlanCompletion({
   evidence = [],
   expectedCommit,
   expectedDeploymentId,
+  subjectCommit = expectedCommit,
+  implementationAuthorityDir,
+  repositoryRoot = process.cwd(),
   resolveReference,
   now = new Date(),
 } = {}) {
   if (!acceptance || acceptance.artifactKind !== 'ranking-rollout-acceptance-contract' || acceptance.schemaVersion !== 1) {
     throw new Error('Invalid plan acceptance contract identity')
   }
-  const resolved = typeof resolveReference === 'function'
+  const bucketResolved = typeof resolveReference === 'function'
     ? (await Promise.all((Array.isArray(evidence) ? evidence : []).map((reference) => resolveCompletionAttachment(reference, resolveReference))))
       .filter(Boolean)
     : []
+  const repositoryResolved = implementationAuthorityDir
+    ? (await resolveImplementationAuthority({
+      authorityDir: implementationAuthorityDir,
+      subjectCommit,
+      repositoryRoot,
+    })).map((value) => ({ authority: 'repository', value }))
+    : []
+  const resolved = [...bucketResolved, ...repositoryResolved]
   const requirements = PLAN_COMPLETION_REQUIREMENTS.map((contract) => {
     const candidates = resolved.filter((entry) => attachmentApplies(entry.value, contract)
       && nativeEvidenceValid(entry.value, {
         expectedCommit,
         expectedDeploymentId,
+        subjectCommit,
+        repositoryAuthority: entry.authority === 'repository',
         requiresLive: contract.requiresLive,
         now,
       }))
@@ -94,7 +111,7 @@ async function resolveCompletionAttachment(raw, resolveReference) {
     const value = result?.found === undefined ? result : result.value
     if (!found || !record(value)) return null
     const digest = createHash('sha256').update(canonicalJsonFor(value)).digest('hex')
-    return digest === reference.sha256 ? { ...reference, value } : null
+    return digest === reference.sha256 ? { authority: 'bucket', ...reference, value } : null
   } catch {
     return null
   }
@@ -103,7 +120,7 @@ async function resolveCompletionAttachment(raw, resolveReference) {
 function attachmentApplies(value, contract) {
   if (value.artifactKind !== contract.evidenceKind) return false
   if (value.artifactKind === 'ranking-rollout-implementation-test-evidence') {
-    return Array.isArray(value.tests) && value.tests.includes(contract.id)
+    return value.requirementId === contract.id
   }
   return true
 }
@@ -111,10 +128,19 @@ function attachmentApplies(value, contract) {
 function nativeEvidenceValid(value, {
   expectedCommit,
   expectedDeploymentId,
+  subjectCommit,
+  repositoryAuthority,
   requiresLive,
   now,
 }) {
   try {
+    if (value.artifactKind === 'ranking-rollout-implementation-test-evidence') {
+      const parsed = parseImplementationEvidence(value)
+      return repositoryAuthority === true
+        && typeof subjectCommit === 'string'
+        && parsed.subjectCommit === subjectCommit
+        && parsed.producerSourceCommit === subjectCommit
+    }
     if (typeof expectedCommit !== 'string' || typeof expectedDeploymentId !== 'string') return false
     if (value.commit !== expectedCommit || value.deploymentId !== expectedDeploymentId
       || typeof value.runId !== 'string' || typeof value.recordedAt !== 'string'
@@ -138,10 +164,6 @@ function nativeEvidenceValid(value, {
       case 'ranking-railway-cost-report':
         parseRailwayCostReport(value)
         return hasMeasuredProductionUsage(value)
-      case 'ranking-rollout-implementation-test-evidence':
-        return value.schemaVersion === 1 && value.evidenceClass === 'production-like-fixture'
-          && ['proved', 'contradicted'].includes(value.result)
-          && Array.isArray(value.tests) && value.tests.length > 0
       default:
         return false
     }
@@ -167,21 +189,62 @@ function record(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-async function main([acceptancePath, evidencePath, commitArg, deploymentArg]) {
-  if (!acceptancePath) throw new Error('Usage: audit-plan-completion <acceptance.json> [evidence-refs.json] [commit] [deploymentId]')
+async function main(args) {
+  const {
+    acceptancePath,
+    evidencePath,
+    commit,
+    deploymentId,
+    subjectCommit,
+    implementationAuthorityDir,
+    repositoryRoot,
+  } = parseCliArgs(args)
   const acceptance = JSON.parse(await readFile(acceptancePath, 'utf8'))
   const evidence = evidencePath ? JSON.parse(await readFile(evidencePath, 'utf8')) : []
-  const config = bucketConfigFromEnv()
-  const client = createBucketClient(config)
+  const references = Array.isArray(evidence) ? evidence : evidence.evidence ?? []
+  const config = references.length > 0 ? bucketConfigFromEnv() : undefined
+  const client = config ? createBucketClient(config) : undefined
   const audit = await auditPlanCompletion({
     acceptance,
-    evidence: Array.isArray(evidence) ? evidence : evidence.evidence ?? [],
-    expectedCommit: commitArg ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA,
-    expectedDeploymentId: deploymentArg ?? process.env.RAILWAY_DEPLOYMENT_ID,
-    resolveReference: (key) => readBucketJson(key, { config, client }),
+    evidence: references,
+    expectedCommit: commit ?? subjectCommit ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA,
+    expectedDeploymentId: deploymentId ?? process.env.RAILWAY_DEPLOYMENT_ID,
+    subjectCommit: subjectCommit ?? commit ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA,
+    implementationAuthorityDir,
+    repositoryRoot,
+    ...(config ? { resolveReference: (key) => readBucketJson(key, { config, client }) } : {}),
   })
   process.stdout.write(`${JSON.stringify(audit, null, 2)}\n`)
   process.exitCode = audit.exitCode
+}
+
+function parseCliArgs(args) {
+  const acceptancePath = args[0]
+  if (!acceptancePath) {
+    throw new Error('Usage: audit-plan-completion <acceptance.json> [--evidence-refs <path>] [--commit <commit>] [--deployment <id>] [--subject-commit <commit> --implementation-authority <absolute-path>] [--repository-root <absolute-path>]')
+  }
+  const optionArgs = args[1] === '--' ? [acceptancePath, ...args.slice(2)] : args
+  if (optionArgs.slice(1).every((value) => !value.startsWith('--'))) {
+    const [evidencePath, commit, deploymentId] = optionArgs.slice(1)
+    return { acceptancePath, evidencePath, commit, deploymentId, repositoryRoot: process.cwd() }
+  }
+  const values = new Map()
+  for (let index = 1; index < optionArgs.length; index += 2) {
+    const flag = optionArgs[index]
+    const value = optionArgs[index + 1]
+    if (!['--evidence-refs', '--commit', '--deployment', '--subject-commit', '--implementation-authority', '--repository-root'].includes(flag)
+      || !value) throw new Error(`Invalid completion audit argument ${flag ?? ''}`.trim())
+    values.set(flag, value)
+  }
+  return {
+    acceptancePath,
+    evidencePath: values.get('--evidence-refs'),
+    commit: values.get('--commit'),
+    deploymentId: values.get('--deployment'),
+    subjectCommit: values.get('--subject-commit'),
+    implementationAuthorityDir: values.get('--implementation-authority'),
+    repositoryRoot: values.get('--repository-root') ?? process.cwd(),
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main(process.argv.slice(2))

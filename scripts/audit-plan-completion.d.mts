@@ -15,6 +15,9 @@ export function auditPlanCompletion(options: {
   evidence?: unknown[]
   expectedCommit?: string
   expectedDeploymentId?: string
+  subjectCommit?: string
+  implementationAuthorityDir?: string
+  repositoryRoot?: string
   resolveReference?: (key: string) => Promise<unknown>
   now?: string | number | Date
 }): Promise<PlanCompletionAudit>

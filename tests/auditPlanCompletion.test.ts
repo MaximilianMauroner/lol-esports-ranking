@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import test from 'node:test'
 import { auditPlanCompletion } from '../scripts/audit-plan-completion.mjs'
 import { createRailwayCostReport } from '../scripts/railway-cost-report.mjs'
+import { writeImplementationAuthority } from '../scripts/rollout-implementation-evidence.mjs'
 import { immutableReference } from '../scripts/rollout-gate.mjs'
 import { evaluateRolloutShadowGate } from '../scripts/rollout-shadow-gate.mjs'
+import {
+  createImplementationRepositoryFixture,
+  generatePassingImplementationEvidence,
+} from './implementationEvidenceTestFixtures.ts'
 import { rolloutEvidence, sevenDayEvidence } from './rolloutTestFixtures.ts'
 
 function implementationProof(runId: string, tests: string[], result: 'proved' | 'contradicted') {
@@ -42,30 +48,53 @@ test('completion audit ignores caller acceptance IDs, inline proof, and never-wr
   assert.equal(result.exitCode, 1)
 })
 
-test('completion audit resolves digest-bound native attachments with fixed requirement mapping', async () => {
+test('completion audit proves both non-live requirements only from explicit commit-bound local authority', async () => {
   const acceptance = JSON.parse(await readFile(new URL('../docs/rollout-acceptance.json', import.meta.url), 'utf8'))
-  const proved = implementationProof('proved-proof', ['provider-request-retry'], 'proved')
-  const contradicted = implementationProof('contradicted-proof', ['complete-immutable-receipts'], 'contradicted')
-  const stored = new Map([
-    ['ops/rollout-tests/proved.json', proved],
-    ['ops/rollout-tests/contradicted.json', contradicted],
-  ])
-  const result = await auditPlanCompletion({
-    acceptance,
-    evidence: [
-      immutableReference(proved, 'ops/rollout-tests/proved.json'),
-      immutableReference(contradicted, 'ops/rollout-tests/contradicted.json'),
-    ],
-    expectedCommit: 'abc123',
-    expectedDeploymentId: 'fixture-deployment',
-    resolveReference: async (key: string) => stored.has(key)
-      ? { found: true, value: stored.get(key) }
-      : { found: false },
-    now: '2026-07-23T01:00:00Z',
-  })
-  assert.equal(result.requirements.find((entry) => entry.id === 'provider-request-retry')?.status, 'proved')
-  assert.equal(result.requirements.find((entry) => entry.id === 'complete-immutable-receipts')?.status, 'contradicted')
-  assert.equal(result.exitCode, 1)
+  const fixture = await createImplementationRepositoryFixture()
+  const authority = join(fixture.root, '.rollout-evidence')
+  try {
+    const values = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
+    await writeImplementationAuthority(values, { authorityDir: authority })
+    const forgedBucket = immutableReference(values[0], 'ops/rollout-tests/forged-local-proof.json')
+    const bucketOnly = await auditPlanCompletion({
+      acceptance,
+      evidence: [forgedBucket],
+      expectedCommit: fixture.commit,
+      expectedDeploymentId: 'fixture-deployment',
+      subjectCommit: fixture.commit,
+      resolveReference: async () => ({ found: true, value: values[0] }),
+      now: '2026-07-23T01:00:00Z',
+    })
+    assert.equal(bucketOnly.requirements.find((entry) => entry.id === 'provider-request-retry')?.status, 'missing')
+
+    const result = await auditPlanCompletion({
+      acceptance,
+      expectedCommit: fixture.commit,
+      subjectCommit: fixture.commit,
+      implementationAuthorityDir: authority,
+      repositoryRoot: fixture.root,
+      now: '2026-07-23T01:00:00Z',
+    })
+    assert.equal(result.requirements.find((entry) => entry.id === 'provider-request-retry')?.status, 'proved')
+    assert.equal(result.requirements.find((entry) => entry.id === 'complete-immutable-receipts')?.status, 'proved')
+    assert.deepEqual(result.counts, {
+      proved: 2,
+      contradicted: 0,
+      missing: 0,
+      'live-pending': 5,
+      'authorization-gated': 3,
+    })
+    assert.equal(result.exitCode, 1)
+
+    await assert.rejects(auditPlanCompletion({
+      acceptance,
+      subjectCommit: '0'.repeat(40),
+      implementationAuthorityDir: authority,
+      repositoryRoot: fixture.root,
+    }), /ENOENT|subject/)
+  } finally {
+    await fixture.cleanup()
+  }
 })
 
 test('measured production usage requires a strict native report resolved from authoritative storage', async () => {
