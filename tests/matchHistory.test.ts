@@ -48,7 +48,7 @@ test('match history parser rejects a winner outside the two teams', () => {
   }), /winnerId must identify a team/)
 })
 
-test('match history impact follows consecutive published ratings instead of a stale point delta', () => {
+test('match history impact stays tied to the series when published ratings also move for other reasons', () => {
   const opening = game(1, 'Gen.G')
   opening.id = 'opening-game'
   opening.sourceGameId = 'opening-game'
@@ -65,18 +65,28 @@ test('match history impact follows consecutive published ratings instead of a st
     dataMode: 'scheduled-public-data',
   })
   const key = snapshotKey({ season: '2026', event: 'All', region: 'All' })
-  const standing = data.snapshots[key]?.standings.find((entry) => entry.team === 'Gen.G')
-  assert.ok(standing)
-  const finalPoint = standing.history.at(-1)
-  assert.ok(finalPoint)
-  finalPoint.delta = -50
+  const baselineEntry = createMatchHistoryArtifacts(data).pages[key][1].matches
+    .find((entry) => entry.id === 'lck-series_2')
+  assert.ok(baselineEntry)
+  assert.equal(baselineEntry.impact.unit, 'series-applied')
+  assert.ok((baselineEntry.impact.teamA ?? 0) > 0)
+  assert.ok((baselineEntry.impact.teamB ?? 0) < 0)
 
-  const shard = createMatchHistoryArtifacts(data).pages[key][1]
-  const finalEntry = shard.matches.find((entry) => entry.id === 'lck-series_2')
+  for (const standing of data.snapshots[key]?.standings ?? []) {
+    const finalPoint = standing.history.at(-1)
+    assert.ok(finalPoint?.source.seriesId)
+    const firstSeriesPoint = standing.history.findIndex(
+      (point) => point.source.seriesId === finalPoint.source.seriesId,
+    )
+    const previousPoint = standing.history[firstSeriesPoint - 1]
+    assert.ok(previousPoint)
+    previousPoint.rating = finalPoint.rating + (standing.team === 'Gen.G' ? 100 : -100)
+  }
 
-  assert.ok(finalEntry)
-  assert.equal(finalEntry.impact.unit, 'series-applied')
-  assert.ok((finalEntry.impact.teamA ?? 0) > 0)
+  const contaminatedEntry = createMatchHistoryArtifacts(data).pages[key][1].matches
+    .find((entry) => entry.id === 'lck-series_2')
+  assert.ok(contaminatedEntry)
+  assert.deepEqual(contaminatedEntry.impact, baselineEntry.impact)
 })
 
 function game(gameNumber: number, winner: 'Gen.G' | 'T1'): MatchRecord {
