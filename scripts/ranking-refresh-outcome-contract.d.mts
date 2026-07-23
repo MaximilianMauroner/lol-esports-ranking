@@ -18,9 +18,21 @@ export type RankingRefreshOutcomeContract = {
     | 'never'
     | 'after-successful-publication'
     | 'after-successful-clean-full-publication'
-  reconciliationBehavior: 'not-consumed' | 'required-before-completion' | 'omitted'
-  auditEligibility: 'ineligible' | 'clean-full-replay-only'
-  retryState: 'none' | 'pending-provider-backoff' | 'pending-publication-on-failure'
+    | 'only-after-successful-clean-full-publication'
+  reconciliationBehavior:
+    | 'not-consumed'
+    | 'required-before-completion'
+    | 'omitted'
+    | 'not-consumed-unless-clean-full-comparison'
+  auditEligibility:
+    | 'ineligible'
+    | 'clean-full-replay-only'
+    | 'clean-zero-mutation-full-replay-only'
+  retryState:
+    | 'none'
+    | 'pending-provider-backoff'
+    | 'pending-publication-on-failure'
+    | 'none-unless-publication-fails'
 }
 
 export type RankingRefreshObservation = {
@@ -28,7 +40,7 @@ export type RankingRefreshObservation = {
   providerStatus: 'usable' | 'failed'
   force: boolean
   rawRecoveryAuthorized: boolean
-  verifiedRawAuthority: boolean
+  validatedExistingRawBaseline: boolean
   dataMode: 'scheduled-public-data' | 'no-data' | null
   rankingChangeKind:
     | 'no-change'
@@ -49,7 +61,11 @@ export const RANKING_REFRESH_OUTCOME_MATRIX: Readonly<
 >
 export function normalizeRankingRefreshOutcome(
   value: unknown,
-): { outcome: RankingRefreshOutcome; contract: Readonly<RankingRefreshOutcomeContract> }
+): {
+  outcome: RankingRefreshOutcome
+  mode: 'ordinary' | 'clean-full-comparison' | 'standard'
+  contract: Readonly<RankingRefreshOutcomeContract>
+}
 export function parseRankingRefreshOutcomeMatrix(
   value: unknown,
 ): Record<RankingRefreshOutcome, RankingRefreshOutcomeContract>

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
+import { normalizeRankingRefreshOutcome } from '../scripts/ranking-refresh-outcome-contract.mjs'
 
 type RefreshRun = (command: string, commandArgs: string[]) => Promise<void>
 type RefreshResult = {
@@ -14,6 +15,13 @@ type RefreshResult = {
   previousFingerprint?: string
   status?: string
   reason?: string
+  incrementalAction?: 'no-change' | 'publish-incremental' | 'publish-full'
+  incrementalMetrics?: {
+    classification: string
+    fullSnapshotWritten: boolean
+    parity: boolean | null
+    fallbackReason?: string
+  }
 }
 type RefreshWindow = {
   start: string
@@ -666,7 +674,11 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
 
   try {
     await mkdir(join(rawDir, 'oracles-elixir'), { recursive: true })
-    await writeFile(previousOraclePath, 'gameid,result\nold,1\n')
+    await writeFile(previousOraclePath, [
+      'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
+      'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Blue,Gen.G,1,18,65000',
+      'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Red,T1,0,10,58000',
+    ].join('\n'))
     await writeFile(manifestPath, `${JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-07-08T00:00:00.000Z',
@@ -753,23 +765,47 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     const rebuild = await refreshDataIfChanged([
       ...unavailableArgs,
       '--force',
-      '--skip-crunch',
     ], {
       run: fakeRun,
       env: {
         ...isolatedRefreshEnv,
         RANKING_REUSE_RAW_ON_SOURCE_FAILURE: 'true',
+        RANKING_FORCE_REFRESH: 'true',
+        RANKING_REFRESH_FENCING_TOKEN: '7',
       },
     })
     const rebuiltManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const rebuiltState = JSON.parse(await readFile(statePath, 'utf8'))
+    const rebuiltRoot = JSON.parse(await readFile(join(tempDir, 'public-data', 'ranking-summary.json'), 'utf8'))
 
     assert.equal(rebuild.changed, true)
     assert.deepEqual(rebuiltManifest.files.oracleCsv, [previousOraclePath])
     assert.equal(rebuiltManifest.refreshAttempt.reusedExistingRaw, true)
-    assert.match(rebuiltManifest.warnings.at(-1), /Reused verified raw authority/)
+    assert.match(rebuiltManifest.warnings.at(-1), /validated existing raw baseline/)
     assert.equal(rebuiltState.status, 'refreshed')
     assert.equal(rebuiltState.coverageEnd, '2026-07-08')
+    assert.equal(rebuild.incrementalAction, 'publish-full')
+    assert.equal(rebuild.incrementalMetrics?.classification, 'full-invalidation')
+    assert.equal(rebuild.incrementalMetrics?.fullSnapshotWritten, true)
+    const recoveryOutcome = normalizeRankingRefreshOutcome({
+      sourceResult: 'completed',
+      providerStatus: 'failed',
+      force: true,
+      rawRecoveryAuthorized: true,
+      validatedExistingRawBaseline: rebuiltManifest.refreshAttempt.reusedExistingRaw === true,
+      dataMode: rebuiltRoot.dataMode,
+      rankingChangeKind: rebuild.incrementalMetrics?.classification,
+      buildAction: rebuild.incrementalAction,
+      parity: rebuild.incrementalMetrics?.parity,
+      fallbackReason: rebuild.incrementalMetrics?.fallbackReason ?? null,
+    })
+    assert.equal(recoveryOutcome.outcome, 'forced-verified-raw-rebuild')
+
+    await rm(previousOraclePath)
+    const missingPriorRaw = await runUnavailable(true, true)
+    assert.equal(missingPriorRaw.changed, false)
+    assert.equal(missingPriorRaw.status, 'stale-source')
+    assert.equal(missingPriorRaw.incrementalAction, undefined)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }

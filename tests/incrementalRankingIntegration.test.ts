@@ -129,6 +129,11 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
     const daily = await run(root, 'daily', source, { mode: 'gated', cause: 'daily-audit', enabled: true, restored: restoreFrom(disabled) })
     assert.equal(daily.action, 'publish-full')
     assert.equal(daily.metrics.parity, true)
+    const dailyOutcome = normalizedOutcomeForBuild(daily)
+    assert.equal(dailyOutcome.outcome, 'unchanged')
+    assert.equal(dailyOutcome.mode, 'clean-full-comparison')
+    assert.equal(dailyOutcome.contract.auditEligibility, 'clean-zero-mutation-full-replay-only')
+    assert.equal(dailyOutcome.contract.authorityAdvancement, 'after-successful-clean-full-publication')
     const manual = await run(root, 'manual', source, { mode: 'shadow', cause: 'manual-force', enabled: true })
     assert.equal(manual.action, 'publish-full')
 
@@ -136,6 +141,11 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
     const noChange = await run(root, 'unchanged', source, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
     assert.equal(noChange.action, 'no-change', noChange.metrics.fallbackReason)
     assert.equal(outcomeForBuild(noChange), 'unchanged')
+    const ordinaryOutcome = normalizedOutcomeForBuild(noChange)
+    assert.equal(ordinaryOutcome.mode, 'ordinary')
+    assert.equal(ordinaryOutcome.contract.authorityAdvancement, 'never')
+    assert.equal(ordinaryOutcome.contract.auditEligibility, 'ineligible')
+    assert.equal(ordinaryOutcome.contract.allowedWrites.includes('semantic-artifacts'), false)
     assert.equal(noChange.metrics.fullSnapshotWritten, false)
     await assert.rejects(access(join(root, 'unchanged-full.json')))
     await assert.rejects(access(join(root, 'unchanged-public')))
@@ -682,19 +692,23 @@ function semanticMap(result: IncrementalRankingBuildResult) {
 }
 
 function outcomeForBuild(result: IncrementalRankingBuildResult) {
+  return normalizedOutcomeForBuild(result).outcome
+}
+
+function normalizedOutcomeForBuild(result: IncrementalRankingBuildResult) {
   return normalizeRankingRefreshOutcome({
     sourceResult: result.action === 'no-change' ? 'unchanged' : 'completed',
     providerStatus: 'usable',
     force: false,
     rawRecoveryAuthorized: false,
-    verifiedRawAuthority: false,
+    validatedExistingRawBaseline: false,
     dataMode: result.sourceData.dataMode,
     rankingChangeKind: result.metrics.classification,
     buildAction: result.action,
     parity: result.metrics.parity,
     fallbackReason: result.metrics.fallbackReason
       ?? (result.action === 'no-change' ? null : result.diagnostic?.reason ?? null),
-  }).outcome
+  })
 }
 
 const teams: Record<string, TeamProfile> = {

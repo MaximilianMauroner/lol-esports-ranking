@@ -25,7 +25,7 @@ const OBSERVATION_KEYS = Object.freeze([
   'providerStatus',
   'force',
   'rawRecoveryAuthorized',
-  'verifiedRawAuthority',
+  'validatedExistingRawBaseline',
   'dataMode',
   'rankingChangeKind',
   'buildAction',
@@ -37,7 +37,7 @@ const INPUTS = new Set([
   'provider-status',
   'force',
   'raw-recovery-authorization',
-  'verified-raw-authority',
+  'validated-existing-raw-baseline',
   'data-mode',
   'ranking-change-kind',
   'build-action',
@@ -49,7 +49,7 @@ const ARTIFACTS = new Set([
   'incremental-candidate',
   'clean-full-replay',
   'provider-failure-manifest',
-  'verified-raw-authority',
+  'validated-existing-raw-baseline',
 ])
 const WRITES = new Set([
   'refresh-telemetry',
@@ -65,17 +65,24 @@ const AUTHORITY_POLICIES = new Set([
   'never',
   'after-successful-publication',
   'after-successful-clean-full-publication',
+  'only-after-successful-clean-full-publication',
 ])
 const RECONCILIATION_POLICIES = new Set([
   'not-consumed',
   'required-before-completion',
   'omitted',
+  'not-consumed-unless-clean-full-comparison',
 ])
-const AUDIT_POLICIES = new Set(['ineligible', 'clean-full-replay-only'])
+const AUDIT_POLICIES = new Set([
+  'ineligible',
+  'clean-full-replay-only',
+  'clean-zero-mutation-full-replay-only',
+])
 const RETRY_POLICIES = new Set([
   'none',
   'pending-provider-backoff',
   'pending-publication-on-failure',
+  'none-unless-publication-fails',
 ])
 const SOURCE_RESULTS = new Set(['unchanged', 'completed', 'stale-source'])
 const PROVIDER_STATUSES = new Set(['usable', 'failed'])
@@ -112,13 +119,13 @@ const COMMON_PUBLISH_WRITES = Object.freeze([
 
 export const RANKING_REFRESH_OUTCOME_MATRIX = deepFreeze({
   unchanged: {
-    requiredInputs: ['source-result', 'provider-status'],
-    optionalArtifacts: ['reconciliation'],
-    allowedWrites: ['refresh-telemetry', 'refresh-state', 'trigger-state'],
-    authorityAdvancement: 'never',
-    reconciliationBehavior: 'not-consumed',
-    auditEligibility: 'ineligible',
-    retryState: 'none',
+    requiredInputs: COMMON_PUBLISH_INPUTS,
+    optionalArtifacts: ['clean-full-replay', 'reconciliation'],
+    allowedWrites: COMMON_PUBLISH_WRITES,
+    authorityAdvancement: 'only-after-successful-clean-full-publication',
+    reconciliationBehavior: 'not-consumed-unless-clean-full-comparison',
+    auditEligibility: 'clean-zero-mutation-full-replay-only',
+    retryState: 'none-unless-publication-fails',
   },
   'latest-append': publishRow(),
   'same-day-insertion': publishRow(),
@@ -130,9 +137,9 @@ export const RANKING_REFRESH_OUTCOME_MATRIX = deepFreeze({
       'provider-status',
       'force',
       'raw-recovery-authorization',
-      'verified-raw-authority',
+      'validated-existing-raw-baseline',
     ],
-    optionalArtifacts: ['provider-failure-manifest', 'verified-raw-authority'],
+    optionalArtifacts: ['provider-failure-manifest', 'validated-existing-raw-baseline'],
     allowedWrites: ['refresh-telemetry', 'refresh-state', 'trigger-state'],
     authorityAdvancement: 'never',
     reconciliationBehavior: 'omitted',
@@ -146,11 +153,11 @@ export const RANKING_REFRESH_OUTCOME_MATRIX = deepFreeze({
       'provider-status',
       'force',
       'raw-recovery-authorization',
-      'verified-raw-authority',
+      'validated-existing-raw-baseline',
       'data-mode',
       'build-action',
     ],
-    optionalArtifacts: ['provider-failure-manifest', 'verified-raw-authority', 'clean-full-replay', 'reconciliation'],
+    optionalArtifacts: ['provider-failure-manifest', 'validated-existing-raw-baseline', 'clean-full-replay', 'reconciliation'],
     allowedWrites: COMMON_PUBLISH_WRITES,
     authorityAdvancement: 'after-successful-clean-full-publication',
     reconciliationBehavior: 'required-before-completion',
@@ -177,6 +184,25 @@ export const RANKING_REFRESH_OUTCOME_MATRIX = deepFreeze({
   },
 })
 
+const CANONICAL_OUTCOME_MATRIX = RANKING_REFRESH_OUTCOME_MATRIX
+const ORDINARY_UNCHANGED_CONTRACT = deepFreeze({
+  requiredInputs: COMMON_PUBLISH_INPUTS,
+  optionalArtifacts: ['reconciliation'],
+  allowedWrites: ['refresh-telemetry', 'refresh-state', 'trigger-state'],
+  authorityAdvancement: 'never',
+  reconciliationBehavior: 'not-consumed',
+  auditEligibility: 'ineligible',
+  retryState: 'none',
+})
+const CLEAN_FULL_UNCHANGED_CONTRACT = deepFreeze({
+  requiredInputs: COMMON_PUBLISH_INPUTS,
+  optionalArtifacts: ['clean-full-replay', 'reconciliation'],
+  allowedWrites: COMMON_PUBLISH_WRITES,
+  authorityAdvancement: 'after-successful-clean-full-publication',
+  reconciliationBehavior: 'required-before-completion',
+  auditEligibility: 'clean-zero-mutation-full-replay-only',
+  retryState: 'pending-publication-on-failure',
+})
 parseRankingRefreshOutcomeMatrix(RANKING_REFRESH_OUTCOME_MATRIX)
 
 /**
@@ -187,7 +213,7 @@ export function normalizeRankingRefreshOutcome(value) {
   const observation = parseObservation(value)
   const recoveryAuthorized = observation.force
     && observation.rawRecoveryAuthorized
-    && observation.verifiedRawAuthority
+    && observation.validatedExistingRawBaseline
 
   if (observation.providerStatus === 'failed') {
     if (!recoveryAuthorized) {
@@ -199,7 +225,7 @@ export function normalizeRankingRefreshOutcome(value) {
         parity: null,
         fallbackReason: null,
       }, 'stale-source')
-      return contractFor('stale-source')
+      return contractFor('stale-source', 'standard')
     }
     requireObservation(observation, {
       sourceResult: 'completed',
@@ -208,18 +234,19 @@ export function normalizeRankingRefreshOutcome(value) {
       fallbackReason: null,
     }, 'forced-verified-raw-rebuild')
     if (!DATA_MODES.has(observation.dataMode)) {
-      throw new Error('forced-verified-raw-rebuild requires a usable verified raw data mode')
+      throw new Error('forced-verified-raw-rebuild requires a usable validated existing raw baseline')
     }
     if (observation.rankingChangeKind !== 'full-invalidation') {
       throw new Error('forced-verified-raw-rebuild requires the current full-invalidation build classification')
     }
-    return contractFor('forced-verified-raw-rebuild')
+    return contractFor('forced-verified-raw-rebuild', 'standard')
   }
 
   if (observation.sourceResult === 'stale-source') {
     throw new Error('stale-source contradicts usable provider input')
   }
   if (observation.sourceResult === 'unchanged') {
+    if (observation.force) throw new Error('Forced refresh cannot take an unchanged source exit')
     const earlySourceExit = observation.dataMode === null
       && observation.rankingChangeKind === null
       && observation.buildAction === null
@@ -231,7 +258,7 @@ export function normalizeRankingRefreshOutcome(value) {
       || observation.fallbackReason !== null) {
       throw new Error('unchanged requires either the source fingerprint exit or canonical no-change build')
     }
-    return contractFor('unchanged')
+    return contractFor('unchanged', 'ordinary')
   }
 
   if (!DATA_MODES.has(observation.dataMode)) {
@@ -240,15 +267,22 @@ export function normalizeRankingRefreshOutcome(value) {
   if (observation.rankingChangeKind === null || observation.buildAction === null) {
     throw new Error('completed refresh requires ranking classification and build action')
   }
-  if (observation.rankingChangeKind === 'no-change' || observation.buildAction === 'no-change') {
-    throw new Error('completed refresh contradicts no-change classification or action')
+  if (observation.rankingChangeKind === 'no-change') {
+    if (observation.buildAction !== 'publish-full' || observation.parity !== true
+      || observation.fallbackReason !== null) {
+      throw new Error('completed no-change requires a clean full zero-mutation comparison')
+    }
+    return contractFor('unchanged', 'clean-full-comparison')
+  }
+  if (observation.buildAction === 'no-change') {
+    throw new Error('completed refresh contradicts no-change build action')
   }
   validateBuildRelationship(observation)
 
-  if (observation.parity === false) return contractFor('parity-failure')
-  if (observation.dataMode === 'no-data') return contractFor('no-data')
-  if (observation.rankingChangeKind === 'full-invalidation') return contractFor('full-invalidation')
-  return contractFor(observation.rankingChangeKind)
+  if (observation.parity === false) return contractFor('parity-failure', 'standard')
+  if (observation.dataMode === 'no-data') return contractFor('no-data', 'standard')
+  if (observation.rankingChangeKind === 'full-invalidation') return contractFor('full-invalidation', 'standard')
+  return contractFor(observation.rankingChangeKind, 'standard')
 }
 
 export function parseRankingRefreshOutcomeMatrix(value) {
@@ -266,6 +300,12 @@ export function parseRankingRefreshOutcomeMatrix(value) {
     assertEnum(row.auditEligibility, AUDIT_POLICIES, `${outcome} auditEligibility`)
     assertEnum(row.retryState, RETRY_POLICIES, `${outcome} retryState`)
     validateRowRelationships(row, outcome)
+    const canonical = CANONICAL_OUTCOME_MATRIX[outcome]
+    for (const dimension of OUTCOME_KEYS) {
+      if (!samePolicy(row[dimension], canonical[dimension])) {
+        throw new Error(`${outcome} ${dimension} does not match the canonical outcome policy`)
+      }
+    }
   }
   return value
 }
@@ -287,7 +327,7 @@ function parseObservation(value) {
   assertExactKeys(value, OBSERVATION_KEYS, 'ranking refresh observation')
   assertEnum(value.sourceResult, SOURCE_RESULTS, 'sourceResult')
   assertEnum(value.providerStatus, PROVIDER_STATUSES, 'providerStatus')
-  for (const field of ['force', 'rawRecoveryAuthorized', 'verifiedRawAuthority']) {
+  for (const field of ['force', 'rawRecoveryAuthorized', 'validatedExistingRawBaseline']) {
     if (typeof value[field] !== 'boolean') throw new Error(`Invalid ranking refresh observation ${field}`)
   }
   assertNullableEnum(value.dataMode, DATA_MODES, 'dataMode')
@@ -313,8 +353,17 @@ function validateBuildRelationship(observation) {
   if (observation.parity === true && observation.fallbackReason !== null) {
     throw new Error('Successful parity contradicts a fallback reason')
   }
+  if (observation.parity === true && observation.buildAction !== 'publish-full') {
+    throw new Error('Successful parity is valid only for a clean full comparison')
+  }
   if (observation.buildAction === 'publish-incremental' && observation.fallbackReason !== null) {
     throw new Error('Incremental publication contradicts a fallback reason')
+  }
+  if (observation.buildAction === 'publish-full'
+    && observation.rankingChangeKind !== 'full-invalidation'
+    && observation.parity === null
+    && observation.fallbackReason === null) {
+    throw new Error('Full publication for an incremental change requires parity or a fallback reason')
   }
   if (observation.rankingChangeKind === 'full-invalidation'
     && observation.buildAction !== 'publish-full') {
@@ -337,14 +386,20 @@ function validateRowRelationships(row, outcome) {
     && !row.allowedWrites.includes('reconciliation')) {
     throw new Error(`${outcome} required reconciliation must be an allowed write`)
   }
-  if (row.auditEligibility === 'clean-full-replay-only'
+  if ((row.auditEligibility === 'clean-full-replay-only'
+      || row.auditEligibility === 'clean-zero-mutation-full-replay-only')
     && !row.optionalArtifacts.includes('clean-full-replay')) {
     throw new Error(`${outcome} audit eligibility requires a clean full replay`)
   }
 }
 
-function contractFor(outcome) {
-  return { outcome, contract: RANKING_REFRESH_OUTCOME_MATRIX[outcome] }
+function contractFor(outcome, mode) {
+  const contract = outcome !== 'unchanged'
+    ? RANKING_REFRESH_OUTCOME_MATRIX[outcome]
+    : mode === 'clean-full-comparison'
+      ? CLEAN_FULL_UNCHANGED_CONTRACT
+      : ORDINARY_UNCHANGED_CONTRACT
+  return { outcome, mode, contract }
 }
 
 function requireObservation(observation, expected, outcome) {
@@ -382,6 +437,12 @@ function assertEnumArray(value, allowed, label) {
     || value.some((entry) => !allowed.has(entry))) {
     throw new Error(`Invalid ${label}`)
   }
+}
+
+function samePolicy(actual, expected) {
+  return Array.isArray(actual) && Array.isArray(expected)
+    ? actual.length === expected.length && actual.every((entry, index) => entry === expected[index])
+    : actual === expected
 }
 
 function deepFreeze(value) {

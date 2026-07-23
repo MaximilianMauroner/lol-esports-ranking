@@ -72,7 +72,7 @@ test('normalization binds all ten canonical outcomes to current runtime vocabula
       providerStatus: 'failed',
       force: true,
       rawRecoveryAuthorized: true,
-      verifiedRawAuthority: true,
+      validatedExistingRawBaseline: true,
       rankingChangeKind: 'full-invalidation',
       buildAction: 'publish-full',
     }),
@@ -102,23 +102,26 @@ test('matrix and observations reject missing, extra, unknown, and contradictory 
     () => parseRankingRefreshOutcomeMatrix({ ...RANKING_REFRESH_OUTCOME_MATRIX, invented: RANKING_REFRESH_OUTCOME_MATRIX.unchanged }),
     /unexpected or missing keys/,
   )
-  assert.throws(
-    () => parseRankingRefreshOutcomeMatrix({
-      ...RANKING_REFRESH_OUTCOME_MATRIX,
-      unchanged: { ...RANKING_REFRESH_OUTCOME_MATRIX.unchanged, retryState: 'invented' },
-    }),
-    /retryState/,
-  )
-  assert.throws(
-    () => parseRankingRefreshOutcomeMatrix({
-      ...RANKING_REFRESH_OUTCOME_MATRIX,
-      unchanged: {
-        ...RANKING_REFRESH_OUTCOME_MATRIX.unchanged,
-        allowedWrites: [...RANKING_REFRESH_OUTCOME_MATRIX.unchanged.allowedWrites, 'active-authority'],
-      },
-    }),
-    /advancement is forbidden/,
-  )
+  const validButWrongPolicies = {
+    requiredInputs: RANKING_REFRESH_OUTCOME_MATRIX['stale-source'].requiredInputs,
+    optionalArtifacts: RANKING_REFRESH_OUTCOME_MATRIX['stale-source'].optionalArtifacts,
+    allowedWrites: RANKING_REFRESH_OUTCOME_MATRIX['stale-source'].allowedWrites,
+    authorityAdvancement: RANKING_REFRESH_OUTCOME_MATRIX['stale-source'].authorityAdvancement,
+    reconciliationBehavior: RANKING_REFRESH_OUTCOME_MATRIX['stale-source'].reconciliationBehavior,
+    auditEligibility: RANKING_REFRESH_OUTCOME_MATRIX['full-invalidation'].auditEligibility,
+    retryState: RANKING_REFRESH_OUTCOME_MATRIX['stale-source'].retryState,
+  }
+  for (const dimension of dimensions) {
+    const changed = structuredClone(RANKING_REFRESH_OUTCOME_MATRIX)
+    Object.assign(changed['latest-append'], {
+      [dimension]: validButWrongPolicies[dimension as keyof typeof validButWrongPolicies],
+    })
+    assert.throws(() => parseRankingRefreshOutcomeMatrix(changed))
+
+    const deleted = structuredClone(RANKING_REFRESH_OUTCOME_MATRIX)
+    delete (deleted['latest-append'] as Partial<Record<string, unknown>>)[dimension]
+    assert.throws(() => parseRankingRefreshOutcomeMatrix(deleted), /unexpected or missing keys/, `delete ${dimension}`)
+  }
   assert.throws(() => normalizeRankingRefreshOutcome({ ...changeObservation('latest-append'), invented: true }), /unexpected or missing keys/)
   assert.throws(() => normalizeRankingRefreshOutcome({
     ...changeObservation('latest-append'),
@@ -131,13 +134,31 @@ test('matrix and observations reject missing, extra, unknown, and contradictory 
     fallbackReason: 'semantic-parity-mismatch',
   }), /clean full fallback/)
   assert.throws(() => normalizeRankingRefreshOutcome({
+    ...changeObservation('latest-append'),
+    buildAction: 'publish-incremental',
+    parity: true,
+  }), /clean full comparison/)
+  assert.throws(() => normalizeRankingRefreshOutcome({
+    ...observation({
+      sourceResult: 'unchanged',
+      dataMode: null,
+      rankingChangeKind: null,
+      buildAction: null,
+    }),
+    force: true,
+  }), /Forced refresh/)
+  assert.throws(() => normalizeRankingRefreshOutcome({
+    ...changeObservation('latest-append'),
+    buildAction: 'publish-full',
+  }), /requires parity or a fallback reason/)
+  assert.throws(() => normalizeRankingRefreshOutcome({
     ...observation({ rankingChangeKind: 'full-invalidation' }),
     buildAction: 'publish-incremental',
   }), /clean full replay/)
 })
 
-test('verified raw recovery requires force, separate authorization, and verified prior authority', () => {
-  for (const [force, rawRecoveryAuthorized, verifiedRawAuthority] of [
+test('forced raw recovery requires force, separate authorization, and a validated existing baseline', () => {
+  for (const [force, rawRecoveryAuthorized, validatedExistingRawBaseline] of [
     [false, false, true],
     [true, false, true],
     [false, true, true],
@@ -148,7 +169,7 @@ test('verified raw recovery requires force, separate authorization, and verified
       providerStatus: 'failed',
       force,
       rawRecoveryAuthorized,
-      verifiedRawAuthority,
+      validatedExistingRawBaseline,
       dataMode: null,
       rankingChangeKind: null,
       buildAction: null,
@@ -161,7 +182,7 @@ test('verified raw recovery requires force, separate authorization, and verified
     providerStatus: 'failed',
     force: true,
     rawRecoveryAuthorized: true,
-    verifiedRawAuthority: true,
+    validatedExistingRawBaseline: true,
     rankingChangeKind: 'full-invalidation',
     buildAction: 'publish-full',
   })).outcome, 'forced-verified-raw-rebuild')
@@ -177,7 +198,7 @@ function observation(overrides: Partial<RankingRefreshObservation>): RankingRefr
     providerStatus: 'usable',
     force: false,
     rawRecoveryAuthorized: false,
-    verifiedRawAuthority: false,
+    validatedExistingRawBaseline: false,
     dataMode: 'scheduled-public-data',
     rankingChangeKind: 'latest-append',
     buildAction: 'publish-incremental',
