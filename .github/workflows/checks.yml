@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22"
-  PNPM_VERSION: "9.15.9"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.16.0"
 
 jobs:
   checks:

@@ -107,7 +107,7 @@ function Licenses() {
         <p>Original project source code is available under the MIT License in the <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/LICENSE`}>repository</ExternalLink>. That license does not override third-party data, asset, font, icon, or trademark terms.</p>
       </Section>
       <Section title="Third-party software">
-        <p>The application uses open-source packages including React, Recharts, Base UI, Radix UI, Lucide, Phosphor Icons, Tailwind CSS, date-fns, and JetBrains Mono. Their MIT, ISC, Apache-2.0, BSD, and SIL Open Font License terms remain with the respective authors. Package names and exact versions are recorded in the repository's <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/package.json`}>package manifest</ExternalLink> and lockfile.</p>
+        <p>The application uses open-source packages including React, Recharts, Base UI, Lucide, Tailwind CSS, and JetBrains Mono. Their MIT, ISC, Apache-2.0, BSD, and SIL Open Font License terms remain with the respective authors. Package names and exact versions are recorded in the repository's <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/package.json`}>package manifest</ExternalLink> and lockfile.</p>
       </Section>
     </div>
   )

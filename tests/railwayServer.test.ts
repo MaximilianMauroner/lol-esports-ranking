@@ -679,6 +679,7 @@ async function startRailwayServer(
       PORT: String(port),
       RAILWAY_DIST_DIR: distDir,
       RANKING_PUBLIC_DATA_DIR: dataDir,
+      RANKING_TRIGGER_STATE: join(dataDir, 'refresh-trigger-state.json'),
       RANKING_REFRESH_ENABLED: 'false',
       RANKING_BUCKET_NAME: '',
       RANKING_BUCKET_ENDPOINT: '',
