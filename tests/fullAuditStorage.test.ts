@@ -103,7 +103,15 @@ test('day receipt is canonical, promotion-bound, lease-checked, and idempotent',
   const client = memoryS3()
   const generationId = 'audit-generation'
   try {
-    const publicManifest = publicManifestFixture()
+    const publicManifest = {
+      ...publicManifestFixture(),
+      model: {
+        ...publicManifestFixture().model,
+        name: 'Transparent Power Index',
+        ratingScale: { version: 'published-power-index-v1' },
+        parameters: { initialTeamRating: 1500 },
+      },
+    }
     const snapshotBytes = Buffer.from(`${JSON.stringify(fullSnapshotFixture())}\n`)
     await writeFile(snapshotPath, snapshotBytes)
     const staged = await stageFullAuditSnapshot({ fullSnapshotPath: snapshotPath, snapshotDescriptor: descriptorFor(snapshotBytes), publicManifest, config, client })
