@@ -151,7 +151,11 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     } catch (error) {
       providerCommandError = error
     }
-    const stagingManifest = await readValidProviderManifest(stagingManifestPath, providerCommandError)
+    const stagingManifest = await readValidProviderManifest(stagingManifestPath, providerCommandError, {
+      start,
+      end,
+      stagingDir,
+    })
     metrics.recordProcessResource({
       processKey: `${runId}:raw-source-subprocess`,
       cpuSeconds: null,
@@ -280,7 +284,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           restoreResult,
           healthFingerprint,
           sourceAuthorityEvidence,
-          reason: recoveryAuthorized ? 'verified-raw-authority-rejected' : 'no-current-match-source-data',
+          reason: recoveryAuthorized ? 'verified-raw-authority-rejected' : outageReason,
         })
         refreshState = state
         terminalResult = 'stale-source'
@@ -1259,7 +1263,7 @@ export function sourceProviderResult(manifest, forcedStatus) {
   }
 }
 
-async function readValidProviderManifest(path, providerCommandError) {
+async function readValidProviderManifest(path, providerCommandError, expected) {
   let value
   try {
     value = await readJson(path)
@@ -1274,8 +1278,122 @@ async function readValidProviderManifest(path, providerCommandError) {
     if (providerCommandError) throw providerCommandError
     throw new Error('Provider downloader emitted an invalid manifest')
   }
-  if (providerCommandError && manifestHasCurrentMatchSourceFiles(value)) throw providerCommandError
+  if (providerCommandError) {
+    try {
+      await assertCanonicalDownloaderOutageManifest(value, expected)
+    } catch {
+      throw providerCommandError
+    }
+  }
   return value
+}
+
+async function assertCanonicalDownloaderOutageManifest(value, { start, end, stagingDir }) {
+  if (value.start !== start || value.end !== end || !isIsoDate(value.start) || !isIsoDate(value.end)
+    || value.start > value.end || !isIsoTimestamp(value.generatedAt)
+    || (value.status !== undefined && value.status !== 'failed')) {
+    throw new Error('Provider outage manifest coverage is invalid')
+  }
+  if (!Array.isArray(value.warnings) || value.warnings.some((warning) => typeof warning !== 'string')) {
+    throw new Error('Provider outage manifest warnings are invalid')
+  }
+  const fileGroups = {
+    oracle: ['oracleCsv', 'primary'],
+    leaguepedia: ['leaguepediaJson', 'backup-gap-fill'],
+    lolesports: ['lolEsportsJson', 'schedule-results-reference'],
+  }
+  if (Object.keys(value.files).sort().join(',') !== ['leaguepediaJson', 'lolEsportsJson', 'oracleCsv'].sort().join(',')) {
+    throw new Error('Provider outage manifest file groups are invalid')
+  }
+  const root = resolve(stagingDir)
+  const rootPrefix = `${root}${sep}`
+  const allPaths = []
+  for (const [provider, [fileGroup, role]] of Object.entries(fileGroups)) {
+    const paths = value.files[fileGroup]
+    if (!Array.isArray(paths) || paths.some((path) => typeof path !== 'string' || path.length === 0)) {
+      throw new Error(`Provider outage manifest ${fileGroup} is invalid`)
+    }
+    for (const path of paths) {
+      const resolvedPath = resolve(root, path)
+      if (resolvedPath !== root && !resolvedPath.startsWith(rootPrefix)) {
+        throw new Error(`Provider outage manifest ${fileGroup} escapes staging`)
+      }
+      await access(resolvedPath, fsConstants.R_OK)
+      allPaths.push(resolvedPath)
+    }
+    const source = value.sources[provider]
+    assertCanonicalDownloaderSource(source, { provider, role, downloadedCount: paths.length })
+  }
+  if (new Set(allPaths).size !== allPaths.length || manifestHasCurrentMatchSourceFiles(value)) {
+    throw new Error('Provider outage manifest files are duplicate or contain current match data')
+  }
+  const telemetry = value.fetchTelemetry
+  if (!isRecord(telemetry)
+    || !isNonNegativeInteger(telemetry.requests)
+    || !isNonNegativeInteger(telemetry.retryCount)
+    || !Array.isArray(telemetry.retries)
+    || !Array.isArray(telemetry.attempts)
+    || telemetry.retryCount !== telemetry.retries.length
+    || (telemetry.elapsedMs !== undefined && (!Number.isFinite(telemetry.elapsedMs) || telemetry.elapsedMs < 0))) {
+    throw new Error('Provider outage manifest fetch telemetry is invalid')
+  }
+}
+
+function assertCanonicalDownloaderSource(source, { provider, role, downloadedCount }) {
+  if (!isRecord(source) || source.role !== role
+    || !['downloaded', 'partial', 'failed', 'skipped', 'unavailable'].includes(source.status)
+    || !isNonNegativeInteger(source.downloadedCount) || source.downloadedCount !== downloadedCount
+    || !isNonNegativeInteger(source.downloadedThisRun) || source.downloadedThisRun !== downloadedCount
+    || !isNonNegativeInteger(source.failedCount)
+    || !isNonNegativeInteger(source.failedThisRun)
+    || !Array.isArray(source.failures)
+    || source.failedCount !== source.failures.length
+    || source.failedThisRun !== source.failures.length
+    || typeof source.skipped !== 'boolean'
+    || typeof source.required !== 'boolean') {
+    throw new Error(`Provider outage manifest ${provider} source record is invalid`)
+  }
+  for (const failure of source.failures) {
+    if (!isRecord(failure) || typeof failure.source !== 'string' || failure.source.length === 0
+      || typeof failure.error !== 'string' || failure.error.length === 0
+      || (failure.url !== undefined && (typeof failure.url !== 'string' || failure.url.length === 0))) {
+      throw new Error(`Provider outage manifest ${provider} failure record is invalid`)
+    }
+  }
+  const hasDownloads = downloadedCount > 0
+  const hasFailures = source.failures.length > 0
+  const expectedStatus = source.skipped
+    ? 'skipped'
+    : hasDownloads && hasFailures ? 'partial'
+      : hasDownloads ? 'downloaded'
+        : hasFailures ? 'failed' : 'unavailable'
+  if (source.status !== expectedStatus) throw new Error(`Provider outage manifest ${provider} status is inconsistent`)
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNonNegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0
+}
+
+function isIsoDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  try {
+    return new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value
+  } catch {
+    return false
+  }
+}
+
+function isIsoTimestamp(value) {
+  if (typeof value !== 'string') return false
+  try {
+    return new Date(value).toISOString() === value
+  } catch {
+    return false
+  }
 }
 
 async function writeFileAtomically(path, bytes) {

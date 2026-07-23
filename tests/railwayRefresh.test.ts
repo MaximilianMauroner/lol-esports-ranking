@@ -254,6 +254,64 @@ test('provider status uses explicit provider outcomes rather than warnings', () 
   }).status, 'unavailable')
 })
 
+test('non-zero provider output must satisfy the complete outage manifest contract', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lol-ranking-invalid-outage-manifest-'))
+  const mutations: Array<[string, (manifest: Record<string, unknown>) => void]> = [
+    ['coverage date', (manifest) => { manifest.start = 'not-a-date' }],
+    ['file group', (manifest) => {
+      const files = manifest.files as Record<string, unknown>
+      files.oracleCsv = 'not-an-array'
+    }],
+    ['escaping path', (manifest) => {
+      const files = manifest.files as Record<string, unknown>
+      files.lolEsportsJson = ['../outside.json']
+    }],
+    ['missing source record', (manifest) => {
+      const sources = manifest.sources as Record<string, unknown>
+      delete sources.lolesports
+    }],
+    ['failure count', (manifest) => {
+      const sources = manifest.sources as Record<string, Record<string, unknown>>
+      sources.oracle.failedThisRun = -1
+    }],
+    ['status consistency', (manifest) => {
+      const sources = manifest.sources as Record<string, Record<string, unknown>>
+      sources.oracle.status = 'downloaded'
+    }],
+    ['warnings', (manifest) => { manifest.warnings = [42] }],
+    ['fetch telemetry', (manifest) => {
+      const telemetry = manifest.fetchTelemetry as Record<string, unknown>
+      telemetry.retries = 'not-an-array'
+    }],
+  ]
+  try {
+    for (const [name, mutate] of mutations) {
+      const caseRoot = join(root, name.replaceAll(' ', '-'))
+      await assert.rejects(refreshDataIfChanged([
+        '--raw-dir', join(caseRoot, 'raw'),
+        '--manifest', join(caseRoot, 'raw', 'manifest.json'),
+        '--state', join(caseRoot, 'state.json'),
+        '--staging-dir', join(caseRoot, 'staging'),
+        '--start', '2026-07-02',
+        '--end', '2026-07-09',
+        '--skip-crunch',
+        '--skip-bucket-upload',
+      ], {
+        env: isolatedRefreshEnv,
+        run: async (_command, args) => {
+          const outputManifest = valueAfter(args, '--manifest')
+          const manifest = strictDownloaderOutageManifest('2026-07-02', '2026-07-09')
+          mutate(manifest)
+          await writeFile(outputManifest, JSON.stringify(manifest))
+          throw new Error(`provider-command-failure:${name}`)
+        },
+      }), new RegExp(`provider-command-failure:${name}`))
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('refresh wrapper skips crunch when staged source digest is unchanged', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-refresh-'))
   const rawDir = join(tempDir, 'raw')
@@ -768,29 +826,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     if (commandArgs.includes('scripts/download-local-data.mjs')) {
       const nextManifestPath = valueAfter(commandArgs, '--manifest')
       await writeFile(nextManifestPath, `${JSON.stringify({
-        schemaVersion: 1,
-        generatedAt: '2026-07-09T00:00:00.000Z',
-        start: '2026-07-02',
-        end: '2026-07-09',
-        files: {
-          leaguepediaJson: [],
-          oracleCsv: [],
-          lolEsportsJson: [],
-        },
-        sources: {
-          oracle: {
-            role: 'primary',
-            status: 'failed',
-            downloadedThisRun: 0,
-            failedThisRun: 1,
-          },
-          leaguepedia: {
-            role: 'backup-gap-fill',
-            status: 'failed',
-            downloadedThisRun: 0,
-            failedThisRun: 1,
-          },
-        },
+        ...strictDownloaderOutageManifest('2026-07-02', '2026-07-09'),
         warnings: [
           'Oracle source 2026.csv was not downloaded: download returned HTML (Google Drive - Quota exceeded)',
           'Leaguepedia backup download was not completed: HTTP 503 from Leaguepedia Cargo',
@@ -873,17 +909,22 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
 
     assert.equal(result.changed, false)
     assert.equal(result.status, 'stale-source')
-    assert.equal(result.reason, 'no-current-match-source-data')
+    assert.equal(result.reason, 'provider-command-failed')
     assert.equal(typeof result.healthFingerprint, 'string')
     assert.equal(crunchCount, 0)
     assert.deepEqual(finalManifest.files.oracleCsv, [previousOraclePath])
     assert.equal(state.status, 'stale-source')
-    assert.equal(state.reason, 'no-current-match-source-data')
+    assert.equal(state.reason, 'provider-command-failed')
     assert.equal(state.coverageEnd, '2026-07-08')
     assert.deepEqual(state.crunch, {
       skipped: true,
-      reason: 'no-current-match-source-data',
+      reason: 'provider-command-failed',
     })
+    assert.deepEqual(state.publish, {
+      skipped: true,
+      reason: 'provider-command-failed',
+    })
+    assert.equal(state.sourceAuthorityEvidence.evidence.outage.reason, 'provider-command-failed')
 
     for (const [force, recoveryAuthorized] of [[true, false], [false, true]] as const) {
       const rejectedRecovery = await runUnavailable(force, recoveryAuthorized)
@@ -1635,6 +1676,41 @@ function bucketConfig() {
     secretAccessKey: 'secret-key',
     prefix: 'rankings',
     forcePathStyle: false,
+  }
+}
+
+function strictDownloaderOutageManifest(start: string, end: string) {
+  const source = (
+    role: 'primary' | 'backup-gap-fill' | 'schedule-results-reference',
+    failed: boolean,
+  ) => ({
+    role,
+    status: failed ? 'failed' : 'unavailable',
+    downloadedCount: 0,
+    downloadedThisRun: 0,
+    failedCount: failed ? 1 : 0,
+    failedThisRun: failed ? 1 : 0,
+    failures: failed ? [{ source: `${role} fixture`, error: 'provider unavailable' }] : [],
+    skipped: false,
+    required: failed,
+  })
+  return {
+    schemaVersion: 1,
+    generatedAt: `${end}T00:00:00.000Z`,
+    status: 'failed',
+    start,
+    end,
+    files: { leaguepediaJson: [], oracleCsv: [], lolEsportsJson: [] },
+    sources: {
+      oracle: source('primary', true),
+      leaguepedia: source('backup-gap-fill', true),
+      lolesports: {
+        ...source('schedule-results-reference', false),
+        unsupportedApi: true,
+      },
+    },
+    warnings: ['provider unavailable'],
+    fetchTelemetry: { requests: 2, retryCount: 0, retries: [], attempts: [] },
   }
 }
 
