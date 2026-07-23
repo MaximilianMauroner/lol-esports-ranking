@@ -86,7 +86,6 @@ export async function uploadRankingArtifacts({
   stateManifestAuthority,
   publicArtifactPatch,
   rawSourceGeneration,
-  contentAddressed = parseBoolean(process.env.RANKING_BUCKET_CONTENT_ADDRESSED),
 } = {}) {
   if (!config.enabled) {
     return {
@@ -106,10 +105,7 @@ export async function uploadRankingArtifacts({
   const uploads = []
   const unchanged = []
   const skipped = []
-  const generationalPublication = generationId !== undefined || fencingToken !== undefined || contentAddressed
-  if (contentAddressed && !generationId) {
-    throw new Error('Content-addressed publication requires a generationId')
-  }
+  const generationalPublication = generationId !== undefined || fencingToken !== undefined
   if (generationalPublication && (!generationId || !Number.isSafeInteger(fencingToken))) {
     throw new Error('Generation publication requires a generationId and fencing token')
   }
@@ -119,8 +115,8 @@ export async function uploadRankingArtifacts({
   if (generationalPublication && Number(leaseAuthority.lease.fencingToken) !== fencingToken) {
     throw new Error('Generation publication fencing token must match its refresh lease')
   }
-  if (contentAddressed && !rawSourceGeneration) {
-    throw new Error('Content-addressed publication requires a raw source generation authority')
+  if (generationalPublication && !rawSourceGeneration) {
+    throw new Error('Generation publication requires a raw source generation authority')
   }
   const dataPrefix = generationId ? `generations/${safeObjectPath(generationId)}/data` : 'data'
   if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
@@ -130,14 +126,14 @@ export async function uploadRankingArtifacts({
     requireEtag: Boolean(leaseAuthority.etag),
   })
   let stageStarted = monotonicNow()
-  const publicSync = contentAddressed
+  const publicSync = generationalPublication
     ? publicArtifactPatch
       ? await uploadContentAddressedPublicArtifactPatch(client, config, { generationId, ...publicArtifactPatch })
       : await uploadContentAddressedPublicArtifacts(client, config, publicDataDir, generationId)
     : { uploaded: await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json'), unchanged: [] }
   uploads.push(...publicSync.uploaded)
   unchanged.push(...publicSync.unchanged)
-  const storageMetrics = contentAddressed ? {
+  const storageMetrics = generationalPublication ? {
     mode: CONTENT_ADDRESSED_STORAGE_MODE,
     objectCount: publicSync.objectCount,
     logicalArtifactCount: publicSync.logicalArtifactCount,
@@ -154,7 +150,7 @@ export async function uploadRankingArtifacts({
       ...byteCounts(publicSync.uploaded),
       reusedCount: publicSync.unchanged.length,
       reusedBytes: sumBytes(publicSync.unchanged),
-      ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+      ...(generationalPublication ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
       ...(storageMetrics ? { storage: storageMetrics } : {}),
     },
   })
@@ -229,8 +225,10 @@ export async function uploadRankingArtifacts({
       throw new Error('Stale refresh worker cannot promote an active generation')
     }
     await beforePromotionWrite?.()
+    // Complete every fallible generation-authority validation before the pointer CAS.
+    // The later receipt is assembled only from these verified authorities and upload results.
     const [, verifiedState, verifiedRaw] = await Promise.all([
-      contentAddressed
+      generationalPublication
         ? assertGenerationManifestAuthority(client, config, publicSync.manifestAuthority)
         : undefined,
       stateManifestAuthority
@@ -268,15 +266,12 @@ export async function uploadRankingArtifacts({
       generationId,
       fencingToken,
       promotedAt,
-      manifestKey: bucketKey(config, contentAddressed
-        ? `generations/${safeObjectPath(generationId)}/manifest.json`
-        : `${dataPrefix}/ranking-summary.json`),
-      ...(contentAddressed ? {
-        storageMode: CONTENT_ADDRESSED_STORAGE_MODE,
-        manifestDigest: publicSync.manifestAuthority.digest,
-        manifestBytes: publicSync.manifestAuthority.bytes,
-        manifestEtag: publicSync.manifestAuthority.etag,
-      } : {}),
+      manifestKey: bucketKey(config, `generations/${safeObjectPath(generationId)}/manifest.json`),
+      publicManifestSchemaVersion: 2,
+      storageMode: CONTENT_ADDRESSED_STORAGE_MODE,
+      manifestDigest: publicSync.manifestAuthority.digest,
+      manifestBytes: publicSync.manifestAuthority.bytes,
+      manifestEtag: publicSync.manifestAuthority.etag,
       ...(verifiedState ? {
         stateManifestKey: verifiedState.key,
         stateManifestDigest: verifiedState.digest,
@@ -307,7 +302,7 @@ export async function uploadRankingArtifacts({
       fencingToken,
       promotedAt,
       etag: promotion.etag,
-      ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+      storageMode: CONTENT_ADDRESSED_STORAGE_MODE,
     }
   }
 
@@ -337,12 +332,12 @@ export async function uploadRankingArtifacts({
   const publishedArtifacts = [...uploads]
   const publishMetrics = publishMetricsFor(publishedArtifacts, unchanged)
   const publishReceipt = {
-    schemaVersion: contentAddressed ? 2 : 1,
+    schemaVersion: generationalPublication ? 2 : 1,
     publishedAt: promotionOutcome?.promotedAt ?? new Date(now()).toISOString(),
     prefix: config.prefix ?? '',
     ...(generationId ? { generationId } : {}),
-    ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
-    ...(contentAddressed ? {
+    ...(generationalPublication ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+    ...(generationalPublication ? {
       authorities: {
         publicManifest: {
           key: publicSync.manifestAuthority.key,
@@ -371,13 +366,10 @@ export async function uploadRankingArtifacts({
     now: now(),
     requireEtag: false,
   })
-  const verifiedPublishReceipt = generationId
-    ? parseGenerationPublishReceipt(publishReceipt, { generationId, prefix: config.prefix ?? '' })
-    : publishReceipt
   if (generationId) {
-    await publishGenerationReceipt(client, config, verifiedPublishReceipt, leaseAuthority, now)
+    await publishGenerationReceipt(client, config, publishReceipt, leaseAuthority, now)
   } else {
-    await uploadJson(client, config, 'latest-publish.json', verifiedPublishReceipt)
+    await uploadJson(client, config, 'latest-publish.json', publishReceipt)
   }
 
   return {
@@ -389,7 +381,7 @@ export async function uploadRankingArtifacts({
     skipped,
     promotion: promotionOutcome,
     refreshTelemetry: telemetry,
-    ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+    ...(generationalPublication ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
     ...(storageMetrics ? { storage: storageMetrics } : {}),
     ...publishMetrics,
   }
@@ -397,10 +389,12 @@ export async function uploadRankingArtifacts({
 
 function previousGenerationForPromotion(active, nextGenerationId) {
   if (active?.generationId === nextGenerationId) {
-    return active.previousGeneration
+    return active.publicManifestSchemaVersion === 2 ? active.previousGeneration : undefined
   }
   if (typeof active?.generationId !== 'string' || active.generationId.length === 0
-    || typeof active?.manifestKey !== 'string' || active.manifestKey.length === 0) return undefined
+    || typeof active?.manifestKey !== 'string' || active.manifestKey.length === 0
+    || active.publicManifestSchemaVersion !== 2
+    || active.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE) return undefined
   return {
     generationId: active.generationId,
     manifestKey: active.manifestKey,
@@ -553,6 +547,27 @@ export async function getBucketObject(relativePath, {
         Bucket: config.bucket,
         Key: key,
       }))
+      if (generationId === undefined && safePath === 'ranking-summary.json' && key.endsWith('/manifest.json')) {
+        const storedBytes = await bodyBytes(object.Body)
+        const parsed = JSON.parse(storedBytes.toString('utf8'))
+        const compatible = compatibleGenerationManifest(parsed, generation)
+        if (compatible.cutover) {
+          const migratedBytes = Buffer.from(jsonBody(compatible.manifest))
+          const migratedDigest = createHash('sha256').update(migratedBytes).digest('hex')
+          return {
+            found: true,
+            key,
+            body: Readable.from([migratedBytes]),
+            contentLength: migratedBytes.byteLength,
+            contentType: PUBLIC_JSON_CONTENT_TYPE,
+            contentEncoding: undefined,
+            etag: `"cutover-v2-${migratedDigest}"`,
+            lastModified: object.LastModified,
+            cutover: 'schema-v1-active-manifest-to-v2',
+          }
+        }
+        object.Body = Readable.from([storedBytes])
+      }
       return {
         found: true,
         key,
@@ -700,22 +715,10 @@ export async function readActiveContentAddressedGeneration({
     || object.Metadata?.sha256 !== manifestDigest) {
     throw new Error('Active public generation manifest authority mismatch')
   }
-  const manifest = JSON.parse(manifestBytes.toString('utf8'))
-  if (manifest.schemaVersion !== 2 || manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== generationId
-    || manifest.runId !== generationId || manifest.rootArtifact !== '/data/ranking-summary.json'
-    || !manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) {
-    throw new Error('Active public generation manifest is invalid')
-  }
+  const { manifest, cutover } = compatibleGenerationManifest(JSON.parse(manifestBytes.toString('utf8')), generationId)
   const identities = {}
   for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
-    const canonical = canonicalPublicLogicalPath(logicalPath)
-    if (identity?.logicalPath !== canonical || identity?.objectUrl !== `/data/objects/sha256/${identity?.sha256}`
-      || identity?.generationId !== generationId || identity?.storageEncoding !== 'gzip'
-      || !Array.isArray(identity?.transportEncodings)
-      || !identity.transportEncodings.includes('identity') || !identity.transportEncodings.includes('gzip')) {
-      throw new Error(`Active public generation has an invalid mapping for ${canonical}`)
-    }
-    identities[canonical] = identity
+    identities[canonicalPublicLogicalPath(logicalPath)] = identity
   }
   const loadArtifacts = async (logicalPaths) => Object.fromEntries(await Promise.all(
     [...new Set(logicalPaths.map((path) => canonicalPublicLogicalPath(path)))]
@@ -730,7 +733,53 @@ export async function readActiveContentAddressedGeneration({
     : await loadArtifacts(['/data/ranking-summary.json'])
   const rootArtifact = artifacts['/data/ranking-summary.json']
   if (!rootArtifact) throw new Error('Active public generation has no valid root artifact')
-  return { found: true, active: active.value, etag: active.etag, manifest, rootArtifact, artifacts, loadArtifacts }
+  return {
+    found: true,
+    active: active.value,
+    etag: active.etag,
+    manifest,
+    rootArtifact,
+    artifacts,
+    loadArtifacts,
+    ...(cutover ? { cutover: 'schema-v1-active-manifest-to-v2' } : {}),
+  }
+}
+
+function compatibleGenerationManifest(value, generationId) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || value.artifactKind !== 'public-artifact-generation-manifest'
+    || (value.schemaVersion !== 1 && value.schemaVersion !== 2)
+    || value.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE
+    || value.generationId !== generationId || value.runId !== generationId
+    || typeof value.generatedAt !== 'string' || Number.isNaN(new Date(value.generatedAt).getTime())
+    || !value.model || typeof value.model !== 'object' || Array.isArray(value.model)
+    || typeof value.model.version !== 'string' || value.model.version.length === 0
+    || typeof value.model.configHash !== 'string' || value.model.configHash.length === 0
+    || !value.provenance || typeof value.provenance !== 'object' || Array.isArray(value.provenance)
+    || typeof value.provenance.source !== 'string' || value.provenance.source.length === 0
+    || typeof value.provenance.dataMode !== 'string' || value.provenance.dataMode.length === 0
+    || !Array.isArray(value.provenance.sourceProviders)
+    || value.provenance.sourceProviders.some((provider) => typeof provider !== 'string' || provider.length === 0)
+    || value.rootArtifact !== '/data/ranking-summary.json'
+    || !value.artifacts || typeof value.artifacts !== 'object' || Array.isArray(value.artifacts)
+    || Object.keys(value.artifacts).length === 0 || !Object.hasOwn(value.artifacts, value.rootArtifact)) {
+    throw new Error('Active public generation manifest is invalid')
+  }
+  for (const [logicalPath, identity] of Object.entries(value.artifacts)) {
+    const canonical = canonicalPublicLogicalPath(logicalPath)
+    if (!identity || typeof identity !== 'object' || Array.isArray(identity)
+      || identity.logicalPath !== canonical || identity.objectUrl !== `/data/objects/sha256/${identity.sha256}`
+      || identity.generationId !== generationId || !/^[a-f0-9]{64}$/.test(identity.sha256 ?? '')
+      || !Number.isSafeInteger(identity.bytes) || identity.bytes <= 0
+      || identity.encoding !== 'gzip' || identity.storageEncoding !== 'gzip'
+      || !Array.isArray(identity.transportEncodings)
+      || identity.transportEncodings.length !== 2
+      || identity.transportEncodings[0] !== 'identity' || identity.transportEncodings[1] !== 'gzip') {
+      throw new Error(`Active public generation has an invalid mapping for ${canonical}`)
+    }
+  }
+  const cutover = value.schemaVersion === 1
+  return { manifest: cutover ? { ...value, schemaVersion: 2 } : value, cutover }
 }
 
 export async function readActiveRawSourceAuthority({

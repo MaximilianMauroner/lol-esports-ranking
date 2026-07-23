@@ -605,7 +605,6 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           config: bucketConfig,
           client: bucketClient,
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
-          contentAddressed: incrementalBuild ? true : env.RANKING_BUCKET_CONTENT_ADDRESSED === 'true',
           ...(incrementalBuild?.action === 'publish-incremental' ? { publicArtifactPatch: incrementalBuild.patch } : {}),
           ...(incrementalState ? { stateManifestAuthority: incrementalState.authority } : {}),
           ...(rawSourceGeneration ? { rawSourceGeneration } : {}),

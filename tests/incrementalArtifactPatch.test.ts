@@ -83,7 +83,7 @@ test('partial artifact patch fails before manifest creation when a reused object
   }
 })
 
-test('partial artifact patch upgrades reused legacy object metadata once without changing its reference', async () => {
+test('partial artifact patch repairs missing object metadata once without changing its reference', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ranking-patch-metadata-'))
   const client = memoryS3()
   try {

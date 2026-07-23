@@ -523,7 +523,6 @@ async function runBenchmarkWorker() {
       RANKING_REFRESH_RUN_ID: 'production-shaped-local',
       RANKING_BUCKET_RESTORE_RAW: 'true',
       RANKING_BUCKET_UPLOAD_ENABLED: 'true',
-      RANKING_BUCKET_CONTENT_ADDRESSED: 'true',
       RANKING_REFRESH_LEASE_OWNER: lease.lease.owner,
       RANKING_REFRESH_FENCING_TOKEN: String(lease.lease.fencingToken),
       RANKING_REFRESH_LEASE_KEY: 'ops/refresh-lease.json',
@@ -923,7 +922,7 @@ async function seedBaseline(
   if (!lease.acquired) throw new Error(`Benchmark baseline lease acquisition failed: ${lease.reason}`)
   await uploadRankingArtifacts({
     publicDataDir: baseline.build.publicDataDir,
-    generationId, fencingToken: lease.lease.fencingToken, contentAddressed: true,
+    generationId, fencingToken: lease.lease.fencingToken,
     leaseAuthority: { key: 'ops/refresh-lease.json', lease: lease.lease, promotionEtag: lease.promotionEtag },
     now: () => new Date('2026-07-21T00:00:01.000Z'),
     stateManifestAuthority: state.authority, rawSourceGeneration: finalizedRaw, config, client,

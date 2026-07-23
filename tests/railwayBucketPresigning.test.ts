@@ -187,7 +187,7 @@ test('content-addressed public uploads carry immutable JSON/gzip metadata', asyn
   }
 })
 
-test('verified legacy content-addressed objects upgrade immutable metadata once, then reuse', async () => {
+test('verified content-addressed objects with missing metadata are repaired once, then reused', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-presigned-migration-'))
   const source = {
     artifactKind: 'public-ranking-manifest',
