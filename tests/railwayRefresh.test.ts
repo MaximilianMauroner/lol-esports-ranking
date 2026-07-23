@@ -727,6 +727,39 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       skipped: true,
       reason: 'no-current-match-source-data',
     })
+
+    const rebuild = await refreshDataIfChanged([
+      '--raw-dir',
+      rawDir,
+      '--manifest',
+      manifestPath,
+      '--state',
+      statePath,
+      '--staging-dir',
+      stagingDir,
+      '--lookback-days',
+      '7',
+      '--end',
+      '2026-07-09',
+      '--force',
+      '--skip-crunch',
+      '--skip-bucket-upload',
+    ], {
+      run: fakeRun,
+      env: {
+        ...isolatedRefreshEnv,
+        RANKING_REUSE_RAW_ON_SOURCE_FAILURE: 'true',
+      },
+    })
+    const rebuiltManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    const rebuiltState = JSON.parse(await readFile(statePath, 'utf8'))
+
+    assert.equal(rebuild.changed, true)
+    assert.deepEqual(rebuiltManifest.files.oracleCsv, [previousOraclePath])
+    assert.equal(rebuiltManifest.refreshAttempt.reusedExistingRaw, true)
+    assert.match(rebuiltManifest.warnings.at(-1), /Reused verified raw authority/)
+    assert.equal(rebuiltState.status, 'refreshed')
+    assert.equal(rebuiltState.coverageEnd, '2026-07-08')
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }

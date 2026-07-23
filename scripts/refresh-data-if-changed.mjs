@@ -153,39 +153,65 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     })
     metrics.recordWork({ broadFetches: 1 })
 
-    const stagingManifest = await readJson(stagingManifestPath)
+    let stagingManifest = await readJson(stagingManifestPath)
     metrics.recordWork({
       providerRequests: finiteOrNull(stagingManifest?.fetchTelemetry?.requests),
       providerRetries: finiteOrNull(stagingManifest?.fetchTelemetry?.retryCount),
     })
     const previousState = await readJsonIfExists(statePath)
-    const healthFingerprint = createSourceHealthFingerprint(stagingManifest)
     if (!manifestHasCurrentMatchSourceFiles(stagingManifest)) {
-      const state = createStaleSourceState({
-        previousState,
-        previousManifest,
-        stagingManifest,
-        start,
-        end,
-        window,
-        mergeExistingRaw,
-        restoreResult,
-        healthFingerprint,
-      })
-      refreshState = state
-      terminalResult = 'stale-source'
-      canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, { result: terminalResult })
-      state.lastRun = canonicalMetrics
-      await mkdir(dirname(statePath), { recursive: true })
-      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
-      console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; preserving existing ranking artifacts.`)
-      return {
-        changed: false,
-        status: 'stale-source',
-        reason: 'no-current-match-source-data',
-        healthFingerprint,
-        previousFingerprint: previousState?.fingerprint,
+      const reuseExistingRaw = force
+        && env.RANKING_REUSE_RAW_ON_SOURCE_FAILURE === 'true'
+        && hasExistingRawBaseline
+      if (!reuseExistingRaw) {
+        const healthFingerprint = createSourceHealthFingerprint(stagingManifest)
+        const state = createStaleSourceState({
+          previousState,
+          previousManifest,
+          stagingManifest,
+          start,
+          end,
+          window,
+          mergeExistingRaw,
+          restoreResult,
+          healthFingerprint,
+        })
+        refreshState = state
+        terminalResult = 'stale-source'
+        canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, { result: terminalResult })
+        state.lastRun = canonicalMetrics
+        await mkdir(dirname(statePath), { recursive: true })
+        await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+        console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; preserving existing ranking artifacts.`)
+        return {
+          changed: false,
+          status: 'stale-source',
+          reason: 'no-current-match-source-data',
+          healthFingerprint,
+          previousFingerprint: previousState?.fingerprint,
+        }
       }
+
+      const failedRefreshManifest = stagingManifest
+      await rm(stagingDir, { recursive: true, force: true })
+      await cp(rawDir, stagingDir, { recursive: true, force: true })
+      stagingManifest = {
+        ...rewriteManifestPaths(previousManifest, rawDir, stagingDir),
+        warnings: uniqueValues([
+          ...arrayValue(previousManifest?.warnings),
+          ...arrayValue(failedRefreshManifest?.warnings),
+          `Reused verified raw authority after scored providers were unavailable for ${start} through ${end}.`,
+        ]),
+        refreshAttempt: {
+          reusedExistingRaw: true,
+          attemptedAt: new Date(wallNow()).toISOString(),
+          start,
+          end,
+          sources: failedRefreshManifest?.sources ?? {},
+        },
+      }
+      await writeFile(stagingManifestPath, `${JSON.stringify(stagingManifest, null, 2)}\n`)
+      console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; rebuilding from verified existing raw authority.`)
     }
 
     const hashingStarted = monotonicNow()
