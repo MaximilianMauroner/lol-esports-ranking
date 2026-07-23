@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { lstat, mkdir, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
@@ -209,5 +209,33 @@ test('local authority rejects relative roots, symlinks, noncanonical JSON, and d
     assert.equal((await lstat(authority)).isSymbolicLink(), false)
   } finally {
     await fixture.cleanup()
+  }
+})
+
+test('descriptor-relative create cannot be redirected by an ancestor swap', async () => {
+  const fixture = await createImplementationRepositoryFixture()
+  const authority = join(fixture.root, '.rollout-evidence')
+  const external = `${fixture.root}-external`
+  try {
+    await mkdir(external)
+    const values = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
+    let swapped = false
+    await assert.rejects(writeImplementationAuthority(values, {
+      authorityDir: authority,
+      repositoryRoot: fixture.root,
+      ioHook: async ({ phase, relativePath }: { phase: string; relativePath: string }) => {
+        if (swapped || phase !== 'before-create' || !relativePath.startsWith('objects/sha256/')) return
+        swapped = true
+        const original = join(authority, 'objects', 'sha256')
+        await rename(original, join(external, 'sha256'))
+        await symlink(external, original, 'dir')
+      },
+    }), /ELOOP|ENOTDIR|symbolic link|descriptor/)
+    assert.equal(swapped, true)
+    assert.deepEqual(await readdir(external), ['sha256'])
+    assert.deepEqual(await readdir(join(external, 'sha256')), [])
+  } finally {
+    await fixture.cleanup()
+    await rm(external, { recursive: true, force: true })
   }
 })

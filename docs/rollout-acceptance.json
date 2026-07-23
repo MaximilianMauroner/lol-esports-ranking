@@ -11,6 +11,7 @@
     "ranking-rollout-production-freshness-evidence",
     "ranking-rollout-latest-game-performance-evidence",
     "ranking-rollout-storage-measurement-evidence",
+    "ranking-rollout-production-action-receipt",
     "ranking-rollout-implementation-test-evidence"
   ],
   "rules": {
@@ -36,10 +37,10 @@
     { "id": "latest-game-performance-bounds", "required": true, "requiresLive": true, "status": "live-pending", "evidenceKinds": ["ranking-rollout-latest-game-performance-evidence"] },
     { "id": "compressed-generation-storage-bounds", "required": true, "requiresLive": true, "status": "live-pending", "evidenceKinds": ["ranking-rollout-storage-measurement-evidence"] },
     { "id": "railway-nontraffic-monthly-under-five", "required": true, "requiresLive": true, "status": "live-pending", "evidenceKinds": ["ranking-railway-cost-report"] },
-    { "id": "five-minute-cadence", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-five-minute-rollout-gate-decision"] },
-    { "id": "production-config-change", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-five-minute-rollout-gate-decision"] },
-    { "id": "incremental-cutover", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-five-minute-rollout-gate-decision"] },
-    { "id": "storage-delivery-production-cutover", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-five-minute-rollout-gate-decision"] },
-    { "id": "retention-delete-execution", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-five-minute-rollout-gate-decision"] }
+    { "id": "five-minute-cadence", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-rollout-production-action-receipt"] },
+    { "id": "production-config-change", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-rollout-production-action-receipt"] },
+    { "id": "incremental-cutover", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-rollout-production-action-receipt"] },
+    { "id": "storage-delivery-production-cutover", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-rollout-production-action-receipt"] },
+    { "id": "retention-delete-execution", "required": true, "requiresLive": true, "authorizationRequired": true, "status": "authorization-gated", "evidenceKinds": ["ranking-rollout-production-action-receipt"] }
   ]
 }

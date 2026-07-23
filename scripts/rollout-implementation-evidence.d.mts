@@ -52,6 +52,11 @@ export function verifyImplementationEvidenceSources(value: unknown, options: { r
 export function writeImplementationAuthority(values: unknown[], options: {
   authorityDir: string
   repositoryRoot: string
+  ioHook?: (event: {
+    phase: 'before-create'
+    relativePath: string
+    authorityDir: string
+  }) => void | Promise<void>
 }): Promise<Record<string, unknown>>
 export function resolveImplementationAuthority(options: {
   authorityDir: string

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
 import { lstat, mkdir, open, realpath } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 
@@ -345,7 +345,7 @@ export async function verifyImplementationEvidenceSources(value, { repositoryRoo
   return evidence
 }
 
-export async function writeImplementationAuthority(values, { authorityDir, repositoryRoot } = {}) {
+export async function writeImplementationAuthority(values, { authorityDir, repositoryRoot, ioHook } = {}) {
   const repository = await inspectRepositoryRoot(repositoryRoot)
   const root = await prepareAuthorityRoot(authorityDir, repository)
   const parsed = values.map(parseImplementationEvidence)
@@ -359,7 +359,7 @@ export async function writeImplementationAuthority(values, { authorityDir, repos
   for (const value of parsed) {
     const bytes = canonicalBytes(value)
     const digest = sha256(bytes)
-    await createOnlyCanonicalFile(root, `objects/sha256/${digest}`, bytes)
+    await createOnlyCanonicalFile(root, `objects/sha256/${digest}`, bytes, { ioHook, repositoryRoot: repository })
     evidence.push({ requirementId: value.requirementId, sha256: digest })
   }
   evidence.sort((left, right) => IMPLEMENTATION_EVIDENCE_REQUIREMENTS.indexOf(left.requirementId)
@@ -370,7 +370,10 @@ export async function writeImplementationAuthority(values, { authorityDir, repos
     subjectCommit,
     evidence,
   })
-  await createOnlyCanonicalFile(root, `subjects/${subjectCommit}/manifest.json`, canonicalBytes(manifest))
+  await createOnlyCanonicalFile(root, `subjects/${subjectCommit}/manifest.json`, canonicalBytes(manifest), {
+    ioHook,
+    repositoryRoot: repository,
+  })
   return manifest
 }
 
@@ -518,7 +521,8 @@ async function readGitObject(root, objectName) {
 
 async function prepareAuthorityRoot(authorityDir, repositoryRoot) {
   const root = exactAuthorityPath(authorityDir, repositoryRoot)
-  await mkdir(root, { recursive: true })
+  const handles = await openDirectoryChain(repositoryRoot, ['.rollout-evidence'], { create: true })
+  await closeHandles(handles)
   return inspectAuthorityRoot(root, repositoryRoot)
 }
 
@@ -530,17 +534,26 @@ async function inspectAuthorityRoot(authorityDir, repositoryRoot) {
   return root
 }
 
-async function createOnlyCanonicalFile(root, relativePath, bytes) {
+async function createOnlyCanonicalFile(root, relativePath, bytes, { ioHook, repositoryRoot } = {}) {
   assertSafeRelativePath(relativePath)
-  const target = containedPath(root, relativePath)
-  await ensureContainedDirectories(root, dirname(target))
+  const parts = relativePath.split(/[\\/]/)
+  const fileName = parts.pop()
+  const handles = await openDirectoryChain(repositoryRoot, ['.rollout-evidence', ...parts], { create: true })
+  const parent = handles.at(-1)
+  const target = `/proc/self/fd/${parent.fd}/${fileName}`
   try {
-    const handle = await open(target, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600)
+    await ioHook?.({ phase: 'before-create', relativePath, authorityDir: root })
+    await assertOpenDirectoryFd(parent, handles[0])
+    const handle = await open(
+      target,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+      0o600,
+    )
     try {
-      await assertOpenRegularFd(handle, root, target)
+      await assertOpenRegularFd(handle, handles[0])
       await handle.writeFile(bytes)
       await handle.sync()
-      await assertOpenRegularFd(handle, root, target)
+      await assertOpenRegularFd(handle, handles[0])
     } finally {
       await handle.close()
     }
@@ -552,21 +565,67 @@ async function createOnlyCanonicalFile(root, relativePath, bytes) {
       throw new Error(`Conflicting immutable implementation authority file: ${relativePath}`, { cause: error })
     }
     return 'reused'
+  } finally {
+    await closeHandles(handles)
   }
 }
 
-async function ensureContainedDirectories(root, targetDirectory) {
-  const relativeDirectory = relative(root, targetDirectory)
-  assertSafeRelativePath(relativeDirectory)
-  let current = root
-  for (const part of relativeDirectory.split(sep).filter(Boolean)) {
-    current = resolve(current, part)
+async function openDirectoryChain(root, parts, { create = false } = {}) {
+  const handles = []
+  try {
+    handles.push(await openDirectory(root))
+    for (const part of parts) {
+      assertSafePathComponent(part)
+      const parent = handles.at(-1)
+      const childPath = `/proc/self/fd/${parent.fd}/${part}`
+      let child
+      try {
+        child = await openDirectory(childPath)
+      } catch (error) {
+        if (!create || error?.code !== 'ENOENT') throw error
+        await mkdir(childPath, { mode: 0o700 })
+        child = await openDirectory(childPath)
+      }
+      await assertOpenDirectoryFd(child, handles[0])
+      handles.push(child)
+    }
+    return handles
+  } catch (error) {
+    await closeHandles(handles)
+    throw error
+  }
+}
+
+async function openDirectory(path) {
+  const handle = await open(path, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW)
+  const stat = await handle.stat()
+  if (!stat.isDirectory()) {
+    await handle.close()
+    throw new Error('Implementation authority directory descriptor must be a directory')
+  }
+  try {
+    await realpath(`/proc/self/fd/${handle.fd}`)
+  } catch (error) {
+    await handle.close()
+    throw new Error('Implementation authority directory descriptor cannot be verified', { cause: error })
+  }
+  return handle
+}
+
+async function assertOpenDirectoryFd(handle, rootHandle) {
+  const stat = await handle.stat()
+  if (!stat.isDirectory()) throw new Error('Implementation authority directory descriptor must be a directory')
+  const root = await fdRealpath(rootHandle)
+  const target = await fdRealpath(handle)
+  if (!pathIsWithin(root, target)) throw new Error('Implementation authority directory descriptor escaped its root')
+}
+
+async function closeHandles(handles) {
+  for (const handle of [...handles].reverse()) {
     try {
-      const stat = await lstat(current)
-      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Implementation authority path contains a non-directory or symlink')
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error
-      await mkdir(current)
+      await handle.close()
+    } catch {
+      // Preserve the primary authority result.
     }
   }
 }
@@ -592,27 +651,35 @@ async function readContainedRegularFile(root, relativePath) {
   }
   const handle = await open(target, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
   try {
-    await assertOpenRegularFd(handle, root, target)
-    const bytes = await handle.readFile()
-    await assertOpenRegularFd(handle, root, target)
-    return bytes
+    const rootHandle = await openDirectory(root)
+    try {
+      await assertOpenRegularFd(handle, rootHandle)
+      const bytes = await handle.readFile()
+      await assertOpenRegularFd(handle, rootHandle)
+      return bytes
+    } finally {
+      await rootHandle.close()
+    }
   } finally {
     await handle.close()
   }
 }
 
-async function assertOpenRegularFd(handle, root, target) {
+async function assertOpenRegularFd(handle, rootHandle) {
   const stat = await handle.stat()
   if (!stat.isFile()) throw new Error('Implementation authority/source object must be a regular file')
-  let fdTarget
+  const fdTarget = await fdRealpath(handle)
+  const realRoot = await fdRealpath(rootHandle)
+  if (!pathIsWithin(realRoot, fdTarget)) {
+    throw new Error('Implementation authority/source descriptor escaped its exact root')
+  }
+}
+
+async function fdRealpath(handle) {
   try {
-    fdTarget = await realpath(`/proc/self/fd/${handle.fd}`)
+    return await realpath(`/proc/self/fd/${handle.fd}`)
   } catch (error) {
     throw new Error('Implementation authority/source descriptor containment cannot be verified', { cause: error })
-  }
-  const realRoot = await realpath(root)
-  if (fdTarget !== target || !pathIsWithin(realRoot, fdTarget)) {
-    throw new Error('Implementation authority/source descriptor escaped its exact root')
   }
 }
 
@@ -629,6 +696,12 @@ function assertSafeRelativePath(value) {
   if (typeof value !== 'string' || value.length === 0 || isAbsolute(value)
     || value.split(/[\\/]/).some((part) => part === '' || part === '.' || part === '..')) {
     throw new Error('Implementation authority/source path must be a safe relative path')
+  }
+}
+
+function assertSafePathComponent(value) {
+  if (typeof value !== 'string' || value.length === 0 || value === '.' || value === '..' || /[\\/]/.test(value)) {
+    throw new Error('Implementation authority path component is unsafe')
   }
 }
 

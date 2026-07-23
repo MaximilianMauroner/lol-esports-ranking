@@ -5,6 +5,15 @@ import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import { parseProbeCoordinationEvidence } from './probe-refresh-coordination.mjs'
 import { bucketConfigFromEnv, createBucketClient, readBucketJson } from './railway-bucket.mjs'
 import { hasMeasuredProductionUsage, parseRailwayCostReport } from './railway-cost-report.mjs'
+import { isProductionActionProof, parseProductionActionReceipt } from './rollout-production-action.mjs'
+import {
+  isLatestGamePerformanceProof,
+  isProductionFreshnessProof,
+  isStorageMeasurementProof,
+  parseLatestGamePerformanceEvidence,
+  parseProductionFreshnessEvidence,
+  parseStorageMeasurementEvidence,
+} from './rollout-production-evidence.mjs'
 import {
   parseImplementationEvidence,
   resolveImplementationAuthority,
@@ -35,11 +44,11 @@ export const PLAN_COMPLETION_REQUIREMENTS = Object.freeze([
   requirement('latest-game-performance-bounds', 'ranking-rollout-latest-game-performance-evidence', { requiresLive: true }),
   requirement('compressed-generation-storage-bounds', 'ranking-rollout-storage-measurement-evidence', { requiresLive: true }),
   requirement('railway-nontraffic-monthly-under-five', 'ranking-railway-cost-report', { requiresLive: true }),
-  requirement('five-minute-cadence', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
-  requirement('production-config-change', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
-  requirement('incremental-cutover', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
-  requirement('storage-delivery-production-cutover', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
-  requirement('retention-delete-execution', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
+  requirement('five-minute-cadence', 'ranking-rollout-production-action-receipt', { requiresLive: true, authorizationRequired: true }),
+  requirement('production-config-change', 'ranking-rollout-production-action-receipt', { requiresLive: true, authorizationRequired: true }),
+  requirement('incremental-cutover', 'ranking-rollout-production-action-receipt', { requiresLive: true, authorizationRequired: true }),
+  requirement('storage-delivery-production-cutover', 'ranking-rollout-production-action-receipt', { requiresLive: true, authorizationRequired: true }),
+  requirement('retention-delete-execution', 'ranking-rollout-production-action-receipt', { requiresLive: true, authorizationRequired: true }),
 ])
 
 export async function auditPlanCompletion({
@@ -80,13 +89,13 @@ export async function auditPlanCompletion({
       }))
     const contradiction = candidates.find((entry) => entry.value.result === 'contradicted' || entry.value.proved === false)
     const proof = candidates.find((entry) => nativeProofPassed(entry.value))
-    const status = contract.authorizationRequired
-      ? 'authorization-gated'
-      : contradiction
+    const status = proof
+      ? 'proved'
+      : contract.authorizationRequired
+        ? 'authorization-gated'
+        : contradiction
         ? 'contradicted'
-        : proof
-          ? 'proved'
-          : contract.requiresLive
+        : contract.requiresLive
             ? 'live-pending'
             : 'missing'
     return {
@@ -132,6 +141,9 @@ function attachmentApplies(value, contract) {
   if (value.artifactKind === 'ranking-rollout-implementation-test-evidence') {
     return value.requirementId === contract.id
   }
+  if (value.artifactKind === 'ranking-rollout-production-action-receipt') {
+    return value.actionId === contract.id
+  }
   return true
 }
 
@@ -174,6 +186,18 @@ function nativeEvidenceValid(value, {
       case 'ranking-railway-cost-report':
         parseRailwayCostReport(value)
         return hasMeasuredProductionUsage(value)
+      case 'ranking-rollout-production-freshness-evidence':
+        parseProductionFreshnessEvidence(value)
+        return isProductionFreshnessProof(value)
+      case 'ranking-rollout-latest-game-performance-evidence':
+        parseLatestGamePerformanceEvidence(value)
+        return isLatestGamePerformanceProof(value)
+      case 'ranking-rollout-storage-measurement-evidence':
+        parseStorageMeasurementEvidence(value)
+        return isStorageMeasurementProof(value)
+      case 'ranking-rollout-production-action-receipt':
+        parseProductionActionReceipt(value)
+        return isProductionActionProof(value, value.actionId)
       default:
         return false
     }
@@ -188,6 +212,12 @@ function nativeProofPassed(value) {
   if (value.artifactKind === 'ranking-rollout-probe-coordination-evidence') return value.status === 'completed'
   if (value.artifactKind === 'ranking-rollout-rollback-rehearsal') return value.completed === true
   if (value.artifactKind === 'ranking-railway-cost-report') return hasMeasuredProductionUsage(value)
+  if (value.artifactKind === 'ranking-rollout-production-freshness-evidence') return isProductionFreshnessProof(value)
+  if (value.artifactKind === 'ranking-rollout-latest-game-performance-evidence') return isLatestGamePerformanceProof(value)
+  if (value.artifactKind === 'ranking-rollout-storage-measurement-evidence') return isStorageMeasurementProof(value)
+  if (value.artifactKind === 'ranking-rollout-production-action-receipt') {
+    return isProductionActionProof(value, value.actionId)
+  }
   return false
 }
 

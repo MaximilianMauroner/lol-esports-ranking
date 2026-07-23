@@ -5,6 +5,16 @@ import test from 'node:test'
 import { auditPlanCompletion, PLAN_COMPLETION_REQUIREMENTS } from '../scripts/audit-plan-completion.mjs'
 import { createRailwayCostReport } from '../scripts/railway-cost-report.mjs'
 import { writeImplementationAuthority } from '../scripts/rollout-implementation-evidence.mjs'
+import {
+  createProductionActionReceipt,
+  PRODUCTION_ACTION_IDS,
+  type ProductionActionId,
+} from '../scripts/rollout-production-action.mjs'
+import {
+  createLatestGamePerformanceEvidence,
+  createProductionFreshnessEvidence,
+  createStorageMeasurementEvidence,
+} from '../scripts/rollout-production-evidence.mjs'
 import { immutableReference } from '../scripts/rollout-gate.mjs'
 import { evaluateRolloutShadowGate } from '../scripts/rollout-shadow-gate.mjs'
 import {
@@ -234,3 +244,138 @@ test('completion audit accepts a native shadow decision and rejects stored inven
   })
   assert.equal(forgedGateAudit.requirements.find((entry) => entry.id === 'deployment-bound-gate')?.status, 'live-pending')
 })
+
+test('storage-resolved native live measurements and action-specific receipts can prove every pending row', async () => {
+  const acceptance = JSON.parse(await readFile(new URL('../docs/rollout-acceptance.json', import.meta.url), 'utf8'))
+  const common = {
+    commit: 'abc123',
+    deploymentId: 'deployment-1',
+    environmentId: 'environment-1',
+    recordedAt: '2026-07-23T02:00:00.000Z',
+    expiresAt: '2026-08-01T00:00:00.000Z',
+  }
+  const live = [
+    createProductionFreshnessEvidence({
+      ...common,
+      runId: 'freshness',
+      measurement: {
+        sampleCount: 10,
+        providerAvailabilityBasis: 'scored-provider-first-capable-response',
+        upstreamDelayExcluded: true,
+        upstreamDelayP95Ms: 1000,
+        p95FreshnessMs: 10000,
+      },
+    }),
+    createLatestGamePerformanceEvidence({
+      ...common,
+      runId: 'latest-game',
+      measurement: {
+        sampleCount: 10,
+        computeMs: 1000,
+        peakRssBytes: 1024,
+        uploadedBytes: 1024,
+        fullSnapshotRewriteBytes: 0,
+      },
+    }),
+    createStorageMeasurementEvidence({
+      ...common,
+      runId: 'storage',
+      measurement: {
+        fullLogicalGenerationCompressedBytes: 1024,
+        postMigration: true,
+        bucketBytes: 2048,
+        retainedManifestCount: 50,
+        retainedManifestsResolvable: true,
+      },
+    }),
+  ]
+  const actions = PRODUCTION_ACTION_IDS.map(nativeActionReceipt)
+  const all = [...live, ...actions]
+  const references = all.map((value) => immutableReference(value, `ops/completion/${value.runId}.json`))
+  const stored = new Map(references.map((reference, index) => [reference.key, all[index]]))
+  const audit = await auditPlanCompletion({
+    acceptance,
+    evidence: references,
+    expectedCommit: 'abc123',
+    expectedDeploymentId: 'deployment-1',
+    resolveReference: async (key: string) => ({ found: stored.has(key), value: stored.get(key) }),
+    now: '2026-07-23T03:00:00.000Z',
+  })
+  for (const id of [
+    'production-freshness-p95-15m',
+    'latest-game-performance-bounds',
+    'compressed-generation-storage-bounds',
+    ...PRODUCTION_ACTION_IDS,
+  ]) {
+    assert.equal(audit.requirements.find((entry) => entry.id === id)?.status, 'proved')
+  }
+
+  const cadence = actions[0]
+  const cadenceReference = references[live.length]
+  const crossAction = await auditPlanCompletion({
+    acceptance,
+    evidence: [cadenceReference],
+    expectedCommit: 'abc123',
+    expectedDeploymentId: 'deployment-1',
+    resolveReference: async () => ({ found: true, value: cadence }),
+    now: '2026-07-23T03:00:00.000Z',
+  })
+  assert.equal(crossAction.requirements.find((entry) => entry.id === 'five-minute-cadence')?.status, 'proved')
+  assert.equal(crossAction.requirements.find((entry) => entry.id === 'production-config-change')?.status, 'authorization-gated')
+
+  const genericGate = {
+    artifactKind: 'ranking-five-minute-rollout-gate-decision',
+    schemaVersion: 1,
+    commit: 'abc123',
+    deploymentId: 'deployment-1',
+    runId: 'generic-gate',
+    evidenceClass: 'live',
+    recordedAt: '2026-07-23T02:00:00.000Z',
+    expiresAt: '2026-08-01T00:00:00.000Z',
+    allowed: true,
+    criteria: { invented: true },
+  }
+  const genericReference = immutableReference(genericGate, 'ops/completion/generic-gate.json')
+  const genericAudit = await auditPlanCompletion({
+    acceptance,
+    evidence: [genericReference, ...actions],
+    expectedCommit: 'abc123',
+    expectedDeploymentId: 'deployment-1',
+    resolveReference: async (key: string) => key === genericReference.key
+      ? { found: true, value: genericGate }
+      : { found: false },
+    now: '2026-07-23T03:00:00.000Z',
+  })
+  assert.equal(genericAudit.requirements.find((entry) => entry.id === 'five-minute-cadence')?.status, 'authorization-gated')
+})
+
+function nativeActionReceipt(actionId: ProductionActionId) {
+  const digest = 'a'.repeat(64)
+  return createProductionActionReceipt({
+    commit: 'abc123',
+    deploymentId: 'deployment-1',
+    environmentId: 'environment-1',
+    runId: `action-${actionId}`,
+    recordedAt: '2026-07-23T02:00:00.000Z',
+    expiresAt: '2026-08-01T00:00:00.000Z',
+    actionId,
+    approval: {
+      approvalId: `approval-${actionId}`,
+      approvedBy: 'human@example.invalid',
+      approvedAt: '2026-07-23T00:00:00.000Z',
+      inventorySha256: actionId === 'retention-delete-execution' ? digest : null,
+    },
+    execution: {
+      environment: 'production',
+      executedAt: '2026-07-23T01:00:00.000Z',
+      succeeded: true,
+    },
+    assertions: {
+      'five-minute-cadence': { active: true, intervalMinutes: 5, mode: 'gated' },
+      'production-config-change': { applied: true },
+      'incremental-cutover': { active: true },
+      'storage-delivery-production-cutover': { presignedDeliveryActive: true, proxyFallbackActive: true },
+      'retention-delete-execution': { deleteCompleted: true, inventorySha256: digest },
+    }[actionId],
+  })
+}
