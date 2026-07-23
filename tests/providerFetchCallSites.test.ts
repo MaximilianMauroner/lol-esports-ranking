@@ -10,10 +10,11 @@ const callSites = [
   'scripts/lolesports-schedule-probe.mjs',
 ]
 
-test('every scored-provider and schedule call site uses the shared request retry helper', async () => {
+test('every provider integration uses the shared retry helper and forbids direct network bypass', async () => {
   for (const path of callSites) {
     const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8')
     assert.match(source, /from ['"].\/provider-fetch-retry\.mjs['"]/)
     assert.match(source, /\bfetchWithRetry\s*\(/)
+    assert.doesNotMatch(source, /(?:^|[^\w.])fetch\s*\(/, `${path} must not bypass fetchWithRetry`)
   }
 })

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { lstat, mkdir, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import test from 'node:test'
+import { promisify } from 'node:util'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import {
   IMPLEMENTATION_EVIDENCE_CONTRACTS,
@@ -13,9 +15,12 @@ import {
 } from '../scripts/rollout-implementation-evidence.mjs'
 import {
   createImplementationRepositoryFixture,
+  generateNativeImplementationEvidence,
   generatePassingImplementationEvidence,
   passingImplementationCommand,
 } from './implementationEvidenceTestFixtures.ts'
+
+const exec = promisify(execFile)
 
 test('native implementation evidence generation is deterministic, exact, and commit-bound', async () => {
   const fixture = await createImplementationRepositoryFixture()
@@ -43,14 +48,17 @@ test('native implementation evidence generation is deterministic, exact, and com
 test('generation rejects modified or uncommitted contract sources and arbitrary command claims', async () => {
   const fixture = await createImplementationRepositoryFixture()
   try {
-    const values = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
+    const values = await generateNativeImplementationEvidence(fixture.root, fixture.commit)
     const forged = structuredClone(values[0])
     forged.commands[0].argv = ['node', '--test', 'tests/invented.test.ts']
     assert.throws(() => parseImplementationEvidence(forged), /contract/)
     assert.throws(() => parseImplementationEvidence({ ...values[0], invented: true }), /unexpected or missing keys/)
     assert.throws(() => parseImplementationEvidence({ ...values[0], contractId: 'invented-v1' }), /contract/)
-    await writeFile(join(fixture.root, values[0].sourceDigests[0].path), 'modified\n')
-    await assert.rejects(generatePassingImplementationEvidence(fixture.root, fixture.commit), /not committed/)
+    const modifiedPath = join(fixture.root, values[0].sourceDigests[0].path)
+    const original = await readFile(modifiedPath)
+    await writeFile(modifiedPath, 'modified\n')
+    await assert.rejects(generatePassingImplementationEvidence(fixture.root, fixture.commit), /clean|not committed/)
+    await writeFile(modifiedPath, original)
     await assert.rejects(
       generateImplementationEvidence({
         repositoryRoot: fixture.root,
@@ -68,16 +76,16 @@ test('local authority is canonical, create-only, reusable, and rejects conflicti
   const fixture = await createImplementationRepositoryFixture()
   const authority = join(fixture.root, '.rollout-evidence')
   try {
-    const values = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
-    const manifest = await writeImplementationAuthority(values, { authorityDir: authority })
-    assert.deepEqual(await writeImplementationAuthority(values, { authorityDir: authority }), manifest)
+    const values = await generateNativeImplementationEvidence(fixture.root, fixture.commit)
+    const manifest = await writeImplementationAuthority(values, { authorityDir: authority, repositoryRoot: fixture.root })
+    assert.deepEqual(await writeImplementationAuthority(values, { authorityDir: authority, repositoryRoot: fixture.root }), manifest)
     const bytes = await readFile(join(authority, 'subjects', fixture.commit, 'manifest.json'), 'utf8')
     assert.equal(bytes, canonicalJsonFor(manifest))
     assert.equal((await resolveImplementationAuthority({
       authorityDir: authority,
       subjectCommit: fixture.commit,
       repositoryRoot: fixture.root,
-    })).length, 2)
+    })).length, IMPLEMENTATION_EVIDENCE_REQUIREMENTS.length)
     const sourcePath = join(fixture.root, values[0].sourceDigests[0].path)
     const sourceBytes = await readFile(sourcePath)
     await writeFile(sourcePath, Buffer.concat([sourceBytes, Buffer.from('\n')]))
@@ -85,7 +93,7 @@ test('local authority is canonical, create-only, reusable, and rejects conflicti
       authorityDir: authority,
       subjectCommit: fixture.commit,
       repositoryRoot: fixture.root,
-    }), /source digest mismatch/)
+    }), /clean|source digest mismatch/)
     await writeFile(sourcePath, sourceBytes)
     const contradicted = structuredClone(values)
     contradicted[0].commands[0].exitCode = 1
@@ -95,7 +103,40 @@ test('local authority is canonical, create-only, reusable, and rejects conflicti
     const { createHash } = await import('node:crypto')
     contradicted[0].runId = `repository-${contradicted[0].requirementId}-${createHash('sha256').update(canonicalJsonFor(withoutRunId)).digest('hex').slice(0, 16)}`
     assert.equal(parseImplementationEvidence(contradicted[0]), contradicted[0])
-    await assert.rejects(writeImplementationAuthority(contradicted, { authorityDir: authority }), /Conflicting immutable/)
+    await assert.rejects(writeImplementationAuthority(contradicted, { authorityDir: authority, repositoryRoot: fixture.root }), /Conflicting immutable/)
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
+test('resolution rejects fake-runner proof, dirty worktrees, and evidence from an older HEAD', async () => {
+  const fixture = await createImplementationRepositoryFixture()
+  const authority = join(fixture.root, '.rollout-evidence')
+  try {
+    const fake = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
+    await writeImplementationAuthority(fake, { authorityDir: authority, repositoryRoot: fixture.root })
+    await assert.rejects(resolveImplementationAuthority({
+      authorityDir: authority,
+      subjectCommit: fixture.commit,
+      repositoryRoot: fixture.root,
+    }), /independently rerun native outcome/)
+
+    await writeFile(join(fixture.root, 'untracked-proof-bypass.txt'), 'bypass\n')
+    await assert.rejects(resolveImplementationAuthority({
+      authorityDir: authority,
+      subjectCommit: fixture.commit,
+      repositoryRoot: fixture.root,
+    }), /clean tracked and untracked/)
+    await unlink(join(fixture.root, 'untracked-proof-bypass.txt'))
+
+    await writeFile(join(fixture.root, 'later.txt'), 'later\n')
+    await exec('git', ['add', 'later.txt'], { cwd: fixture.root })
+    await exec('git', ['-c', 'user.name=Evidence Test', '-c', 'user.email=evidence@example.invalid', 'commit', '-qm', 'later'], { cwd: fixture.root })
+    await assert.rejects(resolveImplementationAuthority({
+      authorityDir: authority,
+      subjectCommit: fixture.commit,
+      repositoryRoot: fixture.root,
+    }), /subject must equal repository HEAD/)
   } finally {
     await fixture.cleanup()
   }
@@ -106,12 +147,28 @@ test('local authority rejects relative roots, symlinks, noncanonical JSON, and d
   const authority = join(fixture.root, '.rollout-evidence')
   try {
     const values = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
-    const manifest = await writeImplementationAuthority(values, { authorityDir: authority })
+    const manifest = await writeImplementationAuthority(values, { authorityDir: authority, repositoryRoot: fixture.root })
     const manifestEvidence = (manifest as { evidence: Array<{ sha256: string }> }).evidence
-    await assert.rejects(writeImplementationAuthority(values, { authorityDir: '.rollout-evidence' }), /explicit absolute path/)
+    await assert.rejects(writeImplementationAuthority(values, {
+      authorityDir: '.rollout-evidence',
+      repositoryRoot: fixture.root,
+    }), /explicit absolute path/)
     await assert.rejects(writeImplementationAuthority(values, {
       authorityDir: `${fixture.root}/nested/../.rollout-evidence`,
+      repositoryRoot: fixture.root,
     }), /traversal/)
+    await assert.rejects(writeImplementationAuthority(values, {
+      authorityDir: join(resolve(fixture.root, '..'), '.rollout-evidence'),
+      repositoryRoot: fixture.root,
+    }), /repository \.rollout-evidence child/)
+    const linkedRoot = `${fixture.root}-link`
+    await symlink(fixture.root, linkedRoot, 'dir')
+    await assert.rejects(resolveImplementationAuthority({
+      authorityDir: join(linkedRoot, '.rollout-evidence'),
+      subjectCommit: fixture.commit,
+      repositoryRoot: linkedRoot,
+    }), /unsymlinked/)
+    await unlink(linkedRoot)
 
     const firstObject = join(authority, 'objects', 'sha256', manifestEvidence[0].sha256)
     const original = await readFile(firstObject)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { costForUsage, createRailwayCostReport, parseRailwayCostReport, RAILWAY_PRICING_VERIFIED_AT, RAILWAY_RATES } from '../scripts/railway-cost-report.mjs'
+import { costForUsage, createRailwayCostReport, hasMeasuredProductionUsage, parseRailwayCostReport, RAILWAY_PRICING_VERIFIED_AT, RAILWAY_RATES } from '../scripts/railway-cost-report.mjs'
 import { rolloutEvidence } from './rolloutTestFixtures.ts'
 
 test('Railway report uses the verified exact rates and never changes unknown measurement to zero', () => {
@@ -33,11 +33,50 @@ test('authoritative native cost report has a strict timestamped evidence schema'
     evidenceClass: 'live',
     recordedAt: '2026-07-23T00:00:00.000Z',
     expiresAt: '2026-08-01T00:00:00.000Z',
-    measured: { cpuSeconds: 1, memoryGbSeconds: 2, serviceEgressGb: 3, bucketGbMonths: 4 },
+    measured: { cpuSeconds: 1, memoryGbSeconds: 2, volumeGbSeconds: 0, serviceEgressGb: 3, bucketGbMonths: 4 },
+    measurement: { publicTrafficExcluded: true },
   })
   assert.equal(parseRailwayCostReport(report), report)
   assert.throws(() => parseRailwayCostReport({ ...report, recordedAt: '2026-07-23T00:00:00Z' }), /recordedAt/)
   assert.throws(() => parseRailwayCostReport({ ...report, measured: { totalUsage: 1 } }), /measured Railway cost/)
+  assert.equal(hasMeasuredProductionUsage(report), true)
+})
+
+test('completion cost eligibility requires every measured nontraffic monthly component and at most five dollars', () => {
+  const base = {
+    commit: 'abc123',
+    deploymentId: 'deployment-1',
+    runId: 'cost-eligibility',
+    evidenceClass: 'live',
+    recordedAt: '2026-07-23T00:00:00.000Z',
+    expiresAt: '2026-08-01T00:00:00.000Z',
+    measurement: { publicTrafficExcluded: true },
+  }
+  const incomplete = createRailwayCostReport({
+    ...base,
+    measured: { cpuSeconds: 1, memoryGbSeconds: 2, serviceEgressGb: 0, bucketGbMonths: 1 },
+  })
+  assert.equal(hasMeasuredProductionUsage(incomplete), false)
+  const reproducedOverage = createRailwayCostReport({
+    ...base,
+    runId: 'reproduced-76-58',
+    measured: {
+      cpuSeconds: 0,
+      memoryGbSeconds: 0,
+      volumeGbSeconds: 0,
+      serviceEgressGb: 1531.6,
+      bucketGbMonths: 0,
+    },
+  })
+  assert.equal(reproducedOverage.measurement.eligibleNonTrafficTotal, 76.58)
+  assert.equal(hasMeasuredProductionUsage(reproducedOverage), false)
+  const trafficNotExcluded = createRailwayCostReport({
+    ...base,
+    runId: 'traffic-included',
+    measurement: { publicTrafficExcluded: false },
+    measured: { cpuSeconds: 0, memoryGbSeconds: 0, volumeGbSeconds: 0, serviceEgressGb: 0, bucketGbMonths: 0 },
+  })
+  assert.equal(hasMeasuredProductionUsage(trafficNotExcluded), false)
 })
 
 test('cost report separates resources and usage, applies Hobby minimum and warnings, and marks service uploads as egress', () => {

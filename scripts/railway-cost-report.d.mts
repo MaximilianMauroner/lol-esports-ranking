@@ -39,6 +39,13 @@ export function createRailwayCostReport(input?: Record<string, unknown>): {
   expiresAt?: string
   pricing: { verifiedAt: string; sources: string[]; rates: typeof RAILWAY_RATES; notes: Record<string, string> }
   measured: RailwayCost
+  measurement: {
+    basis: 'production-metered-month'
+    publicTrafficExcluded: boolean
+    componentsComplete: boolean
+    eligibleNonTrafficTotal: number | null
+    underFive: boolean
+  }
   monthly: MonthlyRailwayCost[]
   marginals: Record<'oneMatch' | 'unchangedProbe', RailwayMarginal>
 }

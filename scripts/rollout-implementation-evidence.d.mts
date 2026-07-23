@@ -1,4 +1,11 @@
-export type ImplementationRequirementId = 'provider-request-retry' | 'complete-immutable-receipts'
+export type ImplementationRequirementId =
+  | 'provider-request-retry'
+  | 'complete-immutable-receipts'
+  | 'storage-delivery-contract'
+  | 'retention-safety-contract'
+  | 'authoritative-full-fallback'
+  | 'atomic-generation-publication'
+  | 'ranking-provenance-contract'
 export type ImplementationCommandResult = {
   id: string
   argv: string[]
@@ -42,7 +49,10 @@ export function generateImplementationEvidence(options: {
 }): Promise<ImplementationEvidence[]>
 export function parseImplementationEvidence(value: unknown): ImplementationEvidence
 export function verifyImplementationEvidenceSources(value: unknown, options: { repositoryRoot: string }): Promise<ImplementationEvidence>
-export function writeImplementationAuthority(values: unknown[], options: { authorityDir: string }): Promise<Record<string, unknown>>
+export function writeImplementationAuthority(values: unknown[], options: {
+  authorityDir: string
+  repositoryRoot: string
+}): Promise<Record<string, unknown>>
 export function resolveImplementationAuthority(options: {
   authorityDir: string
   subjectCommit: string

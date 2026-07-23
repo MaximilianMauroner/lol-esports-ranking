@@ -22,14 +22,24 @@ export const PLAN_COMPLETION_STATUSES = ['proved', 'contradicted', 'missing', 'l
 export const PLAN_COMPLETION_REQUIREMENTS = Object.freeze([
   requirement('provider-request-retry', 'ranking-rollout-implementation-test-evidence'),
   requirement('complete-immutable-receipts', 'ranking-rollout-implementation-test-evidence'),
+  requirement('storage-delivery-contract', 'ranking-rollout-implementation-test-evidence'),
+  requirement('retention-safety-contract', 'ranking-rollout-implementation-test-evidence'),
+  requirement('authoritative-full-fallback', 'ranking-rollout-implementation-test-evidence'),
+  requirement('atomic-generation-publication', 'ranking-rollout-implementation-test-evidence'),
+  requirement('ranking-provenance-contract', 'ranking-rollout-implementation-test-evidence'),
   requirement('seven-day-live-shadow', 'ranking-rollout-shadow-gate-decision', { requiresLive: true }),
   requirement('deployment-bound-gate', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true }),
   requirement('live-probe-coordination', 'ranking-rollout-probe-coordination-evidence', { requiresLive: true }),
   requirement('live-rollback-rehearsal', 'ranking-rollout-rollback-rehearsal', { requiresLive: true }),
-  requirement('measured-production-usage', 'ranking-railway-cost-report', { requiresLive: true }),
+  requirement('production-freshness-p95-15m', 'ranking-rollout-production-freshness-evidence', { requiresLive: true }),
+  requirement('latest-game-performance-bounds', 'ranking-rollout-latest-game-performance-evidence', { requiresLive: true }),
+  requirement('compressed-generation-storage-bounds', 'ranking-rollout-storage-measurement-evidence', { requiresLive: true }),
+  requirement('railway-nontraffic-monthly-under-five', 'ranking-railway-cost-report', { requiresLive: true }),
   requirement('five-minute-cadence', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
   requirement('production-config-change', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
   requirement('incremental-cutover', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
+  requirement('storage-delivery-production-cutover', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
+  requirement('retention-delete-execution', 'ranking-five-minute-rollout-gate-decision', { requiresLive: true, authorizationRequired: true }),
 ])
 
 export async function auditPlanCompletion({

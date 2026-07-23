@@ -2,14 +2,14 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
-import { auditPlanCompletion } from '../scripts/audit-plan-completion.mjs'
+import { auditPlanCompletion, PLAN_COMPLETION_REQUIREMENTS } from '../scripts/audit-plan-completion.mjs'
 import { createRailwayCostReport } from '../scripts/railway-cost-report.mjs'
 import { writeImplementationAuthority } from '../scripts/rollout-implementation-evidence.mjs'
 import { immutableReference } from '../scripts/rollout-gate.mjs'
 import { evaluateRolloutShadowGate } from '../scripts/rollout-shadow-gate.mjs'
 import {
   createImplementationRepositoryFixture,
-  generatePassingImplementationEvidence,
+  generateNativeImplementationEvidence,
 } from './implementationEvidenceTestFixtures.ts'
 import { rolloutEvidence, sevenDayEvidence } from './rolloutTestFixtures.ts'
 
@@ -48,13 +48,30 @@ test('completion audit ignores caller acceptance IDs, inline proof, and never-wr
   assert.equal(result.exitCode, 1)
 })
 
-test('completion audit proves both non-live requirements only from explicit commit-bound local authority', async () => {
+test('descriptive acceptance mirror stays aligned with script-owned completion contracts', async () => {
+  const acceptance = JSON.parse(await readFile(new URL('../docs/rollout-acceptance.json', import.meta.url), 'utf8'))
+  assert.deepEqual(
+    acceptance.requirements.map((entry: { id: string }) => entry.id),
+    PLAN_COMPLETION_REQUIREMENTS.map((entry) => entry.id),
+  )
+})
+
+test('completion audit proves seven repository requirements only from explicit commit-bound local authority', async () => {
   const acceptance = JSON.parse(await readFile(new URL('../docs/rollout-acceptance.json', import.meta.url), 'utf8'))
   const fixture = await createImplementationRepositoryFixture()
   const authority = join(fixture.root, '.rollout-evidence')
   try {
-    const values = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
-    await writeImplementationAuthority(values, { authorityDir: authority })
+    const values = await generateNativeImplementationEvidence(fixture.root, fixture.commit)
+    assert.deepEqual(values.map((value) => [value.requirementId, value.result]), [
+      ['provider-request-retry', 'proved'],
+      ['complete-immutable-receipts', 'proved'],
+      ['storage-delivery-contract', 'proved'],
+      ['retention-safety-contract', 'proved'],
+      ['authoritative-full-fallback', 'proved'],
+      ['atomic-generation-publication', 'proved'],
+      ['ranking-provenance-contract', 'proved'],
+    ])
+    await writeImplementationAuthority(values, { authorityDir: authority, repositoryRoot: fixture.root })
     const forgedBucket = immutableReference(values[0], 'ops/rollout-tests/forged-local-proof.json')
     const bucketOnly = await auditPlanCompletion({
       acceptance,
@@ -78,11 +95,11 @@ test('completion audit proves both non-live requirements only from explicit comm
     assert.equal(result.requirements.find((entry) => entry.id === 'provider-request-retry')?.status, 'proved')
     assert.equal(result.requirements.find((entry) => entry.id === 'complete-immutable-receipts')?.status, 'proved')
     assert.deepEqual(result.counts, {
-      proved: 2,
+      proved: 7,
       contradicted: 0,
       missing: 0,
-      'live-pending': 5,
-      'authorization-gated': 3,
+      'live-pending': 8,
+      'authorization-gated': 5,
     })
     assert.equal(result.exitCode, 1)
 
@@ -106,7 +123,8 @@ test('measured production usage requires a strict native report resolved from au
     evidenceClass: 'live',
     recordedAt: '2026-07-23T00:00:00.000Z',
     expiresAt: '2026-08-01T00:00:00.000Z',
-    measured: { cpuSeconds: 1, memoryGbSeconds: 2, serviceEgressGb: 3, bucketGbMonths: 4 },
+    measured: { cpuSeconds: 1, memoryGbSeconds: 2, volumeGbSeconds: 0, serviceEgressGb: 3, bucketGbMonths: 4 },
+    measurement: { publicTrafficExcluded: true },
   })
   const inline = await auditPlanCompletion({
     acceptance,
@@ -116,7 +134,7 @@ test('measured production usage requires a strict native report resolved from au
     resolveReference: async () => ({ found: false }),
     now: '2026-07-23T01:00:00Z',
   })
-  assert.equal(inline.requirements.find((entry) => entry.id === 'measured-production-usage')?.status, 'live-pending')
+  assert.equal(inline.requirements.find((entry) => entry.id === 'railway-nontraffic-monthly-under-five')?.status, 'live-pending')
 
   const incomplete = createRailwayCostReport({
     commit: 'abc123',
@@ -136,7 +154,7 @@ test('measured production usage requires a strict native report resolved from au
     resolveReference: async () => ({ found: true, value: incomplete }),
     now: '2026-07-23T01:00:00Z',
   })
-  assert.equal(incompleteAudit.requirements.find((entry) => entry.id === 'measured-production-usage')?.status, 'live-pending')
+  assert.equal(incompleteAudit.requirements.find((entry) => entry.id === 'railway-nontraffic-monthly-under-five')?.status, 'live-pending')
 
   const reference = immutableReference(report, 'ops/rollout-cost/live-cost.json')
   const stored = await auditPlanCompletion({
@@ -149,7 +167,7 @@ test('measured production usage requires a strict native report resolved from au
       : { found: false },
     now: '2026-07-23T01:00:00Z',
   })
-  assert.equal(stored.requirements.find((entry) => entry.id === 'measured-production-usage')?.status, 'proved')
+  assert.equal(stored.requirements.find((entry) => entry.id === 'railway-nontraffic-monthly-under-five')?.status, 'proved')
 })
 
 test('completion audit accepts a native shadow decision and rejects stored invented criteria', async () => {

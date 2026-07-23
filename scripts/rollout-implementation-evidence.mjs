@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { lstat, mkdir, open, readFile } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { constants as fsConstants } from 'node:fs'
+import { lstat, mkdir, open, realpath } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 
@@ -10,18 +11,30 @@ export const IMPLEMENTATION_EVIDENCE_CLASS = 'repository-implementation'
 export const IMPLEMENTATION_EVIDENCE_REQUIREMENTS = Object.freeze([
   'provider-request-retry',
   'complete-immutable-receipts',
+  'storage-delivery-contract',
+  'retention-safety-contract',
+  'authoritative-full-fallback',
+  'atomic-generation-publication',
+  'ranking-provenance-contract',
+])
+
+const COMMON_SOURCE_PATHS = Object.freeze([
+  '.gitignore',
+  'scripts/rollout-implementation-evidence.mjs',
+  'scripts/rollout-implementation-evidence.d.mts',
+  'scripts/audit-plan-completion.mjs',
+  'scripts/audit-plan-completion.d.mts',
 ])
 
 export const IMPLEMENTATION_EVIDENCE_CONTRACTS = Object.freeze({
   'provider-request-retry': Object.freeze({
-    contractId: 'provider-request-retry-v1',
+    contractId: 'provider-request-retry-v2',
     sourcePaths: Object.freeze([
-      'scripts/rollout-implementation-evidence.mjs',
-      'scripts/rollout-implementation-evidence.d.mts',
-      'scripts/audit-plan-completion.mjs',
-      'scripts/audit-plan-completion.d.mts',
+      ...COMMON_SOURCE_PATHS,
       'scripts/provider-fetch-retry.mjs',
       'scripts/provider-fetch-retry.d.mts',
+      'scripts/refresh-trigger-state.mjs',
+      'scripts/refresh-trigger-state.d.mts',
       'scripts/download-local-data.mjs',
       'scripts/fetch-leaguepedia.mjs',
       'scripts/fetch-lolesports-schedule.mjs',
@@ -29,6 +42,8 @@ export const IMPLEMENTATION_EVIDENCE_CONTRACTS = Object.freeze({
       'scripts/lolesports-schedule-probe.mjs',
       'tests/providerFetchRetry.test.ts',
       'tests/providerFetchCallSites.test.ts',
+      'tests/refreshTriggerState.test.ts',
+      'tests/downloadLocalData.test.ts',
     ]),
     commands: Object.freeze([
       Object.freeze({
@@ -39,19 +54,34 @@ export const IMPLEMENTATION_EVIDENCE_CONTRACTS = Object.freeze({
         id: 'provider-retry-call-site-tests',
         argv: Object.freeze(['node', '--import', 'tsx', '--test', '--test-reporter=tap', 'tests/providerFetchCallSites.test.ts']),
       }),
+      Object.freeze({
+        id: 'provider-next-attempt-persistence-tests',
+        argv: Object.freeze([
+          'node', '--import', 'tsx', '--test', '--test-reporter=tap',
+          '--test-name-pattern=provider lag backs off|refresh cause precedence',
+          'tests/refreshTriggerState.test.ts',
+        ]),
+      }),
+      Object.freeze({
+        id: 'provider-backup-nonblocking-tests',
+        argv: Object.freeze([
+          'node', '--import', 'tsx', '--test', '--test-reporter=tap',
+          '--test-name-pattern=Oracle HTML quota failure still allows Leaguepedia fallback download',
+          'tests/downloadLocalData.test.ts',
+        ]),
+      }),
     ]),
     assertionIds: Object.freeze([
       'provider-retry-native-tests',
       'provider-retry-call-site-tests',
+      'provider-next-attempt-persistence-tests',
+      'provider-backup-nonblocking-tests',
     ]),
   }),
   'complete-immutable-receipts': Object.freeze({
-    contractId: 'complete-immutable-receipts-v1',
+    contractId: 'complete-immutable-receipts-v2',
     sourcePaths: Object.freeze([
-      'scripts/rollout-implementation-evidence.mjs',
-      'scripts/rollout-implementation-evidence.d.mts',
-      'scripts/audit-plan-completion.mjs',
-      'scripts/audit-plan-completion.d.mts',
+      ...COMMON_SOURCE_PATHS,
       'scripts/refresh-once.mjs',
       'scripts/refresh-once.d.mts',
       'scripts/rollout-evidence.mjs',
@@ -65,6 +95,107 @@ export const IMPLEMENTATION_EVIDENCE_CONTRACTS = Object.freeze({
       }),
     ]),
     assertionIds: Object.freeze(['refresh-early-terminal-receipt-tests']),
+  }),
+  'storage-delivery-contract': Object.freeze({
+    contractId: 'storage-delivery-contract-v1',
+    sourcePaths: Object.freeze([
+      ...COMMON_SOURCE_PATHS,
+      'scripts/railway-server.mjs',
+      'scripts/railway-bucket.mjs',
+      'scripts/public-artifact-storage.mjs',
+      'tests/railwayServer.test.ts',
+    ]),
+    commands: Object.freeze([
+      Object.freeze({
+        id: 'storage-delivery-native-tests',
+        argv: Object.freeze([
+          'node', '--import', 'tsx', '--test', '--test-reporter=tap',
+          '--test-name-pattern=identity and gzip delivery|hybrid delivery redirects|presigned delivery disabled',
+          'tests/railwayServer.test.ts',
+        ]),
+      }),
+    ]),
+    assertionIds: Object.freeze(['storage-delivery-native-tests']),
+  }),
+  'retention-safety-contract': Object.freeze({
+    contractId: 'retention-safety-contract-v1',
+    sourcePaths: Object.freeze([
+      ...COMMON_SOURCE_PATHS,
+      'scripts/ranking-bucket-gc.mjs',
+      'scripts/ranking-bucket-gc.d.mts',
+      'tests/rankingBucketGc.test.ts',
+    ]),
+    commands: Object.freeze([
+      Object.freeze({
+        id: 'retention-safety-native-tests',
+        argv: Object.freeze([
+          'node', '--import', 'tsx', '--test', '--test-reporter=tap',
+          '--test-name-pattern=GC arguments require deletion|generation retention is the union|missing retained references fail closed|corrupt retained content|pointer races',
+          'tests/rankingBucketGc.test.ts',
+        ]),
+      }),
+    ]),
+    assertionIds: Object.freeze(['retention-safety-native-tests']),
+  }),
+  'authoritative-full-fallback': Object.freeze({
+    contractId: 'authoritative-full-fallback-v1',
+    sourcePaths: Object.freeze([
+      ...COMMON_SOURCE_PATHS,
+      'scripts/refresh-data-if-changed.mjs',
+      'scripts/incremental-ranking-orchestrator.ts',
+      'tests/incrementalRankingIntegration.test.ts',
+    ]),
+    commands: Object.freeze([
+      Object.freeze({
+        id: 'authoritative-full-fallback-native-tests',
+        argv: Object.freeze([
+          'node', '--import', 'tsx', '--test', '--test-reporter=tap',
+          '--test-name-pattern=shadow publishes full authority and missing/context-invalid checkpoints or parity mismatch diagnose and fall back fully',
+          'tests/incrementalRankingIntegration.test.ts',
+        ]),
+      }),
+    ]),
+    assertionIds: Object.freeze(['authoritative-full-fallback-native-tests']),
+  }),
+  'atomic-generation-publication': Object.freeze({
+    contractId: 'atomic-generation-publication-v1',
+    sourcePaths: Object.freeze([
+      ...COMMON_SOURCE_PATHS,
+      'scripts/incremental-state-storage.mjs',
+      'scripts/incremental-state-storage.d.mts',
+      'tests/incrementalStateStorage.test.ts',
+    ]),
+    commands: Object.freeze([
+      Object.freeze({
+        id: 'atomic-generation-publication-native-tests',
+        argv: Object.freeze([
+          'node', '--import', 'tsx', '--test', '--test-reporter=tap',
+          '--test-name-pattern=one active CAS binds|old active pointers remain readable|crashes and stale workers cannot activate',
+          'tests/incrementalStateStorage.test.ts',
+        ]),
+      }),
+    ]),
+    assertionIds: Object.freeze(['atomic-generation-publication-native-tests']),
+  }),
+  'ranking-provenance-contract': Object.freeze({
+    contractId: 'ranking-provenance-contract-v1',
+    sourcePaths: Object.freeze([
+      ...COMMON_SOURCE_PATHS,
+      'src/lib/incremental/artifactDependencies.ts',
+      'src/lib/incremental/semanticParity.ts',
+      'tests/incrementalArtifacts.test.ts',
+    ]),
+    commands: Object.freeze([
+      Object.freeze({
+        id: 'ranking-provenance-native-tests',
+        argv: Object.freeze([
+          'node', '--import', 'tsx', '--test', '--test-reporter=tap',
+          '--test-name-pattern=semantic parity reports|dependency graph covers',
+          'tests/incrementalArtifacts.test.ts',
+        ]),
+      }),
+    ]),
+    assertionIds: Object.freeze(['ranking-provenance-native-tests']),
   }),
 })
 
@@ -93,15 +224,15 @@ export async function generateImplementationEvidence({
   subjectCommit,
   runCommand = runNativeCommand,
 } = {}) {
-  const root = requiredAbsoluteDirectory(repositoryRoot, 'repository root')
+  const root = await inspectRepositoryRoot(repositoryRoot)
   assertCommit(subjectCommit, 'subject commit')
+  await assertCleanRepository(root)
   const currentCommit = await readCurrentCommit(root)
   if (currentCommit !== subjectCommit) throw new Error('Implementation evidence subject commit must equal the checked-out producer source commit')
-  await assertContractSourcesCommitted(root, subjectCommit)
   const values = []
   for (const requirementId of IMPLEMENTATION_EVIDENCE_REQUIREMENTS) {
     const contract = IMPLEMENTATION_EVIDENCE_CONTRACTS[requirementId]
-    const sourceDigests = await digestContractSources(root, contract)
+    const sourceDigests = await digestContractSources(root, contract, subjectCommit)
     const commands = []
     for (const command of contract.commands) {
       const result = await runCommand(command.argv, { cwd: root })
@@ -134,6 +265,8 @@ export async function generateImplementationEvidence({
     const runId = `repository-${requirementId}-${sha256(canonicalJsonFor(withoutRunId)).slice(0, 16)}`
     values.push(parseImplementationEvidence({ ...withoutRunId, runId }))
   }
+  await assertCleanRepository(root)
+  if (await readCurrentCommit(root) !== subjectCommit) throw new Error('Implementation evidence repository changed during native command execution')
   return values
 }
 
@@ -201,17 +334,20 @@ export function parseImplementationEvidence(value) {
 
 export async function verifyImplementationEvidenceSources(value, { repositoryRoot } = {}) {
   const evidence = parseImplementationEvidence(value)
-  const root = requiredAbsoluteDirectory(repositoryRoot, 'repository root')
+  const root = await inspectRepositoryRoot(repositoryRoot)
+  await assertCleanRepository(root)
+  if (await readCurrentCommit(root) !== evidence.subjectCommit) throw new Error('Implementation evidence subject is not the checked-out HEAD')
   const contract = IMPLEMENTATION_EVIDENCE_CONTRACTS[evidence.requirementId]
-  const current = await digestContractSources(root, contract)
+  const current = await digestContractSources(root, contract, evidence.subjectCommit)
   if (canonicalJsonFor(current) !== canonicalJsonFor(evidence.sourceDigests)) {
     throw new Error(`Implementation evidence source digest mismatch for ${evidence.requirementId}`)
   }
   return evidence
 }
 
-export async function writeImplementationAuthority(values, { authorityDir } = {}) {
-  const root = await prepareAuthorityRoot(authorityDir)
+export async function writeImplementationAuthority(values, { authorityDir, repositoryRoot } = {}) {
+  const repository = await inspectRepositoryRoot(repositoryRoot)
+  const root = await prepareAuthorityRoot(authorityDir, repository)
   const parsed = values.map(parseImplementationEvidence)
   if (parsed.length !== IMPLEMENTATION_EVIDENCE_REQUIREMENTS.length
     || !IMPLEMENTATION_EVIDENCE_REQUIREMENTS.every((id) => parsed.some((value) => value.requirementId === id))) {
@@ -243,23 +379,34 @@ export async function resolveImplementationAuthority({
   subjectCommit,
   repositoryRoot,
 } = {}) {
-  const root = await inspectAuthorityRoot(authorityDir)
+  const repository = await inspectRepositoryRoot(repositoryRoot)
+  const root = await inspectAuthorityRoot(authorityDir, repository)
   assertCommit(subjectCommit, 'subject commit')
+  await assertCleanRepository(repository)
+  if (await readCurrentCommit(repository) !== subjectCommit) throw new Error('Implementation authority subject must equal repository HEAD')
   const manifest = parseImplementationManifest(await readCanonicalJsonFile(root, `subjects/${subjectCommit}/manifest.json`))
   if (manifest.subjectCommit !== subjectCommit) throw new Error('Implementation authority subject mismatch')
-  const values = []
+  const storedValues = []
   for (const entry of manifest.evidence) {
     const bytes = await readContainedRegularFile(root, `objects/sha256/${entry.sha256}`)
     if (sha256(bytes) !== entry.sha256) throw new Error('Implementation authority object digest mismatch')
     const canonical = canonicalBytes(JSON.parse(bytes.toString('utf8')))
     if (!bytes.equals(canonical)) throw new Error('Implementation authority object is not canonical JSON')
-    const value = await verifyImplementationEvidenceSources(JSON.parse(bytes.toString('utf8')), { repositoryRoot })
+    const value = await verifyImplementationEvidenceSources(JSON.parse(bytes.toString('utf8')), { repositoryRoot: repository })
     if (value.subjectCommit !== subjectCommit || value.requirementId !== entry.requirementId) {
       throw new Error('Implementation authority object metadata mismatch')
     }
-    values.push(value)
+    storedValues.push(value)
   }
-  return values
+  const freshValues = await generateImplementationEvidence({ repositoryRoot: repository, subjectCommit })
+  for (const fresh of freshValues) {
+    const stored = storedValues.find((value) => value.requirementId === fresh.requirementId)
+    if (!stored || canonicalJsonFor(stored) !== canonicalJsonFor(fresh)) {
+      throw new Error(`Stored implementation evidence does not match independently rerun native outcome for ${fresh.requirementId}`)
+    }
+  }
+  await assertCleanRepository(repository)
+  return freshValues
 }
 
 export function parseImplementationManifest(value) {
@@ -282,22 +429,26 @@ export function parseImplementationManifest(value) {
   return value
 }
 
-async function digestContractSources(root, contract) {
+async function digestContractSources(root, contract, subjectCommit) {
   const digests = []
   for (const sourcePath of contract.sourcePaths) {
     assertSafeRelativePath(sourcePath)
-    const bytes = await readContainedRegularFile(root, sourcePath)
-    digests.push({ path: sourcePath, sha256: sha256(bytes) })
+    const committed = await readGitObject(root, `${subjectCommit}:${sourcePath}`)
+    const working = await readContainedRegularFile(root, sourcePath)
+    if (!committed.equals(working)) throw new Error(`Implementation evidence source is not committed at ${subjectCommit}: ${sourcePath}`)
+    digests.push({ path: sourcePath, sha256: sha256(committed) })
   }
   return digests
 }
 
 async function runNativeCommand(argv, { cwd }) {
   const [command, ...args] = argv
+  const childEnv = { ...process.env }
+  delete childEnv.NODE_TEST_CONTEXT
   return new Promise((resolveRun) => {
     const child = spawn(command === 'node' ? process.execPath : command, args, {
       cwd,
-      env: process.env,
+      env: childEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let output = ''
@@ -351,19 +502,6 @@ async function readCurrentCommit(root) {
   return result
 }
 
-async function assertContractSourcesCommitted(root, subjectCommit) {
-  const paths = [...new Set(IMPLEMENTATION_EVIDENCE_REQUIREMENTS.flatMap(
-    (requirementId) => IMPLEMENTATION_EVIDENCE_CONTRACTS[requirementId].sourcePaths,
-  ))]
-  for (const sourcePath of paths) {
-    const committed = await readGitObject(root, `${subjectCommit}:${sourcePath}`)
-    const current = await readContainedRegularFile(root, sourcePath)
-    if (!committed.equals(current)) {
-      throw new Error(`Implementation evidence source is not committed at ${subjectCommit}: ${sourcePath}`)
-    }
-  }
-}
-
 async function readGitObject(root, objectName) {
   return new Promise((resolveRun, rejectRun) => {
     const child = spawn('git', ['show', objectName], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -378,16 +516,17 @@ async function readGitObject(root, objectName) {
   })
 }
 
-async function prepareAuthorityRoot(authorityDir) {
-  const root = requiredAbsoluteDirectory(authorityDir, 'implementation authority directory')
+async function prepareAuthorityRoot(authorityDir, repositoryRoot) {
+  const root = exactAuthorityPath(authorityDir, repositoryRoot)
   await mkdir(root, { recursive: true })
-  return inspectAuthorityRoot(root)
+  return inspectAuthorityRoot(root, repositoryRoot)
 }
 
-async function inspectAuthorityRoot(authorityDir) {
-  const root = requiredAbsoluteDirectory(authorityDir, 'implementation authority directory')
+async function inspectAuthorityRoot(authorityDir, repositoryRoot) {
+  const root = exactAuthorityPath(authorityDir, repositoryRoot)
   const stat = await lstat(root)
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Implementation authority root must be a real directory')
+  if (await realpath(root) !== root) throw new Error('Implementation authority root or ancestor must not be symlinked')
   return root
 }
 
@@ -396,9 +535,12 @@ async function createOnlyCanonicalFile(root, relativePath, bytes) {
   const target = containedPath(root, relativePath)
   await ensureContainedDirectories(root, dirname(target))
   try {
-    const handle = await open(target, 'wx', 0o600)
+    const handle = await open(target, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600)
     try {
+      await assertOpenRegularFd(handle, root, target)
       await handle.writeFile(bytes)
+      await handle.sync()
+      await assertOpenRegularFd(handle, root, target)
     } finally {
       await handle.close()
     }
@@ -448,9 +590,30 @@ async function readContainedRegularFile(root, relativePath) {
     const stat = await lstat(current)
     if (stat.isSymbolicLink()) throw new Error('Implementation authority/source path contains a symlink')
   }
-  const stat = await lstat(target)
-  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Implementation authority/source object must be a regular file')
-  return readFile(target)
+  const handle = await open(target, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+  try {
+    await assertOpenRegularFd(handle, root, target)
+    const bytes = await handle.readFile()
+    await assertOpenRegularFd(handle, root, target)
+    return bytes
+  } finally {
+    await handle.close()
+  }
+}
+
+async function assertOpenRegularFd(handle, root, target) {
+  const stat = await handle.stat()
+  if (!stat.isFile()) throw new Error('Implementation authority/source object must be a regular file')
+  let fdTarget
+  try {
+    fdTarget = await realpath(`/proc/self/fd/${handle.fd}`)
+  } catch (error) {
+    throw new Error('Implementation authority/source descriptor containment cannot be verified', { cause: error })
+  }
+  const realRoot = await realpath(root)
+  if (fdTarget !== target || !pathIsWithin(realRoot, fdTarget)) {
+    throw new Error('Implementation authority/source descriptor escaped its exact root')
+  }
 }
 
 function containedPath(root, relativePath) {
@@ -477,6 +640,44 @@ function requiredAbsoluteDirectory(value, label) {
     throw new Error('implementation authority directory must be an explicit .rollout-evidence directory')
   }
   return directory
+}
+
+async function inspectRepositoryRoot(value) {
+  const root = requiredAbsoluteDirectory(value, 'repository root')
+  const stat = await lstat(root)
+  if (!stat.isDirectory() || stat.isSymbolicLink() || await realpath(root) !== root) {
+    throw new Error('repository root and ancestors must be a real, unsymlinked directory')
+  }
+  return root
+}
+
+function exactAuthorityPath(value, repositoryRoot) {
+  const authority = requiredAbsoluteDirectory(value, 'implementation authority directory')
+  const expected = join(repositoryRoot, '.rollout-evidence')
+  if (authority !== expected) throw new Error('implementation authority directory must be the repository .rollout-evidence child')
+  return authority
+}
+
+function pathIsWithin(root, target) {
+  const fromRoot = relative(root, target)
+  return fromRoot !== '' && fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot)
+}
+
+async function assertCleanRepository(root) {
+  const status = await runGitText(root, ['status', '--porcelain=v1', '--untracked-files=all'])
+  if (status.trim() !== '') throw new Error('Implementation evidence requires a clean tracked and untracked repository')
+}
+
+async function runGitText(root, args) {
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    child.on('error', rejectRun)
+    child.on('close', (code) => code === 0 ? resolveRun(stdout) : rejectRun(new Error(stderr.trim())))
+  })
 }
 
 function canonicalBytes(value) {
@@ -513,7 +714,10 @@ async function main(args) {
     repositoryRoot: options.repositoryRoot,
     subjectCommit: options.subjectCommit,
   })
-  const manifest = await writeImplementationAuthority(values, { authorityDir: options.authorityDir })
+  const manifest = await writeImplementationAuthority(values, {
+    authorityDir: options.authorityDir,
+    repositoryRoot: options.repositoryRoot,
+  })
   process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`)
   if (values.some((value) => value.result !== 'proved')) process.exitCode = 1
 }

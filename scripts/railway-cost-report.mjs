@@ -22,6 +22,10 @@ export const RAILWAY_RATES = Object.freeze({
 
 export function createRailwayCostReport(input = {}) {
   const measured = costForUsage(input.measured ?? input.usage ?? {})
+  const componentsComplete = ['cpuSeconds', 'memoryGbSeconds', 'volumeGbSeconds', 'serviceEgressGb', 'bucketGbMonths']
+    .every((field) => Number.isFinite(measured.usage[field]) && measured.usage[field] >= 0)
+  const publicTrafficExcluded = input.measurement?.publicTrafficExcluded === true
+  const eligibleNonTrafficTotal = componentsComplete && publicTrafficExcluded ? measured.totalUsage : null
   const projections = createMonthlyProjections(input.model ?? {})
   const recordedAt = requiredIso(input.recordedAt ?? new Date().toISOString(), 'recordedAt')
   return {
@@ -45,6 +49,13 @@ export function createRailwayCostReport(input = {}) {
       },
     },
     measured,
+    measurement: {
+      basis: 'production-metered-month',
+      publicTrafficExcluded,
+      componentsComplete,
+      eligibleNonTrafficTotal,
+      underFive: eligibleNonTrafficTotal === null ? false : eligibleNonTrafficTotal <= RAILWAY_RATES.hobbyIncludedUsage,
+    },
     monthly: projections,
     marginals: {
       oneMatch: marginalFromEvidence(input.evidence, (run) => run.scenario === 'latest-append'
@@ -63,7 +74,7 @@ export function parseRailwayCostReport(value) {
   }
   assertExactKeys(value, [
     'artifactKind', 'schemaVersion', 'recordedAt', 'commit', 'deploymentId', 'runId',
-    'evidenceClass', 'expiresAt', 'pricing', 'measured', 'monthly', 'marginals',
+    'evidenceClass', 'expiresAt', 'pricing', 'measured', 'measurement', 'monthly', 'marginals',
   ], 'Railway cost report')
   for (const field of ['commit', 'deploymentId', 'runId']) requireString(value[field], field)
   requiredIso(value.recordedAt, 'recordedAt')
@@ -83,6 +94,7 @@ export function parseRailwayCostReport(value) {
     if (value.pricing.rates[field] !== rate) throw new Error(`Invalid Railway cost rate ${field}`)
   }
   parseRailwayCost(value.measured)
+  parseMeasurementEligibility(value.measurement, value.measured)
   if (!Array.isArray(value.monthly) || !record(value.marginals)
     || !record(value.marginals.oneMatch) || !record(value.marginals.unchangedProbe)) {
     throw new Error('Invalid Railway cost report projections')
@@ -93,11 +105,38 @@ export function parseRailwayCostReport(value) {
 export function hasMeasuredProductionUsage(value) {
   try {
     const report = parseRailwayCostReport(value)
-    return ['cpuSeconds', 'memoryGbSeconds', 'serviceEgressGb', 'bucketGbMonths']
+    return report.evidenceClass === 'live'
+      && ['cpuSeconds', 'memoryGbSeconds', 'volumeGbSeconds', 'serviceEgressGb', 'bucketGbMonths']
       .every((field) => Number.isFinite(report.measured.usage[field]) && report.measured.usage[field] >= 0)
-      && Number.isFinite(report.measured.totalUsage) && report.measured.totalUsage >= 0
+      && report.measurement.basis === 'production-metered-month'
+      && report.measurement.publicTrafficExcluded === true
+      && report.measurement.componentsComplete === true
+      && Number.isFinite(report.measurement.eligibleNonTrafficTotal)
+      && report.measurement.eligibleNonTrafficTotal >= 0
+      && report.measurement.eligibleNonTrafficTotal <= RAILWAY_RATES.hobbyIncludedUsage
+      && report.measurement.underFive === true
   } catch {
     return false
+  }
+}
+
+function parseMeasurementEligibility(value, measured) {
+  if (!record(value)) throw new Error('Invalid Railway measured eligibility')
+  assertExactKeys(value, [
+    'basis', 'publicTrafficExcluded', 'componentsComplete', 'eligibleNonTrafficTotal', 'underFive',
+  ], 'Railway measured eligibility')
+  if (value.basis !== 'production-metered-month'
+    || typeof value.publicTrafficExcluded !== 'boolean'
+    || typeof value.componentsComplete !== 'boolean'
+    || typeof value.underFive !== 'boolean') throw new Error('Invalid Railway measured eligibility fields')
+  numberOrNull(value.eligibleNonTrafficTotal, 'measurement.eligibleNonTrafficTotal')
+  const complete = ['cpuSeconds', 'memoryGbSeconds', 'volumeGbSeconds', 'serviceEgressGb', 'bucketGbMonths']
+    .every((field) => Number.isFinite(measured.usage[field]) && measured.usage[field] >= 0)
+  const total = complete && value.publicTrafficExcluded ? measured.totalUsage : null
+  if (value.componentsComplete !== complete
+    || value.eligibleNonTrafficTotal !== total
+    || value.underFive !== (total !== null && total <= RAILWAY_RATES.hobbyIncludedUsage)) {
+    throw new Error('Railway measured eligibility does not match native calculation')
   }
 }
 
