@@ -692,7 +692,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       coverageEnd: '2026-07-08',
     }, null, 2)}\n`)
 
-    const result = await refreshDataIfChanged([
+    const unavailableArgs = [
       '--raw-dir',
       rawDir,
       '--manifest',
@@ -710,7 +710,19 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       '--end',
       '2026-07-09',
       '--skip-bucket-upload',
-    ], { run: fakeRun, env: isolatedRefreshEnv })
+    ]
+    const runUnavailable = (force: boolean, recoveryAuthorized: boolean) => refreshDataIfChanged([
+      ...unavailableArgs,
+      ...(force ? ['--force'] : []),
+    ], {
+      run: fakeRun,
+      env: {
+        ...isolatedRefreshEnv,
+        ...(recoveryAuthorized ? { RANKING_REUSE_RAW_ON_SOURCE_FAILURE: 'true' } : {}),
+      },
+    })
+
+    const result = await runUnavailable(false, false)
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const state = JSON.parse(await readFile(statePath, 'utf8'))
 
@@ -728,22 +740,20 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       reason: 'no-current-match-source-data',
     })
 
+    for (const [force, recoveryAuthorized] of [[true, false], [false, true]] as const) {
+      const rejectedRecovery = await runUnavailable(force, recoveryAuthorized)
+      assert.equal(rejectedRecovery.changed, false)
+      assert.equal(rejectedRecovery.status, 'stale-source')
+      assert.equal(crunchCount, 0)
+      const preservedManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+      assert.deepEqual(preservedManifest.files.oracleCsv, [previousOraclePath])
+      assert.equal(preservedManifest.refreshAttempt, undefined)
+    }
+
     const rebuild = await refreshDataIfChanged([
-      '--raw-dir',
-      rawDir,
-      '--manifest',
-      manifestPath,
-      '--state',
-      statePath,
-      '--staging-dir',
-      stagingDir,
-      '--lookback-days',
-      '7',
-      '--end',
-      '2026-07-09',
+      ...unavailableArgs,
       '--force',
       '--skip-crunch',
-      '--skip-bucket-upload',
     ], {
       run: fakeRun,
       env: {
