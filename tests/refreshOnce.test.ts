@@ -622,6 +622,9 @@ async function runNonPublishingCase(terminal: 'unchanged' | 'stale-source') {
     runChild: async (context: Record<string, unknown>) => {
       await runRefreshChildCase(terminal, paths, context)
     },
+    ...(terminal === 'stale-source'
+      ? { readJson: async () => { throw new Error('stale-source must not read reconciliation') } }
+      : {}),
   }) as ParentResult
   return {
     result,
@@ -641,6 +644,7 @@ function realParentOptions(paths: RefreshTestPaths, client: ReturnType<typeof me
       RANKING_REFRESH_MODE: 'gated',
       RANKING_REFRESH_METRICS_PATH: paths.metrics,
       RANKING_REFRESH_STATE: paths.refreshState,
+      RANKING_RECONCILIATION_OUTPUT: paths.reconciliation,
     },
     owner: 'worker',
     now: () => new Date('2026-07-22T00:00:30Z'),
@@ -654,7 +658,6 @@ function realParentOptions(paths: RefreshTestPaths, client: ReturnType<typeof me
       coverageComplete: true,
       events: [{ matchId: 'match-1', state: 'completed', startTime: '2026-07-21T23:50:00Z', teams: [{ id: 'a', gameWins: 1 }, { id: 'b', gameWins: 0 }] }],
     }),
-    readJson: async () => ({ matches: [] }),
     setInterval: () => ({ unref() {} }),
     clearInterval: () => undefined,
     logger: { log: (value: string) => logs.push(value), warn() {}, error: (value: string) => logs.push(value) },
@@ -725,6 +728,7 @@ function refreshPaths(root: string) {
     refreshState: join(raw, 'refresh-state.json'),
     staging: join(root, 'staging'),
     metrics: join(root, 'metrics.json'),
+    reconciliation: join(raw, 'reconciliation.json'),
   }
 }
 
