@@ -557,7 +557,7 @@ export async function getBucketObject(relativePath, {
         const storedBytes = await bodyBytes(object.Body)
         const parsed = JSON.parse(storedBytes.toString('utf8'))
         const compatible = compatibleGenerationManifest(parsed, generation, {
-          allowSchemaV1Cutover: active?.publicManifestSchemaVersion === undefined,
+          publicManifestSchemaVersion: active?.publicManifestSchemaVersion,
         })
         if (compatible.cutover) {
           const migratedBytes = Buffer.from(jsonBody(compatible.manifest))
@@ -724,7 +724,7 @@ export async function readActiveContentAddressedGeneration({
     throw new Error('Active public generation manifest authority mismatch')
   }
   const { manifest, cutover } = compatibleGenerationManifest(JSON.parse(manifestBytes.toString('utf8')), generationId, {
-    allowSchemaV1Cutover: active.value.publicManifestSchemaVersion === undefined,
+    publicManifestSchemaVersion: active.value.publicManifestSchemaVersion,
   })
   const identities = {}
   for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
@@ -755,10 +755,13 @@ export async function readActiveContentAddressedGeneration({
   }
 }
 
-function compatibleGenerationManifest(value, generationId, { allowSchemaV1Cutover = false } = {}) {
+function compatibleGenerationManifest(value, generationId, { publicManifestSchemaVersion } = {}) {
+  const schemaPairIsValid = publicManifestSchemaVersion === undefined
+    ? value?.schemaVersion === 1
+    : publicManifestSchemaVersion === 2 && value?.schemaVersion === 2
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || value.artifactKind !== 'public-artifact-generation-manifest'
-    || (value.schemaVersion !== 2 && !(allowSchemaV1Cutover && value.schemaVersion === 1))
+    || !schemaPairIsValid
     || value.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE
     || value.generationId !== generationId || value.runId !== generationId
     || typeof value.generatedAt !== 'string' || Number.isNaN(new Date(value.generatedAt).getTime())
