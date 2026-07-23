@@ -129,6 +129,8 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
     const daily = await run(root, 'daily', source, { mode: 'gated', cause: 'daily-audit', enabled: true, restored: restoreFrom(disabled) })
     assert.equal(daily.action, 'publish-full')
     assert.equal(daily.metrics.parity, true)
+    assert.equal(daily.metrics.stateParity, true)
+    assert.equal(daily.metrics.stateParityReport?.checkpointEqual, true)
     const dailyOutcome = normalizedOutcomeForBuild(daily)
     assert.equal(dailyOutcome.outcome, 'unchanged')
     assert.equal(dailyOutcome.mode, 'clean-full-comparison')
@@ -327,9 +329,11 @@ test('daily audit compares corpus authority across refreshed receipt identities 
       mode: 'gated', cause: 'daily-audit', enabled: true, restored: corrupt, sourceReceiptDigest: 'c'.repeat(64),
     })
     assert.equal(mismatch.action, 'publish-full')
+    assert.equal(mismatch.metrics.parity, true)
     assert.equal(mismatch.metrics.stateParity, false)
     assert.equal(mismatch.metrics.stateParityReport?.checkpointEqual, false)
     assert.ok(mismatch.metrics.stateParityReport?.mismatchPaths.some((path) => path.includes('injectedStateMismatch')))
+    assert.throws(() => normalizedOutcomeForBuild(mismatch), /semantic, state, and checkpoint parity/)
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
@@ -706,6 +710,8 @@ function normalizedOutcomeForBuild(result: IncrementalRankingBuildResult) {
     rankingChangeKind: result.metrics.classification,
     buildAction: result.action,
     parity: result.metrics.parity,
+    stateParity: result.metrics.stateParity,
+    checkpointParity: result.metrics.stateParityReport?.checkpointEqual ?? null,
     fallbackReason: result.metrics.fallbackReason
       ?? (result.action === 'no-change' ? null : result.diagnostic?.reason ?? null),
   })

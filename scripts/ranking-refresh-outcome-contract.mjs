@@ -30,6 +30,8 @@ const OBSERVATION_KEYS = Object.freeze([
   'rankingChangeKind',
   'buildAction',
   'parity',
+  'stateParity',
+  'checkpointParity',
   'fallbackReason',
 ])
 const INPUTS = new Set([
@@ -42,6 +44,8 @@ const INPUTS = new Set([
   'ranking-change-kind',
   'build-action',
   'parity',
+  'state-parity',
+  'checkpoint-parity',
   'fallback-reason',
 ])
 const ARTIFACTS = new Set([
@@ -104,6 +108,8 @@ const COMMON_PUBLISH_INPUTS = Object.freeze([
   'ranking-change-kind',
   'build-action',
   'parity',
+  'state-parity',
+  'checkpoint-parity',
   'fallback-reason',
 ])
 const COMMON_PUBLISH_WRITES = Object.freeze([
@@ -223,6 +229,8 @@ export function normalizeRankingRefreshOutcome(value) {
         rankingChangeKind: null,
         buildAction: null,
         parity: null,
+        stateParity: null,
+        checkpointParity: null,
         fallbackReason: null,
       }, 'stale-source')
       return contractFor('stale-source', 'standard')
@@ -231,6 +239,8 @@ export function normalizeRankingRefreshOutcome(value) {
       sourceResult: 'completed',
       buildAction: 'publish-full',
       parity: null,
+      stateParity: null,
+      checkpointParity: null,
       fallbackReason: null,
     }, 'forced-verified-raw-rebuild')
     if (!DATA_MODES.has(observation.dataMode)) {
@@ -255,6 +265,8 @@ export function normalizeRankingRefreshOutcome(value) {
       && observation.buildAction === 'no-change'
     if ((!earlySourceExit && !canonicalNoChange)
       || observation.parity !== null
+      || observation.stateParity !== null
+      || observation.checkpointParity !== null
       || observation.fallbackReason !== null) {
       throw new Error('unchanged requires either the source fingerprint exit or canonical no-change build')
     }
@@ -268,9 +280,15 @@ export function normalizeRankingRefreshOutcome(value) {
     throw new Error('completed refresh requires ranking classification and build action')
   }
   if (observation.rankingChangeKind === 'no-change') {
-    if (observation.buildAction !== 'publish-full' || observation.parity !== true
+    if (observation.force) {
+      throw new Error('Forced completed no-change must classify as full-invalidation')
+    }
+    if (observation.buildAction !== 'publish-full'
+      || observation.parity !== true
+      || observation.stateParity !== true
+      || observation.checkpointParity !== true
       || observation.fallbackReason !== null) {
-      throw new Error('completed no-change requires a clean full zero-mutation comparison')
+      throw new Error('completed no-change requires clean semantic, state, and checkpoint parity')
     }
     return contractFor('unchanged', 'clean-full-comparison')
   }
@@ -336,6 +354,11 @@ function parseObservation(value) {
   if (value.parity !== null && typeof value.parity !== 'boolean') {
     throw new Error('Invalid ranking refresh observation parity')
   }
+  for (const field of ['stateParity', 'checkpointParity']) {
+    if (value[field] !== null && typeof value[field] !== 'boolean') {
+      throw new Error(`Invalid ranking refresh observation ${field}`)
+    }
+  }
   if (value.fallbackReason !== null
     && (typeof value.fallbackReason !== 'string' || value.fallbackReason.length === 0)) {
     throw new Error('Invalid ranking refresh observation fallbackReason')
@@ -344,6 +367,18 @@ function parseObservation(value) {
 }
 
 function validateBuildRelationship(observation) {
+  if (observation.parity === null
+    && (observation.stateParity !== null || observation.checkpointParity !== null)) {
+    throw new Error('State and checkpoint parity require a semantic comparison result')
+  }
+  if (observation.parity !== null
+    && (observation.stateParity === null || observation.checkpointParity === null)) {
+    throw new Error('Semantic comparison requires state and checkpoint parity results')
+  }
+  if (observation.parity === true
+    && (observation.stateParity !== true || observation.checkpointParity !== true)) {
+    throw new Error('Clean comparison requires semantic, state, and checkpoint parity')
+  }
   if (observation.parity === false) {
     if (observation.buildAction !== 'publish-full' || observation.fallbackReason === null) {
       throw new Error('Parity failure requires a diagnosed clean full fallback')

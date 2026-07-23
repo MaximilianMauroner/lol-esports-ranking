@@ -52,6 +52,8 @@ export type RankingRefreshObservation = {
     | null
   buildAction: 'no-change' | 'publish-incremental' | 'publish-full' | null
   parity: boolean | null
+  stateParity: boolean | null
+  checkpointParity: boolean | null
   fallbackReason: string | null
 }
 

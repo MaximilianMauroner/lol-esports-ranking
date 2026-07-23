@@ -80,6 +80,8 @@ test('normalization binds all ten canonical outcomes to current runtime vocabula
       rankingChangeKind: 'latest-append',
       buildAction: 'publish-full',
       parity: false,
+      stateParity: false,
+      checkpointParity: false,
       fallbackReason: 'semantic-parity-mismatch',
     }),
     'full-invalidation': observation({
@@ -131,12 +133,16 @@ test('matrix and observations reject missing, extra, unknown, and contradictory 
     ...changeObservation('latest-append'),
     buildAction: 'publish-incremental',
     parity: false,
+    stateParity: false,
+    checkpointParity: false,
     fallbackReason: 'semantic-parity-mismatch',
   }), /clean full fallback/)
   assert.throws(() => normalizeRankingRefreshOutcome({
     ...changeObservation('latest-append'),
     buildAction: 'publish-incremental',
     parity: true,
+    stateParity: true,
+    checkpointParity: true,
   }), /clean full comparison/)
   assert.throws(() => normalizeRankingRefreshOutcome({
     ...observation({
@@ -155,6 +161,23 @@ test('matrix and observations reject missing, extra, unknown, and contradictory 
     ...observation({ rankingChangeKind: 'full-invalidation' }),
     buildAction: 'publish-incremental',
   }), /clean full replay/)
+  assert.throws(() => normalizeRankingRefreshOutcome(observation({
+    sourceResult: 'completed',
+    rankingChangeKind: 'no-change',
+    buildAction: 'publish-full',
+    parity: true,
+    stateParity: false,
+    checkpointParity: false,
+  })), /semantic, state, and checkpoint parity/)
+  assert.throws(() => normalizeRankingRefreshOutcome(observation({
+    sourceResult: 'completed',
+    force: true,
+    rankingChangeKind: 'no-change',
+    buildAction: 'publish-full',
+    parity: true,
+    stateParity: true,
+    checkpointParity: true,
+  })), /must classify as full-invalidation/)
 })
 
 test('forced raw recovery requires force, separate authorization, and a validated existing baseline', () => {
@@ -203,6 +226,8 @@ function observation(overrides: Partial<RankingRefreshObservation>): RankingRefr
     rankingChangeKind: 'latest-append',
     buildAction: 'publish-incremental',
     parity: null,
+    stateParity: null,
+    checkpointParity: null,
     fallbackReason: null,
     ...overrides,
   }

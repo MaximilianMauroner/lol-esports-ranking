@@ -20,6 +20,8 @@ type RefreshResult = {
     classification: string
     fullSnapshotWritten: boolean
     parity: boolean | null
+    stateParity: boolean | null
+    stateParityReport?: { checkpointEqual: boolean }
     fallbackReason?: string
   }
 }
@@ -797,6 +799,8 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       rankingChangeKind: rebuild.incrementalMetrics?.classification,
       buildAction: rebuild.incrementalAction,
       parity: rebuild.incrementalMetrics?.parity,
+      stateParity: rebuild.incrementalMetrics?.stateParity,
+      checkpointParity: rebuild.incrementalMetrics?.stateParityReport?.checkpointEqual ?? null,
       fallbackReason: rebuild.incrementalMetrics?.fallbackReason ?? null,
     })
     assert.equal(recoveryOutcome.outcome, 'forced-verified-raw-rebuild')
