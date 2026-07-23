@@ -196,6 +196,12 @@ test('canonical self-digest cannot legitimize crossed paths, integrity, or seede
     (value: typeof original) => { value.active.seeded = true },
     (value: typeof original) => { value.integrity[0].key = 'rankings/crossed.json' },
     (value: typeof original) => { value.latestFullAudit.searchedPrefix = 'rankings/crossed/' },
+    (value: typeof original) => { value.active.pointer.key = '../active-generation.json' },
+    (value: typeof original) => { value.active.publicManifest.key = '/rankings/generations/crossed/manifest.json' },
+    (value: typeof original) => { value.active.stateManifest.key = 'rankings\\state\\generations\\crossed.json' },
+    (value: typeof original) => { value.producingCode[0] = 'scripts/../secrets.txt' },
+    (value: typeof original) => { value.producingCode[0] = 'scripts/./unsafe.mjs' },
+    (value: typeof original) => { value.producingCode[0] = 'scripts//unsafe.mjs' },
   ]
   for (const mutate of mutations) {
     const value = structuredClone(original)

@@ -652,8 +652,10 @@ export function canonicalReceiptDigest(value) {
 export function validateCanonicalRelationships(value) {
   const pointerSuffix = 'active-generation.json'
   const pointerKey = value.active.pointer.key
+  requiredSafeRelativePath(pointerKey, 'active pointer key')
   if (!pointerKey.endsWith(pointerSuffix)) throw new Error('Active pointer key is not canonical')
   const prefix = pointerKey.slice(0, -pointerSuffix.length).replace(/\/$/, '')
+  requiredSafeRelativePath(prefix, 'bucket authority prefix')
   if (pointerKey !== joinedKey(prefix, pointerSuffix)) throw new Error('Active pointer key is not canonical')
   const generationPaths = (generationId) => ({
     publicManifest: joinedKey(prefix, `generations/${generationId}/manifest.json`),
@@ -662,6 +664,16 @@ export function validateCanonicalRelationships(value) {
   })
   const activePaths = generationPaths(value.active.generationId)
   const previousPaths = generationPaths(value.previous.generationId)
+  for (const [label, key] of Object.entries({
+    'active public manifest': value.active.publicManifest.key,
+    'active publish receipt': value.active.publishReceipt.key,
+    'active state manifest': value.active.stateManifest.key,
+    'active raw receipt': value.active.rawReceipt.key,
+    'previous public manifest': value.previous.publicManifest.key,
+    'previous publish receipt': value.previous.publishReceipt.key,
+    'previous state manifest': value.previous.stateManifest.key,
+    'previous raw receipt': value.previous.rawReceipt.key,
+  })) requiredSafeRelativePath(key, `${label} key`)
   assertEqual(value.active.publicManifest.key, activePaths.publicManifest, 'active public manifest path')
   assertEqual(value.active.publishReceipt.key, activePaths.publishReceipt, 'active publish receipt path')
   assertEqual(value.active.stateManifest.key, activePaths.stateManifest, 'active state manifest path')
@@ -678,7 +690,11 @@ export function validateCanonicalRelationships(value) {
     ? joinedKey(prefix, `audits/days/${value.latestFullAudit.auditDate}.json`)
     : joinedKey(prefix, 'audits/days/')
   if (value.latestFullAudit.status === 'present') assertEqual(value.latestFullAudit.key, auditKey, 'full audit path')
-  else assertEqual(value.latestFullAudit.searchedPrefix, auditKey, 'full audit searched prefix')
+  else {
+    requiredSafeRelativePrefix(value.latestFullAudit.searchedPrefix, 'full audit searched prefix')
+    assertEqual(value.latestFullAudit.searchedPrefix, auditKey, 'full audit searched prefix')
+  }
+  if (value.latestFullAudit.status === 'present') requiredSafeRelativePath(value.latestFullAudit.key, 'full audit key')
   const expectedIntegrity = [
     ['active-pointer', pointerKey],
     ['active-public-and-referenced-artifacts', value.active.publicManifest.key],
@@ -691,6 +707,9 @@ export function validateCanonicalRelationships(value) {
   ]
   for (const [index, [scope, key]] of expectedIntegrity.entries()) {
     const actual = value.integrity[index]
+    if (scope === 'latest-full-audit-authority' && actual.key.endsWith('/')) {
+      requiredSafeRelativePrefix(actual.key, `integrity scope ${scope} key`)
+    } else requiredSafeRelativePath(actual.key, `integrity scope ${scope} key`)
     if (actual.scope !== scope || actual.key !== key || actual.result !== 'verified') {
       throw new Error(`Integrity scope ${scope} is not bound to its canonical authority`)
     }
@@ -790,7 +809,14 @@ function parseRecovery(value) {
 }
 
 function parseProducingCode(value) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((path) => typeof path !== 'string' || !path.startsWith('scripts/'))) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((path) => {
+    try {
+      requiredSafeRelativePath(path, 'producing code path')
+      return !path.startsWith('scripts/')
+    } catch {
+      return true
+    }
+  })) {
     throw new Error('Invalid producing code inventory')
   }
   if (new Set(value).size !== value.length) throw new Error('Duplicate producing code path')
@@ -945,6 +971,24 @@ function requiredUuid(value, label) {
 
 function requiredString(value, label) {
   if (typeof value !== 'string' || value.length === 0) throw new Error(`Invalid ${label}`)
+  return value
+}
+
+function requiredSafeRelativePath(value, label) {
+  requiredString(value, label)
+  if (value.startsWith('/') || value.includes('\\')) throw new Error(`Invalid ${label}: path must be relative and use forward slashes`)
+  const segments = value.split('/')
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..'
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment))) {
+    throw new Error(`Invalid ${label}: path contains an unsafe segment`)
+  }
+  return value
+}
+
+function requiredSafeRelativePrefix(value, label) {
+  requiredString(value, label)
+  if (!value.endsWith('/')) throw new Error(`Invalid ${label}: prefix must end with one slash`)
+  requiredSafeRelativePath(value.slice(0, -1), label)
   return value
 }
 
