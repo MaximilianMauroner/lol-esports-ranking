@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { createProviderFetchTelemetry, fetchWithRetry, snapshotProviderFetchTelemetry } from './provider-fetch-retry.mjs'
 
 const publicPersistedApiKey = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
 const defaultPersistedBaseUrl = 'https://esports-api.lolesports.com/persisted/gw'
@@ -19,6 +20,7 @@ const userAgent = args.userAgent ?? 'lol-esports-power-index-local/0.1 (unsuppor
 const warnings = [
   'LoL Esports persisted APIs are public site endpoints, not a supported official data API. Cache responses and use them as reference metadata only.',
 ]
+const fetchTelemetry = createProviderFetchTelemetry()
 
 const schedulePages = []
 const initialPage = await fetchSchedulePage()
@@ -79,6 +81,7 @@ await writeFile(
     events: selectedEvents,
     schedulePages,
     eventDetails,
+    fetchTelemetry: snapshotProviderFetchTelemetry(fetchTelemetry),
     warnings,
   }, null, 2)}\n`,
 )
@@ -114,14 +117,31 @@ async function fetchEventDetails(id) {
 }
 
 async function persistedJson(url) {
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: {
       'x-api-key': publicPersistedApiKey,
       'user-agent': userAgent,
     },
-  })
+  }, { telemetry: fetchTelemetry, onFailure: writeFailureTelemetry })
   if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
   return response.json()
+}
+
+async function writeFailureTelemetry(telemetry) {
+  await mkdir(dirname(output), { recursive: true })
+  await writeFile(output, `${JSON.stringify({
+    source: `${persistedBaseUrl}/getSchedule`,
+    fetchedAt: new Date().toISOString(),
+    locale,
+    start,
+    end,
+    status: 'failed',
+    fetchTelemetry: telemetry,
+    events: [],
+    schedulePages: [],
+    eventDetails: [],
+    warnings,
+  }, null, 2)}\n`)
 }
 
 function persistedUrl(path) {

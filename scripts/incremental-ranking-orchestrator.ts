@@ -51,6 +51,9 @@ export type RestoredIncrementalAuthority = {
 
 export type IncrementalBuildMetrics = {
   classification: RankingChangeClassification['kind']
+  addedCount: number
+  changedCount: number
+  removedCount: number
   replayFromUtcDate?: string
   replayedMatchCount: number
   candidateCount: number
@@ -69,6 +72,8 @@ export type IncrementalBuildMetrics = {
   fullSnapshotWritten: boolean
   parity: boolean | null
   stateParity: boolean | null
+  semanticParityReport?: ReturnType<typeof compareSemanticArtifactMaps>
+  stateParityReport?: ReturnType<typeof compareIncrementalState>
   materializedScopeCount: number
   providerAvailableAt?: string
   playerLifecycleStages?: Array<{
@@ -240,11 +245,16 @@ export async function buildRankingIncrementally({
   const importedMatchCount = sourceData.importedMatches.length
   restored = restored ? { ...restored } : undefined
   const ledger = buildCurrentCanonicalLedger(sourceData, restored)
-  const forceFull = !enabled || mode === 'legacy' || cause === 'daily-audit' || cause === 'manual-force'
+  const auditComparison = cause === 'daily-audit'
+  const comparisonMode = mode === 'shadow' || auditComparison
+  const forceFull = !enabled || mode === 'legacy' || cause === 'manual-force'
   if (forceFull) {
     const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
     const state = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
-    return { action: 'publish-full', sourceData, build: full, state, metrics: baseMetrics('full-invalidation', ledger, { fullSnapshotWritten: true }) }
+    return {
+      action: 'publish-full', sourceData, build: full, state,
+      metrics: baseMetrics('full-invalidation', ledger, { fullSnapshotWritten: true }),
+    }
   }
 
   let classification: RankingChangeClassification | undefined
@@ -254,9 +264,24 @@ export async function buildRankingIncrementally({
     if (!restored) throw new Error('incremental-state-missing')
     let previousLedger: CanonicalMatchLedger | undefined = parseCanonicalMatchLedger(restored.canonicalLedger)
     classification = classifyRankingChange(previousLedger, ledger, ledger.compatibility)
-    if (classification.kind === 'no-change') {
+    if (classification.kind === 'no-change' && !auditComparison) {
       await emitReconciliation(reconciliationOutput, sourceData.importedMatches, generatedAt)
       return { action: 'no-change', sourceData, metrics: baseMetrics('no-change', ledger) }
+    }
+    if (classification.kind === 'no-change' && auditComparison) {
+      const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
+      const fullState = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
+      const candidateState = await stateFromRestoredAudit(restored, ledger)
+      const parity = compareSemanticArtifactMaps(semanticMapFromWrites(full.publicPlan.writes), semanticMapFromGeneration(restored.publicManifest))
+      const stateReport = compareIncrementalState(fullState, candidateState)
+      return {
+        action: 'publish-full', sourceData, build: full, state: fullState,
+        metrics: baseMetrics('no-change', ledger, {
+          fullSnapshotWritten: true, parity: parity.equal, stateParity: stateReport.equal,
+          semanticParityReport: parity, stateParityReport: stateReport,
+          candidateCount: restored.stateManifest.checkpoints.length,
+        }),
+      }
     }
     if (classification.kind === 'full-invalidation') throw new Error(classification.reasons.join(',') || 'full-invalidation')
     if (classification.kind === 'metadata-only') {
@@ -275,7 +300,11 @@ export async function buildRankingIncrementally({
           removedLogicalPaths: [], expectedLogicalPaths,
         },
         metrics: {
-          ...baseMetrics('metadata-only', ledger), changedPaths: [changedPath],
+          ...baseMetrics('metadata-only', ledger, {
+            addedCount: classification.addedKeys.length,
+            changedCount: classification.changedKeys.length,
+            removedCount: classification.removedKeys.length,
+          }), changedPaths: [changedPath],
           reusedPaths: expectedLogicalPaths.filter((path) => path !== changedPath),
           semanticBytes: rootPrepared.bytes,
           compressedBytes: rootPrepared.compressedBytes,
@@ -284,12 +313,12 @@ export async function buildRankingIncrementally({
     }
 
     if (!restored.rootArtifact) throw new Error('verified-active-root-artifact-missing')
-    if (mode === 'gated') {
+    if (mode === 'gated' && !comparisonMode) {
       sourceData.mergedTeams = {}
     }
     const changes = changesForClassification(previousLedger, ledger, classification)
     previousLedger = undefined
-    if (mode === 'gated') memoryCollections.afterInputRelease = collectRefreshGarbage()
+    if (mode === 'gated' && !comparisonMode) memoryCollections.afterInputRelease = collectRefreshGarbage()
     const replay = await selectReplay(restored, sourceData, ledger, classification, generatedAt)
     releaseRestoredReplayPayloads(restored)
     const {
@@ -302,11 +331,11 @@ export async function buildRankingIncrementally({
       restored,
       replay,
       generatedAt,
-      mode === 'shadow',
+      comparisonMode,
       sourceReceiptDigest,
     )
     replay.checkpointState = undefined
-    if (mode === 'gated') memoryCollections.afterReplayState = collectRefreshGarbage()
+    if (mode === 'gated' && !comparisonMode) memoryCollections.afterReplayState = collectRefreshGarbage()
     const dependencyArtifacts = restored.loadArtifacts
       ? { ...restored.artifacts, ...await restored.loadArtifacts([
           `/data/${PUBLIC_ARTIFACT_PATHS.matchHistoryIndex}`,
@@ -335,7 +364,7 @@ export async function buildRankingIncrementally({
       affectedTournamentIds,
       previousArtifacts,
       importedMatchCount,
-      releaseImportAuditBeforeSnapshot: mode === 'gated',
+      releaseImportAuditBeforeSnapshot: mode === 'gated' && !comparisonMode,
       writeFullSnapshot: false,
       replacePublicDirectory: false,
       env,
@@ -383,7 +412,7 @@ export async function buildRankingIncrementally({
     if (root && !changedWrites.includes(root)) changedWrites.push(root)
     let parity: boolean | null = null
 
-    if (mode === 'shadow') {
+    if (comparisonMode) {
       const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
       const fullState = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
       const report = compareSemanticArtifactMaps(
@@ -400,12 +429,12 @@ export async function buildRankingIncrementally({
         await rm(candidateDir, { recursive: true, force: true })
         return {
           action: 'publish-full', sourceData, build: full, state: fullState, diagnostic,
-          metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections),
+          metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
         }
       }
       await rm(candidateDir, { recursive: true, force: true })
       return {
-        action: 'publish-full', sourceData, build: full, state: fullState, metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections),
+        action: 'publish-full', sourceData, build: full, state: fullState, metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
       }
     }
 
@@ -436,7 +465,13 @@ export async function buildRankingIncrementally({
     })
     const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, importedMatchCount, env, silent })
     const state = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
-    const metrics = baseMetrics(classification?.kind ?? 'full-invalidation', ledger, { fullSnapshotWritten: true, fallbackReason: reason })
+    const metrics = baseMetrics(classification?.kind ?? 'full-invalidation', ledger, {
+      fullSnapshotWritten: true,
+      fallbackReason: reason,
+      addedCount: classification?.addedKeys.length ?? 0,
+      changedCount: classification?.changedKeys.length ?? 0,
+      removedCount: classification?.removedKeys.length ?? 0,
+    })
     return { action: 'publish-full', sourceData, build: full, state, diagnostic, metrics }
   }
 }
@@ -1326,6 +1361,9 @@ function metricsFor(classification: RankingChangeClassification, ledger: Canonic
   const suffixRows = replay.replayFromUtcDate ? ledger.rows.filter((row) => row.utcDate >= replay.replayFromUtcDate) : ledger.rows
   return {
     ...base, replayFromUtcDate: replay.replayFromUtcDate, replayedMatchCount, candidateCount: replay.candidateCount,
+    addedCount: classification.addedKeys.length,
+    changedCount: classification.changedKeys.length,
+    removedCount: classification.removedKeys.length,
     rejectedCandidates: replay.rejectedCandidates, selectedBoundary: replay.selectedBoundary,
     suffixRows: suffixRows.length, suffixDates: new Set(suffixRows.map((row) => row.utcDate)).size,
     changedPaths, reusedPaths, removedPaths,
@@ -1336,7 +1374,8 @@ function metricsFor(classification: RankingChangeClassification, ledger: Canonic
 
 function baseMetrics(classification: RankingChangeClassification['kind'], ledger: CanonicalMatchLedger, overrides: Partial<IncrementalBuildMetrics> = {}): IncrementalBuildMetrics {
   return {
-    classification, replayedMatchCount: 0, candidateCount: 0, rejectedCandidates: [], canonicalRows: ledger.rows.length,
+    classification, addedCount: 0, changedCount: 0, removedCount: 0,
+    replayedMatchCount: 0, candidateCount: 0, rejectedCandidates: [], canonicalRows: ledger.rows.length,
     canonicalBytes: Buffer.byteLength(stableJson(ledger)), suffixRows: 0, suffixDates: 0, changedPaths: [], reusedPaths: [], removedPaths: [],
     semanticBytes: 0, compressedBytes: 0, fullSnapshotWritten: false, parity: null, stateParity: null, materializedScopeCount: 0, ...overrides,
   }
@@ -1365,18 +1404,69 @@ function withMemoryCollections(
   return { ...metrics, memoryCollections }
 }
 
+async function stateFromRestoredAudit(restored: RestoredIncrementalAuthority, ledger: CanonicalMatchLedger): Promise<IncrementalStateBuild> {
+  const loaded = restored.loadCheckpoints
+    ? await restored.loadCheckpoints(restored.stateManifest.checkpoints)
+    : restored.checkpoints
+  const byBoundary = new Map(loaded.map((entry) => [`${entry.candidate.boundary.date}\u0000${entry.candidate.boundary.matchId}`, entry]))
+  return {
+    ledger,
+    compatibility: restored.stateManifest.compatibility,
+    sourceReceiptDigest: restored.stateManifest.sourceReceiptDigest,
+    checkpoints: restored.stateManifest.checkpoints.map((candidate) => {
+      const entry = byBoundary.get(`${candidate.boundary.date}\u0000${candidate.boundary.matchId}`)
+      if (!entry) throw new Error(`daily-audit-checkpoint-missing:${candidate.boundary.date}/${candidate.boundary.matchId}`)
+      return {
+        boundary: candidate.boundary,
+        rawPrefix: candidate.rawPrefix,
+        ratingCheckpoint: requiredRecord(entry.bundle.ratingCheckpoint, 'daily audit rating checkpoint'),
+        causalSummaries: parseCausalSummaries(entry.bundle.causalSummaries),
+      }
+    }),
+  }
+}
+
 function compareIncrementalState(expected: IncrementalStateBuild, actual: IncrementalStateBuild) {
-  const expectedProjection = { ...expected, checkpoints: expected.checkpoints.slice(-1) }
-  const actualProjection = { ...actual, checkpoints: actual.checkpoints.slice(-1) }
+  const expectedProjection = comparableIncrementalState(expected)
+  const actualProjection = comparableIncrementalState(actual)
   const expectedJson = stableJson(expectedProjection)
   const actualJson = stableJson(actualProjection)
   return {
     equal: expectedJson === actualJson,
+    sourceReceiptEqual: expected.sourceReceiptDigest === actual.sourceReceiptDigest,
+    expectedSourceReceiptDigest: expected.sourceReceiptDigest,
+    actualSourceReceiptDigest: actual.sourceReceiptDigest,
+    checkpointEqual: expected.checkpoints.length === actual.checkpoints.length
+      && expected.checkpoints.every((checkpoint, index) => stableJson(checkpoint) === stableJson(actual.checkpoints[index])),
     expectedDigest: sha256(expectedJson),
     actualDigest: sha256(actualJson),
     expectedCheckpointDigests: expected.checkpoints.map((checkpoint) => sha256(stableJson(checkpoint))),
     actualCheckpointDigests: actual.checkpoints.map((checkpoint) => sha256(stableJson(checkpoint))),
+    mismatchPaths: firstMismatchPaths(expectedProjection, actualProjection),
   }
+}
+
+function comparableIncrementalState(state: IncrementalStateBuild) {
+  return {
+    ledger: state.ledger,
+    compatibility: state.compatibility,
+    checkpoints: state.checkpoints,
+  }
+}
+
+function firstMismatchPaths(expected: unknown, actual: unknown, path = '$', found: string[] = []): string[] {
+  if (found.length >= 20 || stableJson(expected) === stableJson(actual)) return found
+  if (!expected || !actual || typeof expected !== 'object' || typeof actual !== 'object') {
+    found.push(path)
+    return found
+  }
+  const expectedRecord = expected as Record<string, unknown>
+  const actualRecord = actual as Record<string, unknown>
+  for (const key of [...new Set([...Object.keys(expectedRecord), ...Object.keys(actualRecord)])].sort()) {
+    firstMismatchPaths(expectedRecord[key], actualRecord[key], `${path}.${key}`, found)
+    if (found.length >= 20) break
+  }
+  return found
 }
 
 async function persistDiagnostic(path: string | undefined, diagnostic: IncrementalDiagnostic) {

@@ -6,6 +6,14 @@ export function runRefreshOnce(options?: Record<string, unknown>): Promise<{
   state?: unknown
   metrics?: RefreshRunMetrics
 }>
+export function publishRefreshRolloutEvidence(
+  metrics: RefreshRunMetrics | undefined,
+  options?: Record<string, unknown>,
+): Promise<Record<string, unknown>>
+export function defaultRunChild(
+  input: Record<string, unknown> & { env: NodeJS.ProcessEnv; cause: string },
+  options?: { runProcess?: typeof runChildProcess },
+): Promise<void>
 
 export function startLeaseHeartbeat(options: {
   authority: { lease: Record<string, unknown>; etag?: string; promotionEtag?: string }
@@ -29,3 +37,4 @@ export function runChildProcess(
   env: NodeJS.ProcessEnv,
   options?: Record<string, unknown>,
 ): Promise<void>
+export function isDailyAuditDue(env: NodeJS.ProcessEnv | Record<string, string | undefined>, value: { lastSuccessfulDailyAuditAt?: string }, now: string | number | Date): boolean

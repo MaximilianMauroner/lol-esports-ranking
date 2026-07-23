@@ -1,15 +1,15 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { createProviderFetchTelemetry, fetchWithRetry, snapshotProviderFetchTelemetry } from './provider-fetch-retry.mjs'
 
 const args = parseArgs(process.argv.slice(2))
 const start = args.start ?? `${args.year ?? new Date().getUTCFullYear()}-01-01`
 const end = args.end ?? new Date().toISOString().slice(0, 10)
 const output = resolve(args.output ?? 'data/leaguepedia-matches.json')
 const pageSize = Number(args.limit ?? 500)
-const maxRetries = Number(args.retries ?? 6)
-const retryDelayMs = Number(args.retryDelayMs ?? args.retryDelay ?? 60_000)
 const userAgent = args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)'
 const cargoBaseUrl = args.baseUrl ?? args['base-url'] ?? 'https://lol.fandom.com/api.php'
+const fetchTelemetry = createProviderFetchTelemetry()
 
 const fields = [
   'OverviewPage',
@@ -30,7 +30,7 @@ const matches = []
 let offset = 0
 
 while (true) {
-  const result = await cargoQueryWithRetry({
+  const result = await cargoQuery({
     tables: 'ScoreboardGames',
     fields: fields.join(','),
     where: `DateTime_UTC >= "${start} 00:00:00" AND DateTime_UTC <= "${end} 23:59:59" AND Team1 IS NOT NULL AND Team2 IS NOT NULL AND WinTeam IS NOT NULL`,
@@ -53,7 +53,7 @@ while (true) {
 await mkdir(dirname(output), { recursive: true })
 await writeFile(
   output,
-  `${JSON.stringify({ source: 'Leaguepedia Cargo ScoreboardGames', fetchedAt: new Date().toISOString(), start, end, matches }, null, 2)}\n`,
+  `${JSON.stringify({ source: 'Leaguepedia Cargo ScoreboardGames', fetchedAt: new Date().toISOString(), start, end, matches, fetchTelemetry: snapshotProviderFetchTelemetry(fetchTelemetry) }, null, 2)}\n`,
 )
 
 console.log(`Wrote ${matches.length} matches to ${output}`)
@@ -66,37 +66,41 @@ async function cargoQuery(params) {
     url.searchParams.set(key, value)
   }
 
-  const response = await fetch(url, { headers: { 'user-agent': userAgent } })
+  const response = await fetchWithRetry(url, { headers: { 'user-agent': userAgent } }, {
+    maxAttempts: Number(args.retries ?? 6) + 1,
+    baseDelayMs: Number(args.retryDelayMs ?? args.retryDelay ?? 1000),
+    telemetry: fetchTelemetry,
+    onFailure: writeFailureTelemetry,
+    retryResponse: async (candidate) => {
+      try {
+        const body = await candidate.json()
+        return isRateLimited(body) ? 'leaguepedia-body-ratelimited' : undefined
+      } catch {
+        return undefined
+      }
+    },
+  })
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from Leaguepedia Cargo`)
   }
   return response.json()
 }
 
-async function cargoQueryWithRetry(params) {
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    try {
-      const result = await cargoQuery(params)
-      if (!isRateLimited(result)) return result
-      if (attempt === maxRetries) return result
-      console.warn(`Leaguepedia rate-limited request; retrying in ${retryDelayMs}ms (${attempt + 1}/${maxRetries})`)
-      await sleep(retryDelayMs)
-    } catch (error) {
-      if (attempt === maxRetries || !isRetryableError(error)) throw error
-      console.warn(`Leaguepedia request failed; retrying in ${retryDelayMs}ms (${attempt + 1}/${maxRetries}): ${error instanceof Error ? error.message : String(error)}`)
-      await sleep(retryDelayMs)
-    }
-  }
-  throw new Error('Leaguepedia retry loop exhausted')
+async function writeFailureTelemetry(telemetry) {
+  await mkdir(dirname(output), { recursive: true })
+  await writeFile(output, `${JSON.stringify({
+    source: 'Leaguepedia Cargo ScoreboardGames',
+    fetchedAt: new Date().toISOString(),
+    start,
+    end,
+    status: 'failed',
+    fetchTelemetry: telemetry,
+    matches: [],
+  }, null, 2)}\n`)
 }
 
 function isRateLimited(result) {
   return result?.error?.code === 'ratelimited'
-}
-
-function isRetryableError(error) {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('HTTP 429') || message.includes('HTTP 500') || message.includes('HTTP 502') || message.includes('HTTP 503') || message.includes('HTTP 504')
 }
 
 function normalizeGame(row) {

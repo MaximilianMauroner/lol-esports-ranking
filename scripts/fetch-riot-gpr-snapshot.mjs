@@ -1,5 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import {
+  createProviderFetchTelemetry,
+  fetchWithRetry,
+  snapshotProviderFetchTelemetry,
+} from './provider-fetch-retry.mjs'
 
 const args = parseArgs(process.argv.slice(2))
 const year = args.year ?? new Date().getUTCFullYear().toString()
@@ -7,10 +12,25 @@ const milestone = args.milestone ?? 'current'
 const locale = args.locale ?? 'en-US'
 const output = resolve(args.output ?? `data/riot-gpr-${year}-${milestone}.json`)
 const url = `https://lolesports.com/${locale}/gpr/${year}/${milestone}`
+const fetchTelemetry = createProviderFetchTelemetry()
 
-const response = await fetch(url, {
+const response = await fetchWithRetry(url, {
   headers: {
     'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public snapshot research)',
+  },
+}, {
+  telemetry: fetchTelemetry,
+  onFailure: async (telemetry) => {
+    await mkdir(dirname(output), { recursive: true })
+    await writeFile(output, `${JSON.stringify({
+      source: url,
+      fetchedAt: new Date().toISOString(),
+      year,
+      milestone,
+      status: 'failed',
+      fetchTelemetry: telemetry,
+      payloads: [],
+    }, null, 2)}\n`)
   },
 })
 
@@ -24,7 +44,14 @@ const payloads = extractApolloPayloads(html)
 await mkdir(dirname(output), { recursive: true })
 await writeFile(
   output,
-  `${JSON.stringify({ source: url, fetchedAt: new Date().toISOString(), year, milestone, payloads }, null, 2)}\n`,
+  `${JSON.stringify({
+    source: url,
+    fetchedAt: new Date().toISOString(),
+    year,
+    milestone,
+    payloads,
+    fetchTelemetry: snapshotProviderFetchTelemetry(fetchTelemetry),
+  }, null, 2)}\n`,
 )
 
 console.log(`Wrote ${payloads.length} Apollo payload blocks to ${output}`)

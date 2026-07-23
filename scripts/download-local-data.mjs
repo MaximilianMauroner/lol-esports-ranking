@@ -1,6 +1,11 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
+import {
+  createProviderFetchTelemetry,
+  fetchWithRetry,
+  snapshotProviderFetchTelemetry,
+} from './provider-fetch-retry.mjs'
 
 const defaultOracleDriveFolderId = '1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH'
 const defaultOracleDriveFolderUrl = `https://drive.google.com/drive/folders/${defaultOracleDriveFolderId}`
@@ -33,6 +38,7 @@ const discoveredOracleFiles = []
 const leaguepediaJsonPaths = []
 const lolEsportsJsonPaths = []
 const warnings = []
+const fetchTelemetry = createProviderFetchTelemetry()
 
 if (!skipOracle) {
   const oracleSources = await loadOracleSources()
@@ -66,10 +72,6 @@ if (!skipOracle) {
   warnings.push('Oracle download skipped by --oracle false or --skip-oracle.')
 }
 
-if (oracleFailures.length > 0 && oracleRequired) {
-  throw new Error(`Oracle download is required but ${oracleFailures.length} Oracle source(s) failed.`)
-}
-
 if (!skipLeaguepedia) {
   try {
     await run('node', [
@@ -90,10 +92,6 @@ if (!skipLeaguepedia) {
   }
 } else {
   warnings.push('Leaguepedia backup download skipped by --leaguepedia false or --skip-leaguepedia.')
-}
-
-if (leaguepediaFailures.length > 0 && leaguepediaRequired) {
-  throw new Error(`Leaguepedia backup download is required but failed: ${leaguepediaFailures[0].error}`)
 }
 
 if (!skipLolEsports) {
@@ -122,10 +120,6 @@ if (!skipLolEsports) {
   }
 } else {
   warnings.push('LoL Esports schedule reference download skipped by --lolesports false or --skip-lolesports.')
-}
-
-if (lolEsportsFailures.length > 0 && lolEsportsRequired) {
-  throw new Error(`LoL Esports schedule reference download is required but failed: ${lolEsportsFailures[0].error}`)
 }
 
 if (args.riotGpr !== undefined || args.skipRiotGpr === true || args.riotGprOutput !== undefined) {
@@ -185,6 +179,11 @@ const manifest = {
     },
   },
   warnings,
+  fetchTelemetry: mergeFetchTelemetry([
+    snapshotProviderFetchTelemetry(fetchTelemetry),
+    await readFetchTelemetry(leaguepediaPath),
+    await readFetchTelemetry(lolEsportsPath),
+  ]),
 }
 
 await mkdir(dirname(manifestPath), { recursive: true })
@@ -193,6 +192,15 @@ await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 console.log(`Wrote local data manifest to ${manifestPath}`)
 if (warnings.length > 0) {
   for (const warning of warnings) console.warn(`Warning: ${warning}`)
+}
+if (oracleFailures.length > 0 && oracleRequired) {
+  throw new Error(`Oracle download is required but ${oracleFailures.length} Oracle source(s) failed.`)
+}
+if (leaguepediaFailures.length > 0 && leaguepediaRequired) {
+  throw new Error(`Leaguepedia backup download is required but failed: ${leaguepediaFailures[0].error}`)
+}
+if (lolEsportsFailures.length > 0 && lolEsportsRequired) {
+  throw new Error(`LoL Esports schedule reference download is required but failed: ${lolEsportsFailures[0].error}`)
 }
 
 async function loadOracleSources() {
@@ -224,11 +232,11 @@ function run(command, commandArgs) {
 }
 
 async function downloadCsv(url, outputPath) {
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: {
       'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)',
     },
-  })
+  }, { telemetry: fetchTelemetry, onFailure: writeDownloaderFailureTelemetry })
   if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
 
   const contentType = response.headers.get('content-type') ?? ''
@@ -241,11 +249,11 @@ async function downloadCsv(url, outputPath) {
 
 async function discoverOracleDriveCsvs(folderId) {
   const url = `https://drive.google.com/embeddedfolderview?id=${encodeURIComponent(folderId)}#list`
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: {
       'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)',
     },
-  })
+  }, { telemetry: fetchTelemetry, onFailure: writeDownloaderFailureTelemetry })
   if (!response.ok) throw new Error(`HTTP ${response.status} from Oracle Google Drive folder`)
 
   const html = await response.text()
@@ -352,6 +360,42 @@ function readList(value) {
 function optionalArg(name, value) {
   if (value === undefined || value === null || value === true || value === '') return []
   return [name, String(value)]
+}
+
+async function readFetchTelemetry(path) {
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8'))
+    return parsed.fetchTelemetry ?? null
+  } catch {
+    return null
+  }
+}
+
+async function writeDownloaderFailureTelemetry(telemetry) {
+  await mkdir(dirname(manifestPath), { recursive: true })
+  await writeFile(manifestPath, `${JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    status: 'failed',
+    start,
+    end,
+    files: { leaguepediaJson: [], oracleCsv: [], lolEsportsJson: [] },
+    sources: {},
+    warnings,
+    fetchTelemetry: telemetry,
+  }, null, 2)}\n`)
+}
+
+function mergeFetchTelemetry(items) {
+  const known = items.filter((item) => item && typeof item === 'object')
+  if (known.length === 0) return null
+  return {
+    requests: known.reduce((sum, item) => sum + Number(item.requests ?? 0), 0),
+    retryCount: known.reduce(
+      (sum, item) => sum + Number(item.retryCount ?? (Array.isArray(item.retries) ? item.retries.length : 0)),
+      0,
+    ),
+  }
 }
 
 function parseArgs(rawArgs) {
