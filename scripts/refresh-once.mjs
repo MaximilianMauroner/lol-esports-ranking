@@ -59,7 +59,7 @@ export async function runRefreshOnce(options = {}) {
   const tracker = createRefreshMetrics({
     runId,
     mode,
-    cause: manual ? 'manual-force' : mode === 'legacy' ? 'daily-audit' : 'unchanged-scheduled-probe',
+    cause: manual ? 'manual-force' : 'unchanged-scheduled-probe',
     now: () => new Date(now()).getTime(),
     monotonicNow,
     rss,
@@ -67,7 +67,7 @@ export async function runRefreshOnce(options = {}) {
   let finalRecord
   const finalizePreRunTerminal = async ({ result, error } = {}) => {
     finalRecord = completeRefreshMetrics(tracker.snapshot({ result, ...(error ? { error } : {}) }))
-    if (mode === 'legacy' || !config.enabled || !client) return { status: 'storage-unavailable' }
+    if (!config.enabled || !client) return { status: 'storage-unavailable' }
     try {
       return await publishRefreshRolloutEvidence(finalRecord, {
         env,
@@ -102,58 +102,10 @@ export async function runRefreshOnce(options = {}) {
     await finalizePreRunTerminal({ result: 'failed', error })
     throw error
   }
-  if (mode !== 'legacy' && ttlMs <= jobTimeoutMs + 60_000) {
+  if (ttlMs <= jobTimeoutMs + 60_000) {
     const error = new Error('Refresh lease TTL must exceed the child timeout by at least 60000ms')
     await finalizePreRunTerminal({ result: 'failed', error })
     throw error
-  }
-
-  if (mode === 'legacy') {
-    const finish = tracker.startStage('provider-fetch')
-    try {
-      await writeRefreshMetrics(childMetricsPath, completeRefreshMetrics(tracker.snapshot({ result: 'running' })))
-      await launchChild({
-        env,
-        reconciliationPath,
-        metricsPath: childMetricsPath,
-        runId,
-        cause: manual ? 'manual-force' : 'daily-audit',
-        affectedIds: [],
-      })
-      finish('completed')
-      const childMetrics = await readRefreshMetrics(childMetricsPath)
-      finalRecord = childMetrics && childMetrics.result !== 'running'
-        ? childMetrics
-        : completeRefreshMetrics(tracker.snapshot({ result: 'completed' }))
-      logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
-      return { status: 'completed', metrics: finalRecord }
-    } catch (error) {
-      finish('failed')
-      const childMetrics = await readRefreshMetrics(childMetricsPath)
-      const failure = canonicalChildFailure(
-        childMetrics,
-        completeRefreshMetrics(tracker.snapshot({ result: 'failed', error })),
-        error,
-      )
-      finalRecord = failure.record
-      const persistenceErrors = []
-      try {
-        const local = await readJsonIfExists(refreshStatePath) ?? { schemaVersion: 1, status: 'failed' }
-        local.lastRun = finalRecord
-        await (options.writeLocalState ?? writeLocalState)(refreshStatePath, local)
-      } catch (persistenceError) {
-        persistenceErrors.push(`refresh-state: ${errorMessage(persistenceError)}`)
-      }
-      try {
-        await writeRefreshMetrics(childMetricsPath, finalRecord)
-      } catch (persistenceError) {
-        persistenceErrors.push(`metrics: ${errorMessage(persistenceError)}`)
-      }
-      if (persistenceErrors.length > 0) logger.warn(`Unable to persist canonical legacy refresh failure: ${persistenceErrors.join('; ')}`)
-      logger.log(`REFRESH_RUN_METRIC ${JSON.stringify(finalRecord)}`)
-      if (failure.error instanceof Error) failure.error.refreshMetrics = finalRecord
-      throw failure.error
-    }
   }
 
   if (!config.enabled || !client) {
@@ -685,7 +637,7 @@ function successfulDailyAudit(metrics) {
 }
 
 function refreshMode(value) {
-  return value === 'shadow' || value === 'gated' ? value : 'legacy'
+  return value === 'shadow' ? 'shadow' : 'gated'
 }
 
 function numberEnv(env, name, fallback) {

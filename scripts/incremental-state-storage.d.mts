@@ -103,7 +103,7 @@ export function readActiveIncrementalState(options: {
   checkpointLimit?: number
 }): Promise<
   | { found: false; reason: 'active-generation-missing' }
-  | { found: false; reason: 'legacy-active-generation'; active: Record<string, unknown>; etag?: string }
+  | { found: false; reason: 'incremental-state-authority-missing'; active: Record<string, unknown>; etag?: string }
   | {
     found: true
     active: Record<string, unknown>

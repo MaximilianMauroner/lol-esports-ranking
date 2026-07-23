@@ -432,8 +432,7 @@ export async function readPreviousGenerationAuthorities({
     throw new Error('Previous generation authority is invalid')
   }
   const expectedManifestKey = bucketKey(config, `generations/${previous.generationId}/manifest.json`)
-  const expectedLegacyKey = bucketKey(config, `generations/${previous.generationId}/data/ranking-summary.json`)
-  if (previous.manifestKey !== expectedManifestKey && previous.manifestKey !== expectedLegacyKey) throw new Error('Previous public generation manifest key is not canonical')
+  if (previous.manifestKey !== expectedManifestKey) throw new Error('Previous public generation manifest key is not canonical')
   const publicObject = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: previous.manifestKey }))
   const publicBytes = await bodyBytes(publicObject.Body)
   const publicDigest = createHash('sha256').update(publicBytes).digest('hex')
@@ -442,18 +441,14 @@ export async function readPreviousGenerationAuthorities({
     throw new Error('Previous public generation manifest metadata mismatch')
   }
   const manifest = JSON.parse(publicBytes.toString('utf8'))
-  const legacy = previous.manifestKey === expectedLegacyKey
-  if (legacy) {
-    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
-      || (manifest.artifactMeta?.runId !== undefined && manifest.artifactMeta.runId !== previous.generationId)) throw new Error('Previous legacy public root is invalid')
-  } else if (manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== previous.generationId
+  if (manifest.schemaVersion !== 2 || manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== previous.generationId
     || manifest.runId !== previous.generationId || manifest.rootArtifact !== '/data/ranking-summary.json'
     || !manifest.model || typeof manifest.model !== 'object' || Array.isArray(manifest.model)
     || typeof manifest.model.version !== 'string' || manifest.model.version.length === 0
     || typeof manifest.model.configHash !== 'string' || manifest.model.configHash.length === 0
     || !manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) throw new Error('Previous public generation manifest is invalid')
   const publicArtifacts = {}
-  if (verifyArtifacts && !legacy) {
+  if (verifyArtifacts) {
     for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
       const canonical = canonicalPublicLogicalPath(logicalPath)
       if (identity?.logicalPath !== canonical || identity?.generationId !== previous.generationId
@@ -514,7 +509,7 @@ export async function readPreviousGenerationAuthorities({
     throw new Error('Previous state and raw source receipt authorities do not match')
   }
   const publicModel = manifest?.model
-  if (state && !legacy
+  if (state
     && (state.manifest.compatibility.modelVersion !== publicModel.version
       || state.manifest.compatibility.modelConfigHash !== publicModel.configHash)) {
     throw new Error('Previous public and state model authorities do not match')
@@ -688,7 +683,7 @@ export async function readActiveContentAddressedGeneration({
 } = {}) {
   const active = await readBucketJson('active-generation.json', { config, client })
   if (!active.found || active.value?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE) {
-    return { found: false, reason: active.found ? 'legacy-active-generation' : 'active-generation-missing', active: active.value, etag: active.etag }
+    return { found: false, reason: active.found ? 'content-addressed-authority-missing' : 'active-generation-missing', active: active.value, etag: active.etag }
   }
   const generationId = active.value.generationId
   const expectedKey = bucketKey(config, `generations/${safeObjectPath(generationId)}/manifest.json`)
@@ -706,7 +701,7 @@ export async function readActiveContentAddressedGeneration({
     throw new Error('Active public generation manifest authority mismatch')
   }
   const manifest = JSON.parse(manifestBytes.toString('utf8'))
-  if (manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== generationId
+  if (manifest.schemaVersion !== 2 || manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== generationId
     || manifest.runId !== generationId || manifest.rootArtifact !== '/data/ranking-summary.json'
     || !manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) {
     throw new Error('Active public generation manifest is invalid')
@@ -715,7 +710,9 @@ export async function readActiveContentAddressedGeneration({
   for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
     const canonical = canonicalPublicLogicalPath(logicalPath)
     if (identity?.logicalPath !== canonical || identity?.objectUrl !== `/data/objects/sha256/${identity?.sha256}`
-      || identity?.generationId !== generationId || identity?.storageEncoding !== 'gzip') {
+      || identity?.generationId !== generationId || identity?.storageEncoding !== 'gzip'
+      || !Array.isArray(identity?.transportEncodings)
+      || !identity.transportEncodings.includes('identity') || !identity.transportEncodings.includes('gzip')) {
       throw new Error(`Active public generation has an invalid mapping for ${canonical}`)
     }
     identities[canonical] = identity
@@ -742,7 +739,7 @@ export async function readActiveRawSourceAuthority({
 } = {}) {
   const active = await readBucketJson('active-generation.json', { config, client })
   if (!active.found || typeof active.value?.rawReceiptKey !== 'string') {
-    return { found: false, reason: active.found ? 'legacy-active-generation' : 'active-generation-missing' }
+    return { found: false, reason: active.found ? 'raw-source-authority-missing' : 'active-generation-missing' }
   }
   const reference = {
     key: relativeBucketKey(config, active.value.rawReceiptKey),
@@ -942,18 +939,13 @@ export async function acquireBucketLease(relativeKey, {
   client = createBucketClient(config),
 } = {}) {
   const active = await readBucketJson('active-generation.json', { config, client })
-  const legacy = active.value?.leaseFencingToken === undefined
-    ? await readBucketJson(relativeKey, { config, client })
-    : { found: false }
   const nowMs = new Date(now).getTime()
-  const currentLease = active.value?.leaseFencingToken !== undefined
-    ? {
-        owner: active.value.leaseOwner,
-        fencingToken: active.value.leaseFencingToken,
-        acquiredAt: active.value.leaseAcquiredAt,
-        expiresAt: active.value.leaseExpiresAt,
-      }
-    : legacy.value
+  const currentLease = {
+    owner: active.value?.leaseOwner,
+    fencingToken: active.value?.leaseFencingToken,
+    acquiredAt: active.value?.leaseAcquiredAt,
+    expiresAt: active.value?.leaseExpiresAt,
+  }
   if (new Date(currentLease?.expiresAt).getTime() > nowMs && currentLease?.owner !== owner) {
     return { acquired: false, reason: 'active-lease', lease: currentLease }
   }
@@ -963,7 +955,6 @@ export async function acquireBucketLease(relativeKey, {
     fencingToken: Math.max(
       Number(active.value?.leaseFencingToken ?? 0),
       Number(active.value?.fencingToken ?? 0),
-      Number(legacy.value?.fencingToken ?? 0),
     ) + 1,
     acquiredAt: new Date(nowMs).toISOString(),
     expiresAt: new Date(nowMs + ttlMs).toISOString(),
@@ -1949,7 +1940,7 @@ export function parseGenerationPublishReceipt(value, { generationId, prefix } = 
     || Object.keys(value).some((key) => !requiredKeys.includes(key) && !optionalKeys.has(key))) {
     throw new Error('Invalid generation publish receipt fields')
   }
-  if (![1, 2].includes(value.schemaVersion) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value.generationId ?? '')
+  if (value.schemaVersion !== 2 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value.generationId ?? '')
     || (generationId !== undefined && value.generationId !== generationId)
     || typeof value.prefix !== 'string' || (value.prefix !== '' && safeRequestedObjectPath(value.prefix) !== value.prefix)
     || (prefix !== undefined && value.prefix !== prefix)
@@ -1963,9 +1954,7 @@ export function parseGenerationPublishReceipt(value, { generationId, prefix } = 
     if (Object.keys(entry).some((key) => !allowed.includes(key)) || typeof entry.key !== 'string'
       || safeRequestedObjectPath(entry.key) !== entry.key || !Number.isSafeInteger(entry.bytes) || entry.bytes <= 0
       || typeof entry.contentType !== 'string' || entry.contentType.length === 0
-      || (value.schemaVersion === 2
-        ? !/^[a-f0-9]{64}$/.test(entry.digest ?? '')
-        : entry.digest !== undefined && !/^[a-f0-9]{64}$/.test(entry.digest))) throw new Error(`Invalid ${label} publish entry`)
+      || !/^[a-f0-9]{64}$/.test(entry.digest ?? '')) throw new Error(`Invalid ${label} publish entry`)
     if (value.prefix && !entry.key.startsWith(`${value.prefix}/`)) throw new Error(`${label} publish entry is outside the canonical bucket prefix`)
     const relative = value.prefix && entry.key.startsWith(`${value.prefix}/`) ? entry.key.slice(value.prefix.length + 1) : entry.key
     const digestKey = /^(?:objects|raw\/objects|state\/objects)\/sha256\/([a-f0-9]{64})$/.exec(relative)
@@ -1995,7 +1984,6 @@ export function parseGenerationPublishReceipt(value, { generationId, prefix } = 
     if (!Number.isSafeInteger(value[key]) || value[key] < 0 || value[key] !== count) throw new Error(`Generation publish receipt ${key} is inconsistent`)
   }
   if (value.storageMode === CONTENT_ADDRESSED_STORAGE_MODE) {
-    if (value.schemaVersion !== 2) throw new Error('Content-addressed publish receipt requires schema version 2')
     const manifestKey = `${value.prefix ? `${value.prefix}/` : ''}generations/${value.generationId}/manifest.json`
     const authorityKeys = ['publicManifest', 'rawReceipt']
     if (!value.authorities || typeof value.authorities !== 'object' || Array.isArray(value.authorities)
@@ -2046,9 +2034,7 @@ export function parseGenerationPublishReceipt(value, { generationId, prefix } = 
     if (entries.filter((entry) => entry.key.startsWith(publicObjectPrefix)).length !== value.storage.objectCount) {
       throw new Error('Content-addressed publish receipt public object count is inconsistent')
     }
-  } else if (value.storageMode !== undefined || value.storage !== undefined || value.authorities !== undefined || value.schemaVersion !== 1) {
-    throw new Error('Legacy generation publish receipt has inconsistent storage fields')
-  }
+  } else throw new Error('Generation publish receipt must use content-addressed storage')
   return value
 }
 

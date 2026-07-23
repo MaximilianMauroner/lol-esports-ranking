@@ -368,7 +368,7 @@ function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
   const currentManifest = seedGeneration(client, 'g1', '2026-07-22T12:00:00.000Z')
   seedGeneration(client, 'g0', '2026-01-01T00:00:00.000Z')
   const active = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generationId: 'g1',
     manifestKey: 'rankings/generations/g1/manifest.json',
     fencingToken: 3,
@@ -403,7 +403,7 @@ function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: str
   if (!client.objects.has(objectKey)) seedPrepared(client, objectKey, root, lastModified)
   const manifest = {
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 1,
+    schemaVersion: 2,
     storageMode: 'content-addressed-gzip-v1',
     generationId,
     runId: generationId,
@@ -504,7 +504,7 @@ function seedRetainedGraph(client: ReturnType<typeof gcMemoryS3>) {
   seedPrepared(client, sharedPublicKey, publicObject, '2026-01-01T00:00:00.000Z')
   const publicManifest = {
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 1,
+    schemaVersion: 2,
     storageMode: 'content-addressed-gzip-v1',
     generationId,
     runId: generationId,

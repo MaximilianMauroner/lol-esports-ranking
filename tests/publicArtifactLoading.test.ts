@@ -186,10 +186,12 @@ test('reader mapping canonicalizes double-encoded logical paths exactly once', a
       sha256: identity.sha256,
       bytes: identity.bytes,
       encoding: 'identity',
+      storageEncoding: 'identity',
+      transportEncodings: ['identity'],
     }
     const generation = parsePublicArtifactGenerationManifest({
       artifactKind: 'public-artifact-generation-manifest',
-      schemaVersion: 1,
+      schemaVersion: 2,
       generationId,
       runId: generationId,
       generatedAt: '2026-07-22T00:00:00.000Z',
@@ -241,6 +243,7 @@ test('generation manifest and semantic loading fail closed on integrity and gene
 
   const claimedGzip = structuredClone(fixture.generation)
   claimedGzip.artifacts[fixture.shardEntry.logicalPath]!.encoding = 'gzip'
+  claimedGzip.artifacts[fixture.shardEntry.logicalPath]!.transportEncodings = ['gzip']
   const claimedGzipFetcher = generationFetcher(claimedGzip, fixture)
   const claimedGzipManifest = await createPublicRankingManifestLoader('/data/generation.json', claimedGzipFetcher)()
   const claimedGzipExpected = claimedGzipManifest.snapshotIndex['2026__All__All']
@@ -256,8 +259,8 @@ test('generation manifest and semantic loading fail closed on integrity and gene
   )
 
   const missingStorageEncoding = structuredClone(fixture.generation)
-  missingStorageEncoding.artifacts[fixture.rootEntry.logicalPath]!.transportEncodings = ['identity', 'gzip']
-  assert.throws(() => parsePublicArtifactGenerationManifest(missingStorageEncoding), /storageEncoding is required/)
+  delete (missingStorageEncoding.artifacts[fixture.rootEntry.logicalPath] as { storageEncoding?: string }).storageEncoding
+  assert.throws(() => parsePublicArtifactGenerationManifest(missingStorageEncoding), /storageEncoding/)
 
   const wrongModel = structuredClone(fixture.generation)
   wrongModel.model.version = 'wrong-model'
@@ -489,7 +492,7 @@ async function generationFixture(): Promise<GenerationFixture> {
   artifacts[shardPath] = shardEntry
   const generation = parsePublicArtifactGenerationManifest({
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 1,
+    schemaVersion: 2,
     generationId,
     runId: legacyManifest.artifactMeta?.runId ?? 'run_test',
     generatedAt: legacyManifest.generatedAt,
@@ -535,6 +538,8 @@ function entry(
     sha256: identity.sha256,
     bytes: identity.bytes,
     encoding: 'identity',
+    storageEncoding: 'identity',
+    transportEncodings: ['identity'],
   }
 }
 

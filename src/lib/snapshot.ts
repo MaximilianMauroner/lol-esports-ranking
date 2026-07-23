@@ -985,7 +985,6 @@ export function createStaticRankingSummaryData(
     playerDirectoryUrl,
     teamDirectoryUrl,
     teamHistoryIndexUrl,
-    teamHistoryUrl,
     regionHistoryUrl,
     tournamentMovementIndexUrl = '/data/history/tournament-moves/index.json',
     matchHistoryIndexUrl,
@@ -995,7 +994,6 @@ export function createStaticRankingSummaryData(
     playerDirectoryUrl?: string
     teamDirectoryUrl?: string
     teamHistoryIndexUrl?: string
-    teamHistoryUrl?: string
     regionHistoryUrl?: string
     tournamentMovementIndexUrl?: string
     matchHistoryIndexUrl?: string
@@ -1053,7 +1051,6 @@ export function createStaticRankingSummaryData(
       ...(playerDirectoryUrl ? { playerDirectoryUrl } : {}),
       ...(teamDirectoryUrl ? { teamDirectoryUrl } : {}),
       ...(teamHistoryIndexUrl ? { teamHistoryIndexUrl } : {}),
-      ...(teamHistoryUrl ? { teamHistoryUrl } : {}),
       ...(regionHistoryUrl ? { regionHistoryUrl } : {}),
       tournamentMovementIndexUrl,
       ...(matchHistoryIndexUrl ? { matchHistoryIndexUrl } : {}),

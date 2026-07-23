@@ -492,7 +492,6 @@ export type PublicTeamHistoryDirectory = {
   teamCount: number
   pointCount: number
   series: Record<string, PublicTeamHistorySeries>
-  scopedSeries?: Record<string, Record<string, PublicTeamHistorySeries>>
   scopeIndex?: Record<string, string[]>
 }
 
@@ -786,7 +785,6 @@ export type PublicRankingManifest = {
   playerDirectoryUrl?: string
   teamDirectoryUrl?: string
   teamHistoryIndexUrl?: string
-  teamHistoryUrl?: string
   regionHistoryUrl?: string
   tournamentMovementIndexUrl: string
   matchHistoryIndexUrl?: string
@@ -1143,7 +1141,6 @@ export function parsePublicRankingManifest(value: unknown): PublicRankingManifes
   assertOptionalDataUrlPath(value.teamDirectoryUrl, 'ranking manifest teamDirectoryUrl')
   assertOptionalDataUrlPath(value.teamHistoryIndexUrl, 'ranking manifest teamHistoryIndexUrl', '/data/history')
   assertOptionalDataUrlPath(value.matchHistoryIndexUrl, 'ranking manifest matchHistoryIndexUrl', '/data/matches')
-  assertOptionalDataUrlPath(value.teamHistoryUrl, 'ranking manifest teamHistoryUrl', '/data/history')
   assertOptionalDataUrlPath(value.regionHistoryUrl, 'ranking manifest regionHistoryUrl', '/data/history')
   assertArtifactUrl(value.tournamentMovementIndexUrl, 'ranking manifest tournamentMovementIndexUrl', '/data/history/tournament-moves')
   assertNonNegativeInteger(value.teamCount, 'ranking manifest teamCount')

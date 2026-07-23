@@ -100,7 +100,7 @@ export function readPreviousGenerationAuthorities(options?: {
 export type GenerationPublishEntry = { key: string; bytes: number; contentType: string; digest?: string }
 export type GenerationPublishAuthority = { key: string; bytes: number; contentType: 'application/json; charset=utf-8'; digest: string }
 export type GenerationPublishReceipt = {
-  schemaVersion: 1 | 2
+  schemaVersion: 2
   publishedAt: string
   prefix: string
   generationId: string

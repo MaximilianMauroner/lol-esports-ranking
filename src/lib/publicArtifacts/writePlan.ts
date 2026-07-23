@@ -56,7 +56,6 @@ export const PUBLIC_ARTIFACT_PATHS = {
   manifest: 'ranking-summary.json',
   players: 'entities/players.json',
   teams: 'entities/teams.json',
-  teamHistory: 'history/team-series.json',
   teamHistoryIndex: 'history/team-series/index.json',
   teamHistoryShardDir: 'history/team-series',
   regionHistory: 'history/region-series.json',

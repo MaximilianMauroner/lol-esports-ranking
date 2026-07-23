@@ -215,17 +215,11 @@ export async function buildRankingBucketInventory({
       try {
         const stored = await getStored(client, config, manifestKey)
         const digest = sha256(stored.bytes)
-        if (manifestKey.endsWith('/manifest.json')) {
-          assertStoredPublicManifest(stored, digest)
-          if (authority.manifestDigest && authority.manifestDigest !== digest) throw new Error('Public manifest pointer digest mismatch')
-          if (authority.manifestBytes !== undefined && authority.manifestBytes !== stored.bytes.byteLength) throw new Error('Public manifest pointer byte length mismatch')
-          if (authority.manifestEtag && authority.manifestEtag !== stored.etag) throw new Error('Public manifest pointer ETag mismatch')
-          parsePublicGenerationManifest(JSON.parse(stored.bytes.toString('utf8')), authority.generationId)
-        } else {
-          const root = JSON.parse(stored.bytes.toString('utf8'))
-          if (!root || typeof root !== 'object' || Array.isArray(root)
-            || (root.artifactMeta?.runId !== undefined && root.artifactMeta.runId !== authority.generationId)) throw new Error('Legacy public generation root is invalid')
-        }
+        assertStoredPublicManifest(stored, digest)
+        if (authority.manifestDigest && authority.manifestDigest !== digest) throw new Error('Public manifest pointer digest mismatch')
+        if (authority.manifestBytes !== undefined && authority.manifestBytes !== stored.bytes.byteLength) throw new Error('Public manifest pointer byte length mismatch')
+        if (authority.manifestEtag && authority.manifestEtag !== stored.etag) throw new Error('Public manifest pointer ETag mismatch')
+        parsePublicGenerationManifest(JSON.parse(stored.bytes.toString('utf8')), authority.generationId)
       } catch (error) {
         addError(activeKey, `${authority.reason}-public-authority-invalid`, error)
       }
@@ -271,16 +265,8 @@ export async function buildRankingBucketInventory({
       } catch (error) {
         addError(manifestRoot.key, 'retained-public-manifest-invalid', error)
       }
-    } else {
-      const legacy = candidates.find((entry) => entry.kind === 'legacy')
-      if (!legacy) addError(bucketKey(config, `generations/${generationId}`), 'retained-generation-root-missing')
-    }
+    } else addError(bucketKey(config, `generations/${generationId}`), 'retained-generation-root-missing')
     const generationPrefix = bucketKey(config, `generations/${generationId}/`)
-    for (const object of objects.filter((candidate) => candidate.key.startsWith(generationPrefix))) {
-      if (object.key.includes(`/generations/${generationId}/data/`)) {
-        protect(object.key, 'retained-generation-member')
-      }
-    }
     const retainedStateKey = bucketKey(config, `state/generations/${generationId}.json`)
     if (objectByKey.has(retainedStateKey)) {
       const state = await traverseState(manifestRoot?.key ?? generationPrefix, retainedStateKey, undefined, 'retained-generation-state')
@@ -542,12 +528,8 @@ async function publicGenerationRoots(objects, config, client, addError) {
   for (const object of objects) {
     if (!object.key.startsWith(prefix)) continue
     const relative = object.key.slice(prefix.length)
-    let match = /^([A-Za-z0-9][A-Za-z0-9._-]*)\/manifest\.json$/.exec(relative)
+    const match = /^([A-Za-z0-9][A-Za-z0-9._-]*)\/manifest\.json$/.exec(relative)
     if (match) roots.set(match[1], { generationId: match[1], key: object.key, lastModified: object.lastModified, kind: 'manifest' })
-    match = /^([A-Za-z0-9][A-Za-z0-9._-]*)\/data\/ranking-summary\.json$/.exec(relative)
-    if (match && !roots.has(match[1])) {
-      roots.set(match[1], { generationId: match[1], key: object.key, lastModified: object.lastModified, kind: 'legacy' })
-    }
   }
   for (const root of roots.values()) {
     const publishKey = bucketKey(config, `generations/${root.generationId}/publish.json`)
@@ -577,12 +559,9 @@ function parsePointerGeneration(value, label, key, addError, config, current) {
     }
     return hasKey ? { [keyField]: value[keyField], [digestField]: value[digestField] } : {}
   }
-  const expectedManifestKeys = new Set([
-    bucketKey(config, `generations/${value.generationId}/manifest.json`),
-    bucketKey(config, `generations/${value.generationId}/data/ranking-summary.json`),
-  ])
+  const expectedManifestKey = bucketKey(config, `generations/${value.generationId}/manifest.json`)
   const manifestKey = absoluteReferenceKey(config, value.manifestKey)
-  if (!expectedManifestKeys.has(manifestKey)) addError(key, `${label.replaceAll(' ', '-')}-manifest-key-noncanonical`)
+  if (manifestKey !== expectedManifestKey) addError(key, `${label.replaceAll(' ', '-')}-manifest-key-noncanonical`)
   const state = pair('stateManifestKey', 'stateManifestDigest')
   const raw = pair('rawReceiptKey', 'rawReceiptDigest')
   if (value.promotedAt !== undefined && (typeof value.promotedAt !== 'string' || Number.isNaN(new Date(value.promotedAt).getTime()))) {
@@ -628,7 +607,7 @@ function parsePointerGeneration(value, label, key, addError, config, current) {
 
 function parsePublicGenerationManifest(value, generationId) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
-    || value.artifactKind !== 'public-artifact-generation-manifest' || value.schemaVersion !== 1
+    || value.artifactKind !== 'public-artifact-generation-manifest' || value.schemaVersion !== 2
     || value.storageMode !== 'content-addressed-gzip-v1' || value.generationId !== generationId || value.runId !== generationId
     || typeof value.generatedAt !== 'string' || Number.isNaN(new Date(value.generatedAt).getTime())
     || !value.model || typeof value.model.version !== 'string' || value.model.version.length === 0

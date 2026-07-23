@@ -424,14 +424,6 @@ test('Railway server hybrid delivery redirects only eligible immutable objects a
     assert.deepEqual(JSON.parse(summary.body), { source: 'bundled' })
     assert.equal(bucketCalls.at(-1)?.method, 'GET')
 
-    const health = JSON.parse((await httpRequest(server.port, '/api/health')).body)
-    assert.deepEqual(health.presignedDelivery, {
-      enabled: true,
-      mode: 'hybrid',
-      thresholdBytes: 65_536,
-      expiresInSeconds: 3600,
-    })
-
     const proxyServer = await startRailwayServer(distDir, dataDir, {
       RANKING_BUCKET_NAME: 'test-bucket',
       RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
@@ -465,76 +457,6 @@ test('Railway server hybrid delivery redirects only eligible immutable objects a
   } finally {
     await server.close()
     await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
-    await rm(tempDir, { recursive: true, force: true })
-  }
-})
-
-test('Railway server keeps presigned delivery disabled by default', async () => {
-  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-proxy-default-'))
-  const distDir = join(tempDir, 'dist')
-  const dataDir = join(tempDir, 'data')
-  await mkdir(distDir, { recursive: true })
-  await mkdir(dataDir, { recursive: true })
-  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
-  const server = await startRailwayServer(distDir, dataDir)
-  try {
-    const health = JSON.parse((await httpRequest(server.port, '/api/health')).body)
-    assert.deepEqual(health.presignedDelivery, {
-      enabled: false,
-      mode: 'proxy',
-      thresholdBytes: 65_536,
-      expiresInSeconds: 3600,
-    })
-  } finally {
-    await server.close()
-    await rm(tempDir, { recursive: true, force: true })
-  }
-})
-
-test('Railway server reports stale-source refresh status as healthy', async () => {
-  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
-  const distDir = join(tempDir, 'dist')
-  const dataDir = join(tempDir, 'data')
-  const refreshStatePath = join(tempDir, 'raw', 'refresh-state.json')
-  const refreshScriptPath = join(tempDir, 'stale-refresh.mjs')
-  await mkdir(distDir, { recursive: true })
-  await mkdir(dataDir, { recursive: true })
-  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
-  await writeFile(refreshScriptPath, `
-import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
-
-const statePath = process.env.RANKING_REFRESH_STATE
-await mkdir(dirname(statePath), { recursive: true })
-await writeFile(statePath, JSON.stringify({
-  status: 'stale-source',
-  reason: 'no-current-match-source-data',
-  downloadStart: '2026-07-02',
-  downloadEnd: '2026-07-09',
-  coverageStart: '2026-01-01',
-  coverageEnd: '2026-07-08',
-  crunch: {
-    skipped: true,
-    reason: 'no-current-match-source-data'
-  }
-}, null, 2))
-`)
-
-  const server = await startRailwayServer(distDir, dataDir, {
-    RANKING_REFRESH_ENABLED: 'true',
-    RANKING_REFRESH_ON_START: 'true',
-    RANKING_REFRESH_INTERVAL_MINUTES: '60',
-    RANKING_REFRESH_SCRIPT: refreshScriptPath,
-    RANKING_REFRESH_STATE: refreshStatePath,
-  })
-  try {
-    const health = await waitForRefreshStatus(server.port, 'stale-source')
-    assert.equal(health.ok, true)
-    assert.equal(health.lastRefresh.status, 'stale-source')
-    assert.equal(health.lastRefresh.error, 'no-current-match-source-data')
-    assert.equal(health.lastRefresh.details?.coverageEnd, '2026-07-08')
-  } finally {
-    await server.close()
     await rm(tempDir, { recursive: true, force: true })
   }
 })

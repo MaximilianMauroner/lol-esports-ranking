@@ -4,7 +4,7 @@ import {
 } from './schema'
 import { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from './logicalPath.mjs'
 
-export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 1 as const
+export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 2 as const
 export const PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION = 1 as const
 
 export type PublicArtifactEncoding = 'identity' | 'gzip'
@@ -17,12 +17,11 @@ export type PublicGenerationArtifactEntry = {
   sha256: string
   /** Canonical UTF-8 byte length of the uncompressed semantic JSON. */
   bytes: number
-  /** Legacy expected transport encoding for schema-v1 manifests. */
   encoding: PublicArtifactEncoding
   /** Encoding of the immutable object stored in the bucket. */
-  storageEncoding?: PublicArtifactEncoding
+  storageEncoding: PublicArtifactEncoding
   /** HTTP encodings the serving layer may use after reading the stored object. */
-  transportEncodings?: PublicArtifactEncoding[]
+  transportEncodings: PublicArtifactEncoding[]
 }
 
 export type PublicArtifactGenerationManifest = {
@@ -96,15 +95,8 @@ export function parsePublicArtifactGenerationManifest(value: unknown): PublicArt
     assertObjectUrlDigest(candidate.objectUrl, candidate.sha256, `generation manifest artifact ${logicalPath} objectUrl`)
     assertNonNegativeInteger(candidate.bytes, `generation manifest artifact ${logicalPath} bytes`)
     assertOneOf(candidate.encoding, ['identity', 'gzip'], `generation manifest artifact ${logicalPath} encoding`)
-    if (candidate.storageEncoding !== undefined) {
-      assertOneOf(candidate.storageEncoding, ['identity', 'gzip'], `generation manifest artifact ${logicalPath} storageEncoding`)
-    }
-    if (candidate.transportEncodings !== undefined) {
-      assertArtifactTransportEncodings(candidate.transportEncodings, `generation manifest artifact ${logicalPath} transportEncodings`)
-      if (candidate.storageEncoding === undefined) {
-        throw new Error(`Invalid public artifact: generation manifest artifact ${logicalPath} storageEncoding is required with transportEncodings`)
-      }
-    }
+    assertOneOf(candidate.storageEncoding, ['identity', 'gzip'], `generation manifest artifact ${logicalPath} storageEncoding`)
+    assertArtifactTransportEncodings(candidate.transportEncodings, `generation manifest artifact ${logicalPath} transportEncodings`)
   }
   if (!Object.hasOwn(value.artifacts, value.rootArtifact)) {
     throw new Error('Invalid public artifact: generation manifest rootArtifact mapping is incomplete')
@@ -321,7 +313,6 @@ function normalizeRankingManifestUrls(content: Record<string, unknown>) {
     'playerDirectoryUrl',
     'teamDirectoryUrl',
     'teamHistoryIndexUrl',
-    'teamHistoryUrl',
     'regionHistoryUrl',
     'tournamentMovementIndexUrl',
     'matchHistoryIndexUrl',
@@ -388,7 +379,7 @@ function assertTransportEncoding(
   if (actual !== 'identity' && actual !== 'gzip') {
     throw new Error(`Invalid public artifact: unsupported Content-Encoding ${actual} for ${logicalPath}`)
   }
-  const allowed = entry.transportEncodings ?? [entry.encoding]
+  const allowed = entry.transportEncodings
   if (!allowed.includes(actual)) {
     throw new Error(`Invalid public artifact: ${actual} transport is not allowed for ${logicalPath}`)
   }
@@ -490,7 +481,6 @@ function hydrateKnownLogicalUrls(content: Record<string, unknown>, runId: string
         'playerDirectoryUrl',
         'teamDirectoryUrl',
         'teamHistoryIndexUrl',
-        'teamHistoryUrl',
         'regionHistoryUrl',
         'tournamentMovementIndexUrl',
         'matchHistoryIndexUrl',
@@ -532,7 +522,6 @@ function rankingManifestLogicalPaths(manifest: PublicRankingManifest) {
     manifest.fullSnapshotUrl,
     manifest.teamDirectoryUrl,
     manifest.teamHistoryIndexUrl,
-    manifest.teamHistoryUrl,
     manifest.regionHistoryUrl,
     manifest.tournamentMovementIndexUrl,
     manifest.matchHistoryIndexUrl,

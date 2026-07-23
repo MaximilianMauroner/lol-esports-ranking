@@ -7,7 +7,6 @@ import test from 'node:test'
 import { Readable } from 'node:stream'
 import { defaultRunChild, isDailyAuditDue, publishRefreshRolloutEvidence, runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
 import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
-import { uploadRankingArtifacts } from '../scripts/railway-bucket.mjs'
 import type { RefreshRunMetrics } from '../scripts/refresh-metrics.mjs'
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
@@ -240,10 +239,9 @@ test('recovery-window work uses match completion date and reports no publication
   assert.equal(result.metrics?.freshness.publishedAt, null)
 })
 
-test('startup enforces five-minute gate receipts while six-hour legacy stays compatible', async () => {
+test('startup enforces five-minute gate receipts and lease timing', async () => {
   await assert.rejects(() => runRefreshOnce({
-    env: { RANKING_REFRESH_MODE: 'legacy', RANKING_REFRESH_INTERVAL_MINUTES: '5' },
-    runChild: async () => undefined,
+    env: { RANKING_REFRESH_INTERVAL_MINUTES: '5' },
   }), /immutable outer authority/)
   await assert.rejects(() => runRefreshOnce({
     env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_INTERVAL_MINUTES: '5' },
@@ -251,12 +249,6 @@ test('startup enforces five-minute gate receipts while six-hour legacy stays com
   await assert.rejects(() => runRefreshOnce({
     env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_LEASE_TTL_MS: '60000', RANKING_REFRESH_JOB_TIMEOUT_MS: '60000' },
   }), /lease TTL/)
-  const safe = await runRefreshOnce({
-    env: { RANKING_REFRESH_MODE: 'legacy', RANKING_REFRESH_INTERVAL_MINUTES: '360' },
-    runChild: async () => undefined,
-    logger: { log() {}, warn() {}, error() {} },
-  })
-  assert.equal(safe.status, 'completed')
 })
 
 test('daily audit defaults off, is due from last success, and bypasses unchanged probe work without advancing on failure', async () => {
@@ -428,188 +420,6 @@ test('published child telemetry remains canonical in result, trigger state, and 
     assert.deepEqual(result.metrics, canonical)
     assert.deepEqual((result.state as { lastRun: unknown }).lastRun, canonical)
     assert.deepEqual(metricLog(logs), canonical)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('real bucket child promotion hands authoritative ETag to parent before queued renewal and release', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'refresh-parent-child-etag-'))
-  const publicDir = join(root, 'public')
-  const metricsPath = join(root, 'metrics.json')
-  const client = memoryS3()
-  const config = bucketConfig()
-  const acquiredAt = Date.parse('2026-07-22T00:00:00Z')
-  let currentMs = acquiredAt
-  let childLeaseRemainingMs = 0
-  let heartbeatTick: (() => void) | undefined
-  try {
-    await mkdir(publicDir, { recursive: true })
-    await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
-    const result = await runRefreshOnce({
-      env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_METRICS_PATH: metricsPath },
-      runId: 'parent-child-etag',
-      owner: 'worker',
-      now: () => new Date(currentMs),
-      monotonicNow: increasingClock(),
-      bucketConfig: config,
-      bucketClient: client,
-      readLocalState: async () => undefined,
-      writeLocalState: async () => undefined,
-      fetchProbe: async () => {
-        currentMs = acquiredAt + (14 * 60_000) + 59_000
-        return {
-          checkedAt: new Date(currentMs).toISOString(),
-          coverageComplete: true,
-          events: [{ matchId: 'match-1', state: 'completed', startTime: '2026-07-21T23:50:00Z', teams: [{ id: 'a', gameWins: 1 }, { id: 'b', gameWins: 0 }] }],
-        }
-      },
-      readJson: async () => ({ matches: [] }),
-      runChild: async ({ leaseKey, owner, fencingToken, promotionEtag }: { leaseKey: string; owner: string; fencingToken: number; promotionEtag: string }) => {
-        const leaseAtChildStart = client.objects.get('rankings/active-generation.json')!
-        const activeLease = JSON.parse(leaseAtChildStart.body) as { leaseExpiresAt: string }
-        childLeaseRemainingMs = Date.parse(activeLease.leaseExpiresAt) - currentMs
-        assert.equal(promotionEtag, leaseAtChildStart.etag)
-        const seed = await readRefreshMetrics(metricsPath)
-        assert.ok(seed)
-        const uploaded = await uploadRankingArtifacts({
-          publicDataDir: publicDir,
-          generationId: 'generation-1',
-          fencingToken,
-          leaseAuthority: { key: leaseKey, lease: { owner, fencingToken } },
-          now: () => new Date('2026-07-22T00:00:30Z'),
-          beforePromotionWrite: async () => { heartbeatTick?.() },
-          refreshTelemetry: (promotion: { promotedAt: string; etag: string }) => ({
-            ...seed,
-            result: 'completed',
-            finishedAt: '2026-07-22T00:00:31.000Z',
-            freshness: { ...seed.freshness, publishedAt: promotion.promotedAt },
-            stages: seed.stages.map((stage) => stage.name === 'promotion'
-              ? { ...stage, result: 'completed', output: { promotedAt: promotion.promotedAt, etag: promotion.etag } }
-              : stage),
-            coordination: { owner, fencingToken, etag: promotion.etag },
-          }),
-          config,
-          client,
-        })
-        await writeRefreshMetrics(metricsPath, uploaded.refreshTelemetry as Awaited<ReturnType<typeof readRefreshMetrics>> & {})
-      },
-      setInterval: (callback: () => void) => { heartbeatTick = callback; return { unref() {} } },
-      clearInterval: () => undefined,
-      logger: { log() {}, warn() {}, error() {} },
-    })
-    const activeObject = client.objects.get('rankings/active-generation.json')!
-    const active = JSON.parse(activeObject.body)
-    assert.equal(result.status, 'completed')
-    assert.equal(active.generationId, 'generation-1')
-    assert.ok(childLeaseRemainingMs >= (30 * 60_000) + 60_000)
-    assert.equal(typeof active.leaseRenewedAt, 'string')
-    assert.equal(typeof active.leaseReleasedAt, 'string')
-    assert.notEqual((result.metrics as { coordination?: { etag: string } }).coordination?.etag, activeObject.etag)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('legacy parent returns the same finalized child record stored in state, receipt, file, and log', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'refresh-legacy-canonical-'))
-  const publicDir = join(root, 'public')
-  const statePath = join(root, 'refresh-state.json')
-  const metricsPath = join(root, 'metrics.json')
-  const client = memoryS3()
-  const config = bucketConfig()
-  const logs: string[] = []
-  try {
-    await mkdir(publicDir, { recursive: true })
-    await writeFile(join(publicDir, 'ranking-summary.json'), '{}\n')
-    await writeFile(statePath, '{}\n')
-    const result = await runRefreshOnce({
-      env: { RANKING_REFRESH_MODE: 'legacy', RANKING_REFRESH_METRICS_PATH: metricsPath },
-      runId: 'legacy-canonical',
-      runChild: async ({ cause }: { cause: string }) => {
-        assert.equal(cause, 'daily-audit')
-        const seed = await readRefreshMetrics(metricsPath)
-        assert.ok(seed)
-        const child = {
-          ...seed,
-          cause: 'daily-audit' as const,
-          finishedAt: '2026-07-22T00:00:10.000Z',
-          result: 'no-promotion',
-          peakRssBytes: (seed.peakRssBytes ?? 0) + 100,
-          stages: seed.stages.map((stage) => stage.name === 'public-serialization' || stage.name === 'provider-fetch'
-            ? { ...stage, result: 'completed', output: { outputBytes: 3 } }
-            : stage),
-        }
-        const canonical = mergeRefreshMetrics(seed, child)
-        const uploaded = await uploadRankingArtifacts({
-          publicDataDir: publicDir,
-          statePath,
-          refreshTelemetry: canonical,
-          refreshStateForUpload: ({ refreshTelemetry }: { refreshTelemetry: unknown }) => ({ lastRun: refreshTelemetry }),
-          config,
-          client,
-        })
-        await writeRefreshMetrics(metricsPath, uploaded.refreshTelemetry as typeof canonical)
-      },
-      logger: { log: (value: string) => logs.push(value), warn() {}, error: (value: string) => logs.push(value) },
-    })
-    const receipt = JSON.parse(client.objects.get('rankings/latest-publish.json')!.body)
-    const refreshState = JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body)
-    const fileRecord = JSON.parse(await readFile(metricsPath, 'utf8'))
-    assert.deepEqual(result.metrics, receipt.refreshTelemetry)
-    assert.deepEqual(result.metrics, refreshState.lastRun)
-    assert.deepEqual(result.metrics, fileRecord)
-    assert.deepEqual(result.metrics, metricLog(logs))
-    assert.equal(result.metrics?.cause, 'daily-audit')
-    assert.equal(result.metrics?.freshness.publishedAt, null)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('legacy child telemetry error remains primary when the subprocess wrapper is generic', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'refresh-legacy-process-error-'))
-  const paths = refreshPaths(root)
-  const logs: string[] = []
-  let caught: Error & { refreshMetrics?: RefreshRunMetrics } | undefined
-  try {
-    await runRefreshOnce({
-      env: {
-        RANKING_REFRESH_MODE: 'legacy',
-        RANKING_REFRESH_METRICS_PATH: paths.metrics,
-        RANKING_REFRESH_STATE: paths.refreshState,
-      },
-      runId: 'legacy-process-error',
-      runChild: async () => {
-        const seed = await readRefreshMetrics(paths.metrics)
-        assert.ok(seed)
-        const childFailure = {
-          ...seed,
-          finishedAt: '2026-07-22T00:00:31.000Z',
-          result: 'failed',
-          error: 'Oracle provider request failed',
-        }
-        await writeRefreshMetrics(paths.metrics, childFailure)
-        await mkdir(paths.raw, { recursive: true })
-        await writeFile(paths.refreshState, `${JSON.stringify({ schemaVersion: 1, status: 'failed', lastRun: childFailure })}\n`)
-        throw new Error('Refresh job exited with 1')
-      },
-      logger: { log: (value: string) => logs.push(value), warn() {}, error() {} },
-    })
-  } catch (error) {
-    caught = error as Error & { refreshMetrics?: RefreshRunMetrics }
-  }
-  try {
-    assert.ok(caught)
-    assert.equal(caught.message, 'Oracle provider request failed')
-    assert.equal((caught.cause as Error).message, 'Refresh job exited with 1')
-    assert.equal(caught.refreshMetrics?.error, 'Oracle provider request failed')
-    assert.equal(caught.refreshMetrics?.processError, 'Refresh job exited with 1')
-    const refreshState = JSON.parse(await readFile(paths.refreshState, 'utf8'))
-    const metricsFile = JSON.parse(await readFile(paths.metrics, 'utf8'))
-    assert.deepEqual(caught.refreshMetrics, refreshState.lastRun)
-    assert.deepEqual(caught.refreshMetrics, metricsFile)
-    assert.deepEqual(caught.refreshMetrics, metricLog(logs))
   } finally {
     await rm(root, { recursive: true, force: true })
   }

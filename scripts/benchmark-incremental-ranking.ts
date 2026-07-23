@@ -669,7 +669,7 @@ async function runBenchmarkVerifier() {
     })
   }
   const full = await run('full', nextSource, generatedAt, {
-    mode: 'legacy', cause: 'daily-audit', enabled: false,
+    mode: 'gated', cause: 'daily-audit', enabled: false,
     sourceReceiptDigest: restored.stateManifest.sourceReceiptDigest,
   })
   if (full.action === 'no-change') throw new Error('Benchmark clean full build did not materialize')
@@ -936,7 +936,7 @@ function run(
   sourceData: RankingSourceImport,
   generatedAt: string,
   options: {
-    mode: 'legacy' | 'shadow' | 'gated'
+    mode: 'shadow' | 'gated'
     cause: string
     enabled: boolean
     restored?: RestoredIncrementalAuthority

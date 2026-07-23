@@ -1,4 +1,4 @@
-export type RefreshMode = 'legacy' | 'shadow' | 'gated'
+export type RefreshMode = 'shadow' | 'gated'
 export type RefreshCause = 'pending-match' | 'daily-audit' | 'manual-force' | 'retry' | 'unchanged-scheduled-probe'
 export type RefreshStageName = 'restore' | 'probe' | 'provider-fetch' | 'fingerprint-import' | 'raw-authority-read' | 'raw-prepare' | 'raw-materialization' | 'classification' | 'checkpoint-restore' | 'checkpoint-validation' | 'replay' | 'external-causal-recompute' | 'player-build' | 'player-compaction' | 'dependency-materialization' | 'semantic-parity' | 'state-persistence' | 'full-audit-object' | 'crunch' | 'public-serialization' | 'hashing' | 'raw-synchronization' | 'artifact-upload' | 'promotion' | 'full-audit-receipt'
 export const REFRESH_STAGE_NAMES: readonly RefreshStageName[]

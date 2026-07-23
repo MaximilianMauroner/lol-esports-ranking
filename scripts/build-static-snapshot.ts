@@ -54,7 +54,7 @@ export async function buildStaticSnapshot(options: StaticSnapshotBuildOptions = 
 const env = options.env ?? process.env
 const metrics = createRefreshMetrics({
   runId: env.RANKING_REFRESH_RUN_ID ?? `snapshot-${process.pid}`,
-  mode: env.RANKING_REFRESH_MODE === 'shadow' || env.RANKING_REFRESH_MODE === 'gated' ? env.RANKING_REFRESH_MODE : 'legacy',
+  mode: env.RANKING_REFRESH_MODE === 'shadow' ? 'shadow' : 'gated',
   cause: env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match',
 })
 

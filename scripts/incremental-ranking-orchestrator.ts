@@ -225,7 +225,7 @@ export async function buildRankingIncrementally({
   buildSnapshot = buildStaticSnapshot,
   sourceReceiptDigest,
 }: {
-  mode: 'legacy' | 'shadow' | 'gated'
+  mode: 'shadow' | 'gated'
   cause: string
   enabled: boolean
   manifestPath: string
@@ -247,7 +247,7 @@ export async function buildRankingIncrementally({
   const ledger = buildCurrentCanonicalLedger(sourceData, restored)
   const auditComparison = cause === 'daily-audit'
   const comparisonMode = mode === 'shadow' || auditComparison
-  const forceFull = !enabled || mode === 'legacy' || cause === 'manual-force'
+  const forceFull = !enabled || cause === 'manual-force'
   if (forceFull) {
     const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
     const state = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)

@@ -4,7 +4,7 @@ const TERMINAL_STATES = new Set(['complete', 'completed'])
 const RETRY_DELAYS_MS = [15, 30, 60, 120].map((minutes) => minutes * 60_000)
 const LONG_RETRY_MS = 6 * 60 * 60_000
 
-export function emptyTriggerState(mode = 'legacy') {
+export function emptyTriggerState(mode = 'gated') {
   return {
     schemaVersion: 1,
     generation: 0,
@@ -22,7 +22,7 @@ export function emptyTriggerState(mode = 'legacy') {
   }
 }
 
-export function parseTriggerState(value, { mode = 'legacy' } = {}) {
+export function parseTriggerState(value, { mode = 'gated' } = {}) {
   if (!value || typeof value !== 'object' || value.schemaVersion !== 1) return emptyTriggerState(mode)
   return {
     ...emptyTriggerState(mode),
@@ -217,7 +217,7 @@ function stringValue(value) {
 }
 
 function validMode(value) {
-  return value === 'legacy' || value === 'shadow' || value === 'gated'
+  return value === 'shadow' || value === 'gated'
 }
 
 function nonNegativeInteger(value) {

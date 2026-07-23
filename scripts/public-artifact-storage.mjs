@@ -62,7 +62,7 @@ export function createGenerationManifest({ generationId, rootManifest, entries }
   }
   return {
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 1,
+    schemaVersion: 2,
     storageMode: CONTENT_ADDRESSED_STORAGE_MODE,
     generationId,
     runId,
@@ -119,7 +119,6 @@ function normalizeRankingManifestUrls(content) {
     'playerDirectoryUrl',
     'teamDirectoryUrl',
     'teamHistoryIndexUrl',
-    'teamHistoryUrl',
     'regionHistoryUrl',
     'tournamentMovementIndexUrl',
     'matchHistoryIndexUrl',

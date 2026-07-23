@@ -364,12 +364,12 @@ test('manifest authority fails closed for mutation, missing objects, and corrupt
   await assert.rejects(assertStateManifestAuthority(corruptClient, config, corruptWritten.authority), /metadata mismatch|gzip is corrupt/)
 })
 
-test('old active pointers remain readable and state promotion atomically resolves public and state manifests', async () => {
+test('active pointers without state authority trigger a full rebuild and promotion resolves both manifests', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-state-public-'))
   const publicDir = join(root, 'public')
   const client = memoryS3()
   try {
-    await writeBucketJson('active-generation.json', { schemaVersion: 1, generationId: 'legacy', fencingToken: 1 }, {
+    await writeBucketJson('active-generation.json', { schemaVersion: 1, generationId: 'without-state', fencingToken: 1 }, {
       config,
       client,
       ifNoneMatch: '*',
@@ -378,8 +378,8 @@ test('old active pointers remain readable and state promotion atomically resolve
       await readActiveIncrementalState({ config, client }),
       {
         found: false,
-        reason: 'legacy-active-generation',
-        active: { schemaVersion: 1, generationId: 'legacy', fencingToken: 1 },
+        reason: 'incremental-state-authority-missing',
+        active: { schemaVersion: 1, generationId: 'without-state', fencingToken: 1 },
         etag: '"1"',
       },
     )
@@ -421,18 +421,6 @@ test('old active pointers remain readable and state promotion atomically resolve
     assert.equal(typeof partiallyRestored.loadCheckpoints, 'function')
     assert.equal((await partiallyRestored.loadCheckpoints(partiallyRestored.manifest.checkpoints)).length, 2)
 
-    await uploadRankingArtifacts({
-      publicDataDir: publicDir,
-      generationId: 'legacy-after-state',
-      fencingToken: 3,
-      contentAddressed: false,
-      config,
-      client,
-    })
-    const legacyAfterState = JSON.parse(client.objects.get('custom-rankings/active-generation.json')!.body) as Record<string, unknown>
-    assert.equal(legacyAfterState.generationId, 'legacy-after-state')
-    assert.equal(legacyAfterState.stateManifestKey, undefined)
-    assert.equal(legacyAfterState.stateManifestDigest, undefined)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

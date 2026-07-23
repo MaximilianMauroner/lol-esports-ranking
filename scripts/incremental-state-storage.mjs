@@ -252,7 +252,7 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
   }
   assertRecord(active, 'active generation pointer')
   if (active.stateManifestKey === undefined && active.stateManifestDigest === undefined) {
-    return { found: false, reason: 'legacy-active-generation', active, etag: activeObject.ETag }
+    return { found: false, reason: 'incremental-state-authority-missing', active, etag: activeObject.ETag }
   }
   assertSafeStateKey(config, active.stateManifestKey, 'active stateManifestKey')
   assertDigest(active.stateManifestDigest, 'active stateManifestDigest')

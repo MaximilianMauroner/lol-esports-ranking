@@ -1,5 +1,4 @@
 import { createReadStream } from 'node:fs'
-import { spawn } from 'node:child_process'
 import { access, readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { normalize, resolve, sep } from 'node:path'
@@ -7,7 +6,6 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip, createGzip } from 'node:zlib'
 import {
-  PRESIGNED_URL_EXPIRY_SECONDS,
   bucketConfigFromEnv,
   contentTypeForPath,
   getBucketObject,
@@ -16,18 +14,13 @@ import {
   readBucketJson,
 } from './railway-bucket.mjs'
 import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
-import { refreshWorkerArgs } from './refresh-worker-memory.mjs'
 
 const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
 const distDir = resolve(process.env.RAILWAY_DIST_DIR ?? 'dist')
 const publicDataDir = resolve(process.env.RANKING_PUBLIC_DATA_DIR ?? 'public/data')
 const refreshEnabled = process.env.RANKING_REFRESH_ENABLED === 'true'
-const refreshMode = ['shadow', 'gated'].includes(process.env.RANKING_REFRESH_MODE) ? process.env.RANKING_REFRESH_MODE : 'legacy'
-const refreshIntervalMinutes = Math.max(1, Number(process.env.RANKING_REFRESH_INTERVAL_MINUTES ?? 60))
-const refreshOnStart = process.env.RANKING_REFRESH_ON_START === 'true'
-const refreshScript = process.env.RANKING_REFRESH_SCRIPT ?? 'scripts/refresh-data-if-changed.mjs'
-const refreshStatePath = resolve(process.env.RANKING_REFRESH_STATE ?? 'data/raw/refresh-state.json')
+const refreshMode = process.env.RANKING_REFRESH_MODE === 'shadow' ? 'shadow' : 'gated'
 const dataCacheControl = process.env.RANKING_DATA_CACHE_CONTROL ?? 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800, stale-if-error=604800'
 const dataManifestCacheControl = process.env.RANKING_DATA_MANIFEST_CACHE_CONTROL ?? 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400'
 const htmlCacheControl = process.env.RANKING_HTML_CACHE_CONTROL ?? 'no-store'
@@ -37,19 +30,7 @@ const presignedDeliveryThresholdBytes = positiveIntegerOrDefault(
   process.env.RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES,
   65_536,
 )
-const cronSecret = process.env.CRON_SECRET
 const bucketConfig = bucketConfigFromEnv()
-
-let refreshInFlight = null
-let lastRefresh = {
-  status: 'not-run',
-  startedAt: null,
-  finishedAt: null,
-  reason: null,
-  exitCode: null,
-  error: null,
-  details: null,
-}
 
 const server = createServer(async (request, response) => {
   try {
@@ -71,44 +52,6 @@ const server = createServer(async (request, response) => {
 
     if (url.pathname === '/api/scheduler') {
       sendJson(response, 200, await schedulerStatus())
-      return
-    }
-
-    if (url.pathname === '/api/health') {
-      sendJson(response, 200, {
-        ok: true,
-        refreshEnabled,
-        refreshMode,
-        refreshInFlight: Boolean(refreshInFlight),
-        bucket: bucketConfig.enabled
-          ? { enabled: true, bucket: bucketConfig.bucket, prefix: bucketConfig.prefix }
-          : { enabled: false, missing: bucketConfig.missing },
-        lastRefresh,
-        dataCacheControl,
-        dataManifestCacheControl,
-        htmlCacheControl,
-        gzipEnabled,
-        presignedDelivery: {
-          enabled: presignedDeliveryEnabled,
-          mode: presignedDeliveryEnabled ? 'hybrid' : 'proxy',
-          thresholdBytes: presignedDeliveryThresholdBytes,
-          expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
-        },
-      })
-      return
-    }
-
-    if (url.pathname === '/api/refresh') {
-      if (request.method !== 'POST') {
-        sendJson(response, 405, { ok: false, error: 'Method not allowed' })
-        return
-      }
-      if (!cronSecret || request.headers.authorization !== `Bearer ${cronSecret}`) {
-        sendJson(response, 401, { ok: false, error: 'Unauthorized' })
-        return
-      }
-      void runRefresh('manual')
-      sendJson(response, 202, { ok: true, accepted: true, refreshInFlight: true })
       return
     }
 
@@ -148,17 +91,6 @@ const server = createServer(async (request, response) => {
 
 server.listen(port, host, () => {
   console.log(`Railway server listening on ${host}:${port}`)
-  if (!refreshEnabled || refreshMode !== 'legacy') return
-
-  if (refreshOnStart) {
-    setTimeout(() => {
-      void runRefresh('startup')
-    }, 1000)
-  }
-
-  setInterval(() => {
-    void runRefresh('schedule')
-  }, refreshIntervalMinutes * 60 * 1000).unref()
 })
 
 async function readinessStatus() {
@@ -560,76 +492,6 @@ function isEncodedContentAddressedRequestPath(pathname) {
 
 function isContentAddressedObjectPath(relativePath) {
   return /^objects\/sha256\/[a-f0-9]{64}$/.test(relativePath)
-}
-
-function runRefresh(reason) {
-  if (refreshInFlight) return refreshInFlight
-
-  lastRefresh = {
-    status: 'running',
-    startedAt: new Date().toISOString(),
-    finishedAt: null,
-    reason,
-    exitCode: null,
-    error: null,
-    details: null,
-  }
-
-  refreshInFlight = new Promise((resolveRefresh) => {
-    const child = spawn(process.execPath, refreshWorkerArgs(refreshScript), {
-      env: process.env,
-      stdio: 'inherit',
-    })
-
-    child.on('error', (error) => {
-      lastRefresh = {
-        ...lastRefresh,
-        status: 'error',
-        finishedAt: new Date().toISOString(),
-        error: error.message,
-        details: null,
-      }
-      refreshInFlight = null
-      resolveRefresh()
-    })
-
-    child.on('exit', (code) => {
-      void finishRefreshExit(code, resolveRefresh)
-    })
-  })
-
-  return refreshInFlight
-}
-
-async function finishRefreshExit(code, resolveRefresh) {
-  const state = code === 0 ? await readRefreshState() : null
-  const staleSource = state?.status === 'stale-source'
-  lastRefresh = {
-    ...lastRefresh,
-    status: staleSource ? 'stale-source' : code === 0 ? 'ok' : 'error',
-    finishedAt: new Date().toISOString(),
-    exitCode: code,
-    error: staleSource ? state.reason ?? null : code === 0 ? null : `refresh exited with ${code}`,
-    details: staleSource
-      ? {
-          reason: state.reason ?? null,
-          downloadStart: state.downloadStart ?? null,
-          downloadEnd: state.downloadEnd ?? null,
-          coverageStart: state.coverageStart ?? null,
-          coverageEnd: state.coverageEnd ?? null,
-        }
-      : null,
-  }
-  refreshInFlight = null
-  resolveRefresh()
-}
-
-async function readRefreshState() {
-  try {
-    return JSON.parse(await readFile(refreshStatePath, 'utf8'))
-  } catch {
-    return null
-  }
 }
 
 function sendJson(response, statusCode, value) {

@@ -1,4 +1,4 @@
-export type TriggerMode = 'legacy' | 'shadow' | 'gated'
+export type TriggerMode = 'shadow' | 'gated'
 
 export type PendingMatch = {
   completedAt: string

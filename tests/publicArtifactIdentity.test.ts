@@ -228,7 +228,7 @@ async function completeGenerationFixture() {
   }
   const generation = parsePublicArtifactGenerationManifest({
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 1,
+    schemaVersion: 2,
     generationId,
     runId: root.artifactMeta!.runId,
     generatedAt: root.generatedAt,
@@ -275,6 +275,8 @@ function artifactEntry(logicalPath: string, generationId: string, identity: { sh
     sha256: identity.sha256,
     bytes: identity.bytes,
     encoding: 'identity' as const,
+    storageEncoding: 'identity' as const,
+    transportEncodings: ['identity'] as const,
   }
 }
 
@@ -297,7 +299,7 @@ function generationFor(
   const generationId = 'generation-transport'
   return parsePublicArtifactGenerationManifest({
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 1,
+    schemaVersion: 2,
     generationId,
     runId: 'run_transport',
     generatedAt: generatedAtFor('transport'),
@@ -305,7 +307,15 @@ function generationFor(
     provenance: { source: 'test source', dataMode: 'no-data', sourceProviders: ['test'] },
     rootArtifact: logicalPath,
     artifacts: {
-      [logicalPath]: { logicalPath, objectUrl, generationId, ...identity, encoding },
+      [logicalPath]: {
+        logicalPath,
+        objectUrl,
+        generationId,
+        ...identity,
+        encoding,
+        storageEncoding: encoding,
+        transportEncodings: [encoding],
+      },
     },
   })
 }

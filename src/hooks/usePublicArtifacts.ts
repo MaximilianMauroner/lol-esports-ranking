@@ -4,7 +4,6 @@ import type {
   PublicRankingManifest,
   PublicRegionHistoryDirectory,
   PublicRegionHistoryScope,
-  PublicTeamHistoryDirectory,
   PublicTeamHistoryIndex,
   PublicTeamHistoryShard,
   PublicTournamentMovementIndex,
@@ -19,7 +18,6 @@ import type {
 import {
   parsePublicPlayerDirectory,
   parsePublicRegionHistory,
-  parsePublicTeamHistory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
   parsePublicTournamentMovementIndex,
@@ -52,7 +50,7 @@ export type PublicArtifactState<T> =
   | { status: 'missing'; message: string }
   | { status: 'error'; message: string }
 
-export type TeamHistoryArtifact = PublicTeamHistoryDirectory | PublicTeamHistoryShard
+export type TeamHistoryArtifact = PublicTeamHistoryShard
 export type TeamHistoryArtifactState = PublicArtifactState<TeamHistoryArtifact>
 export type PlayerDirectoryState = PublicArtifactState<PublicPlayerDirectory>
 export type RegionHistoryScopeState = PublicArtifactState<PublicRegionHistoryScope>
@@ -64,7 +62,7 @@ export type MatchHistoryState = PublicArtifactState<{
   pages: Record<number, MatchHistoryPageState>
 }>
 
-type TeamHistoryRoot = PublicTeamHistoryDirectory | PublicTeamHistoryIndex
+type TeamHistoryRoot = PublicTeamHistoryIndex
 type PublicArtifactLoadOptions = {
   initialManifest?: PublicRankingManifest
   initialManifestError?: string
@@ -207,7 +205,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     if (!data || !loadTeamHistory) return
     const manifest = data
     const controller = new AbortController()
-    const url = resolveArtifactUrl(data.teamHistoryIndexUrl ?? data.teamHistoryUrl ?? TEAM_HISTORY_INDEX_URL, DATA_URL)
+    const url = resolveArtifactUrl(data.teamHistoryIndexUrl ?? TEAM_HISTORY_INDEX_URL, DATA_URL)
     setTeamHistoryRootState({ status: 'loading' })
     setTeamHistoryCache({})
     async function load() {
@@ -606,9 +604,6 @@ async function loadMatchHistoryPage(
 }
 
 function parseTeamHistoryRoot(value: unknown): TeamHistoryRoot {
-  if (value && typeof value === 'object' && !Array.isArray(value) && 'artifactKind' in value && value.artifactKind === 'team-history') {
-    return parsePublicTeamHistory(value)
-  }
   return parsePublicTeamHistoryIndex(value)
 }
 
@@ -703,58 +698,13 @@ function resolveTeamHistoryState(
 
   const key = snapshotKey(filter)
   const root = rootState.data
-  if (root.artifactKind === 'team-history-index') {
-    const cached = cache[key]
-    if (cached?.status === 'ready') return { status: 'ready', data: cached.shard }
-    if (cached) return cached.status === 'loading' ? { status: 'loading' } : { status: cached.status, message: cached.message }
-    if (!root.scopeIndex[key]) {
-      return { status: 'missing', message: `No generated team history exists for ${scopeLabel(effectiveScope)}.` }
-    }
-    return { status: 'loading' }
+  const cached = cache[key]
+  if (cached?.status === 'ready') return { status: 'ready', data: cached.shard }
+  if (cached) return cached.status === 'loading' ? { status: 'loading' } : { status: cached.status, message: cached.message }
+  if (!root.scopeIndex[key]) {
+    return { status: 'missing', message: `No generated team history exists for ${scopeLabel(effectiveScope)}.` }
   }
-
-  const scopedSeries = root.scopedSeries?.[key]
-  const scopedIds = root.scopeIndex?.[key]
-  if (!scopedSeries && !scopedIds && filter.season === 'All' && filter.event === 'All' && filter.region === 'All') {
-    return { status: 'ready', data: root }
-  }
-  if (!scopedSeries && !scopedIds) {
-    return {
-      status: 'ready',
-      data: {
-        ...root,
-        teamCount: 0,
-        pointCount: 0,
-        series: {},
-      },
-    }
-  }
-  if (scopedIds) {
-    const scopedSeriesFromIndex = Object.fromEntries(
-      scopedIds
-        .map((id) => [id, root.series[id]] as const)
-        .filter((entry): entry is [string, NonNullable<typeof entry[1]>] => Boolean(entry[1])),
-    )
-    return {
-      status: 'ready',
-      data: {
-        ...root,
-        teamCount: Object.keys(scopedSeriesFromIndex).length,
-        pointCount: Object.values(scopedSeriesFromIndex).reduce((total, series) => total + series.points.length, 0),
-        series: scopedSeriesFromIndex,
-      },
-    }
-  }
-  const legacyScopedSeries = scopedSeries ?? {}
-  return {
-    status: 'ready',
-    data: {
-      ...root,
-      teamCount: Object.keys(legacyScopedSeries).length,
-      pointCount: Object.values(legacyScopedSeries).reduce((total, series) => total + series.points.length, 0),
-      series: legacyScopedSeries,
-    },
-  }
+  return { status: 'loading' }
 }
 
 function resolveRegionHistoryState(

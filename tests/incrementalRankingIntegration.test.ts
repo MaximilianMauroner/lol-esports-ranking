@@ -103,7 +103,7 @@ test('releasing import audit rows before snapshot preserves roster/player public
   }
 })
 
-test('feature/mode matrix preserves legacy and daily/manual force full while canonical no-change exits before build', async () => {
+test('feature/mode matrix preserves disabled and daily/manual force full while canonical no-change exits before build', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-matrix-'))
   try {
     const source = fixtureSource(baseMatches())
@@ -123,8 +123,8 @@ test('feature/mode matrix preserves legacy and daily/manual force full while can
       version: fullBuild.snapshot.model.version,
       configHash: fullBuild.snapshot.model.configHash,
     })
-    const legacy = await run(root, 'legacy', source, { mode: 'legacy', cause: 'pending-match', enabled: true })
-    assert.equal(legacy.action, 'publish-full')
+    const missingState = await run(root, 'missing-state', source, { mode: 'gated', cause: 'pending-match', enabled: true })
+    assert.equal(missingState.action, 'publish-full')
     const daily = await run(root, 'daily', source, { mode: 'gated', cause: 'daily-audit', enabled: true, restored: restoreFrom(disabled) })
     assert.equal(daily.action, 'publish-full')
     assert.equal(daily.metrics.parity, true)
@@ -339,7 +339,7 @@ test('append, same-day insertion, and historical correction use whole-date repla
       assert.equal(incremental.action, 'publish-incremental', `${name}: ${incremental.metrics.fallbackReason ?? 'no fallback reason'}`)
       assert.equal(incremental.metrics.fullSnapshotWritten, false, name)
       assert.ok(incremental.metrics.replayedMatchCount > 0, name)
-      const full = await run(root, `${name}-full`, source, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+      const full = await run(root, `${name}-full`, source, { mode: 'gated', cause: 'daily-audit', enabled: false })
       assert.deepEqual(semanticMap(incremental), semanticMap(full), name)
       await assert.rejects(access(join(root, `${name}-incremental-full.json`)), name)
     }
@@ -361,7 +361,7 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     assert.equal(shadow.metrics.stateParity, false)
     assert.equal(shadow.metrics.stateParityReport?.checkpointEqual, false)
     assert.equal(shadow.diagnostic?.reason, 'checkpoint-state-parity-mismatch')
-    const shadowFull = await run(root, 'shadow-authority', appended, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    const shadowFull = await run(root, 'shadow-authority', appended, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(shadow.state, shadowFull.action === 'no-change' ? undefined : shadowFull.state)
 
     const missing = await run(root, 'missing', appended, {
@@ -422,7 +422,7 @@ test('causal tournament schedule transitions replay while future schedule append
     assert.equal(incremental.action, 'publish-full')
     assert.equal(incremental.metrics.classification, 'historical-correction')
     assert.match(incremental.metrics.fallbackReason ?? '', /checkpoint-/)
-    const full = await run(root, 'tournament-transition-full', transitioned, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    const full = await run(root, 'tournament-transition-full', transitioned, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(semanticMap(incremental), semanticMap(full))
 
     const future = structuredClone(baseSource)
@@ -476,7 +476,7 @@ test('a correction can be promoted and followed by an append without losing pred
       mode: 'gated', cause: 'pending-match', enabled: true, restored: correctedAuthority,
     })
     assert.equal(appended.action, 'publish-incremental', appended.metrics.fallbackReason)
-    const full = await run(root, 'sequence-full', appendedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    const full = await run(root, 'sequence-full', appendedSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(semanticMap(appended), semanticMap(full))
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
@@ -525,7 +525,7 @@ test('cross-season corrections and whole-season deletion subtract extinct scope 
     })
     assert.equal(corrected.action, 'publish-incremental', corrected.metrics.fallbackReason)
     assert.ok(corrected.metrics.changedPaths.some((path) => path.startsWith('/data/scopes/') && path.includes('2026')))
-    const correctionFull = await run(root, 'season-correction-full', correctedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    const correctionFull = await run(root, 'season-correction-full', correctedSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(semanticMap(corrected), semanticMap(correctionFull))
 
     const removedSource = fixtureSource(matches.filter((entry) => entry.season !== 2025))
@@ -535,7 +535,7 @@ test('cross-season corrections and whole-season deletion subtract extinct scope 
     assert.equal(removed.action, 'publish-incremental', removed.metrics.fallbackReason)
     assert.ok(removed.metrics.removedPaths.some((path) => path.startsWith('/data/scopes/') && path.includes('2025')))
     assert.ok(removed.metrics.removedPaths.some((path) => path.startsWith('/data/matches/') && path.includes('2025')))
-    const removalFull = await run(root, 'season-removed-full', removedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    const removalFull = await run(root, 'season-removed-full', removedSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(semanticMap(removed), semanticMap(removalFull))
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
@@ -558,7 +558,7 @@ test('match-page contraction removes obsolete trailing page objects', async () =
     })
     assert.equal(contracted.action, 'publish-incremental', contracted.metrics.fallbackReason)
     assert.ok(contracted.metrics.removedPaths.filter((path) => path.includes('/matches/pages/')).some((path) => /-2\.json$/.test(path)))
-    const full = await run(root, 'pages-full', contractedSource, { mode: 'legacy', cause: 'daily-audit', enabled: false })
+    const full = await run(root, 'pages-full', contractedSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(semanticMap(contracted), semanticMap(full))
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
@@ -569,7 +569,7 @@ function run(
   root: string,
   name: string,
   sourceData: RankingSourceImport,
-  options: { mode: 'legacy' | 'shadow' | 'gated'; cause: string; enabled: boolean; restored?: RestoredIncrementalAuthority; buildSnapshot?: typeof buildStaticSnapshot; sourceReceiptDigest?: string },
+  options: { mode: 'shadow' | 'gated'; cause: string; enabled: boolean; restored?: RestoredIncrementalAuthority; buildSnapshot?: typeof buildStaticSnapshot; sourceReceiptDigest?: string },
 ) {
   return buildRankingIncrementally({
     ...options,
