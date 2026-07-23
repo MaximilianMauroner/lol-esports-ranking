@@ -103,6 +103,28 @@ test('maxElapsed aborts an in-flight provider attempt and emits failure telemetr
   assert.equal(failure?.attempts.at(-1)?.reason, 'max-elapsed')
 })
 
+test('attempt deadline remains a referenced liveness handle until fetch settles and is then cleared', async () => {
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  let cleared = false
+  const setDeadline = ((callback: () => void, delay?: number) => {
+    deadline = setTimeout(callback, delay)
+    return deadline
+  }) as typeof setTimeout
+  const response = await fetchWithRetry('https://provider.invalid', {}, {
+    fetcher: async () => {
+      assert.equal(deadline?.hasRef(), true)
+      return new Response('ok', { status: 200 })
+    },
+    setTimeoutFn: setDeadline,
+    clearTimeoutFn: (timeout) => {
+      cleared = true
+      clearTimeout(timeout)
+    },
+  })
+  assert.equal(response.status, 200)
+  assert.equal(cleared, true)
+})
+
 test('caller timeout preserves abort semantics and attaches one persisted terminal attempt', async () => {
   let failureCalls = 0
   let persisted: ReturnType<typeof snapshotProviderFetchTelemetry> | undefined

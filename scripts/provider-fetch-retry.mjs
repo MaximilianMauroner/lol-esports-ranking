@@ -59,12 +59,19 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
       deadlineExpired = true
       attemptController.abort(new DOMException('Provider request exceeded maxElapsedMs', 'TimeoutError'))
     }, Math.max(1, remainingMs))
-    attemptTimeout?.unref?.()
     try {
-      const response = await fetcher(input, { ...init, signal: attemptController.signal })
-      const bodyRetryReason = await options.retryResponse?.(response.clone?.() ?? response)
-      clearTimeoutFn(attemptTimeout)
-      init.signal?.removeEventListener('abort', forwardAbort)
+      let response
+      let bodyRetryReason
+      try {
+        response = await fetcher(input, { ...init, signal: attemptController.signal })
+        bodyRetryReason = await options.retryResponse?.(response.clone?.() ?? response)
+      } finally {
+        try {
+          clearTimeoutFn(attemptTimeout)
+        } finally {
+          init.signal?.removeEventListener('abort', forwardAbort)
+        }
+      }
       const retryReason = bodyRetryReason
         ? String(bodyRetryReason === true ? 'provider-rate-limited-body' : bodyRetryReason)
         : isRetryableStatus(response.status) ? `http-${response.status}` : undefined
@@ -100,8 +107,6 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
       options.onRetry?.(telemetry.retries.at(-1), telemetry)
       await sleep(delayMs)
     } catch (error) {
-      clearTimeoutFn(attemptTimeout)
-      init.signal?.removeEventListener('abort', forwardAbort)
       if (init.signal?.aborted) {
         const reason = init.signal.reason ?? error
         if (!telemetry.attempts.some((entry) => entry.attempt === attempt)) {
