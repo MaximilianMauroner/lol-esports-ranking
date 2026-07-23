@@ -517,7 +517,6 @@ async function runBenchmarkWorker() {
     '--force',
   ], {
     env: {
-      RANKING_INCREMENTAL_ENABLED: 'true',
       RANKING_REFRESH_MODE: 'gated',
       RANKING_REFRESH_CAUSE: 'pending-match',
       RANKING_REFRESH_RUN_ID: 'production-shaped-local',

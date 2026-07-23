@@ -517,10 +517,6 @@ export async function defaultRunChild({ env, reconciliationPath, metricsPath, ru
     RANKING_REFRESH_RUN_ID: runId,
     RANKING_REFRESH_CAUSE: cause,
     ...(cause === 'daily-audit' ? { RANKING_FORCE_REFRESH: 'true' } : {}),
-    ...((env.RANKING_REFRESH_MODE === 'gated' && cause === 'daily-audit')
-      || (env.RANKING_REFRESH_MODE === 'shadow' && env.RANKING_INCREMENTAL_SHADOW_ENABLED === 'true')
-      ? { RANKING_INCREMENTAL_ENABLED: 'true' }
-      : {}),
     RANKING_REFRESH_AFFECTED_IDS: JSON.stringify(affectedIds ?? []),
     ...(affectedDate ? { RANKING_REFRESH_AFFECTED_DATE: affectedDate } : {}),
     ...(fencingToken ? {

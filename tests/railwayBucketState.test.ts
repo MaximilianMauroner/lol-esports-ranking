@@ -12,7 +12,6 @@ import {
   getBucketObject,
   readActiveContentAddressedGeneration,
   readBucketJson,
-  readPreviousGenerationAuthorities,
   releaseBucketLease,
   renewBucketLease,
   uploadContentAddressedPublicArtifacts,
@@ -559,7 +558,7 @@ test('active content-addressed restore verifies pointer, manifest, and every ref
 test('active schema-v1 content-addressed cutover is read-only and the first v2 promotion drops its rollback target', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-schema-cutover-'))
   const publicDir = join(root, 'public')
-  const client = memoryS3()
+  const sourceClient = memoryS3()
   try {
     const oldGenerationId = 'pre_change_schema_v1'
     await writeContentAddressedFixture(publicDir, oldGenerationId)
@@ -568,11 +567,11 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
       generationId: oldGenerationId,
       fencingToken: 1,
       config,
-      client,
+      client: sourceClient,
     })
 
     const manifestKey = `rankings/generations/${oldGenerationId}/manifest.json`
-    const storedManifest = client.objects.get(manifestKey)!
+    const storedManifest = sourceClient.objects.get(manifestKey)!
     const schemaV1 = { ...JSON.parse(storedManifest.body), schemaVersion: 1 }
     const schemaV1Body = `${JSON.stringify(schemaV1, null, 2)}\n`
     const schemaV1Bytes = Buffer.from(schemaV1Body)
@@ -584,19 +583,61 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
       'semantic-bytes': String(schemaV1Bytes.byteLength),
     }
 
-    const activeObject = client.objects.get('rankings/active-generation.json')!
+    const activeObject = sourceClient.objects.get('rankings/active-generation.json')!
+    const markedPointer = JSON.parse(activeObject.body)
+    markedPointer.manifestDigest = schemaV1Digest
+    markedPointer.manifestBytes = schemaV1Bytes.byteLength
+    markedPointer.manifestEtag = storedManifest.etag
+    activeObject.body = JSON.stringify(markedPointer)
+    activeObject.bytes = Buffer.from(activeObject.body)
+
+    const markedClient = memoryS3()
+    for (const [key, object] of sourceClient.objects) {
+      markedClient.objects.set(key, {
+        ...object,
+        ...(object.bytes ? { bytes: Buffer.from(object.bytes) } : {}),
+        ...(object.metadata ? { metadata: { ...object.metadata } } : {}),
+      })
+    }
+    await assert.rejects(
+      readActiveContentAddressedGeneration({ config, client: markedClient, verifyArtifacts: false }),
+      /Active public generation manifest is invalid/,
+    )
+    await assert.rejects(
+      getBucketObject('ranking-summary.json', { config, client: markedClient }),
+      /Active public generation manifest is invalid/,
+    )
+
+    // The cache must retain the pointer's schema authority, not just its generation ID.
+    const cachedPointerObject = markedClient.objects.get('rankings/active-generation.json')!
+    const cachedPointer = JSON.parse(cachedPointerObject.body)
+    delete cachedPointer.publicManifestSchemaVersion
+    cachedPointerObject.body = JSON.stringify(cachedPointer)
+    cachedPointerObject.bytes = Buffer.from(cachedPointerObject.body)
+    await assert.rejects(
+      getBucketObject('ranking-summary.json', { config, client: markedClient }),
+      /Active public generation manifest is invalid/,
+    )
+
     const oldPointer = JSON.parse(activeObject.body)
     delete oldPointer.publicManifestSchemaVersion
-    oldPointer.manifestDigest = schemaV1Digest
-    oldPointer.manifestBytes = schemaV1Bytes.byteLength
-    oldPointer.manifestEtag = storedManifest.etag
     activeObject.body = JSON.stringify(oldPointer)
     activeObject.bytes = Buffer.from(activeObject.body)
 
+    // A fresh process sees the pre-change pointer without a cached v2 marker.
+    const client = memoryS3()
+    for (const [key, object] of sourceClient.objects) {
+      client.objects.set(key, {
+        ...object,
+        ...(object.bytes ? { bytes: Buffer.from(object.bytes) } : {}),
+        ...(object.metadata ? { metadata: { ...object.metadata } } : {}),
+      })
+    }
+    const cutoverManifest = client.objects.get(manifestKey)!
     const delivered = await getBucketObject('ranking-summary.json', { config, client })
     assert.equal(delivered.cutover, 'schema-v1-active-manifest-to-v2')
     assert.equal(JSON.parse((await streamBytes(delivered.body)).toString('utf8')).schemaVersion, 2)
-    assert.equal(JSON.parse(storedManifest.body).schemaVersion, 1)
+    assert.equal(JSON.parse(cutoverManifest.body).schemaVersion, 1)
 
     const restored = await readActiveContentAddressedGeneration({ config, client, verifyArtifacts: false })
     assert.equal(restored.found, true)
@@ -615,7 +656,7 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
     const promoted = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
     assert.equal(promoted.publicManifestSchemaVersion, 2)
     assert.equal(Object.hasOwn(promoted, 'previousGeneration'), false)
-    assert.equal(JSON.parse(storedManifest.body).schemaVersion, 1)
+    assert.equal(JSON.parse(cutoverManifest.body).schemaVersion, 1)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

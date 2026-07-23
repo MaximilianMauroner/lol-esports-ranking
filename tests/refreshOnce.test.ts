@@ -285,7 +285,9 @@ test('daily audit success timestamp requires clean parity, promotion, and full-a
           RANKING_REFRESH_METRICS_PATH: metricsPath,
         },
         runChildProcess: async (_command: string, _args: string[], _timeoutMs: number, childEnv: NodeJS.ProcessEnv) => {
-          assert.equal(childEnv.RANKING_INCREMENTAL_ENABLED, 'true')
+          assert.equal(childEnv.RANKING_INCREMENTAL_ENABLED, undefined)
+          assert.equal(childEnv.RANKING_REFRESH_MODE, 'gated')
+          assert.equal(childEnv.RANKING_REFRESH_FENCING_TOKEN, '1')
           const child = createRefreshMetrics({ runId: `audit-${auditCase.name}`, mode: 'gated', cause: 'daily-audit' })
           child.recordStage('semantic-parity', {
             result: auditCase.semantic && auditCase.state && auditCase.checkpoint ? 'completed' : 'failed',
@@ -312,7 +314,7 @@ test('daily audit success timestamp requires clean parity, promotion, and full-a
   }
 })
 
-test('default gated daily-audit child enables incremental comparison while shadow remains opt-in', async () => {
+test('default gated child env enables canonical fenced ingestion for every scored cause without a legacy flag', async () => {
   const childEnvironments: NodeJS.ProcessEnv[] = []
   const runProcess = async (_command: string, _args: string[], _timeoutMs: number, childEnv: NodeJS.ProcessEnv) => {
     childEnvironments.push(childEnv)
@@ -320,26 +322,47 @@ test('default gated daily-audit child enables incremental comparison while shado
   const base = {
     reconciliationPath: '/tmp/reconciliation.json',
     metricsPath: '/tmp/metrics.json',
-    runId: 'audit-child',
     leaseKey: 'ops/refresh-lease.json',
     owner: 'worker',
     fencingToken: 1,
     promotionEtag: 'promotion',
     affectedIds: [],
   }
+  for (const cause of ['pending-match', 'retry', 'manual-force', 'daily-audit'] as const) {
+    await defaultRunChild({
+      ...base,
+      runId: `${cause}-child`,
+      env: {
+        RANKING_REFRESH_MODE: 'gated',
+        ...(cause === 'manual-force' ? { RANKING_FORCE_REFRESH: 'true' } : {}),
+      },
+      cause,
+    }, { runProcess })
+  }
   await defaultRunChild({
     ...base,
-    env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'true' },
+    runId: 'shadow-child',
+    env: {
+      RANKING_REFRESH_MODE: 'shadow',
+      RANKING_INCREMENTAL_SHADOW_ENABLED: 'true',
+    },
     cause: 'daily-audit',
   }, { runProcess })
-  await defaultRunChild({
-    ...base,
-    env: { RANKING_REFRESH_MODE: 'shadow' },
-    cause: 'daily-audit',
-  }, { runProcess })
-  assert.equal(childEnvironments[0].RANKING_INCREMENTAL_ENABLED, 'true')
-  assert.equal(childEnvironments[0].RANKING_FORCE_REFRESH, 'true')
-  assert.equal(childEnvironments[1].RANKING_INCREMENTAL_ENABLED, undefined)
+  assert.equal(childEnvironments.length, 5)
+  for (const childEnv of childEnvironments.slice(0, 4)) {
+    assert.equal(childEnv.RANKING_REFRESH_MODE, 'gated')
+    assert.equal(childEnv.RANKING_REFRESH_FENCING_TOKEN, '1')
+    assert.equal(childEnv.RANKING_REFRESH_LEASE_KEY, 'ops/refresh-lease.json')
+    assert.equal(childEnv.RANKING_REFRESH_LEASE_OWNER, 'worker')
+    assert.equal(childEnv.RANKING_REFRESH_PROMOTION_ETAG, 'promotion')
+    assert.equal(childEnv.RANKING_INCREMENTAL_ENABLED, undefined)
+  }
+  assert.equal(childEnvironments[0].RANKING_FORCE_REFRESH, undefined)
+  assert.equal(childEnvironments[1].RANKING_FORCE_REFRESH, undefined)
+  assert.equal(childEnvironments[2].RANKING_FORCE_REFRESH, 'true')
+  assert.equal(childEnvironments[3].RANKING_FORCE_REFRESH, 'true')
+  assert.equal(childEnvironments[4].RANKING_INCREMENTAL_SHADOW_ENABLED, 'true')
+  assert.equal(childEnvironments[4].RANKING_INCREMENTAL_ENABLED, undefined)
 })
 
 test('release failure cannot replace the primary failure and terminal metric is unconditional', async () => {

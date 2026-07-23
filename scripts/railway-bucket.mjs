@@ -13,7 +13,7 @@ import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogica
 import { assertStateManifestAuthority, parseIncrementalStateManifest, readStoredJsonStateObject } from './incremental-state-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
 
-let activeGenerationCache = { expiresAt: 0, value: null }
+const activeGenerationCache = new WeakMap()
 
 export const PRESIGNED_URL_EXPIRY_SECONDS = 3600
 const IMMUTABLE_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable'
@@ -291,7 +291,10 @@ export async function uploadRankingArtifacts({
       ...(active.found ? { ifMatch: active.etag } : { ifNoneMatch: '*' }),
     })
     if (!promotion.written) throw new Error('Active generation changed during promotion')
-    activeGenerationCache = { expiresAt: Date.now() + 30_000, value: generationId }
+    activeGenerationCache.set(client, {
+      expiresAt: Date.now() + 30_000,
+      value: { generationId, publicManifestSchemaVersion: 2 },
+    })
     onStage?.('promotion', {
       durationMs: monotonicNow() - stageStarted,
       output: { generationId, fencingToken, promotedAt, etag: promotion.etag },
@@ -527,11 +530,14 @@ export async function getBucketObject(relativePath, {
   const contentObjectRequest = safePath.startsWith('objects/sha256/')
   const directContentObject = /^objects\/sha256\/[a-f0-9]{64}$/.test(safePath)
   if (contentObjectRequest && !directContentObject) return { found: false }
+  const active = directContentObject || typeof generationId === 'string'
+    ? undefined
+    : await activeGeneration(config, client)
   const generation = directContentObject
     ? undefined
     : typeof generationId === 'string' && generationId.length > 0
       ? generationId
-      : await activeGeneration(config, client)
+      : active?.generationId
   const keys = [
     ...(directContentObject ? [bucketKey(config, safePath)] : []),
     ...(generation && safePath === 'ranking-summary.json'
@@ -550,7 +556,9 @@ export async function getBucketObject(relativePath, {
       if (generationId === undefined && safePath === 'ranking-summary.json' && key.endsWith('/manifest.json')) {
         const storedBytes = await bodyBytes(object.Body)
         const parsed = JSON.parse(storedBytes.toString('utf8'))
-        const compatible = compatibleGenerationManifest(parsed, generation)
+        const compatible = compatibleGenerationManifest(parsed, generation, {
+          allowSchemaV1Cutover: active?.publicManifestSchemaVersion === undefined,
+        })
         if (compatible.cutover) {
           const migratedBytes = Buffer.from(jsonBody(compatible.manifest))
           const migratedDigest = createHash('sha256').update(migratedBytes).digest('hex')
@@ -715,7 +723,9 @@ export async function readActiveContentAddressedGeneration({
     || object.Metadata?.sha256 !== manifestDigest) {
     throw new Error('Active public generation manifest authority mismatch')
   }
-  const { manifest, cutover } = compatibleGenerationManifest(JSON.parse(manifestBytes.toString('utf8')), generationId)
+  const { manifest, cutover } = compatibleGenerationManifest(JSON.parse(manifestBytes.toString('utf8')), generationId, {
+    allowSchemaV1Cutover: active.value.publicManifestSchemaVersion === undefined,
+  })
   const identities = {}
   for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
     identities[canonicalPublicLogicalPath(logicalPath)] = identity
@@ -745,10 +755,10 @@ export async function readActiveContentAddressedGeneration({
   }
 }
 
-function compatibleGenerationManifest(value, generationId) {
+function compatibleGenerationManifest(value, generationId, { allowSchemaV1Cutover = false } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || value.artifactKind !== 'public-artifact-generation-manifest'
-    || (value.schemaVersion !== 1 && value.schemaVersion !== 2)
+    || (value.schemaVersion !== 2 && !(allowSchemaV1Cutover && value.schemaVersion === 1))
     || value.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE
     || value.generationId !== generationId || value.runId !== generationId
     || typeof value.generatedAt !== 'string' || Number.isNaN(new Date(value.generatedAt).getTime())
@@ -2111,22 +2121,31 @@ function isMissingObjectError(error) {
 }
 
 async function activeGeneration(config, client) {
-  if (activeGenerationCache.expiresAt > Date.now()) return activeGenerationCache.value
+  const cached = activeGenerationCache.get(client)
+  if (cached?.expiresAt > Date.now()) return cached.value
   try {
     const object = await client.send(new GetObjectCommand({
       Bucket: config.bucket,
       Key: bucketKey(config, 'active-generation.json'),
     }))
-    const value = JSON.parse(await bodyText(object.Body))
-    activeGenerationCache = {
+    const pointer = JSON.parse(await bodyText(object.Body))
+    const value = typeof pointer?.generationId === 'string'
+      ? {
+          generationId: pointer.generationId,
+          ...(pointer.publicManifestSchemaVersion !== undefined
+            ? { publicManifestSchemaVersion: pointer.publicManifestSchemaVersion }
+            : {}),
+        }
+      : null
+    activeGenerationCache.set(client, {
       expiresAt: Date.now() + 30_000,
-      value: typeof value?.generationId === 'string' ? value.generationId : null,
-    }
+      value,
+    })
   } catch (error) {
     if (!isMissingObjectError(error)) throw error
-    activeGenerationCache = { expiresAt: Date.now() + 30_000, value: null }
+    activeGenerationCache.set(client, { expiresAt: Date.now() + 30_000, value: null })
   }
-  return activeGenerationCache.value
+  return activeGenerationCache.get(client)?.value ?? null
 }
 
 function isPreconditionError(error) {
