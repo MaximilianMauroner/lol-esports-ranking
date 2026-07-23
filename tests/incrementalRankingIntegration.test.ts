@@ -8,6 +8,7 @@ import type { MatchRecord, MatchRosterSnapshot, Role, Side, TeamProfile } from '
 import { buildRankingIncrementally, mergePartialPlayerDirectoryArtifact, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from '../scripts/incremental-ranking-orchestrator.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import type { RankingSourceImport } from '../scripts/ranking-source-import.ts'
+import { normalizeRankingRefreshOutcome } from '../scripts/ranking-refresh-outcome-contract.mjs'
 import { buildStaticSnapshot } from '../scripts/build-static-snapshot.ts'
 import { createStaticRankingData } from '../src/lib/snapshot.ts'
 import { buildPlayerModel } from '../src/lib/model.ts'
@@ -128,12 +129,25 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
     const daily = await run(root, 'daily', source, { mode: 'gated', cause: 'daily-audit', enabled: true, restored: restoreFrom(disabled) })
     assert.equal(daily.action, 'publish-full')
     assert.equal(daily.metrics.parity, true)
+    assert.equal(daily.metrics.stateParity, true)
+    assert.equal(daily.metrics.stateParityReport?.checkpointEqual, true)
+    const dailyOutcome = normalizedOutcomeForBuild(daily)
+    assert.equal(dailyOutcome.outcome, 'unchanged')
+    assert.equal(dailyOutcome.mode, 'clean-full-comparison')
+    assert.equal(dailyOutcome.contract.auditEligibility, 'clean-zero-mutation-full-replay-only')
+    assert.equal(dailyOutcome.contract.authorityAdvancement, 'after-successful-clean-full-publication')
     const manual = await run(root, 'manual', source, { mode: 'shadow', cause: 'manual-force', enabled: true })
     assert.equal(manual.action, 'publish-full')
 
     const restored = restoreFrom(disabled)
     const noChange = await run(root, 'unchanged', source, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
     assert.equal(noChange.action, 'no-change', noChange.metrics.fallbackReason)
+    assert.equal(outcomeForBuild(noChange), 'unchanged')
+    const ordinaryOutcome = normalizedOutcomeForBuild(noChange)
+    assert.equal(ordinaryOutcome.mode, 'ordinary')
+    assert.equal(ordinaryOutcome.contract.authorityAdvancement, 'never')
+    assert.equal(ordinaryOutcome.contract.auditEligibility, 'ineligible')
+    assert.equal(ordinaryOutcome.contract.allowedWrites.includes('semantic-artifacts'), false)
     assert.equal(noChange.metrics.fullSnapshotWritten, false)
     await assert.rejects(access(join(root, 'unchanged-full.json')))
     await assert.rejects(access(join(root, 'unchanged-public')))
@@ -145,6 +159,7 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
     const metadata = await run(root, 'metadata', metadataSource, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
     assert.equal(metadata.action, 'publish-incremental')
     assert.equal(metadata.metrics.classification, 'metadata-only')
+    assert.equal(outcomeForBuild(metadata), 'metadata-only')
     assert.equal(metadata.metrics.replayedMatchCount, 0)
     assert.deepEqual(metadata.metrics.changedPaths, ['/data/ranking-summary.json'])
     assert.equal(metadata.action === 'publish-incremental' ? metadata.build : undefined, undefined)
@@ -314,9 +329,11 @@ test('daily audit compares corpus authority across refreshed receipt identities 
       mode: 'gated', cause: 'daily-audit', enabled: true, restored: corrupt, sourceReceiptDigest: 'c'.repeat(64),
     })
     assert.equal(mismatch.action, 'publish-full')
+    assert.equal(mismatch.metrics.parity, true)
     assert.equal(mismatch.metrics.stateParity, false)
     assert.equal(mismatch.metrics.stateParityReport?.checkpointEqual, false)
     assert.ok(mismatch.metrics.stateParityReport?.mismatchPaths.some((path) => path.includes('injectedStateMismatch')))
+    assert.throws(() => normalizedOutcomeForBuild(mismatch), /semantic, state, and checkpoint parity/)
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
@@ -337,6 +354,7 @@ test('append, same-day insertion, and historical correction use whole-date repla
       const source = fixtureSource(matches)
       const incremental = await run(root, `${name}-incremental`, source, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
       assert.equal(incremental.action, 'publish-incremental', `${name}: ${incremental.metrics.fallbackReason ?? 'no fallback reason'}`)
+      assert.equal(outcomeForBuild(incremental), incremental.metrics.classification)
       assert.equal(incremental.metrics.fullSnapshotWritten, false, name)
       assert.ok(incremental.metrics.replayedMatchCount > 0, name)
       const full = await run(root, `${name}-full`, source, { mode: 'gated', cause: 'daily-audit', enabled: false })
@@ -395,6 +413,7 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     assert.equal(mismatch.metrics.parity, false)
     assert.equal(mismatch.diagnostic?.kind, 'shadow-parity')
     assert.equal(mismatch.diagnostic?.parity?.equal, false)
+    assert.equal(outcomeForBuild(mismatch), 'parity-failure')
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
@@ -674,6 +693,28 @@ function semanticMap(result: IncrementalRankingBuildResult) {
   }
   if (!result.build) throw new Error('no materialized build')
   return Object.fromEntries(result.build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, prepareSemanticArtifact(write.value).digest]))
+}
+
+function outcomeForBuild(result: IncrementalRankingBuildResult) {
+  return normalizedOutcomeForBuild(result).outcome
+}
+
+function normalizedOutcomeForBuild(result: IncrementalRankingBuildResult) {
+  return normalizeRankingRefreshOutcome({
+    sourceResult: result.action === 'no-change' ? 'unchanged' : 'completed',
+    providerStatus: 'usable',
+    force: false,
+    rawRecoveryAuthorized: false,
+    validatedExistingRawBaseline: false,
+    dataMode: result.sourceData.dataMode,
+    rankingChangeKind: result.metrics.classification,
+    buildAction: result.action,
+    parity: result.metrics.parity,
+    stateParity: result.metrics.stateParity,
+    checkpointParity: result.metrics.stateParityReport?.checkpointEqual ?? null,
+    fallbackReason: result.metrics.fallbackReason
+      ?? (result.action === 'no-change' ? null : result.diagnostic?.reason ?? null),
+  })
 }
 
 const teams: Record<string, TeamProfile> = {

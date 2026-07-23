@@ -201,7 +201,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         warnings: uniqueValues([
           ...arrayValue(previousManifest?.warnings),
           ...arrayValue(failedRefreshManifest?.warnings),
-          `Reused verified raw authority after scored providers were unavailable for ${start} through ${end}.`,
+          `Reused a validated existing raw baseline after scored providers were unavailable for ${start} through ${end}.`,
         ]),
         refreshAttempt: {
           reusedExistingRaw: true,
@@ -212,7 +212,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         },
       }
       await writeFile(stagingManifestPath, `${JSON.stringify(stagingManifest, null, 2)}\n`)
-      console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; rebuilding from verified existing raw authority.`)
+      console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; rebuilding from a validated existing raw baseline.`)
     }
 
     const hashingStarted = monotonicNow()
@@ -756,7 +756,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
       ...(publishedGenerationId ? { generationId: publishedGenerationId } : {}),
-      ...(incrementalBuild ? { incrementalMetrics: incrementalBuild.metrics } : {}),
+      ...(incrementalBuild ? {
+        incrementalAction: incrementalBuild.action,
+        incrementalMetrics: incrementalBuild.metrics,
+      } : {}),
       ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
       ...(publishedBucket ? { bucketPublish: publishedBucket } : {}),
     }
