@@ -1,0 +1,191 @@
+{
+  "kind": "ranking-restart-incident-ledger",
+  "schemaVersion": 1,
+  "baselineCommit": "3682553419beada82a7954ad02db366571320667",
+  "entries": [
+    {
+      "id": "lesson-01-production-shaped-proof",
+      "lesson": "Green CI is not production-shaped proof; test Git and archive roots; do not assume .git.",
+      "currentPaths": [
+        "scripts/rollout-implementation-evidence.mjs",
+        "tests/rolloutImplementationEvidence.test.ts"
+      ],
+      "existingEvidence": [
+        "tests/rolloutImplementationEvidence.test.ts exercises both a Git checkout and a source archive without .git."
+      ],
+      "phase0Evidence": [
+        "tests/rankingRestartBaseline.test.ts proves identical explicit commit semantics in Git and archive roots and a strict failure when neither explicit/environment nor Git identity exists."
+      ],
+      "disposition": "proven-fixed",
+      "rationale": "The Phase 0 capture path no longer assumes .git and the existing rollout implementation evidence already has a production-shaped archive fixture.",
+      "followup": "Keep Git/archive parity in every later evidence producer."
+    },
+    {
+      "id": "lesson-02-path-specific-memory",
+      "lesson": "Full replay is a separate ~2GB workload; distinct probe/append/bootstrap/audit envelopes and honest measurement.",
+      "currentPaths": [
+        "scripts/refresh-worker-memory.mjs",
+        "tests/refreshWorkerMemory.test.ts",
+        "scripts/benchmark-incremental-ranking.ts"
+      ],
+      "existingEvidence": [
+        "The current worker and raw-source child both declare a 2048 MB old-space ceiling and tests bind entry points to that policy."
+      ],
+      "phase0Evidence": [
+        "ops/ranking-restart/baseline-receipt.json freezes the current deployment and cadence without claiming an incremental memory target."
+      ],
+      "disposition": "still-exposed",
+      "rationale": "Current code has an honest full-workload ceiling but does not yet define and prove distinct production envelopes for probe, append, bootstrap, and audit.",
+      "followup": "Add path-specific resource budgets and production measurements in the later resource-budget phase."
+    },
+    {
+      "id": "lesson-03-discriminated-failure-authority",
+      "lesson": "Authority includes failure semantics; discriminated child states with explicit required/optional artifacts; real absent-file/provider fixtures.",
+      "currentPaths": [
+        "scripts/rollout-implementation-evidence.mjs",
+        "scripts/refresh-once.mjs",
+        "tests/refreshOnceEarlyReceipts.test.ts"
+      ],
+      "existingEvidence": [
+        "Early terminal refresh outcomes publish immutable success, skipped, or failure evidence and missing storage fails closed."
+      ],
+      "phase0Evidence": [
+        "scripts/ranking-restart-baseline.mjs uses a strict present/absent full-audit union and records verified live absence instead of fabricating an audit receipt."
+      ],
+      "disposition": "still-exposed",
+      "rationale": "Phase 0 represents audit absence exactly, but a complete child-state outcome matrix with production absent-provider fixtures is deferred.",
+      "followup": "Specify and test the authoritative outcome matrix in the next contract phase."
+    },
+    {
+      "id": "lesson-04-narrow-recovery-override",
+      "lesson": "Recovery needs narrow override; scheduled freshness stays strict; verified-raw rebuild requires force + separate recovery authorization.",
+      "currentPaths": [
+        "scripts/refresh-once.mjs",
+        "scripts/refresh-trigger-state.mjs",
+        "scripts/refresh-data-if-changed.mjs"
+      ],
+      "existingEvidence": [
+        "Scheduled refresh cadence and freshness checks currently fail closed; manual force exists but is not a separate recovery authorization."
+      ],
+      "phase0Evidence": [
+        "ops/ranking-restart/baseline-receipt.json records previous-complete-generation first and requires both force and recovery-authorization for verified-raw replay."
+      ],
+      "disposition": "intentionally-unsupported",
+      "rationale": "Phase 0 documents the required recovery contract but is explicitly unauthorized to introduce the recovery override.",
+      "followup": "Implement the separate recovery authorization only in the approved fresh/recovery/stale phase."
+    },
+    {
+      "id": "lesson-05-causal-explanations",
+      "lesson": "Published movement is not causal match impact; explanations come from causal per-series engine output.",
+      "currentPaths": [
+        "src/lib/ratingSeriesEngine.ts",
+        "src/lib/rankingExplanations.ts",
+        "tests/rankingExplanations.test.ts"
+      ],
+      "existingEvidence": [
+        "Ranking explanations are produced from series-engine causal outputs rather than inferred only from published movement."
+      ],
+      "phase0Evidence": [
+        "ops/ranking-restart/baseline-receipt.json binds the live model/config and producing code without changing explanation semantics."
+      ],
+      "disposition": "proven-fixed",
+      "rationale": "Current code has a causal per-series explanation path with direct regression coverage.",
+      "followup": "Preserve semantic equality of causal explanation artifacts in all later incremental mutation tests."
+    },
+    {
+      "id": "lesson-06-transactional-publication",
+      "lesson": "Publication is transactional; immutable objects/state/receipts first, reassert fencing, active pointer last; immutable receipt members only.",
+      "currentPaths": [
+        "scripts/railway-bucket.mjs",
+        "scripts/incremental-state-storage.mjs",
+        "tests/railwayBucketState.test.ts",
+        "tests/incrementalStateStorage.test.ts"
+      ],
+      "existingEvidence": [
+        "Content-addressed objects and state are verified before promotion, but uploadRankingArtifacts promotes active-generation.json before publishGenerationReceipt writes generations/<id>/publish.json."
+      ],
+      "phase0Evidence": [
+        "tests/rankingRestartBaseline.test.ts requires active and previous publish receipt presence or verified absence to be explicit and binds that result without mutating publication."
+      ],
+      "disposition": "still-exposed",
+      "rationale": "A crash after pointer promotion and before publish receipt completion can expose a generation whose publish receipt is absent.",
+      "followup": "Move immutable receipt completion before a final fenced active-pointer CAS in the atomic-publication phase."
+    },
+    {
+      "id": "lesson-07-all-publication-modes",
+      "lesson": "Correctness covers local-only, upload-disabled, content-addressed full, patch, no-data.",
+      "currentPaths": [
+        "scripts/refresh-data-if-changed.mjs",
+        "scripts/incremental-ranking-orchestrator.ts",
+        "tests/incrementalRankingIntegration.test.ts",
+        "tests/incrementalArtifactPatch.test.ts"
+      ],
+      "existingEvidence": [
+        "Current integration and patch suites cover full and incremental publication paths, including no-change behavior."
+      ],
+      "phase0Evidence": [
+        "Phase 0 changes no publication defaults and tests prohibit publication or deletion commands from its read-only inspector."
+      ],
+      "disposition": "still-exposed",
+      "rationale": "One matrix proving semantic equivalence across local-only, upload-disabled, content-addressed full, patch, and no-data modes does not yet exist.",
+      "followup": "Add the complete publication-mode outcome matrix before incremental activation."
+    },
+    {
+      "id": "lesson-08-typed-artifact-dependencies",
+      "lesson": "Artifact dependencies need typed domain evidence including tournament invalidation and endpoint-state ratings.",
+      "currentPaths": [
+        "src/lib/incremental/artifactDependencies.ts",
+        "src/lib/incremental/changeClassifier.ts",
+        "tests/incrementalArtifacts.test.ts",
+        "tests/incrementalChangeClassifier.test.ts"
+      ],
+      "existingEvidence": [
+        "The typed dependency graph covers tournament movement artifacts and the classifier has tournament/context invalidation cases."
+      ],
+      "phase0Evidence": [
+        "The baseline binds every active public artifact plus state checkpoints to the exact model/config authority."
+      ],
+      "disposition": "still-exposed",
+      "rationale": "Typed dependencies exist, but complete domain evidence for endpoint-state ratings and every tournament invalidation consumer remains unproven.",
+      "followup": "Close dependency coverage in the later typed-artifact-dependencies phase."
+    },
+    {
+      "id": "lesson-09-one-canonical-rollout-gate",
+      "lesson": "Rollout evidence measures the exact gate; one canonical schema/path resolver across CLI/runtime/runbook/tests/cost; audit success exact zero-mutation/full-comparison.",
+      "currentPaths": [
+        "scripts/rollout-evidence.mjs",
+        "scripts/validate-rollout-gate.mjs",
+        "scripts/railway-cost-report.mjs",
+        "tests/rolloutEvidence.test.ts",
+        "tests/refreshOnceEarlyReceipts.test.ts"
+      ],
+      "existingEvidence": [
+        "Rollout evidence has a canonical schema and early terminal receipts, but multiple consumers still independently resolve parts of the gate."
+      ],
+      "phase0Evidence": [
+        "scripts/ranking-restart-baseline.mjs provides one strict baseline receipt parser/path and records exact full-audit absence."
+      ],
+      "disposition": "still-exposed",
+      "rationale": "Seven-day rollout evidence and exact zero-mutation/full-comparison audit success are explicitly later-phase work.",
+      "followup": "Unify gate resolution and collect seven immutable days before activation."
+    },
+    {
+      "id": "lesson-10-small-sequential-prs",
+      "lesson": "Large stacked PRs hide risk; one current-main contract PR with production-shaped test at a time.",
+      "currentPaths": [
+        "scripts/rollout-implementation-evidence.mjs",
+        "tests/rolloutImplementationEvidence.test.ts",
+        "ops/ranking-restart/incident-ledger.json"
+      ],
+      "existingEvidence": [
+        "The restart baseline is a single current-main Phase 0 contract change and later phases are not included."
+      ],
+      "phase0Evidence": [
+        "tests/rankingRestartBaseline.test.ts verifies this ledger contains exactly the ten approved lessons in order."
+      ],
+      "disposition": "proven-fixed",
+      "rationale": "This restart follows the required one-invariant Phase 0 slice and records later work without implementing it.",
+      "followup": "Merge and independently review Phase 0 before opening the next current-main contract PR."
+    }
+  ]
+}
