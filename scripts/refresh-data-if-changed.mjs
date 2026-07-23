@@ -11,6 +11,7 @@ import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
 import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
 import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
+import { rawSourceWorkerExecArgv } from './refresh-worker-memory.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -1252,7 +1253,7 @@ async function runRawSourceWorker(input, workerDir) {
   try {
     await new Promise((resolveRun, rejectRun) => {
       const child = spawn(process.execPath, [
-        ...process.execArgv,
+        ...rawSourceWorkerExecArgv(process.execArgv),
         resolve('scripts/raw-source-worker.mjs'),
         inputPath,
         outputPath,
