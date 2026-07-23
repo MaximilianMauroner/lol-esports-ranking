@@ -342,7 +342,10 @@ async function verifyRawReceiptObject(client, config, reference, expected) {
 function parsePublicModel(value) {
   const manifest = value?.manifest ?? value
   if (!manifest || typeof manifest !== 'object') throw new Error('Full audit public manifest is required')
-  return parseModel(manifest.model)
+  return parseModel({
+    version: manifest.model?.version,
+    configHash: manifest.model?.configHash,
+  })
 }
 
 function parseModel(value) {

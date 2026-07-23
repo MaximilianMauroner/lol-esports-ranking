@@ -11,7 +11,7 @@ import {
 } from '../scripts/refresh-worker-memory.mjs'
 
 test('refresh worker memory flags are canonical and deduplicate inherited variants', () => {
-  assert.equal(REFRESH_WORKER_MAX_OLD_SPACE_MB, 384)
+  assert.equal(REFRESH_WORKER_MAX_OLD_SPACE_MB, 2048)
   assert.equal(RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB, 2048)
   assert.equal(REFRESH_WORKER_MAX_SEMI_SPACE_MB, 8)
   const inherited = [

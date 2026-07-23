@@ -1,8 +1,8 @@
-export const REFRESH_WORKER_MAX_OLD_SPACE_MB = 384
+export const REFRESH_WORKER_MAX_OLD_SPACE_MB = 2048
 export const RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB = 2048
 export const REFRESH_WORKER_MAX_SEMI_SPACE_MB = 8
 
-/** One launch policy for Railway-triggered and benchmarked refresh workers. */
+/** Full refreshes materialize ranking history; unchanged probes remain small despite this ceiling. */
 export function refreshWorkerExecArgv(inherited = process.execArgv) {
   return workerExecArgv(inherited, REFRESH_WORKER_MAX_OLD_SPACE_MB)
 }
