@@ -1,8 +1,18 @@
 export const REFRESH_WORKER_MAX_OLD_SPACE_MB = 384
+export const RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB = 512
 export const REFRESH_WORKER_MAX_SEMI_SPACE_MB = 8
 
 /** One launch policy for Railway-triggered and benchmarked refresh workers. */
 export function refreshWorkerExecArgv(inherited = process.execArgv) {
+  return workerExecArgv(inherited, REFRESH_WORKER_MAX_OLD_SPACE_MB)
+}
+
+/** Raw authority bootstrap briefly retains compressed source objects alongside the parsed corpus. */
+export function rawSourceWorkerExecArgv(inherited = process.execArgv) {
+  return workerExecArgv(inherited, RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB)
+}
+
+function workerExecArgv(inherited, maxOldSpaceMb) {
   const retained = []
   for (let index = 0; index < inherited.length; index += 1) {
     const value = inherited[index]
@@ -26,7 +36,7 @@ export function refreshWorkerExecArgv(inherited = process.execArgv) {
   }
   return [
     ...retained,
-    `--max-old-space-size=${REFRESH_WORKER_MAX_OLD_SPACE_MB}`,
+    `--max-old-space-size=${maxOldSpaceMb}`,
     `--max-semi-space-size=${REFRESH_WORKER_MAX_SEMI_SPACE_MB}`,
     '--expose-gc',
     '--import=tsx',
