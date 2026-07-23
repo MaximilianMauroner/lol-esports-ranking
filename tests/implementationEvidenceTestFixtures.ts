@@ -14,10 +14,12 @@ const exec = promisify(execFile)
 export async function createImplementationRepositoryFixture() {
   const root = await mkdtemp(join(tmpdir(), 'implementation-evidence-'))
   const { stdout: tracked } = await exec('git', ['ls-files'], { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 })
+  const { stdout: deleted } = await exec('git', ['ls-files', '--deleted'], { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 })
+  const deletedPaths = new Set(deleted.trim().split('\n').filter(Boolean))
   const paths = [...new Set([
-    ...tracked.trim().split('\n').filter(Boolean),
+    ...tracked.trim().split('\n').filter((path) => path && !deletedPaths.has(path)),
     ...IMPLEMENTATION_EVIDENCE_REQUIREMENTS.flatMap(
-    (id) => IMPLEMENTATION_EVIDENCE_CONTRACTS[id].sourcePaths,
+      (id) => IMPLEMENTATION_EVIDENCE_CONTRACTS[id].sourcePaths,
     ),
   ])]
   for (const path of paths) {

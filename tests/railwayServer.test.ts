@@ -189,7 +189,11 @@ test('Railway server and production reader support identity and gzip delivery of
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
     if (pathname === '/test-bucket/rankings/active-generation.json') {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ generationId: fixture.generationId, storageMode: 'content-addressed-gzip-v1' }))
+      response.end(JSON.stringify({
+        generationId: fixture.generationId,
+        publicManifestSchemaVersion: 2,
+        storageMode: 'content-addressed-gzip-v1',
+      }))
       return
     }
     if (pathname === `/test-bucket/rankings/generations/${fixture.generationId}/manifest.json`) {
@@ -534,7 +538,7 @@ async function contentAddressedReaderFixture() {
     return {
       logicalPath,
       digest: artifact?.digest ?? (index + 1).toString(16).padStart(64, '0'),
-      bytes: artifact?.bytes ?? 0,
+      bytes: artifact?.bytes ?? 1,
     }
   })
   const generationManifest = createGenerationManifest({

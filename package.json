@@ -41,9 +41,7 @@
     "rollout:implementation-evidence": "node scripts/rollout-implementation-evidence.mjs",
     "rollout:shadow-gate": "node scripts/rollout-shadow-gate.mjs",
     "rollout:gate": "node scripts/validate-rollout-gate.mjs",
-    "rollout:cost": "node scripts/railway-cost-report.mjs",
-    "validate:rollout:implementation": "node scripts/audit-plan-completion.mjs docs/rollout-acceptance.json",
-    "validate:rollout": "node scripts/audit-plan-completion.mjs docs/rollout-acceptance.json"
+    "rollout:cost": "node scripts/railway-cost-report.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1092.0",

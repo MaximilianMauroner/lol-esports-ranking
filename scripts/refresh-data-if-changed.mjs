@@ -285,7 +285,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     const incrementalEnabled = Boolean(env.RANKING_REFRESH_FENCING_TOKEN)
       && (refreshMode === 'gated'
         || (refreshMode === 'shadow' && env.RANKING_INCREMENTAL_SHADOW_ENABLED === 'true'))
-    if (!skipCrunch && incrementalEnabled && env.RANKING_REFRESH_FENCING_TOKEN && bucketConfig.enabled && bucketClient) {
+    if (!skipCrunch && incrementalEnabled && bucketConfig.enabled && bucketClient) {
       const rawAuthorityStarted = monotonicNow()
       const activeRaw = await readActiveRawSourceAuthority({ config: bucketConfig, client: bucketClient })
       metrics.recordStage('raw-authority-read', {
