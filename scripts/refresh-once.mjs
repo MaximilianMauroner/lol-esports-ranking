@@ -333,7 +333,11 @@ export async function runRefreshOnce(options = {}) {
           if (stage.result !== 'not-applicable') tracker.recordStage(stage.name, stage)
         }
         state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now() })
-        const ledger = await (options.readJson ?? readJson)(reconciliationPath)
+        const ledger = await readReconciliationLedger(
+          reconciliationPath,
+          childMetrics,
+          options.readJson ?? readJson,
+        )
         state = acknowledgeMatches(state, ledger?.matches ?? [], now())
         if (dailyAuditDue && successfulDailyAudit(childMetrics)) {
           state.lastSuccessfulDailyAuditAt = new Date(now()).toISOString()
@@ -598,6 +602,16 @@ async function readJsonIfExists(path) {
     return await readJson(path)
   } catch {
     return undefined
+  }
+}
+
+async function readReconciliationLedger(path, childMetrics, reader) {
+  if (childMetrics?.result === 'stale-source') return { matches: [] }
+  try {
+    return await reader(path)
+  } catch (error) {
+    if (childMetrics?.result === 'unchanged' && error?.code === 'ENOENT') return { matches: [] }
+    throw error
   }
 }
 
