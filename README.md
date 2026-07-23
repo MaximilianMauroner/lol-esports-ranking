@@ -1,5 +1,26 @@
 # LoL Esports Power Index
 
+## Ranking restart Phase 0 baseline
+
+Phase 0 freezes the existing six-hour, gated refresh and proxy delivery behavior. It does not activate a new ranking path, change Railway configuration or cadence, publish artifacts, authorize deletion, or run bucket GC.
+
+The committed baseline is [ops/ranking-restart/baseline-receipt.json](ops/ranking-restart/baseline-receipt.json). It binds the deployed code, Railway project/environment/service/deployment identities, active and previous complete generations, public/state/raw/publish authorities, model/config/schema/coverage, and the latest full-audit authority. At capture time `rankings/audits/days/` was verified empty; absence is represented explicitly and is not treated as a successful audit.
+
+Verify the committed receipt without network or bucket mutation:
+
+```sh
+pnpm ranking:baseline
+```
+
+Recapture is a read-only operator action. Run the capture command through the production refresh service environment so bucket credentials are injected, provide all non-secret Railway identities explicitly, and write to a reviewed new path before replacing the committed receipt. The command only permits S3 `GetObject`, `HeadObject`, and paginated `ListObjectsV2` operations. In a source archive without `.git`, pass `--commit`; commit resolution is explicit CLI, then `RAILWAY_GIT_COMMIT_SHA`, then `GIT_COMMIT_SHA`, then Git metadata.
+
+Recovery order is strict:
+
+1. Restore the previous complete generation.
+2. If that is unavailable, perform a forced full replay from the active verified raw authority only with separate recovery authorization.
+
+Scheduled freshness remains strict. Production deployment, incremental activation, five-minute cadence, presigned delivery, delete-mode cleanup, Railway sizing, and billing changes remain unauthorized.
+
 An independent team-strength prototype for LoL esports. The app presents a Power Index rather than a static table: ranking controls, tournament weights, selected-team explanations, team timelines, player timelines, season summaries, event summaries, and methodology notes.
 
 Live site: [lol.lab4code.com](https://lol.lab4code.com/) · [Source code](https://github.com/MaximilianMauroner/lol-esports-ranking) · [Report feedback](https://github.com/MaximilianMauroner/lol-esports-ranking/issues/new?title=%5BFeedback%5D%20)

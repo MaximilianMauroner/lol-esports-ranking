@@ -41,7 +41,8 @@
     "rollout:implementation-evidence": "node scripts/rollout-implementation-evidence.mjs",
     "rollout:shadow-gate": "node scripts/rollout-shadow-gate.mjs",
     "rollout:gate": "node scripts/validate-rollout-gate.mjs",
-    "rollout:cost": "node scripts/railway-cost-report.mjs"
+    "rollout:cost": "node scripts/railway-cost-report.mjs",
+    "ranking:baseline": "node scripts/ranking-restart-baseline.mjs verify"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1092.0",
