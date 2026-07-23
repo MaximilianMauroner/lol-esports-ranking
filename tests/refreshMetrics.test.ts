@@ -75,6 +75,60 @@ test('record aggregation preserves whole-run envelope, freshness, promotion, and
   assert.ok(merged.stages.some((stage) => stage.name === 'public-serialization'))
 })
 
+test('resource telemetry measures CPU seconds and RSS-integrated GB-seconds separately from peak', () => {
+  const monotonic = values([0, 1000, 2000, 3000])
+  const rss = values([1024 ** 3, 1024 ** 3, 3 * 1024 ** 3, 1024 ** 3])
+  const cpu = [{ user: 100_000, system: 50_000 }, { user: 600_000, system: 150_000 }]
+  let cpuIndex = 0
+  const metrics = createRefreshMetrics({
+    runId: 'resources', mode: 'gated', cause: 'pending-match', monotonicNow: monotonic, rss,
+    cpuUsage: () => cpu[Math.min(cpuIndex++, cpu.length - 1)],
+    processKey: 'worker-1',
+  })
+  const finish = metrics.startStage('probe')
+  finish()
+  const result = metrics.snapshot({ result: 'completed' })
+  assert.equal(result.resources.cpuSeconds, 0.6)
+  assert.equal(result.resources.memoryGbSeconds, 5)
+  assert.equal(result.resources.peakRssBytes, 3 * 1024 ** 3)
+})
+
+test('work telemetry preserves unknown as null and process merging deduplicates one process', () => {
+  const metrics = createRefreshMetrics({ runId: 'work', mode: 'gated', cause: 'pending-match', processKey: 'same' })
+  metrics.recordWork({ providerRequests: 2, broadFetches: 0 })
+  const first = metrics.snapshot({ result: 'completed' })
+  assert.equal(first.work.providerRequests, 2)
+  assert.equal(first.work.providerRetries, null)
+  assert.equal(first.work.broadFetches, 0)
+  const merged = mergeRefreshMetrics(first, first)
+  assert.equal(merged.resources.processes.length, 1)
+  assert.equal(merged.resources.cpuSeconds, first.resources.cpuSeconds)
+  assert.equal(merged.work.providerRequests, 2)
+})
+
+test('one unknown subprocess keeps aggregate CPU and integrated memory unknown', () => {
+  const metrics = createRefreshMetrics({ runId: 'unknown-child', mode: 'gated', cause: 'pending-match', processKey: 'parent' })
+  metrics.recordProcessResource({
+    processKey: 'raw-source-subprocess',
+    cpuSeconds: null,
+    memoryGbSeconds: null,
+    peakRssBytes: null,
+    sampleCount: 0,
+  })
+  const result = metrics.snapshot({ result: 'completed' })
+  assert.equal(result.resources.processes.length, 2)
+  assert.equal(result.resources.cpuSeconds, null)
+  assert.equal(result.resources.memoryGbSeconds, null)
+})
+
+test('metric aggregation preserves failed stages and all failure messages', () => {
+  const parent = { ...fixture('failed'), error: 'parent failure' }
+  const child = { ...fixture('completed'), error: 'child failure' }
+  const merged = mergeRefreshMetrics(parent, child)
+  assert.equal(merged.stages[0].result, 'failed')
+  assert.deepEqual(merged.errors, ['parent failure', 'child failure'])
+})
+
 function fixture(result: string) {
   return {
     schemaVersion: 1 as const,

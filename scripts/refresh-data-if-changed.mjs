@@ -41,8 +41,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const wallNow = options.now ?? Date.now
   const monotonicNow = options.monotonicNow ?? (() => performance.now())
   const metricsPath = env.RANKING_REFRESH_METRICS_PATH
+  const runId = env.RANKING_REFRESH_RUN_ID ?? `refresh-child-${process.pid}`
   const metrics = createRefreshMetrics({
-    runId: env.RANKING_REFRESH_RUN_ID ?? `refresh-child-${process.pid}`,
+    runId,
     mode: env.RANKING_REFRESH_MODE === 'shadow' || env.RANKING_REFRESH_MODE === 'gated' ? env.RANKING_REFRESH_MODE : 'legacy',
     cause: env.RANKING_REFRESH_CAUSE ?? (env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match'),
     affectedIds: parseAffectedIds(env.RANKING_REFRESH_AFFECTED_IDS),
@@ -139,12 +140,24 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       stagingManifestPath,
       ...extraDownloadArgs,
     ])
+    metrics.recordProcessResource({
+      processKey: `${runId}:raw-source-subprocess`,
+      cpuSeconds: null,
+      memoryGbSeconds: null,
+      peakRssBytes: null,
+      sampleCount: 0,
+    })
     metrics.recordStage('provider-fetch', {
       durationMs: monotonicNow() - providerStarted,
       output: { start, end },
     })
+    metrics.recordWork({ broadFetches: 1 })
 
     const stagingManifest = await readJson(stagingManifestPath)
+    metrics.recordWork({
+      providerRequests: finiteOrNull(stagingManifest?.fetchTelemetry?.requests),
+      providerRetries: finiteOrNull(stagingManifest?.fetchTelemetry?.retryCount),
+    })
     const previousState = await readJsonIfExists(statePath)
     const healthFingerprint = createSourceHealthFingerprint(stagingManifest)
     if (!manifestHasCurrentMatchSourceFiles(stagingManifest)) {
@@ -366,10 +379,17 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
       })
       providerAvailableAt = incrementalBuild.metrics.providerAvailableAt ?? null
+      metrics.recordWork({
+        fullBuilds: incrementalBuild.action === 'publish-full' ? 1 : 0,
+        incrementalBuilds: incrementalBuild.action === 'publish-incremental' ? 1 : 0,
+      })
       metrics.recordStage('classification', {
         durationMs: 0,
         output: {
           classification: incrementalBuild.metrics.classification,
+          addedCount: incrementalBuild.metrics.addedCount,
+          changedCount: incrementalBuild.metrics.changedCount,
+          removedCount: incrementalBuild.metrics.removedCount,
           canonicalRows: incrementalBuild.metrics.canonicalRows,
           canonicalBytes: incrementalBuild.metrics.canonicalBytes,
         },
@@ -416,8 +436,16 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       })
       metrics.recordStage('semantic-parity', {
         durationMs: 0,
-        result: incrementalBuild.metrics.parity === null ? 'not-applicable' : incrementalBuild.metrics.parity ? 'completed' : 'failed',
-        output: { parity: incrementalBuild.metrics.parity, stateParity: incrementalBuild.metrics.stateParity },
+        result: incrementalBuild.metrics.parity === null && incrementalBuild.metrics.stateParity === null
+          ? 'not-applicable'
+          : incrementalBuild.metrics.parity === true && incrementalBuild.metrics.stateParity === true ? 'completed' : 'failed',
+        output: {
+          parity: incrementalBuild.metrics.parity,
+          stateParity: incrementalBuild.metrics.stateParity,
+          checkpointParity: incrementalBuild.metrics.stateParityReport?.checkpointEqual ?? null,
+          semanticReport: incrementalBuild.metrics.semanticParityReport ?? null,
+          stateReport: incrementalBuild.metrics.stateParityReport ?? null,
+        },
       })
       metrics.setCheckpoint({
         applicable: incrementalBuild.metrics.classification !== 'no-change',
@@ -449,6 +477,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         reconciliationOutput,
       ])
       metrics.recordStage('crunch', { durationMs: monotonicNow() - crunchStarted })
+      metrics.recordWork({ fullBuilds: 1, incrementalBuilds: 0 })
     }
 
     inheritedMetrics = await readRefreshMetrics(metricsPath) ?? inheritedMetrics
@@ -638,6 +667,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               ...stage,
               output: { ...(stage.output ?? {}), rssBytes: process.memoryUsage().rss },
             })
+            if (name === 'artifact-upload' || name === 'raw-synchronization') {
+              metrics.recordWork({
+                uploads: Number.isFinite(stage.output?.uploadedCount) ? stage.output.uploadedCount : null,
+                objectsWritten: Number.isFinite(stage.output?.uploadedCount) ? stage.output.uploadedCount : null,
+                bytesWritten: Number.isFinite(stage.output?.uploadedBytes) ? stage.output.uploadedBytes : null,
+              })
+            }
             if (name === 'promotion' && stage.output?.promotedAt) completedPromotionAt = stage.output.promotedAt
             if (name === 'promotion' && stage.output?.etag) completedPromotionEtag = stage.output.etag
           },
@@ -698,6 +734,20 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
   } catch (error) {
     refreshError = error
+    metrics.recordProcessResource({
+      processKey: `${runId}:raw-source-subprocess`,
+      cpuSeconds: error?.telemetry?.cpuSeconds ?? null,
+      memoryGbSeconds: error?.telemetry?.memoryGbSeconds ?? null,
+      peakRssBytes: error?.telemetry?.peakRssBytes ?? null,
+      sampleCount: error?.telemetry?.sampleCount ?? 0,
+    })
+    const failedManifest = await readJsonIfExists(stagingManifestPath)
+    if (failedManifest?.fetchTelemetry) {
+      metrics.recordWork({
+        providerRequests: finiteOrNull(failedManifest.fetchTelemetry.requests),
+        providerRetries: finiteOrNull(failedManifest.fetchTelemetry.retryCount),
+      })
+    }
     canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, {
       result: 'failed',
       error,
@@ -1295,6 +1345,10 @@ function maxDate(left, right) {
 
 function arrayValue(value) {
   return Array.isArray(value) ? value : []
+}
+
+function finiteOrNull(value) {
+  return Number.isFinite(value) ? Number(value) : null
 }
 
 function parseAffectedIds(value) {

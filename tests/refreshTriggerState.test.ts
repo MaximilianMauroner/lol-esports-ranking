@@ -8,6 +8,7 @@ import {
   duePendingMatchIds,
   emptyTriggerState,
   recordPendingAttempt,
+  refreshTriggerCause,
   retryDelayMs,
   shouldFetchScoredProviders,
 } from '../scripts/refresh-trigger-state.mjs'
@@ -95,10 +96,19 @@ test('provider lag backs off and exact reconciliation alone acknowledges work', 
   assert.equal(acknowledged.acknowledged['match-1'].canonicalSeriesId, 'series-1')
 })
 
-test('five-minute cadence is gated by cheap-exit and lease evidence', () => {
-  assert.equal(assertRefreshCadence({ intervalMinutes: 5, mode: 'gated', cheapExitProven: true, leaseFencingConfigured: true }), true)
-  assert.throws(() => assertRefreshCadence({ intervalMinutes: 5, mode: 'legacy', cheapExitProven: true, leaseFencingConfigured: true }), /gated-mode/)
-  assert.throws(() => assertRefreshCadence({ intervalMinutes: 5, mode: 'gated', cheapExitProven: false, leaseFencingConfigured: true }), /proven-cheap-exit/)
-  assert.throws(() => assertRefreshCadence({ intervalMinutes: 5, mode: 'gated', cheapExitProven: true, leaseFencingConfigured: false }), /lease-fencing/)
-  assert.equal(assertRefreshCadence({ intervalMinutes: 360, mode: 'legacy' }), true)
+test('five-minute cadence requires immutable stored rollout gate authority', async () => {
+  await assert.rejects(assertRefreshCadence({ intervalMinutes: 5, mode: 'gated' }), /immutable storage resolution|outer authority/)
+  assert.equal(await assertRefreshCadence({ intervalMinutes: 360, mode: 'legacy' }), true)
+})
+
+test('refresh cause precedence is manual, overdue audit, retry, pending, unchanged', () => {
+  const queued = applyScheduleProbe(emptyTriggerState('gated'), {
+    checkedAt: '2026-07-11T13:00:00Z', coverageComplete: true, events: [completed],
+  })
+  const retried = recordPendingAttempt(queued, ['match-1'], { attemptedAt: '2026-07-11T12:45:00Z' })
+  assert.equal(refreshTriggerCause(retried, { manual: true, correctionAuditDue: true, now: '2026-07-11T13:00:00Z' }), 'manual-force')
+  assert.equal(refreshTriggerCause(retried, { correctionAuditDue: true, now: '2026-07-11T13:00:00Z' }), 'daily-audit')
+  assert.equal(refreshTriggerCause(retried, { now: '2026-07-11T13:00:00Z' }), 'retry')
+  assert.equal(refreshTriggerCause(queued, { now: '2026-07-11T13:00:00Z' }), 'pending-match')
+  assert.equal(refreshTriggerCause(emptyTriggerState('gated')), 'unchanged-scheduled-probe')
 })

@@ -5,14 +5,69 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { Readable } from 'node:stream'
-import { runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
-import { mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
+import { defaultRunChild, isDailyAuditDue, publishRefreshRolloutEvidence, runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
+import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
 import { uploadRankingArtifacts } from '../scripts/railway-bucket.mjs'
 import type { RefreshRunMetrics } from '../scripts/refresh-metrics.mjs'
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
 const refreshDataScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
 const { refreshDataIfChanged } = await import(refreshDataScriptPath) as unknown as { refreshDataIfChanged: RefreshDataIfChanged }
+
+test('production publication hook emits strict immutable evidence when explicitly enabled', async () => {
+  let published: Record<string, unknown> | undefined
+  const result = await publishRefreshRolloutEvidence({
+    schemaVersion: 2,
+    runId: 'production-run',
+    result: 'completed',
+    startedAt: '2026-07-23T00:00:00Z',
+    finishedAt: '2026-07-23T00:00:01Z',
+    durationMs: 1000,
+    mode: 'shadow',
+    cause: 'pending-match',
+    peakRssBytes: 3,
+    resources: {
+      cpuSeconds: 1,
+      memoryGbSeconds: 2,
+      peakRssBytes: 3,
+      processes: [{ processKey: 'fixture:refresh', sampleCount: 2, cpuSeconds: 1, memoryGbSeconds: 2, peakRssBytes: 3 }],
+    },
+    work: {
+      providerRequests: 1, providerRetries: 0, broadFetches: 1, fullBuilds: 1,
+      incrementalBuilds: 0, bytesRead: 1, bytesWritten: 1, objectsRead: 1,
+      objectsWritten: 1, uploads: 1,
+    },
+    freshness: { providerAvailableAt: null, detectedAt: null, publishedAt: '2026-07-23T00:00:01Z' },
+    checkpoint: { applicable: true },
+    affected: { matchIds: ['fixture-match'] },
+    coordination: { owner: 'fixture-owner', fencingToken: 1, etag: 'fixture-etag' },
+    stages: [
+      { name: 'classification', durationMs: 0, input: {}, result: 'completed', output: { classification: 'latest-append', addedCount: 1, changedCount: 0, removedCount: 0 } },
+      { name: 'semantic-parity', durationMs: 0, input: {}, result: 'completed', output: { parity: true, stateParity: true, checkpointParity: true } },
+      { name: 'crunch', durationMs: 0, input: {}, result: 'completed', output: { fullSnapshotWritten: true } },
+      { name: 'promotion', durationMs: 0, input: {}, result: 'completed', output: { generationId: 'generation-1', promotedAt: '2026-07-23T00:00:01Z' } },
+    ],
+  }, {
+    env: {
+      RANKING_ROLLOUT_EVIDENCE_ENABLED: 'true',
+      RAILWAY_GIT_COMMIT_SHA: 'abc123',
+      RAILWAY_DEPLOYMENT_ID: 'deployment-1',
+      RAILWAY_ENVIRONMENT_ID: 'environment-1',
+      RAILWAY_SERVICE_ID: 'service-1',
+    },
+    now: '2026-07-23T00:00:01Z',
+    config: {},
+    client: {},
+    evidenceClass: 'production-like-fixture',
+    publish: async (value: Record<string, unknown>) => {
+      published = value
+      return { status: 'uploaded' }
+    },
+  })
+  assert.equal(result.status, 'uploaded')
+  assert.equal(published?.artifactKind, 'ranking-rollout-run-evidence')
+  assert.equal(published?.evidenceClass, 'production-like-fixture')
+})
 
 test('unchanged gated probe performs no broad provider fetch, crunch, or artifact upload', async () => {
   let childRuns = 0
@@ -185,14 +240,14 @@ test('recovery-window work uses match completion date and reports no publication
   assert.equal(result.metrics?.freshness.publishedAt, null)
 })
 
-test('startup enforces five-minute evidence flags while six-hour legacy stays compatible', async () => {
+test('startup enforces five-minute gate receipts while six-hour legacy stays compatible', async () => {
   await assert.rejects(() => runRefreshOnce({
     env: { RANKING_REFRESH_MODE: 'legacy', RANKING_REFRESH_INTERVAL_MINUTES: '5' },
     runChild: async () => undefined,
-  }), /gated-mode/)
+  }), /immutable outer authority/)
   await assert.rejects(() => runRefreshOnce({
     env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_INTERVAL_MINUTES: '5' },
-  }), /proven-cheap-exit, lease-fencing/)
+  }), /immutable outer authority/)
   await assert.rejects(() => runRefreshOnce({
     env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_LEASE_TTL_MS: '60000', RANKING_REFRESH_JOB_TIMEOUT_MS: '60000' },
   }), /lease TTL/)
@@ -202,6 +257,97 @@ test('startup enforces five-minute evidence flags while six-hour legacy stays co
     logger: { log() {}, warn() {}, error() {} },
   })
   assert.equal(safe.status, 'completed')
+})
+
+test('daily audit defaults off, is due from last success, and bypasses unchanged probe work without advancing on failure', async () => {
+  assert.equal(isDailyAuditDue({}, {}, '2026-07-23T00:00:00Z'), false)
+  assert.equal(isDailyAuditDue({ RANKING_DAILY_AUDIT_ENABLED: 'true' }, {}, '2026-07-23T00:00:00Z'), true)
+  assert.equal(isDailyAuditDue({ RANKING_DAILY_AUDIT_ENABLED: 'true' }, { lastSuccessfulDailyAuditAt: '2026-07-22T12:00:00Z' }, '2026-07-23T00:00:00Z'), false)
+  let childRuns = 0
+  const result = await runRefreshOnce({
+    ...baseOptions([]),
+    env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'true' },
+    runChild: async () => { childRuns += 1 },
+    readJson: async () => ({ matches: [] }),
+  })
+  assert.equal(childRuns, 1)
+  assert.equal(result.metrics?.cause, 'daily-audit')
+  assert.equal((result.state as { lastSuccessfulDailyAuditAt?: string } | undefined)?.lastSuccessfulDailyAuditAt, undefined)
+})
+
+test('daily audit success timestamp requires clean parity, promotion, and full-audit receipt', async () => {
+  for (const auditCase of [
+    { name: 'clean', semantic: true, state: true, checkpoint: true, expected: true },
+    { name: 'semantic-mismatch', semantic: false, state: false, checkpoint: false, expected: false },
+    { name: 'earlier-checkpoint-mismatch', semantic: true, state: false, checkpoint: false, expected: false },
+  ]) {
+    const root = await mkdtemp(join(tmpdir(), `daily-audit-${auditCase.name}-`))
+    const metricsPath = join(root, 'metrics.json')
+    try {
+      const result = await runRefreshOnce({
+        ...baseOptions([]),
+        runId: `audit-${auditCase.name}`,
+        env: {
+          RANKING_REFRESH_MODE: 'gated',
+          RANKING_DAILY_AUDIT_ENABLED: 'true',
+          RANKING_REFRESH_METRICS_PATH: metricsPath,
+        },
+        runChildProcess: async (_command: string, _args: string[], _timeoutMs: number, childEnv: NodeJS.ProcessEnv) => {
+          assert.equal(childEnv.RANKING_INCREMENTAL_ENABLED, 'true')
+          const child = createRefreshMetrics({ runId: `audit-${auditCase.name}`, mode: 'gated', cause: 'daily-audit' })
+          child.recordStage('semantic-parity', {
+            result: auditCase.semantic && auditCase.state && auditCase.checkpoint ? 'completed' : 'failed',
+            output: {
+              parity: auditCase.semantic,
+              stateParity: auditCase.state,
+              checkpointParity: auditCase.checkpoint,
+            },
+          })
+          child.recordStage('promotion', { result: 'completed', output: { promotedAt: '2026-07-22T00:00:00Z' } })
+          child.recordStage('full-audit-receipt', { result: 'completed' })
+          await writeRefreshMetrics(metricsPath, {
+            ...completeRefreshMetrics(child.snapshot({ result: 'completed' })),
+            coordination: { owner: 'worker', fencingToken: 1, etag: `promoted-${auditCase.name}` },
+          })
+        },
+        readJson: async () => ({ matches: [] }),
+      })
+      const state = result.state as { lastSuccessfulDailyAuditAt?: string }
+      assert.equal(Boolean(state.lastSuccessfulDailyAuditAt), auditCase.expected)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+})
+
+test('default gated daily-audit child enables incremental comparison while shadow remains opt-in', async () => {
+  const childEnvironments: NodeJS.ProcessEnv[] = []
+  const runProcess = async (_command: string, _args: string[], _timeoutMs: number, childEnv: NodeJS.ProcessEnv) => {
+    childEnvironments.push(childEnv)
+  }
+  const base = {
+    reconciliationPath: '/tmp/reconciliation.json',
+    metricsPath: '/tmp/metrics.json',
+    runId: 'audit-child',
+    leaseKey: 'ops/refresh-lease.json',
+    owner: 'worker',
+    fencingToken: 1,
+    promotionEtag: 'promotion',
+    affectedIds: [],
+  }
+  await defaultRunChild({
+    ...base,
+    env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'true' },
+    cause: 'daily-audit',
+  }, { runProcess })
+  await defaultRunChild({
+    ...base,
+    env: { RANKING_REFRESH_MODE: 'shadow' },
+    cause: 'daily-audit',
+  }, { runProcess })
+  assert.equal(childEnvironments[0].RANKING_INCREMENTAL_ENABLED, 'true')
+  assert.equal(childEnvironments[0].RANKING_FORCE_REFRESH, 'true')
+  assert.equal(childEnvironments[1].RANKING_INCREMENTAL_ENABLED, undefined)
 })
 
 test('release failure cannot replace the primary failure and terminal metric is unconditional', async () => {
@@ -389,7 +535,7 @@ test('legacy parent returns the same finalized child record stored in state, rec
           cause: 'daily-audit' as const,
           finishedAt: '2026-07-22T00:00:10.000Z',
           result: 'no-promotion',
-          peakRssBytes: seed.peakRssBytes + 100,
+          peakRssBytes: (seed.peakRssBytes ?? 0) + 100,
           stages: seed.stages.map((stage) => stage.name === 'public-serialization' || stage.name === 'provider-fetch'
             ? { ...stage, result: 'completed', output: { outputBytes: 3 } }
             : stage),
@@ -476,12 +622,20 @@ test('gated probe failure persists one canonical record without a publish receip
   const logs: string[] = []
   let caught: Error & { refreshMetrics?: RefreshRunMetrics } | undefined
   const options = realParentOptions(paths, client, logs)
+  const scheduleError = Object.assign(new Error('schedule-provider-unavailable'), {
+    telemetry: {
+      requests: 2,
+      retryCount: 1,
+      retries: [{ attempt: 1, delayMs: 1, reason: 'network-error' }],
+      attempts: [],
+    },
+  })
   try {
     await runRefreshOnce({
       ...options,
       env: { ...options.env, RANKING_TRIGGER_STATE: paths.triggerState },
       runId: 'probe-error-canonical',
-      fetchProbe: async () => { throw new Error('schedule-provider-unavailable') },
+      fetchProbe: async () => { throw scheduleError },
       writeLocalState: async (path: string, value: unknown) => {
         await mkdir(paths.raw, { recursive: true })
         await writeFile(path, `${JSON.stringify(value, null, 2)}\n`)
@@ -506,6 +660,12 @@ test('gated probe failure persists one canonical record without a publish receip
     assert.deepEqual(caught.refreshMetrics, metricLog(logs))
     assert.equal(caught.refreshMetrics?.result, 'failed')
     assert.equal(caught.refreshMetrics?.error, 'schedule-provider-unavailable')
+    assert.equal(caught.refreshMetrics?.work?.providerRequests, 2)
+    assert.equal(caught.refreshMetrics?.work?.providerRetries, 1)
+    assert.deepEqual(caught.refreshMetrics?.stages.find((stage) => stage.name === 'probe')?.output, {
+      providerRequests: 2,
+      providerRetries: 1,
+    })
     assert.equal(client.objects.has('rankings/latest-publish.json'), false)
   } finally {
     await rm(root, { recursive: true, force: true })

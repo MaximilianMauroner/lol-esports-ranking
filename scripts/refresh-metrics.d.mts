@@ -11,8 +11,22 @@ export type RefreshStage = {
   input: Record<string, unknown>
   output: Record<string, unknown>
 }
+export type RefreshWork = {
+  providerRequests: number | null
+  providerRetries: number | null
+  broadFetches: number | null
+  fullBuilds: number | null
+  incrementalBuilds: number | null
+  bytesRead: number | null
+  bytesWritten: number | null
+  objectsRead: number | null
+  objectsWritten: number | null
+  uploads: number | null
+}
+export type ProcessResources = { processKey: string; cpuSeconds: number | null; memoryGbSeconds: number | null; peakRssBytes: number | null; sampleCount: number | null }
+export type RefreshResources = { cpuSeconds: number | null; memoryGbSeconds: number | null; peakRssBytes: number | null; processes: ProcessResources[] }
 export type RefreshRunMetrics = {
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   runId: string
   mode: RefreshMode
   cause: RefreshCause
@@ -20,7 +34,9 @@ export type RefreshRunMetrics = {
   finishedAt: string | null
   durationMs: number
   result: string
-  peakRssBytes: number
+  peakRssBytes: number | null
+  resources?: RefreshResources
+  work?: RefreshWork
   affected: { matchIds: string[]; date?: string }
   freshness: { providerAvailableAt: string | null; detectedAt: string | null; publishedAt: string | null }
   checkpoint: {
@@ -36,9 +52,11 @@ export type RefreshRunMetrics = {
   }
   stages: RefreshStage[]
   error?: string
+  errors?: string[]
   processError?: string
   coordination?: { owner: string; fencingToken: number; etag: string }
 }
+export type CompleteRefreshRunMetrics = RefreshRunMetrics & { resources: RefreshResources; work: RefreshWork }
 export function createRefreshMetrics(options: {
   runId: string
   mode: RefreshMode
@@ -48,15 +66,25 @@ export function createRefreshMetrics(options: {
   now?: () => number
   monotonicNow?: () => number
   rss?: () => number
+  cpuUsage?: () => { user: number; system: number }
+  processKey?: string
+  sampleIntervalMs?: number
+  setIntervalFn?: typeof setInterval
+  clearIntervalFn?: typeof clearInterval
 }): {
   setContext(context: { cause?: RefreshCause; affectedIds?: string[]; affectedDate?: string }): void
   setCheckpoint(checkpoint: RefreshRunMetrics['checkpoint']): void
+  setEvidence(evidence: Record<string, unknown>): void
+  recordWork(work: Partial<RefreshWork>): void
+  recordProcessResource(resource: ProcessResources): void
   startStage(name: RefreshStageName, input?: Record<string, unknown>): (result?: string, output?: Record<string, unknown>) => void
   recordStage(name: RefreshStageName, stage?: Partial<Omit<RefreshStage, 'name'>>): void
-  snapshot(options?: { result?: string; freshness?: Partial<RefreshRunMetrics['freshness']>; error?: unknown }): RefreshRunMetrics
+  snapshot(options?: { result?: string; freshness?: Partial<RefreshRunMetrics['freshness']>; error?: unknown }): CompleteRefreshRunMetrics
 }
-export function mergeRefreshMetrics(parent: RefreshRunMetrics, child?: RefreshRunMetrics): RefreshRunMetrics
-export function completeRefreshMetrics(record: RefreshRunMetrics): RefreshRunMetrics
+export function mergeRefreshMetrics(parent: RefreshRunMetrics, child?: RefreshRunMetrics): CompleteRefreshRunMetrics
+export function completeRefreshMetrics(record: RefreshRunMetrics): CompleteRefreshRunMetrics
 export function readRefreshMetrics(path?: string): Promise<RefreshRunMetrics | undefined>
 export function writeRefreshMetrics(path: string | undefined, record: RefreshRunMetrics): Promise<void>
 export function appendRefreshStages(path: string | undefined, record: RefreshRunMetrics): Promise<void>
+export function emptyRefreshWork(): RefreshWork
+export function mergeRefreshWork(left?: Partial<RefreshWork>, right?: Partial<RefreshWork>): RefreshWork

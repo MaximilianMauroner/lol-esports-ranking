@@ -125,8 +125,9 @@ test('feature/mode matrix preserves legacy and daily/manual force full while can
     })
     const legacy = await run(root, 'legacy', source, { mode: 'legacy', cause: 'pending-match', enabled: true })
     assert.equal(legacy.action, 'publish-full')
-    const daily = await run(root, 'daily', source, { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const daily = await run(root, 'daily', source, { mode: 'gated', cause: 'daily-audit', enabled: true, restored: restoreFrom(disabled) })
     assert.equal(daily.action, 'publish-full')
+    assert.equal(daily.metrics.parity, true)
     const manual = await run(root, 'manual', source, { mode: 'shadow', cause: 'manual-force', enabled: true })
     assert.equal(manual.action, 'publish-full')
 
@@ -285,6 +286,42 @@ test('retry no-change reconciliation acknowledges a match after publish-to-paren
   }
 })
 
+test('daily audit compares corpus authority across refreshed receipt identities without hiding state drift', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-audit-receipt-identity-'))
+  try {
+    const source = fixtureSource(baseMatches())
+    const baseline = await run(root, 'receipt-baseline', source, {
+      mode: 'gated', cause: 'daily-audit', enabled: true, sourceReceiptDigest: 'a'.repeat(64),
+    })
+    const restored = restoreFrom(baseline)
+    const clean = await run(root, 'receipt-refresh', source, {
+      mode: 'gated', cause: 'daily-audit', enabled: true, restored, sourceReceiptDigest: 'b'.repeat(64),
+    })
+    assert.equal(clean.action, 'publish-full')
+    assert.equal(clean.metrics.parity, true)
+    assert.equal(clean.metrics.stateParity, true)
+    assert.equal(clean.metrics.stateParityReport?.sourceReceiptEqual, false)
+    assert.equal(clean.metrics.stateParityReport?.checkpointEqual, true)
+    assert.equal(clean.state.sourceReceiptDigest, 'b'.repeat(64))
+    assert.equal(clean.metrics.stateParityReport?.mismatchPaths.includes('$.sourceReceiptDigest'), false)
+
+    const corrupt = structuredClone(restored)
+    corrupt.checkpoints[0].bundle.ratingCheckpoint = {
+      ...(corrupt.checkpoints[0].bundle.ratingCheckpoint as Record<string, unknown>),
+      injectedStateMismatch: true,
+    }
+    const mismatch = await run(root, 'receipt-state-mismatch', source, {
+      mode: 'gated', cause: 'daily-audit', enabled: true, restored: corrupt, sourceReceiptDigest: 'c'.repeat(64),
+    })
+    assert.equal(mismatch.action, 'publish-full')
+    assert.equal(mismatch.metrics.stateParity, false)
+    assert.equal(mismatch.metrics.stateParityReport?.checkpointEqual, false)
+    assert.ok(mismatch.metrics.stateParityReport?.mismatchPaths.some((path) => path.includes('injectedStateMismatch')))
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('append, same-day insertion, and historical correction use whole-date replay and equal clean full semantics', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-parity-'))
   try {
@@ -319,9 +356,11 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     const appended = fixtureSource([...baseMatches(), match('m5', '2026-01-05', 'Event C')])
     const shadow = await run(root, 'shadow', appended, { mode: 'shadow', cause: 'pending-match', enabled: true, restored })
     assert.equal(shadow.action, 'publish-full')
-    assert.equal(shadow.metrics.parity, true)
-    assert.equal(shadow.metrics.stateParity, true)
-    assert.equal(shadow.diagnostic, undefined)
+    assert.equal(shadow.metrics.parity, false)
+    assert.equal(shadow.metrics.semanticParityReport?.equal, true)
+    assert.equal(shadow.metrics.stateParity, false)
+    assert.equal(shadow.metrics.stateParityReport?.checkpointEqual, false)
+    assert.equal(shadow.diagnostic?.reason, 'checkpoint-state-parity-mismatch')
     const shadowFull = await run(root, 'shadow-authority', appended, { mode: 'legacy', cause: 'daily-audit', enabled: false })
     assert.deepEqual(shadow.state, shadowFull.action === 'no-change' ? undefined : shadowFull.state)
 
@@ -530,7 +569,7 @@ function run(
   root: string,
   name: string,
   sourceData: RankingSourceImport,
-  options: { mode: 'legacy' | 'shadow' | 'gated'; cause: string; enabled: boolean; restored?: RestoredIncrementalAuthority; buildSnapshot?: typeof buildStaticSnapshot },
+  options: { mode: 'legacy' | 'shadow' | 'gated'; cause: string; enabled: boolean; restored?: RestoredIncrementalAuthority; buildSnapshot?: typeof buildStaticSnapshot; sourceReceiptDigest?: string },
 ) {
   return buildRankingIncrementally({
     ...options,

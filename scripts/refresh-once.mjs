@@ -28,12 +28,17 @@ import {
 } from './refresh-trigger-state.mjs'
 import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
 import { refreshWorkerArgs } from './refresh-worker-memory.mjs'
+import { readRolloutGateReceipt } from './validate-rollout-gate.mjs'
+import {
+  createRefreshRolloutEvidence,
+  publishRolloutEvidence,
+} from './rollout-evidence.mjs'
 
 export async function runRefreshOnce(options = {}) {
   const env = options.env ?? process.env
   const now = options.now ?? (() => new Date())
   const monotonicNow = options.monotonicNow ?? (() => performance.now())
-  const rss = options.rss ?? (() => Math.max(process.memoryUsage().rss, process.resourceUsage().maxRSS * 1024))
+  const rss = options.rss ?? (() => process.memoryUsage().rss)
   const logger = options.logger ?? console
   const mode = refreshMode(env.RANKING_REFRESH_MODE)
   const runId = options.runId ?? randomUUID()
@@ -46,6 +51,8 @@ export async function runRefreshOnce(options = {}) {
   const owner = options.owner ?? `${env.RAILWAY_DEPLOYMENT_ID ?? 'local'}:${process.pid}:${runId}`
   const config = options.bucketConfig ?? bucketConfigFromEnv(env)
   const client = options.bucketClient ?? createBucketClient(config)
+  const launchChild = options.runChild
+    ?? ((input) => defaultRunChild(input, { runProcess: options.runChildProcess }))
   const ttlMs = numberEnv(env, 'RANKING_REFRESH_LEASE_TTL_MS', 45 * 60_000)
   const jobTimeoutMs = numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000)
   const manual = env.RANKING_FORCE_REFRESH === 'true'
@@ -59,11 +66,19 @@ export async function runRefreshOnce(options = {}) {
   })
   let finalRecord
 
-  assertRefreshCadence({
-    intervalMinutes: numberEnv(env, 'RANKING_REFRESH_INTERVAL_MINUTES', 360),
+  const intervalMinutes = numberEnv(env, 'RANKING_REFRESH_INTERVAL_MINUTES', 360)
+  const resolveGateReference = options.readBucketJson ?? readBucketJson
+  const rolloutGateReceipt = intervalMinutes <= 5
+    ? await readRolloutGateReceipt(env.RANKING_ROLLOUT_GATE_RECEIPT, { config, client, readJson: resolveGateReference })
+    : undefined
+  await assertRefreshCadence({
+    intervalMinutes,
     mode,
-    cheapExitProven: env.RANKING_CHEAP_EXIT_PROVEN === 'true',
-    leaseFencingConfigured: env.RANKING_LEASE_FENCING_ENABLED === 'true',
+    commit: env.RAILWAY_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA,
+    deploymentId: env.RAILWAY_DEPLOYMENT_ID,
+    receiptAuthority: rolloutGateReceipt,
+    resolveReference: (key) => resolveGateReference(key, { config, client }),
+    now: now(),
   })
   if (mode !== 'legacy' && ttlMs <= jobTimeoutMs + 60_000) {
     throw new Error('Refresh lease TTL must exceed the child timeout by at least 60000ms')
@@ -73,7 +88,7 @@ export async function runRefreshOnce(options = {}) {
     const finish = tracker.startStage('provider-fetch')
     try {
       await writeRefreshMetrics(childMetricsPath, completeRefreshMetrics(tracker.snapshot({ result: 'running' })))
-      await (options.runChild ?? defaultRunChild)({
+      await launchChild({
         env,
         reconciliationPath,
         metricsPath: childMetricsPath,
@@ -209,10 +224,24 @@ export async function runRefreshOnce(options = {}) {
         result: 'completed',
         output: { eventCount: probe.events?.length ?? 0, detectedCount: state.lastProbe?.detected ?? 0 },
       })
+      tracker.recordWork({
+        providerRequests: Number.isFinite(probe.requestCount) ? probe.requestCount : Number.isFinite(probe.pageCount) ? probe.pageCount : null,
+        providerRetries: Number.isFinite(probe.retryCount) ? probe.retryCount : null,
+      })
       state.fencingToken = authority.lease.fencingToken
       await persistState(state)
     } catch (error) {
-      tracker.recordStage('probe', { durationMs: monotonicNow() - probeStarted, result: 'failed' })
+      const retryTelemetry = error?.telemetry
+      const providerRequests = Number.isFinite(retryTelemetry?.requests) ? retryTelemetry.requests : null
+      const providerRetries = Number.isFinite(retryTelemetry?.retryCount)
+        ? retryTelemetry.retryCount
+        : Array.isArray(retryTelemetry?.retries) ? retryTelemetry.retries.length : null
+      tracker.recordStage('probe', {
+        durationMs: monotonicNow() - probeStarted,
+        result: 'failed',
+        output: { providerRequests, providerRetries },
+      })
+      tracker.recordWork({ providerRequests, providerRetries })
       finalRecord = completeRefreshMetrics(tracker.snapshot({ result: 'failed', error }))
       state = applyProbeFailure(state, { checkedAt: now(), reason: errorMessage(error) })
       state.fencingToken = authority.lease.fencingToken
@@ -239,18 +268,19 @@ export async function runRefreshOnce(options = {}) {
       throw error
     }
 
-    const correctionAuditDue = auditDue(env, state, now())
-    const cause = refreshTriggerCause(state, { correctionAuditDue, manual, now: now() })
+    const dailyAuditDue = isDailyAuditDue(env, state, now())
+    const cause = refreshTriggerCause(state, { correctionAuditDue: dailyAuditDue, manual, now: now() })
     const affectedIds = duePendingMatchIds(state, now())
     const affectedDate = pendingAffectedDate(state, affectedIds)
     tracker.setContext({ cause, affectedIds, affectedDate })
 
     if (!shouldFetchScoredProviders(state, {
-      correctionAuditDue,
+      correctionAuditDue: dailyAuditDue,
       manual,
       now: now(),
-      shadowIngestionEnabled: env.RANKING_INCREMENTAL_SHADOW_INGESTION_ENABLED === 'true',
+      shadowIngestionEnabled: env.RANKING_INCREMENTAL_SHADOW_ENABLED === 'true',
     })) {
+      tracker.recordWork({ broadFetches: 0, fullBuilds: 0, incrementalBuilds: 0, uploads: 0, bytesWritten: 0, objectsWritten: 0 })
       logger.log(`Refresh probe complete: mode=${mode} pending=${Object.keys(state.pending).length}; scored providers skipped`)
     } else {
       const dueMatchIds = duePendingMatchIds(state, now())
@@ -280,7 +310,7 @@ export async function runRefreshOnce(options = {}) {
           }
           let childError
           try {
-            await (options.runChild ?? defaultRunChild)({
+            await launchChild({
               env,
               reconciliationPath,
               metricsPath: childMetricsPath,
@@ -321,7 +351,9 @@ export async function runRefreshOnce(options = {}) {
         state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now() })
         const ledger = await (options.readJson ?? readJson)(reconciliationPath)
         state = acknowledgeMatches(state, ledger?.matches ?? [], now())
-        if (correctionAuditDue) state.lastCorrectionAuditAt = new Date(now()).toISOString()
+        if (dailyAuditDue && successfulDailyAudit(childMetrics)) {
+          state.lastSuccessfulDailyAuditAt = new Date(now()).toISOString()
+        }
         state.fencingToken = authority.lease.fencingToken
         if (childMetrics && childMetrics.result !== 'running') finalRecord = childMetrics
         await persistState(state)
@@ -369,6 +401,19 @@ export async function runRefreshOnce(options = {}) {
   } finally {
     const finalizationErrors = []
     try {
+      await publishRefreshRolloutEvidence(finalRecord, {
+        env,
+        now: now(),
+        runId,
+        config,
+        client,
+        publish: options.publishRolloutEvidence ?? publishRolloutEvidence,
+      })
+    } catch (error) {
+      finalizationErrors.push(`rollout-evidence: ${errorMessage(error)}`)
+      logger.warn(`Rollout evidence publication failed: ${errorMessage(error)}`)
+    }
+    try {
       await heartbeat.stop()
     } catch (error) {
       finalizationErrors.push(`heartbeat-stop: ${errorMessage(error)}`)
@@ -395,6 +440,36 @@ export async function runRefreshOnce(options = {}) {
       }
     }
   }
+}
+
+export async function publishRefreshRolloutEvidence(metrics, {
+  env = process.env,
+  now = new Date(),
+  runId,
+  config,
+  client,
+  evidenceClass = 'live',
+  publish = publishRolloutEvidence,
+} = {}) {
+  if (env.RANKING_ROLLOUT_EVIDENCE_ENABLED !== 'true' || !metrics) return { status: 'disabled' }
+  const commit = env.RAILWAY_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA
+  const deploymentId = env.RAILWAY_DEPLOYMENT_ID
+  const environmentId = env.RAILWAY_ENVIRONMENT_ID
+  const serviceId = env.RAILWAY_SERVICE_ID
+  if (![commit, deploymentId, environmentId, serviceId].every((value) => typeof value === 'string' && value.length > 0)) {
+    throw new Error('Rollout evidence requires commit, deployment, environment, and service authority')
+  }
+  const ttlMs = numberEnv(env, 'RANKING_ROLLOUT_EVIDENCE_TTL_MS', 14 * 24 * 60 * 60_000)
+  const evidence = createRefreshRolloutEvidence({ ...metrics, runId: metrics.runId ?? runId }, {
+    evidenceClass,
+    commit,
+    expiresAt: new Date(new Date(now).getTime() + ttlMs).toISOString(),
+    deployment: { deploymentId, environmentId, serviceId },
+    ...(env.RANKING_ROLLOUT_EVIDENCE_SCENARIO
+      ? { scenario: env.RANKING_ROLLOUT_EVIDENCE_SCENARIO }
+      : {}),
+  })
+  return publish(evidence, { config, client })
 }
 
 export function startLeaseHeartbeat({ authority, leaseKey, ttlMs, now, renew, config, client, setIntervalFn, clearIntervalFn }) {
@@ -450,13 +525,18 @@ function installChildCoordination(authority, metrics) {
   authority.promotionEtag = coordination.etag
 }
 
-async function defaultRunChild({ env, reconciliationPath, metricsPath, runId, leaseKey, owner, fencingToken, promotionEtag, cause, affectedIds, affectedDate }) {
-  await runChildProcess(process.execPath, refreshWorkerArgs('scripts/refresh-data-if-changed.mjs'), numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), {
+export async function defaultRunChild({ env, reconciliationPath, metricsPath, runId, leaseKey, owner, fencingToken, promotionEtag, cause, affectedIds, affectedDate }, options = {}) {
+  await (options.runProcess ?? runChildProcess)(process.execPath, refreshWorkerArgs('scripts/refresh-data-if-changed.mjs'), numberEnv(env, 'RANKING_REFRESH_JOB_TIMEOUT_MS', 30 * 60_000), {
     ...env,
     RANKING_RECONCILIATION_OUTPUT: reconciliationPath,
     RANKING_REFRESH_METRICS_PATH: metricsPath,
     RANKING_REFRESH_RUN_ID: runId,
     RANKING_REFRESH_CAUSE: cause,
+    ...(cause === 'daily-audit' ? { RANKING_FORCE_REFRESH: 'true' } : {}),
+    ...((env.RANKING_REFRESH_MODE === 'gated' && cause === 'daily-audit')
+      || (env.RANKING_REFRESH_MODE === 'shadow' && env.RANKING_INCREMENTAL_SHADOW_ENABLED === 'true')
+      ? { RANKING_INCREMENTAL_ENABLED: 'true' }
+      : {}),
     RANKING_REFRESH_AFFECTED_IDS: JSON.stringify(affectedIds ?? []),
     ...(affectedDate ? { RANKING_REFRESH_AFFECTED_DATE: affectedDate } : {}),
     ...(fencingToken ? {
@@ -556,10 +636,20 @@ function pendingDetectedAt(state, matchIds) {
     .sort()[0] ?? null
 }
 
-function auditDue(env, value, now) {
-  if (env.RANKING_CORRECTION_AUDIT_ENABLED !== 'true') return false
-  const intervalMs = numberEnv(env, 'RANKING_CORRECTION_AUDIT_INTERVAL_MS', 24 * 60 * 60_000)
-  return new Date(now).getTime() - new Date(value.lastCorrectionAuditAt ?? 0).getTime() >= intervalMs
+export function isDailyAuditDue(env, value, now) {
+  if (env.RANKING_DAILY_AUDIT_ENABLED !== 'true') return false
+  const intervalMs = numberEnv(env, 'RANKING_DAILY_AUDIT_INTERVAL_MS', 24 * 60 * 60_000)
+  return new Date(now).getTime() - new Date(value.lastSuccessfulDailyAuditAt ?? 0).getTime() >= intervalMs
+}
+
+function successfulDailyAudit(metrics) {
+  if (!metrics || metrics.result === 'failed') return false
+  const stages = new Map((metrics.stages ?? []).map((stage) => [stage.name, stage]))
+  const parity = stages.get('semantic-parity')
+  return stages.get('promotion')?.result === 'completed'
+    && stages.get('full-audit-receipt')?.result === 'completed'
+    && parity?.result === 'completed'
+    && parity.output?.parity === true && parity.output?.stateParity === true && parity.output?.checkpointParity === true
 }
 
 function refreshMode(value) {

@@ -21,7 +21,7 @@ export type RefreshTriggerState = {
   metrics: Record<string, number>
   lastProbe?: Record<string, unknown>
   fencingToken?: number
-  lastCorrectionAuditAt?: string
+  lastSuccessfulDailyAuditAt?: string
   lastRun?: Record<string, unknown>
 }
 
@@ -54,5 +54,5 @@ export function acknowledgeMatches(state: unknown, reconciliations: Array<{
 }>, acknowledgedAt?: string | Date): RefreshTriggerState
 export function shouldFetchScoredProviders(state: unknown, options?: { now?: string | Date; correctionAuditDue?: boolean; manual?: boolean; shadowIngestionEnabled?: boolean }): boolean
 export function refreshTriggerCause(state: unknown, options?: { now?: string | Date; correctionAuditDue?: boolean; manual?: boolean }): 'pending-match' | 'daily-audit' | 'manual-force' | 'retry' | 'unchanged-scheduled-probe'
-export function assertRefreshCadence(options: { intervalMinutes: number; mode: TriggerMode; cheapExitProven?: boolean; leaseFencingConfigured?: boolean }): true
+export function assertRefreshCadence(options: { intervalMinutes: number; mode: TriggerMode; commit?: string; deploymentId?: string; receiptAuthority?: unknown; resolveReference?: (key: string) => Promise<unknown>; now?: string | number | Date }): Promise<true>
 export function retryDelayMs(attempts: number): number

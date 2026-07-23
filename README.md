@@ -153,9 +153,13 @@ Recommended Railway variables:
 - `RANKING_REFRESH_MODE`: `legacy` (default), `shadow`, or `gated`. The web-process timer runs only in legacy mode; shadow/gated use the one-shot cron worker.
 - `RANKING_TRIGGER_STATE_KEY` and `RANKING_REFRESH_LEASE_KEY`: optional bucket keys for durable detector state and the fencing lease.
 - `RANKING_SCHEDULE_RECOVERY_HOURS`, `RANKING_SCHEDULE_MAX_OLDER_PAGES`, and `RANKING_SCHEDULE_REQUEST_TIMEOUT_MS`: bounded probe coverage and request deadline controls.
-- `RANKING_CORRECTION_AUDIT_ENABLED`: set to `true` only after gated rollout to permit declared scored-source correction audits for already-completed games.
+- `RANKING_INCREMENTAL_SHADOW_ENABLED`: defaults off; an authorized `true` shadow run performs one scored-provider ingestion for the candidate/full comparison.
+- `RANKING_DAILY_AUDIT_ENABLED`: defaults off; when authorized, runs an overdue full comparison and advances `lastSuccessfulDailyAuditAt` only after clean parity, promotion, and an audit receipt.
+- `RANKING_DAILY_AUDIT_INTERVAL_MS`: defaults to `86400000` (24 hours).
+- `RANKING_ROLLOUT_GATE_RECEIPT`: JSON bucket reference containing only the immutable gate-receipt `key` and expected `sha256`; inline receipts and local paths are rejected. The loaded receipt must be exact-commit, deployment-bound, and unexpired. Its nested run, audit, full-audit, coordination, and rollback proofs must also be storage-resolvable `{key, sha256}` references; each is re-read and digest-checked before cadence at or below five minutes is allowed.
+- `RANKING_ROLLOUT_EVIDENCE_ENABLED`: set to `true` in an authorized evidence deployment to publish every gated/shadow refresh outcome, including failures, under an immutable run key.
 - `RANKING_ALERT_WEBHOOK_URL`: optional operational alert destination for probe failures, ingestion failures, and overdue pending matches.
-- `RANKING_REFRESH_INTERVAL_MINUTES`: refresh cadence. Defaults to `60`.
+- `RANKING_REFRESH_INTERVAL_MINUTES`: refresh cadence. The legacy web-process scheduler defaults to `60`; the one-shot shadow/gated worker defaults to `360` (six hours), matching `railway.refresh.toml`.
 - `RANKING_REFRESH_ON_START`: set to `true` to run a refresh immediately after the server starts. Defaults to disabled.
 - `RANKING_REFRESH_LOOKBACK_DAYS`: optional rolling source-download window for scheduled refreshes. Production uses `7`.
 - `RANKING_REFRESH_BOOTSTRAP_START`: source coverage start date to use when no raw baseline exists locally or in the bucket. A `2025-01-01` start is a cost/speed-oriented production setting, not a neutral accuracy default.
@@ -172,7 +176,7 @@ Recommended Railway variables:
 
 `GET /api/live` reports process liveness, `GET /api/ready` verifies app and ranking data availability, and `GET /api/scheduler` exposes non-sensitive detector counts and timing. The legacy `GET /api/health` remains available; its `presignedDelivery` field contains only the mode, enabled state, compressed-byte threshold, and fixed 3600-second expiry—not bucket endpoints, credentials, or signed URLs. `POST /api/refresh` starts a manual recovery refresh when `Authorization: Bearer $CRON_SECRET` matches.
 
-Railway's dedicated cron service should run `pnpm run railway:refresh-once` every 6 hours. The bucket is the shared durable state and publish target, so the cron container can exit after each invocation and the web service can serve the promoted generation independently.
+Railway's dedicated cron service should run `pnpm run railway:refresh-once` every 6 hours. Its one-shot default is therefore `360` minutes; the separate legacy web scheduler retains its `60`-minute default. The bucket is the shared durable state and publish target, so the cron container can exit after each invocation and the web service can serve the promoted generation independently.
 
 To override Oracle discovery with direct CSV URLs, include them in the download step:
 

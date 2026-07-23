@@ -52,6 +52,25 @@ test('probe reports incomplete coverage without silently accepting a page limit'
   assert.equal(probe.coverageComplete, false)
 })
 
+test('probe request timeout exposes terminal retry telemetry for failure persistence', async () => {
+  let caught: (Error & { telemetry?: { requests: number; attempts: Array<{ reason?: string }> } }) | undefined
+  try {
+    await fetchScheduleProbe({
+      fetcher: async (_url: URL, init?: RequestInit) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+      }),
+      requestTimeoutMs: 10,
+      maxOlderPages: 0,
+    })
+  } catch (error) {
+    caught = error as typeof caught
+  }
+  assert.ok(caught)
+  assert.equal(caught.name, 'TimeoutError')
+  assert.equal(caught.telemetry?.requests, 1)
+  assert.equal(caught.telemetry?.attempts.at(-1)?.reason, 'caller-timeout')
+})
+
 function schedulePage(events: unknown[], older?: string) {
   return { data: { schedule: { events, pages: { older } } } }
 }

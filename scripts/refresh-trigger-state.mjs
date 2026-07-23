@@ -1,3 +1,5 @@
+import { assertFiveMinuteRolloutGate } from './rollout-gate.mjs'
+
 const TERMINAL_STATES = new Set(['complete', 'completed'])
 const RETRY_DELAYS_MS = [15, 30, 60, 120].map((minutes) => minutes * 60_000)
 const LONG_RETRY_MS = 6 * 60 * 60_000
@@ -183,22 +185,17 @@ export function refreshTriggerCause(stateValue, { correctionAuditDue = false, ma
   return 'unchanged-scheduled-probe'
 }
 
-export function assertRefreshCadence({
+export async function assertRefreshCadence({
   intervalMinutes,
   mode,
-  cheapExitProven = false,
-  leaseFencingConfigured = false,
+  commit,
+  deploymentId,
+  receiptAuthority,
+  resolveReference,
+  now,
 } = {}) {
   if (!Number.isFinite(intervalMinutes) || intervalMinutes > 5) return true
-  const missing = [
-    mode !== 'gated' ? 'gated-mode' : undefined,
-    !cheapExitProven ? 'proven-cheap-exit' : undefined,
-    !leaseFencingConfigured ? 'lease-fencing' : undefined,
-  ].filter(Boolean)
-  if (missing.length > 0) {
-    throw new Error(`Refresh cadence of five minutes or less requires ${missing.join(', ')}`)
-  }
-  return true
+  return assertFiveMinuteRolloutGate({ intervalMinutes, mode, commit, deploymentId, receiptAuthority, resolveReference, now })
 }
 
 export function retryDelayMs(attempts) {
