@@ -517,7 +517,6 @@ function manifestUrls(manifest: PublicRankingManifest) {
     manifest.playerDirectoryUrl,
     manifest.teamDirectoryUrl,
     manifest.teamHistoryIndexUrl,
-    manifest.teamHistoryUrl,
     manifest.regionHistoryUrl,
     manifest.tournamentMovementIndexUrl,
     manifest.matchHistoryIndexUrl,

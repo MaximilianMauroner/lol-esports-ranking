@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { Readable } from 'node:stream'
 import { defaultRunChild, isDailyAuditDue, publishRefreshRolloutEvidence, runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
-import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
+import { completeRefreshMetrics, createRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
 import type { RefreshRunMetrics } from '../scripts/refresh-metrics.mjs'
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>

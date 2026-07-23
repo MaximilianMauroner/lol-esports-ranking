@@ -561,7 +561,6 @@ function rankingManifestLogicalPaths(manifest: ReturnType<typeof parsePublicRank
     manifest.fullSnapshotUrl,
     manifest.teamDirectoryUrl,
     manifest.teamHistoryIndexUrl,
-    manifest.teamHistoryUrl,
     manifest.regionHistoryUrl,
     manifest.tournamentMovementIndexUrl,
     manifest.matchHistoryIndexUrl,
@@ -574,17 +573,6 @@ type HttpResponse = {
   statusCode: number
   headers: IncomingHttpHeaders
   body: string
-}
-
-type HealthJson = {
-  ok: boolean
-  lastRefresh: {
-    status: string
-    error: string | null
-    details?: {
-      coverageEnd?: string
-    } | null
-  }
 }
 
 async function startRailwayServer(
@@ -640,19 +628,6 @@ async function waitForHealthy(port: number, child: ChildProcess, output: () => s
     }
   }
   throw new Error(`Timed out waiting for Railway server:\n${output()}`)
-}
-
-async function waitForRefreshStatus(port: number, status: string): Promise<HealthJson> {
-  const deadline = Date.now() + 5_000
-  while (Date.now() < deadline) {
-    const response = await httpRequest(port, '/api/health')
-    if (response.statusCode === 200) {
-      const health = JSON.parse(response.body) as HealthJson
-      if (health.lastRefresh?.status === status) return health
-    }
-    await delay(50)
-  }
-  throw new Error(`Timed out waiting for refresh status ${status}`)
 }
 
 async function stopChild(child: ChildProcess) {

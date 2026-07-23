@@ -72,7 +72,7 @@ test('gated fetches occur only for due pending work, audits, or manual recovery'
   assert.equal(shouldFetchScoredProviders(shadow, { now: '2026-07-11T13:00:00Z', shadowIngestionEnabled: true }), true)
   assert.equal(shouldFetchScoredProviders({ ...shadow, mode: 'gated' }, { now: '2026-07-11T13:00:00Z' }), true)
   assert.equal(shouldFetchScoredProviders(emptyTriggerState('gated'), { correctionAuditDue: true }), true)
-  assert.equal(shouldFetchScoredProviders(emptyTriggerState('legacy'), { manual: true }), true)
+  assert.equal(shouldFetchScoredProviders(emptyTriggerState('gated'), { manual: true }), true)
 })
 
 test('provider lag backs off and exact reconciliation alone acknowledges work', () => {
@@ -98,7 +98,7 @@ test('provider lag backs off and exact reconciliation alone acknowledges work', 
 
 test('five-minute cadence requires immutable stored rollout gate authority', async () => {
   await assert.rejects(assertRefreshCadence({ intervalMinutes: 5, mode: 'gated' }), /immutable storage resolution|outer authority/)
-  assert.equal(await assertRefreshCadence({ intervalMinutes: 360, mode: 'legacy' }), true)
+  assert.equal(await assertRefreshCadence({ intervalMinutes: 360, mode: 'shadow' }), true)
 })
 
 test('refresh cause precedence is manual, overdue audit, retry, pending, unchanged', () => {

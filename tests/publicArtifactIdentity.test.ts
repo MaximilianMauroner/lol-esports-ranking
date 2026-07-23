@@ -251,7 +251,6 @@ function rootLogicalUrls(manifest: PublicRankingManifest) {
     manifest.playerDirectoryUrl,
     manifest.teamDirectoryUrl,
     manifest.teamHistoryIndexUrl,
-    manifest.teamHistoryUrl,
     manifest.regionHistoryUrl,
     manifest.tournamentMovementIndexUrl,
     manifest.matchHistoryIndexUrl,
@@ -267,7 +266,11 @@ function pathFor(url: string) {
   return new URL(url, 'https://fixture.invalid').pathname
 }
 
-function artifactEntry(logicalPath: string, generationId: string, identity: { sha256: string; bytes: number }) {
+function artifactEntry(
+  logicalPath: string,
+  generationId: string,
+  identity: { sha256: string; bytes: number },
+): PublicGenerationArtifactEntry {
   return {
     logicalPath,
     objectUrl: `/objects/${identity.sha256}.json`,
@@ -276,7 +279,7 @@ function artifactEntry(logicalPath: string, generationId: string, identity: { sh
     bytes: identity.bytes,
     encoding: 'identity' as const,
     storageEncoding: 'identity' as const,
-    transportEncodings: ['identity'] as const,
+    transportEncodings: ['identity'],
   }
 }
 
