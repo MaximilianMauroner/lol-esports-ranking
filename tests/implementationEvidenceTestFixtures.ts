@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process'
-import { copyFile, mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readdir, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import {
   IMPLEMENTATION_EVIDENCE_CONTRACTS,
@@ -11,13 +12,31 @@ import {
 
 const exec = promisify(execFile)
 
-export async function createImplementationRepositoryFixture() {
+const ARCHIVE_DISCOVERY_EXCLUSIONS = new Set([
+  '.cache',
+  '.git',
+  '.rollout-evidence',
+  '.vite',
+  'coverage',
+  'dist',
+  'dist-ssr',
+  'logs',
+  'node_modules',
+])
+
+interface ImplementationRepositoryFixtureOptions {
+  sourceRoot?: string
+  nodeModulesRoot?: string
+}
+
+export async function createImplementationRepositoryFixture({
+  sourceRoot = resolve(fileURLToPath(new URL('..', import.meta.url))),
+  nodeModulesRoot = resolve(sourceRoot, 'node_modules'),
+}: ImplementationRepositoryFixtureOptions = {}) {
   const root = await mkdtemp(join(tmpdir(), 'implementation-evidence-'))
-  const { stdout: tracked } = await exec('git', ['ls-files'], { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 })
-  const { stdout: deleted } = await exec('git', ['ls-files', '--deleted'], { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 })
-  const deletedPaths = new Set(deleted.trim().split('\n').filter(Boolean))
+  const discoveredPaths = await discoverRepositorySourcePaths(sourceRoot)
   const paths = [...new Set([
-    ...tracked.trim().split('\n').filter((path) => path && !deletedPaths.has(path)),
+    ...discoveredPaths,
     ...IMPLEMENTATION_EVIDENCE_REQUIREMENTS.flatMap(
       (id) => IMPLEMENTATION_EVIDENCE_CONTRACTS[id].sourcePaths,
     ),
@@ -25,9 +44,9 @@ export async function createImplementationRepositoryFixture() {
   for (const path of paths) {
     const target = join(root, path)
     await mkdir(dirname(target), { recursive: true })
-    await copyFile(new URL(`../${path}`, import.meta.url), target)
+    await copyFile(join(sourceRoot, path), target)
   }
-  await symlink(resolve(process.cwd(), 'node_modules'), join(root, 'node_modules'), 'dir')
+  await symlink(nodeModulesRoot, join(root, 'node_modules'), 'dir')
   await exec('git', ['init', '-q'], { cwd: root })
   await exec('git', ['add', '.'], { cwd: root })
   await exec('git', ['-c', 'user.name=Evidence Test', '-c', 'user.email=evidence@example.invalid', 'commit', '-qm', 'fixture'], { cwd: root })
@@ -37,6 +56,59 @@ export async function createImplementationRepositoryFixture() {
     commit: stdout.trim(),
     cleanup: () => rm(root, { recursive: true, force: true }),
   }
+}
+
+async function discoverRepositorySourcePaths(sourceRoot: string) {
+  try {
+    const [{ stdout: tracked }, { stdout: deleted }] = await Promise.all([
+      exec('git', ['ls-files'], { cwd: sourceRoot, maxBuffer: 10 * 1024 * 1024 }),
+      exec('git', ['ls-files', '--deleted'], { cwd: sourceRoot, maxBuffer: 10 * 1024 * 1024 }),
+    ])
+    const deletedPaths = new Set(lines(deleted))
+    return lines(tracked).filter((path) => !deletedPaths.has(path))
+  } catch {
+    return discoverArchiveSourcePaths(sourceRoot)
+  }
+}
+
+async function discoverArchiveSourcePaths(sourceRoot: string) {
+  const paths: string[] = []
+  const visit = async (directory: string): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      const absolutePath = join(directory, entry.name)
+      const relativePath = relative(sourceRoot, absolutePath)
+      if (excludeArchiveEntry(relativePath, entry.isDirectory())) continue
+      if (entry.isDirectory()) {
+        await visit(absolutePath)
+      } else if (entry.isFile()) {
+        paths.push(relativePath)
+      }
+    }
+  }
+  await visit(sourceRoot)
+  return paths
+}
+
+function excludeArchiveEntry(relativePath: string, isDirectory: boolean) {
+  const normalized = relativePath.split(sep).join('/')
+  const name = normalized.slice(normalized.lastIndexOf('/') + 1)
+  if (ARCHIVE_DISCOVERY_EXCLUSIONS.has(name)) return true
+  if (name === '.env' || name.startsWith('.env.')) return true
+  if (normalized === 'data/derived' || normalized.startsWith('data/derived/')) return true
+  if (normalized.startsWith('data/raw/') && normalized !== 'data/raw/manifest.json') return true
+  if (!isDirectory && normalized.startsWith('data/')
+    && /\.(?:csv|jsonl|ndjson|parquet|sqlite|db)$/u.test(normalized)) return true
+  if (!isDirectory && normalized.startsWith('public/data/')
+    && (normalized.endsWith('.tmp') || /(?:^|\/)ranking-snapshot(?:\.full)?\.json$/u.test(normalized))) return true
+  if (!isDirectory && (name.endsWith('.local') || name.endsWith('.log'))) return true
+  if (normalized === 'lol-ranking-dev-current-branch.png') return true
+  return false
+}
+
+function lines(value: string) {
+  return value.trim().split('\n').filter(Boolean)
 }
 
 export function passingImplementationCommand() {

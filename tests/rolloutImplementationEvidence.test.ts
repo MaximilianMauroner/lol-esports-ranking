@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { lstat, mkdir, readFile, readdir, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { promisify } from 'node:util'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
@@ -21,6 +23,54 @@ import {
 } from './implementationEvidenceTestFixtures.ts'
 
 const exec = promisify(execFile)
+
+test('fixture construction supports source archives and preserves tracked-file filtering when Git exists', async () => {
+  const sourceRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
+  const archiveRoot = await mkdtemp(join(tmpdir(), 'implementation-evidence-archive-'))
+  let fixture: Awaited<ReturnType<typeof createImplementationRepositoryFixture>> | undefined
+  try {
+    const sourcePaths = [...new Set(IMPLEMENTATION_EVIDENCE_REQUIREMENTS.flatMap(
+      (id) => IMPLEMENTATION_EVIDENCE_CONTRACTS[id].sourcePaths,
+    ))]
+    for (const path of sourcePaths) {
+      await mkdir(dirname(join(archiveRoot, path)), { recursive: true })
+      await copyFile(join(sourceRoot, path), join(archiveRoot, path))
+    }
+    await assert.rejects(exec('git', ['rev-parse', '--is-inside-work-tree'], { cwd: archiveRoot }))
+
+    fixture = await createImplementationRepositoryFixture({
+      sourceRoot: archiveRoot,
+      nodeModulesRoot: join(sourceRoot, 'node_modules'),
+    })
+    const values = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
+    assert.deepEqual(values.map((value) => value.requirementId), IMPLEMENTATION_EVIDENCE_REQUIREMENTS)
+    await fixture.cleanup()
+    fixture = undefined
+
+    await writeFile(join(archiveRoot, 'tracked-marker.txt'), 'tracked\n')
+    await writeFile(join(archiveRoot, 'deleted-marker.txt'), 'deleted\n')
+    await exec('git', ['init', '-q'], { cwd: archiveRoot })
+    await exec('git', ['add', '.'], { cwd: archiveRoot })
+    await exec('git', [
+      '-c', 'user.name=Evidence Test',
+      '-c', 'user.email=evidence@example.invalid',
+      'commit', '-qm', 'archive source',
+    ], { cwd: archiveRoot })
+    await unlink(join(archiveRoot, 'deleted-marker.txt'))
+    await writeFile(join(archiveRoot, 'untracked-marker.txt'), 'untracked\n')
+
+    fixture = await createImplementationRepositoryFixture({
+      sourceRoot: archiveRoot,
+      nodeModulesRoot: join(sourceRoot, 'node_modules'),
+    })
+    assert.equal(await readFile(join(fixture.root, 'tracked-marker.txt'), 'utf8'), 'tracked\n')
+    await assert.rejects(readFile(join(fixture.root, 'deleted-marker.txt')), { code: 'ENOENT' })
+    await assert.rejects(readFile(join(fixture.root, 'untracked-marker.txt')), { code: 'ENOENT' })
+  } finally {
+    await fixture?.cleanup()
+    await rm(archiveRoot, { recursive: true, force: true })
+  }
+})
 
 test('native implementation evidence generation is deterministic, exact, and commit-bound', async () => {
   const fixture = await createImplementationRepositoryFixture()
