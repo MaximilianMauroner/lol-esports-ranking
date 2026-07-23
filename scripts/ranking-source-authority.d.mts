@@ -23,6 +23,8 @@ export type RankingSourceAuthorityEvidence = {
     coverage: { start: string; end: string }
     sourceReceiptDigest: string
     rawIdentityDigest: string
+    receiptSchemaVersion: 1
+    storageMode: string
     receiptReference: RawObjectReference
   }
   outage: null | {
@@ -58,6 +60,11 @@ export function prepareRankingSourceAuthorityEvidence(
 ): { evidence: RankingSourceAuthorityEvidence; evidenceDigest: string; bytes: number }
 export function parseRankingSourceAuthorityEvidence(value: unknown): RankingSourceAuthorityEvidence
 export function rankingSourceAuthorityEvidenceDigest(value: unknown): string
+export function parseRankingSourceAuthorityEvidenceEnvelope(value: unknown): {
+  evidence: RankingSourceAuthorityEvidence
+  evidenceDigest: string
+  bytes: number
+}
 export function validateRawSourceAuthority(
   authority: RawSourceAuthority,
   options?: { importerVersion?: string; requiredCoverage?: { start: string; end: string } },

@@ -62,6 +62,10 @@ type RefreshModule = {
     end?: string
     hasExistingRawBaseline?: boolean
   }) => RefreshWindow
+  sourceProviderResult: (
+    manifest: Record<string, unknown>,
+    forcedStatus?: 'available' | 'unavailable' | 'no-data',
+  ) => { status: 'available' | 'unavailable' | 'no-data'; sources: Record<string, unknown>; warnings: string[] }
 }
 type BucketConfig = ReturnType<typeof bucketConfig>
 type BucketClient = {
@@ -107,6 +111,7 @@ const {
   manifestHasBootstrapCoverage,
   refreshDataIfChanged,
   refreshDateWindow,
+  sourceProviderResult,
 } = await import(refreshScriptPath) as unknown as RefreshModule
 const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import(bucketScriptPath) as unknown as BucketModule
 const isolatedRefreshEnv = {
@@ -232,6 +237,21 @@ test('source fingerprint separates provider health noise from ranking content', 
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
+})
+
+test('provider status uses explicit provider outcomes rather than warnings', () => {
+  assert.equal(sourceProviderResult({
+    sources: { oracle: { status: 'skipped' }, leaguepedia: { status: 'no-data', failedThisRun: 0 } },
+    warnings: ['Informational warning: optional provider was skipped'],
+  }).status, 'no-data')
+  assert.equal(sourceProviderResult({
+    sources: { oracle: { status: 'downloaded', failedThisRun: 0 } },
+    warnings: ['Informational warning about partial schedule metadata'],
+  }, 'available').status, 'available')
+  assert.equal(sourceProviderResult({
+    sources: { oracle: { status: 'downloaded', failedThisRun: 1 } },
+    warnings: [],
+  }).status, 'unavailable')
 })
 
 test('refresh wrapper skips crunch when staged source digest is unchanged', async () => {
@@ -519,6 +539,106 @@ test('refresh wrapper ignores legacy unverified bucket raw files when bootstrapp
   }
 })
 
+test('verified startup restore honors a custom manifest path', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lol-ranking-custom-manifest-restore-'))
+  const rawDir = join(root, 'raw')
+  const manifestPath = join(root, 'authority', 'custom-manifest.json')
+  const statePath = join(root, 'state.json')
+  const stagingDir = join(root, 'staging')
+  const baseline = prepareOracleBaseline({
+    csv: 'gameid,date,league,side\nrestored,2026-06-20,LCK,Blue\nrestored,2026-06-20,LCK,Red\n',
+    sourceFileName: '2026.csv',
+    importerVersion: 'community-source-import-v1',
+  })
+  const preparedReceipt = prepareRawSourceReceipt({
+    generationId: 'raw_custom_manifest_restore',
+    importerVersion: 'community-source-import-v1',
+    coverage: { start: '2025-01-01', end: '2026-06-21' },
+    sourceReceiptInputs: { sources: { oracle: { status: 'downloaded' } } },
+    oracle: [{
+      sourceFileName: baseline.source.sourceFileName,
+      headerDigest: baseline.source.headerDigest,
+      digestScheme: ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
+      effectiveOracleDigest: baseline.source.digest,
+      gameInventory: oracleGameInventory(baseline.source),
+      baseline: baseline.reference,
+      deltas: [],
+    }],
+  })
+  const receiptReference = rawObjectReferenceFor(preparedReceipt.prepared)
+  const objects = new Map<string, Pick<PreparedRawObject, 'compressed' | 'compressedBytes' | 'digest' | 'bytes'>>()
+  objects.set(baseline.reference.key, baseline.prepared)
+  objects.set(receiptReference.key, preparedReceipt.prepared)
+  const client = {
+    async send(command: { input: Record<string, unknown> }) {
+      const key = String(command.input.Key)
+      if (key === 'rankings/active-generation.json') {
+        return { Body: Readable.from([JSON.stringify({
+          generationId: preparedReceipt.receipt.generationId,
+          storageMode: 'raw-authority-test',
+          rawReceiptKey: `rankings/${receiptReference.key}`,
+          rawReceiptDigest: receiptReference.sha256,
+          rawReceiptBytes: receiptReference.bytes,
+          rawReceiptCompressedBytes: receiptReference.compressedBytes,
+          sourceReceiptDigest: preparedReceipt.receipt.sourceReceiptDigest,
+          rawIdentityDigest: preparedReceipt.receipt.rawIdentityDigest,
+        })]) }
+      }
+      const prepared = objects.get(key.replace(/^rankings\//, ''))
+      if (prepared) {
+        return {
+          Body: Readable.from([prepared.compressed]),
+          ContentLength: prepared.compressedBytes,
+          ContentEncoding: 'gzip',
+          Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' },
+        }
+      }
+      const error = new Error('NoSuchKey')
+      error.name = 'NoSuchKey'
+      throw error
+    },
+  }
+  let downloadStart = ''
+  try {
+    await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', stagingDir,
+      '--lookback-days', '7',
+      '--end', '2026-06-29',
+      '--skip-crunch',
+    ], {
+      bucketClient: client,
+      bucketConfig: bucketConfig(),
+      env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_BUCKET_UPLOAD_ENABLED: 'false' },
+      run: async (_command, args) => {
+        downloadStart = valueAfter(args, '--start')
+        const outDir = valueAfter(args, '--out-dir')
+        const outputManifest = valueAfter(args, '--manifest')
+        const sourcePath = join(outDir, 'oracles-elixir', 'current.csv')
+        await mkdir(join(outDir, 'oracles-elixir'), { recursive: true })
+        await writeFile(sourcePath, 'gameid,date,league,side\ncurrent,2026-06-29,LCK,Blue\ncurrent,2026-06-29,LCK,Red\n')
+        await writeFile(outputManifest, JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-06-29T00:00:00.000Z',
+          start: '2026-06-22',
+          end: '2026-06-29',
+          files: { oracleCsv: [sourcePath], leaguepediaJson: [], lolEsportsJson: [] },
+          sources: { oracle: { status: 'downloaded', downloadedCount: 1 } },
+          warnings: [],
+        }))
+      },
+    })
+    assert.equal(downloadStart, '2026-06-22')
+    const customManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    assert.equal(customManifest.start, '2025-01-01')
+    assert.equal(customManifest.files.oracleCsv.some((path: string) => path.endsWith('/2026.csv')), true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('refresh wrapper merges rolling downloads into existing raw baseline', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-rolling-refresh-'))
   const rawDir = join(tempDir, 'raw')
@@ -642,6 +762,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Red,T1,0,10,58000',
   ].join('\n')
   let crunchCount = 0
+  let failAfterManifest = true
 
   async function fakeRun(command: string, commandArgs: string[]) {
     if (commandArgs.includes('scripts/download-local-data.mjs')) {
@@ -675,6 +796,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
           'Leaguepedia backup download was not completed: HTTP 503 from Leaguepedia Cargo',
         ],
       }, null, 2)}\n`)
+      if (failAfterManifest) throw new Error('provider downloader exited non-zero after writing outage manifest')
       return
     }
 
@@ -745,6 +867,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     })
 
     const result = await runUnavailable(false, false)
+    failAfterManifest = false
     const finalManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const state = JSON.parse(await readFile(statePath, 'utf8'))
 

@@ -518,6 +518,31 @@ for (const terminal of ['unchanged', 'stale-source'] as const) {
     assert.equal(outcome.result.metrics?.cause, 'pending-match')
     assert.equal(outcome.result.metrics?.freshness.publishedAt, null)
     assert.equal(outcome.client.objects.has('rankings/latest-publish.json'), false, 'non-publishing runs intentionally have no receipt')
+    if (terminal === 'stale-source') {
+      const metrics = outcome.result.metrics as RefreshRunMetrics & {
+        sourceAuthorityEvidence: {
+          evidence: { mode: string; runId: string }
+          evidenceDigest: string
+          bytes: number
+        }
+      }
+      assert.equal(metrics.sourceAuthorityEvidence.evidence.mode, 'stale-source-preservation')
+      assert.equal(metrics.sourceAuthorityEvidence.evidence.runId, 'stale-source-canonical')
+      const proofKey = `rankings/raw/source-authority-evidence/sha256/${metrics.sourceAuthorityEvidence.evidenceDigest}.json`
+      assert.equal(outcome.client.objects.has(proofKey), true)
+      assert.equal(JSON.parse(outcome.client.objects.get(proofKey)!.body).mode, 'stale-source-preservation')
+      assert.deepEqual(outcome.remoteRefreshState.sourceAuthorityEvidence, metrics.sourceAuthorityEvidence)
+      assert.deepEqual(outcome.remoteRefreshState.sourceAuthorityEvidenceAuthority, {
+        key: proofKey,
+        sha256: metrics.sourceAuthorityEvidence.evidenceDigest,
+        bytes: metrics.sourceAuthorityEvidence.bytes,
+        runId: 'stale-source-canonical',
+        mode: 'stale-source-preservation',
+      })
+      assert.ok(outcome.result.state)
+      const resultState = outcome.result.state as { pending: Record<string, unknown> }
+      assert.equal(Object.keys(resultState.pending).length, 1)
+    }
     await outcome.cleanup()
   })
 }

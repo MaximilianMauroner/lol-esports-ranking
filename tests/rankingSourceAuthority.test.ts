@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import {
   authorityIdentityFor,
+  parseRankingSourceAuthorityEvidenceEnvelope,
   parseRankingSourceAuthorityEvidence,
   prepareRankingSourceAuthorityEvidence,
   rankingSourceAuthorityEvidenceDigest,
@@ -131,10 +132,45 @@ test('fresh, stale, and forced recovery evidence are distinct canonical immutabl
     assert.deepEqual(parseRankingSourceAuthorityEvidence(proof.evidence), proof.evidence)
     assert.equal(rankingSourceAuthorityEvidenceDigest(proof.evidence), proof.evidenceDigest)
     assert.ok(proof.bytes > 0)
+    assert.deepEqual(parseRankingSourceAuthorityEvidenceEnvelope(proof), proof)
   }
+  assert.throws(() => parseRankingSourceAuthorityEvidenceEnvelope({
+    ...stale,
+    evidenceDigest: '0'.repeat(64),
+  }), /envelope identity mismatch/)
   assert.equal(recovery.evidence.authority?.sourceReceiptDigest, validated.receipt.sourceReceiptDigest)
   assert.equal(recovery.evidence.authority?.rawIdentityDigest, validated.receipt.rawIdentityDigest)
   assert.deepEqual(recovery.evidence.authority?.coverage, COVERAGE)
+
+  assert.throws(() => parseRankingSourceAuthorityEvidence({
+    ...fresh.evidence,
+    authority: recovery.evidence.authority,
+  }), /without recovery provenance/)
+  assert.throws(() => parseRankingSourceAuthorityEvidence({
+    ...stale.evidence,
+    compatibility: recovery.evidence.compatibility,
+  }), /without a restored baseline/)
+  assert.throws(() => parseRankingSourceAuthorityEvidence({
+    ...stale.evidence,
+    outage: {
+      ...stale.evidence.outage!,
+      attemptedCoverage: { start: '2026-07-01', end: '2026-07-09' },
+    },
+  }), /outage provenance contradicts/)
+  assert.throws(() => parseRankingSourceAuthorityEvidence({
+    ...recovery.evidence,
+    restoredBaseline: {
+      ...recovery.evidence.restoredBaseline!,
+      rawIdentityDigest: 'f'.repeat(64),
+    },
+  }), /contradicts its authority identity/)
+  assert.throws(() => parseRankingSourceAuthorityEvidence({
+    ...recovery.evidence,
+    compatibility: {
+      ...recovery.evidence.compatibility!,
+      importerVersion: 'different-importer',
+    },
+  }), /contradicts its authority identity/)
 })
 
 test('evidence modes reject ambiguous or weakened recovery provenance', () => {

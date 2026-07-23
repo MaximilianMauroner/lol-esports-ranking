@@ -75,15 +75,38 @@ export function parseRankingSourceAuthorityEvidence(value) {
   const compatibility = value.compatibility === null ? null : parseCompatibility(value.compatibility)
 
   if (value.mode === 'fresh-ingestion') {
-    if (providerResult.status !== 'available' || outage !== null || restoredBaseline !== null) {
+    if (providerResult.status !== 'available' || authority !== null || outage !== null
+      || restoredBaseline !== null || compatibility !== null) {
       throw new Error('Fresh-ingestion evidence must describe available provider data without recovery provenance')
     }
   } else if (value.mode === 'stale-source-preservation') {
-    if (providerResult.status === 'available' || outage === null || restoredBaseline !== null) {
+    if (providerResult.status === 'available' || authority !== null || outage === null
+      || restoredBaseline !== null || compatibility !== null) {
       throw new Error('Stale-source-preservation evidence must describe an outage without a restored baseline')
     }
   } else if (providerResult.status === 'available' || outage === null || authority === null || restoredBaseline === null || compatibility === null) {
     throw new Error('Forced verified-raw evidence requires outage, authority, restored baseline, and compatibility provenance')
+  }
+  if (outage && (canonicalJsonFor(outage.providerResult) !== canonicalJsonFor(providerResult)
+    || canonicalJsonFor(outage.attemptedCoverage) !== canonicalJsonFor(requestedCoverage))) {
+    throw new Error('Source authority outage provenance contradicts the top-level provider result or requested coverage')
+  }
+  if (value.mode === 'forced-verified-raw-recovery') {
+    const expectedRestored = {
+      generationId: authority.generationId,
+      sourceReceiptDigest: authority.sourceReceiptDigest,
+      rawIdentityDigest: authority.rawIdentityDigest,
+      coverage: authority.coverage,
+    }
+    const expectedCompatibility = {
+      importerVersion: authority.importerVersion,
+      receiptSchemaVersion: authority.receiptSchemaVersion,
+      storageMode: authority.storageMode,
+    }
+    if (canonicalJsonFor(restoredBaseline) !== canonicalJsonFor(expectedRestored)
+      || canonicalJsonFor(compatibility) !== canonicalJsonFor(expectedCompatibility)) {
+      throw new Error('Forced verified-raw recovery provenance contradicts its authority identity')
+    }
   }
 
   return {
@@ -103,6 +126,16 @@ export function parseRankingSourceAuthorityEvidence(value) {
 
 export function rankingSourceAuthorityEvidenceDigest(value) {
   return prepareRawObject(parseRankingSourceAuthorityEvidence(value)).digest
+}
+
+export function parseRankingSourceAuthorityEvidenceEnvelope(value) {
+  assertExactKeys(value, ['evidence', 'evidenceDigest', 'bytes'], 'ranking source authority evidence envelope')
+  const evidence = parseRankingSourceAuthorityEvidence(value.evidence)
+  const prepared = prepareRawObject(evidence)
+  if (value.evidenceDigest !== prepared.digest || value.bytes !== prepared.bytes) {
+    throw new Error('Ranking source authority evidence envelope identity mismatch')
+  }
+  return { evidence, evidenceDigest: prepared.digest, bytes: prepared.bytes }
 }
 
 export async function validateRawSourceAuthority(authority, {
@@ -140,6 +173,8 @@ export async function validateRawSourceAuthority(authority, {
       coverage: receipt.coverage,
       sourceReceiptDigest: receipt.sourceReceiptDigest,
       rawIdentityDigest: receipt.rawIdentityDigest,
+      receiptSchemaVersion: receipt.schemaVersion,
+      storageMode: receipt.storageMode,
       receiptReference,
     },
   }
@@ -156,6 +191,8 @@ function parseAuthorityIdentity(value) {
     'coverage',
     'sourceReceiptDigest',
     'rawIdentityDigest',
+    'receiptSchemaVersion',
+    'storageMode',
     'receiptReference',
   ], 'ranking source authority identity')
   assertNonEmptyString(value.generationId, 'authority generationId')
@@ -163,12 +200,16 @@ function parseAuthorityIdentity(value) {
   const coverage = parseCoverage(value.coverage, 'authority coverage')
   assertDigest(value.sourceReceiptDigest, 'authority sourceReceiptDigest')
   assertDigest(value.rawIdentityDigest, 'authority rawIdentityDigest')
+  if (value.receiptSchemaVersion !== 1) throw new Error('Authority receipt schema is incompatible')
+  assertNonEmptyString(value.storageMode, 'authority storageMode')
   return {
     generationId: value.generationId,
     importerVersion: value.importerVersion,
     coverage,
     sourceReceiptDigest: value.sourceReceiptDigest,
     rawIdentityDigest: value.rawIdentityDigest,
+    receiptSchemaVersion: value.receiptSchemaVersion,
+    storageMode: value.storageMode,
     receiptReference: parseReceiptReference(value.receiptReference),
   }
 }
