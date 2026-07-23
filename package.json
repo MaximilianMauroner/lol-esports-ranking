@@ -35,7 +35,8 @@
     "railway:refresh-once": "node scripts/refresh-once.mjs",
     "fetch:lolesports": "node scripts/fetch-lolesports-schedule.mjs",
     "fetch:leaguepedia": "node scripts/fetch-leaguepedia.mjs",
-    "fetch:riot-gpr": "node scripts/fetch-riot-gpr-snapshot.mjs"
+    "fetch:riot-gpr": "node scripts/fetch-riot-gpr-snapshot.mjs",
+    "bucket:gc": "node scripts/ranking-bucket-gc.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

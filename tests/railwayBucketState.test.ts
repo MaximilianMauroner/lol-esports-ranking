@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,13 +12,17 @@ import {
   getBucketObject,
   readActiveContentAddressedGeneration,
   readBucketJson,
+  readPreviousGenerationAuthorities,
   releaseBucketLease,
   renewBucketLease,
   uploadContentAddressedPublicArtifacts,
-  uploadRankingArtifacts,
+  uploadRankingArtifacts as uploadRankingArtifactsImplementation,
   writeBucketJson,
+  type BucketClient,
+  type BucketStorageConfig,
 } from '../scripts/railway-bucket.mjs'
-import { canonicalPublicLogicalPath, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { canonicalJsonFor, canonicalPublicLogicalPath, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
 
@@ -29,6 +34,74 @@ const config = {
   accessKeyId: 'key',
   secretAccessKey: 'secret',
   prefix: 'rankings',
+}
+
+async function uploadRankingArtifacts(options: Parameters<typeof uploadRankingArtifactsImplementation>[0]) {
+  let withRaw = options
+  if (options?.contentAddressed && options.generationId && !options.rawSourceGeneration) {
+    withRaw = { ...options, rawSourceGeneration: testRawGeneration(String(options.generationId)) }
+  }
+  if (!withRaw?.generationId || withRaw.leaseAuthority) return uploadRankingArtifactsImplementation(withRaw)
+  const fencingToken = Number(withRaw.fencingToken)
+  const storage = { config: withRaw.config as BucketStorageConfig, client: withRaw.client as BucketClient }
+  const current = await readBucketJson('active-generation.json', storage)
+  const owner = `test-publication-${fencingToken}`
+  const leaseValue = {
+    ...(current.value ?? {}),
+    leaseKey: 'ops/refresh-lease.json', leaseOwner: owner, leaseFencingToken: fencingToken,
+    leaseAcquiredAt: '2026-07-23T00:00:00.000Z', leaseExpiresAt: '2099-01-01T00:00:00.000Z',
+  }
+  const written = await writeBucketJson('active-generation.json', leaseValue, {
+    ...storage,
+    ...(current.found ? { ifMatch: current.etag } : { ifNoneMatch: '*' }),
+  })
+  assert.equal(written.written, true)
+  return uploadRankingArtifactsImplementation({
+    ...withRaw,
+    leaseAuthority: {
+      key: 'ops/refresh-lease.json',
+      lease: { owner, fencingToken, acquiredAt: leaseValue.leaseAcquiredAt, expiresAt: leaseValue.leaseExpiresAt },
+    },
+  })
+}
+
+function testRawGeneration(generationId: string) {
+  const baseline = prepareOracleBaseline({
+    csv: ['gameid,date,league,side,position,teamname,result', `${generationId}-game,2026-01-01,LCK,Blue,team,Alpha,1`, `${generationId}-game,2026-01-01,LCK,Red,team,Beta,0`].join('\n'),
+    sourceFileName: `${generationId}.csv`,
+    importerVersion: 'test-importer',
+  })
+  const prepared = prepareRawSourceReceipt({
+    generationId,
+    importerVersion: 'test-importer',
+    coverage: { start: '2026-01-01', end: '2026-01-01' },
+    sourceReceiptInputs: {},
+    oracle: [{
+      sourceFileName: baseline.source.sourceFileName,
+      headerDigest: baseline.source.headerDigest,
+      digestScheme: ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
+      effectiveOracleDigest: baseline.source.digest,
+      gameInventory: oracleGameInventory(baseline.source),
+      baseline: baseline.reference,
+      deltas: [],
+    }],
+  })
+  return {
+    generationId,
+    importerVersion: 'test-importer',
+    coverage: { start: '2026-01-01', end: '2026-01-01' },
+    sourceReceiptInputs: {},
+    oracle: prepared.receipt.oracle,
+    leaguepedia: [],
+    lolesports: [],
+    objects: [baseline.prepared],
+    verifiedSourceFiles: [],
+    receipt: prepared.receipt,
+    receiptPrepared: prepared.prepared,
+    receiptReference: rawObjectReferenceFor(prepared.prepared),
+    sourceReceiptDigest: prepared.receipt.sourceReceiptDigest,
+    rawIdentityDigest: prepared.receipt.rawIdentityDigest,
+  }
 }
 
 test('conditional JSON state writes and lease fencing reject stale owners', async () => {
@@ -87,6 +160,27 @@ test('live lease assertion rejects expiry takeover and an old worker resuming', 
   assert.equal(replacement.acquired && replacement.lease.fencingToken, 2)
 })
 
+test('every fenced or content-addressed generation promotion requires the live shared lease', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-required-lease-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'ranking-summary.json'), '{"artifactKind":"public-ranking-manifest"}\n')
+  try {
+    await assert.rejects(uploadRankingArtifactsImplementation({
+      publicDataDir: publicDir, generationId: 'missing-lease', fencingToken: 1, config, client,
+    }), /requires a live refresh lease authority/)
+    await assert.rejects(uploadRankingArtifactsImplementation({
+      publicDataDir: publicDir, generationId: 'missing-content-lease', fencingToken: 1, contentAddressed: true, config, client,
+    }), /requires a live refresh lease authority/)
+    assert.equal(client.objects.size, 0)
+    const legacy = await uploadRankingArtifactsImplementation({ publicDataDir: publicDir, config, client })
+    assert.equal(legacy.enabled, true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('generation publication uploads immutable data before promoting one pointer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-generation-'))
   const publicDir = join(root, 'public')
@@ -107,6 +201,7 @@ test('generation publication uploads immutable data before promoting one pointer
     const active = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
     assert.equal(active.generationId, 'run-1')
     assert.equal(active.fencingToken, 4)
+    assert.equal(Object.hasOwn(active, 'previousGeneration'), false)
 
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
@@ -115,14 +210,39 @@ test('generation publication uploads immutable data before promoting one pointer
       config,
       client,
     })
+    const second = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.deepEqual(second.previousGeneration, {
+      generationId: 'run-1',
+      manifestKey: 'rankings/generations/run-1/data/ranking-summary.json',
+      promotedAt: active.promotedAt,
+    })
+    const legacyRollback = await readPreviousGenerationAuthorities({ config, client })
+    assert.equal(legacyRollback.found, true)
+    assert.equal(legacyRollback.found && legacyRollback.public.manifest.artifactKind, 'public-ranking-manifest')
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'run-2',
+      fencingToken: 6,
+      config,
+      client,
+    })
+    assert.deepEqual(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).previousGeneration, second.previousGeneration)
+    const activeBeforeForwardCompatibleRetry = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    activeBeforeForwardCompatibleRetry.previousGeneration.futureAuthority = { schemaVersion: 2, opaque: true }
+    client.objects.get('rankings/active-generation.json')!.body = JSON.stringify(activeBeforeForwardCompatibleRetry)
+    client.objects.get('rankings/active-generation.json')!.bytes = Buffer.from(JSON.stringify(activeBeforeForwardCompatibleRetry))
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'run-2', fencingToken: 7, config, client })
+    assert.deepEqual(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).previousGeneration, activeBeforeForwardCompatibleRetry.previousGeneration)
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'stale-run',
-      fencingToken: 4,
+      fencingToken: 5,
       config,
       client,
     }), /Stale refresh worker/)
-    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'run-2')
+    const afterStale = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.equal(afterStale.generationId, 'run-2')
+    assert.deepEqual(afterStale.previousGeneration, activeBeforeForwardCompatibleRetry.previousGeneration)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -164,7 +284,7 @@ test('lost lease leaves uploaded generation objects orphaned and active pointer 
     await assert.rejects(() => uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: 'orphan',
-      fencingToken: 1,
+      fencingToken: current.lease.fencingToken,
       leaseAuthority: { key: 'lease.json', lease: current.lease },
       now: () => new Date('2026-07-11T00:00:30Z'),
       config,
@@ -277,6 +397,49 @@ test('semantic public artifacts produce deterministic gzip bytes over canonical 
   assert.equal(gunzipSync(first.compressed).toString('utf8'), first.canonicalJson)
 })
 
+test('generation publish receipt is canonical, digest-bound, and safely CAS-repromoted', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-publish-authority-'))
+  const publicDir = join(root, 'public')
+  const generationId = 'publish_authority'
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir, generationId, fencingToken: 1, contentAddressed: true,
+      now: () => new Date('2026-07-23T00:00:00.000Z'), config, client,
+    })
+    const key = `rankings/generations/${generationId}/publish.json`
+    const first = client.objects.get(key)!
+    const parsed = JSON.parse(first.body)
+    assert.equal(first.body, canonicalJsonFor(parsed))
+    assert.equal(first.contentType, 'application/json; charset=utf-8')
+    assert.equal(first.contentEncoding, undefined)
+    assert.equal(first.metadata?.sha256, createHash('sha256').update(first.bytes!).digest('hex'))
+    assert.equal(first.metadata?.['semantic-bytes'], String(first.bytes!.byteLength))
+    assert.equal(parsed.schemaVersion, 2)
+    for (const authority of [parsed.authorities.publicManifest, parsed.authorities.rawReceipt]) {
+      assert.equal(parsed.artifacts.filter((entry: Record<string, unknown>) => entry.key === authority.key
+        && entry.digest === authority.digest && entry.bytes === authority.bytes && entry.contentType === authority.contentType).length, 1)
+    }
+
+    const firstEtag = first.etag
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir, generationId, fencingToken: 2, contentAddressed: true,
+      now: () => new Date('2026-07-23T00:01:00.000Z'), config, client,
+    })
+    const repromoted = client.objects.get(key)!
+    assert.notEqual(repromoted.etag, firstEtag)
+    assert.equal(JSON.parse(repromoted.body).publishedAt, '2026-07-23T00:01:00.000Z')
+    await assert.rejects(uploadRankingArtifacts({
+      publicDataDir: publicDir, generationId, fencingToken: 3, contentAddressed: true,
+      now: () => new Date('2026-07-23T00:00:30.000Z'), config, client,
+    }), /replacement is not newer/)
+    assert.equal(client.objects.get(key)!.etag, repromoted.etag)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('content-addressed generation reuses unchanged objects, uploads only changed content, and remains reader-compatible', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-content-addressed-'))
   const publicDir = join(root, 'public')
@@ -298,7 +461,7 @@ test('content-addressed generation reuses unchanged objects, uploads only change
     const generationManifest = JSON.parse(generationManifestObject.body)
     assert.equal(generationManifest.storageMode, 'content-addressed-gzip-v1')
     assert.equal(Object.keys(generationManifest.artifacts).length, 3)
-    assert.equal(first.uploadedCount, 4)
+    assert.equal(first.uploadedCount, 6)
     assert.equal(first.unchangedCount, 0)
     assert.equal(objectEntries.length, 3)
 
@@ -327,7 +490,10 @@ test('content-addressed generation reuses unchanged objects, uploads only change
       measuredSemanticBytes += entry.bytes
     }
     assert.ok(measuredCompressedBytes < measuredSemanticBytes)
-    assert.equal(first.uploadedBytes, measuredCompressedBytes + generationManifestObject.bytes!.byteLength)
+    const rawUploadedBytes = (first.uploaded as Array<{ key: string; bytes: number }>)
+      .filter((entry) => entry.key.startsWith('rankings/raw/objects/sha256/'))
+      .reduce((sum, entry) => sum + entry.bytes, 0)
+    assert.equal(first.uploadedBytes, measuredCompressedBytes + generationManifestObject.bytes!.byteLength + rawUploadedBytes)
     assert.deepEqual(first.storage, {
       mode: 'content-addressed-gzip-v1',
       objectCount: 3,
@@ -370,8 +536,8 @@ test('content-addressed generation reuses unchanged objects, uploads only change
       client,
     })
     assert.equal(repeated.uploadedCount, 0)
-    assert.equal(repeated.unchangedCount, 4)
-    assert.equal(repeated.unchangedBytes, measuredCompressedBytes + generationManifestObject.bytes!.byteLength)
+    assert.equal(repeated.unchangedCount, 6)
+    assert.equal(repeated.unchangedBytes, measuredCompressedBytes + generationManifestObject.bytes!.byteLength + rawUploadedBytes)
 
     const changedGenerationId = 'run_content_storage_changed'
     await writeContentAddressedFixture(publicDir, changedGenerationId)
@@ -387,7 +553,7 @@ test('content-addressed generation reuses unchanged objects, uploads only change
       config,
       client,
     })
-    assert.equal(changed.uploadedCount, 2)
+    assert.equal(changed.uploadedCount, 4)
     assert.equal(changed.unchangedCount, 2)
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -618,7 +784,7 @@ test('logical path aliases and encoded traversal fail before any bucket upload',
         uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'run_invalid_path', fencingToken: 1, contentAddressed: true, config, client }),
         /encoded path separators|path traversal|invalid percent encoding|Duplicate public artifact logical path alias/,
       )
-      assert.equal(client.objects.size, 0)
+      assert.deepEqual([...client.objects.keys()], ['rankings/active-generation.json'])
     } finally {
       await rm(root, { recursive: true, force: true })
     }

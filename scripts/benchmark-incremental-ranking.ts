@@ -917,9 +917,15 @@ async function seedBaseline(
   const generationId = generationIdFor(baseline)
   const finalizedRaw = finalizeRawSourceGeneration(rawGeneration, generationId)
   const state = await persistIncrementalStateBuild({ state: baseline.state, generationId, client, config })
+  const lease = await acquireBucketLease('ops/refresh-lease.json', {
+    owner: 'benchmark-baseline', now: '2026-07-21T00:00:00.000Z', ttlMs: 10 * 60_000, config, client,
+  })
+  if (!lease.acquired) throw new Error(`Benchmark baseline lease acquisition failed: ${lease.reason}`)
   await uploadRankingArtifacts({
     publicDataDir: baseline.build.publicDataDir,
-    generationId, fencingToken: 1, contentAddressed: true,
+    generationId, fencingToken: lease.lease.fencingToken, contentAddressed: true,
+    leaseAuthority: { key: 'ops/refresh-lease.json', lease: lease.lease, promotionEtag: lease.promotionEtag },
+    now: () => new Date('2026-07-21T00:00:01.000Z'),
     stateManifestAuthority: state.authority, rawSourceGeneration: finalizedRaw, config, client,
   })
   return { generationId, matchCount: source.matches.length, rawDeltaCount: finalizedRaw.receipt.oracle.reduce((sum, entry) => sum + entry.deltas.length, 0) }

@@ -24,6 +24,14 @@ type RefreshWindow = {
 }
 type RefreshModule = {
   createSourceFingerprint: (manifest: unknown) => Promise<{ fingerprint: string; healthFingerprint: string }>
+  invokeFullAuditReceiptIfEligible: (
+    input: Record<string, unknown>,
+    invoke: () => Promise<unknown>,
+  ) => Promise<unknown | undefined>
+  invokeFullAuditStageIfEligible: (
+    input: Record<string, unknown>,
+    invoke: () => Promise<unknown>,
+  ) => Promise<unknown | undefined>
   manifestHasBootstrapCoverage: (manifest: unknown, bootstrapStart: string) => boolean
   refreshDataIfChanged: (rawArgs?: string[], options?: {
     run?: RefreshRun
@@ -75,12 +83,67 @@ type BucketModule = {
 
 const refreshScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
 const bucketScriptPath: string = '../scripts/railway-bucket.mjs'
-const { createSourceFingerprint, manifestHasBootstrapCoverage, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
+const {
+  createSourceFingerprint,
+  invokeFullAuditReceiptIfEligible,
+  invokeFullAuditStageIfEligible,
+  manifestHasBootstrapCoverage,
+  refreshDataIfChanged,
+  refreshDateWindow,
+} = await import(refreshScriptPath) as unknown as RefreshModule
 const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import(bucketScriptPath) as unknown as BucketModule
 const isolatedRefreshEnv = {
   RANKING_BUCKET_RESTORE_RAW: 'false',
   RANKING_BUCKET_UPLOAD_ENABLED: 'false',
 }
+
+test('full-audit injected functions run only for eligible daily and manual full refreshes', async () => {
+  const common = {
+    fullSnapshotPath: '/tmp/ranking-full.json',
+    fullSnapshotDescriptor: {
+      artifactKind: 'full-ranking-artifact', schemaVersion: 23, generatedAt: '2026-07-23T00:00:00.000Z',
+      source: 'test', sources: [{ name: 'test' }], model: { version: 'model-v1', configHash: 'config-v1' },
+      sha256: 'b'.repeat(64), bytes: 100,
+    },
+    generationId: 'generation-1',
+    fencingToken: 7,
+    stateManifestAuthority: { key: 'state/manifests/manifest.json', digest: 'a'.repeat(64) },
+    rawReceiptAuthority: { receiptReference: { key: 'raw/receipts/receipt.json' }, receipt: {} },
+    promotion: {
+      completed: true,
+      etag: 'promotion-etag',
+      generationId: 'generation-1',
+      fencingToken: 7,
+    },
+  }
+  const cases = [
+    { cause: 'daily-audit', result: 'publish-full', eligible: true },
+    { cause: 'manual-force', result: 'publish-full', eligible: true },
+    { cause: 'pending-match', result: 'publish-full', eligible: false },
+    { cause: 'daily-audit', result: 'publish-incremental', eligible: false },
+    { cause: 'daily-audit', result: 'no-change', eligible: false },
+    { cause: 'daily-audit', result: 'failed', eligible: false },
+  ] as const
+
+  for (const refreshCase of cases) {
+    let stageCalls = 0
+    let receiptCalls = 0
+    const input = { ...common, ...refreshCase }
+    const stagedAudit = await invokeFullAuditStageIfEligible(input, async () => {
+      stageCalls += 1
+      return { reference: { key: 'audit/objects/snapshot.json.gz' } }
+    })
+    await invokeFullAuditReceiptIfEligible({
+      ...input,
+      stagedAudit: stagedAudit ?? { reference: { key: 'audit/objects/snapshot.json.gz' } },
+    }, async () => {
+      receiptCalls += 1
+    })
+
+    assert.equal(stageCalls, refreshCase.eligible ? 1 : 0, `${refreshCase.cause}/${refreshCase.result} stage`)
+    assert.equal(receiptCalls, refreshCase.eligible ? 1 : 0, `${refreshCase.cause}/${refreshCase.result} receipt`)
+  }
+})
 
 test('source fingerprint ignores volatile fetch timestamps', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-fingerprint-'))

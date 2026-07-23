@@ -1,4 +1,5 @@
 import { once } from 'node:events'
+import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -36,6 +37,17 @@ export type StaticSnapshotBuildOptions = {
   releaseImportAuditBeforeSnapshot?: boolean
   compactPlayerDirectory?: boolean
   silent?: boolean
+}
+
+export type FullSnapshotDescriptor = {
+  artifactKind: 'full-ranking-artifact'
+  schemaVersion: number
+  generatedAt: string
+  source: string
+  sources: Array<{ name: string }>
+  model: { version: string; configHash: string }
+  sha256: string
+  bytes: number
 }
 
 export async function buildStaticSnapshot(options: StaticSnapshotBuildOptions = {}) {
@@ -116,9 +128,20 @@ for (const stage of playerLifecycleStages) {
   metrics.recordStage(stage.name, stage)
 }
 
+let fullSnapshotDescriptor: FullSnapshotDescriptor | undefined
 if (options.writeFullSnapshot !== false) {
   await mkdir(dirname(output), { recursive: true })
-  await writeJsonFile(output, snapshot)
+  const written = await writeJsonFile(output, snapshot)
+  fullSnapshotDescriptor = {
+    artifactKind: snapshot.artifactKind,
+    schemaVersion: snapshot.schemaVersion,
+    generatedAt: snapshot.generatedAt,
+    source: snapshot.source,
+    sources: snapshot.sources.map(({ name }) => ({ name })),
+    model: { version: snapshot.model.version, configHash: snapshot.model.configHash },
+    sha256: written.sha256,
+    bytes: written.bytes,
+  }
 }
 const serializationFinished = metrics.startStage('public-serialization', {
   importedGameCount: importedMatchCount,
@@ -171,7 +194,7 @@ try {
     for (const write of publicPlan.writes) write.contents = ''
     return result
   }
-  return { snapshot, ...result, ...sourceData }
+  return { snapshot, fullSnapshotDescriptor, ...result, ...sourceData }
 } catch (error) {
   await rm(publicDataDir, { recursive: true, force: true })
   throw error
@@ -260,8 +283,12 @@ async function atomicWriteFile(path: string, contents: string) {
 
 async function writeJsonFile(path: string, value: unknown) {
   const stream = createWriteStream(path, { encoding: 'utf8' })
+  const hash = createHash('sha256')
+  let bytes = 0
 
   async function writeChunk(chunk: string) {
+    hash.update(chunk)
+    bytes += Buffer.byteLength(chunk)
     if (!stream.write(chunk)) await once(stream, 'drain')
   }
 
@@ -270,6 +297,7 @@ async function writeJsonFile(path: string, value: unknown) {
     await writeChunk('\n')
     stream.end()
     await once(stream, 'finish')
+    return { sha256: hash.digest('hex'), bytes }
   } catch (error) {
     stream.destroy()
     throw error

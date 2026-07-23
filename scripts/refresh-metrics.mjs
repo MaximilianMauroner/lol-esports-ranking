@@ -19,12 +19,14 @@ export const REFRESH_STAGE_NAMES = [
   'dependency-materialization',
   'semantic-parity',
   'state-persistence',
+  'full-audit-object',
   'crunch',
   'public-serialization',
   'hashing',
   'raw-synchronization',
   'artifact-upload',
   'promotion',
+  'full-audit-receipt',
 ]
 
 export function createRefreshMetrics({

@@ -9,7 +9,7 @@ export type BucketConfig = {
   forcePathStyle?: boolean
 }
 export type BucketStorageConfig = Omit<BucketConfig, 'enabled'> & { enabled?: boolean }
-export type BucketClient = { send(command: unknown): Promise<unknown> }
+export type BucketClient = { send(command: unknown, options?: { abortSignal?: AbortSignal }): Promise<unknown> }
 export type PresignedBucketMethod = 'GET' | 'HEAD'
 export type ContentAddressedObjectPath = { path: string; sha256: string }
 export type BucketObjectHead = {
@@ -73,6 +73,51 @@ export type BucketLeaseAuthority = {
   etag?: string
   promotionEtag?: string
 }
+export type PreviousGeneration = {
+  generationId: string
+  manifestKey: string
+  promotedAt?: string
+  stateManifestKey?: string
+  stateManifestDigest?: string
+  rawReceiptKey?: string
+  rawReceiptDigest?: string
+}
+export function readPreviousGenerationAuthorities(options?: {
+  config?: BucketStorageConfig
+  client?: BucketClient
+  verifyArtifacts?: boolean
+  beforePointerRecheck?: () => void | Promise<void>
+}): Promise<
+  | { found: false; reason: string }
+  | {
+      found: true
+      previous: PreviousGeneration
+      public: { manifest: Record<string, unknown>; digest: string; artifacts: Record<string, unknown> }
+      state?: { manifest: import('./incremental-state-storage.mjs').IncrementalStateManifest; canonicalLedger: Record<string, unknown>; checkpoints: unknown[] }
+      raw?: { receipt: import('./raw-source-storage.mjs').RawSourceReceipt; receiptReference: import('./raw-source-storage.mjs').RawObjectReference }
+    }
+>
+export type GenerationPublishEntry = { key: string; bytes: number; contentType: string; digest?: string }
+export type GenerationPublishAuthority = { key: string; bytes: number; contentType: 'application/json; charset=utf-8'; digest: string }
+export type GenerationPublishReceipt = {
+  schemaVersion: 1 | 2
+  publishedAt: string
+  prefix: string
+  generationId: string
+  artifactCount: number
+  uploadedCount: number
+  uploadedBytes: number
+  unchangedCount: number
+  unchangedBytes: number
+  artifacts: GenerationPublishEntry[]
+  unchanged: GenerationPublishEntry[]
+  skipped: Array<{ key: string; reason: string }>
+  storageMode?: string
+  storage?: Record<string, unknown>
+  authorities?: { publicManifest: GenerationPublishAuthority; rawReceipt: GenerationPublishAuthority }
+  refreshTelemetry?: unknown
+}
+export function parseGenerationPublishReceipt(value: unknown, options?: { generationId?: string; prefix?: string }): GenerationPublishReceipt
 export function renewBucketLease(relativeKey: string, lease: BucketLeaseAuthority, options?: {
   ttlMs?: number
   now?: string | Date

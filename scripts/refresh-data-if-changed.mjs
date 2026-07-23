@@ -10,6 +10,7 @@ import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, read
 import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
 import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
+import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -63,6 +64,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const bucketRequired = booleanArg(args.bucketRequired) || env.RANKING_BUCKET_REQUIRED === 'true'
   const bucketConfig = options.bucketConfig ?? bucketConfigFromEnv(env)
   const bucketClient = options.bucketClient ?? createBucketClient(bucketConfig)
+  const stageAuditSnapshot = options.stageFullAuditSnapshot ?? stageFullAuditSnapshot
+  const publishAuditReceipt = options.publishFullAuditDayReceipt ?? publishFullAuditDayReceipt
   const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
   const stagingDir = resolve(stringArg(args.stagingDir ?? `data/.refresh-staging-${process.pid}-${Date.now()}`))
   const stagingManifestPath = resolve(stagingDir, 'manifest.json')
@@ -516,6 +519,54 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           releasePersistedIncrementalInputs(incrementalBuild, restoredIncremental)
           restoredIncremental = undefined
         }
+        const fencingToken = env.RANKING_REFRESH_FENCING_TOKEN
+          ? Number(env.RANKING_REFRESH_FENCING_TOKEN)
+          : undefined
+        const leaseAuthority = env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
+          ? {
+              key: env.RANKING_REFRESH_LEASE_KEY ?? 'ops/refresh-lease.json',
+              lease: {
+                owner: env.RANKING_REFRESH_LEASE_OWNER,
+                fencingToken,
+              },
+              promotionEtag: env.RANKING_REFRESH_PROMOTION_ETAG,
+            }
+          : undefined
+        const auditCause = env.RANKING_REFRESH_CAUSE ?? (env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match')
+        const stagedAudit = await invokeFullAuditStageIfEligible({
+          cause: auditCause,
+          result: incrementalBuild?.action,
+          fullSnapshotPath: output,
+          fullSnapshotDescriptor: incrementalBuild?.build?.fullSnapshotDescriptor,
+          generationId,
+          fencingToken,
+          stateManifestAuthority: incrementalState?.authority,
+          rawReceiptAuthority: rawSourceGeneration,
+        }, async () => {
+          const auditStarted = monotonicNow()
+          const staged = await stageAuditSnapshot({
+            fullSnapshotPath: output,
+            snapshotDescriptor: incrementalBuild.build.fullSnapshotDescriptor,
+            generationId,
+            fencingToken,
+            stateManifestAuthority: incrementalState.authority,
+            rawReceiptAuthority: rawSourceGeneration,
+            publicManifest: browserManifest,
+            config: bucketConfig,
+            client: bucketClient,
+          })
+          metrics.recordStage('full-audit-object', {
+            durationMs: monotonicNow() - auditStarted,
+            output: {
+              status: staged.status,
+              key: staged.reference?.key ?? staged.key,
+              bytes: staged.reference?.bytes ?? staged.bytes,
+              compressedBytes: staged.reference?.compressedBytes ?? staged.compressedBytes,
+              rssBytes: process.memoryUsage().rss,
+            },
+          })
+          return staged
+        })
         const bucketPublish = await uploadRankingArtifacts({
           publicDataDir: incrementalBuild?.build?.publicDataDir ?? publicDataDir,
           rawDir,
@@ -530,18 +581,41 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           ...(incrementalState ? { stateManifestAuthority: incrementalState.authority } : {}),
           ...(rawSourceGeneration ? { rawSourceGeneration } : {}),
           generationId,
-          fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
-          leaseAuthority: env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
-            ? {
-                key: env.RANKING_REFRESH_LEASE_KEY ?? 'ops/refresh-lease.json',
-                lease: {
-                  owner: env.RANKING_REFRESH_LEASE_OWNER,
-                  fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
-                },
-                promotionEtag: env.RANKING_REFRESH_PROMOTION_ETAG,
-              }
-            : undefined,
-          refreshTelemetry: (promotion) => {
+          fencingToken,
+          leaseAuthority,
+          refreshTelemetry: async (promotion) => {
+            await invokeFullAuditReceiptIfEligible({
+              cause: auditCause,
+              result: incrementalBuild?.action,
+              fullSnapshotPath: output,
+              fullSnapshotDescriptor: incrementalBuild?.build?.fullSnapshotDescriptor,
+              generationId,
+              fencingToken,
+              promotion,
+              stateManifestAuthority: incrementalState?.authority,
+              rawReceiptAuthority: rawSourceGeneration,
+              stagedAudit,
+            }, async () => {
+              const auditStarted = monotonicNow()
+              const auditReceipt = await publishAuditReceipt({
+                cause: auditCause,
+                generationId,
+                fencingToken,
+                promotion,
+                publicManifest: browserManifest,
+                stateManifestAuthority: incrementalState.authority,
+                rawReceiptAuthority: rawSourceGeneration,
+                stagedSnapshot: stagedAudit,
+                leaseAuthority,
+                config: bucketConfig,
+                client: bucketClient,
+              })
+              metrics.recordStage('full-audit-receipt', {
+                durationMs: monotonicNow() - auditStarted,
+                output: { status: auditReceipt.status, key: auditReceipt.key, bytes: auditReceipt.bytes, rssBytes: process.memoryUsage().rss },
+              })
+              return auditReceipt
+            })
             const own = completeRefreshMetrics(metrics.snapshot({
               result: promotion?.completed ? 'completed' : 'no-promotion',
               freshness: { providerAvailableAt, publishedAt: promotion?.promotedAt ?? null },
@@ -679,6 +753,23 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     await rm(stagingDir, { recursive: true, force: true })
     await rm(rawWorkerDir, { recursive: true, force: true })
   }
+}
+
+export async function invokeFullAuditStageIfEligible(input, invoke) {
+  const raw = input.rawReceiptAuthority
+  const eligible = (input.cause === 'daily-audit' || input.cause === 'manual-force')
+    && input.result === 'publish-full'
+    && typeof input.fullSnapshotPath === 'string'
+    && Boolean(input.fullSnapshotDescriptor)
+    && typeof input.generationId === 'string'
+    && Number.isSafeInteger(input.fencingToken)
+    && Boolean(input.stateManifestAuthority?.key && input.stateManifestAuthority?.digest)
+    && Boolean((raw?.reference ?? raw?.receiptReference)?.key && raw?.receipt)
+  return eligible ? invoke() : undefined
+}
+
+export async function invokeFullAuditReceiptIfEligible(input, invoke) {
+  return input.stagedAudit && isFullAuditEligible(input) ? invoke() : undefined
 }
 
 function aggregateMetrics(inherited, metrics, options) {

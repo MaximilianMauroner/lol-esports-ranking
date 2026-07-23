@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -109,6 +110,19 @@ test('feature/mode matrix preserves legacy and daily/manual force full while can
     const disabled = await run(root, 'disabled', source, { mode: 'gated', cause: 'pending-match', enabled: false })
     assert.equal(disabled.action, 'publish-full')
     assert.equal(disabled.metrics.fullSnapshotWritten, true)
+    if (disabled.action !== 'publish-full') return
+    if (!('snapshot' in disabled.build) || !disabled.build.fullSnapshotDescriptor) throw new Error('Full build did not return its snapshot descriptor')
+    const fullBuild = disabled.build
+    const fullSnapshotDescriptor = fullBuild.fullSnapshotDescriptor
+    if (!fullSnapshotDescriptor) throw new Error('Full build snapshot descriptor was released unexpectedly')
+    const fullBytes = await readFile(join(root, 'disabled-full.json'))
+    assert.equal(fullSnapshotDescriptor.bytes, fullBytes.byteLength)
+    assert.equal(fullSnapshotDescriptor.sha256, createHash('sha256').update(fullBytes).digest('hex'))
+    assert.equal(fullSnapshotDescriptor.generatedAt, fullBuild.snapshot.generatedAt)
+    assert.deepEqual(fullSnapshotDescriptor.model, {
+      version: fullBuild.snapshot.model.version,
+      configHash: fullBuild.snapshot.model.configHash,
+    })
     const legacy = await run(root, 'legacy', source, { mode: 'legacy', cause: 'pending-match', enabled: true })
     assert.equal(legacy.action, 'publish-full')
     const daily = await run(root, 'daily', source, { mode: 'gated', cause: 'daily-audit', enabled: true })

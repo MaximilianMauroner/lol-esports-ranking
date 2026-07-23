@@ -9,8 +9,8 @@ import { basename, dirname, extname, join, posix, relative, resolve, sep } from 
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
-import { assertStateManifestAuthority } from './incremental-state-storage.mjs'
+import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
+import { assertStateManifestAuthority, parseIncrementalStateManifest, readStoredJsonStateObject } from './incremental-state-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
 
 let activeGenerationCache = { expiresAt: 0, value: null }
@@ -106,8 +106,21 @@ export async function uploadRankingArtifacts({
   const uploads = []
   const unchanged = []
   const skipped = []
+  const generationalPublication = generationId !== undefined || fencingToken !== undefined || contentAddressed
   if (contentAddressed && !generationId) {
     throw new Error('Content-addressed publication requires a generationId')
+  }
+  if (generationalPublication && (!generationId || !Number.isSafeInteger(fencingToken))) {
+    throw new Error('Generation publication requires a generationId and fencing token')
+  }
+  if (generationalPublication && (!leaseAuthority?.lease || typeof leaseAuthority.key !== 'string' || leaseAuthority.key.length === 0)) {
+    throw new Error('Generation publication requires a live refresh lease authority')
+  }
+  if (generationalPublication && Number(leaseAuthority.lease.fencingToken) !== fencingToken) {
+    throw new Error('Generation publication fencing token must match its refresh lease')
+  }
+  if (contentAddressed && !rawSourceGeneration) {
+    throw new Error('Content-addressed publication requires a raw source generation authority')
   }
   const dataPrefix = generationId ? `generations/${safeObjectPath(generationId)}/data` : 'data'
   if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
@@ -237,6 +250,7 @@ export async function uploadRankingArtifacts({
       && verifiedState.manifest.sourceReceiptDigest !== verifiedRaw.receipt.sourceReceiptDigest) {
       throw new Error('Incremental state source receipt does not match raw source authority')
     }
+    const previousGeneration = previousGenerationForPromotion(active.value, generationId)
     const promotedAt = new Date(now()).toISOString()
     const activePointerBase = { ...active.value }
     delete activePointerBase.stateManifestKey
@@ -247,6 +261,7 @@ export async function uploadRankingArtifacts({
     delete activePointerBase.rawReceiptCompressedBytes
     delete activePointerBase.sourceReceiptDigest
     delete activePointerBase.rawIdentityDigest
+    delete activePointerBase.previousGeneration
     const promotion = await writeBucketJson('active-generation.json', {
       ...activePointerBase,
       schemaVersion: 1,
@@ -274,6 +289,7 @@ export async function uploadRankingArtifacts({
         sourceReceiptDigest: verifiedRaw.receipt.sourceReceiptDigest,
         rawIdentityDigest: verifiedRaw.receipt.rawIdentityDigest,
       } : {}),
+      ...(previousGeneration ? { previousGeneration } : {}),
     }, {
       config,
       client,
@@ -321,14 +337,30 @@ export async function uploadRankingArtifacts({
   const publishedArtifacts = [...uploads]
   const publishMetrics = publishMetricsFor(publishedArtifacts, unchanged)
   const publishReceipt = {
-    schemaVersion: 1,
+    schemaVersion: contentAddressed ? 2 : 1,
     publishedAt: promotionOutcome?.promotedAt ?? new Date(now()).toISOString(),
-    prefix: config.prefix,
+    prefix: config.prefix ?? '',
     ...(generationId ? { generationId } : {}),
     ...(contentAddressed ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
+    ...(contentAddressed ? {
+      authorities: {
+        publicManifest: {
+          key: publicSync.manifestAuthority.key,
+          digest: publicSync.manifestAuthority.digest,
+          bytes: publicSync.manifestAuthority.bytes,
+          contentType: PUBLIC_JSON_CONTENT_TYPE,
+        },
+        rawReceipt: {
+          key: rawAuthority.key,
+          digest: rawAuthority.reference.sha256,
+          bytes: rawAuthority.reference.compressedBytes,
+          contentType: PUBLIC_JSON_CONTENT_TYPE,
+        },
+      },
+    } : {}),
     ...(storageMetrics ? { storage: storageMetrics } : {}),
     ...publishMetrics,
-    artifacts: publishedArtifacts.map(({ key, bytes, contentType }) => ({ key, bytes, contentType })),
+    artifacts: publishedArtifacts.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, ...(digest ? { digest } : {}) })),
     unchanged: unchanged.map(({ key, bytes, contentType, digest }) => ({ key, bytes, contentType, digest })),
     skipped,
     ...(telemetry ? { refreshTelemetry: telemetry } : {}),
@@ -339,7 +371,14 @@ export async function uploadRankingArtifacts({
     now: now(),
     requireEtag: false,
   })
-  await uploadJson(client, config, generationId ? `generations/${safeObjectPath(generationId)}/publish.json` : 'latest-publish.json', publishReceipt)
+  const verifiedPublishReceipt = generationId
+    ? parseGenerationPublishReceipt(publishReceipt, { generationId, prefix: config.prefix ?? '' })
+    : publishReceipt
+  if (generationId) {
+    await publishGenerationReceipt(client, config, verifiedPublishReceipt, leaseAuthority, now)
+  } else {
+    await uploadJson(client, config, 'latest-publish.json', verifiedPublishReceipt)
+  }
 
   return {
     enabled: true,
@@ -354,6 +393,139 @@ export async function uploadRankingArtifacts({
     ...(storageMetrics ? { storage: storageMetrics } : {}),
     ...publishMetrics,
   }
+}
+
+function previousGenerationForPromotion(active, nextGenerationId) {
+  if (active?.generationId === nextGenerationId) {
+    return active.previousGeneration
+  }
+  if (typeof active?.generationId !== 'string' || active.generationId.length === 0
+    || typeof active?.manifestKey !== 'string' || active.manifestKey.length === 0) return undefined
+  return {
+    generationId: active.generationId,
+    manifestKey: active.manifestKey,
+    ...(typeof active.promotedAt === 'string' ? { promotedAt: active.promotedAt } : {}),
+    ...(completeAuthorityPair(active, 'stateManifestKey', 'stateManifestDigest')
+      ? { stateManifestKey: active.stateManifestKey, stateManifestDigest: active.stateManifestDigest }
+      : {}),
+    ...(completeAuthorityPair(active, 'rawReceiptKey', 'rawReceiptDigest')
+      ? { rawReceiptKey: active.rawReceiptKey, rawReceiptDigest: active.rawReceiptDigest }
+      : {}),
+  }
+}
+
+function completeAuthorityPair(value, keyField, digestField) {
+  return typeof value?.[keyField] === 'string' && value[keyField].length > 0
+    && /^[a-f0-9]{64}$/.test(value[digestField] ?? '')
+}
+
+export async function readPreviousGenerationAuthorities({
+  config = bucketConfigFromEnv(),
+  client = createBucketClient(config),
+  verifyArtifacts = true,
+  beforePointerRecheck,
+} = {}) {
+  const pointer = await readBucketJson('active-generation.json', { config, client })
+  const previous = pointer.value?.previousGeneration
+  if (!pointer.found || !previous) return { found: false, reason: pointer.found ? 'previous-generation-missing' : 'active-generation-missing' }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(previous.generationId ?? '') || typeof previous.manifestKey !== 'string') {
+    throw new Error('Previous generation authority is invalid')
+  }
+  const expectedManifestKey = bucketKey(config, `generations/${previous.generationId}/manifest.json`)
+  const expectedLegacyKey = bucketKey(config, `generations/${previous.generationId}/data/ranking-summary.json`)
+  if (previous.manifestKey !== expectedManifestKey && previous.manifestKey !== expectedLegacyKey) throw new Error('Previous public generation manifest key is not canonical')
+  const publicObject = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: previous.manifestKey }))
+  const publicBytes = await bodyBytes(publicObject.Body)
+  const publicDigest = createHash('sha256').update(publicBytes).digest('hex')
+  if (Number(publicObject.ContentLength) !== publicBytes.byteLength
+    || (previous.manifestKey === expectedManifestKey && publicObject.Metadata?.sha256 !== publicDigest)) {
+    throw new Error('Previous public generation manifest metadata mismatch')
+  }
+  const manifest = JSON.parse(publicBytes.toString('utf8'))
+  const legacy = previous.manifestKey === expectedLegacyKey
+  if (legacy) {
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
+      || (manifest.artifactMeta?.runId !== undefined && manifest.artifactMeta.runId !== previous.generationId)) throw new Error('Previous legacy public root is invalid')
+  } else if (manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== previous.generationId
+    || manifest.runId !== previous.generationId || manifest.rootArtifact !== '/data/ranking-summary.json'
+    || !manifest.model || typeof manifest.model !== 'object' || Array.isArray(manifest.model)
+    || typeof manifest.model.version !== 'string' || manifest.model.version.length === 0
+    || typeof manifest.model.configHash !== 'string' || manifest.model.configHash.length === 0
+    || !manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) throw new Error('Previous public generation manifest is invalid')
+  const publicArtifacts = {}
+  if (verifyArtifacts && !legacy) {
+    for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
+      const canonical = canonicalPublicLogicalPath(logicalPath)
+      if (identity?.logicalPath !== canonical || identity?.generationId !== previous.generationId
+        || identity?.objectUrl !== `/data/objects/sha256/${identity?.sha256}`) throw new Error('Previous public artifact mapping is invalid')
+      publicArtifacts[canonical] = await readVerifiedContentAddressedArtifact(client, config, identity, canonical)
+    }
+  }
+  let state
+  if (previous.stateManifestKey !== undefined || previous.stateManifestDigest !== undefined) {
+    if (!completeAuthorityPair(previous, 'stateManifestKey', 'stateManifestDigest')) throw new Error('Previous state authority is incomplete')
+    if (previous.stateManifestKey !== bucketKey(config, `state/generations/${previous.generationId}.json`)) {
+      throw new Error('Previous state manifest key is not canonical')
+    }
+    const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: previous.stateManifestKey }))
+    const bytes = await bodyBytes(object.Body)
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    if (digest !== previous.stateManifestDigest || object.Metadata?.sha256 !== digest
+      || object.Metadata?.['semantic-bytes'] !== String(bytes.byteLength)) throw new Error('Previous state manifest authority mismatch')
+    const stateManifest = parseIncrementalStateManifest(JSON.parse(bytes.toString('utf8')))
+    if (stateManifest.generationId !== previous.generationId || canonicalJsonFor(stateManifest) !== bytes.toString('utf8')) throw new Error('Previous state manifest is invalid')
+    const canonicalLedger = await readStoredJsonStateObject(client, config, stateManifest.canonicalLedger)
+    const checkpoints = verifyArtifacts
+      ? await Promise.all(stateManifest.checkpoints.map(async (candidate) => ({ candidate, bundle: await readStoredJsonStateObject(client, config, candidate.object) })))
+      : []
+    state = { manifest: stateManifest, canonicalLedger, checkpoints }
+  }
+  let raw
+  if (previous.rawReceiptKey !== undefined || previous.rawReceiptDigest !== undefined) {
+    if (!completeAuthorityPair(previous, 'rawReceiptKey', 'rawReceiptDigest')) throw new Error('Previous raw authority is incomplete')
+    if (previous.rawReceiptKey !== bucketKey(config, `raw/objects/sha256/${previous.rawReceiptDigest}`)) {
+      throw new Error('Previous raw receipt key is not canonical')
+    }
+    const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: previous.rawReceiptKey }))
+    const compressed = await bodyBytes(object.Body)
+    const reference = {
+      key: relativeBucketKey(config, previous.rawReceiptKey),
+      sha256: previous.rawReceiptDigest,
+      bytes: Number(object.Metadata?.['semantic-bytes']),
+      compressedBytes: Number(object.ContentLength),
+      storageEncoding: 'gzip',
+    }
+    if (object.ContentEncoding !== 'gzip' || object.Metadata?.encoding !== 'gzip' || object.Metadata?.sha256 !== reference.sha256
+      || !Number.isSafeInteger(reference.bytes) || reference.bytes <= 0 || compressed.byteLength !== reference.compressedBytes) {
+      throw new Error('Previous raw receipt authority mismatch')
+    }
+    const receipt = parseRawSourceReceipt(decodeRawObject(reference, compressed))
+    if (receipt.generationId !== previous.generationId) throw new Error('Previous raw receipt generation mismatch')
+    if (verifyArtifacts) {
+      for (const child of [
+        ...receipt.oracle.flatMap((source) => [source.baseline, ...source.deltas]),
+        ...receipt.leaguepedia.map((source) => source.object),
+        ...receipt.lolesports.map((source) => source.object),
+      ]) await readRawObjectBytes(client, config, child)
+    }
+    raw = { receipt, receiptReference: reference }
+  }
+  if (state && raw && state.manifest.sourceReceiptDigest !== raw.receipt.sourceReceiptDigest) {
+    throw new Error('Previous state and raw source receipt authorities do not match')
+  }
+  const publicModel = manifest?.model
+  if (state && !legacy
+    && (state.manifest.compatibility.modelVersion !== publicModel.version
+      || state.manifest.compatibility.modelConfigHash !== publicModel.configHash)) {
+    throw new Error('Previous public and state model authorities do not match')
+  }
+  await beforePointerRecheck?.()
+  const current = await readBucketJson('active-generation.json', { config, client })
+  if (!current.found || current.etag !== pointer.etag
+    || canonicalJsonFor(current.value?.previousGeneration) !== canonicalJsonFor(previous)) {
+    throw new Error('Active previous-generation authority changed during rollback hydration')
+  }
+  return { found: true, previous, public: { manifest, digest: publicDigest, artifacts: publicArtifacts }, ...(state ? { state } : {}), ...(raw ? { raw } : {}) }
 }
 
 export async function getBucketObject(relativePath, {
@@ -1203,7 +1375,7 @@ async function syncGenerationManifest(client, config, generationId, manifest) {
       Body: body,
       ContentLength: bytes,
       ContentType: 'application/json; charset=utf-8',
-      Metadata: { sha256: digest },
+      Metadata: { sha256: digest, 'semantic-bytes': String(bytes) },
       IfNoneMatch: '*',
     }))
     return {
@@ -1216,6 +1388,29 @@ async function syncGenerationManifest(client, config, generationId, manifest) {
     const existingBody = await bodyText(existing.Body)
     if (existingBody !== body) {
       throw new Error(`Generation manifest collision for generationId ${generationId}`, { cause: error })
+    }
+    const metadataMatches = Number(existing.ContentLength) === bytes
+      && existing.ContentType === PUBLIC_JSON_CONTENT_TYPE && existing.ContentEncoding === undefined
+      && existing.Metadata?.sha256 === digest && existing.Metadata?.['semantic-bytes'] === String(bytes)
+    if (!metadataMatches) {
+      try {
+        const repaired = await client.send(new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+          Body: body,
+          ContentLength: bytes,
+          ContentType: PUBLIC_JSON_CONTENT_TYPE,
+          Metadata: { sha256: digest, 'semantic-bytes': String(bytes) },
+          IfMatch: existing.ETag,
+        }))
+        return {
+          result: { status: 'uploaded', reason: 'generation-manifest-metadata-upgraded', key, bytes, contentType: PUBLIC_JSON_CONTENT_TYPE, digest },
+          authority: { key, etag: repaired.ETag, bytes, digest },
+        }
+      } catch (repairError) {
+        if (!isPreconditionError(repairError)) throw repairError
+        throw new Error(`Generation manifest changed during metadata repair for generationId ${generationId}`, { cause: repairError })
+      }
     }
     return {
       result: {
@@ -1237,6 +1432,9 @@ async function assertGenerationManifestAuthority(client, config, authority) {
   const matches = current.ETag === authority.etag
     && Number(current.ContentLength) === authority.bytes
     && current.Metadata?.sha256 === authority.digest
+    && current.Metadata?.['semantic-bytes'] === String(authority.bytes)
+    && current.ContentType === PUBLIC_JSON_CONTENT_TYPE
+    && current.ContentEncoding === undefined
   if (!matches) throw new Error('Generation manifest changed before active pointer promotion')
 }
 
@@ -1493,20 +1691,21 @@ export async function uploadFile(client, config, filePath, relativeKey, { metada
   if (expectedStat) assertStableFile(expectedStat, fileStat, filePath)
   const key = bucketKey(config, relativeKey)
   const resolvedContentType = contentType ?? contentTypeForPath(filePath)
+  const resolvedDigest = digest ?? await sha256File(filePath)
   await client.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: key,
     Body: createReadStream(filePath),
     ContentLength: fileStat.size,
     ContentType: resolvedContentType,
-    ...(metadata ? { Metadata: metadata } : {}),
+    Metadata: { ...(metadata ?? {}), sha256: resolvedDigest, 'semantic-bytes': String(fileStat.size) },
   }))
   return {
     status: 'uploaded',
     key,
     bytes: fileStat.size,
     contentType: resolvedContentType,
-    ...(digest ? { digest } : {}),
+    digest: resolvedDigest,
   }
 }
 
@@ -1516,16 +1715,21 @@ export async function uploadJson(client, config, relativeKey, value) {
 
 async function uploadJsonBody(client, config, relativeKey, body) {
   const key = bucketKey(config, relativeKey)
+  const bytes = Buffer.byteLength(body)
+  const digest = createHash('sha256').update(body).digest('hex')
   await client.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: key,
     Body: body,
+    ContentLength: bytes,
     ContentType: 'application/json; charset=utf-8',
+    Metadata: { sha256: digest, 'semantic-bytes': String(bytes) },
   }))
   return {
     key,
-    bytes: Buffer.byteLength(body),
+    bytes,
     contentType: 'application/json; charset=utf-8',
+    digest,
   }
 }
 
@@ -1668,6 +1872,184 @@ function publishMetricsFor(uploaded, unchanged) {
     unchangedCount: unchanged.length,
     unchangedBytes: sumBytes(unchanged),
   }
+}
+
+async function publishGenerationReceipt(client, config, receipt, leaseAuthority, now) {
+  const relativeKey = `generations/${safeObjectPath(receipt.generationId)}/publish.json`
+  const key = bucketKey(config, relativeKey)
+  const body = Buffer.from(canonicalJsonFor(receipt))
+  const digest = createHash('sha256').update(body).digest('hex')
+  let existing
+  try {
+    existing = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  } catch (error) {
+    if (!isMissingObjectError(error)) throw error
+  }
+  let condition = { IfNoneMatch: '*' }
+  if (existing) {
+    const existingBody = await bodyBytes(existing.Body)
+    if (existingBody.equals(body)) {
+      if (existing.ContentType !== PUBLIC_JSON_CONTENT_TYPE || existing.ContentEncoding !== undefined
+        || Number(existing.ContentLength) !== body.byteLength || existing.Metadata?.sha256 !== digest
+        || existing.Metadata?.['semantic-bytes'] !== String(body.byteLength)) {
+        throw new Error('Existing generation publish receipt metadata is invalid')
+      }
+      if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
+        config,
+        client,
+        now: now(),
+        requireEtag: false,
+      })
+      return { status: 'unchanged', key, bytes: body.byteLength, contentType: PUBLIC_JSON_CONTENT_TYPE, digest }
+    }
+    let old
+    try {
+      old = JSON.parse(existingBody.toString('utf8'))
+    } catch (error) {
+      throw new Error('Existing generation publish receipt is unreadable', { cause: error })
+    }
+    if (old?.generationId !== receipt.generationId || typeof old?.publishedAt !== 'string'
+      || Number.isNaN(new Date(old.publishedAt).getTime())) {
+      throw new Error('Existing generation publish receipt cannot be safely replaced')
+    }
+    const oldTime = new Date(old.publishedAt).getTime()
+    const nextTime = new Date(receipt.publishedAt).getTime()
+    if (oldTime >= nextTime) throw new Error('Generation publish receipt replacement is not newer')
+    if (!existing.ETag) throw new Error('Existing generation publish receipt has no CAS authority')
+    condition = { IfMatch: existing.ETag }
+  }
+  if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
+    config,
+    client,
+    now: now(),
+    requireEtag: false,
+  })
+  try {
+    await client.send(new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: body,
+      ContentLength: body.byteLength,
+      ContentType: PUBLIC_JSON_CONTENT_TYPE,
+      Metadata: { sha256: digest, 'semantic-bytes': String(body.byteLength) },
+      ...condition,
+    }))
+  } catch (error) {
+    if (isPreconditionError(error)) throw new Error('Generation publish receipt changed during CAS publication', { cause: error })
+    throw error
+  }
+  return { status: 'uploaded', key, bytes: body.byteLength, contentType: PUBLIC_JSON_CONTENT_TYPE, digest }
+}
+
+export function parseGenerationPublishReceipt(value, { generationId, prefix } = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid generation publish receipt')
+  const requiredKeys = ['schemaVersion', 'publishedAt', 'prefix', 'generationId', 'artifactCount', 'uploadedCount', 'uploadedBytes', 'unchangedCount', 'unchangedBytes', 'artifacts', 'unchanged', 'skipped']
+  const optionalKeys = new Set(['storageMode', 'storage', 'authorities', 'refreshTelemetry'])
+  if (requiredKeys.some((key) => !Object.hasOwn(value, key))
+    || Object.keys(value).some((key) => !requiredKeys.includes(key) && !optionalKeys.has(key))) {
+    throw new Error('Invalid generation publish receipt fields')
+  }
+  if (![1, 2].includes(value.schemaVersion) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value.generationId ?? '')
+    || (generationId !== undefined && value.generationId !== generationId)
+    || typeof value.prefix !== 'string' || (value.prefix !== '' && safeRequestedObjectPath(value.prefix) !== value.prefix)
+    || (prefix !== undefined && value.prefix !== prefix)
+    || typeof value.publishedAt !== 'string' || new Date(value.publishedAt).toISOString() !== value.publishedAt
+    || !Array.isArray(value.artifacts) || !Array.isArray(value.unchanged) || !Array.isArray(value.skipped)) {
+    throw new Error('Invalid generation publish receipt schema')
+  }
+  const parseEntry = (entry, label) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(`Invalid ${label} publish entry`)
+    const allowed = ['key', 'bytes', 'contentType', 'digest']
+    if (Object.keys(entry).some((key) => !allowed.includes(key)) || typeof entry.key !== 'string'
+      || safeRequestedObjectPath(entry.key) !== entry.key || !Number.isSafeInteger(entry.bytes) || entry.bytes <= 0
+      || typeof entry.contentType !== 'string' || entry.contentType.length === 0
+      || (value.schemaVersion === 2
+        ? !/^[a-f0-9]{64}$/.test(entry.digest ?? '')
+        : entry.digest !== undefined && !/^[a-f0-9]{64}$/.test(entry.digest))) throw new Error(`Invalid ${label} publish entry`)
+    if (value.prefix && !entry.key.startsWith(`${value.prefix}/`)) throw new Error(`${label} publish entry is outside the canonical bucket prefix`)
+    const relative = value.prefix && entry.key.startsWith(`${value.prefix}/`) ? entry.key.slice(value.prefix.length + 1) : entry.key
+    const digestKey = /^(?:objects|raw\/objects|state\/objects)\/sha256\/([a-f0-9]{64})$/.exec(relative)
+    if (digestKey && entry.digest !== digestKey[1]) throw new Error(`${label} content-addressed reference is missing its digest authority`)
+    if (/^state\/generations\/.+\.json$/.test(relative) && !entry.digest) throw new Error(`${label} state manifest reference is missing its digest authority`)
+    return entry
+  }
+  const artifacts = value.artifacts.map((entry) => parseEntry(entry, 'uploaded'))
+  const unchanged = value.unchanged.map((entry) => parseEntry(entry, 'unchanged'))
+  for (const entry of value.skipped) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)
+      || Object.keys(entry).some((key) => key !== 'key' && key !== 'reason')
+      || typeof entry.key !== 'string' || safeRequestedObjectPath(entry.key) !== entry.key
+      || typeof entry.reason !== 'string' || entry.reason.length === 0) throw new Error('Invalid skipped publish entry')
+    if (value.prefix && !entry.key.startsWith(`${value.prefix}/`)) throw new Error('Skipped publish entry is outside the canonical bucket prefix')
+  }
+  const entries = [...artifacts, ...unchanged]
+  if (new Set(entries.map((entry) => entry.key)).size !== entries.length) throw new Error('Duplicate generation publish reference')
+  const expected = {
+    artifactCount: entries.length,
+    uploadedCount: artifacts.length,
+    uploadedBytes: sumBytes(artifacts),
+    unchangedCount: unchanged.length,
+    unchangedBytes: sumBytes(unchanged),
+  }
+  for (const [key, count] of Object.entries(expected)) {
+    if (!Number.isSafeInteger(value[key]) || value[key] < 0 || value[key] !== count) throw new Error(`Generation publish receipt ${key} is inconsistent`)
+  }
+  if (value.storageMode === CONTENT_ADDRESSED_STORAGE_MODE) {
+    if (value.schemaVersion !== 2) throw new Error('Content-addressed publish receipt requires schema version 2')
+    const manifestKey = `${value.prefix ? `${value.prefix}/` : ''}generations/${value.generationId}/manifest.json`
+    const authorityKeys = ['publicManifest', 'rawReceipt']
+    if (!value.authorities || typeof value.authorities !== 'object' || Array.isArray(value.authorities)
+      || Object.keys(value.authorities).length !== authorityKeys.length
+      || authorityKeys.some((key) => !Object.hasOwn(value.authorities, key))) {
+      throw new Error('Content-addressed publish receipt authorities are incomplete')
+    }
+    const parseAuthority = (authority, label) => {
+      if (!authority || typeof authority !== 'object' || Array.isArray(authority)
+        || Object.keys(authority).sort().join(',') !== 'bytes,contentType,digest,key'
+        || typeof authority.key !== 'string' || safeRequestedObjectPath(authority.key) !== authority.key
+        || !/^[a-f0-9]{64}$/.test(authority.digest ?? '') || !Number.isSafeInteger(authority.bytes) || authority.bytes <= 0
+        || authority.contentType !== PUBLIC_JSON_CONTENT_TYPE) throw new Error(`Content-addressed ${label} authority is invalid`)
+      const matches = entries.filter((entry) => entry.key === authority.key && entry.digest === authority.digest
+        && entry.bytes === authority.bytes && entry.contentType === authority.contentType)
+      if (matches.length !== 1) throw new Error(`Content-addressed ${label} authority must match exactly one publish entry`)
+      return authority
+    }
+    const publicManifest = parseAuthority(value.authorities.publicManifest, 'public manifest')
+    const rawReceipt = parseAuthority(value.authorities.rawReceipt, 'raw receipt')
+    if (publicManifest.key !== manifestKey) throw new Error('Content-addressed public manifest authority key is not canonical')
+    if (entries.filter((entry) => /\/generations\/[A-Za-z0-9][A-Za-z0-9._-]*\/manifest\.json$/.test(`/${entry.key}`)).length !== 1) {
+      throw new Error('Content-addressed publish receipt must contain exactly one public manifest')
+    }
+    const rawPrefix = `${value.prefix ? `${value.prefix}/` : ''}raw/objects/sha256/`
+    if (rawReceipt.key !== `${rawPrefix}${rawReceipt.digest}`) throw new Error('Content-addressed raw receipt authority key is not canonical')
+    const storageRequiredKeys = ['mode', 'objectCount', 'logicalArtifactCount', 'semanticLogicalBytes', 'compressedLogicalBytes', 'uniqueCompressedBytes']
+    const storagePathKeys = ['changedLogicalPaths', 'reusedLogicalPaths', 'removedLogicalPaths']
+    if (!value.storage || typeof value.storage !== 'object' || Array.isArray(value.storage)
+      || storageRequiredKeys.some((key) => !Object.hasOwn(value.storage, key))
+      || Object.keys(value.storage).some((key) => !storageRequiredKeys.includes(key) && !storagePathKeys.includes(key))
+      || value.storage.mode !== CONTENT_ADDRESSED_STORAGE_MODE
+      || !Number.isSafeInteger(value.storage.objectCount) || value.storage.objectCount <= 0
+      || !Number.isSafeInteger(value.storage.logicalArtifactCount) || value.storage.logicalArtifactCount <= 0
+      || !Number.isSafeInteger(value.storage.semanticLogicalBytes) || value.storage.semanticLogicalBytes <= 0
+      || !Number.isSafeInteger(value.storage.compressedLogicalBytes) || value.storage.compressedLogicalBytes <= 0
+      || !Number.isSafeInteger(value.storage.uniqueCompressedBytes) || value.storage.uniqueCompressedBytes <= 0) {
+      throw new Error('Content-addressed publish receipt storage metrics are incomplete')
+    }
+    for (const key of storagePathKeys) {
+      if (value.storage[key] === undefined) continue
+      if (!Array.isArray(value.storage[key]) || new Set(value.storage[key]).size !== value.storage[key].length
+        || value.storage[key].some((path) => typeof path !== 'string' || canonicalPublicLogicalPath(path) !== path)) {
+        throw new Error(`Content-addressed publish receipt ${key} is invalid`)
+      }
+    }
+    const publicObjectPrefix = `${value.prefix ? `${value.prefix}/` : ''}objects/sha256/`
+    if (entries.filter((entry) => entry.key.startsWith(publicObjectPrefix)).length !== value.storage.objectCount) {
+      throw new Error('Content-addressed publish receipt public object count is inconsistent')
+    }
+  } else if (value.storageMode !== undefined || value.storage !== undefined || value.authorities !== undefined || value.schemaVersion !== 1) {
+    throw new Error('Legacy generation publish receipt has inconsistent storage fields')
+  }
+  return value
 }
 
 function byteCounts(entries) {

@@ -113,6 +113,27 @@ The refresh job uploads:
 - `rankings/raw/files/**`: the raw source baseline used to restore a fresh Railway container before lookback-only refreshes.
 - `rankings/raw/refresh-state.json` and `rankings/latest-publish.json`: refresh/publish audit metadata.
 - `rankings/artifacts/latest-full.json`: optional full audit/calculation artifact, uploaded only when `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT=true`.
+- `rankings/audits/objects/sha256/*` and `rankings/audits/days/YYYY-MM-DD.json`: immutable compressed full-ranking audit objects and their canonical daily authorities.
+
+The schema-v1 active pointer may also carry an additive `previousGeneration` authority. On a generation change it captures the prior public manifest and, when present as complete pairs, its state-manifest and raw-receipt authorities. Re-publishing the same active generation preserves the existing rollback target. Readers remain compatible with older pointers that omit this field.
+
+A daily audit receipt is created only for a successfully promoted, fenced `daily-audit` or `manual-force` full build with matching public, incremental-state, and raw-source authorities. Pending-match fallback full builds, incremental and metadata-only publishes, unchanged or failed runs, and unfenced legacy runs do not create one. This does not change the legacy `artifacts/latest-full.json` opt-in or any production environment default.
+
+Bucket retention is the union of all public generations from the last 14 days, the newest 50 public generations, the active and explicit previous generations, one audit receipt for each of the last 14 UTC dates, and the complete shared public/state/raw/audit reference closure reached from those roots. Unreferenced immutable objects must be at least 48 whole hours old before they can become deletion candidates. Operational, unknown, control, lease, refresh, trigger, reconciliation, GC-receipt, audit-control, and legacy raw-migration objects remain protected.
+
+The GC command is inventory-only by default and prints one canonical JSON document:
+
+```bash
+pnpm run bucket:gc
+```
+
+Deletion requires a fresh explicit approval bound to the exact canonical inventory digest and the inventoried active-pointer ETag:
+
+```bash
+pnpm run bucket:gc -- --delete --approved-inventory-sha256 <64-lowercase-hex>
+```
+
+Any malformed, missing, corrupt, or unreadable retained authority/reference makes the inventory invalid and disables deletion. Strict GC accepts only canonical schema-v2 generation publish receipts whose stored digest/byte metadata binds exactly one public manifest authority and exactly one raw receipt authority; legacy schema-v1 receipts remain readable for restore compatibility but deliberately invalidate deletion. Every referenced publish entry is re-read and verified before it is protected. Deletion renews and reasserts the exclusive refresh lease and active pointer around each single-object delete, applies a 30-second abort deadline, and writes a success receipt only after every exact approved candidate settles successfully. Adding this command does not run deletion, deploy code, change cron, modify bucket CORS, or alter Railway variables.
 
 Raw source uploads are content-addressed. Before uploading a file under `rankings/raw/files/**`, the publisher computes its SHA-256 digest, compares it with the object's stored `sha256` metadata and content length, and skips the PUT when both match. Existing objects without digest metadata are uploaded once to establish metadata. Publish logs and `latest-publish.json` report uploaded and unchanged counts/bytes separately, so an operator can verify that an hourly refresh did not resend an unchanged historical baseline. A missing object, missing metadata, or failed comparison falls back to uploading the file so recovery correctness takes priority over egress savings.
 

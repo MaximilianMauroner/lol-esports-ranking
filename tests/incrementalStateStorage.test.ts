@@ -18,7 +18,8 @@ import {
   type StateCompatibility,
   type StateObjectReference,
 } from '../scripts/incremental-state-storage.mjs'
-import { readActiveRawSourceAuthority, readBucketJson, uploadRankingArtifacts, writeBucketJson } from '../scripts/railway-bucket.mjs'
+import { readActiveRawSourceAuthority, readBucketJson, readPreviousGenerationAuthorities, uploadRankingArtifacts as uploadRankingArtifactsImplementation, writeBucketJson, type BucketClient, type BucketStorageConfig } from '../scripts/railway-bucket.mjs'
+import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 
 const config = {
@@ -42,6 +43,34 @@ const compatibility: StateCompatibility = {
 }
 
 type StateInputCheckpoint = Parameters<typeof prepareContentAddressedState>[0]['checkpoints'][number]
+
+async function uploadRankingArtifacts(options: Parameters<typeof uploadRankingArtifactsImplementation>[0]) {
+  if (!options?.generationId || options.leaseAuthority) return uploadRankingArtifactsImplementation(options)
+  const fencingToken = Number(options.fencingToken)
+  const storage = { config: options.config as BucketStorageConfig, client: options.client as BucketClient }
+  const current = await readBucketJson('active-generation.json', storage)
+  const owner = `test-publication-${fencingToken}`
+  const leaseValue = {
+    ...(current.value ?? {}),
+    leaseKey: 'ops/refresh-lease.json',
+    leaseOwner: owner,
+    leaseFencingToken: fencingToken,
+    leaseAcquiredAt: '2026-07-23T00:00:00.000Z',
+    leaseExpiresAt: '2099-01-01T00:00:00.000Z',
+  }
+  const written = await writeBucketJson('active-generation.json', leaseValue, {
+    ...storage,
+    ...(current.found ? { ifMatch: current.etag } : { ifNoneMatch: '*' }),
+  })
+  assert.equal(written.written, true)
+  return uploadRankingArtifactsImplementation({
+    ...options,
+    leaseAuthority: {
+      key: 'ops/refresh-lease.json',
+      lease: { owner, fencingToken, acquiredAt: leaseValue.leaseAcquiredAt, expiresAt: leaseValue.leaseExpiresAt },
+    },
+  })
+}
 
 test('state preparation hashes canonical JSON and creates deterministic gzip bytes', () => {
   const left = prepareStateObject({ z: [3, 2, 1], a: { y: true, x: 'value' } })
@@ -82,6 +111,107 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
     const restored = await readActiveRawSourceAuthority({ config, client })
     assert.equal(restored.found, true)
     assert.equal(restored.found && restored.receipt.sourceReceiptDigest, raw.sourceReceiptDigest)
+
+    const nextGenerationId = 'triple_authority_next'
+    await writePublicFixture(publicDir, nextGenerationId)
+    const nextRaw = rawGeneration(nextGenerationId)
+    const nextState = preparedStateWithReceipt(nextGenerationId, nextRaw.sourceReceiptDigest)
+    await syncAllStateObjects(client, nextState.objects)
+    const nextManifest = await writeIncrementalStateManifest(client, config, nextState)
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: nextGenerationId,
+      fencingToken: 2,
+      contentAddressed: true,
+      stateManifestAuthority: nextManifest.authority,
+      rawSourceGeneration: nextRaw,
+      config,
+      client,
+    })
+    const promoted = (await readBucketJson('active-generation.json', { config, client })).value!
+    assert.deepEqual(promoted.previousGeneration, {
+      generationId,
+      manifestKey: active.manifestKey,
+      promotedAt: active.promotedAt,
+      stateManifestKey: manifest.authority.key,
+      stateManifestDigest: manifest.authority.digest,
+      rawReceiptKey: `custom-rankings/${raw.receiptReference.key}`,
+      rawReceiptDigest: raw.receiptReference.sha256,
+    })
+    for (const key of [
+      String(active.manifestKey),
+      manifest.authority.key,
+      ...state.manifest.checkpoints.map((candidate) => `custom-rankings/${candidate.object.key}`),
+      `custom-rankings/${state.manifest.canonicalLedger.key}`,
+      `custom-rankings/${raw.receiptReference.key}`,
+      ...raw.oracle.flatMap((source) => [source.baseline, ...source.deltas]).map((reference) => `custom-rankings/${reference.key}`),
+    ]) assert.ok(client.objects.has(key), `previous authority must remain resolvable: ${key}`)
+    const rollback = await readPreviousGenerationAuthorities({ config, client })
+    assert.equal(rollback.found, true)
+    if (rollback.found) {
+      assert.ok(rollback.state)
+      assert.ok(rollback.raw)
+      assert.equal(rollback.public.manifest.generationId, generationId)
+      assert.equal(rollback.state.manifest.generationId, generationId)
+      assert.equal(rollback.state.checkpoints.length, state.manifest.checkpoints.length)
+      assert.equal(rollback.raw.receipt.generationId, generationId)
+      assert.equal(rollback.raw.receipt.oracle[0]?.deltas.length, raw.oracle[0]?.deltas.length)
+    }
+
+    const activeObject = client.objects.get('custom-rankings/active-generation.json')!
+    const publicObject = client.objects.get(String(active.manifestKey))!
+    const stateObject = client.objects.get(manifest.authority.key)!
+    const originalActive = { ...activeObject, bytes: Buffer.from(activeObject.bytes), metadata: { ...activeObject.metadata } }
+    const originalPublic = { ...publicObject, bytes: Buffer.from(publicObject.bytes), metadata: { ...publicObject.metadata } }
+    const originalState = { ...stateObject, bytes: Buffer.from(stateObject.bytes), metadata: { ...stateObject.metadata } }
+    const assertInvalidPrevious = async (mutate: (previous: Record<string, unknown>) => void, expected: RegExp) => {
+      const pointer = JSON.parse(originalActive.bytes.toString('utf8'))
+      mutate(pointer.previousGeneration)
+      const bytes = Buffer.from(JSON.stringify(pointer))
+      Object.assign(activeObject, { body: bytes.toString('utf8'), bytes, etag: '"invalid-previous"' })
+      await assert.rejects(readPreviousGenerationAuthorities({ config, client }), expected)
+      Object.assign(activeObject, originalActive)
+    }
+    await assertInvalidPrevious((previous) => { previous.generationId = '../unsafe' }, /authority is invalid/)
+    await assertInvalidPrevious((previous) => { previous.manifestKey = 'custom-rankings/generations/triple_authority/other.json' }, /manifest key is not canonical/)
+    await assertInvalidPrevious((previous) => { delete previous.stateManifestDigest }, /state authority is incomplete/)
+    await assertInvalidPrevious((previous) => { previous.stateManifestKey = 'custom-rankings/state/generations/other.json' }, /state manifest key is not canonical/)
+    await assertInvalidPrevious((previous) => { previous.rawReceiptKey = `custom-rankings/raw/objects/sha256/${'e'.repeat(64)}` }, /raw receipt key is not canonical/)
+
+    const publicWithoutModel = JSON.parse(originalPublic.bytes.toString('utf8'))
+    delete publicWithoutModel.model
+    const publicWithoutModelBytes = Buffer.from(JSON.stringify(publicWithoutModel, null, 2) + '\n')
+    Object.assign(publicObject, {
+      body: publicWithoutModelBytes.toString('utf8'), bytes: publicWithoutModelBytes, etag: '"missing-model"',
+      metadata: { sha256: createHash('sha256').update(publicWithoutModelBytes).digest('hex'), 'semantic-bytes': String(publicWithoutModelBytes.byteLength) },
+    })
+    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /public generation manifest is invalid/)
+    Object.assign(publicObject, originalPublic)
+    const installStateMutation = (mutate: (value: Record<string, unknown>) => void) => {
+      const value = JSON.parse(originalState.bytes.toString('utf8')) as Record<string, unknown>
+      mutate(value)
+      const bytes = Buffer.from(canonicalJsonFor(value))
+      const digest = createHash('sha256').update(bytes).digest('hex')
+      Object.assign(stateObject, { body: bytes.toString('utf8'), bytes, etag: '"mutated-state"', metadata: { sha256: digest, 'semantic-bytes': String(bytes.byteLength) } })
+      const pointer = JSON.parse(originalActive.bytes.toString('utf8'))
+      pointer.previousGeneration.stateManifestDigest = digest
+      Object.assign(activeObject, { body: JSON.stringify(pointer), bytes: Buffer.from(JSON.stringify(pointer)), etag: '"mutated-pointer"' })
+    }
+    installStateMutation((value) => { value.sourceReceiptDigest = 'f'.repeat(64) })
+    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /state and raw source receipt authorities do not match/)
+    Object.assign(stateObject, originalState)
+    Object.assign(activeObject, originalActive)
+    installStateMutation((value) => {
+      value.compatibility = { ...(value.compatibility as Record<string, unknown>), modelVersion: 'mismatched-model' }
+    })
+    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /public and state model authorities do not match/)
+    Object.assign(stateObject, originalState)
+    Object.assign(activeObject, originalActive)
+    await assert.rejects(readPreviousGenerationAuthorities({
+      config,
+      client,
+      beforePointerRecheck: () => { activeObject.etag = '"rollback-race"' },
+    }), /changed during rollback hydration/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -255,7 +385,8 @@ test('old active pointers remain readable and state promotion atomically resolve
     )
 
     const generationId = 'state-public-generation'
-    const prepared = preparedState(generationId)
+    const raw = rawGeneration(generationId)
+    const prepared = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
     await syncAllStateObjects(client, prepared.objects)
     const state = await writeIncrementalStateManifest(client, config, prepared)
     await writePublicFixture(publicDir, generationId)
@@ -265,6 +396,7 @@ test('old active pointers remain readable and state promotion atomically resolve
       fencingToken: 2,
       contentAddressed: true,
       stateManifestAuthority: state.authority,
+      rawSourceGeneration: raw,
       config,
       client,
     })
@@ -316,7 +448,8 @@ test('crashes and stale workers cannot activate prepared state', async () => {
       client,
       ifNoneMatch: '*',
     })
-    const prepared = preparedState('orphan')
+    const raw = rawGeneration('orphan')
+    const prepared = preparedStateWithReceipt('orphan', raw.sourceReceiptDigest)
     await syncAllStateObjects(client, prepared.objects)
     const state = await writeIncrementalStateManifest(client, config, prepared)
     assert.equal(JSON.parse(client.objects.get('custom-rankings/active-generation.json')!.body).generationId, 'current')
@@ -328,6 +461,7 @@ test('crashes and stale workers cannot activate prepared state', async () => {
       fencingToken: 9,
       contentAddressed: true,
       stateManifestAuthority: state.authority,
+      rawSourceGeneration: raw,
       config,
       client,
     }), /Stale refresh worker/)
@@ -349,7 +483,8 @@ test('state-manifest mutation after preparation blocks public pointer promotion'
       client,
       ifNoneMatch: '*',
     })
-    const prepared = preparedState('state-race')
+    const raw = rawGeneration('state-race')
+    const prepared = preparedStateWithReceipt('state-race', raw.sourceReceiptDigest)
     await syncAllStateObjects(client, prepared.objects)
     const state = await writeIncrementalStateManifest(client, config, prepared)
     await writePublicFixture(publicDir, 'state-race')
@@ -359,6 +494,7 @@ test('state-manifest mutation after preparation blocks public pointer promotion'
       fencingToken: 2,
       contentAddressed: true,
       stateManifestAuthority: state.authority,
+      rawSourceGeneration: raw,
       beforePromotionWrite: () => {
         const stored = client.objects.get(state.authority.key)!
         stored.bytes = Buffer.concat([stored.bytes, Buffer.from(' ')])

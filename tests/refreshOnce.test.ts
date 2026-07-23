@@ -823,6 +823,7 @@ function memoryS3() {
 
 async function streamText(value: unknown) {
   if (typeof value === 'string') return value
+  if (value instanceof Uint8Array) return Buffer.from(value).toString('utf8')
   const chunks: Buffer[] = []
   for await (const chunk of value as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks).toString('utf8')
