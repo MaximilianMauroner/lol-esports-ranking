@@ -507,7 +507,6 @@ function canonicalGcPointerAuthority(value) {
 async function deleteObjectWithDeadline(client, config, key, timeoutMs) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(new Error(`GC delete timed out after ${timeoutMs} milliseconds`)), timeoutMs)
-  timer.unref?.()
   try {
     await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: controller.signal })
   } catch (error) {
