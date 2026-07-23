@@ -2,9 +2,11 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
-import { gunzipSync } from 'node:zlib'
-import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { createGunzip, gunzipSync } from 'node:zlib'
+import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { parseFullAuditReceipt } from './full-audit-storage.mjs'
 import { parseIncrementalStateManifest } from './incremental-state-storage.mjs'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
@@ -92,7 +94,7 @@ export async function runCli(argv, dependencies = {}) {
     readers: dependencies.readers,
     onProgress: dependencies.onProgress ?? ((phase) => process.stderr.write(`ranking-baseline: ${phase}\n`)),
   })
-  await writeFile(resolve(options.receipt), `${canonicalJsonFor(receipt)}\n`, { flag: options.overwrite ? 'w' : 'wx' })
+  await writeFile(resolve(options.receipt), `${canonicalJsonFor(receipt)}\n`, { flag: 'wx' })
   process.stdout.write(`${canonicalJsonFor(receipt)}\n`)
   return receipt
 }
@@ -100,7 +102,7 @@ export async function runCli(argv, dependencies = {}) {
 export function parseArgs(argv) {
   const [command = 'verify', ...rest] = argv
   if (command !== 'capture' && command !== 'verify') throw new Error(`Unknown baseline command: ${command}`)
-  const options = { command, receipt: DEFAULT_RECEIPT, tag: BASELINE_TAG, overwrite: false }
+  const options = { command, receipt: DEFAULT_RECEIPT, tag: BASELINE_TAG }
   const names = {
     '--receipt': 'receipt',
     '--commit': 'commit',
@@ -119,10 +121,6 @@ export function parseArgs(argv) {
   }
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index]
-    if (argument === '--overwrite') {
-      options.overwrite = true
-      continue
-    }
     const separator = argument.indexOf('=')
     const flag = separator === -1 ? argument : argument.slice(0, separator)
     const field = names[flag]
@@ -180,6 +178,7 @@ export async function captureRankingRestartBaseline({
   railway,
   readers = {},
   onProgress = () => {},
+  beforeFinalPointerRead,
 }) {
   const readPublic = readers.readActiveContentAddressedGeneration ?? readActiveContentAddressedGeneration
   const readState = readers.readActiveIncrementalState
@@ -200,7 +199,7 @@ export async function captureRankingRestartBaseline({
     throw new Error('Baseline requires complete active public/state/raw and previous-generation authorities')
   }
   onProgress('active-and-previous-authorities-read')
-  await verifyPublicArtifactHeads(client, config, publicAuthority.manifest)
+  await verifyPublicArtifactBodies(client, config, publicAuthority.manifest)
   onProgress('active-public-references-verified')
   await verifyStateReferences(client, config, stateAuthority.manifest)
   onProgress('active-state-references-verified')
@@ -213,6 +212,18 @@ export async function captureRankingRestartBaseline({
     `generations/${activeGenerationId}/publish.json`,
   )
   parseGenerationPublishReceipt(activePublish.value, { generationId: activeGenerationId, prefix: config.prefix ?? '' })
+  assertPublishReceiptBindings(activePublish.value, {
+    publicManifest: {
+      key: publicAuthority.active.manifestKey,
+      digest: publicAuthority.active.manifestDigest,
+      bytes: publicAuthority.active.manifestBytes,
+    },
+    rawReceipt: {
+      key: publicAuthority.active.rawReceiptKey,
+      digest: publicAuthority.active.rawReceiptDigest,
+      bytes: publicAuthority.active.rawReceiptCompressedBytes,
+    },
+  })
   onProgress('active-publish-receipt-verified')
   const previousGenerationId = requiredSafeId(previousAuthority.previous.generationId, 'previous generationId')
   const previousPublish = await readStoredJsonOptional(
@@ -222,10 +233,23 @@ export async function captureRankingRestartBaseline({
   )
   if (previousPublish.found) {
     parseGenerationPublishReceipt(previousPublish.value, { generationId: previousGenerationId, prefix: config.prefix ?? '' })
+    assertPublishReceiptBindings(previousPublish.value, {
+      publicManifest: {
+        key: previousAuthority.previous.manifestKey,
+        digest: previousAuthority.public.digest,
+        bytes: previousAuthority.public.bytes,
+      },
+      rawReceipt: {
+        key: previousAuthority.previous.rawReceiptKey,
+        digest: previousAuthority.previous.rawReceiptDigest,
+        bytes: previousAuthority.raw.receiptReference.compressedBytes,
+      },
+    })
   }
   onProgress('previous-publish-receipt-verified')
   const latestFullAudit = await readLatestFullAuditAuthority({ config, client, verifiedAt: capturedAt })
   onProgress('audit-authority-verified')
+  await beforeFinalPointerRead?.()
   const finalPointer = await readBucketJson('active-generation.json', { config, client })
   assertStablePointer(firstPointer, finalPointer)
 
@@ -242,7 +266,7 @@ export async function captureRankingRestartBaseline({
     publishReceipt: activePublish.value,
   })
   if (!previousAuthority.state || !previousAuthority.raw) throw new Error('Previous generation is not complete')
-  await verifyPublicArtifactHeads(client, config, previousAuthority.public.manifest)
+  await verifyPublicArtifactBodies(client, config, previousAuthority.public.manifest)
   onProgress('previous-public-references-verified')
   await verifyStateReferences(client, config, previousAuthority.state.manifest)
   onProgress('previous-state-references-verified')
@@ -272,7 +296,7 @@ export async function captureRankingRestartBaseline({
     stateManifest: authorityReference(
       publicAuthority.active.stateManifestKey,
       publicAuthority.active.stateManifestDigest,
-      Buffer.byteLength(canonicalJsonFor(stateManifest)),
+      stateAuthority.bytes,
     ),
     rawReceipt: authorityReference(
       publicAuthority.active.rawReceiptKey,
@@ -282,7 +306,10 @@ export async function captureRankingRestartBaseline({
     publishReceipt: authorityReference(activePublish.key, activePublish.sha256, activePublish.bytes),
     sourceReceiptDigest: requiredDigest(rawReceipt.sourceReceiptDigest, 'active sourceReceiptDigest'),
     model: modelAuthority(manifest.model),
-    rankingSchemaVersion: requiredPositiveInteger(root.schemaVersion ?? 23, 'ranking schemaVersion'),
+    rankingSchemaVersion: requiredPositiveInteger(
+      stateManifest.compatibility?.publicArtifactSchemaVersion,
+      'ranking schemaVersion from state compatibility',
+    ),
     coverage: coverageAuthority(root.coverage),
     dataMode: requiredString(root.dataMode ?? manifest.provenance?.dataMode, 'active dataMode'),
     seeded: root.coverage?.seededSample === true,
@@ -294,12 +321,12 @@ export async function captureRankingRestartBaseline({
     publicManifest: authorityReference(
       previousAuthority.previous.manifestKey,
       previousAuthority.public.digest,
-      Buffer.byteLength(canonicalJsonFor(previousAuthority.public.manifest)),
+      previousAuthority.public.bytes,
     ),
     stateManifest: authorityReference(
       previousAuthority.previous.stateManifestKey,
       previousAuthority.previous.stateManifestDigest,
-      Buffer.byteLength(canonicalJsonFor(previousAuthority.state.manifest)),
+      previousAuthority.state.bytes,
     ),
     rawReceipt: authorityReference(
       previousAuthority.previous.rawReceiptKey,
@@ -406,8 +433,9 @@ async function verifyFullAuditReferences(client, config, receipt) {
   const source = await readCompressedReference(client, config, receipt.sourceReceipt)
   const parsedRaw = parseRawSourceReceipt(decodeRawObject(receipt.sourceReceipt, source))
   if (parsedRaw.generationId !== receipt.generationId) throw new Error('Full audit raw receipt generation mismatch')
-  await readCompressedReference(client, config, receipt.rawLedger)
-  await headCompressedReference(client, config, receipt.fullSnapshot)
+  await verifyRawChildren(client, config, parsedRaw)
+  await verifyCompressedReference(client, config, receipt.rawLedger, 'full audit raw ledger')
+  await verifyCompressedReference(client, config, receipt.fullSnapshot, 'full audit snapshot')
 }
 
 async function verifyRawChildren(client, config, receipt) {
@@ -416,7 +444,7 @@ async function verifyRawChildren(client, config, receipt) {
     ...receipt.leaguepedia.map((source) => source.object),
     ...receipt.lolesports.map((source) => source.object),
   ]
-  await mapConcurrent(children, 24, (child) => headCompressedReference(client, config, child))
+  await mapConcurrent(children, 8, (child) => verifyCompressedReference(client, config, child, 'raw child'))
 }
 
 async function verifyRawChildrenFromBucket(client, config, receipt) {
@@ -425,30 +453,27 @@ async function verifyRawChildrenFromBucket(client, config, receipt) {
     ...receipt.leaguepedia.map((source) => source.object),
     ...receipt.lolesports.map((source) => source.object),
   ]
-  await mapConcurrent(children, 24, (child) => headCompressedReference(client, config, child))
+  await mapConcurrent(children, 8, (child) => verifyCompressedReference(client, config, child, 'previous raw child'))
 }
 
-async function verifyPublicArtifactHeads(client, config, manifest) {
-  await mapConcurrent(Object.values(manifest.artifacts), 24, async (identity) => {
+async function verifyPublicArtifactBodies(client, config, manifest) {
+  await mapConcurrent(Object.values(manifest.artifacts), 8, async (identity) => {
     const relativeKey = `objects/sha256/${requiredDigest(identity.sha256, 'public artifact digest')}`
     const key = bucketKey(config, relativeKey)
-    const object = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
-    if (object.ContentEncoding !== 'gzip'
-      || object.Metadata?.sha256 !== identity.sha256
-      || object.Metadata?.['semantic-bytes'] !== String(identity.bytes)
-      || object.Metadata?.encoding !== 'gzip'
-      || !Number.isSafeInteger(Number(object.ContentLength))
-      || Number(object.ContentLength) <= 0) {
-      throw new Error(`Public artifact metadata mismatch: ${key}`)
-    }
+    await verifyCompressedReference(client, config, {
+      key: relativeKey,
+      sha256: identity.sha256,
+      bytes: identity.bytes,
+      storageEncoding: 'gzip',
+    }, `public artifact ${key}`)
   })
 }
 
 async function verifyStateReferences(client, config, manifest) {
   await mapConcurrent(
     [manifest.canonicalLedger, ...manifest.checkpoints.map((checkpoint) => checkpoint.object)],
-    16,
-    (reference) => headCompressedReference(client, config, reference),
+    8,
+    (reference) => verifyCompressedReference(client, config, reference, 'state object'),
   )
 }
 
@@ -460,7 +485,7 @@ async function readIncrementalStateAuthority(pointer, { config, client }) {
   if (stored.sha256 !== pointer.stateManifestDigest) throw new Error('State manifest digest mismatch')
   const manifest = parseIncrementalStateManifest(stored.value)
   if (canonicalJsonFor(manifest) !== canonicalJsonFor(stored.value)) throw new Error('State manifest is not canonical')
-  return { found: true, active: pointer, manifest, canonicalLedger: {}, checkpoints: [] }
+  return { found: true, active: pointer, manifest, bytes: stored.bytes, canonicalLedger: {}, checkpoints: [] }
 }
 
 async function readPreviousAuthorities(pointer, { config, client }) {
@@ -497,8 +522,8 @@ async function readPreviousAuthorities(pointer, { config, client }) {
   return {
     found: true,
     previous,
-    public: { manifest, digest: publicStored.sha256, artifacts: {} },
-    state: { manifest: stateManifest, canonicalLedger: {}, checkpoints: [] },
+    public: { manifest, digest: publicStored.sha256, bytes: publicStored.bytes, artifacts: {} },
+    state: { manifest: stateManifest, bytes: stateStored.bytes, canonicalLedger: {}, checkpoints: [] },
     raw: { receipt, receiptReference: rawReference },
   }
 }
@@ -545,12 +570,6 @@ async function readCompressedReference(client, config, reference) {
   return compressed
 }
 
-async function headCompressedReference(client, config, reference) {
-  const key = bucketKey(config, reference.key)
-  const object = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
-  assertCompressedMetadata(object, reference, key, reference.compressedBytes)
-}
-
 function assertCompressedMetadata(object, reference, key, observedBytes) {
   if (object.ContentEncoding !== 'gzip'
     || object.Metadata?.sha256 !== reference.sha256
@@ -560,6 +579,48 @@ function assertCompressedMetadata(object, reference, key, observedBytes) {
     || observedBytes !== reference.compressedBytes) {
     throw new Error(`Compressed authority metadata mismatch: ${key}`)
   }
+}
+
+async function verifyCompressedReference(client, config, reference, label) {
+  const key = bucketKey(config, reference.key)
+  const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  const contentLength = Number(object.ContentLength)
+  if (!Number.isSafeInteger(contentLength) || contentLength <= 0
+    || object.ContentEncoding !== 'gzip'
+    || object.Metadata?.sha256 !== reference.sha256
+    || object.Metadata?.['semantic-bytes'] !== String(reference.bytes)
+    || object.Metadata?.encoding !== 'gzip'
+    || (reference.compressedBytes !== undefined && contentLength !== reference.compressedBytes)) {
+    throw new Error(`${label} metadata mismatch: ${key}`)
+  }
+  let compressedBytes = 0
+  let semanticBytes = 0
+  const digest = createHash('sha256')
+  const countCompressed = new Transform({
+    transform(chunk, _encoding, callback) {
+      compressedBytes += chunk.length
+      callback(null, chunk)
+    },
+  })
+  const hashSemantic = new Transform({
+    transform(chunk, _encoding, callback) {
+      semanticBytes += chunk.length
+      digest.update(chunk)
+      callback()
+    },
+  })
+  try {
+    await pipeline(readableBody(object.Body), countCompressed, createGunzip(), hashSemantic)
+  } catch (error) {
+    throw new Error(`${label} gzip is corrupt: ${key}`, { cause: error })
+  }
+  if (compressedBytes !== contentLength || semanticBytes !== reference.bytes || digest.digest('hex') !== reference.sha256) {
+    throw new Error(`${label} body digest mismatch: ${key}`)
+  }
+}
+
+function readableBody(body) {
+  return typeof body?.pipe === 'function' ? body : Readable.from([body])
 }
 
 export function parseRankingRestartBaselineReceipt(value) {
@@ -577,6 +638,7 @@ export function parseRankingRestartBaselineReceipt(value) {
   parseRecovery(value.recovery)
   parseProducingCode(value.producingCode)
   parseIntegrity(value.integrity)
+  validateCanonicalRelationships(value)
   requiredDigest(value.canonicalDigest, 'canonicalDigest')
   const { canonicalDigest, ...withoutDigest } = value
   if (canonicalReceiptDigest(withoutDigest) !== canonicalDigest) throw new Error('Baseline canonical digest mismatch')
@@ -585,6 +647,66 @@ export function parseRankingRestartBaselineReceipt(value) {
 
 export function canonicalReceiptDigest(value) {
   return sha256(Buffer.from(canonicalJsonFor(value), 'utf8'))
+}
+
+export function validateCanonicalRelationships(value) {
+  const pointerSuffix = 'active-generation.json'
+  const pointerKey = value.active.pointer.key
+  if (!pointerKey.endsWith(pointerSuffix)) throw new Error('Active pointer key is not canonical')
+  const prefix = pointerKey.slice(0, -pointerSuffix.length).replace(/\/$/, '')
+  if (pointerKey !== joinedKey(prefix, pointerSuffix)) throw new Error('Active pointer key is not canonical')
+  const generationPaths = (generationId) => ({
+    publicManifest: joinedKey(prefix, `generations/${generationId}/manifest.json`),
+    publishReceipt: joinedKey(prefix, `generations/${generationId}/publish.json`),
+    stateManifest: joinedKey(prefix, `state/generations/${generationId}.json`),
+  })
+  const activePaths = generationPaths(value.active.generationId)
+  const previousPaths = generationPaths(value.previous.generationId)
+  assertEqual(value.active.publicManifest.key, activePaths.publicManifest, 'active public manifest path')
+  assertEqual(value.active.publishReceipt.key, activePaths.publishReceipt, 'active publish receipt path')
+  assertEqual(value.active.stateManifest.key, activePaths.stateManifest, 'active state manifest path')
+  assertDigestPath(value.active.rawReceipt, prefix, 'active raw receipt')
+  assertEqual(value.previous.publicManifest.key, previousPaths.publicManifest, 'previous public manifest path')
+  assertEqual(value.previous.publishReceipt.key, previousPaths.publishReceipt, 'previous publish receipt path')
+  assertEqual(value.previous.stateManifest.key, previousPaths.stateManifest, 'previous state manifest path')
+  assertDigestPath(value.previous.rawReceipt, prefix, 'previous raw receipt')
+  if (value.active.seeded !== value.active.coverage.seeded) throw new Error('Active seeded flags disagree')
+  if (value.railway.web.commit !== value.baseline.commit || value.railway.refresh.commit !== value.baseline.commit) {
+    throw new Error('Railway deployment commits do not match baseline commit')
+  }
+  const auditKey = value.latestFullAudit.status === 'present'
+    ? joinedKey(prefix, `audits/days/${value.latestFullAudit.auditDate}.json`)
+    : joinedKey(prefix, 'audits/days/')
+  if (value.latestFullAudit.status === 'present') assertEqual(value.latestFullAudit.key, auditKey, 'full audit path')
+  else assertEqual(value.latestFullAudit.searchedPrefix, auditKey, 'full audit searched prefix')
+  const expectedIntegrity = [
+    ['active-pointer', pointerKey],
+    ['active-public-and-referenced-artifacts', value.active.publicManifest.key],
+    ['active-state-ledger-and-checkpoints', value.active.stateManifest.key],
+    ['active-raw-receipt-and-children', value.active.rawReceipt.key],
+    ['active-publish-receipt', value.active.publishReceipt.key],
+    ['previous-public-state-raw-and-publish', value.previous.publishReceipt.key],
+    ['latest-full-audit-authority', auditKey],
+    ['active-pointer-etag-recheck', pointerKey],
+  ]
+  for (const [index, [scope, key]] of expectedIntegrity.entries()) {
+    const actual = value.integrity[index]
+    if (actual.scope !== scope || actual.key !== key || actual.result !== 'verified') {
+      throw new Error(`Integrity scope ${scope} is not bound to its canonical authority`)
+    }
+  }
+}
+
+function assertDigestPath(reference, prefix, label) {
+  assertEqual(reference.key, joinedKey(prefix, `raw/objects/sha256/${reference.sha256}`), `${label} path`)
+}
+
+function joinedKey(prefix, relative) {
+  return prefix ? `${prefix}/${relative}` : relative
+}
+
+function assertEqual(actual, expected, label) {
+  if (actual !== expected) throw new Error(`${label} is not canonical`)
 }
 
 function parseBaseline(value) {
@@ -697,6 +819,19 @@ export function assertAuthorityAgreement({ generationId, manifest, stateManifest
   }
   if (stateManifest.sourceReceiptDigest !== rawReceipt.sourceReceiptDigest) {
     throw new Error('State and raw source receipt authorities disagree')
+  }
+}
+
+export function assertPublishReceiptBindings(receipt, expected) {
+  for (const name of ['publicManifest', 'rawReceipt']) {
+    const actual = receipt?.authorities?.[name]
+    const authority = expected?.[name]
+    if (!actual || !authority
+      || actual.key !== authority.key
+      || actual.digest !== authority.digest
+      || actual.bytes !== authority.bytes) {
+      throw new Error(`Publish receipt ${name} authority does not match selected baseline authority`)
+    }
   }
 }
 

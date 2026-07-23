@@ -89,6 +89,7 @@ export function captureRankingRestartBaseline(options: {
   capturedAt: string
   railway: RankingRestartBaselineReceipt['railway']
   readers?: Record<string, (...args: never[]) => Promise<unknown>>
+  beforeFinalPointerRead?: () => void | Promise<void>
 }): Promise<RankingRestartBaselineReceipt>
 export function readLatestFullAuditAuthority(options: {
   config: BucketStorageConfig
@@ -98,4 +99,6 @@ export function readLatestFullAuditAuthority(options: {
 export function parseRankingRestartBaselineReceipt(value: unknown): RankingRestartBaselineReceipt
 export function canonicalReceiptDigest(value: unknown): string
 export function assertAuthorityAgreement(value: Record<string, unknown>): void
+export function assertPublishReceiptBindings(receipt: Record<string, unknown>, expected: Record<string, unknown>): void
 export function assertStablePointer(first: Record<string, unknown>, final: Record<string, unknown>): void
+export function validateCanonicalRelationships(value: RankingRestartBaselineReceipt): void
