@@ -277,12 +277,9 @@ Riot's official model should be used as a benchmark layer, not as a formula clon
 
 Every generated snapshot includes `model.version`, `model.configHash`, active model parameters, source provider breakdowns, match coverage dates, source/data quality counts, and whether seeded sample data is present. Current schema version `18` standing rows include rating components and latest latent-strength rating-update ledger fields; league rows include expected wins, wins over expected, opponent-adjusted win rate, and average international opponent rating; region rows include flagship team/league counts and separate ecosystem counts. Walk-forward metrics also include aggregate and segment-level baseline comparisons against coin-flip, pre-game win-rate, and neutral team-only predictors, while full prediction rows expose the prior-only blue/red side adjustment used by the published probability. Compact sourced-player outputs carry latest Oracle observation provenance plus appearance provenance and recent match context, and browser history is split into scoped team-history shards plus first-class region-history artifacts, so player/team/role/region claims can be traced back to the source game, file, date, event, shown-team games, role games, last played opponents, and model provenance. Ranking claims should always be cited with the data source, canonical pre-1.0 model version, config hash, and schema version that produced them.
 
-See [docs/ideal-match-impact-model.md](/home/codex/work/lol-esports-ranking/docs/ideal-match-impact-model.md) for the predictive target, dynamic player-importance formula, roster-continuity model, and anti-leakage rules.
-
 ## Key Files
 
 - `src/App.tsx`: main ranking workbench UI.
-- [docs/ideal-match-impact-model.md](/home/codex/work/lol-esports-ranking/docs/ideal-match-impact-model.md): latent ranking target, model layering, player-share formula, validation order, and anti-leakage rules.
 - `src/lib/model.ts`: transparent team and league rating calculations.
 - `src/lib/playerModel.ts`: seeded player-share model plus sourced Oracle player-game rating updates.
 - `src/lib/rosters.ts`: latest observed game-roster provenance and standings roster-basis derivation.

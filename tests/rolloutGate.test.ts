@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { auditPlanCompletion } from '../scripts/audit-plan-completion.mjs'
 import { createProbeCoordinationEvidence } from '../scripts/probe-refresh-coordination.mjs'
 import {
   createAuditGateEvidence,
@@ -219,20 +217,6 @@ test('all canonical nested proof kinds resolve from storage without trusting inl
     criteria: { invented: true },
     allowed: true,
   }), /criteria/)
-
-  const acceptance = JSON.parse(await readFile(new URL('../docs/rollout-acceptance.json', import.meta.url), 'utf8'))
-  const decisionReference = immutableReference(decision, 'ops/rollout-gates/native-decision.json')
-  const completion = await auditPlanCompletion({
-    acceptance,
-    evidence: [decisionReference],
-    expectedCommit: 'abc123',
-    expectedDeploymentId: 'deployment-1',
-    resolveReference: async (key: string) => key === decisionReference.key
-      ? { found: true, value: decision }
-      : { found: false },
-    now: '2026-07-08T01:00:00Z',
-  })
-  assert.equal(completion.requirements.find((entry) => entry.id === 'deployment-bound-gate')?.status, 'proved')
 
   const fixtureReceipt = createRolloutGateReceipt({
     ...receipt,

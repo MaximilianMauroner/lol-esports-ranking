@@ -1258,33 +1258,6 @@ export function parsePublicTeamDirectory(value: unknown): PublicTeamDirectory {
   return value as PublicTeamDirectory
 }
 
-export function parsePublicTeamHistory(value: unknown): PublicTeamHistoryDirectory {
-  assertObject(value, 'team history')
-  assertEqual(value.artifactKind, 'team-history', 'team history artifactKind')
-  assertSchemaVersion(value, 'team history')
-  assertArtifactMeta(value.artifactMeta, 'team history artifactMeta')
-  assertPublishedRatingScale(value.ratingScale, 'team history ratingScale')
-  assertString(value.generatedAt, 'team history generatedAt')
-  assertString(value.modelVersion, 'team history modelVersion')
-  assertString(value.modelConfigHash, 'team history modelConfigHash')
-  const seriesCounts = assertTeamHistorySeriesRecord(value.series, 'team history series')
-  assertNonNegativeInteger(value.teamCount, 'team history teamCount')
-  assertNonNegativeInteger(value.pointCount, 'team history pointCount')
-  if (seriesCounts.seriesCount !== value.teamCount) {
-    throw new Error('Invalid public artifact: team history teamCount must match series count')
-  }
-  if (seriesCounts.pointCount !== value.pointCount) {
-    throw new Error('Invalid public artifact: team history pointCount must match series points')
-  }
-  if (value.scopeIndex !== undefined) {
-    assertObject(value.scopeIndex, 'team history scopeIndex')
-    for (const [key, teamIds] of Object.entries(value.scopeIndex)) {
-      assertStringArray(teamIds, `team history scopeIndex ${key}`)
-    }
-  }
-  return value as PublicTeamHistoryDirectory
-}
-
 export function parsePublicTeamHistoryIndex(value: unknown): PublicTeamHistoryIndex {
   assertObject(value, 'team history index')
   assertEqual(value.artifactKind, 'team-history-index', 'team history index artifactKind')

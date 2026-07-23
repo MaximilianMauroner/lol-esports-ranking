@@ -22,8 +22,6 @@ const COMMON_SOURCE_PATHS = Object.freeze([
   '.gitignore',
   'scripts/rollout-implementation-evidence.mjs',
   'scripts/rollout-implementation-evidence.d.mts',
-  'scripts/audit-plan-completion.mjs',
-  'scripts/audit-plan-completion.d.mts',
 ])
 
 export const IMPLEMENTATION_EVIDENCE_CONTRACTS = Object.freeze({

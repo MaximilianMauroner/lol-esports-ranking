@@ -38,17 +38,15 @@ test('refresh worker memory flags are canonical and deduplicate inherited varian
   )
 })
 
-test('Railway, direct, and benchmark entry points share the exact refresh memory policy', async () => {
-  const [packageJson, runner, once, server, benchmark] = await Promise.all([
+test('worker, direct, and benchmark entry points share the exact refresh memory policy', async () => {
+  const [packageJson, runner, once, benchmark] = await Promise.all([
     readFile('package.json', 'utf8'),
     readFile('scripts/run-refresh-worker.mjs', 'utf8'),
     readFile('scripts/refresh-once.mjs', 'utf8'),
-    readFile('scripts/railway-server.mjs', 'utf8'),
     readFile('scripts/benchmark-incremental-ranking.ts', 'utf8'),
   ])
   assert.match(packageJson, /"railway:refresh": "node scripts\/run-refresh-worker\.mjs"/)
   assert.match(runner, /refreshWorkerArgs\('scripts\/refresh-data-if-changed\.mjs', process\.argv\.slice\(2\)\)/)
   assert.match(once, /refreshWorkerArgs\('scripts\/refresh-data-if-changed\.mjs'\)/)
-  assert.match(server, /refreshWorkerArgs\(refreshScript\)/)
   assert.match(benchmark, /execArgv: refreshWorkerExecArgv\(process\.execArgv\)/)
 })
