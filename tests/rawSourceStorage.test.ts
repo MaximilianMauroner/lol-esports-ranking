@@ -150,6 +150,8 @@ test('raw objects are canonical, deterministic gzip objects and fail closed when
 
   assert.equal(left.digest, right.digest)
   assert.deepEqual(left.compressed, right.compressed)
+  assert.equal('canonicalJson' in left, false)
+  assert.equal('canonicalBytes' in left, false)
   assert.deepEqual(decodeRawObject(reference, left.compressed), left.value)
   assert.throws(() => decodeRawObject(reference, Buffer.from('not-gzip')), /compressed byte length|gzip is corrupt/)
   assert.throws(

@@ -25,8 +25,6 @@ export function prepareRawObject(value) {
   const compressed = gzipSync(canonicalBytes, { level: 9, mtime: 0 })
   return {
     value,
-    canonicalJson,
-    canonicalBytes,
     digest,
     bytes: canonicalBytes.byteLength,
     compressed,
@@ -88,7 +86,7 @@ export function parseOracleCsv(csv, { sourceFileName, importerVersion }) {
     current.rows.push(row)
     byGame.set(gameId, current)
   }
-  const games = [...byGame.values()].map((game) => parseOracleGame(game, header, indexes))
+  const games = [...byGame.values()].map((game) => parseOracleGame(game, header, indexes, 'Oracle game', undefined, false))
     .sort(compareGames)
   if (games.length === 0) throw new Error('Oracle CSV contains no complete games')
   const source = {
@@ -102,11 +100,14 @@ export function parseOracleCsv(csv, { sourceFileName, importerVersion }) {
 }
 
 export function prepareOracleBaseline({ csv, sourceFileName, importerVersion }) {
-  return prepareOracleBaselineFromSource(parseOracleCsv(csv, { sourceFileName, importerVersion }))
+  return prepareParsedOracleBaseline(parseOracleCsv(csv, { sourceFileName, importerVersion }))
 }
 
 export function prepareOracleBaselineFromSource(source) {
-  const parsed = parseOracleSource(source, 'Oracle baseline source')
+  return prepareParsedOracleBaseline(parseOracleSource(source, 'Oracle baseline source'))
+}
+
+function prepareParsedOracleBaseline(parsed) {
   const value = {
     artifactKind: ORACLE_BASELINE_KIND,
     schemaVersion: 1,
@@ -505,7 +506,7 @@ function parseOracleSource(value, label) {
   return { ...source, digest: oracleSourceDigest(source) }
 }
 
-function parseOracleGame(value, header, indexes, label = 'Oracle game', fallbackSourceOrder) {
+function parseOracleGame(value, header, indexes, label = 'Oracle game', fallbackSourceOrder, copyRows = true) {
   assertRecord(value, label)
   assertNonEmptyString(value.gameId, `${label} gameId`)
   assertUtcDate(value.date, `${label} date`)
@@ -521,7 +522,7 @@ function parseOracleGame(value, header, indexes, label = 'Oracle game', fallback
       throw new Error(`${label} row ${rowIndex} has inconsistent identity`)
     }
     sides.add(row[resolvedIndexes.side]?.trim().toLowerCase())
-    return [...row]
+    return copyRows ? [...row] : row
   })
   if (!sides.has('blue') || !sides.has('red')) throw new Error(`${label} does not contain both sides`)
   const game = { gameId: value.gameId, date: value.date, league: value.league, sourceOrder, rows }
@@ -783,8 +784,10 @@ function assertPreparedObject(value) {
     }
     return
   }
-  if (!Buffer.isBuffer(value.canonicalBytes) || !Buffer.isBuffer(value.compressed)) throw new Error('Prepared raw object bytes are invalid')
-  if (value.bytes !== value.canonicalBytes.byteLength || value.compressedBytes !== value.compressed.byteLength) throw new Error('Prepared raw object lengths are invalid')
+  if (!Buffer.isBuffer(value.compressed)) throw new Error('Prepared raw object bytes are invalid')
+  if (!Number.isSafeInteger(value.bytes) || value.bytes <= 0 || value.compressedBytes !== value.compressed.byteLength) {
+    throw new Error('Prepared raw object lengths are invalid')
+  }
 }
 
 function assertExactKeys(value, allowed, label) {

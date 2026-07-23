@@ -15,8 +15,6 @@ export type RawObjectReference = {
 
 export type PreparedRawObject<T extends object = Record<string, unknown>> = {
   value: T
-  canonicalJson: string
-  canonicalBytes: Buffer
   digest: string
   bytes: number
   compressed: Buffer

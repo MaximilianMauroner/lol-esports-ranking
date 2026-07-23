@@ -1,5 +1,5 @@
 export const REFRESH_WORKER_MAX_OLD_SPACE_MB = 384
-export const RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB = 512
+export const RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB = 2048
 export const REFRESH_WORKER_MAX_SEMI_SPACE_MB = 8
 
 /** One launch policy for Railway-triggered and benchmarked refresh workers. */
@@ -7,7 +7,7 @@ export function refreshWorkerExecArgv(inherited = process.execArgv) {
   return workerExecArgv(inherited, REFRESH_WORKER_MAX_OLD_SPACE_MB)
 }
 
-/** Raw authority bootstrap briefly retains compressed source objects alongside the parsed corpus. */
+/** Raw authority work briefly materializes the full Oracle corpus alongside compressed source objects. */
 export function rawSourceWorkerExecArgv(inherited = process.execArgv) {
   return workerExecArgv(inherited, RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB)
 }
