@@ -571,6 +571,24 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
     })
 
     const manifestKey = `rankings/generations/${oldGenerationId}/manifest.json`
+    for (const marker of [undefined, 3]) {
+      const mismatchedClient = cloneMemoryS3(sourceClient)
+      const pointerObject = mismatchedClient.objects.get('rankings/active-generation.json')!
+      const pointer = JSON.parse(pointerObject.body)
+      if (marker === undefined) delete pointer.publicManifestSchemaVersion
+      else pointer.publicManifestSchemaVersion = marker
+      pointerObject.body = JSON.stringify(pointer)
+      pointerObject.bytes = Buffer.from(pointerObject.body)
+      await assert.rejects(
+        readActiveContentAddressedGeneration({ config, client: mismatchedClient, verifyArtifacts: false }),
+        /Active public generation manifest is invalid/,
+      )
+      await assert.rejects(
+        getBucketObject('ranking-summary.json', { config, client: mismatchedClient }),
+        /Active public generation manifest is invalid/,
+      )
+    }
+
     const storedManifest = sourceClient.objects.get(manifestKey)!
     const schemaV1 = { ...JSON.parse(storedManifest.body), schemaVersion: 1 }
     const schemaV1Body = `${JSON.stringify(schemaV1, null, 2)}\n`
@@ -591,14 +609,7 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
     activeObject.body = JSON.stringify(markedPointer)
     activeObject.bytes = Buffer.from(activeObject.body)
 
-    const markedClient = memoryS3()
-    for (const [key, object] of sourceClient.objects) {
-      markedClient.objects.set(key, {
-        ...object,
-        ...(object.bytes ? { bytes: Buffer.from(object.bytes) } : {}),
-        ...(object.metadata ? { metadata: { ...object.metadata } } : {}),
-      })
-    }
+    const markedClient = cloneMemoryS3(sourceClient)
     await assert.rejects(
       readActiveContentAddressedGeneration({ config, client: markedClient, verifyArtifacts: false }),
       /Active public generation manifest is invalid/,
@@ -619,20 +630,28 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
       /Active public generation manifest is invalid/,
     )
 
+    const unknownMarkerClient = cloneMemoryS3(sourceClient)
+    const unknownPointerObject = unknownMarkerClient.objects.get('rankings/active-generation.json')!
+    const unknownPointer = JSON.parse(unknownPointerObject.body)
+    unknownPointer.publicManifestSchemaVersion = 3
+    unknownPointerObject.body = JSON.stringify(unknownPointer)
+    unknownPointerObject.bytes = Buffer.from(unknownPointerObject.body)
+    await assert.rejects(
+      readActiveContentAddressedGeneration({ config, client: unknownMarkerClient, verifyArtifacts: false }),
+      /Active public generation manifest is invalid/,
+    )
+    await assert.rejects(
+      getBucketObject('ranking-summary.json', { config, client: unknownMarkerClient }),
+      /Active public generation manifest is invalid/,
+    )
+
     const oldPointer = JSON.parse(activeObject.body)
     delete oldPointer.publicManifestSchemaVersion
     activeObject.body = JSON.stringify(oldPointer)
     activeObject.bytes = Buffer.from(activeObject.body)
 
     // A fresh process sees the pre-change pointer without a cached v2 marker.
-    const client = memoryS3()
-    for (const [key, object] of sourceClient.objects) {
-      client.objects.set(key, {
-        ...object,
-        ...(object.bytes ? { bytes: Buffer.from(object.bytes) } : {}),
-        ...(object.metadata ? { metadata: { ...object.metadata } } : {}),
-      })
-    }
+    const client = cloneMemoryS3(sourceClient)
     const cutoverManifest = client.objects.get(manifestKey)!
     const delivered = await getBucketObject('ranking-summary.json', { config, client })
     assert.equal(delivered.cutover, 'schema-v1-active-manifest-to-v2')
@@ -987,6 +1006,18 @@ function memoryS3() {
       throw new Error(`Unsupported command ${name}`)
     },
   }
+}
+
+function cloneMemoryS3(source: ReturnType<typeof memoryS3>) {
+  const clone = memoryS3()
+  for (const [key, object] of source.objects) {
+    clone.objects.set(key, {
+      ...object,
+      ...(object.bytes ? { bytes: Buffer.from(object.bytes) } : {}),
+      ...(object.metadata ? { metadata: { ...object.metadata } } : {}),
+    })
+  }
+  return clone
 }
 
 function commandDetails(value: unknown) {
