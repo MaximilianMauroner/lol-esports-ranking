@@ -271,7 +271,6 @@ test('public manifest data URLs resolve to tracked public files', async () => {
   addLocalDataUrl(summary.playerDirectoryUrl, urls)
   addLocalDataUrl(summary.teamDirectoryUrl, urls)
   addLocalDataUrl(summary.teamHistoryIndexUrl, urls)
-  addLocalDataUrl(summary.teamHistoryUrl, urls)
   addLocalDataUrl(summary.regionHistoryUrl, urls)
   addLocalDataUrl(summary.tournamentMovementIndexUrl, urls)
 

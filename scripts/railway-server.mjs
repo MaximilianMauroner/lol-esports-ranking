@@ -1,12 +1,18 @@
 import { createReadStream } from 'node:fs'
-import { spawn } from 'node:child_process'
 import { access, readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { normalize, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { createGzip } from 'node:zlib'
-import { bucketConfigFromEnv, contentTypeForPath, getBucketObject, readBucketJson } from './railway-bucket.mjs'
+import { createGunzip, createGzip } from 'node:zlib'
+import {
+  bucketConfigFromEnv,
+  contentTypeForPath,
+  getBucketObject,
+  headBucketObject,
+  preparePresignedBucketDelivery,
+  readBucketJson,
+} from './railway-bucket.mjs'
 import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
 
 const port = Number(process.env.PORT ?? 4173)
@@ -14,31 +20,23 @@ const host = process.env.HOST ?? '0.0.0.0'
 const distDir = resolve(process.env.RAILWAY_DIST_DIR ?? 'dist')
 const publicDataDir = resolve(process.env.RANKING_PUBLIC_DATA_DIR ?? 'public/data')
 const refreshEnabled = process.env.RANKING_REFRESH_ENABLED === 'true'
-const refreshMode = ['shadow', 'gated'].includes(process.env.RANKING_REFRESH_MODE) ? process.env.RANKING_REFRESH_MODE : 'legacy'
-const refreshIntervalMinutes = Math.max(1, Number(process.env.RANKING_REFRESH_INTERVAL_MINUTES ?? 60))
-const refreshOnStart = process.env.RANKING_REFRESH_ON_START === 'true'
-const refreshScript = process.env.RANKING_REFRESH_SCRIPT ?? 'scripts/refresh-data-if-changed.mjs'
-const refreshStatePath = resolve(process.env.RANKING_REFRESH_STATE ?? 'data/raw/refresh-state.json')
+const refreshMode = process.env.RANKING_REFRESH_MODE === 'shadow' ? 'shadow' : 'gated'
 const dataCacheControl = process.env.RANKING_DATA_CACHE_CONTROL ?? 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800, stale-if-error=604800'
 const dataManifestCacheControl = process.env.RANKING_DATA_MANIFEST_CACHE_CONTROL ?? 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400'
 const htmlCacheControl = process.env.RANKING_HTML_CACHE_CONTROL ?? 'no-store'
 const gzipEnabled = process.env.RANKING_GZIP_ENABLED !== 'false'
-const cronSecret = process.env.CRON_SECRET
+const presignedDeliveryEnabled = process.env.RANKING_PRESIGNED_DELIVERY_ENABLED === 'true'
+const presignedDeliveryThresholdBytes = positiveIntegerOrDefault(
+  process.env.RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES,
+  65_536,
+)
 const bucketConfig = bucketConfigFromEnv()
-
-let refreshInFlight = null
-let lastRefresh = {
-  status: 'not-run',
-  startedAt: null,
-  finishedAt: null,
-  reason: null,
-  exitCode: null,
-  error: null,
-  details: null,
-}
 
 const server = createServer(async (request, response) => {
   try {
+    const rawPathname = rawRequestPathname(request.url)
+    const canonicalPresignedPath = isImmutableDataObjectPath(rawPathname)
+    const encodedPresignedPath = isEncodedContentAddressedRequestPath(rawPathname)
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
 
     if (url.pathname === '/api/live') {
@@ -57,50 +55,25 @@ const server = createServer(async (request, response) => {
       return
     }
 
-    if (url.pathname === '/api/health') {
-      sendJson(response, 200, {
-        ok: true,
-        refreshEnabled,
-        refreshMode,
-        refreshInFlight: Boolean(refreshInFlight),
-        bucket: bucketConfig.enabled
-          ? { enabled: true, bucket: bucketConfig.bucket, prefix: bucketConfig.prefix }
-          : { enabled: false, missing: bucketConfig.missing },
-        lastRefresh,
-        dataCacheControl,
-        dataManifestCacheControl,
-        htmlCacheControl,
-        gzipEnabled,
-      })
-      return
-    }
-
-    if (url.pathname === '/api/refresh') {
-      if (request.method !== 'POST') {
-        sendJson(response, 405, { ok: false, error: 'Method not allowed' })
-        return
-      }
-      if (!cronSecret || request.headers.authorization !== `Bearer ${cronSecret}`) {
-        sendJson(response, 401, { ok: false, error: 'Unauthorized' })
-        return
-      }
-      void runRefresh('manual')
-      sendJson(response, 202, { ok: true, accepted: true, refreshInFlight: true })
-      return
-    }
-
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       sendJson(response, 405, { ok: false, error: 'Method not allowed' })
       return
     }
 
     if (url.pathname.startsWith('/data/')) {
+      if (encodedPresignedPath || (isImmutableDataObjectPath(url.pathname) && !canonicalPresignedPath)) {
+        sendJson(response, 400, { ok: false, error: 'Invalid data path' })
+        return
+      }
       const relativeDataPath = url.pathname.slice('/data/'.length)
       await serveDataFile(response, relativeDataPath, {
         cacheControl: cacheControlForDataPath(relativeDataPath),
         headOnly: request.method === 'HEAD',
+        requestMethod: request.method,
         requestHeaders: request.headers,
         requestedGeneration: url.searchParams.get('v') || undefined,
+        forceProxy: url.searchParams.get('delivery') === 'proxy',
+        canonicalPresignedPath: canonicalPresignedPath && rawPathname === url.pathname,
       })
       return
     }
@@ -118,17 +91,6 @@ const server = createServer(async (request, response) => {
 
 server.listen(port, host, () => {
   console.log(`Railway server listening on ${host}:${port}`)
-  if (!refreshEnabled || refreshMode !== 'legacy') return
-
-  if (refreshOnStart) {
-    setTimeout(() => {
-      void runRefresh('startup')
-    }, 1000)
-  }
-
-  setInterval(() => {
-    void runRefresh('schedule')
-  }, refreshIntervalMinutes * 60 * 1000).unref()
 })
 
 async function readinessStatus() {
@@ -284,8 +246,14 @@ async function serveDataFile(response, relativePath, options) {
   }
 
   if (bucketConfig.enabled) {
+    const presigned = await tryRedirectToPresignedBucketObject(response, safePath, options)
+    if (presigned.redirected) return
     try {
-      const servedBucket = await tryServeBucketFile(response, safePath, options)
+      const servedBucket = await tryServeBucketFile(response, safePath, {
+        ...options,
+        bucketHead: presigned.bucketHead,
+        bucketHeadFailed: presigned.headFailed,
+      })
       if (servedBucket) return
       if (options.requestedGeneration) {
         sendJson(response, 404, { ok: false, error: 'Versioned data artifact not found' })
@@ -307,12 +275,54 @@ async function serveDataFile(response, relativePath, options) {
   sendJson(response, 404, { ok: false, error: 'Not found' })
 }
 
-async function tryServeBucketFile(response, relativePath, { cacheControl, headOnly, requestHeaders, requestedGeneration }) {
+async function tryRedirectToPresignedBucketObject(response, relativePath, options) {
+  if (!presignedDeliveryEnabled || options.forceProxy || !options.canonicalPresignedPath
+    || !isContentAddressedObjectPath(relativePath)) return { redirected: false }
+
+  const delivery = await preparePresignedBucketDelivery(relativePath, {
+    config: bucketConfig,
+    method: options.requestMethod === 'HEAD' ? 'HEAD' : 'GET',
+    thresholdBytes: presignedDeliveryThresholdBytes,
+  })
+  if (delivery.kind === 'head-failed') {
+    console.warn(`Presigned bucket delivery fallback used for ${relativePath}`)
+    return { redirected: false, headFailed: true }
+  }
+  if (delivery.kind === 'proxy') {
+    return { redirected: false, bucketHead: delivery.bucketHead }
+  }
+  if (delivery.kind === 'sign-failed') {
+    console.warn(`Presigned bucket delivery fallback used for ${relativePath}`)
+    return { redirected: false, bucketHead: delivery.bucketHead }
+  }
+  response.statusCode = 307
+  response.setHeader('Location', delivery.location)
+  response.setHeader('Cache-Control', 'private, no-store')
+  response.end()
+  return { redirected: true }
+}
+
+async function tryServeBucketFile(response, relativePath, {
+  cacheControl,
+  headOnly,
+  requestHeaders,
+  requestedGeneration,
+  bucketHead,
+  bucketHeadFailed,
+}) {
+  if (headOnly && isContentAddressedObjectPath(relativePath)) {
+    if (bucketHeadFailed) return false
+    const object = bucketHead ?? await headBucketObject(relativePath, { config: bucketConfig })
+    if (!object.found) return false
+    sendBucketHead(response, relativePath, object, { cacheControl, requestHeaders })
+    return true
+  }
   const object = await getBucketObject(relativePath, { config: bucketConfig, generationId: requestedGeneration })
   if (!object.found) return false
 
   const contentType = object.contentType ?? contentTypeForPath(relativePath)
   const compressible = isCompressibleContentType(contentType)
+  const storedGzip = object.contentEncoding === 'gzip'
   if (isFreshRequest(requestHeaders, object.etag, object.lastModified)) {
     destroyBody(object.body)
     sendNotModified(response, {
@@ -325,13 +335,19 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
     return true
   }
 
-  const gzip = shouldGzip(requestHeaders, contentType, object.contentLength, headOnly)
+  const gzip = storedGzip
+    ? gzipEnabled && acceptsGzip(requestHeaders?.['accept-encoding'])
+    : shouldGzip(requestHeaders, contentType, object.contentLength, headOnly)
   response.statusCode = 200
   response.setHeader('Content-Type', contentType)
   response.setHeader('Cache-Control', cacheControl)
   if (compressible) response.setHeader('Vary', 'Accept-Encoding')
-  if (gzip) response.setHeader('Content-Encoding', 'gzip')
-  else if (object.contentLength !== undefined) response.setHeader('Content-Length', String(object.contentLength))
+  if (gzip) {
+    response.setHeader('Content-Encoding', 'gzip')
+    if (storedGzip && object.contentLength !== undefined) response.setHeader('Content-Length', String(object.contentLength))
+  } else if (!storedGzip && object.contentLength !== undefined) {
+    response.setHeader('Content-Length', String(object.contentLength))
+  }
   if (object.etag) response.setHeader('ETag', object.etag)
   if (object.lastModified) response.setHeader('Last-Modified', object.lastModified.toUTCString())
   if (headOnly) {
@@ -339,8 +355,40 @@ async function tryServeBucketFile(response, relativePath, { cacheControl, headOn
     return true
   }
 
-  await pipeBody(object.body, response, { gzip })
+  await pipeBody(object.body, response, { gzip: gzip && !storedGzip, gunzip: storedGzip && !gzip })
   return true
+}
+
+function sendBucketHead(response, relativePath, object, { cacheControl, requestHeaders }) {
+  const contentType = object.contentType ?? contentTypeForPath(relativePath)
+  const compressible = isCompressibleContentType(contentType)
+  if (isFreshRequest(requestHeaders, object.etag, object.lastModified)) {
+    sendNotModified(response, {
+      cacheControl,
+      contentType,
+      etag: object.etag,
+      lastModified: object.lastModified,
+      varyAcceptEncoding: compressible,
+    })
+    return
+  }
+
+  const storedGzip = object.contentEncoding === 'gzip'
+  const gzip = storedGzip && gzipEnabled && acceptsGzip(requestHeaders?.['accept-encoding'])
+  response.statusCode = 200
+  response.setHeader('Content-Type', contentType)
+  response.setHeader('Cache-Control', cacheControl)
+  if (compressible) response.setHeader('Vary', 'Accept-Encoding')
+  if (gzip) response.setHeader('Content-Encoding', 'gzip')
+  const contentLength = gzip
+    ? object.contentLength
+    : storedGzip
+      ? positiveIntegerOrDefault(object.metadata?.['semantic-bytes'], undefined)
+      : object.contentLength
+  if (contentLength !== undefined) response.setHeader('Content-Length', String(contentLength))
+  if (object.etag) response.setHeader('ETag', object.etag)
+  if (object.lastModified) response.setHeader('Last-Modified', object.lastModified.toUTCString())
+  response.end()
 }
 
 async function tryServeFile(response, rootDir, relativePath, { cacheControl, headOnly, requestHeaders }) {
@@ -418,74 +466,32 @@ function safeRequestPath(relativePath) {
   return relativePath
 }
 
-function runRefresh(reason) {
-  if (refreshInFlight) return refreshInFlight
-
-  lastRefresh = {
-    status: 'running',
-    startedAt: new Date().toISOString(),
-    finishedAt: null,
-    reason,
-    exitCode: null,
-    error: null,
-    details: null,
-  }
-
-  refreshInFlight = new Promise((resolveRefresh) => {
-    const child = spawn(process.execPath, [refreshScript], {
-      env: process.env,
-      stdio: 'inherit',
-    })
-
-    child.on('error', (error) => {
-      lastRefresh = {
-        ...lastRefresh,
-        status: 'error',
-        finishedAt: new Date().toISOString(),
-        error: error.message,
-        details: null,
-      }
-      refreshInFlight = null
-      resolveRefresh()
-    })
-
-    child.on('exit', (code) => {
-      void finishRefreshExit(code, resolveRefresh)
-    })
-  })
-
-  return refreshInFlight
+function rawRequestPathname(requestTarget) {
+  const value = String(requestTarget ?? '/')
+  const queryIndex = value.indexOf('?')
+  return queryIndex === -1 ? value : value.slice(0, queryIndex)
 }
 
-async function finishRefreshExit(code, resolveRefresh) {
-  const state = code === 0 ? await readRefreshState() : null
-  const staleSource = state?.status === 'stale-source'
-  lastRefresh = {
-    ...lastRefresh,
-    status: staleSource ? 'stale-source' : code === 0 ? 'ok' : 'error',
-    finishedAt: new Date().toISOString(),
-    exitCode: code,
-    error: staleSource ? state.reason ?? null : code === 0 ? null : `refresh exited with ${code}`,
-    details: staleSource
-      ? {
-          reason: state.reason ?? null,
-          downloadStart: state.downloadStart ?? null,
-          downloadEnd: state.downloadEnd ?? null,
-          coverageStart: state.coverageStart ?? null,
-          coverageEnd: state.coverageEnd ?? null,
-        }
-      : null,
-  }
-  refreshInFlight = null
-  resolveRefresh()
+function isImmutableDataObjectPath(pathname) {
+  return /^\/data\/objects\/sha256\/[a-f0-9]{64}$/.test(pathname)
 }
 
-async function readRefreshState() {
-  try {
-    return JSON.parse(await readFile(refreshStatePath, 'utf8'))
-  } catch {
-    return null
+function isEncodedContentAddressedRequestPath(pathname) {
+  if (!pathname.includes('%')) return false
+  let decoded = pathname
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      decoded = decodeURIComponent(decoded)
+    } catch {
+      return true
+    }
+    if (decoded.includes('/objects/sha256/')) return true
   }
+  return false
+}
+
+function isContentAddressedObjectPath(relativePath) {
+  return /^objects\/sha256\/[a-f0-9]{64}$/.test(relativePath)
 }
 
 function sendJson(response, statusCode, value) {
@@ -513,13 +519,14 @@ function sendNotFound(response, { headOnly, requestHeaders }) {
   response.end(body)
 }
 
-async function pipeBody(body, response, { gzip = false } = {}) {
+async function pipeBody(body, response, { gzip = false, gunzip = false } = {}) {
   const stream = await readableBody(body)
   if (!stream) {
     response.end()
     return
   }
   if (gzip) await pipeline(stream, createGzip(), response)
+  else if (gunzip) await pipeline(stream, createGunzip(), response)
   else await pipeline(stream, response)
 }
 
@@ -568,6 +575,7 @@ function isImmutableStaticAssetPath(path) {
 
 function cacheControlForDataPath(path) {
   if (path === 'ranking-summary.json') return dataManifestCacheControl
+  if (/^objects\/sha256\/[a-f0-9]{64}$/.test(path)) return 'public, max-age=31536000, immutable'
   return dataCacheControl
 }
 
@@ -645,4 +653,9 @@ function sendNotModified(response, {
 
 function destroyBody(body) {
   if (body && typeof body.destroy === 'function') body.destroy()
+}
+
+function positiveIntegerOrDefault(value, fallback) {
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback
 }

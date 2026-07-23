@@ -1,8 +1,10 @@
+import { assertFiveMinuteRolloutGate } from './rollout-gate.mjs'
+
 const TERMINAL_STATES = new Set(['complete', 'completed'])
 const RETRY_DELAYS_MS = [15, 30, 60, 120].map((minutes) => minutes * 60_000)
 const LONG_RETRY_MS = 6 * 60 * 60_000
 
-export function emptyTriggerState(mode = 'legacy') {
+export function emptyTriggerState(mode = 'gated') {
   return {
     schemaVersion: 1,
     generation: 0,
@@ -20,7 +22,7 @@ export function emptyTriggerState(mode = 'legacy') {
   }
 }
 
-export function parseTriggerState(value, { mode = 'legacy' } = {}) {
+export function parseTriggerState(value, { mode = 'gated' } = {}) {
   if (!value || typeof value !== 'object' || value.schemaVersion !== 1) return emptyTriggerState(mode)
   return {
     ...emptyTriggerState(mode),
@@ -166,11 +168,34 @@ export function acknowledgeMatches(stateValue, reconciliations, acknowledgedAt =
   return { ...state, generation: state.generation + 1, pending, acknowledged }
 }
 
-export function shouldFetchScoredProviders(stateValue, { now = new Date(), correctionAuditDue = false, manual = false } = {}) {
+export function shouldFetchScoredProviders(stateValue, { now = new Date(), correctionAuditDue = false, manual = false, shadowIngestionEnabled = false } = {}) {
   const state = parseTriggerState(stateValue)
   if (manual) return true
-  if (state.mode !== 'gated') return false
+  if (state.mode !== 'gated' && !(state.mode === 'shadow' && shadowIngestionEnabled)) return false
   return correctionAuditDue || duePendingMatchIds(state, now).length > 0
+}
+
+export function refreshTriggerCause(stateValue, { correctionAuditDue = false, manual = false, now = new Date() } = {}) {
+  if (manual) return 'manual-force'
+  if (correctionAuditDue) return 'daily-audit'
+  const state = parseTriggerState(stateValue)
+  const due = duePendingMatchIds(state, now)
+  if (due.some((matchId) => nonNegativeInteger(state.pending[matchId]?.attempts) > 0)) return 'retry'
+  if (due.length > 0) return 'pending-match'
+  return 'unchanged-scheduled-probe'
+}
+
+export async function assertRefreshCadence({
+  intervalMinutes,
+  mode,
+  commit,
+  deploymentId,
+  receiptAuthority,
+  resolveReference,
+  now,
+} = {}) {
+  if (!Number.isFinite(intervalMinutes) || intervalMinutes > 5) return true
+  return assertFiveMinuteRolloutGate({ intervalMinutes, mode, commit, deploymentId, receiptAuthority, resolveReference, now })
 }
 
 export function retryDelayMs(attempts) {
@@ -192,7 +217,7 @@ function stringValue(value) {
 }
 
 function validMode(value) {
-  return value === 'legacy' || value === 'shadow' || value === 'gated'
+  return value === 'shadow' || value === 'gated'
 }
 
 function nonNegativeInteger(value) {

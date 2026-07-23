@@ -413,7 +413,7 @@ function manifest(overrides: Partial<PublicRankingManifest> = {}): PublicRanking
     summaryMode: 'browser-summary',
     playerDirectoryUrl: '/data/entities/players.json',
     teamDirectoryUrl: '/data/entities/teams.json',
-    teamHistoryUrl: '/data/history/team-series.json',
+    teamHistoryIndexUrl: '/data/history/team-series/index.json',
     regionHistoryUrl: '/data/history/region-series.json',
     tournamentMovementIndexUrl: '/data/history/tournament-moves/index.json',
     teamCount: 0,

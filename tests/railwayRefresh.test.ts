@@ -24,6 +24,14 @@ type RefreshWindow = {
 }
 type RefreshModule = {
   createSourceFingerprint: (manifest: unknown) => Promise<{ fingerprint: string; healthFingerprint: string }>
+  invokeFullAuditReceiptIfEligible: (
+    input: Record<string, unknown>,
+    invoke: () => Promise<unknown>,
+  ) => Promise<unknown | undefined>
+  invokeFullAuditStageIfEligible: (
+    input: Record<string, unknown>,
+    invoke: () => Promise<unknown>,
+  ) => Promise<unknown | undefined>
   manifestHasBootstrapCoverage: (manifest: unknown, bootstrapStart: string) => boolean
   refreshDataIfChanged: (rawArgs?: string[], options?: {
     run?: RefreshRun
@@ -69,17 +77,73 @@ type BucketModule = {
     config: BucketConfig
     client: BucketClient
     uploadFullSnapshot?: boolean
+    refreshTelemetry?: unknown
   }) => Promise<BucketUploadResult>
 }
 
 const refreshScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
 const bucketScriptPath: string = '../scripts/railway-bucket.mjs'
-const { createSourceFingerprint, manifestHasBootstrapCoverage, refreshDataIfChanged, refreshDateWindow } = await import(refreshScriptPath) as unknown as RefreshModule
+const {
+  createSourceFingerprint,
+  invokeFullAuditReceiptIfEligible,
+  invokeFullAuditStageIfEligible,
+  manifestHasBootstrapCoverage,
+  refreshDataIfChanged,
+  refreshDateWindow,
+} = await import(refreshScriptPath) as unknown as RefreshModule
 const { bucketKey, getBucketObject, safeObjectPath, safeRequestedObjectPath, uploadRankingArtifacts } = await import(bucketScriptPath) as unknown as BucketModule
 const isolatedRefreshEnv = {
   RANKING_BUCKET_RESTORE_RAW: 'false',
   RANKING_BUCKET_UPLOAD_ENABLED: 'false',
 }
+
+test('full-audit injected functions run only for eligible daily and manual full refreshes', async () => {
+  const common = {
+    fullSnapshotPath: '/tmp/ranking-full.json',
+    fullSnapshotDescriptor: {
+      artifactKind: 'full-ranking-artifact', schemaVersion: 23, generatedAt: '2026-07-23T00:00:00.000Z',
+      source: 'test', sources: [{ name: 'test' }], model: { version: 'model-v1', configHash: 'config-v1' },
+      sha256: 'b'.repeat(64), bytes: 100,
+    },
+    generationId: 'generation-1',
+    fencingToken: 7,
+    stateManifestAuthority: { key: 'state/manifests/manifest.json', digest: 'a'.repeat(64) },
+    rawReceiptAuthority: { receiptReference: { key: 'raw/receipts/receipt.json' }, receipt: {} },
+    promotion: {
+      completed: true,
+      etag: 'promotion-etag',
+      generationId: 'generation-1',
+      fencingToken: 7,
+    },
+  }
+  const cases = [
+    { cause: 'daily-audit', result: 'publish-full', eligible: true },
+    { cause: 'manual-force', result: 'publish-full', eligible: true },
+    { cause: 'pending-match', result: 'publish-full', eligible: false },
+    { cause: 'daily-audit', result: 'publish-incremental', eligible: false },
+    { cause: 'daily-audit', result: 'no-change', eligible: false },
+    { cause: 'daily-audit', result: 'failed', eligible: false },
+  ] as const
+
+  for (const refreshCase of cases) {
+    let stageCalls = 0
+    let receiptCalls = 0
+    const input = { ...common, ...refreshCase }
+    const stagedAudit = await invokeFullAuditStageIfEligible(input, async () => {
+      stageCalls += 1
+      return { reference: { key: 'audit/objects/snapshot.json.gz' } }
+    })
+    await invokeFullAuditReceiptIfEligible({
+      ...input,
+      stagedAudit: stagedAudit ?? { reference: { key: 'audit/objects/snapshot.json.gz' } },
+    }, async () => {
+      receiptCalls += 1
+    })
+
+    assert.equal(stageCalls, refreshCase.eligible ? 1 : 0, `${refreshCase.cause}/${refreshCase.result} stage`)
+    assert.equal(receiptCalls, refreshCase.eligible ? 1 : 0, `${refreshCase.cause}/${refreshCase.result} receipt`)
+  }
+})
 
 test('source fingerprint ignores volatile fetch timestamps', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-fingerprint-'))
@@ -294,6 +358,10 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
     assert.equal(crunchCount, 2)
     assert.equal(outageState.fingerprint, third.fingerprint)
     assert.equal(unchangedState.status, 'unchanged')
+    assert.equal(unchangedState.lastRun.result, 'unchanged')
+    assert.equal(unchangedState.lastRun.freshness.publishedAt, null)
+    assert.equal(outageState.lastRun.result, 'stale-source')
+    assert.equal(outageState.lastRun.freshness.publishedAt, null)
     assert.deepEqual(unchangedState.warnings, ['Oracle provider health changed without changing ranking content.'])
     assert.deepEqual(unchangedState.publish, { skipped: true, reason: 'unchanged-source-data' })
     assert.match(await readFile(manifestPath, 'utf8'), new RegExp(escapeRegExp(rawDir)))
@@ -353,6 +421,11 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
   const client = {
     async send(command: { input: Record<string, unknown> }) {
       calls.push(command.input)
+      if (command.input.Key === 'rankings/active-generation.json') {
+        const error = new Error('NoSuchKey')
+        error.name = 'NoSuchKey'
+        throw error
+      }
       if (command.input.Prefix === 'rankings/raw/files/') {
         return {
           Contents: [
@@ -1026,6 +1099,30 @@ test('bucket publisher skips full audit artifact upload by default', async () =>
   }
 })
 
+test('bucket publish receipt carries refresh telemetry without changing public artifacts', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-receipt-metrics-'))
+  const publicDataDir = join(tempDir, 'public-data')
+  const sent: Array<{ input: { Key: string; Body?: unknown } }> = []
+  const client = {
+    async send(command: { input: { Key: string; Body?: unknown } }) {
+      sent.push({ input: command.input })
+      return {}
+    },
+  }
+  const refreshTelemetry = { schemaVersion: 1, runId: 'refresh-run', stages: [{ name: 'probe', durationMs: 4 }] }
+  try {
+    await mkdir(publicDataDir, { recursive: true })
+    await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+    await uploadRankingArtifacts({ publicDataDir, config: bucketConfig(), client, refreshTelemetry })
+    const publicBody = sent.find((entry) => entry.input.Key === 'rankings/data/ranking-summary.json')?.input.Body
+    const receiptBody = sent.find((entry) => entry.input.Key === 'rankings/latest-publish.json')?.input.Body
+    assert.equal(await bodyText(publicBody), '{}\n')
+    assert.deepEqual(JSON.parse(String(receiptBody)).refreshTelemetry, refreshTelemetry)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('bucket publisher can opt in to full audit artifact upload', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-full-bucket-'))
   const publicDataDir = join(tempDir, 'public-data')
@@ -1275,4 +1372,13 @@ function bucketConfig() {
     prefix: 'rankings',
     forcePathStyle: false,
   }
+}
+
+async function bodyText(value: unknown) {
+  if (typeof value === 'string') return value
+  const chunks: Buffer[] = []
+  for await (const chunk of value as AsyncIterable<Buffer | string>) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks).toString('utf8')
 }

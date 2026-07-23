@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.rollout-evidence/
 
 # Local data inputs/caches. Fetch/update into data/raw locally, but do not
 # commit provider downloads; commit only the manifest that documents inputs.
@@ -65,3 +66,5 @@ public/data/**/*.tmp
 *.njsproj
 *.sln
 *.sw?
+
+/lol-ranking-dev-current-branch.png

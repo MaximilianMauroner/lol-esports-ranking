@@ -1,3 +1,5 @@
+import { createProviderFetchTelemetry, fetchWithRetry } from './provider-fetch-retry.mjs'
+
 const PUBLIC_API_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
 const DEFAULT_BASE_URL = 'https://esports-api.lolesports.com/persisted/gw'
 
@@ -10,12 +12,15 @@ export async function fetchScheduleProbe({
   recoveryHours = 48,
   maxOlderPages = 16,
   requestTimeoutMs = 15_000,
+  retryOptions = {},
 } = {}) {
   const checkedAt = new Date(now).toISOString()
   const targetWatermark = watermark
     ? new Date(watermark).toISOString()
     : new Date(new Date(now).getTime() - recoveryHours * 60 * 60_000).toISOString()
   const pages = []
+  const retryTelemetry = retryOptions.telemetry ?? createProviderFetchTelemetry()
+  const requestRetryOptions = { ...retryOptions, telemetry: retryTelemetry }
   let token
   let reachedWatermark = false
 
@@ -26,6 +31,7 @@ export async function fetchScheduleProbe({
       locale,
       pageToken: token,
       requestTimeoutMs,
+      retryOptions: requestRetryOptions,
     })
     const schedule = response?.data?.schedule ?? {}
     const events = Array.isArray(schedule.events) ? schedule.events : []
@@ -55,6 +61,7 @@ export async function fetchScheduleProbe({
         locale,
         id: candidate.matchId,
         requestTimeoutMs,
+        retryOptions: requestRetryOptions,
       })
       const detail = response?.data?.event
       if (detail) details.set(candidate.matchId, detail)
@@ -75,6 +82,8 @@ export async function fetchScheduleProbe({
     coverageEnd: times.at(-1) ?? null,
     coverageComplete: reachedWatermark,
     pageCount: pages.length,
+    requestCount: retryTelemetry?.requests ?? null,
+    retryCount: retryTelemetry?.retries?.length ?? null,
     events,
   }
 }
@@ -94,18 +103,18 @@ export function normalizeScheduleEvent(value) {
   }
 }
 
-async function persistedJson(path, { fetcher, baseUrl, locale, pageToken, id, requestTimeoutMs }) {
+async function persistedJson(path, { fetcher, baseUrl, locale, pageToken, id, requestTimeoutMs, retryOptions }) {
   const url = new URL(`${baseUrl}/${path}`)
   url.searchParams.set('hl', locale)
   if (pageToken) url.searchParams.set('pageToken', pageToken)
   if (id) url.searchParams.set('id', id)
-  const response = await fetcher(url, {
+  const response = await fetchWithRetry(url, {
     headers: {
       'x-api-key': PUBLIC_API_KEY,
       'user-agent': 'lol-esports-power-index-trigger/1.0 (unsupported reference probe)',
     },
     signal: AbortSignal.timeout(requestTimeoutMs),
-  })
+  }, { fetcher, ...retryOptions })
   if (!response.ok) {
     const retryAfter = response.headers?.get?.('retry-after')
     throw new Error(`HTTP ${response.status} from ${path}${retryAfter ? `; retry-after=${retryAfter}` : ''}`)

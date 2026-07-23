@@ -4,7 +4,6 @@ import type {
   PublicRankingManifest,
   PublicRegionHistoryDirectory,
   PublicRegionHistoryScope,
-  PublicTeamHistoryDirectory,
   PublicTeamHistoryIndex,
   PublicTeamHistoryShard,
   PublicTournamentMovementIndex,
@@ -19,7 +18,6 @@ import type {
 import {
   parsePublicPlayerDirectory,
   parsePublicRegionHistory,
-  parsePublicTeamHistory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
   parsePublicTournamentMovementIndex,
@@ -39,6 +37,11 @@ import {
 } from '../lib/publicArtifacts/resolver'
 import { tournamentEntriesForScope, type TournamentInstanceId } from '../lib/internationalTournaments'
 import { createPublicRankingManifestLoader } from '../lib/publicArtifacts/manifestLoader'
+import {
+  assertGenerationMapping,
+  fetchPublicArtifact,
+  PublicArtifactRequestError,
+} from '../lib/publicArtifacts/artifactIdentity'
 
 export type PublicArtifactState<T> =
   | { status: 'idle' }
@@ -47,7 +50,7 @@ export type PublicArtifactState<T> =
   | { status: 'missing'; message: string }
   | { status: 'error'; message: string }
 
-export type TeamHistoryArtifact = PublicTeamHistoryDirectory | PublicTeamHistoryShard
+export type TeamHistoryArtifact = PublicTeamHistoryShard
 export type TeamHistoryArtifactState = PublicArtifactState<TeamHistoryArtifact>
 export type PlayerDirectoryState = PublicArtifactState<PublicPlayerDirectory>
 export type RegionHistoryScopeState = PublicArtifactState<PublicRegionHistoryScope>
@@ -59,7 +62,7 @@ export type MatchHistoryState = PublicArtifactState<{
   pages: Record<number, MatchHistoryPageState>
 }>
 
-type TeamHistoryRoot = PublicTeamHistoryDirectory | PublicTeamHistoryIndex
+type TeamHistoryRoot = PublicTeamHistoryIndex
 type PublicArtifactLoadOptions = {
   initialManifest?: PublicRankingManifest
   initialManifestError?: string
@@ -178,20 +181,20 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
 
   useEffect(() => {
     if (!data || !loadPlayers) return
+    const manifest = data
     const controller = new AbortController()
     const url = resolveArtifactUrl(data.playerDirectoryUrl ?? PLAYERS_URL, DATA_URL)
     setPlayersState({ status: 'loading' })
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) {
-          setPlayersState({ status: response.status === 404 ? 'missing' : 'error', message: `Player artifact failed with ${response.status}` })
-          return
-        }
-        setPlayersState({ status: 'ready', data: parsePublicPlayerDirectory(await response.json()) })
+        const players = await fetchPublicArtifact(manifest, url, DATA_URL, parsePublicPlayerDirectory, { signal: controller.signal })
+        setPlayersState({ status: 'ready', data: players })
       } catch (error) {
         if (isAbortError(error)) return
-        setPlayersState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load players' })
+        setPlayersState({
+          status: requestStatus(error) === 404 ? 'missing' : 'error',
+          message: error instanceof Error ? error.message : 'Unable to load players',
+        })
       }
     }
     void load()
@@ -200,26 +203,24 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
 
   useEffect(() => {
     if (!data || !loadTeamHistory) return
+    const manifest = data
     const controller = new AbortController()
-    const url = resolveArtifactUrl(data.teamHistoryIndexUrl ?? data.teamHistoryUrl ?? TEAM_HISTORY_INDEX_URL, DATA_URL)
+    const url = resolveArtifactUrl(data.teamHistoryIndexUrl ?? TEAM_HISTORY_INDEX_URL, DATA_URL)
     setTeamHistoryRootState({ status: 'loading' })
     setTeamHistoryCache({})
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) {
-          setTeamHistoryRootState({ status: response.status === 404 ? 'missing' : 'error', message: `Team history artifact failed with ${response.status}` })
-          return
+        const artifact = await fetchPublicArtifact(manifest, url, DATA_URL, parseTeamHistoryRoot, { signal: controller.signal })
+        if (artifact.artifactKind === 'team-history-index') {
+          Object.values(artifact.scopeIndex).forEach((entry) => assertGenerationMapping(artifact, entry.url))
         }
-        const artifact = await response.json()
-        if (artifact?.artifactKind === 'team-history') {
-          setTeamHistoryRootState({ status: 'ready', data: parsePublicTeamHistory(artifact) })
-          return
-        }
-        setTeamHistoryRootState({ status: 'ready', data: parsePublicTeamHistoryIndex(artifact) })
+        setTeamHistoryRootState({ status: 'ready', data: artifact })
       } catch (error) {
         if (isAbortError(error)) return
-        setTeamHistoryRootState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load team history' })
+        setTeamHistoryRootState({
+          status: requestStatus(error) === 404 ? 'missing' : 'error',
+          message: error instanceof Error ? error.message : 'Unable to load team history',
+        })
       }
     }
     void load()
@@ -228,20 +229,20 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
 
   useEffect(() => {
     if (!data || !loadRegionHistory) return
+    const manifest = data
     const controller = new AbortController()
     const url = resolveArtifactUrl(data.regionHistoryUrl ?? REGION_HISTORY_URL, DATA_URL)
     setRegionHistoryState({ status: 'loading' })
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) {
-          setRegionHistoryState({ status: response.status === 404 ? 'missing' : 'error', message: `Region history artifact failed with ${response.status}` })
-          return
-        }
-        setRegionHistoryState({ status: 'ready', data: parsePublicRegionHistory(await response.json()) })
+        const regionHistory = await fetchPublicArtifact(manifest, url, DATA_URL, parsePublicRegionHistory, { signal: controller.signal })
+        setRegionHistoryState({ status: 'ready', data: regionHistory })
       } catch (error) {
         if (isAbortError(error)) return
-        setRegionHistoryState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load region history' })
+        setRegionHistoryState({
+          status: requestStatus(error) === 404 ? 'missing' : 'error',
+          message: error instanceof Error ? error.message : 'Unable to load region history',
+        })
       }
     }
     void load()
@@ -258,20 +259,19 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     tournamentMovementCacheRef.current = {}
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal, cache: 'no-cache', headers: { Accept: 'application/json' } })
-        if (!response.ok) {
-          setTournamentMovementIndexState({
-            status: response.status === 404 ? 'missing' : 'error',
-            message: `Tournament movement index failed with ${response.status}`,
-          })
-          return
-        }
-        const next = parsePublicTournamentMovementIndex(await response.json())
+        const next = await fetchPublicArtifact(manifest, url, DATA_URL, parsePublicTournamentMovementIndex, {
+          signal: controller.signal,
+          cache: 'no-cache',
+        })
         validatePublicTournamentMovementIndex(next, manifest)
+        next.tournaments.forEach((entry) => assertGenerationMapping(next, entry.url))
         setTournamentMovementIndexState({ status: 'ready', data: next })
       } catch (error) {
         if (isAbortError(error)) return
-        setTournamentMovementIndexState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load tournament movement index' })
+        setTournamentMovementIndexState({
+          status: requestStatus(error) === 404 ? 'missing' : 'error',
+          message: error instanceof Error ? error.message : 'Unable to load tournament movement index',
+        })
       }
     }
     void load()
@@ -285,21 +285,20 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     setMatchHistoryIndexState({ status: 'loading' })
     async function load() {
       try {
-        const response = await fetch(resolveArtifactUrl(manifest.matchHistoryIndexUrl ?? MATCH_HISTORY_INDEX_URL, DATA_URL), {
+        const logicalUrl = manifest.matchHistoryIndexUrl ?? MATCH_HISTORY_INDEX_URL
+        const index = await fetchPublicArtifact(manifest, logicalUrl, DATA_URL, parsePublicMatchHistoryIndex, {
           signal: controller.signal,
           cache: 'no-cache',
-          headers: { Accept: 'application/json' },
         })
-        if (!response.ok) {
-          setMatchHistoryIndexState({ status: response.status === 404 ? 'missing' : 'error', message: `Match history index failed with ${response.status}` })
-          return
-        }
-        const index = parsePublicMatchHistoryIndex(await response.json())
         validateMatchHistoryRun(index, manifest)
+        Object.values(index.scopeIndex).forEach((entry) => assertGenerationMapping(index, entry.url))
         setMatchHistoryIndexState({ status: 'ready', data: index })
       } catch (error) {
         if (isAbortError(error)) return
-        setMatchHistoryIndexState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load match history index' })
+        setMatchHistoryIndexState({
+          status: requestStatus(error) === 404 ? 'missing' : 'error',
+          message: error instanceof Error ? error.message : 'Unable to load match history index',
+        })
       }
     }
     void load()
@@ -326,10 +325,9 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     matchHistoryCatalogRef.current = undefined
     async function load() {
       try {
-        const response = await fetch(resolveArtifactUrl(expected.url, DATA_URL), { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) throw new Error(`Match history failed with ${response.status}`)
-        const catalog = parsePublicMatchHistoryCatalog(await response.json())
+        const catalog = await fetchPublicArtifact(index, expected.url, DATA_URL, parsePublicMatchHistoryCatalog, { signal: controller.signal })
         validateMatchHistoryCatalog(key, expected, catalog, index)
+        catalog.pages.forEach((entry) => assertGenerationMapping(catalog, entry.url))
         matchHistoryCatalogRef.current = catalog
         setMatchHistoryCatalogState({ status: 'ready', data: catalog })
       } catch (error) {
@@ -396,12 +394,9 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     setTournamentMovementCache((current) => ({ ...current, [selectedTournamentId]: loadingEntry }))
     async function load() {
       try {
-        const response = await fetch(resolveArtifactUrl(expectedEntry.url, DATA_URL), {
+        const shard = await fetchPublicArtifact(index, expectedEntry.url, DATA_URL, parsePublicTournamentMovementShard, {
           signal: controller.signal,
-          headers: { Accept: 'application/json' },
         })
-        if (!response.ok) throw new Error(`Tournament movement failed with ${response.status}`)
-        const shard = parsePublicTournamentMovementShard(await response.json())
         validatePublicTournamentMovementShard(expectedEntry, shard, index)
         const readyEntry: TournamentMovementCacheEntry = { status: 'ready', shard }
         tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [selectedTournamentId]: readyEntry }
@@ -463,10 +458,8 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     const loadingEntry: TournamentMovementCacheEntry = { status: 'loading' }
     tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: loadingEntry }
     setTournamentMovementCache((current) => ({ ...current, [id]: loadingEntry }))
-    void fetch(resolveArtifactUrl(expected.url, DATA_URL), { headers: { Accept: 'application/json' } })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Tournament movement failed with ${response.status}`)
-        const shard = parsePublicTournamentMovementShard(await response.json())
+    void fetchPublicArtifact(index, expected.url, DATA_URL, parsePublicTournamentMovementShard)
+      .then((shard) => {
         validatePublicTournamentMovementShard(expected, shard, index)
         const readyEntry: TournamentMovementCacheEntry = { status: 'ready', shard }
         tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: readyEntry }
@@ -538,9 +531,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     setTeamHistoryCache((current) => ({ ...current, [key]: { status: 'loading' } }))
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
-        if (!response.ok) throw new Error(`Team history failed with ${response.status}`)
-        const next = parsePublicTeamHistoryShard(await response.json())
+        const next = await fetchPublicArtifact(index, url, DATA_URL, parsePublicTeamHistoryShard, { signal: controller.signal })
         validatePublicTeamHistoryShard(key, expected, next, index)
         setTeamHistoryCache((current) => ({ ...current, [key]: { status: 'ready', shard: next } }))
       } catch (error) {
@@ -602,9 +593,7 @@ async function loadMatchHistoryPage(
   pageNumber: number,
 ): Promise<MatchHistoryPageState> {
   try {
-    const response = await fetch(resolveArtifactUrl(expected.url, DATA_URL), { headers: { Accept: 'application/json' } })
-    if (!response.ok) throw new Error(`Match history page ${pageNumber} failed with ${response.status}`)
-    const page = parsePublicMatchHistoryPage(await response.json())
+    const page = await fetchPublicArtifact(catalog, expected.url, DATA_URL, parsePublicMatchHistoryPage)
     if (snapshotKey(page.filter) !== snapshotKey(catalog.filter) || page.page !== pageNumber) throw new Error(`Match history page ${pageNumber} scope mismatch`)
     if (page.seriesCount !== expected.seriesCount || page.gameCount !== expected.gameCount) throw new Error(`Match history page ${pageNumber} counts mismatch`)
     if (page.modelVersion !== catalog.modelVersion || page.modelConfigHash !== catalog.modelConfigHash || page.generatedAt !== catalog.generatedAt || page.artifactMeta.runId !== catalog.artifactMeta.runId) throw new Error(`Match history page ${pageNumber} run mismatch`)
@@ -612,6 +601,14 @@ async function loadMatchHistoryPage(
   } catch (error) {
     return { status: 'error', message: error instanceof Error ? error.message : `Unable to load match history page ${pageNumber}` }
   }
+}
+
+function parseTeamHistoryRoot(value: unknown): TeamHistoryRoot {
+  return parsePublicTeamHistoryIndex(value)
+}
+
+function requestStatus(error: unknown) {
+  return error instanceof PublicArtifactRequestError ? error.status : undefined
 }
 
 export function orderedSeasonYears(data: PublicRankingManifest) {
@@ -701,58 +698,13 @@ function resolveTeamHistoryState(
 
   const key = snapshotKey(filter)
   const root = rootState.data
-  if (root.artifactKind === 'team-history-index') {
-    const cached = cache[key]
-    if (cached?.status === 'ready') return { status: 'ready', data: cached.shard }
-    if (cached) return cached.status === 'loading' ? { status: 'loading' } : { status: cached.status, message: cached.message }
-    if (!root.scopeIndex[key]) {
-      return { status: 'missing', message: `No generated team history exists for ${scopeLabel(effectiveScope)}.` }
-    }
-    return { status: 'loading' }
+  const cached = cache[key]
+  if (cached?.status === 'ready') return { status: 'ready', data: cached.shard }
+  if (cached) return cached.status === 'loading' ? { status: 'loading' } : { status: cached.status, message: cached.message }
+  if (!root.scopeIndex[key]) {
+    return { status: 'missing', message: `No generated team history exists for ${scopeLabel(effectiveScope)}.` }
   }
-
-  const scopedSeries = root.scopedSeries?.[key]
-  const scopedIds = root.scopeIndex?.[key]
-  if (!scopedSeries && !scopedIds && filter.season === 'All' && filter.event === 'All' && filter.region === 'All') {
-    return { status: 'ready', data: root }
-  }
-  if (!scopedSeries && !scopedIds) {
-    return {
-      status: 'ready',
-      data: {
-        ...root,
-        teamCount: 0,
-        pointCount: 0,
-        series: {},
-      },
-    }
-  }
-  if (scopedIds) {
-    const scopedSeriesFromIndex = Object.fromEntries(
-      scopedIds
-        .map((id) => [id, root.series[id]] as const)
-        .filter((entry): entry is [string, NonNullable<typeof entry[1]>] => Boolean(entry[1])),
-    )
-    return {
-      status: 'ready',
-      data: {
-        ...root,
-        teamCount: Object.keys(scopedSeriesFromIndex).length,
-        pointCount: Object.values(scopedSeriesFromIndex).reduce((total, series) => total + series.points.length, 0),
-        series: scopedSeriesFromIndex,
-      },
-    }
-  }
-  const legacyScopedSeries = scopedSeries ?? {}
-  return {
-    status: 'ready',
-    data: {
-      ...root,
-      teamCount: Object.keys(legacyScopedSeries).length,
-      pointCount: Object.values(legacyScopedSeries).reduce((total, series) => total + series.points.length, 0),
-      series: legacyScopedSeries,
-    },
-  }
+  return { status: 'loading' }
 }
 
 function resolveRegionHistoryState(

@@ -3,6 +3,7 @@ import type {
   LeagueStrength,
   LeagueTierName,
   MatchRecord,
+  MatchRosterSnapshot,
   PlayerAppearanceFlag,
   PlayerAppearanceSummary,
   PlayerDiagnostics,
@@ -24,6 +25,14 @@ import {
 } from './eventWeighting'
 import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
 import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam } from './seriesResolver'
+import {
+  buildCausalContextIdentity,
+  buildCausalPrefixSummary,
+  causalInputRow,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 const initialPlayerRating = 100
 const sourcedPlayerKFactor = 8
@@ -117,10 +126,15 @@ export type PregamePlayerRatingEdge = {
   teamBCoverage: number
 }
 
-type PlayerRatingContext = {
+export type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
   leagueStrengths?: LeagueStrength[]
   eventWeightContext?: EventWeightContext
+}
+
+export type SourcedPlayerCausalContext = {
+  rosters: Record<string, PlayerProfile[]>
+  ratingContext: Required<PlayerRatingContext>
 }
 
 export function buildPlayerModel(
@@ -184,11 +198,8 @@ function buildStaticRosterPlayerModel(
         const nextRating = Number((rating + delta).toFixed(1))
         finalShares.set(player.id, playerShare)
         ratings.set(player.id, nextRating)
-        forms.set(player.id, [...(forms.get(player.id) ?? []), won ? 'W' : 'L'].slice(-5))
-        histories.set(player.id, [
-          ...(histories.get(player.id) ?? []),
-          { date: match.date, event: match.event, rating: nextRating, delta },
-        ])
+        appendPlayerForm(forms, player.id, won ? 'W' : 'L')
+        appendMapArray(histories, player.id, { date: match.date, event: match.event, rating: nextRating, delta })
       }
     }
   }
@@ -239,7 +250,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
   const state = createSourcedPlayerState(true)
   const histories = state.histories ?? new Map<string, PlayerStanding['history']>()
   const finalShares = new Map<string, PlayerShare>()
-  const latestRosterByTeam = new Map<string, PlayerProfile[]>()
+  const latestRosterByTeam = new Map<string, { team: string; roster: MatchRosterSnapshot }>()
   const leagueRatings = leagueRatingsFor(context.leagueStrengths)
   const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
   const residualControlModel = buildIndividualResidualControlModel(sortedMatches, context, leagueRatings)
@@ -251,9 +262,10 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
     applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings), context, leagueRatings, latestRosterByTeam, residualControlModel)
   }
 
-  for (const roster of latestRosterByTeam.values()) {
-    const shares = playerSharesForRoster(roster, state.ratings, state.forms)
-    for (const player of roster) {
+  for (const { team, roster } of latestRosterByTeam.values()) {
+    const profiles = roster.players.map((player) => profileForAppearance(player, team))
+    const shares = playerSharesForRoster(profiles, state.ratings, state.forms)
+    for (const player of profiles) {
       finalShares.set(player.id, shares.get(player.id) ?? fallbackPlayerShare(player))
     }
   }
@@ -384,6 +396,86 @@ export function buildPregamePlayerRatingEdges(
   return edges
 }
 
+export function sourcedPlayerCausalInputs(
+  matches: readonly MatchRecord[],
+  contextInputs: readonly CausalInputRow[] = [],
+) {
+  return [
+    ...matches.map((match) => causalInputRow(`match:${match.id}`, match.date, match)),
+    ...contextInputs,
+  ]
+}
+
+export function buildSourcedPlayerCausalSummary({
+  prefixMatches,
+  processedThroughUtcDate,
+  causalContext,
+  contextInputs = [],
+}: {
+  prefixMatches: readonly MatchRecord[]
+  processedThroughUtcDate: string
+  causalContext: SourcedPlayerCausalContext
+  contextInputs?: readonly CausalInputRow[]
+}) {
+  const contextIdentity = sourcedPlayerContextIdentity(causalContext)
+  if (!contextIdentity) throw new Error('Sourced-player causal context is incomplete')
+  return buildCausalPrefixSummary({
+    surface: 'sourced-player',
+    processedThroughUtcDate,
+    inputs: sourcedPlayerCausalInputs(prefixMatches, contextInputs),
+    contextIdentity,
+  })
+}
+
+export function reconcileSourcedPlayerCausality({
+  summary,
+  freshMatches,
+  causalContext,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: CausalPrefixSummary
+  freshMatches: readonly MatchRecord[]
+  causalContext?: SourcedPlayerCausalContext
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  if (summary.surface !== 'sourced-player') throw new Error('Expected sourced-player causal summary')
+  return reconcileCausalPrefix({
+    summary,
+    freshInputs: sourcedPlayerCausalInputs(freshMatches, contextInputs),
+    freshContextIdentity: causalContext
+      ? sourcedPlayerContextIdentity(causalContext)
+      : undefined,
+    availableProcessedThroughUtcDates,
+  })
+}
+
+function sourcedPlayerContextIdentity({ rosters, ratingContext }: SourcedPlayerCausalContext) {
+  if (!ratingContext.teams || !ratingContext.leagueStrengths || !ratingContext.eventWeightContext) return undefined
+  return buildCausalContextIdentity({
+    semanticId: 'sourced-player-context-v1',
+    serializableInputs: {
+      modelParameters: playerModelParameters,
+      fallbackPolicy: 'static-roster-player-model-v1',
+      rosters,
+      teams: ratingContext.teams,
+      leagueStrengths: ratingContext.leagueStrengths,
+      eventWeightContext: ratingContext.eventWeightContext,
+    },
+  })
+}
+
+export function recomputeSourcedPlayerCausalOutputs(
+  matches: MatchRecord[],
+  { rosters, ratingContext }: SourcedPlayerCausalContext,
+) {
+  return {
+    players: buildPlayerModel(matches, rosters, ratingContext),
+    pregameEdges: buildPregamePlayerRatingEdges(matches, ratingContext),
+  }
+}
+
 function hasObservedPlayerStats(matches: MatchRecord[]) {
   return matches.some((match) =>
     [match.teamARoster, match.teamBRoster].some((roster) => roster?.players.some((player) => player.stats)),
@@ -505,7 +597,7 @@ function applySourcedPlayerUpdates(
   preUpdateRatings: Map<string, number>,
   context: PlayerRatingContext,
   leagueRatings: Map<string, number>,
-  latestRosterByTeam?: Map<string, PlayerProfile[]>,
+  latestRosterByTeam?: Map<string, { team: string; roster: MatchRosterSnapshot }>,
   residualControlModel?: IndividualResidualControlModel,
 ) {
   const seriesByMatchId = canonicalSeriesForMatches(matches)
@@ -514,11 +606,20 @@ function applySourcedPlayerUpdates(
     if (!series) throw new Error(`Missing canonical series for player update ${match.id}`)
     for (const { side, team, opponent, roster, opponentRoster, opponentSide } of teamRosterEntries(match)) {
       if (!roster || !opponentRoster || !isCompleteSourcedMatchup(roster, opponentRoster)) continue
-      latestRosterByTeam?.set(team, roster.players.map((player) => profileForAppearance(player, team)))
+      latestRosterByTeam?.set(team, { team, roster })
       const league = leagueForSide(match, side, context)
       const opponentLeague = leagueForSide(match, opponentSide, context)
       const leagueBaseline = playerBaselineForLeague(league, leagueRatings)
       const opponentLeagueBaseline = playerBaselineForLeague(opponentLeague, leagueRatings)
+      const eventWeight = eventWeightForMatch(match, context.eventWeightContext)
+      const playerSeriesOutcome = canonicalSeriesOutcomeForTeam(series, team)
+        ?? (match.teamA === team ? series.outcomeA : match.teamB === team ? oppositeSeriesOutcome(series.outcomeA) : undefined)
+      const playerSource = Object.freeze({
+        ...sourceTraceFor(match, series),
+        ...(series.state === 'completed' ? {
+          seriesOutcome: playerSeriesOutcome,
+        } : {}),
+      })
       for (const player of roster.players) {
         if (!player.stats) continue
         const profile = profileForAppearance(player, team)
@@ -529,40 +630,28 @@ function applySourcedPlayerUpdates(
         const opponentRating = preUpdateRatings.get(opponentPlayer.id) ?? opponentLeagueBaseline
         const expected = expectedPlayerScore(rating, opponentRating)
         const performance = playerPerformance(player, opponentPlayer)
-        const eventWeight = eventWeightForMatch(match, context.eventWeightContext)
         const delta = Number((sourcedPlayerKFactor * eventWeight * (performance - expected)).toFixed(1))
         const currentRating = state.ratings.get(player.id) ?? rating
         const nextRating = Number((currentRating + delta).toFixed(1))
         const currentPublishedRating = publishedPlayerRating(currentRating, league, leagueRatings)
         const nextPublishedRating = publishedPlayerRating(nextRating, league, leagueRatings)
-        const playerSeriesOutcome = canonicalSeriesOutcomeForTeam(series, team)
-          ?? (match.teamA === team ? series.outcomeA : match.teamB === team ? oppositeSeriesOutcome(series.outcomeA) : undefined)
-        const playerSource = {
-          ...sourceTraceFor(match, series),
-          ...(series.state === 'completed' ? {
-            seriesOutcome: playerSeriesOutcome,
-          } : {}),
-        }
         state.ratings.set(player.id, nextRating)
         state.profiles.set(player.id, profile)
         state.games.set(player.id, (state.games.get(player.id) ?? 0) + 1)
-        state.forms.set(player.id, [...(state.forms.get(player.id) ?? []), player.stats.won ? 'W' : 'L'].slice(-5))
-        state.histories?.set(player.id, [
-          ...(state.histories.get(player.id) ?? []),
-          {
-            date: match.date,
-            event: match.event,
-            opponent,
-            playerTeam: team,
-            result: player.stats.won ? 'W' : 'L',
-            bestOf: series.format,
-            teamKills: side === 'A' ? match.teamAKills : match.teamBKills,
-            opponentKills: side === 'A' ? match.teamBKills : match.teamAKills,
-            source: playerSource,
-            rating: nextPublishedRating,
-            delta: Number((nextPublishedRating - currentPublishedRating).toFixed(1)),
-          },
-        ])
+        appendPlayerForm(state.forms, player.id, player.stats.won ? 'W' : 'L')
+        appendMapArray(state.histories, player.id, {
+          date: match.date,
+          event: match.event,
+          opponent,
+          playerTeam: team,
+          result: player.stats.won ? 'W' : 'L',
+          bestOf: series.format,
+          teamKills: side === 'A' ? match.teamAKills : match.teamBKills,
+          opponentKills: side === 'A' ? match.teamBKills : match.teamAKills,
+          source: playerSource,
+          rating: nextPublishedRating,
+          delta: Number((nextPublishedRating - currentPublishedRating).toFixed(1)),
+        })
         state.sources?.set(player.id, playerSource)
         recordPlayerDiagnostics(player.id, player, opponentPlayer, state)
         recordIndividualResidual(
@@ -588,6 +677,26 @@ function oppositeSeriesOutcome(outcome: 0 | 0.5 | 1) {
   if (outcome === 0) return 1 as const
   if (outcome === 1) return 0 as const
   return 0.5 as const
+}
+
+function appendMapArray<T>(map: Map<string, T[]> | undefined, key: string, value: T) {
+  if (!map) return
+  const values = map.get(key)
+  if (values) {
+    values.push(value)
+    return
+  }
+  map.set(key, [value])
+}
+
+function appendPlayerForm(forms: Map<string, string[]>, playerId: string, result: 'W' | 'L') {
+  const form = forms.get(playerId)
+  if (!form) {
+    forms.set(playerId, [result])
+    return
+  }
+  form.push(result)
+  if (form.length > 5) form.shift()
 }
 
 function recordRatedAppearance(

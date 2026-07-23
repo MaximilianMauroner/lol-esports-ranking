@@ -5,7 +5,12 @@ import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/prom
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { bucketConfigFromEnv, downloadBucketDirectory, downloadBucketObject, uploadRankingArtifacts } from './railway-bucket.mjs'
+import { bucketConfigFromEnv, createBucketClient, downloadBucketDirectory, downloadBucketObject, readActiveContentAddressedGeneration, readActiveRawSourceAuthority, uploadRankingArtifacts } from './railway-bucket.mjs'
+import { completeRefreshMetrics, createRefreshMetrics, mergeRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from './refresh-metrics.mjs'
+import { readActiveIncrementalState } from './incremental-state-storage.mjs'
+import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
+import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
+import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -26,15 +31,29 @@ const wrapperOnlyArgs = new Set([
   'state',
 ])
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await refreshDataIfChanged(process.argv.slice(2))
 }
 
 export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const args = parseArgs(rawArgs)
   const env = options.env ?? process.env
+  const wallNow = options.now ?? Date.now
+  const monotonicNow = options.monotonicNow ?? (() => performance.now())
+  const metricsPath = env.RANKING_REFRESH_METRICS_PATH
+  const runId = env.RANKING_REFRESH_RUN_ID ?? `refresh-child-${process.pid}`
+  const metrics = createRefreshMetrics({
+    runId,
+    mode: env.RANKING_REFRESH_MODE === 'shadow' ? 'shadow' : 'gated',
+    cause: env.RANKING_REFRESH_CAUSE ?? (env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match'),
+    affectedIds: parseAffectedIds(env.RANKING_REFRESH_AFFECTED_IDS),
+    affectedDate: env.RANKING_REFRESH_AFFECTED_DATE,
+    now: wallNow,
+    monotonicNow,
+  })
+  let inheritedMetrics = await readRefreshMetrics(metricsPath)
   const rawDir = resolve(stringArg(args.rawDir ?? env.RANKING_RAW_DIR ?? 'data/raw'))
-  const manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
+  let manifestPath = resolve(stringArg(args.manifest ?? `${rawDir}/manifest.json`))
   const statePath = resolve(stringArg(args.state ?? env.RANKING_REFRESH_STATE ?? `${rawDir}/refresh-state.json`))
   const output = resolve(stringArg(args.output ?? env.RANKING_DERIVED_OUTPUT ?? 'data/derived/ranking-snapshot.full.json'))
   const reconciliationOutput = resolve(stringArg(args.reconciliationOutput ?? env.RANKING_RECONCILIATION_OUTPUT ?? `${rawDir}/reconciliation.json`))
@@ -45,13 +64,19 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const bucketUploadEnabled = !booleanArg(args.skipBucketUpload) && env.RANKING_BUCKET_UPLOAD_ENABLED !== 'false'
   const bucketRequired = booleanArg(args.bucketRequired) || env.RANKING_BUCKET_REQUIRED === 'true'
   const bucketConfig = options.bucketConfig ?? bucketConfigFromEnv(env)
+  const bucketClient = options.bucketClient ?? createBucketClient(bucketConfig)
+  const stageAuditSnapshot = options.stageFullAuditSnapshot ?? stageFullAuditSnapshot
+  const publishAuditReceipt = options.publishFullAuditDayReceipt ?? publishFullAuditDayReceipt
   const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
   const stagingDir = resolve(stringArg(args.stagingDir ?? `data/.refresh-staging-${process.pid}-${Date.now()}`))
   const stagingManifestPath = resolve(stagingDir, 'manifest.json')
+  const rawWorkerDir = `${stagingDir}-raw-worker`
+  await rm(rawWorkerDir, { recursive: true, force: true })
   const extraDownloadArgs = [
     ...passThroughDownloadArgs(rawArgs),
     ...splitExtraArgs(env.RANKING_REFRESH_DOWNLOAD_ARGS),
   ]
+  const restoreStarted = monotonicNow()
   const localManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasUsableLocalRawBaseline = await manifestHasUsableSourceFiles(localManifest)
   const restoreResult = restoreRawEnabled && bucketConfig.enabled
@@ -61,9 +86,15 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         statePath,
         hasUsableLocalRawBaseline,
         config: bucketConfig,
-        client: options.bucketClient,
+        client: bucketClient,
+        rawWorkerDir,
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
+  metrics.recordStage('restore', {
+    durationMs: monotonicNow() - restoreStarted,
+    result: restoreResult.restored ? 'completed' : 'not-applicable',
+    output: { ...restoreResult, rssBytes: process.memoryUsage().rss },
+  })
   const previousManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const configuredBootstrapStart = env.RANKING_REFRESH_BOOTSTRAP_START ?? env.RANKING_REFRESH_START
   const bootstrapStart = stringArg(configuredBootstrapStart ?? '2011-01-01')
@@ -83,7 +114,20 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   await rm(stagingDir, { recursive: true, force: true })
   await mkdir(stagingDir, { recursive: true })
 
+  let refreshError
+  let canonicalMetrics
+  let terminalResult = 'completed'
+  let completedPromotionAt
+  let completedPromotionEtag
+  let publishedGenerationId
+  let publishedBucket
+  let refreshState
+  let incrementalBuild
+  let restoredIncremental
+  let rawSourceGeneration
+  let providerAvailableAt
   try {
+    const providerStarted = monotonicNow()
     await (options.run ?? runCommand)(process.execPath, [
       'scripts/download-local-data.mjs',
       '--start',
@@ -96,8 +140,24 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       stagingManifestPath,
       ...extraDownloadArgs,
     ])
+    metrics.recordProcessResource({
+      processKey: `${runId}:raw-source-subprocess`,
+      cpuSeconds: null,
+      memoryGbSeconds: null,
+      peakRssBytes: null,
+      sampleCount: 0,
+    })
+    metrics.recordStage('provider-fetch', {
+      durationMs: monotonicNow() - providerStarted,
+      output: { start, end },
+    })
+    metrics.recordWork({ broadFetches: 1 })
 
     const stagingManifest = await readJson(stagingManifestPath)
+    metrics.recordWork({
+      providerRequests: finiteOrNull(stagingManifest?.fetchTelemetry?.requests),
+      providerRetries: finiteOrNull(stagingManifest?.fetchTelemetry?.retryCount),
+    })
     const previousState = await readJsonIfExists(statePath)
     const healthFingerprint = createSourceHealthFingerprint(stagingManifest)
     if (!manifestHasCurrentMatchSourceFiles(stagingManifest)) {
@@ -112,6 +172,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         restoreResult,
         healthFingerprint,
       })
+      refreshState = state
+      terminalResult = 'stale-source'
+      canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, { result: terminalResult })
+      state.lastRun = canonicalMetrics
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; preserving existing ranking artifacts.`)
@@ -124,7 +188,12 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       }
     }
 
+    const hashingStarted = monotonicNow()
     const fingerprint = await createSourceFingerprint(stagingManifest)
+    metrics.recordStage('hashing', {
+      durationMs: monotonicNow() - hashingStarted,
+      output: { fileCount: fingerprint.files.length },
+    })
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
 
     if (!changed) {
@@ -147,6 +216,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           reason: 'unchanged-source-data',
         },
       }
+      refreshState = state
+      terminalResult = 'unchanged'
+      canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, { result: terminalResult })
+      state.lastRun = canonicalMetrics
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       console.log(`No source-data changes detected for ${start} through ${end}; skipping crunch.`)
@@ -172,6 +245,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       await rename(stagingDir, rawDir)
     }
     await writeFile(manifestPath, `${JSON.stringify(finalManifest, null, 2)}\n`)
+    metrics.recordStage('fingerprint-import', {
+      durationMs: 0,
+      output: {
+        sourceFileCount: Object.values(finalManifest.files ?? {}).flatMap((paths) => arrayValue(paths)).length,
+        changed,
+      },
+    })
 
     const state = {
       schemaVersion: 1,
@@ -199,8 +279,192 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             publicDataDir,
           },
     }
+    refreshState = state
 
-    if (!skipCrunch) {
+    const refreshMode = metrics.snapshot().mode
+    const incrementalEnabled = Boolean(env.RANKING_REFRESH_FENCING_TOKEN)
+      && (refreshMode === 'gated'
+        || (refreshMode === 'shadow' && env.RANKING_INCREMENTAL_SHADOW_ENABLED === 'true'))
+    if (!skipCrunch && incrementalEnabled && bucketConfig.enabled && bucketClient) {
+      const rawAuthorityStarted = monotonicNow()
+      const activeRaw = await readActiveRawSourceAuthority({ config: bucketConfig, client: bucketClient })
+      metrics.recordStage('raw-authority-read', {
+        durationMs: monotonicNow() - rawAuthorityStarted,
+        result: activeRaw.found ? 'completed' : 'not-applicable',
+        output: {
+          found: activeRaw.found,
+          rssBytes: process.memoryUsage().rss,
+          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+        },
+      })
+      const rawWorkerStarted = monotonicNow()
+      const rawWorker = await runRawSourceWorker({
+        action: 'prepare',
+        manifestPath,
+        rawDir,
+        importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
+        generatedAt: finalManifest.generatedAt ?? new Date().toISOString(),
+        objectDir: resolve(rawWorkerDir, 'prepared-objects'),
+        ...(activeRaw.found ? { previousReceipt: activeRaw.receipt } : {}),
+      }, rawWorkerDir)
+      rawSourceGeneration = hydrateFileBackedRawSourceGeneration(rawWorker.generation)
+      manifestPath = rawWorker.manifestPath
+      metrics.recordStage('raw-prepare', {
+        durationMs: Number(rawWorker.prepareMs) || monotonicNow() - rawWorkerStarted,
+        output: {
+          objectCount: rawSourceGeneration.objects.length,
+          rssBytes: process.memoryUsage().rss,
+          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          childMaxRssBytes: rawWorker.childMaxRssBytes,
+          childTotalMs: rawWorker.totalMs,
+        },
+      })
+      metrics.recordStage('raw-materialization', {
+        durationMs: Number(rawWorker.materializeMs) || 0,
+        output: {
+          rssBytes: process.memoryUsage().rss,
+          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          childMaxRssBytes: rawWorker.childMaxRssBytes,
+        },
+      })
+    }
+    if (!skipCrunch && incrementalEnabled) {
+      const checkpointRestoreStarted = monotonicNow()
+      if (bucketConfig.enabled && bucketClient) {
+        try {
+          const [activeState, activePublic] = await Promise.all([
+            readActiveIncrementalState({ config: bucketConfig, client: bucketClient, checkpointLimit: 1 }),
+            readActiveContentAddressedGeneration({ config: bucketConfig, client: bucketClient, verifyArtifacts: false }),
+          ])
+          if (activeState.found && activePublic.found
+            && activeState.manifest.generationId === activePublic.active.generationId) {
+            restoredIncremental = {
+              stateManifest: activeState.manifest,
+              canonicalLedger: activeState.canonicalLedger,
+              checkpoints: activeState.checkpoints,
+              publicManifest: activePublic.manifest,
+              rootArtifact: activePublic.rootArtifact,
+              artifacts: activePublic.artifacts,
+              loadArtifacts: activePublic.loadArtifacts,
+              loadCheckpoints: activeState.loadCheckpoints,
+            }
+          }
+        } catch (error) {
+          metrics.recordStage('checkpoint-validation', {
+            durationMs: 0,
+            result: 'failed',
+            output: { reason: errorMessage(error) },
+          })
+        }
+      }
+      metrics.recordStage('checkpoint-restore', {
+        durationMs: monotonicNow() - checkpointRestoreStarted,
+        result: restoredIncremental ? 'completed' : 'not-applicable',
+        output: {
+          found: Boolean(restoredIncremental),
+          candidateCount: restoredIncremental?.checkpoints.length ?? 0,
+          rssBytes: process.memoryUsage().rss,
+        },
+      })
+      const crunchStarted = monotonicNow()
+      incrementalBuild = await buildRankingIncrementally({
+        mode: metrics.snapshot().mode,
+        cause: metrics.snapshot().cause,
+        enabled: true,
+        manifestPath,
+        output,
+        publicDataDir,
+        reconciliationOutput,
+        restored: restoredIncremental,
+        diagnosticPath: resolve(rawDir, 'incremental-diagnostic.json'),
+        env,
+        ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
+      })
+      providerAvailableAt = incrementalBuild.metrics.providerAvailableAt ?? null
+      metrics.recordWork({
+        fullBuilds: incrementalBuild.action === 'publish-full' ? 1 : 0,
+        incrementalBuilds: incrementalBuild.action === 'publish-incremental' ? 1 : 0,
+      })
+      metrics.recordStage('classification', {
+        durationMs: 0,
+        output: {
+          classification: incrementalBuild.metrics.classification,
+          addedCount: incrementalBuild.metrics.addedCount,
+          changedCount: incrementalBuild.metrics.changedCount,
+          removedCount: incrementalBuild.metrics.removedCount,
+          canonicalRows: incrementalBuild.metrics.canonicalRows,
+          canonicalBytes: incrementalBuild.metrics.canonicalBytes,
+        },
+      })
+      metrics.recordStage('checkpoint-validation', {
+        durationMs: 0,
+        result: incrementalBuild.metrics.fallbackReason ? 'failed' : 'completed',
+        output: {
+          candidateCount: incrementalBuild.metrics.candidateCount,
+          rejectedCandidates: incrementalBuild.metrics.rejectedCandidates,
+          selectedBoundary: incrementalBuild.metrics.selectedBoundary,
+          fallbackReason: incrementalBuild.metrics.fallbackReason,
+        },
+      })
+      metrics.recordStage('replay', {
+        durationMs: monotonicNow() - crunchStarted,
+        result: incrementalBuild.action === 'no-change' ? 'not-applicable' : 'completed',
+        output: {
+          replayFromUtcDate: incrementalBuild.metrics.replayFromUtcDate,
+          replayedMatchCount: incrementalBuild.metrics.replayedMatchCount,
+          suffixRows: incrementalBuild.metrics.suffixRows,
+          suffixDates: incrementalBuild.metrics.suffixDates,
+          rssBytes: process.memoryUsage().rss,
+        },
+      })
+      metrics.recordStage('external-causal-recompute', {
+        durationMs: 0,
+        result: incrementalBuild.action === 'no-change' ? 'not-applicable' : 'completed',
+      })
+      for (const stage of incrementalBuild.metrics.playerLifecycleStages ?? []) {
+        metrics.recordStage(stage.name, stage)
+      }
+      metrics.recordStage('dependency-materialization', {
+        durationMs: 0,
+        result: incrementalBuild.action === 'publish-incremental' ? 'completed' : 'not-applicable',
+        output: {
+          changedPaths: incrementalBuild.metrics.changedPaths,
+          reusedPaths: incrementalBuild.metrics.reusedPaths,
+          removedPaths: incrementalBuild.metrics.removedPaths,
+          semanticBytes: incrementalBuild.metrics.semanticBytes,
+          compressedBytes: incrementalBuild.metrics.compressedBytes,
+          materializedScopeCount: incrementalBuild.metrics.materializedScopeCount,
+        },
+      })
+      metrics.recordStage('semantic-parity', {
+        durationMs: 0,
+        result: incrementalBuild.metrics.parity === null && incrementalBuild.metrics.stateParity === null
+          ? 'not-applicable'
+          : incrementalBuild.metrics.parity === true && incrementalBuild.metrics.stateParity === true ? 'completed' : 'failed',
+        output: {
+          parity: incrementalBuild.metrics.parity,
+          stateParity: incrementalBuild.metrics.stateParity,
+          checkpointParity: incrementalBuild.metrics.stateParityReport?.checkpointEqual ?? null,
+          semanticReport: incrementalBuild.metrics.semanticParityReport ?? null,
+          stateReport: incrementalBuild.metrics.stateParityReport ?? null,
+        },
+      })
+      metrics.setCheckpoint({
+        applicable: incrementalBuild.metrics.classification !== 'no-change',
+        classification: incrementalBuild.metrics.classification,
+        selectedBoundary: incrementalBuild.metrics.selectedBoundary,
+        replayFromUtcDate: incrementalBuild.metrics.replayFromUtcDate,
+        replayedMatchCount: incrementalBuild.metrics.replayedMatchCount,
+        candidateCount: incrementalBuild.metrics.candidateCount,
+        rejectedCandidates: incrementalBuild.metrics.rejectedCandidates,
+        fallbackReason: incrementalBuild.metrics.fallbackReason,
+      })
+      metrics.recordStage('crunch', {
+        durationMs: monotonicNow() - crunchStarted,
+        output: { incremental: incrementalBuild.action === 'publish-incremental', fullSnapshotWritten: incrementalBuild.metrics.fullSnapshotWritten },
+      })
+    } else if (!skipCrunch) {
+      const crunchStarted = monotonicNow()
       await (options.run ?? runCommand)('pnpm', [
         'exec',
         'tsx',
@@ -214,9 +478,29 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         '--reconciliation-output',
         reconciliationOutput,
       ])
+      metrics.recordStage('crunch', { durationMs: monotonicNow() - crunchStarted })
+      metrics.recordWork({ fullBuilds: 1, incrementalBuilds: 0 })
+    }
+
+    inheritedMetrics = await readRefreshMetrics(metricsPath) ?? inheritedMetrics
+    for (const stage of inheritedMetrics?.stages ?? []) {
+      if (stage.result !== 'not-applicable') metrics.recordStage(stage.name, stage)
     }
 
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+
+    if (incrementalBuild?.action === 'no-change') {
+      state.crunch = { skipped: true, reason: 'canonical-ledger-unchanged' }
+      state.publish = { skipped: true, reason: 'canonical-ledger-unchanged' }
+      terminalResult = 'unchanged'
+      canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, {
+        result: terminalResult,
+        freshness: { providerAvailableAt, publishedAt: null },
+      })
+      state.lastRun = canonicalMetrics
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+      return { changed: false, status: 'canonical-no-change', fingerprint: fingerprint.fingerprint }
+    }
 
     if (!skipCrunch && bucketUploadEnabled) {
       if (!bucketConfig.enabled && bucketRequired) {
@@ -232,22 +516,169 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           console.warn(`Railway bucket upload skipped; missing ${bucketConfig.missing.join(', ')}.`)
         }
       } else {
-        const browserManifest = await readJson(resolve(publicDataDir, 'ranking-summary.json'))
+        const browserManifest = incrementalBuild?.rootManifest
+          ?? incrementalBuild?.build?.publicPlan.manifest
+          ?? incrementalBuild?.patch?.changedArtifacts?.find((artifact) => artifact.logicalPath === '/data/ranking-summary.json')?.value
+          ?? await readJson(resolve(publicDataDir, 'ranking-summary.json'))
         const generationId = env.RANKING_REFRESH_FENCING_TOKEN
           ? stringArg(browserManifest?.artifactMeta?.runId)
           : undefined
-        const bucketPublish = await uploadRankingArtifacts({
-          publicDataDir,
-          rawDir,
+        publishedGenerationId = generationId
+        if (rawSourceGeneration && generationId) rawSourceGeneration = finalizeRawSourceGeneration(rawSourceGeneration, generationId)
+        let incrementalState
+        if (incrementalBuild && generationId && bucketClient) {
+          const stateStarted = monotonicNow()
+          incrementalState = await persistIncrementalStateBuild({
+            state: incrementalBuild.state,
+            generationId,
+            baseGenerationId: restoredIncremental?.stateManifest.generationId ?? null,
+            baseRunId: restoredIncremental?.stateManifest.runId ?? null,
+            config: bucketConfig,
+            client: bucketClient,
+          })
+          metrics.recordStage('state-persistence', {
+            durationMs: monotonicNow() - stateStarted,
+            output: {
+              uploadedBytes: incrementalState.uploadedBytes,
+              objectCount: incrementalState.objectCount,
+              ledgerBytes: incrementalState.ledgerBytes,
+              ledgerCompressedBytes: incrementalState.ledgerCompressedBytes,
+              checkpointCount: incrementalState.checkpointCount,
+              rssBytes: process.memoryUsage().rss,
+            },
+          })
+          releasePersistedIncrementalInputs(incrementalBuild, restoredIncremental)
+          restoredIncremental = undefined
+        }
+        const fencingToken = env.RANKING_REFRESH_FENCING_TOKEN
+          ? Number(env.RANKING_REFRESH_FENCING_TOKEN)
+          : undefined
+        const leaseAuthority = env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
+          ? {
+              key: env.RANKING_REFRESH_LEASE_KEY ?? 'ops/refresh-lease.json',
+              lease: {
+                owner: env.RANKING_REFRESH_LEASE_OWNER,
+                fencingToken,
+              },
+              promotionEtag: env.RANKING_REFRESH_PROMOTION_ETAG,
+            }
+          : undefined
+        const auditCause = env.RANKING_REFRESH_CAUSE ?? (env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match')
+        const stagedAudit = await invokeFullAuditStageIfEligible({
+          cause: auditCause,
+          result: incrementalBuild?.action,
           fullSnapshotPath: output,
+          fullSnapshotDescriptor: incrementalBuild?.build?.fullSnapshotDescriptor,
+          generationId,
+          fencingToken,
+          stateManifestAuthority: incrementalState?.authority,
+          rawReceiptAuthority: rawSourceGeneration,
+        }, async () => {
+          const auditStarted = monotonicNow()
+          const staged = await stageAuditSnapshot({
+            fullSnapshotPath: output,
+            snapshotDescriptor: incrementalBuild.build.fullSnapshotDescriptor,
+            generationId,
+            fencingToken,
+            stateManifestAuthority: incrementalState.authority,
+            rawReceiptAuthority: rawSourceGeneration,
+            publicManifest: browserManifest,
+            config: bucketConfig,
+            client: bucketClient,
+          })
+          metrics.recordStage('full-audit-object', {
+            durationMs: monotonicNow() - auditStarted,
+            output: {
+              status: staged.status,
+              key: staged.reference?.key ?? staged.key,
+              bytes: staged.reference?.bytes ?? staged.bytes,
+              compressedBytes: staged.reference?.compressedBytes ?? staged.compressedBytes,
+              rssBytes: process.memoryUsage().rss,
+            },
+          })
+          return staged
+        })
+        const bucketPublish = await uploadRankingArtifacts({
+          publicDataDir: incrementalBuild?.build?.publicDataDir ?? publicDataDir,
+          rawDir,
+          fullSnapshotPath: incrementalBuild?.action === 'publish-incremental' ? undefined : output,
           manifestPath,
           statePath,
           config: bucketConfig,
-          client: options.bucketClient,
+          client: bucketClient,
           uploadFullSnapshot: env.RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT === 'true',
+          ...(incrementalBuild?.action === 'publish-incremental' ? { publicArtifactPatch: incrementalBuild.patch } : {}),
+          ...(incrementalState ? { stateManifestAuthority: incrementalState.authority } : {}),
+          ...(rawSourceGeneration ? { rawSourceGeneration } : {}),
           generationId,
-          fencingToken: env.RANKING_REFRESH_FENCING_TOKEN ? Number(env.RANKING_REFRESH_FENCING_TOKEN) : undefined,
-          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped }) => {
+          fencingToken,
+          leaseAuthority,
+          refreshTelemetry: async (promotion) => {
+            await invokeFullAuditReceiptIfEligible({
+              cause: auditCause,
+              result: incrementalBuild?.action,
+              fullSnapshotPath: output,
+              fullSnapshotDescriptor: incrementalBuild?.build?.fullSnapshotDescriptor,
+              generationId,
+              fencingToken,
+              promotion,
+              stateManifestAuthority: incrementalState?.authority,
+              rawReceiptAuthority: rawSourceGeneration,
+              stagedAudit,
+            }, async () => {
+              const auditStarted = monotonicNow()
+              const auditReceipt = await publishAuditReceipt({
+                cause: auditCause,
+                generationId,
+                fencingToken,
+                promotion,
+                publicManifest: browserManifest,
+                stateManifestAuthority: incrementalState.authority,
+                rawReceiptAuthority: rawSourceGeneration,
+                stagedSnapshot: stagedAudit,
+                leaseAuthority,
+                config: bucketConfig,
+                client: bucketClient,
+              })
+              metrics.recordStage('full-audit-receipt', {
+                durationMs: monotonicNow() - auditStarted,
+                output: { status: auditReceipt.status, key: auditReceipt.key, bytes: auditReceipt.bytes, rssBytes: process.memoryUsage().rss },
+              })
+              return auditReceipt
+            })
+            const own = completeRefreshMetrics(metrics.snapshot({
+              result: promotion?.completed ? 'completed' : 'no-promotion',
+              freshness: { providerAvailableAt, publishedAt: promotion?.promotedAt ?? null },
+            }))
+            const aggregated = inheritedMetrics ? mergeRefreshMetrics(inheritedMetrics, own) : own
+            return promotion?.etag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN
+              ? {
+                  ...aggregated,
+                  coordination: {
+                    owner: env.RANKING_REFRESH_LEASE_OWNER,
+                    fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+                    etag: promotion.etag,
+                  },
+                }
+              : aggregated
+          },
+          monotonicNow,
+          onStage: (name, stage) => {
+            metrics.recordStage(name, {
+              ...stage,
+              output: { ...(stage.output ?? {}), rssBytes: process.memoryUsage().rss },
+            })
+            if (name === 'artifact-upload' || name === 'raw-synchronization') {
+              metrics.recordWork({
+                uploads: Number.isFinite(stage.output?.uploadedCount) ? stage.output.uploadedCount : null,
+                objectsWritten: Number.isFinite(stage.output?.uploadedCount) ? stage.output.uploadedCount : null,
+                bytesWritten: Number.isFinite(stage.output?.uploadedBytes) ? stage.output.uploadedBytes : null,
+              })
+            }
+            if (name === 'promotion' && stage.output?.promotedAt) completedPromotionAt = stage.output.promotedAt
+            if (name === 'promotion' && stage.output?.etag) completedPromotionEtag = stage.output.etag
+          },
+          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped, refreshTelemetry, storage }) => {
             state.bucket = {
               enabled: true,
               bucket,
@@ -258,10 +689,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               unchangedCount,
               unchangedBytes,
               skipped,
+              ...(storage ? { storage } : {}),
             }
+            state.lastRun = refreshTelemetry
             return state
           },
         })
+        publishedBucket = bucketPublish
         state.bucket = {
           enabled: true,
           bucket: bucketPublish.bucket,
@@ -272,7 +706,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           unchangedCount: bucketPublish.unchanged.length,
           unchangedBytes: bucketPublish.unchangedBytes,
           skipped: bucketPublish.skipped,
+          ...(bucketPublish.storage ? { storage: bucketPublish.storage } : {}),
         }
+        state.lastRun = bucketPublish.refreshTelemetry
+        canonicalMetrics = bucketPublish.refreshTelemetry
         const optionalSkippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
         console.log(`Uploaded ${bucketPublish.uploadedCount} ranking artifact(s) (${bucketPublish.uploadedBytes} bytes); reused ${bucketPublish.unchangedCount} unchanged artifact(s) (${bucketPublish.unchangedBytes} bytes) in Railway bucket prefix ${bucketPublish.prefix || '(root)'}${optionalSkippedMessage}.`)
       }
@@ -283,6 +720,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       }
     }
 
+    state.lastRun ??= completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
     console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
     return {
@@ -290,10 +728,104 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       fingerprint: fingerprint.fingerprint,
       healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
+      ...(publishedGenerationId ? { generationId: publishedGenerationId } : {}),
+      ...(incrementalBuild ? { incrementalMetrics: incrementalBuild.metrics } : {}),
+      ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
+      ...(publishedBucket ? { bucketPublish: publishedBucket } : {}),
     }
+  } catch (error) {
+    refreshError = error
+    metrics.recordProcessResource({
+      processKey: `${runId}:raw-source-subprocess`,
+      cpuSeconds: error?.telemetry?.cpuSeconds ?? null,
+      memoryGbSeconds: error?.telemetry?.memoryGbSeconds ?? null,
+      peakRssBytes: error?.telemetry?.peakRssBytes ?? null,
+      sampleCount: error?.telemetry?.sampleCount ?? 0,
+    })
+    const failedManifest = await readJsonIfExists(stagingManifestPath)
+    if (failedManifest?.fetchTelemetry) {
+      metrics.recordWork({
+        providerRequests: finiteOrNull(failedManifest.fetchTelemetry.requests),
+        providerRetries: finiteOrNull(failedManifest.fetchTelemetry.retryCount),
+      })
+    }
+    canonicalMetrics = aggregateMetrics(inheritedMetrics, metrics, {
+      result: 'failed',
+      error,
+      freshness: { providerAvailableAt, publishedAt: completedPromotionAt ?? null },
+    })
+    if (completedPromotionEtag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN) {
+      canonicalMetrics = {
+        ...canonicalMetrics,
+        coordination: {
+          owner: env.RANKING_REFRESH_LEASE_OWNER,
+          fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+          etag: completedPromotionEtag,
+        },
+      }
+    }
+    try {
+      const state = refreshState ?? await readJsonIfExists(statePath) ?? { schemaVersion: 1, status: 'failed' }
+      state.lastRun = canonicalMetrics
+      await mkdir(dirname(statePath), { recursive: true })
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+    } catch (stateError) {
+      console.warn(`Unable to persist failed refresh telemetry: ${errorMessage(stateError)}`)
+    }
+    throw error
   } finally {
+    if (metricsPath) {
+      if (canonicalMetrics) {
+        await writeRefreshMetrics(metricsPath, canonicalMetrics)
+      } else {
+        let own = completeRefreshMetrics(metrics.snapshot({
+          result: refreshError ? 'failed' : terminalResult,
+          error: refreshError,
+          freshness: { providerAvailableAt, publishedAt: completedPromotionAt ?? null },
+        }))
+        if (completedPromotionEtag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN) {
+          own = {
+            ...own,
+            coordination: {
+              owner: env.RANKING_REFRESH_LEASE_OWNER,
+              fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+              etag: completedPromotionEtag,
+            },
+          }
+        }
+        const existing = await readRefreshMetrics(metricsPath)
+        await writeRefreshMetrics(metricsPath, existing ? mergeRefreshMetrics(existing, own) : own)
+      }
+    }
+    const temporaryPublicDir = incrementalBuild?.build?.publicDataDir
+    if (temporaryPublicDir && temporaryPublicDir !== publicDataDir) {
+      await rm(temporaryPublicDir, { recursive: true, force: true })
+    }
     await rm(stagingDir, { recursive: true, force: true })
+    await rm(rawWorkerDir, { recursive: true, force: true })
   }
+}
+
+export async function invokeFullAuditStageIfEligible(input, invoke) {
+  const raw = input.rawReceiptAuthority
+  const eligible = (input.cause === 'daily-audit' || input.cause === 'manual-force')
+    && input.result === 'publish-full'
+    && typeof input.fullSnapshotPath === 'string'
+    && Boolean(input.fullSnapshotDescriptor)
+    && typeof input.generationId === 'string'
+    && Number.isSafeInteger(input.fencingToken)
+    && Boolean(input.stateManifestAuthority?.key && input.stateManifestAuthority?.digest)
+    && Boolean((raw?.reference ?? raw?.receiptReference)?.key && raw?.receipt)
+  return eligible ? invoke() : undefined
+}
+
+export async function invokeFullAuditReceiptIfEligible(input, invoke) {
+  return input.stagedAudit && isFullAuditEligible(input) ? invoke() : undefined
+}
+
+function aggregateMetrics(inherited, metrics, options) {
+  const own = completeRefreshMetrics(metrics.snapshot(options))
+  return inherited ? completeRefreshMetrics(mergeRefreshMetrics(inherited, own)) : own
 }
 
 export async function createSourceFingerprint(manifest) {
@@ -369,11 +901,33 @@ export function refreshDateWindow({
   }
 }
 
-async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config, client }) {
+async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, statePath, hasUsableLocalRawBaseline, config, client, rawWorkerDir }) {
   if (hasUsableLocalRawBaseline) {
     return {
       restored: false,
       reason: 'local-baseline-present',
+    }
+  }
+
+  const activeRaw = await readActiveRawSourceAuthority({ config, client })
+  if (activeRaw.found) {
+    if (typeof activeRaw.streamObjectToFile !== 'function') throw new Error('Active raw authority cannot stream objects for isolated restore')
+    const objectFiles = await stageRawAuthorityObjectFiles(activeRaw, resolve(rawWorkerDir, 'restore-objects'))
+    const materialized = await runRawSourceWorker({
+      action: 'restore',
+      receipt: activeRaw.receipt,
+      objectFiles,
+      destinationDir: rawDir,
+      generatedAt: new Date().toISOString(),
+    }, rawWorkerDir)
+    return {
+      restored: true,
+      mode: activeRaw.receipt.storageMode,
+      generationId: activeRaw.receipt.generationId,
+      manifestRestored: materialized.manifestPath === manifestPath,
+      sourceReceiptDigest: activeRaw.receipt.sourceReceiptDigest,
+      childMaxRssBytes: materialized.childMaxRssBytes,
+      childDurationMs: materialized.restoreMs,
     }
   }
 
@@ -644,6 +1198,57 @@ function runCommand(command, commandArgs) {
   })
 }
 
+async function stageRawAuthorityObjectFiles(authority, destinationDir) {
+  const references = [
+    ...authority.receipt.oracle.flatMap((source) => [source.baseline, ...source.deltas]),
+    ...authority.receipt.leaguepedia.map((source) => source.object),
+    ...authority.receipt.lolesports.map((source) => source.object),
+  ]
+  const unique = new Map(references.map((reference) => [reference.key, reference]))
+  await rm(destinationDir, { recursive: true, force: true })
+  await mkdir(destinationDir, { recursive: true })
+  const objectFiles = {}
+  for (const [key, reference] of unique) {
+    const path = resolve(destinationDir, reference.sha256)
+    await authority.streamObjectToFile(reference, path)
+    objectFiles[key] = path
+  }
+  return objectFiles
+}
+
+async function runRawSourceWorker(input, workerDir) {
+  await mkdir(workerDir, { recursive: true })
+  const nonce = `${input.action}-${process.pid}-${Date.now()}`
+  const inputPath = resolve(workerDir, `${nonce}.input.json`)
+  const outputPath = resolve(workerDir, `${nonce}.output.json`)
+  await writeFile(inputPath, `${JSON.stringify(input)}\n`, { flag: 'wx' })
+  const stderr = []
+  try {
+    await new Promise((resolveRun, rejectRun) => {
+      const child = spawn(process.execPath, [
+        ...process.execArgv,
+        resolve('scripts/raw-source-worker.mjs'),
+        inputPath,
+        outputPath,
+      ], { stdio: ['ignore', 'ignore', 'pipe'] })
+      child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
+      child.on('error', rejectRun)
+      child.on('exit', (code) => {
+        if (code === 0) resolveRun()
+        else rejectRun(new Error(`Raw source worker ${input.action} exited with ${code}: ${Buffer.concat(stderr).toString('utf8')}`))
+      })
+    })
+    const output = await readJson(outputPath)
+    if (output?.action !== input.action || !Number.isSafeInteger(output.childMaxRssBytes) || output.childMaxRssBytes <= 0) {
+      throw new Error(`Raw source worker ${input.action} produced an invalid descriptor`)
+    }
+    return output
+  } finally {
+    await rm(inputPath, { force: true })
+    await rm(outputPath, { force: true })
+  }
+}
+
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
@@ -741,6 +1346,25 @@ function maxDate(left, right) {
 
 function arrayValue(value) {
   return Array.isArray(value) ? value : []
+}
+
+function finiteOrNull(value) {
+  return Number.isFinite(value) ? Number(value) : null
+}
+
+function parseAffectedIds(value) {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed.map(String)
+  } catch {
+    // Accept a compact comma-separated fallback for manual runs.
+  }
+  return String(value).split(',').map((entry) => entry.trim()).filter(Boolean)
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function uniqueValues(values) {

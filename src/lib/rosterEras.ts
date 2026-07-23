@@ -1,5 +1,13 @@
 import type { DeservedStandingRosterEra, MatchRecord, MatchRosterSnapshot, Role, Side } from '../types'
 import { clamp } from './ratingCalculations'
+import {
+  buildCausalContextIdentity,
+  buildCausalPrefixSummary,
+  causalInputRow,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 export const dssRosterEraModelParameters = {
   retainedSynergyWeights: {
@@ -250,6 +258,143 @@ export function buildDssRosterEras(
     ...era,
     uncertainty: options.uncertaintyFor?.(eraWithoutUncertainty(era)) ?? era.uncertainty,
   }))
+}
+
+export type DssRosterEraCausalSummary = {
+  prefix: CausalPrefixSummary
+  openEras: { team: string; startDate: string; signature: string }[]
+}
+
+export type DssRosterEraCallbackSemanticIds = Partial<Record<
+  | 'coachIdFor'
+  | 'resumeLedgerIdsFor'
+  | 'playerContributionLedgerIdsFor'
+  | 'synergyLedgerIdsFor'
+  | 'uncertaintyFor',
+  string
+>>
+
+export type DssRosterEraCausalContext = {
+  options: BuildDssRosterErasOptions
+  callbackSemanticIds: DssRosterEraCallbackSemanticIds
+}
+
+export function buildDssRosterEraCausalSummary({
+  prefixMatches,
+  processedThroughUtcDate,
+  causalContext,
+  contextInputs = [],
+}: {
+  prefixMatches: MatchRecord[]
+  processedThroughUtcDate: string
+  causalContext: DssRosterEraCausalContext
+  contextInputs?: readonly CausalInputRow[]
+}): DssRosterEraCausalSummary {
+  const { options } = causalContext
+  const contextIdentity = dssRosterEraContextIdentity(causalContext)
+  if (!contextIdentity) throw new Error('Roster-era callback semantic ids are incomplete')
+  const eras = buildDssRosterEras(prefixMatches, options)
+  return {
+    prefix: buildCausalPrefixSummary({
+      surface: 'roster-era',
+      processedThroughUtcDate,
+      inputs: rosterEraCausalInputs(prefixMatches, contextInputs),
+      contextIdentity,
+    }),
+    openEras: eras
+      .filter((era) => era.endDate === undefined)
+      .map((era) => ({
+        team: era.team,
+        startDate: era.startDate,
+        signature: dssRosterEraSignature(era.roster, era.coachId),
+      }))
+      .sort((left, right) => compareCodeUnits(left.team, right.team)),
+  }
+}
+
+export function reconcileDssRosterEraCausality({
+  summary,
+  freshMatches,
+  causalContext,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: DssRosterEraCausalSummary
+  freshMatches: MatchRecord[]
+  causalContext?: DssRosterEraCausalContext
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  const appendedTeams = new Set(
+    freshMatches
+      .filter((match) => match.date > summary.prefix.processedThroughUtcDate)
+      .flatMap((match) => [match.teamA, match.teamB]),
+  )
+  const openEraBoundary = summary.openEras
+    .filter((era) => appendedTeams.has(era.team))
+    .map((era) => era.startDate)
+    .sort(compareCodeUnits)[0]
+  return reconcileCausalPrefix({
+    summary: summary.prefix,
+    freshInputs: rosterEraCausalInputs(freshMatches, contextInputs),
+    freshContextIdentity: causalContext
+      ? dssRosterEraContextIdentity(causalContext)
+      : undefined,
+    availableProcessedThroughUtcDates,
+    earliestRecomputeUtcDate: openEraBoundary,
+  })
+}
+
+function dssRosterEraContextIdentity({
+  options,
+  callbackSemanticIds,
+}: DssRosterEraCausalContext) {
+  return buildCausalContextIdentity({
+    semanticId: 'dss-roster-era-context-v1',
+    serializableInputs: {
+      modelParameters: dssRosterEraModelParameters,
+      includePartialRosters: options.includePartialRosters ?? false,
+      defaultPolicies: 'dss-roster-era-defaults-v1',
+    },
+    callbacks: [
+      rosterCallbackBinding('coachIdFor', options.coachIdFor, callbackSemanticIds),
+      rosterCallbackBinding('resumeLedgerIdsFor', options.resumeLedgerIdsFor, callbackSemanticIds),
+      rosterCallbackBinding('playerContributionLedgerIdsFor', options.playerContributionLedgerIdsFor, callbackSemanticIds),
+      rosterCallbackBinding('synergyLedgerIdsFor', options.synergyLedgerIdsFor, callbackSemanticIds),
+      rosterCallbackBinding('uncertaintyFor', options.uncertaintyFor, callbackSemanticIds),
+    ],
+  })
+}
+
+function rosterCallbackBinding(
+  name: keyof DssRosterEraCallbackSemanticIds,
+  implementation: unknown,
+  semanticIds: DssRosterEraCallbackSemanticIds,
+) {
+  return { name, implementation, semanticId: semanticIds[name] }
+}
+
+export function recomputeDssRosterEraCausalState(
+  matches: MatchRecord[],
+  { options }: DssRosterEraCausalContext,
+) {
+  return buildDssRosterEras(matches, options)
+}
+
+function rosterEraCausalInputs(
+  matches: readonly MatchRecord[],
+  contextInputs: readonly CausalInputRow[],
+) {
+  return [
+    ...matches
+      .filter((match) => match.teamARoster || match.teamBRoster)
+      .map((match) => causalInputRow(`match:${match.id}`, match.date, match)),
+    ...contextInputs,
+  ]
+}
+
+function compareCodeUnits(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 export function dssRosterEraSignature(roster: MatchRosterSnapshot, coachId?: string) {

@@ -52,6 +52,9 @@ export type RatingRunState = {
   eventTrackers: ReturnType<typeof buildEventTrackers>
   eventWeightContext: EventWeightContext
   previousMatch?: MatchRecord
+  processedThroughUtcDate?: string
+  /** Stable identities proving the checkpoint covers the complete terminal UTC date. */
+  processedThroughUtcDateMatchIds: string[]
   processedMatchCount: number
 }
 
@@ -95,6 +98,7 @@ export function createRatingRunState(
     lastRosterFingerprintByTeam: new Map(),
     eventTrackers: buildEventTrackers(sortedMatches, eventWeightContext, tournamentLifecycles),
     eventWeightContext,
+    processedThroughUtcDateMatchIds: [],
     processedMatchCount: 0,
   }
 

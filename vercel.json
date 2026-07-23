@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/recalculate-rankings",
-      "schedule": "0 6 * * *"
-    }
-  ]
-}

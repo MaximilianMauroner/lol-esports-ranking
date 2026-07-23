@@ -1,160 +1,156 @@
 import { once } from 'node:events'
+import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
-import { manifestWithResolvedFiles } from './local-data-manifest.js'
+import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { replaceDirectory } from './replace-directory.ts'
-import { knownTeamIdentities } from '../src/data/teamIdentity'
-import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources'
-import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
-import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports'
-import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
-import { createStaticRankingData, type DataSourceWarning } from '../src/lib/snapshot'
+import { createStaticRankingData, type PlayerLifecycleEvent, type PlayerLifecycleReleaseEvent } from '../src/lib/snapshot'
+import type { RankingModelOutput } from '../src/lib/model'
+import type { MatchRecord } from '../src/types'
+import type { TournamentInstanceId } from '../src/lib/internationalTournaments'
 import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib/publicArtifacts/writePlan'
-import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
-import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
+import { appendRefreshStages, createRefreshMetrics } from './refresh-metrics.mjs'
+import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
+import { collectRefreshGarbage } from './refresh-worker-memory.mjs'
 
-const output = resolve(readArg('output') ?? 'data/derived/ranking-snapshot.full.json')
-const publicDataTargetDir = resolve(readArg('public-data-dir') ?? 'public/data')
-const reconciliationOutput = readArg('reconciliation-output') ? resolve(readArg('reconciliation-output')!) : undefined
-const publicDataDir = `${publicDataTargetDir}.next-${process.pid}`
-const manifestPath = readArg('manifest')
-const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
-const manifest = resolvedManifestPath
-  ? manifestWithResolvedFiles(JSON.parse(await readFile(resolvedManifestPath, 'utf8')) as LocalDataManifest, dirname(resolvedManifestPath)) as LocalDataManifest
-  : undefined
-const oracleCsvPaths = uniquePaths([...readArgList('oracle-csv'), ...(manifest?.files.oracleCsv ?? [])])
-const leaguepediaJsonPaths = uniquePaths([...readArgList('leaguepedia-json'), ...(manifest?.files.leaguepediaJson ?? [])])
-const lolEsportsJsonPaths = uniquePaths([...readArgList('lolesports-json'), ...(manifest?.files.lolEsportsJson ?? [])])
-const oracleImports = []
-const leaguepediaImports = []
-const lolEsportsImports = []
-const oracleWarnings = manifestSourceWarnings('oracle', manifest?.warnings)
-const leaguepediaWarnings = manifestSourceWarnings('leaguepedia', manifest?.warnings)
-const lolEsportsWarnings = manifestSourceWarnings('lolesports', manifest?.warnings)
-
-if (process.argv.includes('--seeded-sample')) {
-  throw new Error('Seeded sample generation has been removed from the production build path. Provide public source files or use tests/fixtures/rankingFixtures.ts for unit fixtures.')
+export type StaticSnapshotBuildOptions = {
+  output?: string
+  publicDataDir?: string
+  reconciliationOutput?: string
+  manifestPath?: string
+  oracleCsvPaths?: string[]
+  leaguepediaJsonPaths?: string[]
+  lolEsportsJsonPaths?: string[]
+  generatedAt?: string
+  precomputedGlobalRanking?: RankingModelOutput
+  affectedLogicalPaths?: ReadonlySet<string>
+  affectedSnapshotKeys?: ReadonlySet<string>
+  affectedTournamentIds?: ReadonlySet<TournamentInstanceId>
+  previousArtifacts?: Readonly<Record<string, unknown>>
+  writeFullSnapshot?: boolean
+  replacePublicDirectory?: boolean
+  env?: NodeJS.ProcessEnv
+  sourceData?: RankingSourceImport
+  importedMatchCount?: number
+  releaseImportAuditBeforeSnapshot?: boolean
+  compactPlayerDirectory?: boolean
+  silent?: boolean
 }
 
-for (const csvPath of oracleCsvPaths) {
-  const csvText = await readFile(csvPath, 'utf8')
-  oracleImports.push(importOraclesElixirCsv(csvText, { sourceFileName: basename(csvPath) }))
+export type FullSnapshotDescriptor = {
+  artifactKind: 'full-ranking-artifact'
+  schemaVersion: number
+  generatedAt: string
+  source: string
+  sources: Array<{ name: string }>
+  model: { version: string; configHash: string }
+  sha256: string
+  bytes: number
 }
 
-for (const jsonPath of leaguepediaJsonPaths) {
-  const jsonText = await readFile(jsonPath, 'utf8')
-  leaguepediaImports.push(importLeaguepediaSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
-}
-
-for (const jsonPath of lolEsportsJsonPaths) {
-  const jsonText = await readFile(jsonPath, 'utf8')
-  lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(jsonText), { sourceFileName: basename(jsonPath) }))
-}
-
-const importedMatches = mergeCommunityMatchSources({
-  oracleMatches: oracleImports.flatMap((result) => result.matches),
-  leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
-  lolEsportsReferences: lolEsportsImports.flatMap((result) => result.events),
+export async function buildStaticSnapshot(options: StaticSnapshotBuildOptions = {}) {
+const env = options.env ?? process.env
+const metrics = createRefreshMetrics({
+  runId: env.RANKING_REFRESH_RUN_ID ?? `snapshot-${process.pid}`,
+  mode: env.RANKING_REFRESH_MODE === 'shadow' ? 'shadow' : 'gated',
+  cause: env.RANKING_FORCE_REFRESH === 'true' ? 'manual-force' : 'pending-match',
 })
-const importedTeams = mergeTeamProfiles([...leaguepediaImports.map((result) => result.teams), ...oracleImports.map((result) => result.teams)])
-const mergedTeams = importedMatches.length > 0 ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities } : {}
-const ratingUniverse = filterPublishedRatingUniverseInput(importedMatches, mergedTeams)
-const matches = ratingUniverse.matches
-const teams = ratingUniverse.teams
+
+const output = resolve(options.output ?? 'data/derived/ranking-snapshot.full.json')
+const publicDataTargetDir = resolve(options.publicDataDir ?? 'public/data')
+const reconciliationOutput = options.reconciliationOutput ? resolve(options.reconciliationOutput) : undefined
+const publicDataDir = `${publicDataTargetDir}.next-${process.pid}-${Date.now()}`
+const sourceData = options.sourceData ?? await importRankingSourceData({
+  manifestPath: options.manifestPath,
+  oracleCsvPaths: options.oracleCsvPaths,
+  leaguepediaJsonPaths: options.leaguepediaJsonPaths,
+  lolEsportsJsonPaths: options.lolEsportsJsonPaths,
+})
+const { importedMatches, matches, teams } = sourceData
+const importedMatchCount = options.importedMatchCount ?? importedMatches.length
+const generatedAt = options.generatedAt ?? new Date().toISOString()
+const playerLifecycleEvents: Array<PlayerLifecycleEvent & { rssBytes: number }> = []
+const playerReleaseCollections: Array<PlayerLifecycleReleaseEvent & ReturnType<typeof collectRefreshGarbage>> = []
+if (reconciliationOutput) await writeReconciliationOutput({ reconciliationOutput, importedMatches, generatedAt })
+if (options.releaseImportAuditBeforeSnapshot) {
+  if (importedMatches !== matches) importedMatches.length = 0
+  sourceData.mergedTeams = {}
+}
 const snapshot = createStaticRankingData({
   matches,
   teams,
   rosters: {},
-  source: matches.length > 0
-    ? describeCommunitySource(oracleImports.length, leaguepediaImports.length)
-    : importedMatches.length > 0 ? 'no rated public match data available for published team universe' : 'no public match data available',
-  dataMode: matches.length > 0 ? 'scheduled-public-data' : 'no-data',
-  externalSources: [
-    ...lolEsportsImports.map((result) => ({
-      name: result.source.fileName ? `LoL Esports schedule API: ${result.source.fileName}` : 'LoL Esports schedule API',
-      kind: 'official-reference' as const,
-      url: result.source.url,
-      retrievedAt: result.source.retrievedAt,
-      coverageStart: dateRange(result.events).start,
-      coverageEnd: dateRange(result.events).end,
-      rowCount: result.source.eventCount,
-      description: `${result.source.eventCount} schedule/result events and ${result.source.gameCount} game IDs cached from LoL Esports persisted APIs. Used only to attach official event/match/game IDs and audit schedule/results; not a rich stat source or standalone model input. ${result.source.attribution}`,
-      status: result.source.eventCount > 0 ? 'active' as const : 'reference-only' as const,
-      warnings: [
-        {
-          kind: 'source-policy' as const,
-          severity: 'warning' as const,
-          message: 'LoL Esports persisted APIs are public site endpoints, not a supported official data API; cache responses and keep them reference-only.',
-        },
-        ...lolEsportsWarnings,
-      ],
-      ...(sourceRefreshReceipt('lolesports', manifest) ? { refreshReceipt: sourceRefreshReceipt('lolesports', manifest) } : {}),
-    })),
-    ...oracleImports.map((result) => {
-      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
-      return {
-        name: result.source.fileName ? `Oracle's Elixir CSV: ${result.source.fileName}` : "Oracle's Elixir CSV",
-        kind: 'game-stats' as const,
-        url: result.source.url,
-        retrievedAt: result.source.retrievedAt,
-        coverageStart: dateRange(ratedMatches).start,
-        coverageEnd: dateRange(ratedMatches).end,
-        rowCount: ratedMatches.length,
-        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after the published team-universe filter. ${result.source.attribution}`,
-        status: ratedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
-        ...(oracleWarnings.length > 0 ? { warnings: oracleWarnings } : {}),
-        ...(sourceRefreshReceipt('oracle', manifest) ? { refreshReceipt: sourceRefreshReceipt('oracle', manifest) } : {}),
-      }
-    }),
-    ...leaguepediaImports.map((result) => {
-      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
-      return {
-        name: result.source.fileName ? `Leaguepedia Cargo: ${result.source.fileName}` : 'Leaguepedia Cargo',
-        kind: 'match-data' as const,
-        url: result.source.url,
-        retrievedAt: result.source.retrievedAt,
-        coverageStart: dateRange(ratedMatches).start,
-        coverageEnd: dateRange(ratedMatches).end,
-        rowCount: ratedMatches.length,
-        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after the published team-universe filter. ${result.source.attribution}`,
-        status: ratedMatches.length > 0 ? 'active' as const : 'reference-only' as const,
-        ...(leaguepediaWarnings.length > 0 ? { warnings: leaguepediaWarnings } : {}),
-        ...(sourceRefreshReceipt('leaguepedia', manifest) ? { refreshReceipt: sourceRefreshReceipt('leaguepedia', manifest) } : {}),
-      }
-    }),
-  ],
-  tournamentScheduleReferences: lolEsportsImports.flatMap((result) => {
-    const coverage = dateRange(result.events)
-    return result.events.map((event) => ({
-      matchId: event.matchId,
-      tournamentId: event.tournamentId,
-      leagueName: event.leagueName,
-      leagueSlug: event.leagueSlug,
-      startTime: event.startTime,
-      date: event.date,
-      state: event.state,
-      retrievedAt: result.source.retrievedAt,
-      coverageStart: coverage.start,
-      coverageEnd: coverage.end,
-      coverageEndComplete: result.source.coverageEndComplete,
-    }))
-  }),
-  pipelineAudit: { importedMatchCount: importedMatches.length },
+  source: sourceData.source,
+  dataMode: sourceData.dataMode,
+  externalSources: sourceData.externalSources,
+  tournamentScheduleReferences: sourceData.tournamentScheduleReferences,
+  pipelineAudit: { importedMatchCount },
+  generatedAt,
+  ...(options.precomputedGlobalRanking ? { precomputedGlobalRanking: options.precomputedGlobalRanking } : {}),
+  ...(options.affectedSnapshotKeys ? { materializeSnapshotKeys: options.affectedSnapshotKeys } : {}),
+  ...(options.affectedTournamentIds ? { materializeTournamentIds: options.affectedTournamentIds } : {}),
+  compactPlayerDirectory: options.compactPlayerDirectory ?? options.writeFullSnapshot === false,
+  onPlayerLifecycleStage: (event) => {
+    playerLifecycleEvents.push({
+      ...event,
+      rssBytes: Math.max(process.memoryUsage().rss, process.resourceUsage().maxRSS * 1024),
+    })
+  },
+  onPlayerLifecycleRelease: (event) => {
+    playerReleaseCollections.push({ ...event, ...collectRefreshGarbage() })
+  },
 })
 
-await mkdir(dirname(output), { recursive: true })
-await writeJsonFile(output, snapshot)
-if (reconciliationOutput) {
-  await mkdir(dirname(reconciliationOutput), { recursive: true })
-  await writeFile(reconciliationOutput, `${JSON.stringify({
-    schemaVersion: 1,
-    generatedAt: snapshot.generatedAt,
-    matches: reconciliationEntries(importedMatches),
-  }, null, 2)}\n`)
+const playerLifecycleStages = (['player-build', 'player-compaction'] as const).flatMap((name) => {
+  const events = playerLifecycleEvents.filter((event) => event.name === name)
+  if (events.length === 0) return []
+  return [{
+    name,
+    durationMs: events.reduce((total, event) => total + event.durationMs, 0),
+    input: { operationCount: events.length },
+    output: {
+      peakRssBytes: Math.max(...events.map((event) => event.rssBytes)),
+      maxPlayerCount: Math.max(...events.map((event) => event.playerCount)),
+      scopes: events.map(({ scope, scopeKey, durationMs, playerCount, rssBytes }) => ({
+        scope,
+        scopeKey,
+        durationMs,
+        playerCount,
+        rssBytes,
+      })),
+      ...(name === 'player-compaction' ? { releaseCollections: playerReleaseCollections } : {}),
+    },
+  }]
+})
+for (const stage of playerLifecycleStages) {
+  metrics.recordStage(stage.name, stage)
 }
-const publicPlan = createPublicArtifactWritePlan(snapshot)
+
+let fullSnapshotDescriptor: FullSnapshotDescriptor | undefined
+if (options.writeFullSnapshot !== false) {
+  await mkdir(dirname(output), { recursive: true })
+  const written = await writeJsonFile(output, snapshot)
+  fullSnapshotDescriptor = {
+    artifactKind: snapshot.artifactKind,
+    schemaVersion: snapshot.schemaVersion,
+    generatedAt: snapshot.generatedAt,
+    source: snapshot.source,
+    sources: snapshot.sources.map(({ name }) => ({ name })),
+    model: { version: snapshot.model.version, configHash: snapshot.model.configHash },
+    sha256: written.sha256,
+    bytes: written.bytes,
+  }
+}
+const serializationFinished = metrics.startStage('public-serialization', {
+  importedGameCount: importedMatchCount,
+  ratedGameCount: matches.length,
+})
+const publicPlan = createPublicArtifactWritePlan(snapshot, {
+  ...(options.affectedLogicalPaths ? { affectedLogicalPaths: options.affectedLogicalPaths } : {}),
+  ...(options.previousArtifacts ? { previousArtifacts: options.previousArtifacts } : {}),
+})
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)
 const publicWrites = publicPlan.writes.map((entry) => ({
@@ -172,16 +168,52 @@ try {
     await atomicWriteFile(write.path, write.contents)
   }
 
-  await replaceDirectory(publicDataDir, publicDataTargetDir, { publishLast: PUBLIC_ARTIFACT_PATHS.manifest })
+  if (options.replacePublicDirectory !== false) {
+    await replaceDirectory(publicDataDir, publicDataTargetDir, { publishLast: PUBLIC_ARTIFACT_PATHS.manifest })
+  } else {
+    await rm(publicDataTargetDir, { recursive: true, force: true })
+    await rename(publicDataDir, publicDataTargetDir)
+  }
   const publicDataBytes = await directorySize(publicDataTargetDir)
+  serializationFinished('completed', {
+    importedGameCount: importedMatchCount,
+    ratedGameCount: matches.length,
+    artifactCount: publicWrites.length,
+    outputBytes: publicDataBytes,
+  })
+  await appendRefreshStages(env.RANKING_REFRESH_METRICS_PATH, metrics.snapshot({ result: 'running' }))
 
-  console.log(`Wrote ${Object.keys(snapshot.snapshots).length} ranking snapshots to ${output}`)
-  console.log(`Wrote browser summary to ${summaryOutput}`)
-  console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
-  console.log(`Public data budget: ${publicDataBytes} bytes`)
+  if (!options.silent) {
+    console.log(`${options.writeFullSnapshot === false ? 'Materialized' : 'Wrote'} ${Object.keys(snapshot.snapshots).length} ranking snapshots${options.writeFullSnapshot === false ? '' : ` to ${output}`}`)
+    console.log(`Wrote browser summary to ${summaryOutput}`)
+    console.log(`Wrote ${summarySnapshots.length} public ranking scopes to ${resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.scopeDir)}`)
+    console.log(`Public data budget: ${publicDataBytes} bytes`)
+  }
+  const result = { publicPlan, publicDataBytes, publicDataDir: publicDataTargetDir, playerLifecycleStages }
+  if (options.writeFullSnapshot === false) {
+    for (const write of publicPlan.writes) write.contents = ''
+    return result
+  }
+  return { snapshot, fullSnapshotDescriptor, ...result, ...sourceData }
 } catch (error) {
   await rm(publicDataDir, { recursive: true, force: true })
   throw error
+}
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.argv.includes('--seeded-sample')) {
+    throw new Error('Seeded sample generation has been removed from the production build path. Provide public source files or use tests/fixtures/rankingFixtures.ts for unit fixtures.')
+  }
+  await buildStaticSnapshot({
+    output: readArg('output'),
+    publicDataDir: readArg('public-data-dir'),
+    reconciliationOutput: readArg('reconciliation-output'),
+    manifestPath: readArg('manifest'),
+    oracleCsvPaths: readArgList('oracle-csv'),
+    leaguepediaJsonPaths: readArgList('leaguepedia-json'),
+    lolEsportsJsonPaths: readArgList('lolesports-json'),
+  })
 }
 
 function readArg(name: string) {
@@ -201,11 +233,21 @@ function readArgList(name: string) {
   return values
 }
 
-function uniquePaths(paths: string[]) {
-  return Array.from(new Set(paths.filter(Boolean).map((path) => resolve(path))))
+export async function writeReconciliationOutput({
+  reconciliationOutput,
+  importedMatches,
+  generatedAt,
+}: {
+  reconciliationOutput: string
+  importedMatches: MatchRecord[]
+  generatedAt: string
+}) {
+  const matches = reconciliationEntries(importedMatches)
+  await atomicWriteFile(reconciliationOutput, `${JSON.stringify({ schemaVersion: 1, generatedAt, matches }, null, 2)}\n`)
+  return matches
 }
 
-function reconciliationEntries(importedMatches: typeof matches) {
+function reconciliationEntries(importedMatches: MatchRecord[]) {
   return resolveCanonicalSeries(importedMatches).flatMap((series) => {
     const officialIds = [...new Set(series.games.map((game) => game.officialMatchId).filter((value): value is string => Boolean(value)))]
     if (officialIds.length !== 1) return []
@@ -216,84 +258,6 @@ function reconciliationEntries(importedMatches: typeof matches) {
       scoredGameIds: series.games.map((game) => game.officialGameId ?? game.sourceGameId ?? game.id),
     }]
   })
-}
-
-type LocalDataManifest = {
-  start?: string
-  end?: string
-  generatedAt?: string
-  files: {
-    oracleCsv?: string[]
-    leaguepediaJson?: string[]
-    lolEsportsJson?: string[]
-  }
-  warnings?: string[]
-  sources?: Partial<Record<'oracle' | 'leaguepedia' | 'lolesports', {
-    status?: string
-    downloadedCount?: number
-    reusedCount?: number
-    failedCount?: number
-  }>>
-}
-
-function sourceRefreshReceipt(provider: 'oracle' | 'leaguepedia' | 'lolesports', value: LocalDataManifest | undefined) {
-  const source = value?.sources?.[provider]
-  if (!source?.status) return undefined
-  return {
-    requestedStart: value?.start,
-    requestedEnd: value?.end,
-    attemptedAt: value?.generatedAt,
-    status: source.status,
-    downloadedCount: source.downloadedCount ?? 0,
-    reusedCount: source.reusedCount ?? 0,
-    failedCount: source.failedCount ?? 0,
-  }
-}
-
-function manifestSourceWarnings(provider: 'oracle' | 'leaguepedia' | 'lolesports', warnings: string[] | undefined): DataSourceWarning[] {
-  return (warnings ?? [])
-    .filter((warning) => warningMatchesProvider(provider, warning))
-    .map((message) => ({
-      kind: sourceWarningKind(message),
-      severity: sourceWarningSeverity(message),
-      message,
-    }))
-}
-
-function warningMatchesProvider(provider: 'oracle' | 'leaguepedia' | 'lolesports', warning: string) {
-  const lower = warning.toLowerCase()
-  if (provider === 'oracle') return lower.includes('oracle')
-  if (provider === 'lolesports') return lower.includes('lol esports') || lower.includes('lolesports')
-  return lower.includes('leaguepedia') || lower.includes('cargo')
-}
-
-function sourceWarningKind(message: string): DataSourceWarning['kind'] {
-  const lower = message.toLowerCase()
-  if (lower.includes('rate-limit')) return 'rate-limit'
-  if (lower.includes('download')) return 'download'
-  if (lower.includes('coverage') || lower.includes('through') || lower.includes('preserved')) return 'coverage'
-  return 'source-policy'
-}
-
-function sourceWarningSeverity(message: string): DataSourceWarning['severity'] {
-  const lower = message.toLowerCase()
-  if (lower.includes('failed') || lower.includes('unavailable')) return 'error'
-  if (lower.includes('rate-limit') || lower.includes('preserved')) return 'warning'
-  return 'info'
-}
-
-function describeCommunitySource(oracleCount: number, leaguepediaCount: number) {
-  if (oracleCount > 0 && leaguepediaCount > 0) return "Oracle's Elixir primary with Leaguepedia Cargo gap-fill"
-  if (oracleCount > 0) return "Oracle's Elixir CSV import"
-  return 'Leaguepedia Cargo import'
-}
-
-function dateRange(matches: { date?: string }[]) {
-  const dates = matches.map((match) => match.date).filter(Boolean).sort()
-  return {
-    start: dates[0],
-    end: dates.at(-1),
-  }
 }
 
 async function directorySize(dir: string): Promise<number> {
@@ -319,8 +283,12 @@ async function atomicWriteFile(path: string, contents: string) {
 
 async function writeJsonFile(path: string, value: unknown) {
   const stream = createWriteStream(path, { encoding: 'utf8' })
+  const hash = createHash('sha256')
+  let bytes = 0
 
   async function writeChunk(chunk: string) {
+    hash.update(chunk)
+    bytes += Buffer.byteLength(chunk)
     if (!stream.write(chunk)) await once(stream, 'drain')
   }
 
@@ -329,6 +297,7 @@ async function writeJsonFile(path: string, value: unknown) {
     await writeChunk('\n')
     stream.end()
     await once(stream, 'finish')
+    return { sha256: hash.digest('hex'), bytes }
   } catch (error) {
     stream.destroy()
     throw error

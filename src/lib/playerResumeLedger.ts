@@ -1,4 +1,12 @@
 import type { DeservedStandingPlayerResumeLedger, EventTier, Role } from '../types'
+import {
+  buildCausalContextIdentity,
+  buildCausalPrefixSummary,
+  causalInputRow,
+  reconcileCausalPrefix,
+  type CausalInputRow,
+  type CausalPrefixSummary,
+} from './causalRecompute'
 
 export type DssPlayerResumeSeriesPlayer = {
   id: string
@@ -48,6 +56,11 @@ export type DssPlayerResumeLedgerModel = {
   currentSplitId?: string
 }
 
+export type DssPlayerResumeCausalContext = {
+  options: BuildDssPlayerResumeLedgerOptions
+  uncertaintyForSemanticId?: string
+}
+
 export function buildDssPlayerResumeLedgers(
   series: DssPlayerResumeSeriesInput[],
   options: BuildDssPlayerResumeLedgerOptions = {},
@@ -71,6 +84,89 @@ export function buildDssPlayerResumeLedgers(
     ...(currentSeason === undefined ? {} : { currentSeason }),
     ...(currentSplitId === undefined ? {} : { currentSplitId }),
   }
+}
+
+export function playerResumeCausalInputs(
+  series: readonly DssPlayerResumeSeriesInput[],
+  contextInputs: readonly CausalInputRow[] = [],
+) {
+  return [
+    ...series.map((entry) => causalInputRow(`series:${entry.seriesKey}:${entry.team}`, entry.date, entry)),
+    ...contextInputs,
+  ]
+}
+
+export function buildDssPlayerResumeCausalSummary({
+  prefixSeries,
+  processedThroughUtcDate,
+  causalContext,
+  contextInputs = [],
+}: {
+  prefixSeries: readonly DssPlayerResumeSeriesInput[]
+  processedThroughUtcDate: string
+  causalContext: DssPlayerResumeCausalContext
+  contextInputs?: readonly CausalInputRow[]
+}) {
+  const contextIdentity = dssPlayerResumeContextIdentity(causalContext)
+  if (!contextIdentity) throw new Error('Player-resume uncertainty callback semantic id is missing')
+  return buildCausalPrefixSummary({
+    surface: 'player-resume-ledger',
+    processedThroughUtcDate,
+    inputs: playerResumeCausalInputs(prefixSeries, contextInputs),
+    contextIdentity,
+  })
+}
+
+export function reconcileDssPlayerResumeCausality({
+  summary,
+  freshSeries,
+  causalContext,
+  contextInputs = [],
+  availableProcessedThroughUtcDates = [],
+}: {
+  summary: CausalPrefixSummary
+  freshSeries: readonly DssPlayerResumeSeriesInput[]
+  causalContext?: DssPlayerResumeCausalContext
+  contextInputs?: readonly CausalInputRow[]
+  availableProcessedThroughUtcDates?: readonly string[]
+}) {
+  if (summary.surface !== 'player-resume-ledger') {
+    throw new Error('Expected player-resume-ledger causal summary')
+  }
+  return reconcileCausalPrefix({
+    summary,
+    freshInputs: playerResumeCausalInputs(freshSeries, contextInputs),
+    freshContextIdentity: causalContext
+      ? dssPlayerResumeContextIdentity(causalContext)
+      : undefined,
+    availableProcessedThroughUtcDates,
+  })
+}
+
+function dssPlayerResumeContextIdentity({
+  options,
+  uncertaintyForSemanticId,
+}: DssPlayerResumeCausalContext) {
+  return buildCausalContextIdentity({
+    semanticId: 'dss-player-resume-context-v1',
+    serializableInputs: {
+      currentSeason: options.currentSeason ?? null,
+      currentSplitId: options.currentSplitId ?? null,
+      defaultUncertaintyPolicy: 'zero-v1',
+    },
+    callbacks: [{
+      name: 'uncertaintyFor',
+      implementation: options.uncertaintyFor,
+      semanticId: uncertaintyForSemanticId,
+    }],
+  })
+}
+
+export function recomputeDssPlayerResumeCausalState(
+  series: DssPlayerResumeSeriesInput[],
+  { options }: DssPlayerResumeCausalContext,
+) {
+  return buildDssPlayerResumeLedgers(series, options)
 }
 
 export function playerResumeCreditEntries(series: DssPlayerResumeSeriesInput[]): DssPlayerResumeCreditEntry[] {

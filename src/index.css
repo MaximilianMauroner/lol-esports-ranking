@@ -4,10 +4,21 @@
 
 @import './styles/base.css';
 @import './styles/rankings.css';
-@import "shadcn/tailwind.css";
 @import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant data-open {
+    &:where([data-state="open"]),
+    &:where([data-open]:not([data-open="false"])) {
+        @slot;
+    }
+}
+@custom-variant data-closed {
+    &:where([data-state="closed"]),
+    &:where([data-closed]:not([data-closed="false"])) {
+        @slot;
+    }
+}
 
 @theme inline {
     --color-background: var(--background);

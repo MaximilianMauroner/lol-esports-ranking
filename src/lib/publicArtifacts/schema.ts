@@ -492,7 +492,6 @@ export type PublicTeamHistoryDirectory = {
   teamCount: number
   pointCount: number
   series: Record<string, PublicTeamHistorySeries>
-  scopedSeries?: Record<string, Record<string, PublicTeamHistorySeries>>
   scopeIndex?: Record<string, string[]>
 }
 
@@ -687,6 +686,7 @@ export type PublicMatchHistoryScopeIndexEntry = {
   gameCount: number
   seriesCount: number
   pageCount: number
+  pages?: PublicMatchHistoryPageRef[]
 }
 
 export type PublicMatchHistoryIndex = {
@@ -717,6 +717,9 @@ export type PublicMatchHistoryPageRef = {
   url: string
   seriesCount: number
   gameCount: number
+  seriesIds?: string[]
+  startUtcDate?: string
+  endUtcDate?: string
 }
 
 export type PublicMatchHistoryCatalog = {
@@ -782,7 +785,6 @@ export type PublicRankingManifest = {
   playerDirectoryUrl?: string
   teamDirectoryUrl?: string
   teamHistoryIndexUrl?: string
-  teamHistoryUrl?: string
   regionHistoryUrl?: string
   tournamentMovementIndexUrl: string
   matchHistoryIndexUrl?: string
@@ -1139,7 +1141,6 @@ export function parsePublicRankingManifest(value: unknown): PublicRankingManifes
   assertOptionalDataUrlPath(value.teamDirectoryUrl, 'ranking manifest teamDirectoryUrl')
   assertOptionalDataUrlPath(value.teamHistoryIndexUrl, 'ranking manifest teamHistoryIndexUrl', '/data/history')
   assertOptionalDataUrlPath(value.matchHistoryIndexUrl, 'ranking manifest matchHistoryIndexUrl', '/data/matches')
-  assertOptionalDataUrlPath(value.teamHistoryUrl, 'ranking manifest teamHistoryUrl', '/data/history')
   assertOptionalDataUrlPath(value.regionHistoryUrl, 'ranking manifest regionHistoryUrl', '/data/history')
   assertArtifactUrl(value.tournamentMovementIndexUrl, 'ranking manifest tournamentMovementIndexUrl', '/data/history/tournament-moves')
   assertNonNegativeInteger(value.teamCount, 'ranking manifest teamCount')
@@ -1255,33 +1256,6 @@ export function parsePublicTeamDirectory(value: unknown): PublicTeamDirectory {
     throw new Error('Invalid public artifact: team directory teamCount must match teams length')
   }
   return value as PublicTeamDirectory
-}
-
-export function parsePublicTeamHistory(value: unknown): PublicTeamHistoryDirectory {
-  assertObject(value, 'team history')
-  assertEqual(value.artifactKind, 'team-history', 'team history artifactKind')
-  assertSchemaVersion(value, 'team history')
-  assertArtifactMeta(value.artifactMeta, 'team history artifactMeta')
-  assertPublishedRatingScale(value.ratingScale, 'team history ratingScale')
-  assertString(value.generatedAt, 'team history generatedAt')
-  assertString(value.modelVersion, 'team history modelVersion')
-  assertString(value.modelConfigHash, 'team history modelConfigHash')
-  const seriesCounts = assertTeamHistorySeriesRecord(value.series, 'team history series')
-  assertNonNegativeInteger(value.teamCount, 'team history teamCount')
-  assertNonNegativeInteger(value.pointCount, 'team history pointCount')
-  if (seriesCounts.seriesCount !== value.teamCount) {
-    throw new Error('Invalid public artifact: team history teamCount must match series count')
-  }
-  if (seriesCounts.pointCount !== value.pointCount) {
-    throw new Error('Invalid public artifact: team history pointCount must match series points')
-  }
-  if (value.scopeIndex !== undefined) {
-    assertObject(value.scopeIndex, 'team history scopeIndex')
-    for (const [key, teamIds] of Object.entries(value.scopeIndex)) {
-      assertStringArray(teamIds, `team history scopeIndex ${key}`)
-    }
-  }
-  return value as PublicTeamHistoryDirectory
 }
 
 export function parsePublicTeamHistoryIndex(value: unknown): PublicTeamHistoryIndex {
@@ -1408,6 +1382,10 @@ export function parsePublicMatchHistoryIndex(value: unknown): PublicMatchHistory
     assertNonNegativeInteger(entry.gameCount, `match history index scopeIndex ${key} gameCount`)
     assertNonNegativeInteger(entry.seriesCount, `match history index scopeIndex ${key} seriesCount`)
     assertNonNegativeInteger(entry.pageCount, `match history index scopeIndex ${key} pageCount`)
+    if (entry.pages !== undefined) {
+      assertArray(entry.pages, `match history index scopeIndex ${key} pages`)
+      entry.pages.forEach((page, index) => assertPublicMatchHistoryPageRef(page, `match history index scopeIndex ${key} pages[${index}]`))
+    }
     if (snapshotKey(entry.filter as SnapshotFilter) !== key) throw new Error(`Invalid public artifact: match history index scopeIndex key ${key} must match its filter`)
   }
   if (!value.scopeIndex[value.defaultScopeKey as string]) throw new Error('Invalid public artifact: match history index defaultScopeKey must exist in scopeIndex')
@@ -1421,17 +1399,22 @@ export function parsePublicMatchHistoryCatalog(value: unknown): PublicMatchHisto
   assertNonNegativeInteger(value.gameCount, 'match history catalog gameCount')
   assertNonNegativeInteger(value.seriesCount, 'match history catalog seriesCount')
   assertArray(value.pages, 'match history catalog pages')
-  value.pages.forEach((page, index) => {
-    assertObject(page, `match history catalog pages[${index}]`)
-    assertNonNegativeInteger(page.page, `match history catalog pages[${index}] page`)
-    assertArtifactUrl(page.url, `match history catalog pages[${index}] url`, '/data/matches')
-    assertNonNegativeInteger(page.seriesCount, `match history catalog pages[${index}] seriesCount`)
-    assertNonNegativeInteger(page.gameCount, `match history catalog pages[${index}] gameCount`)
-  })
+  value.pages.forEach((page, index) => assertPublicMatchHistoryPageRef(page, `match history catalog pages[${index}]`))
   assertArray(value.series, 'match history catalog series')
   value.series.forEach((entry, index) => assertPublicMatchHistorySeriesRef(entry, `match history catalog series[${index}]`))
   if (value.series.length !== value.seriesCount) throw new Error('Invalid public artifact: match history catalog seriesCount must match series length')
   return value as PublicMatchHistoryCatalog
+}
+
+function assertPublicMatchHistoryPageRef(value: unknown, label: string) {
+  assertObject(value, label)
+  assertNonNegativeInteger(value.page, `${label} page`)
+  assertArtifactUrl(value.url, `${label} url`, '/data/matches')
+  assertNonNegativeInteger(value.seriesCount, `${label} seriesCount`)
+  assertNonNegativeInteger(value.gameCount, `${label} gameCount`)
+  if (value.seriesIds !== undefined) assertStringArray(value.seriesIds, `${label} seriesIds`)
+  if (value.startUtcDate !== undefined) assertString(value.startUtcDate, `${label} startUtcDate`)
+  if (value.endUtcDate !== undefined) assertString(value.endUtcDate, `${label} endUtcDate`)
 }
 
 export function parsePublicMatchHistoryPage(value: unknown): PublicMatchHistoryPage {

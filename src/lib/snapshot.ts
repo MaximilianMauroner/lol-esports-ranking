@@ -21,7 +21,7 @@ import { leagueTierFor } from '../data/leagueTiers'
 import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../data/regionTaxonomy'
 import { canonicalTeamNameFor, regionForLeague } from '../data/teamIdentity'
 import { deriveRegionStrength, type RegionStrength } from './regionStrength'
-import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata } from './model'
+import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata, type RankingModelOutput } from './model'
 import { publishedRatingScale } from './modelConfig'
 import {
   teamNamesForDssContext,
@@ -112,6 +112,17 @@ import type {
 
 export type { CompactPlayer, CompactPlayerRating, PlayerRatingProof } from './publicArtifacts/schema'
 export { snapshotKey } from './publicArtifacts/schema'
+
+// Snapshot generation owns these derived outputs, but intentionally does not
+// activate checkpoint resume until orchestration persists and validates the
+// corresponding causal prefix summaries.
+export const snapshotExternalCausalSurfaces = [
+  'sourced-player',
+  'dss-team',
+  'dss-region',
+  'roster-era',
+  'player-resume-ledger',
+] as const
 
 export const rolePowerPlayerMetric: PlayerMetricInfo = {
   id: 'role-power',
@@ -247,6 +258,16 @@ export type DataQualityAudit = {
 }
 
 export type PlayerDirectory = PublicPlayerDirectory
+
+export type PlayerLifecycleEvent = {
+  name: 'player-build' | 'player-compaction'
+  scope: 'global' | 'season' | 'directory'
+  scopeKey: string
+  durationMs: number
+  playerCount: number
+}
+
+export type PlayerLifecycleReleaseEvent = Pick<PlayerLifecycleEvent, 'scope' | 'scopeKey'>
 export type TeamDirectory = PublicTeamDirectory
 export type TeamHistoryPointCompact = PublicTeamHistoryPoint
 export type TeamHistorySeries = PublicTeamHistorySeries
@@ -406,7 +427,10 @@ function createTeamHistoryShard(
   ratingScale: PublishedRatingScale = data.model.ratingScale ?? publishedRatingScale,
 ): PublicTeamHistoryShard {
   const minimumPointsPerSeries = 2
-  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf: data.generatedAt })
+  // A completed season shard is immutable: its standing is as of its last
+  // resolved match, while the all-time shard continues to expose the run time.
+  const asOf = snapshot && isSeasonHistoryScope(snapshot.filter) ? '' : data.generatedAt
+  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf })
   return {
     artifactKind: 'team-history-scope',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
@@ -945,6 +969,8 @@ export type StaticRankingData = {
   tournamentMovements: Record<TournamentInstanceId, PublicTournamentMovementShard>
   teams: Record<string, TeamProfile>
   matches: MatchRecord[]
+  /** Incremental builds may compact full player histories before public serialization. */
+  precomputedPlayerDirectory?: PlayerDirectory
 }
 
 export type RankingSummaryStanding = PublicTeamStanding
@@ -959,7 +985,6 @@ export function createStaticRankingSummaryData(
     playerDirectoryUrl,
     teamDirectoryUrl,
     teamHistoryIndexUrl,
-    teamHistoryUrl,
     regionHistoryUrl,
     tournamentMovementIndexUrl = '/data/history/tournament-moves/index.json',
     matchHistoryIndexUrl,
@@ -969,7 +994,6 @@ export function createStaticRankingSummaryData(
     playerDirectoryUrl?: string
     teamDirectoryUrl?: string
     teamHistoryIndexUrl?: string
-    teamHistoryUrl?: string
     regionHistoryUrl?: string
     tournamentMovementIndexUrl?: string
     matchHistoryIndexUrl?: string
@@ -1002,6 +1026,7 @@ export function createStaticRankingSummaryData(
     tournamentMovements: _tournamentMovements,
     teams: _teams,
     matches: _matches,
+    precomputedPlayerDirectory: _precomputedPlayerDirectory,
     ...manifestBase
   } = data
   void _artifactKind
@@ -1009,6 +1034,7 @@ export function createStaticRankingSummaryData(
   void _tournamentMovements
   void _teams
   void _matches
+  void _precomputedPlayerDirectory
 
   return {
     manifest: {
@@ -1025,7 +1051,6 @@ export function createStaticRankingSummaryData(
       ...(playerDirectoryUrl ? { playerDirectoryUrl } : {}),
       ...(teamDirectoryUrl ? { teamDirectoryUrl } : {}),
       ...(teamHistoryIndexUrl ? { teamHistoryIndexUrl } : {}),
-      ...(teamHistoryUrl ? { teamHistoryUrl } : {}),
       ...(regionHistoryUrl ? { regionHistoryUrl } : {}),
       tournamentMovementIndexUrl,
       ...(matchHistoryIndexUrl ? { matchHistoryIndexUrl } : {}),
@@ -1086,15 +1111,18 @@ function createTournamentMovementShards({
   teams,
   generatedAt,
   scheduleReferences,
+  materializeTournamentIds,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
   generatedAt: string
   scheduleReferences: TournamentScheduleReference[]
+  materializeTournamentIds?: ReadonlySet<TournamentInstanceId>
 }): Record<TournamentInstanceId, PublicTournamentMovementShard> {
-  const instances = deriveTournamentInstances({ matches, scheduleReferences, generatedAt })
+  const allInstances = deriveTournamentInstances({ matches, scheduleReferences, generatedAt })
+  const instances = allInstances.filter((instance) => !materializeTournamentIds || materializeTournamentIds.has(instance.id))
   const rankingOptions = {
-    tournamentLifecycles: new Map(instances.map((instance) => [instance.id, {
+    tournamentLifecycles: new Map(allInstances.map((instance) => [instance.id, {
       status: instance.status,
       boundaryDate: instance.boundaryDate,
       ratedThroughDate: instance.ratedThroughDate,
@@ -1208,6 +1236,12 @@ export function createStaticRankingData({
   externalSources = [],
   tournamentScheduleReferences = [],
   pipelineAudit,
+  precomputedGlobalRanking,
+  materializeSnapshotKeys,
+  materializeTournamentIds,
+  compactPlayerDirectory = false,
+  onPlayerLifecycleStage,
+  onPlayerLifecycleRelease,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -1218,6 +1252,18 @@ export function createStaticRankingData({
   externalSources?: DataSourceInfo[]
   tournamentScheduleReferences?: TournamentScheduleReference[]
   pipelineAudit?: { importedMatchCount: number }
+  /** A rating-checkpoint replay may provide the authoritative global model. */
+  precomputedGlobalRanking?: RankingModelOutput
+  /** Incremental publication may materialize only public scopes selected by the dependency graph. */
+  materializeSnapshotKeys?: ReadonlySet<string>
+  /** Incremental publication may materialize only tournament shards selected by the dependency graph. */
+  materializeTournamentIds?: ReadonlySet<TournamentInstanceId>
+  /** Build and retain only public player rows for incremental publication. */
+  compactPlayerDirectory?: boolean
+  /** Observe bounded player work without retaining model history. */
+  onPlayerLifecycleStage?: (event: PlayerLifecycleEvent) => void
+  /** Release full player histories between independently materialized scopes. */
+  onPlayerLifecycleRelease?: (event: PlayerLifecycleReleaseEvent) => void
 }): StaticRankingData {
   const ratingUniverse = filterPublishedRatingUniverseInput(matches, teams)
   matches = ratingUniverse.matches
@@ -1252,10 +1298,9 @@ export function createStaticRankingData({
   )
   const regions = ['All', ...currentTopTierRegions.filter((region) => observedCurrentRegions.has(region))] as Array<Region | 'All'>
   const snapshots: Record<string, ComputedRankingSnapshot> = {}
-  const globalRanking = buildRankingModel(matches, teams, rankingOptions)
+  const globalRanking = precomputedGlobalRanking ?? buildRankingModel(matches, teams, rankingOptions)
   const globalRankingScope: RankingScope = { ranking: globalRanking, teams }
   const seasonRankingCache = new Map<string, RankingScope>()
-  const rollingBaselineCache = new Map<string, RollingRankingState>()
   const rankingScopeForFilter = (filter: SnapshotFilter): RankingScope => {
     if (filter.season === 'All') return globalRankingScope
     const cacheKey = snapshotKey(filter)
@@ -1264,30 +1309,62 @@ export function createStaticRankingData({
 
     const checkpoint = checkpointForFilter(filter, checkpointByFilterKey)
     const scopeMatches = checkpoint ? matchesThroughDate(matches, checkpoint.endDate) : matchesThroughSeason(matches, filter.season)
+    if (!checkpoint && scopeMatches.length === matches.length) {
+      seasonRankingCache.set(cacheKey, globalRankingScope)
+      return globalRankingScope
+    }
     const scopeTeams = teamProfilesForRankingScope(scopeMatches, teams)
     const scope = { ranking: buildRankingModel(scopeMatches, scopeTeams, rankingOptions), teams: scopeTeams }
     seasonRankingCache.set(cacheKey, scope)
     return scope
   }
-  const globalPlayers = buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
-  const seasonPlayerCache = new Map<string, PlayerStanding[]>()
+  const hasObservedGameRosters = matches.some((match) => match.teamARoster || match.teamBRoster)
+  const hasRosterProfiles = Object.keys(rosters).length > 0
+  const runPlayerLifecycleStage = <T extends PlayerStanding[] | CompactPlayer[] | PlayerDirectory>(
+    name: PlayerLifecycleEvent['name'],
+    scope: PlayerLifecycleEvent['scope'],
+    scopeKey: string,
+    operation: () => T,
+  ): T => {
+    const startedAt = performance.now()
+    const result = operation()
+    onPlayerLifecycleStage?.({
+      name,
+      scope,
+      scopeKey,
+      durationMs: Math.max(0, performance.now() - startedAt),
+      playerCount: Array.isArray(result) ? result.length : result.players.length,
+    })
+    return result
+  }
+  let globalPlayers = runPlayerLifecycleStage('player-build', 'global', 'All__All__All', () => (
+    hasObservedGameRosters || hasRosterProfiles
+      ? buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
+      : []
+  ))
+  const seasonPlayerCache = compactPlayerDirectory ? undefined : new Map<string, PlayerStanding[]>()
   const playersForFilter = (filter: SnapshotFilter, filteredMatches: MatchRecord[], scope: RankingScope): PlayerStanding[] => {
     if (filter.event !== 'All' || filter.region !== 'All') return []
     if (filter.season === 'All') return globalPlayers
     const cacheKey = snapshotKey(filter)
-    const cached = seasonPlayerCache.get(cacheKey)
+    const cached = seasonPlayerCache?.get(cacheKey)
     if (cached) return cached
-    const players = buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
-    seasonPlayerCache.set(cacheKey, players)
+    const players = runPlayerLifecycleStage('player-build', 'season', cacheKey, () => (
+      buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
+    ))
+    seasonPlayerCache?.set(cacheKey, players)
     return players
   }
-  const hasRosters = Object.keys(rosters).length > 0
-  const hasObservedGameRosters = matches.some((match) => match.teamARoster || match.teamBRoster)
+  const hasRosters = hasRosterProfiles
   const playerRatingProof = buildPlayerRatingProof(globalPlayers)
   const seedMatches = matches.filter((match) => (match.sourceProvider ?? 'seed') === 'seed')
   const defaultFilter: SnapshotFilter = { season: 'All', event: 'All', region: 'All' }
+  const defaultPlayerSnapshotKey = snapshotKey(defaultFilter)
+  let precomputedDefaultPlayers: CompactPlayer[] | undefined
+  const precomputedScopedPlayers: Record<string, CompactPlayer[]> = {}
 
   for (const filter of buildSnapshotFilters(matches, teams, checkpointOptions)) {
+    if (materializeSnapshotKeys && !materializeSnapshotKeys.has(snapshotKey(filter))) continue
     const checkpoint = checkpointForFilter(filter, checkpointByFilterKey)
     const filteredMatches = filterMatches(matches, teams, filter, checkpoint)
     const snapshotScope = rankingScopeForFilter(filter)
@@ -1315,14 +1392,8 @@ export function createStaticRankingData({
       useCheckpointBaseline: Boolean(checkpoint),
     })
     const rolling = rollingMovementForScope({
-      filter,
       filteredMatches,
       currentStandings: standingsWithDss,
-      matches,
-      teams,
-      rankingOptions,
-      checkpoint,
-      cache: rollingBaselineCache,
     })
     const snapshotLeagueHistory = leagueHistoryForFilter(snapshotScope.ranking.leagueHistory, filteredMatches, snapshotScope.teams, filter)
     const snapshotRegions = withDeservedStandingRegionComparison(
@@ -1332,7 +1403,9 @@ export function createStaticRankingData({
       standingsWithDss,
       { contextStandings: dssContextStandings, useCheckpointBaseline: Boolean(checkpoint) },
     )
-    snapshots[snapshotKey(filter)] = {
+    const key = snapshotKey(filter)
+    let snapshotPlayers = playersForFilter(filter, filteredMatches, snapshotScope)
+    const snapshot: ComputedRankingSnapshot = {
       artifactKind: 'full-ranking-snapshot',
       filter,
       modelVersion: transparentGprModelMetadata.version,
@@ -1343,14 +1416,36 @@ export function createStaticRankingData({
       standings: rolling.standings,
       leagues: snapshotLeagues,
       leagueHistory: snapshotLeagueHistory,
-      players: playersForFilter(filter, filteredMatches, snapshotScope),
+      players: snapshotPlayers,
       events: filterEventSummaries(snapshotScope.ranking.events, filteredMatches),
       seasons: filterSeasonSummaries(snapshotScope.ranking.seasons, filteredMatches),
       regions: snapshotRegions,
     }
+    if (compactPlayerDirectory && key === defaultPlayerSnapshotKey) {
+      precomputedDefaultPlayers = runPlayerLifecycleStage('player-compaction', 'global', key, () => (
+        compactPlayersForSnapshot(snapshot, teams)
+      ))
+      snapshot.players = []
+      globalPlayers = []
+      // Drop the loop-local full history before the production release hook collects.
+      // eslint-disable-next-line no-useless-assignment
+      snapshotPlayers = []
+      onPlayerLifecycleRelease?.({ scope: 'global', scopeKey: key })
+    } else if (compactPlayerDirectory && isSeasonPlayerScope(filter)) {
+      const compact = runPlayerLifecycleStage('player-compaction', 'season', key, () => (
+        compactPlayersForSnapshot(snapshot, teams, { detail: 'scope' })
+      ))
+      if (compact.length > 0) precomputedScopedPlayers[key] = compact
+      snapshot.players = []
+      // Drop the loop-local full history before the production release hook collects.
+      // eslint-disable-next-line no-useless-assignment
+      snapshotPlayers = []
+      onPlayerLifecycleRelease?.({ scope: 'season', scopeKey: key })
+    }
+    snapshots[key] = snapshot
   }
 
-  return {
+  const result: StaticRankingData = {
     artifactKind: 'full-ranking-artifact',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     generatedAt,
@@ -1460,10 +1555,21 @@ export function createStaticRankingData({
       teams,
       generatedAt,
       scheduleReferences: tournamentScheduleReferences,
+      ...(materializeTournamentIds ? { materializeTournamentIds } : {}),
     }),
     teams,
     matches,
   }
+  if (compactPlayerDirectory) {
+    result.precomputedPlayerDirectory = runPlayerLifecycleStage('player-compaction', 'directory', 'players', () => (
+      playerDirectoryFromCompact(
+        result,
+        precomputedDefaultPlayers ?? [],
+        precomputedScopedPlayers,
+      )
+    ))
+  }
+  return result
 }
 
 export function createMatchHistoryArtifacts(
@@ -1534,7 +1640,11 @@ export function createMatchHistoryArtifacts(
       const summary = games.findLast((game) => game.impact.unit === 'series-applied') ?? games.at(-1)
       if (!summary) throw new Error(`Cannot publish empty match history series ${id}`)
       return { id, games, summary }
-    })
+    }).toSorted(compareMatchHistorySeriesChronologically)
+    // Page identities are chronological and therefore stable for latest
+    // appends. The catalog remains newest-first for display and points each
+    // series at its stable storage page.
+    const stablePageBySeriesId = new Map(series.map((entry, index) => [entry.id, Math.floor(index / 25) + 1]))
     const pageGroups = chunk(series, 25)
     const artifactMeta = artifactMetaFor({ generatedAt: data.generatedAt, modelVersion: data.model.version, modelConfigHash: data.model.configHash })
     const pages: Record<number, PublicMatchHistoryPage> = Object.fromEntries(pageGroups.map((group, index) => {
@@ -1554,7 +1664,7 @@ export function createMatchHistoryArtifacts(
         matches: pageMatches,
       }]
     }))
-    const catalogSeries: PublicMatchHistorySeriesRef[] = series.map((entry, index) => ({
+    const catalogSeries: PublicMatchHistorySeriesRef[] = series.toReversed().map((entry) => ({
       id: entry.id,
       date: entry.summary.date,
       ...(entry.summary.datetimeUtc ? { datetimeUtc: entry.summary.datetimeUtc } : {}),
@@ -1562,7 +1672,7 @@ export function createMatchHistoryArtifacts(
       league: entry.summary.league,
       teamA: entry.summary.teamA,
       teamB: entry.summary.teamB,
-      page: Math.floor(index / 25) + 1,
+      page: stablePageBySeriesId.get(entry.id)!,
       gameCount: entry.games.length,
     }))
     const catalog: PublicMatchHistoryCatalog = {
@@ -1580,6 +1690,9 @@ export function createMatchHistoryArtifacts(
         url: matchHistoryPageUrlForKey(key, page.page),
         seriesCount: page.seriesCount,
         gameCount: page.gameCount,
+        seriesIds: [...new Set(page.matches.map((match) => match.seriesId))],
+        startUtcDate: page.matches.map((match) => match.date).sort()[0]!,
+        endUtcDate: page.matches.map((match) => match.date).sort().at(-1)!,
       })),
       series: catalogSeries,
     }
@@ -1593,6 +1706,7 @@ export function createMatchHistoryArtifacts(
     gameCount: catalog.gameCount,
     seriesCount: catalog.seriesCount,
     pageCount: catalog.pages.length,
+    pages: catalog.pages,
   }]))
   return {
     index: {
@@ -1608,6 +1722,15 @@ export function createMatchHistoryArtifacts(
     catalogs,
     pages,
   }
+}
+
+function compareMatchHistorySeriesChronologically(
+  left: { id: string; summary: PublicMatchHistoryEntry },
+  right: { id: string; summary: PublicMatchHistoryEntry },
+) {
+  return (left.summary.datetimeUtc ?? `${left.summary.date}T00:00:00.000Z`)
+    .localeCompare(right.summary.datetimeUtc ?? `${right.summary.date}T00:00:00.000Z`)
+    || left.id.localeCompare(right.id)
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -1663,6 +1786,14 @@ export function createPlayerDirectory(data: StaticRankingData): PlayerDirectory 
       .map(([key, snapshot]) => [key, compactPlayersForSnapshot(snapshot, data.teams, { detail: 'scope' })])
       .filter(([, rows]) => rows.length > 0),
   )
+  return playerDirectoryFromCompact(data, players, scopedPlayers)
+}
+
+function playerDirectoryFromCompact(
+  data: StaticRankingData,
+  players: CompactPlayer[],
+  scopedPlayers: Record<string, CompactPlayer[]>,
+): PlayerDirectory {
   const scopedSameTeamTopFiveClustering: Record<string, SameTeamTopFiveClusteringDiagnostic> = Object.fromEntries(
     Object.entries(scopedPlayers).map(([key, rows]) => [key, sameTeamTopFiveClustering(rows, key)]),
   )
@@ -2437,54 +2568,23 @@ function baselineRankingForCheckpoint(
 const ROLLING_MOVEMENT_DAYS = 30 as const
 
 function rollingMovementForScope({
-  filter,
   filteredMatches,
   currentStandings,
-  matches,
-  teams,
-  rankingOptions,
-  checkpoint,
-  cache,
 }: {
-  filter: SnapshotFilter
   filteredMatches: MatchRecord[]
   currentStandings: ComputedTeamStanding[]
-  matches: MatchRecord[]
-  teams: Record<string, TeamProfile>
-  rankingOptions: Parameters<typeof buildRankingModel>[2]
-  checkpoint?: SnapshotCheckpointOption
-  cache: Map<string, RollingRankingState>
 }): { window?: PublicRollingWindow, standings: ComputedTeamStanding[] } {
   const completedSeries = resolveCanonicalSeries(filteredMatches).filter((series) => series.state === 'completed')
   const endDate = completedSeries.map((series) => series.finalMatch.date).sort().at(-1)
   if (!endDate) return { standings: currentStandings }
   const startDate = shiftUtcDate(endDate, -ROLLING_MOVEMENT_DAYS)
-  const scopeMatches = checkpoint
-    ? matchesThroughDate(matches, checkpoint.endDate)
-    : filter.season === 'All'
-      ? matches
-      : matchesThroughSeason(matches, filter.season)
   const currentTeamNames = new Set(currentStandings.map((standing) => standing.team))
-  const rankingAt = (date: string) => rollingRankingAtDate({
-    date,
-    scopeMatches,
-    teams,
-    rankingOptions,
-    cacheKeyPrefix: `${filter.season}\u0000${checkpoint?.id ?? ''}`,
-    cache,
-  })
-  const baselineRanking = rankingAt(startDate)
-  const endpointRanking = rankingAt(endDate)
+  const baselineRanking = rollingRankingFromStandingHistory(currentStandings, startDate)
+  const endpointRanking = rollingRankingFromStandingHistory(currentStandings, endDate)
   const baselineByTeam = baselineRanking.teams
   const endpointByTeam = endpointRanking.teams
-  const rankMapsByDate = new Map(
-    [startDate, ...completedSeries
-      .map((series) => series.finalMatch.date)
-      .filter((date) => date > startDate && date <= endDate), endDate]
-      .filter((date, index, dates) => dates.indexOf(date) === index)
-      .sort()
-      .map((date) => [date, rollingRankMap(rankingAt(date), currentTeamNames)]),
-  )
+  const baselineRanks = rollingRankMap(baselineRanking, currentTeamNames)
+  const endpointRanks = rollingRankMap(endpointRanking, currentTeamNames)
   const activeSeriesByTeam = new Map<string, number>()
   for (const series of completedSeries) {
     if (series.finalMatch.date <= startDate || series.finalMatch.date > endDate) continue
@@ -2496,13 +2596,19 @@ function rollingMovementForScope({
     const baseline = baselineByTeam.get(standing.team)
     const endpoint = endpointByTeam.get(standing.team)
     const scoredSeries = activeSeriesByTeam.get(standing.team) ?? 0
-    const baselineRank = rankMapsByDate.get(startDate)?.get(standing.team)
-    const currentRank = rankMapsByDate.get(endDate)?.get(standing.team) ?? standing.rank
-    const rankPoints = [...rankMapsByDate]
-      .flatMap(([date, ranks]): Array<[string, number]> => {
-        const rank = ranks.get(standing.team)
-        return rank === undefined ? [] : [[date, rank]]
-      })
+    const baselineRank = baselineRanks.get(standing.team)
+    const currentRank = endpointRanks.get(standing.team) ?? standing.rank
+    const historicalRanks = new Map<string, number>()
+    for (const point of standing.history) {
+      if (point.date <= startDate || point.date > endDate) continue
+      historicalRanks.set(point.date, point.rank)
+    }
+    const rankPoints: Array<[string, number]> = [
+      ...(baselineRank === undefined ? [] : [[startDate, baselineRank] as [string, number]]),
+      ...[...historicalRanks.entries()].sort(([left], [right]) => left.localeCompare(right)),
+    ]
+    if (rankPoints.at(-1)?.[0] === endDate) rankPoints[rankPoints.length - 1] = [endDate, currentRank]
+    else rankPoints.push([endDate, currentRank])
     const biggestUpsetWin = rollingUpsetWin(standing, completedSeries, startDate, endDate)
     const hasBaseline = Boolean(baseline?.hasHistory && baselineRank !== undefined)
     const rollingMovement: PublicTeamRollingMovement = hasBaseline && baseline && endpoint && baselineRank !== undefined
@@ -2541,35 +2647,17 @@ function rollingMovementForScope({
   }
 }
 
-function rollingRankingAtDate({
-  date,
-  scopeMatches,
-  teams,
-  rankingOptions,
-  cacheKeyPrefix,
-  cache,
-}: {
-  date: string
-  scopeMatches: MatchRecord[]
-  teams: Record<string, TeamProfile>
-  rankingOptions: Parameters<typeof buildRankingModel>[2]
-  cacheKeyPrefix: string
-  cache: Map<string, RollingRankingState>
-}) {
-  const cacheKey = `${cacheKeyPrefix}\u0000${date}`
-  const cached = cache.get(cacheKey)
-  if (cached) return cached
-  const datedMatches = matchesThroughDate(scopeMatches, date)
-  const ranking = buildRankingModel(datedMatches, teamProfilesForRankingScope(datedMatches, teams), rankingOptions)
-  const state: RollingRankingState = {
-    teams: new Map(ranking.standings.map((standing) => [standing.team, {
-      rating: standing.rating,
-      eligible: standing.eligibility.eligible,
-      hasHistory: standing.history.length > 0,
-    }])),
+function rollingRankingFromStandingHistory(standings: readonly ComputedTeamStanding[], date: string): RollingRankingState {
+  return {
+    teams: new Map(standings.map((standing) => {
+      const point = standing.history.findLast((entry) => entry.date <= date)
+      return [standing.team, {
+        rating: point?.rating ?? standing.rating,
+        eligible: standing.eligibility.eligible,
+        hasHistory: Boolean(point),
+      }]
+    })),
   }
-  cache.set(cacheKey, state)
-  return state
 }
 
 type RollingRankingState = {

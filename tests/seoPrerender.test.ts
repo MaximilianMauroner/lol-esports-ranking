@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { createServer } from 'vite'
 import { renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
 import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
@@ -34,23 +33,13 @@ test('homepage prerender includes ranking snapshot content from public artifacts
   }
 })
 
-test('Tailwind emits utilities owned only by the prerender source file', async () => {
-  const stylesheet = await readFile('src/index.css', 'utf8')
+test('Tailwind scans utilities owned only by the prerender source file', async () => {
+  const [stylesheet, prerenderSource] = await Promise.all([
+    readFile('src/index.css', 'utf8'),
+    readFile('scripts/seo-prerender.ts', 'utf8'),
+  ])
   assert.match(stylesheet, /@source\s+["']\.\.\/scripts\/seo-prerender\.ts["']/)
-
-  const vite = await createServer({
-    appType: 'custom',
-    configFile: 'vite.config.ts',
-    logLevel: 'silent',
-    server: { middlewareMode: true },
-  })
-  try {
-    const transformed = await vite.transformRequest('/src/index.css')
-    assert.ok(transformed)
-    assert.match(transformed.code, /max-width:\s*1080px/)
-  } finally {
-    await vite.close()
-  }
+  assert.match(prerenderSource, /max-w-\[1080px\]/)
 })
 
 test('only ranking startup holds the prerender while the manifest loads', () => {

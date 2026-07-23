@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22"
-  PNPM_VERSION: "9.15.9"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.16.0"
   RAILWAY_PROJECT_ID: "2bf26cbc-4cfa-4114-87c0-83b446f30816"
   RAILWAY_SERVICE_ID: "d01fe39e-81a4-4230-b997-f13fe8af351b"
   RAILWAY_ENVIRONMENT: production
@@ -27,16 +27,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
