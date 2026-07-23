@@ -5,7 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
-import { normalizeRankingRefreshOutcome } from '../scripts/ranking-refresh-outcome-contract.mjs'
+import {
+  ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
+  oracleGameInventory,
+  prepareOracleBaseline,
+  prepareRawSourceReceipt,
+  rawObjectReferenceFor,
+  type PreparedRawObject,
+} from '../scripts/raw-source-storage.mjs'
 
 type RefreshRun = (command: string, commandArgs: string[]) => Promise<void>
 type RefreshResult = {
@@ -410,7 +417,7 @@ test('refresh date window bootstraps without raw baseline and then uses rolling 
   })
 })
 
-test('refresh wrapper uses the injected bucket client when restoring a missing raw baseline', async () => {
+test('refresh wrapper ignores legacy unverified bucket raw files when bootstrapping', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-injected-restore-'))
   const rawDir = join(tempDir, 'raw')
   const manifestPath = join(rawDir, 'manifest.json')
@@ -504,9 +511,9 @@ test('refresh wrapper uses the injected bucket client when restoring a missing r
       },
     })
 
-    assert.equal(downloadStart, '2026-06-22')
-    assert.equal(await readFile(join(rawDir, 'oracles-elixir', '2025.csv'), 'utf8'), restoredOracle)
-    assert.equal(calls.some((input) => input.Prefix === 'rankings/raw/files/'), true)
+    assert.equal(downloadStart, '2025-01-01')
+    await assert.rejects(readFile(join(rawDir, 'oracles-elixir', '2025.csv')), { code: 'ENOENT' })
+    assert.equal(calls.some((input) => input.Prefix === 'rankings/raw/files/'), false)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
@@ -629,6 +636,11 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
   const statePath = join(rawDir, 'refresh-state.json')
   const stagingDir = join(tempDir, 'staging')
   const previousOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const previousOracleCsv = [
+    'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
+    'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Blue,Gen.G,1,18,65000',
+    'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Red,T1,0,10,58000',
+  ].join('\n')
   let crunchCount = 0
 
   async function fakeRun(command: string, commandArgs: string[]) {
@@ -676,11 +688,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
 
   try {
     await mkdir(join(rawDir, 'oracles-elixir'), { recursive: true })
-    await writeFile(previousOraclePath, [
-      'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
-      'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Blue,Gen.G,1,18,65000',
-      'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Red,T1,0,10,58000',
-    ].join('\n'))
+    await writeFile(previousOraclePath, previousOracleCsv)
     await writeFile(manifestPath, `${JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-07-08T00:00:00.000Z',
@@ -764,11 +772,73 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       assert.equal(preservedManifest.refreshAttempt, undefined)
     }
 
-    const rebuild = await refreshDataIfChanged([
+    const baseline = prepareOracleBaseline({
+      csv: previousOracleCsv,
+      sourceFileName: '2026.csv',
+      importerVersion: 'community-source-import-v1',
+    })
+    const preparedReceipt = prepareRawSourceReceipt({
+      generationId: 'raw_recovery_generation',
+      importerVersion: 'community-source-import-v1',
+      coverage: { start: '2026-01-01', end: '2026-07-08' },
+      sourceReceiptInputs: { sources: { oracle: { status: 'downloaded' } } },
+      oracle: [{
+        sourceFileName: baseline.source.sourceFileName,
+        headerDigest: baseline.source.headerDigest,
+        digestScheme: ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
+        effectiveOracleDigest: baseline.source.digest,
+        gameInventory: oracleGameInventory(baseline.source),
+        baseline: baseline.reference,
+        deltas: [],
+      }],
+    })
+    const receiptReference = rawObjectReferenceFor(preparedReceipt.prepared)
+    type StoredRawObject = Pick<PreparedRawObject, 'compressed' | 'compressedBytes' | 'digest' | 'bytes'>
+    const rawObjects = new Map<string, StoredRawObject>()
+    rawObjects.set(baseline.reference.key, baseline.prepared)
+    rawObjects.set(receiptReference.key, preparedReceipt.prepared)
+    const verifiedBucketClient = {
+      async send(command: { input: Record<string, unknown> }) {
+        const key = String(command.input.Key)
+        if (key === 'rankings/active-generation.json') {
+          const active = {
+            generationId: preparedReceipt.receipt.generationId,
+            storageMode: 'raw-authority-test',
+            rawReceiptKey: `rankings/${receiptReference.key}`,
+            rawReceiptDigest: receiptReference.sha256,
+            rawReceiptBytes: receiptReference.bytes,
+            rawReceiptCompressedBytes: receiptReference.compressedBytes,
+            sourceReceiptDigest: preparedReceipt.receipt.sourceReceiptDigest,
+            rawIdentityDigest: preparedReceipt.receipt.rawIdentityDigest,
+          }
+          return { Body: Readable.from([JSON.stringify(active)]) }
+        }
+        const relativeKey = key.replace(/^rankings\//, '')
+        const prepared = rawObjects.get(relativeKey)
+        if (prepared) {
+          return {
+            Body: Readable.from([prepared.compressed]),
+            ContentLength: prepared.compressedBytes,
+            ContentEncoding: 'gzip',
+            Metadata: {
+              sha256: prepared.digest,
+              'semantic-bytes': String(prepared.bytes),
+              encoding: 'gzip',
+            },
+          }
+        }
+        const error = new Error('NoSuchKey')
+        error.name = 'NoSuchKey'
+        throw error
+      },
+    }
+    const verifiedRecovery = await refreshDataIfChanged([
       ...unavailableArgs,
       '--force',
     ], {
       run: fakeRun,
+      bucketClient: verifiedBucketClient,
+      bucketConfig: bucketConfig(),
       env: {
         ...isolatedRefreshEnv,
         RANKING_REUSE_RAW_ON_SOURCE_FAILURE: 'true',
@@ -778,32 +848,20 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     })
     const rebuiltManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const rebuiltState = JSON.parse(await readFile(statePath, 'utf8'))
-    const rebuiltRoot = JSON.parse(await readFile(join(tempDir, 'public-data', 'ranking-summary.json'), 'utf8'))
 
-    assert.equal(rebuild.changed, true)
-    assert.deepEqual(rebuiltManifest.files.oracleCsv, [previousOraclePath])
-    assert.equal(rebuiltManifest.refreshAttempt.reusedExistingRaw, true)
-    assert.match(rebuiltManifest.warnings.at(-1), /validated existing raw baseline/)
+    assert.equal(verifiedRecovery.changed, true)
+    assert.equal(rebuiltManifest.refreshAttempt.forcedVerifiedRawRecovery, true)
+    assert.equal(rebuiltManifest.refreshAttempt.restoredGenerationId, preparedReceipt.receipt.generationId)
+    assert.equal(rebuiltManifest.sourceAuthorityEvidence.evidence.mode, 'forced-verified-raw-recovery')
+    assert.equal(
+      rebuiltManifest.sourceAuthorityEvidence.evidence.authority.sourceReceiptDigest,
+      preparedReceipt.receipt.sourceReceiptDigest,
+    )
     assert.equal(rebuiltState.status, 'refreshed')
     assert.equal(rebuiltState.coverageEnd, '2026-07-08')
-    assert.equal(rebuild.incrementalAction, 'publish-full')
-    assert.equal(rebuild.incrementalMetrics?.classification, 'full-invalidation')
-    assert.equal(rebuild.incrementalMetrics?.fullSnapshotWritten, true)
-    const recoveryOutcome = normalizeRankingRefreshOutcome({
-      sourceResult: 'completed',
-      providerStatus: 'failed',
-      force: true,
-      rawRecoveryAuthorized: true,
-      validatedExistingRawBaseline: rebuiltManifest.refreshAttempt.reusedExistingRaw === true,
-      dataMode: rebuiltRoot.dataMode,
-      rankingChangeKind: rebuild.incrementalMetrics?.classification,
-      buildAction: rebuild.incrementalAction,
-      parity: rebuild.incrementalMetrics?.parity,
-      stateParity: rebuild.incrementalMetrics?.stateParity,
-      checkpointParity: rebuild.incrementalMetrics?.stateParityReport?.checkpointEqual ?? null,
-      fallbackReason: rebuild.incrementalMetrics?.fallbackReason ?? null,
-    })
-    assert.equal(recoveryOutcome.outcome, 'forced-verified-raw-rebuild')
+    assert.equal(verifiedRecovery.incrementalAction, 'publish-full')
+    assert.equal(verifiedRecovery.incrementalMetrics?.classification, 'full-invalidation')
+    assert.equal(verifiedRecovery.incrementalMetrics?.fullSnapshotWritten, true)
 
     await rm(previousOraclePath)
     const missingPriorRaw = await runUnavailable(true, true)

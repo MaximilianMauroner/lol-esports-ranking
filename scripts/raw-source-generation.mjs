@@ -118,6 +118,10 @@ export async function prepareRawSourceGeneration({
     refreshWindow: manifest.refreshWindow,
     sources: manifest.sources ?? {},
     warnings: manifest.warnings ?? [],
+    ...(manifest.sourceAuthorityEvidence
+      ? { sourceAuthorityEvidence: manifest.sourceAuthorityEvidence }
+      : {}),
+    ...(manifest.refreshAttempt ? { refreshAttempt: manifest.refreshAttempt } : {}),
   }
   return finalizeRawSourceGeneration({
     generationId,
@@ -167,6 +171,12 @@ export async function materializeVerifiedPreparedRawSourceGeneration(generation,
       warnings: generation.sourceReceiptInputs.warnings ?? [],
       ...(generation.sourceReceiptInputs.refreshWindow
         ? { refreshWindow: generation.sourceReceiptInputs.refreshWindow }
+        : {}),
+      ...(generation.sourceReceiptInputs.sourceAuthorityEvidence
+        ? { sourceAuthorityEvidence: generation.sourceReceiptInputs.sourceAuthorityEvidence }
+        : {}),
+      ...(generation.sourceReceiptInputs.refreshAttempt
+        ? { refreshAttempt: generation.sourceReceiptInputs.refreshAttempt }
         : {}),
     }
     await writeFile(join(nextDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
