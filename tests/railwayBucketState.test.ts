@@ -493,7 +493,7 @@ test('pre-promotion state model and publication outcomes are exact and exhaustiv
       stateManifestAuthority: {
         ...matching,
         publicationObjects: [
-          ...matching.publicationObjects,
+          ...publicationObjects,
           { key: `rankings/state/objects/sha256/${'f'.repeat(64)}`, digest: 'f'.repeat(64), bytes: 1, outcome: 'reused' },
         ],
       },

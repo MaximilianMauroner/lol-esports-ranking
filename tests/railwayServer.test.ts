@@ -9,7 +9,12 @@ import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import test from 'node:test'
 import { canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { createGenerationPublicationReceipt, publicationReceiptBytes } from '../scripts/generation-publication.mjs'
+import {
+  createGenerationPublicationReceipt,
+  publicationReceiptBytes,
+  type PublicationObject,
+  type PublicationObjectOutcome,
+} from '../scripts/generation-publication.mjs'
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
 import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
@@ -155,6 +160,27 @@ test('Railway server reuses its verified root cache and invalidates it when the 
   const manifestDigest = createHash('sha256').update(manifestBody).digest('hex')
   const manifestEtag = '"manifest-etag"'
   const rawDigest = 'b'.repeat(64)
+  const uploaded: PublicationObjectOutcome = 'uploaded'
+  const publicationObjects: PublicationObject[] = [
+    {
+      key: `rankings/generations/${generationId}/manifest.json`,
+      digest: manifestDigest,
+      bytes: manifestBody.byteLength,
+      outcome: uploaded,
+    },
+    {
+      key: `rankings/objects/sha256/${preparedRoot.digest}`,
+      digest: preparedRoot.digest,
+      bytes: preparedRoot.compressedBytes,
+      outcome: uploaded,
+    },
+    {
+      key: `rankings/raw/objects/sha256/${rawDigest}`,
+      digest: rawDigest,
+      bytes: 123,
+      outcome: uploaded,
+    },
+  ]
   const receipt = createGenerationPublicationReceipt({
     generationId,
     preparedAt: '2026-07-23T00:00:00.000Z',
@@ -181,26 +207,7 @@ test('Railway server reuses its verified root cache and invalidates it when the 
         bytes: 123,
       },
     },
-    objects: [
-      {
-        key: `rankings/generations/${generationId}/manifest.json`,
-        digest: manifestDigest,
-        bytes: manifestBody.byteLength,
-        outcome: 'uploaded',
-      },
-      {
-        key: `rankings/objects/sha256/${preparedRoot.digest}`,
-        digest: preparedRoot.digest,
-        bytes: preparedRoot.compressedBytes,
-        outcome: 'uploaded',
-      },
-      {
-        key: `rankings/raw/objects/sha256/${rawDigest}`,
-        digest: rawDigest,
-        bytes: 123,
-        outcome: 'uploaded',
-      },
-    ],
+    objects: publicationObjects,
   })
   const preparedReceipt = publicationReceiptBytes(receipt)
   const receiptEtag = '"receipt-etag"'
@@ -766,6 +773,31 @@ async function contentAddressedReaderFixture() {
   const manifestDigest = createHash('sha256').update(manifestBody).digest('hex')
   const manifestEtag = '"content-reader-manifest"'
   const rawDigest = 'f'.repeat(64)
+  const uploaded: PublicationObjectOutcome = 'uploaded'
+  const publicationObjects: PublicationObject[] = [
+    {
+      key: `rankings/generations/${generationId}/manifest.json`,
+      digest: manifestDigest,
+      bytes: manifestBody.byteLength,
+      outcome: uploaded,
+    },
+    ...entries.map((entry): PublicationObject => ({
+      key: `rankings/objects/sha256/${entry.digest}`,
+      digest: entry.digest,
+      bytes: entry.logicalPath === '/data/ranking-summary.json'
+        ? rootArtifact.compressedBytes
+        : entry.logicalPath === canonicalPublicLogicalPath(snapshotEntry.url)
+          ? shardArtifact.compressedBytes
+          : 1,
+      outcome: uploaded,
+    })),
+    {
+      key: `rankings/raw/objects/sha256/${rawDigest}`,
+      digest: rawDigest,
+      bytes: 1,
+      outcome: uploaded,
+    },
+  ]
   const receipt = createGenerationPublicationReceipt({
     generationId,
     preparedAt: rankingManifest.generatedAt,
@@ -792,32 +824,7 @@ async function contentAddressedReaderFixture() {
         bytes: 1,
       },
     },
-    objects: [
-      {
-        key: `rankings/generations/${generationId}/manifest.json`,
-        digest: manifestDigest,
-        bytes: manifestBody.byteLength,
-        outcome: 'uploaded',
-      },
-      ...entries.map((entry) => ({
-        key: `rankings/objects/sha256/${entry.digest}`,
-        digest: entry.digest,
-        bytes: logicalPaths.includes(entry.logicalPath)
-          ? (entry.logicalPath === '/data/ranking-summary.json'
-              ? rootArtifact.compressedBytes
-              : entry.logicalPath === canonicalPublicLogicalPath(snapshotEntry.url)
-                ? shardArtifact.compressedBytes
-                : 1)
-          : 1,
-        outcome: 'uploaded',
-      })),
-      {
-        key: `rankings/raw/objects/sha256/${rawDigest}`,
-        digest: rawDigest,
-        bytes: 1,
-        outcome: 'uploaded',
-      },
-    ],
+    objects: publicationObjects,
   })
   const preparedReceipt = publicationReceiptBytes(receipt)
   const receiptEtag = '"content-reader-receipt"'

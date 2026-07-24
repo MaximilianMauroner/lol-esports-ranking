@@ -45,7 +45,7 @@ test('inventory protects retained and operational objects while exposing only ol
     `rankings/raw/objects/sha256/${'d'.repeat(64)}`,
   ])
   assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/generations/g1/manifest.json' && entry.reasons.includes('active-generation-public-manifest')))
-  assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/generations/g0/manifest.json' && entry.reasons.includes('previous-generation-public-manifest')))
+  assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/generations/g0/manifest.json' && entry.reasons.includes('retained-public-generation')))
   assert.ok(inventory.protected.some((entry) => entry.key === `rankings/objects/sha256/${'c'.repeat(64)}` && entry.reasons.includes('minimum-delete-age')))
   assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/raw/files/legacy.csv' && entry.reasons.includes('operational-or-unknown-namespace')))
   for (const key of [
@@ -120,7 +120,7 @@ test('missing retained references fail closed with no deletion candidates', asyn
   const inventory = await buildRankingBucketInventory({ config, client, now })
   assert.equal(inventory.valid, false)
   assert.equal(inventory.deletionCandidates.length, 0)
-  assert.ok(inventory.missingReferences.some((entry) => entry.referencedKey === 'rankings/generations/g1/manifest.json'))
+  assert.ok(inventory.errors.some((error) => error.reason === 'active-generation-publication-authority-invalid'))
 })
 
 test('minimum deletion age includes exactly 48 hours and protects just under', async () => {
@@ -153,8 +153,7 @@ test('retained public, recursive state, current raw, and recent audit roots prot
 
 test('corrupt retained content and pointer ETag/reference mutations change or invalidate approval', async () => {
   const client = gcMemoryS3()
-  seedValidBucket(client)
-  const graph = seedRetainedGraph(client)
+  const graph = seedReceiptBoundPointers(client)
   const baseline = await buildRankingBucketInventory({ config, client, now })
   const activeForBadPrevious = JSON.parse(client.objects.get('rankings/active-generation.json')!.bytes.toString('utf8'))
   activeForBadPrevious.previousGeneration = {
@@ -231,6 +230,38 @@ test('strict publish closure rejects authority omission, body mutation, and meta
   assert.ok(metadataInventory.errors.some((error) => error.message?.includes('metadata mismatch')))
 })
 
+test('GC accepts only the exact historical schema-1 legacy cutover authority', async () => {
+  const client = gcMemoryS3()
+  seedValidBucket(client)
+  const inventory = await buildRankingBucketInventory({ config, client, now })
+  assert.equal(inventory.valid, true, JSON.stringify(inventory.errors))
+  assert.equal(inventory.deletionCandidates.length > 0, true)
+})
+
+test('native schema-2 authority stripped of every receipt and public marker fails closed', async () => {
+  for (const keepPreviousGeneration of [false, true]) {
+    const client = gcMemoryS3()
+    seedReceiptBoundPointers(client)
+    const stored = client.objects.get('rankings/active-generation.json')!
+    const active = JSON.parse(stored.bytes.toString('utf8')) as Record<string, unknown>
+    for (const field of [
+      'publicationSchemaVersion',
+      'publicationReceiptKey',
+      'publicationReceiptDigest',
+      'publicationReceiptBytes',
+      'publicationReceiptEtag',
+      'publicManifestSchemaVersion',
+    ]) delete active[field]
+    if (!keepPreviousGeneration) delete active.previousGeneration
+    stored.bytes = Buffer.from(JSON.stringify(active))
+
+    const inventory = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(inventory.valid, false, `previousGeneration=${keepPreviousGeneration}`)
+    assert.equal(inventory.deletionCandidates.length, 0)
+    assert.ok(inventory.errors.some((error) => error.reason === 'active-generation-publication-authority-invalid'))
+  }
+})
+
 test('receipt-bound active and previous pointers require exact schema-1 publication bindings', async () => {
   const validClient = gcMemoryS3()
   seedReceiptBoundPointers(validClient)
@@ -273,6 +304,16 @@ type Stored = { bytes: Buffer; etag: string; lastModified: Date; contentType?: s
 function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
   const currentManifest = seedGeneration(client, 'g1', '2026-07-22T12:00:00.000Z')
   seedGeneration(client, 'g0', '2026-01-01T00:00:00.000Z')
+  const currentStored = client.objects.get(currentManifest.key)!
+  const schemaV1 = { ...JSON.parse(currentStored.bytes.toString('utf8')), schemaVersion: 1 }
+  currentStored.bytes = Buffer.from(JSON.stringify(schemaV1))
+  currentStored.metadata = {
+    sha256: digest(currentStored.bytes),
+    'semantic-bytes': String(currentStored.bytes.byteLength),
+  }
+  currentManifest.digest = currentStored.metadata.sha256
+  currentManifest.bytes = currentStored.bytes.byteLength
+  seedPublishReceipt(client, 'g1', currentManifest)
   const active = {
     schemaVersion: 2,
     generationId: 'g1',
@@ -283,11 +324,6 @@ function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
     manifestDigest: currentManifest.digest,
     manifestBytes: currentManifest.bytes,
     manifestEtag: currentManifest.etag,
-    previousGeneration: {
-      generationId: 'g0',
-      manifestKey: 'rankings/generations/g0/manifest.json',
-      promotedAt: '2026-01-01T00:00:00.000Z',
-    },
   }
   client.set('rankings/active-generation.json', Buffer.from(JSON.stringify(active)), '2026-07-22T12:00:00.000Z', 'active-etag')
   client.set(`rankings/objects/sha256/${'b'.repeat(64)}`, Buffer.from('old-public-orphan'), '2026-07-10T00:00:00.000Z')
@@ -305,7 +341,7 @@ function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
 
 function seedReceiptBoundPointers(client: ReturnType<typeof gcMemoryS3>) {
   seedValidBucket(client)
-  seedRetainedGraph(client)
+  const graph = seedRetainedGraph(client, 2)
   const activeObject = client.objects.get('rankings/active-generation.json')!
   const active = JSON.parse(activeObject.bytes.toString('utf8')) as Record<string, unknown>
   const bindings = new Map<string, {
@@ -392,6 +428,7 @@ function seedReceiptBoundPointers(client: ReturnType<typeof gcMemoryS3>) {
   const current = bindings.get('g1')!
   const previous = bindings.get('g0')!
   Object.assign(active, {
+    publicManifestSchemaVersion: 2,
     publicationSchemaVersion: 1,
     ...current,
     previousGeneration: {
@@ -403,6 +440,7 @@ function seedReceiptBoundPointers(client: ReturnType<typeof gcMemoryS3>) {
     },
   })
   activeObject.bytes = Buffer.from(JSON.stringify(active))
+  return graph
 }
 
 function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: string, lastModified: string) {
@@ -507,14 +545,14 @@ function seedCanonicalJson(client: ReturnType<typeof gcMemoryS3>, key: string, v
   })
 }
 
-function seedRetainedGraph(client: ReturnType<typeof gcMemoryS3>) {
+function seedRetainedGraph(client: ReturnType<typeof gcMemoryS3>, publicManifestSchemaVersion = 1) {
   const generationId = 'g1'
   const publicObject = prepareSemanticArtifact({ artifactKind: 'test-public-artifact', rows: [] })
   const sharedPublicKey = `rankings/objects/sha256/${publicObject.digest}`
   seedPrepared(client, sharedPublicKey, publicObject, '2026-01-01T00:00:00.000Z')
   const publicManifest = {
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 2,
+    schemaVersion: publicManifestSchemaVersion,
     storageMode: 'content-addressed-gzip-v1',
     generationId,
     runId: generationId,

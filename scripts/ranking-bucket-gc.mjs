@@ -15,7 +15,11 @@ import {
   readBucketJson,
   safeRequestedObjectPath,
 } from './railway-bucket.mjs'
-import { classifyActiveGenerationPointer, parseGenerationPublicationReceipt } from './generation-publication.mjs'
+import {
+  assertLegacyGenerationCutoverPointer,
+  classifyActiveGenerationPointer,
+  parseGenerationPublicationReceipt,
+} from './generation-publication.mjs'
 
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000
@@ -364,12 +368,9 @@ export async function buildRankingBucketInventory({
   return { ...payload, inventorySha256: sha256(Buffer.from(canonicalJsonFor(payload))) }
 }
 
-async function validatePointerPublication(value, label, key, addError, config, client, activeContainer = false) {
+async function validatePointerPublication(value, label, key, addError, config, client, requireLegacyCutover = false) {
   try {
-    const classifiedValue = activeContainer && value?.publicationSchemaVersion === undefined && value?.previousGeneration !== undefined
-      ? Object.fromEntries(Object.entries(value).filter(([field]) => field !== 'previousGeneration'))
-      : value
-    const kind = classifyActiveGenerationPointer(classifiedValue)
+    const kind = classifyActiveGenerationPointer(value)
     if (kind === 'receipt-bound') {
       const publication = await readActiveGenerationPublication({
         config,
@@ -378,6 +379,19 @@ async function validatePointerPublication(value, label, key, addError, config, c
         verifyClosure: false,
       })
       if (!publication.found) throw new Error(`${label} publication receipt is unavailable`)
+    } else if (requireLegacyCutover) {
+      const expectedKey = bucketKey(config, `generations/${value.generationId}/manifest.json`)
+      if (absoluteReferenceKey(config, value.manifestKey) !== expectedKey) {
+        throw new Error('Legacy active public generation manifest key is not canonical')
+      }
+      const stored = await getStored(client, config, expectedKey)
+      const digest = sha256(stored.bytes)
+      assertStoredPublicManifest(stored, digest)
+      if (value.manifestDigest !== digest || value.manifestBytes !== stored.bytes.byteLength
+        || value.manifestEtag !== stored.etag) {
+        throw new Error('Legacy active public generation manifest authority mismatch')
+      }
+      assertLegacyGenerationCutoverPointer(value, JSON.parse(stored.bytes.toString('utf8')))
     }
     return kind
   } catch (error) {
@@ -495,7 +509,7 @@ function parsePointerGeneration(value, label, key, addError, config, current) {
 
 function parsePublicGenerationManifest(value, generationId) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
-    || value.artifactKind !== 'public-artifact-generation-manifest' || value.schemaVersion !== 2
+    || value.artifactKind !== 'public-artifact-generation-manifest' || ![1, 2].includes(value.schemaVersion)
     || value.storageMode !== 'content-addressed-gzip-v1' || value.generationId !== generationId || value.runId !== generationId
     || typeof value.generatedAt !== 'string' || Number.isNaN(new Date(value.generatedAt).getTime())
     || !value.model || typeof value.model.version !== 'string' || value.model.version.length === 0
