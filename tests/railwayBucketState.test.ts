@@ -1109,6 +1109,51 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
 
     // A fresh process sees the pre-change pointer without a cached v2 marker.
     const client = cloneMemoryS3(sourceClient)
+    const legacyActive = client.objects.get('rankings/active-generation.json')!
+    const renewed = await renewBucketLease('ops/refresh-lease.json', {
+      etag: legacyActive.etag,
+      lease: {
+        owner: String(oldPointer.leaseOwner),
+        fencingToken: Number(oldPointer.leaseFencingToken),
+        acquiredAt: String(oldPointer.leaseAcquiredAt),
+        expiresAt: String(oldPointer.leaseExpiresAt),
+      },
+    }, {
+      now: '2026-07-24T00:00:00.000Z',
+      ttlMs: 60_000,
+      config,
+      client,
+    })
+    assert.ok(renewed.renewed)
+    assert.equal((await readActiveContentAddressedGeneration({
+      config,
+      client,
+      verifyArtifacts: false,
+    })).cutover, 'schema-v1-active-manifest-to-v2')
+
+    const released = await releaseBucketLease('ops/refresh-lease.json', renewed, {
+      now: '2026-07-24T00:00:30.000Z',
+      config,
+      client,
+    })
+    assert.equal(released.released, true)
+    assert.equal((await readActiveContentAddressedGeneration({
+      config,
+      client,
+      verifyArtifacts: false,
+    })).cutover, 'schema-v1-active-manifest-to-v2')
+
+    const unknownFieldClient = cloneMemoryS3(client)
+    const unknownFieldObject = unknownFieldClient.objects.get('rankings/active-generation.json')!
+    const unknownFieldPointer = JSON.parse(unknownFieldObject.body)
+    unknownFieldPointer.unexpectedLeaseField = true
+    unknownFieldObject.body = JSON.stringify(unknownFieldPointer)
+    unknownFieldObject.bytes = Buffer.from(unknownFieldObject.body)
+    await assert.rejects(
+      readActiveContentAddressedGeneration({ config, client: unknownFieldClient, verifyArtifacts: false }),
+      /unsupported native authority fields/,
+    )
+
     const cutoverManifest = client.objects.get(manifestKey)!
     const delivered = await getBucketObject('ranking-summary.json', { config, client })
     assert.equal(delivered.cutover, 'schema-v1-active-manifest-to-v2')

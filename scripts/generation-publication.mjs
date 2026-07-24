@@ -27,6 +27,8 @@ const legacyPointerFields = new Set([
   'leaseFencingToken',
   'leaseAcquiredAt',
   'leaseExpiresAt',
+  'leaseRenewedAt',
+  'leaseReleasedAt',
 ])
 
 export function classifyActiveGenerationPointer(value) {
