@@ -23,6 +23,8 @@ type RefreshResult = {
   status?: string
   reason?: string
   incrementalAction?: 'no-change' | 'publish-incremental' | 'publish-full'
+  committedWithOperationalWarnings?: boolean
+  operationalWarnings?: Array<{ stage: string; message: string }>
   incrementalMetrics?: {
     classification: string
     fullSnapshotWritten: boolean
@@ -56,6 +58,7 @@ type RefreshModule = {
     bucketConfig?: BucketConfig
     env?: Record<string, string | undefined>
     readActiveRawSourceAuthority?: () => Promise<unknown>
+    uploadRankingArtifacts?: (options: Record<string, unknown>) => Promise<Record<string, unknown>>
   }) => Promise<RefreshResult>
   refreshDateWindow: (options?: {
     args?: Record<string, string | undefined>
@@ -1388,6 +1391,110 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
     assert.equal(JSON.parse(publishBody as string).artifactCount, uploadedState.bucket.uploadedCount)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh workflow preserves a committed promotion and surfaces post-CAS audit, telemetry, and state warnings', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lol-ranking-committed-warnings-'))
+  const rawDir = join(root, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const stagingDir = join(root, 'staging')
+  const publicDataDir = join(root, 'public-data')
+  const output = join(root, 'derived', 'ranking-snapshot.full.json')
+  const metricsPath = join(root, 'metrics.json')
+  const warnings = [
+    { stage: 'post-commit-telemetry', message: 'injected audit receipt failure' },
+    { stage: 'post-commit-refresh-state', message: 'injected remote state failure' },
+    { stage: 'promotion-observer', message: 'injected terminal telemetry failure' },
+  ]
+  const loggedWarnings: string[] = []
+  const originalWarn = console.warn
+  console.warn = (message?: unknown) => { loggedWarnings.push(String(message)) }
+  try {
+    const result = await refreshDataIfChanged([
+      '--raw-dir', rawDir,
+      '--manifest', manifestPath,
+      '--state', statePath,
+      '--staging-dir', stagingDir,
+      '--output', output,
+      '--public-data-dir', publicDataDir,
+      '--end', '2026-06-29',
+    ], {
+      run: async (command, commandArgs) => {
+        if (commandArgs.includes('scripts/download-local-data.mjs')) {
+          const outDir = valueAfter(commandArgs, '--out-dir')
+          const nextManifestPath = valueAfter(commandArgs, '--manifest')
+          const oraclePath = join(outDir, 'oracles-elixir', '2026.csv')
+          await mkdir(join(outDir, 'oracles-elixir'), { recursive: true })
+          await writeFile(oraclePath, 'gameid,result\nnew,1\n')
+          await writeFile(nextManifestPath, JSON.stringify({
+            ...manifest(oraclePath),
+            files: { leaguepediaJson: [], oracleCsv: [oraclePath] },
+          }))
+          return
+        }
+        if (command === 'pnpm' && commandArgs.includes('scripts/build-static-snapshot.ts')) {
+          await mkdir(join(publicDataDir, 'scopes'), { recursive: true })
+          await mkdir(join(root, 'derived'), { recursive: true })
+          await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+          await writeFile(join(publicDataDir, 'scopes', 'all.json'), '{}\n')
+          await writeFile(output, '{}\n')
+          return
+        }
+        throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
+      },
+      bucketClient: { async send() { throw new Error('upload stub should own bucket publication') } },
+      bucketConfig: bucketConfig(),
+      uploadRankingArtifacts: async () => ({
+        enabled: true,
+        bucket: 'bucket-123',
+        prefix: 'rankings',
+        uploaded: [],
+        unchanged: [],
+        skipped: [],
+        reused: [],
+        artifactCount: 0,
+        uploadedCount: 0,
+        uploadedBytes: 0,
+        unchangedCount: 0,
+        unchangedBytes: 0,
+        promotion: {
+          completed: true,
+          generationId: 'committed-warning-generation',
+          fencingToken: 7,
+          promotedAt: '2026-06-29T00:00:00.000Z',
+          etag: '"committed-etag"',
+        },
+        committedWithOperationalWarnings: true,
+        operationalWarnings: warnings,
+      }),
+      env: {
+        RANKING_BUCKET_RESTORE_RAW: 'false',
+        RANKING_REFRESH_METRICS_PATH: metricsPath,
+      },
+    })
+
+    assert.equal(result.status, 'committed-with-operational-warnings')
+    assert.equal(result.committedWithOperationalWarnings, true)
+    assert.deepEqual(result.operationalWarnings, warnings)
+    const state = JSON.parse(await readFile(statePath, 'utf8'))
+    assert.equal(state.bucket.committedWithOperationalWarnings, true)
+    assert.deepEqual(state.bucket.operationalWarnings, warnings)
+    assert.equal(state.lastRun.result, 'committed-with-operational-warnings')
+    const postCommitStage = state.lastRun.stages.find((stage: { name: string }) => stage.name === 'post-commit-operations')
+    assert.equal(postCommitStage.result, 'failed')
+    assert.deepEqual(postCommitStage.output.warnings, warnings)
+    assert.equal(
+      state.lastRun.stages.some((stage: { name: string; result: string }) => stage.name === 'full-audit-receipt' && stage.result === 'completed'),
+      false,
+    )
+    const persistedMetrics = JSON.parse(await readFile(metricsPath, 'utf8'))
+    assert.equal(persistedMetrics.result, 'committed-with-operational-warnings')
+    assert.equal(loggedWarnings.some((message) => message.includes('injected audit receipt failure')), true)
+  } finally {
+    console.warn = originalWarn
+    await rm(root, { recursive: true, force: true })
   }
 })
 

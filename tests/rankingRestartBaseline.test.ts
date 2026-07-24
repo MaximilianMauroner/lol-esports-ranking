@@ -15,6 +15,10 @@ import {
   resolveCommitIdentity,
 } from '../scripts/ranking-restart-baseline.mjs'
 import {
+  createGenerationPublicationReceipt,
+  publicationReceiptBytes,
+} from '../scripts/generation-publication.mjs'
+import {
   canonicalJsonFor,
   createGenerationManifest,
   prepareSemanticArtifact,
@@ -157,11 +161,14 @@ test('full capture rejects corrupt bodies, crossed publish authority, and pointe
   const value = JSON.parse(publish.bytes.toString('utf8'))
   const wrongDigest = 'f'.repeat(64)
   value.authorities.publicManifest.digest = wrongDigest
-  const entry = [...value.artifacts, ...value.unchanged].find((candidate) => candidate.key === value.authorities.publicManifest.key)
+  const entry = value.objects.find((candidate: { key: string }) => candidate.key === value.authorities.publicManifest.key)
   entry.digest = wrongDigest
   publish.bytes = Buffer.from(canonicalJsonFor(value))
   publish.contentLength = publish.bytes.byteLength
-  await assert.rejects(captureRankingRestartBaseline(crossed.captureOptions), /publicManifest authority does not match/)
+  await assert.rejects(
+    captureRankingRestartBaseline(crossed.captureOptions),
+    /publication receipt authority mismatch|publicManifest authority does not match/,
+  )
 
   const raced = productionCaptureFixture()
   await assert.rejects(captureRankingRestartBaseline({
@@ -536,14 +543,59 @@ function productionCaptureFixture({ audit = 'absent' }: { audit?: 'absent' | 'pr
     for (const prepared of state.objects) putCompressed(objects, `rankings/state/objects/sha256/${prepared.digest}`, prepared)
     const stateStored = putPlain(objects, `rankings/state/generations/${generationId}.json`, state.manifest, `"state-${generationId}"`, true)
 
-    const publish = publishReceiptFor({
+    const publicationObjects = [
+      `rankings/generations/${generationId}/manifest.json`,
+      ...publicObjects.map(({ prepared }) => `rankings/objects/sha256/${prepared.digest}`),
+      `rankings/${rawReference.key}`,
+      `rankings/${baseline.reference.key}`,
+      `rankings/state/generations/${generationId}.json`,
+      `rankings/${ledgerReference.key}`,
+      ...state.objects.map((prepared) => `rankings/state/objects/sha256/${prepared.digest}`),
+    ].map((key) => {
+      const stored = objects.get(key)
+      assert.ok(stored, key)
+      return {
+        key,
+        digest: stored.metadata?.sha256 ?? sha256(stored.bytes),
+        bytes: stored.contentLength,
+        outcome: 'uploaded' as const,
+      }
+    })
+    const publish = createGenerationPublicationReceipt({
       generationId,
-      publicStored,
-      rawReference,
-      publicObjects: publicObjects.map(({ prepared }) => prepared),
+      preparedAt: promotedAt,
+      prefix: 'rankings',
+      fencingToken: 7,
+      leaseOwner: 'production-shaped-fixture',
+      promotionEtag: '"lease-etag"',
+      provenance: {
+        modelVersion: model.version,
+        modelConfigHash: model.configHash,
+        source: root.source,
+        dataMode: root.dataMode,
+        sourceProviders: publicManifest.provenance.sourceProviders,
+      },
+      authorities: {
+        publicManifest: {
+          key: `rankings/generations/${generationId}/manifest.json`,
+          digest: sha256(publicStored.bytes),
+          bytes: publicStored.bytes.byteLength,
+        },
+        stateManifest: {
+          key: `rankings/state/generations/${generationId}.json`,
+          digest: sha256(stateStored.bytes),
+          bytes: stateStored.bytes.byteLength,
+        },
+        rawReceipt: {
+          key: `rankings/${rawReference.key}`,
+          digest: rawReference.sha256,
+          bytes: rawReference.compressedBytes,
+        },
+      },
+      objects: publicationObjects,
     })
     const publishKey = `rankings/generations/${generationId}/publish.json`
-    putPlain(objects, publishKey, publish, `"publish-${generationId}"`)
+    const publishStored = putPlain(objects, publishKey, publish, `"publish-${generationId}"`, true)
     return {
       generationId,
       promotedAt,
@@ -564,6 +616,9 @@ function productionCaptureFixture({ audit = 'absent' }: { audit?: 'absent' | 'pr
       rawKey: `rankings/${rawReference.key}`,
       publish,
       publishKey,
+      publishDigest: publicationReceiptBytes(publish).digest,
+      publishBytes: publishStored.bytes.byteLength,
+      publishEtag: publishStored.etag,
     }
   }
 
@@ -582,6 +637,11 @@ function productionCaptureFixture({ audit = 'absent' }: { audit?: 'absent' | 'pr
     manifestDigest: active.publicManifestDigest,
     manifestBytes: active.publicManifestBytes,
     manifestEtag: active.publicManifestEtag,
+    publicationReceiptKey: active.publishKey,
+    publicationReceiptDigest: active.publishDigest,
+    publicationReceiptBytes: active.publishBytes,
+    publicationReceiptEtag: active.publishEtag,
+    publicationSchemaVersion: 1,
     stateManifestKey: active.stateKey,
     stateManifestDigest: active.stateManifestDigest,
     rawReceiptKey: active.rawKey,
@@ -693,77 +753,6 @@ function productionCaptureFixture({ audit = 'absent' }: { audit?: 'absent' | 'pr
     active: { ...active, pointer, pointerKey },
     previous,
     captureOptions,
-  }
-}
-
-function publishReceiptFor({
-  generationId,
-  publicStored,
-  rawReference,
-  publicObjects,
-}: {
-  generationId: string
-  publicStored: BucketStored
-  rawReference: ReturnType<typeof rawObjectReferenceFor>
-  publicObjects: Array<ReturnType<typeof prepareSemanticArtifact>>
-}) {
-  const manifestDigest = sha256(publicStored.bytes)
-  const entries = [
-    {
-      key: `rankings/generations/${generationId}/manifest.json`,
-      bytes: publicStored.bytes.byteLength,
-      contentType: 'application/json; charset=utf-8',
-      digest: manifestDigest,
-    },
-    {
-      key: `rankings/raw/objects/sha256/${rawReference.sha256}`,
-      bytes: rawReference.compressedBytes,
-      contentType: 'application/json; charset=utf-8',
-      digest: rawReference.sha256,
-    },
-    ...publicObjects.map((prepared) => ({
-      key: `rankings/objects/sha256/${prepared.digest}`,
-      bytes: prepared.compressedBytes,
-      contentType: 'application/json; charset=utf-8',
-      digest: prepared.digest,
-    })),
-  ]
-  return {
-    schemaVersion: 2,
-    publishedAt: '2026-07-23T01:00:00.000Z',
-    prefix: 'rankings',
-    generationId,
-    storageMode: 'content-addressed-gzip-v1',
-    storage: {
-      mode: 'content-addressed-gzip-v1',
-      objectCount: publicObjects.length,
-      logicalArtifactCount: publicObjects.length,
-      semanticLogicalBytes: publicObjects.reduce((sum, prepared) => sum + prepared.bytes, 0),
-      compressedLogicalBytes: publicObjects.reduce((sum, prepared) => sum + prepared.compressedBytes, 0),
-      uniqueCompressedBytes: publicObjects.reduce((sum, prepared) => sum + prepared.compressedBytes, 0),
-    },
-    authorities: {
-      publicManifest: {
-        key: entries[0].key,
-        digest: manifestDigest,
-        bytes: publicStored.bytes.byteLength,
-        contentType: 'application/json; charset=utf-8',
-      },
-      rawReceipt: {
-        key: entries[1].key,
-        digest: rawReference.sha256,
-        bytes: rawReference.compressedBytes,
-        contentType: 'application/json; charset=utf-8',
-      },
-    },
-    artifactCount: entries.length,
-    uploadedCount: entries.length,
-    uploadedBytes: entries.reduce((sum, entry) => sum + entry.bytes, 0),
-    unchangedCount: 0,
-    unchangedBytes: 0,
-    artifacts: entries,
-    unchanged: [],
-    skipped: [],
   }
 }
 

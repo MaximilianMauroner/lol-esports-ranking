@@ -10,6 +10,7 @@ import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCom
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import {
+  assertLegacyGenerationCutoverPointer,
   classifyActiveGenerationPointer,
   createGenerationPublicationReceipt,
   deduplicatePublicationOutcomes,
@@ -23,6 +24,7 @@ import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from '.
 export const PRESIGNED_URL_EXPIRY_SECONDS = 3600
 const IMMUTABLE_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable'
 const PUBLIC_JSON_CONTENT_TYPE = 'application/json; charset=utf-8'
+const verifiedRootServingCache = new WeakMap()
 
 export function bucketConfigFromEnv(env = process.env) {
   const bucket = env.RANKING_BUCKET_NAME ?? env.S3_BUCKET ?? env.BUCKET
@@ -672,37 +674,55 @@ export async function getBucketObject(relativePath, {
   const contentObjectRequest = safePath.startsWith('objects/sha256/')
   const directContentObject = /^objects\/sha256\/[a-f0-9]{64}$/.test(safePath)
   if (contentObjectRequest && !directContentObject) return { found: false }
+  if (directContentObject) {
+    return readVerifiedContentAddressedObjectForServing(client, config, safePath)
+  }
   if (generationId === undefined && safePath === 'ranking-summary.json') {
-    const verified = await readActiveContentAddressedGeneration({ config, client, verifyArtifacts: true })
+    const activeAuthority = await readBucketJson('active-generation.json', { config, client })
+    if (activeAuthority.found) classifyActiveGenerationPointer(activeAuthority.value)
+    const cacheKey = activeAuthority.found
+      ? rootServingCacheKey(config, activeAuthority)
+      : undefined
+    const cached = cacheKey ? verifiedRootServingCache.get(client) : undefined
+    if (cached && cached.key === cacheKey) return rootServingResponse(cached.value)
+    const verified = await readActiveContentAddressedGeneration({
+      config,
+      client,
+      verifyArtifacts: false,
+      verifyPublicationClosure: false,
+      activeAuthority,
+    })
     if (verified.found) {
       const body = verified.cutover ? Buffer.from(jsonBody(verified.manifest)) : verified.manifestBytes
-      return {
+      const etag = verified.cutover
+        ? `"cutover-v2-${createHash('sha256').update(body).digest('hex')}"`
+        : verified.active.manifestEtag
+      const value = {
         found: true,
         key: verified.active.manifestKey,
-        body: Readable.from([body]),
+        body,
         contentLength: body.byteLength,
         contentType: PUBLIC_JSON_CONTENT_TYPE,
         contentEncoding: undefined,
-        etag: verified.active.manifestEtag,
+        etag,
         ...(verified.cutover ? { cutover: verified.cutover } : {}),
       }
+      if (cacheKey) verifiedRootServingCache.set(client, { key: cacheKey, value })
+      return rootServingResponse(value)
     }
   }
-  const active = directContentObject || typeof generationId === 'string'
+  const active = typeof generationId === 'string'
     ? undefined
     : await activeGeneration(config, client)
-  const generation = directContentObject
-    ? undefined
-    : typeof generationId === 'string' && generationId.length > 0
+  const generation = typeof generationId === 'string' && generationId.length > 0
       ? generationId
       : active?.generationId
   const keys = [
-    ...(directContentObject ? [bucketKey(config, safePath)] : []),
     ...(generation && safePath === 'ranking-summary.json'
       ? [bucketKey(config, `generations/${safeObjectPath(generation)}/manifest.json`)]
       : []),
     ...(generation ? [bucketKey(config, `generations/${safeObjectPath(generation)}/data/${safePath}`)] : []),
-    ...(generationId || directContentObject ? [] : [bucketKey(config, `data/${safePath}`)]),
+    ...(generationId ? [] : [bucketKey(config, `data/${safePath}`)]),
   ]
 
   for (const key of keys) {
@@ -749,6 +769,67 @@ export async function getBucketObject(relativePath, {
     }
   }
   return { found: false, key: keys[0] }
+}
+
+function rootServingCacheKey(config, activeAuthority) {
+  if (typeof activeAuthority.etag !== 'string' || activeAuthority.etag.length === 0) return undefined
+  const immutableAuthority = activeAuthority.value.publicationReceiptDigest
+    ?? activeAuthority.value.manifestDigest
+  if (typeof immutableAuthority !== 'string' || immutableAuthority.length === 0) return undefined
+  return [
+    config.bucket,
+    normalizePrefix(config.prefix),
+    activeAuthority.etag,
+    immutableAuthority,
+  ].join('\0')
+}
+
+function rootServingResponse(value) {
+  return {
+    ...value,
+    body: Readable.from([value.body]),
+  }
+}
+
+async function readVerifiedContentAddressedObjectForServing(client, config, safePath) {
+  const digest = safePath.slice('objects/sha256/'.length)
+  const key = bucketKey(config, safePath)
+  let object
+  try {
+    object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  } catch (error) {
+    if (isMissingObjectError(error)) return { found: false, key }
+    throw error
+  }
+  const compressed = await bodyBytes(object.Body)
+  const semanticBytes = Number(object.Metadata?.['semantic-bytes'])
+  if (object.ContentEncoding !== 'gzip'
+    || object.Metadata?.sha256 !== digest
+    || object.Metadata?.encoding !== 'gzip'
+    || !Number.isSafeInteger(semanticBytes) || semanticBytes <= 0
+    || Number(object.ContentLength) !== compressed.byteLength) {
+    throw new Error(`Referenced content-addressed object metadata mismatch: ${safePath}`)
+  }
+  let semantic
+  try {
+    semantic = gunzipSync(compressed)
+  } catch (error) {
+    throw new Error(`Referenced content-addressed object gzip is corrupt: ${safePath}`, { cause: error })
+  }
+  if (semantic.byteLength !== semanticBytes
+    || createHash('sha256').update(semantic).digest('hex') !== digest) {
+    throw new Error(`Referenced content-addressed object digest mismatch: ${safePath}`)
+  }
+  return {
+    found: true,
+    key,
+    body: Readable.from([compressed]),
+    contentLength: compressed.byteLength,
+    contentType: object.ContentType ?? PUBLIC_JSON_CONTENT_TYPE,
+    contentEncoding: 'gzip',
+    etag: object.ETag,
+    lastModified: object.LastModified,
+  }
 }
 
 export async function headBucketObject(relativePath, {
@@ -861,8 +942,10 @@ export async function readActiveContentAddressedGeneration({
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
   verifyArtifacts = true,
+  verifyPublicationClosure = true,
+  activeAuthority,
 } = {}) {
-  const active = await readBucketJson('active-generation.json', { config, client })
+  const active = activeAuthority ?? await readBucketJson('active-generation.json', { config, client })
   if (!active.found) {
     return { found: false, reason: 'active-generation-missing', active: active.value, etag: active.etag }
   }
@@ -875,7 +958,12 @@ export async function readActiveContentAddressedGeneration({
   }
   const generationId = active.value.generationId
   const publication = pointerKind === 'receipt-bound'
-    ? await readActiveGenerationPublication({ client, config, active: active.value })
+    ? await readActiveGenerationPublication({
+        client,
+        config,
+        active: active.value,
+        verifyClosure: verifyPublicationClosure,
+      })
     : undefined
   const expectedKey = bucketKey(config, `generations/${safeObjectPath(generationId)}/manifest.json`)
   if (active.value.manifestKey !== expectedKey) throw new Error('Active public generation manifest key is not canonical')
@@ -891,7 +979,9 @@ export async function readActiveContentAddressedGeneration({
     || object.Metadata?.sha256 !== manifestDigest) {
     throw new Error('Active public generation manifest authority mismatch')
   }
-  const { manifest, cutover } = compatibleGenerationManifest(JSON.parse(manifestBytes.toString('utf8')), generationId, {
+  const storedManifest = JSON.parse(manifestBytes.toString('utf8'))
+  if (pointerKind === 'legacy') assertLegacyGenerationCutoverPointer(active.value, storedManifest)
+  const { manifest, cutover } = compatibleGenerationManifest(storedManifest, generationId, {
     publicManifestSchemaVersion: active.value.publicManifestSchemaVersion,
   })
   if (publication) {
@@ -940,6 +1030,7 @@ export async function readActiveGenerationPublication({
   config = bucketConfigFromEnv(),
   client = createBucketClient(config),
   active,
+  verifyClosure = true,
 } = {}) {
   if (!active) {
     const pointer = await readBucketJson('active-generation.json', { config, client })
@@ -981,7 +1072,9 @@ export async function readActiveGenerationPublication({
         || receipt.authorities.stateManifest?.digest !== active.stateManifestDigest))) {
     throw new Error('Active generation pointer and publication receipt authorities differ')
   }
-  for (const member of receipt.objects) await assertPublicationMember(client, config, member)
+  if (verifyClosure) {
+    for (const member of receipt.objects) await assertPublicationMember(client, config, member)
+  }
   return { found: true, receipt }
 }
 
@@ -1065,6 +1158,17 @@ export async function readActiveRawSourceAuthority({
   if (pointerKind === 'receipt-bound') {
     const publication = await readActiveGenerationPublication({ config, client, active: active.value })
     if (!publication.found) throw new Error('Active raw source publication receipt is unavailable')
+  } else {
+    const cutover = await readActiveContentAddressedGeneration({
+      config,
+      client,
+      verifyArtifacts: false,
+      verifyPublicationClosure: false,
+      activeAuthority: active,
+    })
+    if (!cutover.found || cutover.cutover !== 'schema-v1-active-manifest-to-v2') {
+      throw new Error('Legacy active raw source authority is not bound to the schema-v1 cutover')
+    }
   }
   const reference = {
     key: relativeBucketKey(config, active.value.rawReceiptKey),

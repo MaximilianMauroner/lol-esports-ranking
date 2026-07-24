@@ -72,6 +72,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const bucketConfig = options.bucketConfig ?? bucketConfigFromEnv(env)
   const bucketClient = options.bucketClient ?? createBucketClient(bucketConfig)
   const readRawAuthority = options.readActiveRawSourceAuthority ?? readActiveRawSourceAuthority
+  const publishRankingArtifacts = options.uploadRankingArtifacts ?? uploadRankingArtifacts
   const stageAuditSnapshot = options.stageFullAuditSnapshot ?? stageFullAuditSnapshot
   const publishAuditReceipt = options.publishFullAuditDayReceipt ?? publishFullAuditDayReceipt
   const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
@@ -774,7 +775,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           })
           return staged
         })
-        const bucketPublish = await uploadRankingArtifacts({
+        const bucketPublish = await publishRankingArtifacts({
           publicDataDir: incrementalBuild?.build?.publicDataDir ?? publicDataDir,
           rawDir,
           fullSnapshotPath: incrementalBuild?.action === 'publish-incremental' ? undefined : output,
@@ -803,24 +804,33 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               stagedAudit,
             }, async () => {
               const auditStarted = monotonicNow()
-              const auditReceipt = await publishAuditReceipt({
-                cause: auditCause,
-                generationId,
-                fencingToken,
-                promotion,
-                publicManifest: browserManifest,
-                stateManifestAuthority: incrementalState.authority,
-                rawReceiptAuthority: rawSourceGeneration,
-                stagedSnapshot: stagedAudit,
-                leaseAuthority,
-                config: bucketConfig,
-                client: bucketClient,
-              })
-              metrics.recordStage('full-audit-receipt', {
-                durationMs: monotonicNow() - auditStarted,
-                output: { status: auditReceipt.status, key: auditReceipt.key, bytes: auditReceipt.bytes, rssBytes: process.memoryUsage().rss },
-              })
-              return auditReceipt
+              try {
+                const auditReceipt = await publishAuditReceipt({
+                  cause: auditCause,
+                  generationId,
+                  fencingToken,
+                  promotion,
+                  publicManifest: browserManifest,
+                  stateManifestAuthority: incrementalState.authority,
+                  rawReceiptAuthority: rawSourceGeneration,
+                  stagedSnapshot: stagedAudit,
+                  leaseAuthority,
+                  config: bucketConfig,
+                  client: bucketClient,
+                })
+                metrics.recordStage('full-audit-receipt', {
+                  durationMs: monotonicNow() - auditStarted,
+                  output: { status: auditReceipt.status, key: auditReceipt.key, bytes: auditReceipt.bytes, rssBytes: process.memoryUsage().rss },
+                })
+                return auditReceipt
+              } catch (error) {
+                metrics.recordStage('full-audit-receipt', {
+                  durationMs: monotonicNow() - auditStarted,
+                  result: 'failed',
+                  output: { error: errorMessage(error), rssBytes: process.memoryUsage().rss },
+                })
+                throw error
+              }
             })
             const own = completeRefreshMetrics(metrics.snapshot({
               result: promotion?.completed ? 'completed' : 'no-promotion',
@@ -872,6 +882,39 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           },
         })
         publishedBucket = bucketPublish
+        const operationalWarnings = bucketPublish.committedWithOperationalWarnings
+          ? bucketPublish.operationalWarnings ?? []
+          : []
+        if (operationalWarnings.length) {
+          terminalResult = 'committed-with-operational-warnings'
+          metrics.recordStage('post-commit-operations', {
+            result: 'failed',
+            output: {
+              committed: true,
+              warnings: operationalWarnings,
+              rssBytes: process.memoryUsage().rss,
+            },
+          })
+          const own = completeRefreshMetrics(metrics.snapshot({
+            result: terminalResult,
+            freshness: {
+              providerAvailableAt,
+              publishedAt: bucketPublish.promotion?.promotedAt ?? completedPromotionAt ?? null,
+            },
+          }))
+          canonicalMetrics = inheritedMetrics ? mergeRefreshMetrics(inheritedMetrics, own) : own
+          if (bucketPublish.promotion?.etag && env.RANKING_REFRESH_LEASE_OWNER && env.RANKING_REFRESH_FENCING_TOKEN) {
+            canonicalMetrics = {
+              ...canonicalMetrics,
+              coordination: {
+                owner: env.RANKING_REFRESH_LEASE_OWNER,
+                fencingToken: Number(env.RANKING_REFRESH_FENCING_TOKEN),
+                etag: bucketPublish.promotion.etag,
+              },
+            }
+          }
+          console.warn(`Ranking generation committed with operational warnings: ${operationalWarnings.map((warning) => `${warning.stage}: ${warning.message}`).join('; ')}`)
+        }
         state.bucket = {
           enabled: true,
           bucket: bucketPublish.bucket,
@@ -883,9 +926,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           unchangedBytes: bucketPublish.unchangedBytes,
           skipped: bucketPublish.skipped,
           ...(bucketPublish.storage ? { storage: bucketPublish.storage } : {}),
+          ...(operationalWarnings.length ? {
+            committedWithOperationalWarnings: true,
+            operationalWarnings,
+          } : {}),
         }
-        state.lastRun = bucketPublish.refreshTelemetry
-        canonicalMetrics = bucketPublish.refreshTelemetry
+        state.lastRun = canonicalMetrics ?? bucketPublish.refreshTelemetry
+        canonicalMetrics ??= bucketPublish.refreshTelemetry
         const optionalSkippedMessage = bucketPublish.skipped?.length ? `; skipped ${bucketPublish.skipped.length} optional artifact(s)` : ''
         console.log(`Uploaded ${bucketPublish.uploadedCount} ranking artifact(s) (${bucketPublish.uploadedBytes} bytes); reused ${bucketPublish.unchangedCount} unchanged artifact(s) (${bucketPublish.unchangedBytes} bytes) in Railway bucket prefix ${bucketPublish.prefix || '(root)'}${optionalSkippedMessage}.`)
       }
@@ -914,6 +961,11 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         ? { sourceAuthorityEvidenceDigest: stagingManifestForRun.sourceAuthorityEvidence.evidenceDigest }
         : {}),
       ...(publishedBucket ? { bucketPublish: publishedBucket } : {}),
+      ...(publishedBucket?.committedWithOperationalWarnings ? {
+        status: 'committed-with-operational-warnings',
+        committedWithOperationalWarnings: true,
+        operationalWarnings: publishedBucket.operationalWarnings,
+      } : {}),
     }
   } catch (error) {
     refreshError = error

@@ -4,6 +4,31 @@ import { canonicalJsonFor } from './public-artifact-storage.mjs'
 export const GENERATION_PUBLICATION_SCHEMA_VERSION = 1
 export const GENERATION_PUBLICATION_STATUS = 'ready'
 
+const legacyPointerFields = new Set([
+  'schemaVersion',
+  'generationId',
+  'fencingToken',
+  'promotedAt',
+  'manifestKey',
+  'storageMode',
+  'manifestDigest',
+  'manifestBytes',
+  'manifestEtag',
+  'stateManifestKey',
+  'stateManifestDigest',
+  'rawReceiptKey',
+  'rawReceiptDigest',
+  'rawReceiptBytes',
+  'rawReceiptCompressedBytes',
+  'sourceReceiptDigest',
+  'rawIdentityDigest',
+  'leaseKey',
+  'leaseOwner',
+  'leaseFencingToken',
+  'leaseAcquiredAt',
+  'leaseExpiresAt',
+])
+
 export function classifyActiveGenerationPointer(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Active generation pointer is invalid')
@@ -17,6 +42,11 @@ export function classifyActiveGenerationPointer(value) {
   const present = publicationFields.filter((field) => value[field] !== undefined)
   if (value.publicationSchemaVersion === undefined) {
     if (present.length > 0) throw new Error('Legacy active generation pointer has contradictory publication receipt fields')
+    if (value.publicManifestSchemaVersion !== undefined
+      || value.previousGeneration !== undefined
+      || Object.keys(value).some((field) => !legacyPointerFields.has(field))) {
+      throw new Error('Legacy active generation pointer has unsupported native authority fields')
+    }
     return 'legacy'
   }
   if (value.publicationSchemaVersion !== 1) {
@@ -30,6 +60,25 @@ export function classifyActiveGenerationPointer(value) {
     throw new Error('Active generation pointer publication receipt binding is incomplete')
   }
   return 'receipt-bound'
+}
+
+export function assertLegacyGenerationCutoverPointer(pointer, publicManifest) {
+  if (classifyActiveGenerationPointer(pointer) !== 'legacy'
+    || pointer.storageMode !== 'content-addressed-gzip-v1'
+    || typeof pointer.generationId !== 'string' || pointer.generationId.length === 0
+    || typeof pointer.manifestKey !== 'string' || pointer.manifestKey.length === 0
+    || !/^[a-f0-9]{64}$/.test(pointer.manifestDigest ?? '')
+    || !Number.isSafeInteger(pointer.manifestBytes) || pointer.manifestBytes <= 0
+    || typeof pointer.manifestEtag !== 'string' || pointer.manifestEtag.length === 0
+    || !publicManifest || typeof publicManifest !== 'object' || Array.isArray(publicManifest)
+    || publicManifest.artifactKind !== 'public-artifact-generation-manifest'
+    || publicManifest.schemaVersion !== 1
+    || publicManifest.generationId !== pointer.generationId
+    || publicManifest.runId !== pointer.generationId
+    || publicManifest.storageMode !== pointer.storageMode) {
+    throw new Error('Legacy active generation pointer is not an explicit schema-v1 cutover authority')
+  }
+  return true
 }
 
 const immutableKeyPatterns = [

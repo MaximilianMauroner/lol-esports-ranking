@@ -34,7 +34,13 @@ export function readBucketJson(relativeKey: string, options?: { config?: unknown
   etag?: string
   value?: Record<string, unknown>
 }>
-export function readActiveContentAddressedGeneration(options?: { config?: unknown; client?: BucketClient; verifyArtifacts?: boolean }): Promise<
+export function readActiveContentAddressedGeneration(options?: {
+  config?: unknown
+  client?: BucketClient
+  verifyArtifacts?: boolean
+  verifyPublicationClosure?: boolean
+  activeAuthority?: { found: boolean; key?: string; etag?: string; value?: Record<string, unknown> }
+}): Promise<
   | { found: false; reason: string; active?: Record<string, unknown>; etag?: string }
   | { found: true; active: Record<string, unknown>; etag?: string; cutover?: 'schema-v1-active-manifest-to-v2'; manifest: Record<string, unknown>; manifestBytes: Buffer; rootArtifact: Record<string, unknown>; artifacts: Record<string, unknown>; loadArtifacts(paths: string[]): Promise<Record<string, unknown>> }
 >
@@ -42,6 +48,7 @@ export function readActiveGenerationPublication(options?: {
   config?: unknown
   client?: BucketClient
   active?: Record<string, unknown>
+  verifyClosure?: boolean
 }): Promise<
   | { found: false; reason: string }
   | { found: true; receipt: import('./generation-publication.mjs').GenerationPublicationReceipt }
