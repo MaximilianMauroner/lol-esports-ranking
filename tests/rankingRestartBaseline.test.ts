@@ -368,7 +368,7 @@ test('commit identity has explicit/env/Git priority and archive failure is stric
   assert.throws(() => parseArgs(['capture', '--overwrite']), /Unknown baseline argument/)
 })
 
-test('runtime defaults, cron, proxy delivery, and delete opt-in remain unchanged', async () => {
+test('runtime defaults, cron, proxy delivery, and inventory-only GC remain explicit', async () => {
   const [once, server, gc, refreshToml] = await Promise.all([
     readFile('scripts/refresh-once.mjs', 'utf8'),
     readFile('scripts/railway-server.mjs', 'utf8'),
@@ -378,7 +378,8 @@ test('runtime defaults, cron, proxy delivery, and delete opt-in remain unchanged
   assert.match(once, /RANKING_REFRESH_INTERVAL_MINUTES', 360/)
   assert.match(once, /return value === 'shadow' \? 'shadow' : 'gated'/)
   assert.match(server, /RANKING_PRESIGNED_DELIVERY_ENABLED === 'true'/)
-  assert.match(gc, /if \(argument === '--delete'\)|if \(arg === '--delete'\)/)
+  assert.match(gc, /inventory-only/)
+  assert.equal(gc.includes('DeleteObjectCommand'), false)
   assert.match(refreshToml, /cronSchedule = "0 \*\/6 \* \* \*"/)
 })
 

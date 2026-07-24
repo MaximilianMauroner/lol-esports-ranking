@@ -16,6 +16,7 @@ import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
 } from './ranking-source-authority.mjs'
+import { materializePublicArtifactPatch } from './public-artifact-materialization.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -661,6 +662,19 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       state.lastRun = canonicalMetrics
       await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
       return { changed: false, status: 'canonical-no-change', fingerprint: fingerprint.fingerprint }
+    }
+
+    if (!skipCrunch && incrementalBuild?.action === 'publish-incremental'
+      && (!bucketUploadEnabled || !bucketConfig.enabled)) {
+      const localStarted = monotonicNow()
+      const local = await materializePublicArtifactPatch(publicDataDir, incrementalBuild.patch)
+      metrics.recordStage('local-publication', {
+        durationMs: monotonicNow() - localStarted,
+        output: {
+          logicalArtifactCount: local.logicalArtifactCount,
+          publicationMode: bucketUploadEnabled ? 'bucket-unavailable' : 'upload-disabled',
+        },
+      })
     }
 
     if (!skipCrunch && bucketUploadEnabled) {

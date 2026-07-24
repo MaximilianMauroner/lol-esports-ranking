@@ -38,6 +38,14 @@ export function readActiveContentAddressedGeneration(options?: { config?: unknow
   | { found: false; reason: string; active?: Record<string, unknown>; etag?: string }
   | { found: true; active: Record<string, unknown>; etag?: string; cutover?: 'schema-v1-active-manifest-to-v2'; manifest: Record<string, unknown>; rootArtifact: Record<string, unknown>; artifacts: Record<string, unknown>; loadArtifacts(paths: string[]): Promise<Record<string, unknown>> }
 >
+export function readActiveGenerationPublication(options?: {
+  config?: unknown
+  client?: BucketClient
+  active?: Record<string, unknown>
+}): Promise<
+  | { found: false; reason: string }
+  | { found: true; receipt: import('./generation-publication.mjs').GenerationPublicationReceipt }
+>
 export function readActiveRawSourceAuthority(options?: { config?: unknown; client?: BucketClient }): Promise<
   | { found: false; reason: string }
   | ({ found: true; active: Record<string, unknown> } & import('./raw-source-generation.mjs').ActiveRawSourceAuthority & {
@@ -81,6 +89,11 @@ export type PreviousGeneration = {
   stateManifestDigest?: string
   rawReceiptKey?: string
   rawReceiptDigest?: string
+  publicationSchemaVersion?: 1
+  publicationReceiptKey?: string
+  publicationReceiptDigest?: string
+  publicationReceiptBytes?: number
+  publicationReceiptEtag?: string
 }
 export function readPreviousGenerationAuthorities(options?: {
   config?: BucketStorageConfig
@@ -178,6 +191,7 @@ export function uploadContentAddressedPublicArtifacts(
 ): Promise<{
   uploaded: SyncedArtifact[]
   unchanged: SyncedArtifact[]
+  reused: SyncedArtifact[]
   manifest: Record<string, unknown>
   manifestAuthority: { key: string; etag?: string; bytes: number; digest: string }
   objectCount: number
@@ -199,6 +213,7 @@ export function uploadContentAddressedPublicArtifactPatch(
 ): Promise<{
   uploaded: SyncedArtifact[]
   unchanged: SyncedArtifact[]
+  reused: SyncedArtifact[]
   manifest: Record<string, unknown>
   manifestAuthority: { key: string; etag?: string; bytes: number; digest: string }
   objectCount: number
@@ -214,7 +229,6 @@ export function uploadRawSourceFiles(...args: unknown[]): Promise<Record<string,
 export function syncRawFile(...args: unknown[]): Promise<Record<string, unknown>>
 export function uploadFile(...args: unknown[]): Promise<Record<string, unknown>>
 export function uploadJson(...args: unknown[]): Promise<Record<string, unknown>>
-export function deleteObject(...args: unknown[]): Promise<boolean>
 export function bucketKey(config: { prefix?: string }, relativeKey: string): string
 export function safeObjectPath(path: string): string
 export function safeRequestedObjectPath(path: string): string

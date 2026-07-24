@@ -57,6 +57,12 @@ export type StateManifestAuthority = {
   bytes: number
   digest: string
   manifest?: IncrementalStateManifest
+  publicationObjects?: Array<{
+    key: string
+    digest: string
+    bytes: number
+    outcome: 'uploaded' | 'unchanged'
+  }>
 }
 
 export function prepareStateObject(value: object): PreparedStateObject

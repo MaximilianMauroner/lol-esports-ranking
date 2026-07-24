@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
 import { uploadContentAddressedPublicArtifactPatch, uploadContentAddressedPublicArtifacts } from '../scripts/railway-bucket.mjs'
+import { materializePublicArtifactPatch } from '../scripts/public-artifact-materialization.mjs'
 
 const config = { enabled: true, bucket: 'test', endpoint: 'https://example.invalid', region: 'auto', accessKeyId: 'x', secretAccessKey: 'y', prefix: 'rankings' }
 
@@ -44,6 +45,38 @@ test('partial artifact patch uploads only changed hashes and composes exact comp
       changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: root('bad') }],
       expectedLogicalPaths: ['/data/ranking-summary.json'],
     }), /Incomplete public artifact patch mapping/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('local-only patch verifies reused inputs and atomically materializes the same mapping', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-local-patch-'))
+  const client = memoryS3()
+  try {
+    await writeFile(join(dir, 'ranking-summary.json'), JSON.stringify(root('base-local')))
+    await writeFile(join(dir, 'stable.json'), JSON.stringify({ artifactKind: 'fixture', value: 1 }))
+    await writeFile(join(dir, 'removed.json'), JSON.stringify({ artifactKind: 'fixture', value: 2 }))
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, 'base-local')
+    const patch = {
+      previousManifest: base.manifest,
+      changedArtifacts: [
+        { logicalPath: '/data/ranking-summary.json', value: root('next-local') },
+        { logicalPath: '/data/changed.json', value: { artifactKind: 'fixture', value: 3 } },
+      ],
+      removedLogicalPaths: ['/data/removed.json'],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json', '/data/changed.json'],
+    }
+    const bucket = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId: 'next-local', ...patch })
+    const local = await materializePublicArtifactPatch(dir, patch)
+    const bucketArtifacts = record(bucket.manifest.artifacts)
+    assert.deepEqual(Object.keys(local.mapping).sort(), Object.keys(bucketArtifacts).sort())
+    for (const [logicalPath, identity] of Object.entries(local.mapping)) {
+      assert.equal(identity.sha256, record(bucketArtifacts[logicalPath]).sha256)
+      assert.equal(identity.bytes, record(bucketArtifacts[logicalPath]).bytes)
+    }
+    assert.equal(JSON.parse(await readFile(join(dir, 'changed.json'), 'utf8')).value, 3)
+    await assert.rejects(readFile(join(dir, 'removed.json'), 'utf8'), /ENOENT/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

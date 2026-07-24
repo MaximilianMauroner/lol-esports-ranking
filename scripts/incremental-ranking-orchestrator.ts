@@ -197,8 +197,14 @@ export async function persistIncrementalStateBuild({
   // Promotion validates the ledger and every checkpoint body before activation,
   // so avoid repeating that exhaustive audit while writing the immutable manifest.
   const manifest = await writeIncrementalStateManifest(client, config, prepared, { verifyObjects: false })
+  const publicationObjects = [ledgerSync, ...objectResults, manifest.result].map((entry) => ({
+    key: String(entry.key),
+    digest: String(entry.digest),
+    bytes: Number(entry.bytes),
+    outcome: entry.status === 'uploaded' ? 'uploaded' as const : 'unchanged' as const,
+  }))
   return {
-    authority: manifest.authority,
+    authority: { ...manifest.authority, publicationObjects },
     uploadedBytes: [ledgerSync, ...objectResults, manifest.result]
       .filter((entry) => entry.status === 'uploaded').reduce((sum, entry) => sum + Number(entry.bytes), 0),
     objectCount: 2 + objectResults.length,
