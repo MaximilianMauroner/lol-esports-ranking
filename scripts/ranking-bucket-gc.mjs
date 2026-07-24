@@ -107,7 +107,11 @@ export async function buildRankingBucketInventory({
     const activeKind = await validatePointerPublication(active.value, 'active-generation', activeKey, addError, config, client, true)
     if (activeKind) {
       const current = parsePointerGeneration(active.value, 'active generation', activeKey, addError, config, true)
-      if (current) pointerAuthorities.push({ ...current, reason: 'active-generation' })
+      if (current) pointerAuthorities.push({
+        ...current,
+        reason: 'active-generation',
+        publicManifestSchemaVersion: activeKind === 'legacy' ? 1 : 2,
+      })
     }
     if (active.value.previousGeneration !== undefined) {
       const previousKind = await validatePointerPublication(
@@ -120,7 +124,11 @@ export async function buildRankingBucketInventory({
       )
       if (previousKind) {
         const previous = parsePointerGeneration(active.value.previousGeneration, 'previous generation', activeKey, addError, config, false)
-        if (previous) pointerAuthorities.push({ ...previous, reason: 'previous-generation' })
+        if (previous) pointerAuthorities.push({
+          ...previous,
+          reason: 'previous-generation',
+          ...(previousKind === 'receipt-bound' ? { publicManifestSchemaVersion: 2 } : {}),
+        })
       }
     }
   }
@@ -222,7 +230,11 @@ export async function buildRankingBucketInventory({
         if (authority.manifestDigest && authority.manifestDigest !== digest) throw new Error('Public manifest pointer digest mismatch')
         if (authority.manifestBytes !== undefined && authority.manifestBytes !== stored.bytes.byteLength) throw new Error('Public manifest pointer byte length mismatch')
         if (authority.manifestEtag && authority.manifestEtag !== stored.etag) throw new Error('Public manifest pointer ETag mismatch')
-        parsePublicGenerationManifest(JSON.parse(stored.bytes.toString('utf8')), authority.generationId)
+        parsePublicGenerationManifest(
+          JSON.parse(stored.bytes.toString('utf8')),
+          authority.generationId,
+          authority.publicManifestSchemaVersion,
+        )
       } catch (error) {
         addError(activeKey, `${authority.reason}-public-authority-invalid`, error)
       }
@@ -507,9 +519,12 @@ function parsePointerGeneration(value, label, key, addError, config, current) {
   }
 }
 
-function parsePublicGenerationManifest(value, generationId) {
+function parsePublicGenerationManifest(value, generationId, expectedSchemaVersion) {
+  const schemaVersionMatches = expectedSchemaVersion === undefined
+    ? [1, 2].includes(value?.schemaVersion)
+    : value?.schemaVersion === expectedSchemaVersion
   if (!value || typeof value !== 'object' || Array.isArray(value)
-    || value.artifactKind !== 'public-artifact-generation-manifest' || ![1, 2].includes(value.schemaVersion)
+    || value.artifactKind !== 'public-artifact-generation-manifest' || !schemaVersionMatches
     || value.storageMode !== 'content-addressed-gzip-v1' || value.generationId !== generationId || value.runId !== generationId
     || typeof value.generatedAt !== 'string' || Number.isNaN(new Date(value.generatedAt).getTime())
     || !value.model || typeof value.model.version !== 'string' || value.model.version.length === 0

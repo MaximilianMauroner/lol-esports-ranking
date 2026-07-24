@@ -299,6 +299,22 @@ test('receipt-bound active and previous pointers require exact schema-1 publicat
   }
 })
 
+test('receipt-bound active and previous authorities reject canonical schema-1 public manifests', async () => {
+  for (const target of ['active', 'previous'] as const) {
+    const client = gcMemoryS3()
+    seedReceiptBoundPointers(client)
+    crossReceiptBoundManifestToSchema1(client, target)
+
+    const inventory = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(inventory.valid, false, target)
+    assert.equal(inventory.deletionCandidates.length, 0, target)
+    assert.ok(
+      inventory.errors.some((error) => error.reason === `${target}-generation-public-authority-invalid`),
+      `${target}: ${JSON.stringify(inventory.errors)}`,
+    )
+  }
+})
+
 type Stored = { bytes: Buffer; etag: string; lastModified: Date; contentType?: string; contentEncoding?: string; metadata?: Record<string, string> }
 
 function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
@@ -441,6 +457,53 @@ function seedReceiptBoundPointers(client: ReturnType<typeof gcMemoryS3>) {
   })
   activeObject.bytes = Buffer.from(JSON.stringify(active))
   return graph
+}
+
+function crossReceiptBoundManifestToSchema1(
+  client: ReturnType<typeof gcMemoryS3>,
+  target: 'active' | 'previous',
+) {
+  const generationId = target === 'active' ? 'g1' : 'g0'
+  const manifestKey = `rankings/generations/${generationId}/manifest.json`
+  const manifestStored = client.objects.get(manifestKey)!
+  const manifest = JSON.parse(manifestStored.bytes.toString('utf8')) as Record<string, unknown>
+  manifest.schemaVersion = 1
+  manifestStored.bytes = Buffer.from(JSON.stringify(manifest))
+  const manifestDigest = digest(manifestStored.bytes)
+  manifestStored.metadata = {
+    sha256: manifestDigest,
+    'semantic-bytes': String(manifestStored.bytes.byteLength),
+  }
+
+  const receiptKey = `rankings/generations/${generationId}/publish.json`
+  const receiptStored = client.objects.get(receiptKey)!
+  const receipt = JSON.parse(receiptStored.bytes.toString('utf8')) as {
+    authorities: { publicManifest: { digest: string; bytes: number } }
+    objects: Array<{ key: string; digest: string; bytes: number }>
+  }
+  receipt.authorities.publicManifest.digest = manifestDigest
+  receipt.authorities.publicManifest.bytes = manifestStored.bytes.byteLength
+  const member = receipt.objects.find((entry) => entry.key === manifestKey)
+  assert.ok(member)
+  member.digest = manifestDigest
+  member.bytes = manifestStored.bytes.byteLength
+  seedCanonicalJson(client, receiptKey, receipt, '2026-07-23T00:00:00.000Z')
+  const reboundReceipt = client.objects.get(receiptKey)!
+
+  const activeStored = client.objects.get('rankings/active-generation.json')!
+  const active = JSON.parse(activeStored.bytes.toString('utf8')) as Record<string, unknown>
+  const pointer = target === 'active' ? active : active.previousGeneration
+  assert.ok(pointer && typeof pointer === 'object' && !Array.isArray(pointer))
+  const boundPointer = pointer as Record<string, unknown>
+  boundPointer.publicationReceiptDigest = digest(reboundReceipt.bytes)
+  boundPointer.publicationReceiptBytes = reboundReceipt.bytes.byteLength
+  boundPointer.publicationReceiptEtag = reboundReceipt.etag
+  if (target === 'active') {
+    boundPointer.manifestDigest = manifestDigest
+    boundPointer.manifestBytes = manifestStored.bytes.byteLength
+    boundPointer.manifestEtag = manifestStored.etag
+  }
+  activeStored.bytes = Buffer.from(JSON.stringify(active))
 }
 
 function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: string, lastModified: string) {
