@@ -8,6 +8,7 @@ import { createGunzip, createGzip } from 'node:zlib'
 import {
   bucketConfigFromEnv,
   contentTypeForPath,
+  createBucketClient,
   getBucketObject,
   headBucketObject,
   preparePresignedBucketDelivery,
@@ -31,6 +32,8 @@ const presignedDeliveryThresholdBytes = positiveIntegerOrDefault(
   65_536,
 )
 const bucketConfig = bucketConfigFromEnv()
+const bucketClient = createBucketClient(bucketConfig)
+const bucketStorage = { config: bucketConfig, client: bucketClient }
 
 const server = createServer(async (request, response) => {
   try {
@@ -100,7 +103,7 @@ async function readinessStatus() {
       await access(resolve(publicDataDir, 'ranking-summary.json'))
       return { ok: true, app: true, data: 'local' }
     } catch {
-      const manifest = await getBucketObject('ranking-summary.json')
+      const manifest = await getBucketObject('ranking-summary.json', bucketStorage)
       if (manifest.found) {
         destroyBody(manifest.body)
         return { ok: true, app: true, data: 'bucket' }
@@ -113,7 +116,7 @@ async function readinessStatus() {
 }
 
 async function schedulerStatus() {
-  const remote = await readBucketJson(process.env.RANKING_TRIGGER_STATE_KEY ?? 'raw/refresh-trigger-state.json')
+  const remote = await readBucketJson(process.env.RANKING_TRIGGER_STATE_KEY ?? 'raw/refresh-trigger-state.json', bucketStorage)
   let state = remote.found ? remote.value : null
   if (!state) {
     try {
@@ -280,7 +283,7 @@ async function tryRedirectToPresignedBucketObject(response, relativePath, option
     || !isContentAddressedObjectPath(relativePath)) return { redirected: false }
 
   const delivery = await preparePresignedBucketDelivery(relativePath, {
-    config: bucketConfig,
+    ...bucketStorage,
     method: options.requestMethod === 'HEAD' ? 'HEAD' : 'GET',
     thresholdBytes: presignedDeliveryThresholdBytes,
   })
@@ -312,12 +315,12 @@ async function tryServeBucketFile(response, relativePath, {
 }) {
   if (headOnly && isContentAddressedObjectPath(relativePath)) {
     if (bucketHeadFailed) return false
-    const object = bucketHead ?? await headBucketObject(relativePath, { config: bucketConfig })
+    const object = bucketHead ?? await headBucketObject(relativePath, bucketStorage)
     if (!object.found) return false
     sendBucketHead(response, relativePath, object, { cacheControl, requestHeaders })
     return true
   }
-  const object = await getBucketObject(relativePath, { config: bucketConfig, generationId: requestedGeneration })
+  const object = await getBucketObject(relativePath, { ...bucketStorage, generationId: requestedGeneration })
   if (!object.found) return false
 
   const contentType = object.contentType ?? contentTypeForPath(relativePath)

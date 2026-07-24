@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import { buildRankingBucketInventory, parseGcArgs } from '../scripts/ranking-bucket-gc.mjs'
 import { canonicalJsonFor, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { createGenerationPublicationReceipt, publicationReceiptBytes } from '../scripts/generation-publication.mjs'
 import { prepareContentAddressedState, prepareStateObject, stateObjectReferenceFor } from '../scripts/incremental-state-storage.mjs'
 import {
   ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
@@ -230,6 +231,43 @@ test('strict publish closure rejects authority omission, body mutation, and meta
   assert.ok(metadataInventory.errors.some((error) => error.message?.includes('metadata mismatch')))
 })
 
+test('receipt-bound active and previous pointers require exact schema-1 publication bindings', async () => {
+  const validClient = gcMemoryS3()
+  seedReceiptBoundPointers(validClient)
+  const valid = await buildRankingBucketInventory({ config, client: validClient, now })
+  assert.equal(valid.valid, true, JSON.stringify(valid.errors))
+
+  const mutations = [
+    { name: 'schema marker', mutate: (pointer: Record<string, unknown>) => { pointer.publicationSchemaVersion = 2 } },
+    { name: 'noncanonical key', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptKey = 'rankings/generations/wrong/publish.json' } },
+    { name: 'digest', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptDigest = 'f'.repeat(64) } },
+    { name: 'bytes', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptBytes = Number(pointer.publicationReceiptBytes) + 1 } },
+    { name: 'ETag', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptEtag = '"wrong-etag"' } },
+  ]
+  for (const target of ['active', 'previous'] as const) {
+    for (const mutation of mutations) {
+      const client = gcMemoryS3()
+      seedReceiptBoundPointers(client)
+      const stored = client.objects.get('rankings/active-generation.json')!
+      const active = JSON.parse(stored.bytes.toString('utf8')) as Record<string, unknown>
+      const pointer = target === 'active'
+        ? active
+        : active.previousGeneration
+      assert.ok(pointer && typeof pointer === 'object' && !Array.isArray(pointer))
+      mutation.mutate(pointer as Record<string, unknown>)
+      stored.bytes = Buffer.from(JSON.stringify(active))
+
+      const inventory = await buildRankingBucketInventory({ config, client, now })
+      assert.equal(inventory.valid, false, `${target} ${mutation.name}`)
+      assert.equal(inventory.deletionCandidates.length, 0, `${target} ${mutation.name}`)
+      assert.ok(
+        inventory.errors.some((error) => error.reason === `${target}-generation-publication-authority-invalid`),
+        `${target} ${mutation.name}: ${JSON.stringify(inventory.errors)}`,
+      )
+    }
+  }
+})
+
 type Stored = { bytes: Buffer; etag: string; lastModified: Date; contentType?: string; contentEncoding?: string; metadata?: Record<string, string> }
 
 function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
@@ -263,6 +301,108 @@ function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
   client.set('rankings/generations/g1/data/%252e%252e/encoded.json', Buffer.from('{}'), '2020-01-01T00:00:00.000Z')
   client.set('rankings/generations/g1/control/delete.json', Buffer.from('{}'), '2020-01-01T00:00:00.000Z')
   client.set('rankings/audits/days/not-a-date.json', Buffer.from('{}'), '2020-01-01T00:00:00.000Z')
+}
+
+function seedReceiptBoundPointers(client: ReturnType<typeof gcMemoryS3>) {
+  seedValidBucket(client)
+  seedRetainedGraph(client)
+  const activeObject = client.objects.get('rankings/active-generation.json')!
+  const active = JSON.parse(activeObject.bytes.toString('utf8')) as Record<string, unknown>
+  const bindings = new Map<string, {
+    publicationReceiptKey: string
+    publicationReceiptDigest: string
+    publicationReceiptBytes: number
+    publicationReceiptEtag: string
+    rawReceiptKey: string
+    rawReceiptDigest: string
+    stateManifestKey: string
+    stateManifestDigest: string
+  }>()
+
+  for (const generationId of ['g0', 'g1']) {
+    const publishKey = `rankings/generations/${generationId}/publish.json`
+    const legacyStored = client.objects.get(publishKey)!
+    const legacy = JSON.parse(legacyStored.bytes.toString('utf8')) as {
+      authorities: {
+        publicManifest: { key: string; digest: string; bytes: number }
+        rawReceipt: { key: string; digest: string; bytes: number }
+      }
+      artifacts: Array<{ key: string; digest: string; bytes: number }>
+      unchanged: Array<{ key: string; digest: string; bytes: number }>
+    }
+    const stateManifestKey = `rankings/state/generations/${generationId}.json`
+    const stateStored = client.objects.get(stateManifestKey)!
+    const stateManifestDigest = stateStored.metadata!.sha256
+    const receipt = createGenerationPublicationReceipt({
+      generationId,
+      preparedAt: '2026-07-23T00:00:00.000Z',
+      prefix: 'rankings',
+      fencingToken: generationId === 'g1' ? 3 : 2,
+      leaseOwner: 'gc-production-shaped-fixture',
+      promotionEtag: `"promotion-${generationId}"`,
+      provenance: {
+        modelVersion: 'model-v1',
+        modelConfigHash: 'config-v1',
+        source: 'test',
+        dataMode: 'scheduled-public-data',
+        sourceProviders: ['test'],
+      },
+      authorities: {
+        publicManifest: {
+          key: legacy.authorities.publicManifest.key,
+          digest: legacy.authorities.publicManifest.digest,
+          bytes: legacy.authorities.publicManifest.bytes,
+        },
+        stateManifest: {
+          key: stateManifestKey,
+          digest: stateManifestDigest,
+          bytes: stateStored.bytes.byteLength,
+        },
+        rawReceipt: {
+          key: legacy.authorities.rawReceipt.key,
+          digest: legacy.authorities.rawReceipt.digest,
+          bytes: legacy.authorities.rawReceipt.bytes,
+        },
+      },
+      objects: [
+        ...legacy.artifacts,
+        ...legacy.unchanged,
+        {
+          key: stateManifestKey,
+          digest: stateManifestDigest,
+          bytes: stateStored.bytes.byteLength,
+        },
+      ].map(({ key, digest, bytes }) => ({ key, digest, bytes, outcome: 'uploaded' as const })),
+    })
+    seedCanonicalJson(client, publishKey, receipt, '2026-07-23T00:00:00.000Z')
+    const stored = client.objects.get(publishKey)!
+    const prepared = publicationReceiptBytes(receipt)
+    bindings.set(generationId, {
+      publicationReceiptKey: publishKey,
+      publicationReceiptDigest: prepared.digest,
+      publicationReceiptBytes: prepared.bytes,
+      publicationReceiptEtag: stored.etag,
+      rawReceiptKey: legacy.authorities.rawReceipt.key,
+      rawReceiptDigest: legacy.authorities.rawReceipt.digest,
+      stateManifestKey,
+      stateManifestDigest,
+    })
+  }
+
+  const current = bindings.get('g1')!
+  const previous = bindings.get('g0')!
+  Object.assign(active, {
+    publicationSchemaVersion: 1,
+    ...current,
+    previousGeneration: {
+      generationId: 'g0',
+      manifestKey: 'rankings/generations/g0/manifest.json',
+      promotedAt: '2026-01-01T00:00:00.000Z',
+      publicationSchemaVersion: 1,
+      ...previous,
+    },
+  })
+  activeObject.bytes = Buffer.from(JSON.stringify(active))
 }
 
 function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: string, lastModified: string) {

@@ -31,6 +31,7 @@ import {
   stateObjectReferenceFor,
   syncContentAddressedStateObject,
   writeIncrementalStateManifest,
+  type StateManifestAuthority,
 } from '../scripts/incremental-state-storage.mjs'
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
@@ -473,8 +474,8 @@ test('pre-promotion state model and publication outcomes are exact and exhaustiv
       modelVersion: rootManifest.model.version,
       modelConfigHash: rootManifest.model.configHash,
     })
-    const missing = { ...matching }
-    delete missing.publicationObjects
+    const { publicationObjects, ...missing } = matching
+    assert.ok(publicationObjects)
     await assert.rejects(uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId,
@@ -953,7 +954,9 @@ test('post-commit operational failures return committed warnings without invalid
       config,
       client,
     })
-    assert.equal(result.promotion?.completed, true)
+    const promotion = result.promotion
+    assert.ok(promotion && typeof promotion === 'object')
+    assert.equal('completed' in promotion && promotion.completed, true)
     assert.equal(result.committedWithOperationalWarnings, true)
     assert.deepEqual(
       (result.operationalWarnings as Array<{ stage: string }>).map((warning) => warning.stage).sort(),
@@ -1372,7 +1375,7 @@ async function testStateAuthority(
   generationId: string,
   sourceReceiptDigest: string,
   model: { modelVersion: string; modelConfigHash: string },
-) {
+): Promise<StateManifestAuthority> {
   const compatibility = {
     ...model,
     importerVersion: 'test-importer',

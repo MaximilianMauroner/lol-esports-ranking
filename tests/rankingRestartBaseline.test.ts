@@ -573,7 +573,7 @@ function productionCaptureFixture({ audit = 'absent' }: { audit?: 'absent' | 'pr
         modelConfigHash: model.configHash,
         source: root.source,
         dataMode: root.dataMode,
-        sourceProviders: publicManifest.provenance.sourceProviders,
+        sourceProviders: root.sources.map((source) => source.name),
       },
       authorities: {
         publicManifest: {

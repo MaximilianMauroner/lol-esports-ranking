@@ -16,6 +16,7 @@ import {
   writeIncrementalStateManifest,
   type PreparedStateObject,
   type StateCompatibility,
+  type StateManifestAuthority,
   type StateObjectReference,
 } from '../scripts/incremental-state-storage.mjs'
 import { readActiveRawSourceAuthority, readBucketJson, readPreviousGenerationAuthorities, uploadRankingArtifacts as uploadRankingArtifactsImplementation, writeBucketJson, type BucketClient, type BucketStorageConfig } from '../scripts/railway-bucket.mjs'
@@ -607,19 +608,30 @@ async function syncAllStateObjects(client: ReturnType<typeof memoryS3>, objects:
 async function publishState(
   client: ReturnType<typeof memoryS3>,
   prepared: ReturnType<typeof preparedStateWithReceipt>,
-) {
+): Promise<{
+  result: Record<string, unknown>
+  authority: StateManifestAuthority
+}> {
   const objectResults = await syncAllStateObjects(client, prepared.objects)
   const manifest = await writeIncrementalStateManifest(client, config, prepared)
-  const publicationObjects = [...objectResults, manifest.result].map((entry) => ({
-    key: entry.key,
-    digest: entry.digest,
-    bytes: entry.bytes,
-    outcome: entry.status === 'uploaded' ? 'uploaded' as const : 'unchanged' as const,
-  }))
+  const publicationObjects: NonNullable<StateManifestAuthority['publicationObjects']> =
+    [...objectResults, manifest.result].map(publicationObjectFromResult)
   return {
     ...manifest,
     authority: { ...manifest.authority, publicationObjects },
   }
+}
+
+function publicationObjectFromResult(
+  result: Record<string, unknown>,
+): NonNullable<StateManifestAuthority['publicationObjects']>[number] {
+  const { key, digest, bytes, status } = result
+  if (typeof key !== 'string' || typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)
+    || typeof bytes !== 'number' || !Number.isSafeInteger(bytes) || bytes <= 0
+    || (status !== 'uploaded' && status !== 'unchanged')) {
+    throw new Error('State publication result is invalid')
+  }
+  return { key, digest, bytes, outcome: status }
 }
 
 async function writePublicFixture(publicDir: string, generationId: string) {

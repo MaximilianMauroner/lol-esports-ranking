@@ -6,8 +6,16 @@ import { canonicalJsonFor, canonicalPublicLogicalPath } from './public-artifact-
 import { parseIncrementalStateManifest } from './incremental-state-storage.mjs'
 import { parseFullAuditReceipt } from './full-audit-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt } from './raw-source-storage.mjs'
-import { bucketConfigFromEnv, bucketKey, createBucketClient, parseGenerationPublishReceipt, readBucketJson, safeRequestedObjectPath } from './railway-bucket.mjs'
-import { parseGenerationPublicationReceipt } from './generation-publication.mjs'
+import {
+  bucketConfigFromEnv,
+  bucketKey,
+  createBucketClient,
+  parseGenerationPublishReceipt,
+  readActiveGenerationPublication,
+  readBucketJson,
+  safeRequestedObjectPath,
+} from './railway-bucket.mjs'
+import { classifyActiveGenerationPointer, parseGenerationPublicationReceipt } from './generation-publication.mjs'
 
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000
@@ -90,27 +98,34 @@ export async function buildRankingBucketInventory({
     if (!isApprovedImmutableKey(relativeKey(config, object.key))) protect(object.key, 'operational-or-unknown-namespace')
   }
 
+  const pointerAuthorities = []
+  if (active) {
+    const activeKind = await validatePointerPublication(active.value, 'active-generation', activeKey, addError, config, client, true)
+    if (activeKind) {
+      const current = parsePointerGeneration(active.value, 'active generation', activeKey, addError, config, true)
+      if (current) pointerAuthorities.push({ ...current, reason: 'active-generation' })
+    }
+    if (active.value.previousGeneration !== undefined) {
+      const previousKind = await validatePointerPublication(
+        active.value.previousGeneration,
+        'previous-generation',
+        activeKey,
+        addError,
+        config,
+        client,
+      )
+      if (previousKind) {
+        const previous = parsePointerGeneration(active.value.previousGeneration, 'previous generation', activeKey, addError, config, false)
+        if (previous) pointerAuthorities.push({ ...previous, reason: 'previous-generation' })
+      }
+    }
+  }
   const generations = await publicGenerationRoots(objects, config, client, addError)
-  const retainedGenerationIds = new Set()
+  const retainedGenerationIds = new Set(pointerAuthorities.map((authority) => authority.generationId))
   for (const root of generations.filter((entry) => new Date(entry.lastModified) >= generationCutoffDate)) retainedGenerationIds.add(root.generationId)
   for (const root of [...generations]
     .sort((left, right) => right.lastModified.localeCompare(left.lastModified) || left.generationId.localeCompare(right.generationId))
     .slice(0, policy.retainNewestGenerationCount)) retainedGenerationIds.add(root.generationId)
-  const pointerAuthorities = []
-  if (active) {
-    const current = parsePointerGeneration(active.value, 'active generation', activeKey, addError, config, true)
-    if (current) {
-      retainedGenerationIds.add(current.generationId)
-      pointerAuthorities.push({ ...current, reason: 'active-generation' })
-    }
-    if (active.value.previousGeneration !== undefined) {
-      const previous = parsePointerGeneration(active.value.previousGeneration, 'previous generation', activeKey, addError, config, false)
-      if (previous) {
-        retainedGenerationIds.add(previous.generationId)
-        pointerAuthorities.push({ ...previous, reason: 'previous-generation' })
-      }
-    }
-  }
 
   const visitedState = new Map()
   const visitedRaw = new Map()
@@ -347,6 +362,28 @@ export async function buildRankingBucketInventory({
     },
   }
   return { ...payload, inventorySha256: sha256(Buffer.from(canonicalJsonFor(payload))) }
+}
+
+async function validatePointerPublication(value, label, key, addError, config, client, activeContainer = false) {
+  try {
+    const classifiedValue = activeContainer && value?.publicationSchemaVersion === undefined && value?.previousGeneration !== undefined
+      ? Object.fromEntries(Object.entries(value).filter(([field]) => field !== 'previousGeneration'))
+      : value
+    const kind = classifyActiveGenerationPointer(classifiedValue)
+    if (kind === 'receipt-bound') {
+      const publication = await readActiveGenerationPublication({
+        config,
+        client,
+        active: value,
+        verifyClosure: false,
+      })
+      if (!publication.found) throw new Error(`${label} publication receipt is unavailable`)
+    }
+    return kind
+  } catch (error) {
+    addError(key, `${label}-publication-authority-invalid`, error)
+    return undefined
+  }
 }
 
 async function listInventory(client, config) {
