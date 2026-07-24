@@ -1125,11 +1125,14 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
       client,
     })
     assert.ok(renewed.renewed)
-    assert.equal((await readActiveContentAddressedGeneration({
+    const renewedActive = await readActiveContentAddressedGeneration({
       config,
       client,
       verifyArtifacts: false,
-    })).cutover, 'schema-v1-active-manifest-to-v2')
+    })
+    assert.equal(renewedActive.found, true)
+    if (!renewedActive.found) throw new Error('Renewed legacy active generation was not found')
+    assert.equal(renewedActive.cutover, 'schema-v1-active-manifest-to-v2')
 
     const released = await releaseBucketLease('ops/refresh-lease.json', renewed, {
       now: '2026-07-24T00:00:30.000Z',
@@ -1137,11 +1140,14 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
       client,
     })
     assert.equal(released.released, true)
-    assert.equal((await readActiveContentAddressedGeneration({
+    const releasedActive = await readActiveContentAddressedGeneration({
       config,
       client,
       verifyArtifacts: false,
-    })).cutover, 'schema-v1-active-manifest-to-v2')
+    })
+    assert.equal(releasedActive.found, true)
+    if (!releasedActive.found) throw new Error('Released legacy active generation was not found')
+    assert.equal(releasedActive.cutover, 'schema-v1-active-manifest-to-v2')
 
     const unknownFieldClient = cloneMemoryS3(client)
     const unknownFieldObject = unknownFieldClient.objects.get('rankings/active-generation.json')!
