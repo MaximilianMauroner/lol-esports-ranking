@@ -279,9 +279,18 @@ test('non-zero provider output must satisfy the complete outage manifest contrac
       sources.oracle.status = 'downloaded'
     }],
     ['warnings', (manifest) => { manifest.warnings = [42] }],
-    ['fetch telemetry', (manifest) => {
+    ['fetch telemetry retries', (manifest) => {
       const telemetry = manifest.fetchTelemetry as Record<string, unknown>
       telemetry.retries = 'not-an-array'
+    }],
+    ['fetch telemetry attempts', (manifest) => {
+      const telemetry = manifest.fetchTelemetry as Record<string, unknown>
+      telemetry.attempts = 'not-an-array'
+    }],
+    ['fetch telemetry retry count', (manifest) => {
+      const telemetry = manifest.fetchTelemetry as Record<string, unknown>
+      telemetry.retries = []
+      telemetry.retryCount = 1
     }],
   ]
   try {
@@ -1710,7 +1719,8 @@ function strictDownloaderOutageManifest(start: string, end: string) {
       },
     },
     warnings: ['provider unavailable'],
-    fetchTelemetry: { requests: 2, retryCount: 0, retries: [], attempts: [] },
+    // This is the aggregate shape emitted by download-local-data.mjs mergeFetchTelemetry.
+    fetchTelemetry: { requests: 2, retryCount: 0 },
   }
 }
 

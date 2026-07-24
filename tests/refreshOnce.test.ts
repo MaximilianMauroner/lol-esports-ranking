@@ -698,15 +698,28 @@ async function runRefreshChildCase(kind: 'unchanged' | 'stale-source' | 'error',
     const outDir = argValue(args, '--out-dir')
     const manifestPath = argValue(args, '--manifest')
     if (kind === 'stale-source') {
+      const start = argValue(args, '--start')
+      const end = argValue(args, '--end')
       await writeFile(manifestPath, `${JSON.stringify({
         schemaVersion: 1,
-        start: '2026-07-21',
-        end: '2026-07-22',
+        generatedAt: `${end}T00:00:00.000Z`,
+        status: 'failed',
+        start,
+        end,
         files: { leaguepediaJson: [], oracleCsv: [], lolEsportsJson: [] },
-        sources: { leaguepedia: { status: 'failed' }, oracle: { status: 'failed' } },
+        sources: {
+          oracle: downloaderSource('primary', true),
+          leaguepedia: downloaderSource('backup-gap-fill', true),
+          lolesports: {
+            ...downloaderSource('schedule-results-reference', false),
+            unsupportedApi: true,
+          },
+        },
         warnings: ['provider unavailable'],
+        // Exact aggregate shape emitted by download-local-data.mjs mergeFetchTelemetry.
+        fetchTelemetry: { requests: 2, retryCount: 0 },
       })}\n`)
-      return
+      throw new Error('required provider command failed after writing its final manifest')
     }
     const sourcePath = join(outDir, 'leaguepedia', 'scoreboard-games.json')
     await mkdir(join(outDir, 'leaguepedia'), { recursive: true })
@@ -741,6 +754,24 @@ async function runRefreshChildCase(kind: 'unchanged' | 'stale-source' | 'error',
   ]
   await refreshDataIfChanged(args, { run: fakeRun, env })
   if (kind === 'unchanged') await refreshDataIfChanged(args, { run: fakeRun, env })
+}
+
+function downloaderSource(
+  role: 'primary' | 'backup-gap-fill' | 'schedule-results-reference',
+  failed: boolean,
+) {
+  const failures = failed ? [{ source: `${role} fixture`, error: 'provider unavailable' }] : []
+  return {
+    role,
+    status: failed ? 'failed' : 'unavailable',
+    downloadedCount: 0,
+    downloadedThisRun: 0,
+    failedCount: failures.length,
+    failedThisRun: failures.length,
+    failures,
+    skipped: false,
+    required: failed,
+  }
 }
 
 function refreshPaths(root: string) {

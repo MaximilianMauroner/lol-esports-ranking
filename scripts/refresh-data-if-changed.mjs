@@ -1328,12 +1328,14 @@ async function assertCanonicalDownloaderOutageManifest(value, { start, end, stag
     throw new Error('Provider outage manifest files are duplicate or contain current match data')
   }
   const telemetry = value.fetchTelemetry
+  const retries = telemetry?.retries
+  const attempts = telemetry?.attempts
   if (!isRecord(telemetry)
     || !isNonNegativeInteger(telemetry.requests)
     || !isNonNegativeInteger(telemetry.retryCount)
-    || !Array.isArray(telemetry.retries)
-    || !Array.isArray(telemetry.attempts)
-    || telemetry.retryCount !== telemetry.retries.length
+    || (retries !== undefined && !Array.isArray(retries))
+    || (attempts !== undefined && !Array.isArray(attempts))
+    || (Array.isArray(retries) && telemetry.retryCount !== retries.length)
     || (telemetry.elapsedMs !== undefined && (!Number.isFinite(telemetry.elapsedMs) || telemetry.elapsedMs < 0))) {
     throw new Error('Provider outage manifest fetch telemetry is invalid')
   }
