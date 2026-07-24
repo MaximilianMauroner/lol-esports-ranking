@@ -272,6 +272,7 @@ test('daily audit success timestamp requires clean parity, promotion, and full-a
     { name: 'clean', semantic: true, state: true, checkpoint: true, expected: true },
     { name: 'semantic-mismatch', semantic: false, state: false, checkpoint: false, expected: false },
     { name: 'earlier-checkpoint-mismatch', semantic: true, state: false, checkpoint: false, expected: false },
+    { name: 'committed-warning', semantic: true, state: true, checkpoint: true, result: 'committed-with-operational-warnings', expected: false },
   ]) {
     const root = await mkdtemp(join(tmpdir(), `daily-audit-${auditCase.name}-`))
     const metricsPath = join(root, 'metrics.json')
@@ -300,7 +301,7 @@ test('daily audit success timestamp requires clean parity, promotion, and full-a
           child.recordStage('promotion', { result: 'completed', output: { promotedAt: '2026-07-22T00:00:00Z' } })
           child.recordStage('full-audit-receipt', { result: 'completed' })
           await writeRefreshMetrics(metricsPath, {
-            ...completeRefreshMetrics(child.snapshot({ result: 'completed' })),
+            ...completeRefreshMetrics(child.snapshot({ result: auditCase.result ?? 'completed' })),
             coordination: { owner: 'worker', fencingToken: 1, etag: `promoted-${auditCase.name}` },
           })
         },

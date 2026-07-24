@@ -3,6 +3,11 @@ import {
   type PublicRankingManifest,
 } from './schema'
 import { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from './logicalPath.mjs'
+import {
+  publicArtifactProxyFallbackUrl,
+  publicArtifactResponseFollowedRedirect,
+  resolvePublicArtifactUrl,
+} from './urlResolver'
 
 export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 2 as const
 export const PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION = 1 as const
@@ -173,7 +178,7 @@ export async function fetchPublicArtifact<T extends object>(
 ): Promise<T> {
   const context = generationContexts.get(owner)
   if (!context) {
-    const response = await fetcher(resolveUrl(logicalUrl, fallbackBaseUrl), {
+    const response = await fetcher(resolvePublicArtifactUrl(logicalUrl, fallbackBaseUrl), {
       signal,
       cache,
       headers: { Accept: 'application/json' },
@@ -188,7 +193,7 @@ export async function fetchPublicArtifact<T extends object>(
   if (entry.generationId !== context.manifest.generationId) {
     throw new Error(`Invalid public artifact: mixed generation mapping for ${logicalPath}`)
   }
-  const objectUrl = resolveUrl(entry.objectUrl, context.manifestUrl)
+  const objectUrl = resolvePublicArtifactUrl(entry.objectUrl, context.manifestUrl)
   const requestInit: RequestInit = {
     signal,
     cache,
@@ -216,7 +221,7 @@ async function fetchArtifactResponse(
   manifestUrl: string,
   requestInit: RequestInit,
 ) {
-  const proxyUrl = proxyFallbackUrl(objectUrl, manifestUrl)
+  const proxyUrl = publicArtifactProxyFallbackUrl(objectUrl, manifestUrl)
   let response: Response
   try {
     response = await fetcher(objectUrl, requestInit)
@@ -225,58 +230,10 @@ async function fetchArtifactResponse(
     return fetcher(proxyUrl, requestInit)
   }
   if (!response.ok && proxyUrl && requestInit.signal?.aborted !== true
-    && followedRedirect(response, objectUrl, manifestUrl)) {
+    && publicArtifactResponseFollowedRedirect(response, objectUrl, manifestUrl)) {
     return fetcher(proxyUrl, requestInit)
   }
   return response
-}
-
-function proxyFallbackUrl(objectUrl: string, manifestUrl: string) {
-  const rootRelative = objectUrl.startsWith('/') && !objectUrl.startsWith('//')
-  const referenceOrigin = runtimeOrigin() ?? absoluteOrigin(manifestUrl)
-  if (!rootRelative && !referenceOrigin) return undefined
-
-  let parsed: URL
-  try {
-    parsed = new URL(objectUrl, referenceOrigin ?? 'https://same-origin.invalid')
-  } catch {
-    return undefined
-  }
-  if (!rootRelative && parsed.origin !== referenceOrigin) return undefined
-  if (!/^\/data\/objects\/sha256\/[a-f0-9]{64}$/.test(parsed.pathname)) return undefined
-  parsed.searchParams.set('delivery', 'proxy')
-  if (rootRelative) return `${parsed.pathname}${parsed.search}${parsed.hash}`
-  return parsed.toString()
-}
-
-function followedRedirect(response: Response, objectUrl: string, manifestUrl: string) {
-  if (response.redirected) return true
-  if (!response.url) return false
-  const base = runtimeOrigin() ?? absoluteOrigin(manifestUrl)
-    ?? (objectUrl.startsWith('/') ? 'https://same-origin.invalid' : undefined)
-  if (!base) return false
-  try {
-    const finalUrl = new URL(response.url, base)
-    const originalUrl = new URL(objectUrl, base)
-    finalUrl.hash = ''
-    originalUrl.hash = ''
-    return finalUrl.toString() !== originalUrl.toString()
-  } catch {
-    return false
-  }
-}
-
-function runtimeOrigin() {
-  const runtime = globalThis as typeof globalThis & { location?: { origin?: unknown } }
-  return typeof runtime.location?.origin === 'string' ? runtime.location.origin : undefined
-}
-
-function absoluteOrigin(value: string) {
-  try {
-    return /^[a-z][a-z\d+.-]*:/i.test(value) ? new URL(value).origin : undefined
-  } catch {
-    return undefined
-  }
 }
 
 function isAbortError(error: unknown, signal: AbortSignal | null | undefined) {
@@ -551,14 +508,6 @@ function assertObjectUrlDigest(value: string, digest: string, label: string) {
   if (!decodeURIComponent(url.pathname).includes(digest)) {
     throw new Error(`Invalid public artifact: ${label} must contain its semantic digest`)
   }
-}
-
-function resolveUrl(value: string, baseUrl: string) {
-  if (/^[a-z][a-z\d+.-]*:/i.test(value) || value.startsWith('/')) return value
-  const runtime = globalThis as typeof globalThis & { location?: { origin?: unknown } }
-  const origin = typeof runtime.location?.origin === 'string' ? runtime.location.origin : 'http://localhost'
-  const base = /^[a-z][a-z\d+.-]*:/i.test(baseUrl) ? baseUrl : new URL(baseUrl, origin).toString()
-  return new URL(value, base).toString()
 }
 
 function canonicalJson(value: unknown): string {

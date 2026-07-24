@@ -11,6 +11,7 @@ import {
   assertBucketLease,
   getBucketObject,
   readActiveContentAddressedGeneration,
+  readActiveRawSourceAuthority,
   readBucketJson,
   releaseBucketLease,
   renewBucketLease,
@@ -21,7 +22,16 @@ import {
   type BucketStorageConfig,
 } from '../scripts/railway-bucket.mjs'
 import { canonicalJsonFor, canonicalPublicLogicalPath, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { createGenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
+import {
+  prepareContentAddressedState,
+  prepareStateObject,
+  readActiveIncrementalState,
+  stateObjectReferenceFor,
+  syncContentAddressedStateObject,
+  writeIncrementalStateManifest,
+} from '../scripts/incremental-state-storage.mjs'
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
 
@@ -34,6 +44,37 @@ const config = {
   secretAccessKey: 'secret',
   prefix: 'rankings',
 }
+
+test('generation readiness closure rejects duplicate and mutable membership', () => {
+  const identity = { key: 'rankings/generations/g1/manifest.json', digest: 'a'.repeat(64), bytes: 1 }
+  const raw = { key: `rankings/raw/objects/sha256/${'b'.repeat(64)}`, digest: 'b'.repeat(64), bytes: 1 }
+  const base = {
+    generationId: 'g1',
+    preparedAt: '2026-07-23T00:00:00.000Z',
+    prefix: 'rankings',
+    fencingToken: 1,
+    leaseOwner: 'worker',
+    promotionEtag: '"etag"',
+    provenance: { modelVersion: 'm', modelConfigHash: 'c', source: 'test', dataMode: 'test', sourceProviders: ['test'] },
+    authorities: { publicManifest: identity, rawReceipt: raw },
+  }
+  assert.throws(() => createGenerationPublicationReceipt({
+    ...base,
+    objects: [
+      { ...identity, outcome: 'uploaded' },
+      { ...raw, outcome: 'uploaded' },
+      { key: 'rankings/raw/refresh-state.json', digest: 'c'.repeat(64), bytes: 1, outcome: 'uploaded' },
+    ],
+  }), /mutable or unknown namespace/)
+  assert.throws(() => createGenerationPublicationReceipt({
+    ...base,
+    objects: [
+      { ...identity, outcome: 'uploaded' },
+      { ...identity, outcome: 'reused' },
+      { ...raw, outcome: 'uploaded' },
+    ],
+  }), /duplicate membership/)
+})
 
 async function uploadRankingArtifacts(options: Parameters<typeof uploadRankingArtifactsImplementation>[0]) {
   let withRaw = options
@@ -60,6 +101,7 @@ async function uploadRankingArtifacts(options: Parameters<typeof uploadRankingAr
     leaseAuthority: {
       key: 'ops/refresh-lease.json',
       lease: { owner, fencingToken, acquiredAt: leaseValue.leaseAcquiredAt, expiresAt: leaseValue.leaseExpiresAt },
+      promotionEtag: written.etag,
     },
   })
 }
@@ -235,7 +277,7 @@ test('lost lease leaves uploaded generation objects orphaned and active pointer 
       publicDataDir: publicDir,
       generationId: 'orphan',
       fencingToken: current.lease.fencingToken,
-      leaseAuthority: { key: 'lease.json', lease: current.lease },
+      leaseAuthority: { key: 'lease.json', lease: current.lease, promotionEtag: current.promotionEtag },
       now: () => new Date('2026-07-11T00:00:30Z'),
       config,
       client,
@@ -270,7 +312,7 @@ test('takeover between final assertion and active-pointer write invalidates the 
       },
       config,
       client,
-    }), /Active generation changed during promotion/)
+    }), /no longer authoritative|Active generation changed during promotion/)
     assert.ok(client.objects.has('rankings/generations/stale-generation/manifest.json'))
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'current')
   } finally {
@@ -278,7 +320,39 @@ test('takeover between final assertion and active-pointer write invalidates the 
   }
 })
 
-test('post-promotion refresh state and receipt contain the same canonical telemetry', async () => {
+test('readiness receipt failure leaves the prior active generation authoritative', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-receipt-failure-'))
+  const publicDir = join(root, 'public')
+  const generationId = 'receipt-failure'
+  const backing = memoryS3()
+  const client = {
+    objects: backing.objects,
+    async send(command: unknown) {
+      const { name, input } = commandDetails(command)
+      if (name === 'PutObjectCommand' && input.Key === `rankings/generations/${generationId}/publish.json`) {
+        throw new Error('injected readiness receipt failure')
+      }
+      return backing.send(command)
+    },
+  }
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    await writeBucketJson('active-generation.json', { generationId: 'prior', fencingToken: 0 }, { ifNoneMatch: '*', config, client })
+    await assert.rejects(uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 1,
+      config,
+      client,
+    }), /injected readiness receipt failure/)
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'prior')
+    assert.equal(client.objects.has(`rankings/generations/${generationId}/manifest.json`), true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('readiness receipt stays pre-activation while mutable refresh telemetry records promotion', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-canonical-metrics-'))
   const publicDir = join(root, 'public')
   const statePath = join(root, 'refresh-state.json')
@@ -312,12 +386,16 @@ test('post-promotion refresh state and receipt contain the same canonical teleme
     })
     const receipt = JSON.parse(client.objects.get('rankings/generations/generation-canonical/publish.json')!.body)
     const refreshState = JSON.parse(client.objects.get('rankings/raw/refresh-state.json')!.body)
-    assert.deepEqual(receipt.refreshTelemetry, refreshState.lastRun)
-    assert.deepEqual(receipt.refreshTelemetry, result.refreshTelemetry)
-    assert.equal(receipt.refreshTelemetry.cause, 'pending-match')
-    assert.deepEqual(receipt.refreshTelemetry.affected, { matchIds: ['match-1'], date: '2026-07-10' })
-    assert.equal(receipt.refreshTelemetry.stages[0].name, 'public-serialization')
-    assert.equal(receipt.refreshTelemetry.freshness.publishedAt, (result.promotion as { promotedAt: string }).promotedAt)
+    assert.equal(receipt.status, 'ready')
+    assert.equal('refreshTelemetry' in receipt, false)
+    assert.deepEqual(refreshState.lastRun, result.refreshTelemetry)
+    assert.equal(refreshState.lastRun.cause, 'pending-match')
+    assert.deepEqual(refreshState.lastRun.affected, { matchIds: ['match-1'], date: '2026-07-10' })
+    assert.equal(refreshState.lastRun.stages[0].name, 'public-serialization')
+    assert.equal(refreshState.lastRun.freshness.publishedAt, (result.promotion as { promotedAt: string }).promotedAt)
+    const active = JSON.parse(client.objects.get('rankings/active-generation.json')!.body)
+    assert.equal(active.publicationReceiptKey, 'rankings/generations/generation-canonical/publish.json')
+    assert.equal(active.publicationReceiptDigest, client.objects.get(active.publicationReceiptKey)!.metadata?.sha256)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -345,7 +423,7 @@ test('semantic public artifacts produce deterministic gzip bytes over canonical 
   assert.equal(gunzipSync(first.compressed).toString('utf8'), first.canonicalJson)
 })
 
-test('generation publish receipt is canonical, digest-bound, and safely CAS-repromoted', async () => {
+test('generation readiness receipt is canonical, digest-bound, and immutable', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-publish-authority-'))
   const publicDir = join(root, 'public')
   const generationId = 'publish_authority'
@@ -364,25 +442,80 @@ test('generation publish receipt is canonical, digest-bound, and safely CAS-repr
     assert.equal(first.contentEncoding, undefined)
     assert.equal(first.metadata?.sha256, createHash('sha256').update(first.bytes!).digest('hex'))
     assert.equal(first.metadata?.['semantic-bytes'], String(first.bytes!.byteLength))
-    assert.equal(parsed.schemaVersion, 2)
+    assert.equal(parsed.schemaVersion, 1)
+    assert.equal(parsed.status, 'ready')
     for (const authority of [parsed.authorities.publicManifest, parsed.authorities.rawReceipt]) {
-      assert.equal(parsed.artifacts.filter((entry: Record<string, unknown>) => entry.key === authority.key
-        && entry.digest === authority.digest && entry.bytes === authority.bytes && entry.contentType === authority.contentType).length, 1)
+      assert.equal(parsed.objects.filter((entry: Record<string, unknown>) => entry.key === authority.key
+        && entry.digest === authority.digest && entry.bytes === authority.bytes).length, 1)
     }
 
     const firstEtag = first.etag
-    await uploadRankingArtifacts({
+    await assert.rejects(uploadRankingArtifacts({
       publicDataDir: publicDir, generationId, fencingToken: 2,
       now: () => new Date('2026-07-23T00:01:00.000Z'), config, client,
+    }), /not identical and immutable/)
+    assert.equal(client.objects.get(key)!.etag, firstEtag)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('pre-promotion state model and publication outcomes are exact and exhaustive', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-state-publication-contract-'))
+  const publicDir = join(root, 'public')
+  const generationId = 'state-publication-contract'
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    const rootManifest = JSON.parse(await readFile(join(publicDir, 'ranking-summary.json'), 'utf8'))
+    const raw = testRawGeneration(generationId)
+    const matching = await testStateAuthority(client, generationId, raw.sourceReceiptDigest, {
+      modelVersion: rootManifest.model.version,
+      modelConfigHash: rootManifest.model.configHash,
     })
-    const repromoted = client.objects.get(key)!
-    assert.notEqual(repromoted.etag, firstEtag)
-    assert.equal(JSON.parse(repromoted.body).publishedAt, '2026-07-23T00:01:00.000Z')
+    const missing = { ...matching }
+    delete missing.publicationObjects
     await assert.rejects(uploadRankingArtifacts({
-      publicDataDir: publicDir, generationId, fencingToken: 3,
-      now: () => new Date('2026-07-23T00:00:30.000Z'), config, client,
-    }), /replacement is not newer/)
-    assert.equal(client.objects.get(key)!.etag, repromoted.etag)
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 1,
+      stateManifestAuthority: missing,
+      rawSourceGeneration: raw,
+      config,
+      client,
+    }), /publication outcomes are required/)
+
+    await assert.rejects(uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 2,
+      stateManifestAuthority: {
+        ...matching,
+        publicationObjects: [
+          ...matching.publicationObjects,
+          { key: `rankings/state/objects/sha256/${'f'.repeat(64)}`, digest: 'f'.repeat(64), bytes: 1, outcome: 'reused' },
+        ],
+      },
+      rawSourceGeneration: raw,
+      config,
+      client,
+    }), /not exhaustive/)
+
+    client.objects.delete(String(matching.key))
+    const mismatched = await testStateAuthority(client, generationId, raw.sourceReceiptDigest, {
+      modelVersion: 'wrong-model',
+      modelConfigHash: rootManifest.model.configHash,
+    })
+    await assert.rejects(uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 3,
+      stateManifestAuthority: mismatched,
+      rawSourceGeneration: raw,
+      config,
+      client,
+    }), /state model authority does not match public generation/)
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, undefined)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -474,16 +607,13 @@ test('content-addressed generation reuses unchanged objects, uploads only change
     const snapshot = await fetchPublicSnapshotShard(expected.url, manifest.defaultSnapshotKey, expected, manifest, { fetcher })
     assert.equal(snapshot.matchCount, expected.matchCount)
 
-    const repeated = await uploadRankingArtifacts({
+    await assert.rejects(uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId,
       fencingToken: 2,
       config,
       client,
-    })
-    assert.equal(repeated.uploadedCount, 0)
-    assert.equal(repeated.unchangedCount, 6)
-    assert.equal(repeated.unchangedBytes, measuredCompressedBytes + generationManifestObject.bytes!.byteLength + rawUploadedBytes)
+    }), /not identical and immutable/)
 
     const changedGenerationId = 'run_content_storage_changed'
     await writeContentAddressedFixture(publicDir, changedGenerationId)
@@ -529,7 +659,7 @@ test('active content-addressed restore verifies pointer, manifest, and every ref
     activeObject.bytes = Buffer.from(activeObject.body)
     await assert.rejects(
       readActiveContentAddressedGeneration({ config, client: pointerClient }),
-      /Active public generation manifest authority mismatch/,
+      /pointer and publication receipt authorities differ/,
     )
 
     const objectClient = memoryS3()
@@ -550,6 +680,289 @@ test('active content-addressed restore verifies pointer, manifest, and every ref
       readActiveContentAddressedGeneration({ config, client: objectClient }),
       /Referenced content-addressed object metadata mismatch/,
     )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('active serving rejects unsupported and contradictory publication pointer schemas', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-pointer-schema-'))
+  const publicDir = join(root, 'public')
+  const source = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, 'pointer-schema')
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'pointer-schema',
+      fencingToken: 1,
+      config,
+      client: source,
+    })
+    const mutations = [
+      {
+        label: 'unknown marker 2',
+        mutate: (pointer: Record<string, unknown>) => { pointer.publicationSchemaVersion = 2 },
+        expected: /publication schema is unsupported/,
+      },
+      {
+        label: 'unknown marker 999',
+        mutate: (pointer: Record<string, unknown>) => {
+          pointer.publicationSchemaVersion = 999
+          delete pointer.storageMode
+        },
+        expected: /publication schema is unsupported/,
+      },
+      {
+        label: 'receipt binding with invalid storage authority',
+        mutate: (pointer: Record<string, unknown>) => { delete pointer.storageMode },
+        expected: /invalid storage authority/,
+      },
+      {
+        label: 'partial binding',
+        mutate: (pointer: Record<string, unknown>) => { delete pointer.publicationReceiptEtag },
+        expected: /receipt binding is incomplete/,
+      },
+      {
+        label: 'contradictory legacy binding',
+        mutate: (pointer: Record<string, unknown>) => { delete pointer.publicationSchemaVersion },
+        expected: /contradictory publication receipt fields/,
+      },
+    ]
+    for (const scenario of mutations) {
+      const client = cloneMemoryS3(source)
+      const active = client.objects.get('rankings/active-generation.json')!
+      const pointer = JSON.parse(active.body)
+      scenario.mutate(pointer)
+      active.body = JSON.stringify(pointer)
+      active.bytes = Buffer.from(active.body)
+      await assert.rejects(
+        getBucketObject('ranking-summary.json', { config, client }),
+        scenario.expected,
+        scenario.label,
+      )
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('stripping publication bindings from a native pointer fails public, state, and raw readers', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-native-pointer-downgrade-'))
+  const publicDir = join(root, 'public')
+  const source = memoryS3()
+  const generationId = 'native-pointer-downgrade'
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    const publicManifest = JSON.parse(await readFile(join(publicDir, 'ranking-summary.json'), 'utf8'))
+    const raw = testRawGeneration(generationId)
+    const state = await testStateAuthority(source, generationId, raw.sourceReceiptDigest, {
+      modelVersion: publicManifest.model.version,
+      modelConfigHash: publicManifest.model.configHash,
+    })
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 1,
+      stateManifestAuthority: state,
+      rawSourceGeneration: raw,
+      config,
+      client: source,
+    })
+
+    for (const removePublicMarker of [false, true]) {
+      const client = cloneMemoryS3(source)
+      const activeObject = client.objects.get('rankings/active-generation.json')!
+      const pointer = JSON.parse(activeObject.body)
+      delete pointer.publicationSchemaVersion
+      delete pointer.publicationReceiptKey
+      delete pointer.publicationReceiptDigest
+      delete pointer.publicationReceiptBytes
+      delete pointer.publicationReceiptEtag
+      if (removePublicMarker) delete pointer.publicManifestSchemaVersion
+      activeObject.body = JSON.stringify(pointer)
+      activeObject.bytes = Buffer.from(activeObject.body)
+      activeObject.etag = removePublicMarker ? '"fully-stripped-native"' : '"stripped-native"'
+      const expected = removePublicMarker
+        ? /explicit schema-v1 cutover authority/
+        : /unsupported native authority fields/
+      await assert.rejects(getBucketObject('ranking-summary.json', { config, client }), expected)
+      await assert.rejects(readActiveIncrementalState({ config, client }), expected)
+      await assert.rejects(readActiveRawSourceAuthority({ config, client }), expected)
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('verified active root serving is bounded, cached by pointer authority, and invalidated by a new ETag', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-root-serving-cache-'))
+  const publicDir = join(root, 'public')
+  const backing = memoryS3()
+  const generationId = 'root-serving-cache'
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    const publicManifest = JSON.parse(await readFile(join(publicDir, 'ranking-summary.json'), 'utf8'))
+    const raw = testRawGeneration(generationId)
+    const state = await testStateAuthority(backing, generationId, raw.sourceReceiptDigest, {
+      modelVersion: publicManifest.model.version,
+      modelConfigHash: publicManifest.model.configHash,
+    })
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 1,
+      stateManifestAuthority: state,
+      rawSourceGeneration: raw,
+      config,
+      client: backing,
+    })
+    const reads: Array<{ key: string; bytes: number }> = []
+    const client = {
+      objects: backing.objects,
+      async send(command: unknown) {
+        const result = await backing.send(command)
+        const { name, input } = commandDetails(command)
+        if (name === 'GetObjectCommand') {
+          reads.push({ key: String(input.Key), bytes: Number((result as { ContentLength?: number }).ContentLength ?? 0) })
+        }
+        return result
+      },
+    }
+
+    const first = await getBucketObject('ranking-summary.json', { config, client })
+    assert.equal(first.found, true)
+    const storedGenerationManifest = JSON.parse(
+      client.objects.get(`rankings/generations/${generationId}/manifest.json`)!.body,
+    )
+    const rootDigest = storedGenerationManifest.artifacts['/data/ranking-summary.json'].sha256
+    assert.equal(reads.length, 4)
+    assert.deepEqual(reads.map((read) => read.key), [
+      'rankings/active-generation.json',
+      `rankings/generations/${generationId}/publish.json`,
+      `rankings/generations/${generationId}/manifest.json`,
+      `rankings/objects/sha256/${rootDigest}`,
+    ])
+    assert.equal(reads.some((read) => read.key.includes('/state/')), false)
+    assert.equal(reads.some((read) => read.key.includes('/raw/')), false)
+    const firstBytes = reads.reduce((sum, read) => sum + read.bytes, 0)
+
+    const second = await getBucketObject('ranking-summary.json', { config, client })
+    assert.equal(second.found, true)
+    assert.equal(second.etag, first.etag)
+    assert.equal(reads.length, 5)
+    assert.equal(reads[4].key, 'rankings/active-generation.json')
+    assert.equal(reads.reduce((sum, read) => sum + read.bytes, 0) - firstBytes, reads[4].bytes)
+
+    const activeObject = client.objects.get('rankings/active-generation.json')!
+    const mutated = JSON.parse(activeObject.body)
+    mutated.publicationReceiptDigest = '0'.repeat(64)
+    activeObject.body = JSON.stringify(mutated)
+    activeObject.bytes = Buffer.from(activeObject.body)
+    activeObject.etag = '"new-active-etag"'
+    await assert.rejects(
+      getBucketObject('ranking-summary.json', { config, client }),
+      /publication receipt authority mismatch/,
+    )
+    assert.equal(reads.at(-2)?.key, 'rankings/active-generation.json')
+    assert.equal(reads.at(-1)?.key, `rankings/generations/${generationId}/publish.json`)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('active reader rejects a receipt whose model provenance differs from the public manifest', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-publication-model-authority-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, 'publication-model-authority')
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId: 'publication-model-authority',
+      fencingToken: 1,
+      config,
+      client,
+    })
+    const activeObject = client.objects.get('rankings/active-generation.json')!
+    const pointer = JSON.parse(activeObject.body)
+    const receiptObject = client.objects.get(String(pointer.publicationReceiptKey))!
+    const receipt = JSON.parse(receiptObject.body)
+    receipt.provenance.modelVersion = 'different-model'
+    const receiptBytes = Buffer.from(canonicalJsonFor(receipt))
+    const receiptDigest = createHash('sha256').update(receiptBytes).digest('hex')
+    const receiptEtag = '"resigned-receipt"'
+    receiptObject.body = receiptBytes.toString('utf8')
+    receiptObject.bytes = receiptBytes
+    receiptObject.etag = receiptEtag
+    receiptObject.metadata = {
+      sha256: receiptDigest,
+      'semantic-bytes': String(receiptBytes.byteLength),
+    }
+    pointer.publicationReceiptDigest = receiptDigest
+    pointer.publicationReceiptBytes = receiptBytes.byteLength
+    pointer.publicationReceiptEtag = receiptEtag
+    activeObject.body = canonicalJsonFor(pointer)
+    activeObject.bytes = Buffer.from(activeObject.body)
+
+    await assert.rejects(
+      getBucketObject('ranking-summary.json', { config, client }),
+      /publication provenance does not match public manifest/,
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('post-commit operational failures return committed warnings without invalidating readers', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-post-commit-warning-'))
+  const publicDir = join(root, 'public')
+  const statePath = join(root, 'refresh-state.json')
+  const backing = memoryS3()
+  let committed = false
+  const client = {
+    objects: backing.objects,
+    async send(command: unknown) {
+      const { name, input } = commandDetails(command)
+      if (committed && name === 'GetObjectCommand' && input.Key === 'rankings/active-generation.json') {
+        throw new Error('post-CAS lease assertion attempted')
+      }
+      if (committed && name === 'PutObjectCommand' && input.Key === 'rankings/raw/refresh-state.json') {
+        throw new Error('injected post-CAS refresh-state failure')
+      }
+      const result = await backing.send(command)
+      if (name === 'PutObjectCommand' && input.Key === 'rankings/active-generation.json'
+        && JSON.parse(backing.objects.get('rankings/active-generation.json')!.body).generationId === 'post-commit-warning') {
+        committed = true
+      }
+      return result
+    },
+  }
+  try {
+    await writeContentAddressedFixture(publicDir, 'post-commit-warning')
+    await writeFile(statePath, '{}\n')
+    const result = await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      statePath,
+      refreshStateForUpload: () => ({ ok: true }),
+      refreshTelemetry: () => { throw new Error('injected post-CAS audit/telemetry failure') },
+      onStage: (name: string) => {
+        if (name === 'promotion') throw new Error('injected post-CAS observer failure')
+      },
+      generationId: 'post-commit-warning',
+      fencingToken: 1,
+      config,
+      client,
+    })
+    assert.equal(result.promotion?.completed, true)
+    assert.equal(result.committedWithOperationalWarnings, true)
+    assert.deepEqual(
+      (result.operationalWarnings as Array<{ stage: string }>).map((warning) => warning.stage).sort(),
+      ['post-commit-refresh-state', 'post-commit-telemetry', 'promotion-observer'],
+    )
+    committed = false
+    const loaded = await readActiveContentAddressedGeneration({ config, client })
+    assert.equal(loaded.found, true)
+    assert.equal(loaded.found && loaded.active.generationId, 'post-commit-warning')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -612,14 +1025,14 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
     const markedClient = cloneMemoryS3(sourceClient)
     await assert.rejects(
       readActiveContentAddressedGeneration({ config, client: markedClient, verifyArtifacts: false }),
-      /Active public generation manifest is invalid/,
+      /publication (?:receipt authorities differ|object authority mismatch)/,
     )
     await assert.rejects(
       getBucketObject('ranking-summary.json', { config, client: markedClient }),
-      /Active public generation manifest is invalid/,
+      /pointer and publication receipt authorities differ/,
     )
 
-    // The cache must retain the pointer's schema authority, not just its generation ID.
+    // Root serving revalidates the pointer against its receipt on every read.
     const cachedPointerObject = markedClient.objects.get('rankings/active-generation.json')!
     const cachedPointer = JSON.parse(cachedPointerObject.body)
     delete cachedPointer.publicManifestSchemaVersion
@@ -627,7 +1040,7 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
     cachedPointerObject.bytes = Buffer.from(cachedPointerObject.body)
     await assert.rejects(
       getBucketObject('ranking-summary.json', { config, client: markedClient }),
-      /Active public generation manifest is invalid/,
+      /pointer and publication receipt authorities differ/,
     )
 
     const unknownMarkerClient = cloneMemoryS3(sourceClient)
@@ -638,15 +1051,20 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
     unknownPointerObject.bytes = Buffer.from(unknownPointerObject.body)
     await assert.rejects(
       readActiveContentAddressedGeneration({ config, client: unknownMarkerClient, verifyArtifacts: false }),
-      /Active public generation manifest is invalid/,
+      /publication (?:receipt authorities differ|object authority mismatch)/,
     )
     await assert.rejects(
       getBucketObject('ranking-summary.json', { config, client: unknownMarkerClient }),
-      /Active public generation manifest is invalid/,
+      /pointer and publication receipt authorities differ/,
     )
 
     const oldPointer = JSON.parse(activeObject.body)
     delete oldPointer.publicManifestSchemaVersion
+    delete oldPointer.publicationReceiptKey
+    delete oldPointer.publicationReceiptDigest
+    delete oldPointer.publicationReceiptBytes
+    delete oldPointer.publicationReceiptEtag
+    delete oldPointer.publicationSchemaVersion
     activeObject.body = JSON.stringify(oldPointer)
     activeObject.bytes = Buffer.from(activeObject.body)
 
@@ -655,7 +1073,13 @@ test('active schema-v1 content-addressed cutover is read-only and the first v2 p
     const cutoverManifest = client.objects.get(manifestKey)!
     const delivered = await getBucketObject('ranking-summary.json', { config, client })
     assert.equal(delivered.cutover, 'schema-v1-active-manifest-to-v2')
-    assert.equal(JSON.parse((await streamBytes(delivered.body)).toString('utf8')).schemaVersion, 2)
+    const deliveredBytes = await streamBytes(delivered.body)
+    assert.equal(JSON.parse(deliveredBytes.toString('utf8')).schemaVersion, 2)
+    assert.equal(delivered.etag, `"cutover-v2-${createHash('sha256').update(deliveredBytes).digest('hex')}"`)
+    assert.notEqual(delivered.etag, cutoverManifest.etag)
+    const repeated = await getBucketObject('ranking-summary.json', { config, client })
+    assert.equal(repeated.etag, delivered.etag)
+    assert.deepEqual(await streamBytes(repeated.body), deliveredBytes)
     assert.equal(JSON.parse(cutoverManifest.body).schemaVersion, 1)
 
     const restored = await readActiveContentAddressedGeneration({ config, client, verifyArtifacts: false })
@@ -774,7 +1198,7 @@ test('generation manifest mutation between upload and pointer CAS blocks activat
       },
       config,
       client,
-    }), /Generation manifest changed before active pointer promotion/)
+    }), /publication object authority mismatch/)
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'current')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -941,6 +1365,49 @@ async function writeContentAddressedFixture(publicDir: string, generationId: str
     artifactMeta: { ...rootManifest.artifactMeta },
     tournaments: [],
   })}\n`)
+}
+
+async function testStateAuthority(
+  client: ReturnType<typeof memoryS3>,
+  generationId: string,
+  sourceReceiptDigest: string,
+  model: { modelVersion: string; modelConfigHash: string },
+) {
+  const compatibility = {
+    ...model,
+    importerVersion: 'test-importer',
+    taxonomyVersion: 'test-taxonomy',
+    ratingCheckpointSchemaVersion: 1,
+    causalPrefixSchemaVersion: 1,
+    publicArtifactSchemaVersion: 23,
+  }
+  const ledger = prepareStateObject({ artifactKind: 'test-ledger', rows: [] })
+  const ledgerResult = await syncContentAddressedStateObject(client, config, ledger)
+  const prepared = prepareContentAddressedState({
+    generationId,
+    canonicalLedgerReference: stateObjectReferenceFor(ledger),
+    sourceReceiptDigest,
+    compatibility,
+    checkpoints: [{
+      boundary: { date: '2026-01-01', matchId: 'match-1' },
+      rawPrefix: { matchCount: 1, digest: 'a'.repeat(64) },
+      compatibility,
+      ratingCheckpoint: {},
+      causalSummaries: { sourcedPlayer: {}, dssTeam: {}, dssRegion: {}, rosterEra: {}, playerResume: {} },
+    }],
+  })
+  const objectResults = []
+  for (const object of prepared.objects) {
+    objectResults.push(await syncContentAddressedStateObject(client, config, object))
+  }
+  const manifest = await writeIncrementalStateManifest(client, config, prepared)
+  const publicationObjects = [ledgerResult, ...objectResults, manifest.result].map((entry) => ({
+    key: String(entry.key),
+    digest: String(entry.digest),
+    bytes: Number(entry.bytes),
+    outcome: entry.status === 'uploaded' ? 'uploaded' as const : 'unchanged' as const,
+  }))
+  return { ...manifest.authority, publicationObjects }
 }
 
 function memoryS3() {
