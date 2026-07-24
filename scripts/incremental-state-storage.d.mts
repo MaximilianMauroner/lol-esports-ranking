@@ -61,7 +61,7 @@ export type StateManifestAuthority = {
     key: string
     digest: string
     bytes: number
-    outcome: 'uploaded' | 'unchanged'
+    outcome: 'uploaded' | 'unchanged' | 'reused'
   }>
 }
 

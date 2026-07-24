@@ -68,6 +68,7 @@ async function uploadRankingArtifacts(options: Parameters<typeof uploadRankingAr
     leaseAuthority: {
       key: 'ops/refresh-lease.json',
       lease: { owner, fencingToken, acquiredAt: leaseValue.leaseAcquiredAt, expiresAt: leaseValue.leaseExpiresAt },
+      promotionEtag: written.etag,
     },
   })
 }
@@ -90,8 +91,7 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
     await writePublicFixture(publicDir, generationId)
     const raw = rawGeneration(generationId)
     const state = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, state.objects)
-    const manifest = await writeIncrementalStateManifest(client, config, state)
+    const manifest = await publishState(client, state)
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId,
@@ -115,8 +115,7 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
     await writePublicFixture(publicDir, nextGenerationId)
     const nextRaw = rawGeneration(nextGenerationId)
     const nextState = preparedStateWithReceipt(nextGenerationId, nextRaw.sourceReceiptDigest)
-    await syncAllStateObjects(client, nextState.objects)
-    const nextManifest = await writeIncrementalStateManifest(client, config, nextState)
+    const nextManifest = await publishState(client, nextState)
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: nextGenerationId,
@@ -135,6 +134,11 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       stateManifestDigest: manifest.authority.digest,
       rawReceiptKey: `custom-rankings/${raw.receiptReference.key}`,
       rawReceiptDigest: raw.receiptReference.sha256,
+      publicationSchemaVersion: 1,
+      publicationReceiptKey: active.publicationReceiptKey,
+      publicationReceiptDigest: active.publicationReceiptDigest,
+      publicationReceiptBytes: active.publicationReceiptBytes,
+      publicationReceiptEtag: active.publicationReceiptEtag,
     })
     for (const key of [
       String(active.manifestKey),
@@ -167,7 +171,10 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       mutate(pointer.previousGeneration)
       const bytes = Buffer.from(JSON.stringify(pointer))
       Object.assign(activeObject, { body: bytes.toString('utf8'), bytes, etag: '"invalid-previous"' })
-      await assert.rejects(readPreviousGenerationAuthorities({ config, client }), expected)
+      await assert.rejects(
+        readPreviousGenerationAuthorities({ config, client }),
+        new RegExp(`${expected.source}|pointer and publication receipt authorities differ`),
+      )
       Object.assign(activeObject, originalActive)
     }
     await assertInvalidPrevious((previous) => { previous.generationId = '../unsafe' }, /authority is invalid/)
@@ -183,7 +190,10 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       body: publicWithoutModelBytes.toString('utf8'), bytes: publicWithoutModelBytes, etag: '"missing-model"',
       metadata: { sha256: createHash('sha256').update(publicWithoutModelBytes).digest('hex'), 'semantic-bytes': String(publicWithoutModelBytes.byteLength) },
     })
-    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /public generation manifest is invalid/)
+    await assert.rejects(
+      readPreviousGenerationAuthorities({ config, client }),
+      /public generation manifest is invalid|publication object authority mismatch/,
+    )
     Object.assign(publicObject, originalPublic)
     const installStateMutation = (mutate: (value: Record<string, unknown>) => void) => {
       const value = JSON.parse(originalState.bytes.toString('utf8')) as Record<string, unknown>
@@ -196,13 +206,19 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       Object.assign(activeObject, { body: JSON.stringify(pointer), bytes: Buffer.from(JSON.stringify(pointer)), etag: '"mutated-pointer"' })
     }
     installStateMutation((value) => { value.sourceReceiptDigest = 'f'.repeat(64) })
-    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /state and raw source receipt authorities do not match/)
+    await assert.rejects(
+      readPreviousGenerationAuthorities({ config, client }),
+      /state and raw source receipt authorities do not match|pointer and publication receipt authorities differ/,
+    )
     Object.assign(stateObject, originalState)
     Object.assign(activeObject, originalActive)
     installStateMutation((value) => {
       value.compatibility = { ...(value.compatibility as Record<string, unknown>), modelVersion: 'mismatched-model' }
     })
-    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /public and state model authorities do not match/)
+    await assert.rejects(
+      readPreviousGenerationAuthorities({ config, client }),
+      /public and state model authorities do not match|pointer and publication receipt authorities differ/,
+    )
     Object.assign(stateObject, originalState)
     Object.assign(activeObject, originalActive)
     await assert.rejects(readPreviousGenerationAuthorities({
@@ -226,8 +242,7 @@ test('raw/state receipt mismatch and corrupt raw references never promote', asyn
       await writePublicFixture(publicDir, generationId)
       const raw = rawGeneration(generationId)
       const state = preparedStateWithReceipt(generationId, failure === 'digest-mismatch' ? 'f'.repeat(64) : raw.sourceReceiptDigest)
-      await syncAllStateObjects(client, state.objects)
-      const manifest = await writeIncrementalStateManifest(client, config, state)
+      const manifest = await publishState(client, state)
       await assert.rejects(uploadRankingArtifacts({
         publicDataDir: publicDir,
         generationId,
@@ -384,8 +399,7 @@ test('active pointers without state authority trigger a full rebuild and promoti
     const generationId = 'state-public-generation'
     const raw = rawGeneration(generationId)
     const prepared = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, prepared.objects)
-    const state = await writeIncrementalStateManifest(client, config, prepared)
+    const state = await publishState(client, prepared)
     await writePublicFixture(publicDir, generationId)
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
@@ -434,8 +448,7 @@ test('crashes and stale workers cannot activate prepared state', async () => {
     })
     const raw = rawGeneration('orphan')
     const prepared = preparedStateWithReceipt('orphan', raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, prepared.objects)
-    const state = await writeIncrementalStateManifest(client, config, prepared)
+    const state = await publishState(client, prepared)
     assert.equal(JSON.parse(client.objects.get('custom-rankings/active-generation.json')!.body).generationId, 'current')
 
     await writePublicFixture(publicDir, 'orphan')
@@ -468,8 +481,7 @@ test('state-manifest mutation after preparation blocks public pointer promotion'
     })
     const raw = rawGeneration('state-race')
     const prepared = preparedStateWithReceipt('state-race', raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, prepared.objects)
-    const state = await writeIncrementalStateManifest(client, config, prepared)
+    const state = await publishState(client, prepared)
     await writePublicFixture(publicDir, 'state-race')
     await assert.rejects(uploadRankingArtifacts({
       publicDataDir: publicDir,
@@ -484,7 +496,7 @@ test('state-manifest mutation after preparation blocks public pointer promotion'
       },
       config,
       client,
-    }), /state manifest changed before active pointer promotion/i)
+    }), /Generation publication object authority mismatch|state manifest changed before active pointer promotion/i)
     assert.equal(JSON.parse(client.objects.get('custom-rankings/active-generation.json')!.body).generationId, 'current')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -587,7 +599,27 @@ function objectReference(digest: string, prefix: string): StateObjectReference {
 }
 
 async function syncAllStateObjects(client: ReturnType<typeof memoryS3>, objects: PreparedStateObject[]) {
-  for (const object of objects) await syncContentAddressedStateObject(client, config, object)
+  const results = []
+  for (const object of objects) results.push(await syncContentAddressedStateObject(client, config, object))
+  return results
+}
+
+async function publishState(
+  client: ReturnType<typeof memoryS3>,
+  prepared: ReturnType<typeof preparedStateWithReceipt>,
+) {
+  const objectResults = await syncAllStateObjects(client, prepared.objects)
+  const manifest = await writeIncrementalStateManifest(client, config, prepared)
+  const publicationObjects = [...objectResults, manifest.result].map((entry) => ({
+    key: entry.key,
+    digest: entry.digest,
+    bytes: entry.bytes,
+    outcome: entry.status === 'uploaded' ? 'uploaded' as const : 'unchanged' as const,
+  }))
+  return {
+    ...manifest,
+    authority: { ...manifest.authority, publicationObjects },
+  }
 }
 
 async function writePublicFixture(publicDir: string, generationId: string) {

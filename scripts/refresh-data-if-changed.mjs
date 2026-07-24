@@ -673,6 +673,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         output: {
           logicalArtifactCount: local.logicalArtifactCount,
           publicationMode: bucketUploadEnabled ? 'bucket-unavailable' : 'upload-disabled',
+          ...(local.cleanupWarning ? { cleanupWarning: local.cleanupWarning } : {}),
         },
       })
     }

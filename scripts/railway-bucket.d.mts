@@ -36,7 +36,7 @@ export function readBucketJson(relativeKey: string, options?: { config?: unknown
 }>
 export function readActiveContentAddressedGeneration(options?: { config?: unknown; client?: BucketClient; verifyArtifacts?: boolean }): Promise<
   | { found: false; reason: string; active?: Record<string, unknown>; etag?: string }
-  | { found: true; active: Record<string, unknown>; etag?: string; cutover?: 'schema-v1-active-manifest-to-v2'; manifest: Record<string, unknown>; rootArtifact: Record<string, unknown>; artifacts: Record<string, unknown>; loadArtifacts(paths: string[]): Promise<Record<string, unknown>> }
+  | { found: true; active: Record<string, unknown>; etag?: string; cutover?: 'schema-v1-active-manifest-to-v2'; manifest: Record<string, unknown>; manifestBytes: Buffer; rootArtifact: Record<string, unknown>; artifacts: Record<string, unknown>; loadArtifacts(paths: string[]): Promise<Record<string, unknown>> }
 >
 export function readActiveGenerationPublication(options?: {
   config?: unknown

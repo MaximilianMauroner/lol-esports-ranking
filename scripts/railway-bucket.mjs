@@ -10,6 +10,7 @@ import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCom
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import {
+  classifyActiveGenerationPointer,
   createGenerationPublicationReceipt,
   deduplicatePublicationOutcomes,
   parseGenerationPublicationReceipt,
@@ -18,8 +19,6 @@ import {
 import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { assertStateManifestAuthority, parseIncrementalStateManifest, readStoredJsonStateObject } from './incremental-state-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
-
-const activeGenerationCache = new WeakMap()
 
 export const PRESIGNED_URL_EXPIRY_SECONDS = 3600
 const IMMUTABLE_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable'
@@ -140,6 +139,7 @@ export async function uploadRankingArtifacts({
   uploads.push(...publicSync.uploaded)
   unchanged.push(...publicSync.unchanged)
   const reused = [...(publicSync.reused ?? [])]
+  const operationalWarnings = []
   const storageMetrics = generationalPublication ? {
     mode: CONTENT_ADDRESSED_STORAGE_MODE,
     objectCount: publicSync.objectCount,
@@ -260,6 +260,11 @@ export async function uploadRankingArtifacts({
       && verifiedState.manifest.sourceReceiptDigest !== verifiedRaw.receipt.sourceReceiptDigest) {
       throw new Error('Incremental state source receipt does not match raw source authority')
     }
+    if (verifiedState
+      && (verifiedState.manifest.compatibility.modelVersion !== publicSync.manifest.model.version
+        || verifiedState.manifest.compatibility.modelConfigHash !== publicSync.manifest.model.configHash)) {
+      throw new Error('Incremental state model authority does not match public generation')
+    }
     if (liveAuthority.etag !== leaseAuthority.promotionEtag) {
       throw new Error('Refresh lease no longer matches the handed-off promotion ETag')
     }
@@ -373,14 +378,6 @@ export async function uploadRankingArtifacts({
       ifMatch: leaseAuthority.promotionEtag,
     })
     if (!promotion.written) throw new Error('Active generation changed during promotion')
-    activeGenerationCache.set(client, {
-      expiresAt: Date.now() + 30_000,
-      value: { generationId, publicManifestSchemaVersion: 2 },
-    })
-    onStage?.('promotion', {
-      durationMs: monotonicNow() - stageStarted,
-      output: { generationId, fencingToken, promotedAt, etag: promotion.etag },
-    })
     promotionOutcome = {
       completed: true,
       generationId,
@@ -390,29 +387,62 @@ export async function uploadRankingArtifacts({
       storageMode: CONTENT_ADDRESSED_STORAGE_MODE,
       receipt: receiptAuthority,
     }
+    try {
+      onStage?.('promotion', {
+        durationMs: monotonicNow() - stageStarted,
+        output: { generationId, fencingToken, promotedAt, etag: promotion.etag },
+      })
+    } catch (error) {
+      operationalWarnings.push(operationalWarning('promotion-observer', error))
+    }
   }
 
-  const telemetry = refreshTelemetry
-    ? await (typeof refreshTelemetry === 'function' ? refreshTelemetry(promotionOutcome) : refreshTelemetry)
-    : undefined
-  if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
-    config,
-    client,
-    now: now(),
-    requireEtag: false,
-  })
-  if (statePath) {
-    if (refreshStateForUpload) {
-      uploads.push(await uploadRefreshState(client, config, refreshStateForUpload, {
-        uploads,
-        unchanged,
-        skipped,
-        promotion: promotionOutcome,
-        refreshTelemetry: telemetry,
-        storage: storageMetrics,
-      }))
-    } else {
-      uploads.push(await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
+  let telemetry
+  if (generationalPublication) {
+    if (refreshTelemetry) {
+      try {
+        telemetry = await (typeof refreshTelemetry === 'function' ? refreshTelemetry(promotionOutcome) : refreshTelemetry)
+      } catch (error) {
+        operationalWarnings.push(operationalWarning('post-commit-telemetry', error))
+      }
+    }
+    if (statePath) {
+      try {
+        uploads.push(refreshStateForUpload
+          ? await uploadRefreshState(client, config, refreshStateForUpload, {
+              uploads,
+              unchanged,
+              skipped,
+              promotion: promotionOutcome,
+              refreshTelemetry: telemetry,
+              storage: storageMetrics,
+            })
+          : await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
+      } catch (error) {
+        operationalWarnings.push(operationalWarning('post-commit-refresh-state', error))
+      }
+    }
+  } else {
+    telemetry = refreshTelemetry
+      ? await (typeof refreshTelemetry === 'function' ? refreshTelemetry(promotionOutcome) : refreshTelemetry)
+      : undefined
+    if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
+      config,
+      client,
+      now: now(),
+      requireEtag: false,
+    })
+    if (statePath) {
+      uploads.push(refreshStateForUpload
+        ? await uploadRefreshState(client, config, refreshStateForUpload, {
+            uploads,
+            unchanged,
+            skipped,
+            promotion: promotionOutcome,
+            refreshTelemetry: telemetry,
+            storage: storageMetrics,
+          })
+        : await uploadFile(client, config, statePath, 'raw/refresh-state.json'))
     }
   }
   const publishedArtifacts = [...uploads]
@@ -446,7 +476,7 @@ export async function uploadRankingArtifacts({
     skipped,
     ...(telemetry ? { refreshTelemetry: telemetry } : {}),
   }
-  if (leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
+  if (!generationalPublication && leaseAuthority) await assertBucketLease(leaseAuthority.key, leaseAuthority, {
     config,
     client,
     now: now(),
@@ -469,7 +499,18 @@ export async function uploadRankingArtifacts({
     ...(generationalPublication ? { storageMode: CONTENT_ADDRESSED_STORAGE_MODE } : {}),
     ...(storageMetrics ? { storage: storageMetrics } : {}),
     ...(publicationReceipt ? { publicationReceipt } : {}),
+    ...(operationalWarnings.length ? {
+      committedWithOperationalWarnings: true,
+      operationalWarnings,
+    } : {}),
     ...publishMetrics,
+  }
+}
+
+function operationalWarning(stage, error) {
+  return {
+    stage,
+    message: error instanceof Error ? error.message : String(error),
   }
 }
 
@@ -521,9 +562,11 @@ export async function readPreviousGenerationAuthorities({
   const expectedManifestKey = bucketKey(config, `generations/${previous.generationId}/manifest.json`)
   if (previous.manifestKey !== expectedManifestKey) throw new Error('Previous public generation manifest key is not canonical')
   const publicObject = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: previous.manifestKey }))
+  let publicationReceipt
   if (previous.publicationSchemaVersion === 1) {
     const publication = await readActiveGenerationPublication({ config, client, active: previous })
     if (!publication.found) throw new Error('Previous generation publication receipt is unavailable')
+    publicationReceipt = publication.receipt
   }
   const publicBytes = await bodyBytes(publicObject.Body)
   const publicDigest = createHash('sha256').update(publicBytes).digest('hex')
@@ -600,6 +643,11 @@ export async function readPreviousGenerationAuthorities({
     throw new Error('Previous state and raw source receipt authorities do not match')
   }
   const publicModel = manifest?.model
+  if (publicationReceipt
+    && (publicationReceipt.provenance.modelVersion !== publicModel.version
+      || publicationReceipt.provenance.modelConfigHash !== publicModel.configHash)) {
+    throw new Error('Previous publication receipt and public model authorities do not match')
+  }
   if (state
     && (state.manifest.compatibility.modelVersion !== publicModel.version
       || state.manifest.compatibility.modelConfigHash !== publicModel.configHash)) {
@@ -624,6 +672,22 @@ export async function getBucketObject(relativePath, {
   const contentObjectRequest = safePath.startsWith('objects/sha256/')
   const directContentObject = /^objects\/sha256\/[a-f0-9]{64}$/.test(safePath)
   if (contentObjectRequest && !directContentObject) return { found: false }
+  if (generationId === undefined && safePath === 'ranking-summary.json') {
+    const verified = await readActiveContentAddressedGeneration({ config, client, verifyArtifacts: true })
+    if (verified.found) {
+      const body = verified.cutover ? Buffer.from(jsonBody(verified.manifest)) : verified.manifestBytes
+      return {
+        found: true,
+        key: verified.active.manifestKey,
+        body: Readable.from([body]),
+        contentLength: body.byteLength,
+        contentType: PUBLIC_JSON_CONTENT_TYPE,
+        contentEncoding: undefined,
+        etag: verified.active.manifestEtag,
+        ...(verified.cutover ? { cutover: verified.cutover } : {}),
+      }
+    }
+  }
   const active = directContentObject || typeof generationId === 'string'
     ? undefined
     : await activeGeneration(config, client)
@@ -799,11 +863,18 @@ export async function readActiveContentAddressedGeneration({
   verifyArtifacts = true,
 } = {}) {
   const active = await readBucketJson('active-generation.json', { config, client })
-  if (!active.found || active.value?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE) {
-    return { found: false, reason: active.found ? 'content-addressed-authority-missing' : 'active-generation-missing', active: active.value, etag: active.etag }
+  if (!active.found) {
+    return { found: false, reason: 'active-generation-missing', active: active.value, etag: active.etag }
+  }
+  const pointerKind = classifyActiveGenerationPointer(active.value)
+  if (active.value?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE) {
+    if (pointerKind === 'receipt-bound') {
+      throw new Error('Receipt-bound active generation pointer has invalid storage authority')
+    }
+    return { found: false, reason: 'content-addressed-authority-missing', active: active.value, etag: active.etag }
   }
   const generationId = active.value.generationId
-  const publication = active.value.publicationSchemaVersion === 1
+  const publication = pointerKind === 'receipt-bound'
     ? await readActiveGenerationPublication({ client, config, active: active.value })
     : undefined
   const expectedKey = bucketKey(config, `generations/${safeObjectPath(generationId)}/manifest.json`)
@@ -856,6 +927,7 @@ export async function readActiveContentAddressedGeneration({
     active: active.value,
     etag: active.etag,
     manifest,
+    manifestBytes,
     rootArtifact,
     artifacts,
     loadArtifacts,
@@ -874,7 +946,7 @@ export async function readActiveGenerationPublication({
     if (!pointer.found) return { found: false, reason: 'active-generation-missing' }
     active = pointer.value
   }
-  if (active.publicationSchemaVersion !== 1) {
+  if (classifyActiveGenerationPointer(active) !== 'receipt-bound') {
     return { found: false, reason: 'legacy-publication-without-receipt-binding' }
   }
   const generationId = active.generationId
@@ -921,9 +993,14 @@ async function assertPublicationMember(client, config, member) {
     throw new Error(`Generation publication object authority mismatch: ${member.key}`)
   }
   const relative = relativeBucketKeyAny(config, member.key)
-  const semantic = /^(?:objects|state\/objects|raw\/objects)\/sha256\//.test(relative)
-    ? gunzipSync(stored)
-    : stored
+  let semantic = stored
+  if (/^(?:objects|state\/objects|raw\/objects)\/sha256\//.test(relative)) {
+    try {
+      semantic = gunzipSync(stored)
+    } catch (error) {
+      throw new Error(`Generation publication object gzip is corrupt: ${member.key}`, { cause: error })
+    }
+  }
   if (createHash('sha256').update(semantic).digest('hex') !== member.digest) {
     throw new Error(`Generation publication object digest mismatch: ${member.key}`)
   }
@@ -981,10 +1058,11 @@ export async function readActiveRawSourceAuthority({
   client = createBucketClient(config),
 } = {}) {
   const active = await readBucketJson('active-generation.json', { config, client })
+  const pointerKind = active.found ? classifyActiveGenerationPointer(active.value) : undefined
   if (!active.found || typeof active.value?.rawReceiptKey !== 'string') {
     return { found: false, reason: active.found ? 'raw-source-authority-missing' : 'active-generation-missing' }
   }
-  if (active.value.publicationSchemaVersion === 1) {
+  if (pointerKind === 'receipt-bound') {
     const publication = await readActiveGenerationPublication({ config, client, active: active.value })
     if (!publication.found) throw new Error('Active raw source publication receipt is unavailable')
   }
@@ -2139,12 +2217,23 @@ function statePublicationClosure(config, authority, publicationObjects) {
       bytes: reference.compressedBytes,
     })),
   ]
-  if (!publicationObjects) return expected.map((entry) => ({ ...entry, outcome: 'reused' }))
-  const byKey = new Map(publicationObjects.map((entry) => [entry.key, entry]))
+  if (!Array.isArray(publicationObjects)) {
+    throw new Error('Incremental state publication outcomes are required')
+  }
+  const byKey = new Map()
+  for (const entry of publicationObjects) {
+    if (byKey.has(entry.key)) throw new Error(`Duplicate incremental state publication outcome: ${entry.key}`)
+    byKey.set(entry.key, entry)
+  }
+  const expectedKeys = new Set(expected.map((entry) => entry.key))
+  if (publicationObjects.length !== expected.length
+    || publicationObjects.some((entry) => !expectedKeys.has(entry.key))) {
+    throw new Error('Incremental state publication outcomes are not exhaustive')
+  }
   return expected.map((entry) => {
     const reported = byKey.get(entry.key)
     if (!reported || reported.digest !== entry.digest || reported.bytes !== entry.bytes
-      || !['uploaded', 'unchanged'].includes(reported.outcome)) {
+      || !['uploaded', 'unchanged', 'reused'].includes(reported.outcome)) {
       throw new Error(`Incremental state publication outcome is incomplete: ${entry.key}`)
     }
     return { ...entry, outcome: reported.outcome }
@@ -2347,31 +2436,17 @@ function isMissingObjectError(error) {
 }
 
 async function activeGeneration(config, client) {
-  const cached = activeGenerationCache.get(client)
-  if (cached?.expiresAt > Date.now()) return cached.value
-  try {
-    const object = await client.send(new GetObjectCommand({
-      Bucket: config.bucket,
-      Key: bucketKey(config, 'active-generation.json'),
-    }))
-    const pointer = JSON.parse(await bodyText(object.Body))
-    const value = typeof pointer?.generationId === 'string'
-      ? {
-          generationId: pointer.generationId,
-          ...(pointer.publicManifestSchemaVersion !== undefined
-            ? { publicManifestSchemaVersion: pointer.publicManifestSchemaVersion }
-            : {}),
-        }
-      : null
-    activeGenerationCache.set(client, {
-      expiresAt: Date.now() + 30_000,
-      value,
-    })
-  } catch (error) {
-    if (!isMissingObjectError(error)) throw error
-    activeGenerationCache.set(client, { expiresAt: Date.now() + 30_000, value: null })
+  const pointer = await readBucketJson('active-generation.json', { config, client })
+  if (!pointer.found) return null
+  const pointerKind = classifyActiveGenerationPointer(pointer.value)
+  if (pointer.value?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE) {
+    if (pointerKind === 'receipt-bound') {
+      throw new Error('Receipt-bound active generation pointer has invalid storage authority')
+    }
+    return pointer.value
   }
-  return activeGenerationCache.get(client)?.value ?? null
+  const verified = await readActiveContentAddressedGeneration({ config, client, verifyArtifacts: false })
+  return verified.found ? verified.active : null
 }
 
 function isPreconditionError(error) {

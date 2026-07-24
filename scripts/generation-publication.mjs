@@ -4,6 +4,34 @@ import { canonicalJsonFor } from './public-artifact-storage.mjs'
 export const GENERATION_PUBLICATION_SCHEMA_VERSION = 1
 export const GENERATION_PUBLICATION_STATUS = 'ready'
 
+export function classifyActiveGenerationPointer(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Active generation pointer is invalid')
+  }
+  const publicationFields = [
+    'publicationReceiptKey',
+    'publicationReceiptDigest',
+    'publicationReceiptBytes',
+    'publicationReceiptEtag',
+  ]
+  const present = publicationFields.filter((field) => value[field] !== undefined)
+  if (value.publicationSchemaVersion === undefined) {
+    if (present.length > 0) throw new Error('Legacy active generation pointer has contradictory publication receipt fields')
+    return 'legacy'
+  }
+  if (value.publicationSchemaVersion !== 1) {
+    throw new Error('Active generation pointer publication schema is unsupported')
+  }
+  if (present.length !== publicationFields.length
+    || typeof value.publicationReceiptKey !== 'string' || value.publicationReceiptKey.length === 0
+    || !/^[a-f0-9]{64}$/.test(value.publicationReceiptDigest ?? '')
+    || !Number.isSafeInteger(value.publicationReceiptBytes) || value.publicationReceiptBytes <= 0
+    || typeof value.publicationReceiptEtag !== 'string' || value.publicationReceiptEtag.length === 0) {
+    throw new Error('Active generation pointer publication receipt binding is incomplete')
+  }
+  return 'receipt-bound'
+}
+
 const immutableKeyPatterns = [
   /^generations\/[A-Za-z0-9][A-Za-z0-9._-]*\/manifest\.json$/,
   /^objects\/sha256\/[a-f0-9]{64}$/,

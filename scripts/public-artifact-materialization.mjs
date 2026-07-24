@@ -2,7 +2,10 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { canonicalPublicLogicalPath, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 
-export async function materializePublicArtifactPatch(publicDataDir, patch) {
+export async function materializePublicArtifactPatch(publicDataDir, patch, {
+  move = rename,
+  remove = rm,
+} = {}) {
   const root = resolve(publicDataDir)
   const staging = `${root}.patch-${process.pid}-${Date.now()}`
   const backup = `${root}.previous-${process.pid}-${Date.now()}`
@@ -53,19 +56,45 @@ export async function materializePublicArtifactPatch(publicDataDir, patch) {
 
     let movedPrevious = false
     try {
-      await rename(root, backup)
+      await move(root, backup)
       movedPrevious = true
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error
     }
     try {
-      await rename(staging, root)
-      if (movedPrevious) await rm(backup, { recursive: true, force: true })
+      await move(staging, root)
+      let cleanupWarning
+      if (movedPrevious) {
+        try {
+          await remove(backup, { recursive: true, force: true })
+        } catch (error) {
+          cleanupWarning = {
+            stage: 'backup-cleanup',
+            message: error instanceof Error ? error.message : String(error),
+            backupPath: backup,
+          }
+        }
+      }
+      return {
+        materialized: true,
+        logicalArtifactCount: expected.length,
+        mapping,
+        ...(cleanupWarning ? { cleanupWarning } : {}),
+      }
     } catch (error) {
-      if (movedPrevious) await rename(backup, root).catch(() => undefined)
+      if (movedPrevious) {
+        try {
+          await move(backup, root)
+        } catch (rollbackError) {
+          throw new AggregateError(
+            [error, rollbackError],
+            'Local public artifact swap failed and rollback requires inspection',
+            { cause: rollbackError },
+          )
+        }
+      }
       throw error
     }
-    return { materialized: true, logicalArtifactCount: expected.length, mapping }
   } finally {
     await rm(staging, { recursive: true, force: true })
   }

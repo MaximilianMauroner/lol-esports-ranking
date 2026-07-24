@@ -30,6 +30,7 @@ export type GenerationPublicationReceipt = {
 }
 export const GENERATION_PUBLICATION_SCHEMA_VERSION: 1
 export const GENERATION_PUBLICATION_STATUS: 'ready'
+export function classifyActiveGenerationPointer(value: unknown): 'legacy' | 'receipt-bound'
 export function createGenerationPublicationReceipt(options: {
   generationId: string
   preparedAt: string

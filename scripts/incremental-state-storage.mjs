@@ -4,7 +4,7 @@ import { pipeline } from 'node:stream/promises'
 import { createGunzip, gunzipSync, gzipSync } from 'node:zlib'
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
-import { parseGenerationPublicationReceipt } from './generation-publication.mjs'
+import { classifyActiveGenerationPointer, parseGenerationPublicationReceipt } from './generation-publication.mjs'
 
 export const INCREMENTAL_STATE_STORAGE_MODE = 'content-addressed-state-gzip-v1'
 export const INCREMENTAL_STATE_MANIFEST_KIND = 'incremental-state-generation-manifest'
@@ -253,7 +253,7 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
   }
   assertRecord(active, 'active generation pointer')
   let publication
-  if (active.publicationSchemaVersion === 1) {
+  if (classifyActiveGenerationPointer(active) === 'receipt-bound') {
     publication = await readStatePublicationReceipt(client, config, active)
   }
   if (active.stateManifestKey === undefined && active.stateManifestDigest === undefined) {
@@ -285,6 +285,10 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
     if (!authority || authority.key !== active.stateManifestKey || authority.digest !== digest
       || authority.bytes !== manifestBytes.byteLength) {
       throw new Error('Active incremental state authority is not bound by publication receipt')
+    }
+    if (publication.provenance.modelVersion !== manifest.compatibility.modelVersion
+      || publication.provenance.modelConfigHash !== manifest.compatibility.modelConfigHash) {
+      throw new Error('Active incremental state model authority does not match publication provenance')
     }
   }
   const loadCheckpoints = async (candidates = manifest.checkpoints) => {
