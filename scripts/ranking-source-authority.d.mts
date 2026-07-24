@@ -79,6 +79,14 @@ export function validateRawSourceAuthority(
   }
   identity: NonNullable<RankingSourceAuthorityEvidence['authority']>
 }>
+export function validateRawSourceAuthorityMetadata(
+  authority: Omit<RawSourceAuthority, 'objectResolver'>,
+  options?: { importerVersion?: string; requiredCoverage?: { start: string; end: string } },
+): {
+  receipt: RawSourceReceipt
+  receiptReference: RawObjectReference
+  identity: NonNullable<RankingSourceAuthorityEvidence['authority']>
+}
 export function authorityIdentityFor(
   validated: { identity: NonNullable<RankingSourceAuthorityEvidence['authority']> },
 ): NonNullable<RankingSourceAuthorityEvidence['authority']>

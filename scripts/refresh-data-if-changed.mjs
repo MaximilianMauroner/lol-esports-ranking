@@ -15,7 +15,6 @@ import { rawSourceWorkerExecArgv } from './refresh-worker-memory.mjs'
 import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
-  validateRawSourceAuthority,
 } from './ranking-source-authority.mjs'
 
 const wrapperOnlyArgs = new Set([
@@ -71,6 +70,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   const bucketRequired = booleanArg(args.bucketRequired) || env.RANKING_BUCKET_REQUIRED === 'true'
   const bucketConfig = options.bucketConfig ?? bucketConfigFromEnv(env)
   const bucketClient = options.bucketClient ?? createBucketClient(bucketConfig)
+  const readRawAuthority = options.readActiveRawSourceAuthority ?? readActiveRawSourceAuthority
   const stageAuditSnapshot = options.stageFullAuditSnapshot ?? stageFullAuditSnapshot
   const publishAuditReceipt = options.publishFullAuditDayReceipt ?? publishFullAuditDayReceipt
   const restoreRawEnabled = env.RANKING_BUCKET_RESTORE_RAW !== 'false'
@@ -93,6 +93,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         config: bucketConfig,
         client: bucketClient,
         rawWorkerDir,
+        readRawAuthority,
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
   metrics.recordStage('restore', {
@@ -182,6 +183,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       const outageReason = providerCommandError ? 'provider-command-failed' : 'no-current-match-source-data'
       const recoveryAuthorized = force && env.RANKING_REUSE_RAW_ON_SOURCE_FAILURE === 'true'
       if (recoveryAuthorized && bucketConfig.enabled && bucketClient) {
+        const recoveryValidationStarted = monotonicNow()
+        let recoveryValidationRecorded = false
         try {
           acceptedRawRecovery = await restoreVerifiedRawRecovery({
             config: bucketConfig,
@@ -190,7 +193,21 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             rawWorkerDir,
             generatedAt: attemptedAt,
             importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
+            readRawAuthority,
           })
+          metrics.recordStage('raw-recovery-validation', {
+            durationMs: monotonicNow() - recoveryValidationStarted,
+            result: 'completed',
+            output: {
+              generationId: acceptedRawRecovery.identity.generationId,
+              sourceReceiptDigest: acceptedRawRecovery.identity.sourceReceiptDigest,
+              rawIdentityDigest: acceptedRawRecovery.identity.rawIdentityDigest,
+              receiptDigest: acceptedRawRecovery.identity.receiptReference.sha256,
+              objectCount: acceptedRawRecovery.materialized.objectCount,
+              childMaxRssBytes: acceptedRawRecovery.materialized.childMaxRssBytes,
+            },
+          })
+          recoveryValidationRecorded = true
           currentStagingManifest = manifestWithResolvedFiles(await readJson(stagingManifestPath), stagingDir)
           const evidence = prepareRankingSourceAuthorityEvidence({
             mode: 'forced-verified-raw-recovery',
@@ -198,22 +215,22 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             attemptedAt,
             providerResult,
             requestedCoverage: { start, end },
-            authority: authorityIdentityFor(acceptedRawRecovery.validated),
+            authority: acceptedRawRecovery.identity,
             outage: {
               reason: outageReason,
               attemptedCoverage: { start, end },
               providerResult,
             },
             restoredBaseline: {
-              generationId: acceptedRawRecovery.validated.receipt.generationId,
-              sourceReceiptDigest: acceptedRawRecovery.validated.receipt.sourceReceiptDigest,
-              rawIdentityDigest: acceptedRawRecovery.validated.receipt.rawIdentityDigest,
-              coverage: acceptedRawRecovery.validated.receipt.coverage,
+              generationId: acceptedRawRecovery.identity.generationId,
+              sourceReceiptDigest: acceptedRawRecovery.identity.sourceReceiptDigest,
+              rawIdentityDigest: acceptedRawRecovery.identity.rawIdentityDigest,
+              coverage: acceptedRawRecovery.identity.coverage,
             },
             compatibility: {
-              importerVersion: acceptedRawRecovery.validated.receipt.importerVersion,
-              receiptSchemaVersion: acceptedRawRecovery.validated.receipt.schemaVersion,
-              storageMode: acceptedRawRecovery.validated.receipt.storageMode,
+              importerVersion: acceptedRawRecovery.identity.importerVersion,
+              receiptSchemaVersion: acceptedRawRecovery.identity.receiptSchemaVersion,
+              storageMode: acceptedRawRecovery.identity.storageMode,
             },
           })
           const sourceAuthorityEvidence = {
@@ -235,7 +252,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               start,
               end,
               sources: providerResult.sources,
-              restoredGenerationId: acceptedRawRecovery.validated.receipt.generationId,
+              restoredGenerationId: acceptedRawRecovery.identity.generationId,
             },
             sourceAuthorityEvidence,
           }
@@ -243,11 +260,13 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           console.warn(`No current Oracle or Leaguepedia source files were downloaded for ${start} through ${end}; rebuilding from verified raw authority.`)
         } catch (error) {
           acceptedRawRecovery = undefined
-          metrics.recordStage('raw-recovery-validation', {
-            durationMs: 0,
-            result: 'failed',
-            output: { reason: errorMessage(error) },
-          })
+          if (!recoveryValidationRecorded) {
+            metrics.recordStage('raw-recovery-validation', {
+              durationMs: monotonicNow() - recoveryValidationStarted,
+              result: 'failed',
+              output: { reason: errorMessage(error) },
+            })
+          }
         }
       }
       if (!acceptedRawRecovery) {
@@ -428,7 +447,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         || (refreshMode === 'shadow' && env.RANKING_INCREMENTAL_SHADOW_ENABLED === 'true'))
     if (!skipCrunch && incrementalEnabled && bucketConfig.enabled && bucketClient) {
       const rawAuthorityStarted = monotonicNow()
-      const activeRaw = await readActiveRawSourceAuthority({ config: bucketConfig, client: bucketClient })
+      const activeRaw = await readRawAuthority({ config: bucketConfig, client: bucketClient })
       metrics.recordStage('raw-authority-read', {
         durationMs: monotonicNow() - rawAuthorityStarted,
         result: activeRaw.found ? 'completed' : 'not-applicable',
@@ -1061,7 +1080,15 @@ async function attemptOptionalRawRestore(options) {
   }
 }
 
-async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, hasUsableLocalRawBaseline, config, client, rawWorkerDir }) {
+async function restoreRawFromBucketIfMissing({
+  rawDir,
+  manifestPath,
+  hasUsableLocalRawBaseline,
+  config,
+  client,
+  rawWorkerDir,
+  readRawAuthority = readActiveRawSourceAuthority,
+}) {
   if (hasUsableLocalRawBaseline) {
     return {
       restored: false,
@@ -1069,36 +1096,33 @@ async function restoreRawFromBucketIfMissing({ rawDir, manifestPath, hasUsableLo
     }
   }
 
-  const activeRaw = await readActiveRawSourceAuthority({ config, client })
+  const activeRaw = await readRawAuthority({ config, client })
   if (activeRaw.found) {
     if (typeof activeRaw.streamObjectToFile !== 'function') throw new Error('Active raw authority cannot stream objects for isolated restore')
     const objectFiles = await stageRawAuthorityObjectFiles(activeRaw, resolve(rawWorkerDir, 'restore-objects'))
-    const stagedAuthority = {
-      ...activeRaw,
-      objectResolver: (reference) => {
-        const path = objectFiles[reference.key]
-        return path ? readFile(path) : undefined
-      },
-    }
-    await validateRawSourceAuthority(stagedAuthority, {
-      importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
-    })
     const materialized = await runRawSourceWorker({
       action: 'restore',
       receipt: activeRaw.receipt,
+      receiptReference: activeRaw.receiptReference,
       objectFiles,
       destinationDir: rawDir,
       generatedAt: new Date().toISOString(),
+      importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
     }, rawWorkerDir)
+    const identity = authorityIdentityFor({ identity: materialized.identity })
+    assertRawRestoreWorkerDescriptor(materialized, identity)
     if (resolve(materialized.manifestPath) !== resolve(manifestPath)) {
       await writeFileAtomically(manifestPath, await readFile(materialized.manifestPath))
     }
     return {
       restored: true,
-      mode: activeRaw.receipt.storageMode,
-      generationId: activeRaw.receipt.generationId,
+      mode: identity.storageMode,
+      generationId: identity.generationId,
       manifestRestored: true,
-      sourceReceiptDigest: activeRaw.receipt.sourceReceiptDigest,
+      sourceReceiptDigest: identity.sourceReceiptDigest,
+      rawIdentityDigest: identity.rawIdentityDigest,
+      receiptDigest: identity.receiptReference.sha256,
+      objectCount: materialized.objectCount,
       childMaxRssBytes: materialized.childMaxRssBytes,
       childDurationMs: materialized.restoreMs,
     }
@@ -1116,30 +1140,34 @@ async function restoreVerifiedRawRecovery({
   rawWorkerDir,
   generatedAt,
   importerVersion,
+  readRawAuthority = readActiveRawSourceAuthority,
 }) {
-  const activeRaw = await readActiveRawSourceAuthority({ config, client })
+  const activeRaw = await readRawAuthority({ config, client })
   if (!activeRaw.found) throw new Error(`Verified raw source authority is unavailable: ${activeRaw.reason}`)
   if (typeof activeRaw.streamObjectToFile !== 'function') throw new Error('Active raw authority cannot stream objects for isolated recovery')
   const objectFiles = await stageRawAuthorityObjectFiles(activeRaw, resolve(rawWorkerDir, 'recovery-objects'))
-  const stagedAuthority = {
-    ...activeRaw,
-    objectResolver: (reference) => {
-      const path = objectFiles[reference.key]
-      return path ? readFile(path) : undefined
-    },
-  }
-  const validated = await validateRawSourceAuthority(stagedAuthority, { importerVersion })
   const materialized = await runRawSourceWorker({
     action: 'restore',
-    receipt: validated.receipt,
+    receipt: activeRaw.receipt,
+    receiptReference: activeRaw.receiptReference,
     objectFiles,
     destinationDir: stagingDir,
     generatedAt,
+    importerVersion,
   }, rawWorkerDir)
-  if (materialized.sourceReceiptDigest !== validated.receipt.sourceReceiptDigest) {
+  const identity = authorityIdentityFor({ identity: materialized.identity })
+  assertRawRestoreWorkerDescriptor(materialized, identity)
+  return { identity, materialized }
+}
+
+function assertRawRestoreWorkerDescriptor(materialized, identity) {
+  if (materialized.sourceReceiptDigest !== identity.sourceReceiptDigest
+    || materialized.generationId !== identity.generationId
+    || materialized.receiptDigest !== identity.receiptReference.sha256
+    || !Number.isSafeInteger(materialized.objectCount)
+    || materialized.objectCount < 0) {
     throw new Error('Recovered raw materialization lost source receipt provenance')
   }
-  return { validated, materialized }
 }
 
 function mergeRawManifests(previousManifest, nextManifest) {

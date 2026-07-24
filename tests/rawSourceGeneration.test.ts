@@ -253,7 +253,51 @@ test('raw worker emits a file-backed generation and cleans partial output on fai
     assert.ok(imported.importedMatches.length > 0)
 
     const generation = hydrateFileBackedRawSourceGeneration(output.generation)
+    const restoreInputPath = join(root, 'restore.input.json')
+    const restoreOutputPath = join(root, 'restore.output.json')
+    const restoreDir = join(root, 'restored')
+    await writeFile(restoreInputPath, JSON.stringify({
+      action: 'restore',
+      receipt: generation.receipt,
+      receiptReference: generation.receiptReference,
+      objectFiles: Object.fromEntries(generation.objects.map((object) => [
+        `raw/objects/sha256/${object.digest}`,
+        object.compressedPath,
+      ])),
+      destinationDir: restoreDir,
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      importerVersion,
+    }))
+    const restored = await runRawWorker(restoreInputPath, restoreOutputPath)
+    assert.equal(restored.code, 0, restored.stderr)
+    const restoreOutput = JSON.parse(await readFile(restoreOutputPath, 'utf8'))
+    assert.equal(restoreOutput.action, 'restore')
+    assert.equal(restoreOutput.identity.sourceReceiptDigest, generation.sourceReceiptDigest)
+    assert.equal(restoreOutput.receiptDigest, generation.receiptReference.sha256)
+    assert.equal(restoreOutput.objectCount, generation.objects.length)
+    await access(join(restoreDir, 'manifest.json'))
+
     await writeFile(generation.objects[0].compressedPath!, Buffer.from('tampered'))
+    const corruptInputPath = join(root, 'corrupt-restore.input.json')
+    const corruptOutputPath = join(root, 'corrupt-restore.output.json')
+    const corruptRestoreDir = join(root, 'corrupt-restored')
+    await writeFile(corruptInputPath, JSON.stringify({
+      action: 'restore',
+      receipt: generation.receipt,
+      receiptReference: generation.receiptReference,
+      objectFiles: Object.fromEntries(generation.objects.map((object) => [
+        `raw/objects/sha256/${object.digest}`,
+        object.compressedPath,
+      ])),
+      destinationDir: corruptRestoreDir,
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      importerVersion,
+    }))
+    const corruptRestore = await runRawWorker(corruptInputPath, corruptOutputPath)
+    assert.notEqual(corruptRestore.code, 0)
+    await assert.rejects(access(corruptOutputPath), { code: 'ENOENT' })
+    await assert.rejects(access(join(corruptRestoreDir, 'manifest.json')), { code: 'ENOENT' })
+
     await assert.rejects(
       uploadContentAddressedRawSourceGeneration(streamConsumingBucketClient(), bucketConfig, generation),
       /changed before upload/,

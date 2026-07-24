@@ -142,6 +142,19 @@ export async function validateRawSourceAuthority(authority, {
   importerVersion,
   requiredCoverage,
 } = {}) {
+  const validated = validateRawSourceAuthorityMetadata(authority, { importerVersion, requiredCoverage })
+  if (typeof authority.objectResolver !== 'function') throw new Error('Raw source authority object resolver is missing')
+  const reconstructed = await reconstructRawSourceReceipt(validated.receipt, authority.objectResolver)
+  return {
+    ...validated,
+    reconstructed,
+  }
+}
+
+export function validateRawSourceAuthorityMetadata(authority, {
+  importerVersion,
+  requiredCoverage,
+} = {}) {
   if (!authority || authority.found !== true) throw new Error('Verified raw source authority is missing')
   const receipt = parseRawSourceReceipt(authority.receipt)
   const receiptReference = parseReceiptReference(authority.receiptReference)
@@ -161,12 +174,9 @@ export async function validateRawSourceAuthority(authority, {
       throw new Error('Raw source authority coverage is incompatible with the requested recovery window')
     }
   }
-  if (typeof authority.objectResolver !== 'function') throw new Error('Raw source authority object resolver is missing')
-  const reconstructed = await reconstructRawSourceReceipt(receipt, authority.objectResolver)
   return {
     receipt,
     receiptReference,
-    reconstructed,
     identity: {
       generationId: receipt.generationId,
       importerVersion: receipt.importerVersion,

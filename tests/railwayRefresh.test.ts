@@ -55,6 +55,7 @@ type RefreshModule = {
     bucketClient?: BucketClient
     bucketConfig?: BucketConfig
     env?: Record<string, string | undefined>
+    readActiveRawSourceAuthority?: () => Promise<unknown>
   }) => Promise<RefreshResult>
   refreshDateWindow: (options?: {
     args?: Record<string, string | undefined>
@@ -636,6 +637,21 @@ test('verified startup restore honors a custom manifest path', async () => {
   const objects = new Map<string, Pick<PreparedRawObject, 'compressed' | 'compressedBytes' | 'digest' | 'bytes'>>()
   objects.set(baseline.reference.key, baseline.prepared)
   objects.set(receiptReference.key, preparedReceipt.prepared)
+  let parentObjectResolutions = 0
+  const readRawAuthority = async () => ({
+    found: true,
+    receipt: preparedReceipt.receipt,
+    receiptReference,
+    objectResolver: async () => {
+      parentObjectResolutions += 1
+      throw new Error('Parent must not reconstruct raw authority objects')
+    },
+    streamObjectToFile: async (reference: { key: string }, destinationPath: string) => {
+      const prepared = objects.get(reference.key)
+      if (!prepared) throw new Error(`Missing fixture object ${reference.key}`)
+      await writeFile(destinationPath, prepared.compressed)
+    },
+  })
   const client = {
     async send(command: { input: Record<string, unknown> }) {
       const key = String(command.input.Key)
@@ -679,6 +695,7 @@ test('verified startup restore honors a custom manifest path', async () => {
       bucketClient: client,
       bucketConfig: bucketConfig(),
       env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_BUCKET_UPLOAD_ENABLED: 'false' },
+      readActiveRawSourceAuthority: readRawAuthority,
       run: async (_command, args) => {
         downloadStart = valueAfter(args, '--start')
         const outDir = valueAfter(args, '--out-dir')
@@ -698,6 +715,12 @@ test('verified startup restore honors a custom manifest path', async () => {
       },
     })
     assert.equal(downloadStart, '2026-06-22')
+    assert.equal(parentObjectResolutions, 0)
+    const restoredState = JSON.parse(await readFile(statePath, 'utf8'))
+    const restoreStage = restoredState.lastRun.stages.find((stage: { name: string }) => stage.name === 'restore')
+    assert.equal(restoreStage.result, 'completed')
+    assert.equal(restoreStage.output.objectCount, 1)
+    assert.equal(restoreStage.output.sourceReceiptDigest, preparedReceipt.receipt.sourceReceiptDigest)
     const customManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     assert.equal(customManifest.start, '2025-01-01')
     assert.equal(customManifest.files.oracleCsv.some((path: string) => path.endsWith('/2026.csv')), true)
@@ -970,6 +993,21 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     const rawObjects = new Map<string, StoredRawObject>()
     rawObjects.set(baseline.reference.key, baseline.prepared)
     rawObjects.set(receiptReference.key, preparedReceipt.prepared)
+    let parentObjectResolutions = 0
+    const readRawAuthority = async () => ({
+      found: true,
+      receipt: preparedReceipt.receipt,
+      receiptReference,
+      objectResolver: async () => {
+        parentObjectResolutions += 1
+        throw new Error('Parent must not reconstruct raw authority objects')
+      },
+      streamObjectToFile: async (reference: { key: string }, destinationPath: string) => {
+        const prepared = rawObjects.get(reference.key)
+        if (!prepared) throw new Error(`Missing fixture object ${reference.key}`)
+        await writeFile(destinationPath, prepared.compressed)
+      },
+    })
     const verifiedBucketClient = {
       async send(command: { input: Record<string, unknown> }) {
         const key = String(command.input.Key)
@@ -1012,6 +1050,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
       run: fakeRun,
       bucketClient: verifiedBucketClient,
       bucketConfig: bucketConfig(),
+      readActiveRawSourceAuthority: readRawAuthority,
       env: {
         ...isolatedRefreshEnv,
         RANKING_REUSE_RAW_ON_SOURCE_FAILURE: 'true',
@@ -1035,6 +1074,17 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     assert.equal(verifiedRecovery.incrementalAction, 'publish-full')
     assert.equal(verifiedRecovery.incrementalMetrics?.classification, 'full-invalidation')
     assert.equal(verifiedRecovery.incrementalMetrics?.fullSnapshotWritten, true)
+    assert.equal(parentObjectResolutions, 0)
+    const recoveryValidation = rebuiltState.lastRun.stages.find(
+      (stage: { name: string }) => stage.name === 'raw-recovery-validation',
+    )
+    assert.equal(recoveryValidation.result, 'completed')
+    assert.equal(recoveryValidation.output.generationId, preparedReceipt.receipt.generationId)
+    assert.equal(recoveryValidation.output.sourceReceiptDigest, preparedReceipt.receipt.sourceReceiptDigest)
+    assert.equal(recoveryValidation.output.rawIdentityDigest, preparedReceipt.receipt.rawIdentityDigest)
+    assert.equal(recoveryValidation.output.receiptDigest, receiptReference.sha256)
+    assert.equal(recoveryValidation.output.objectCount, 1)
+    assert.ok(recoveryValidation.output.childMaxRssBytes > 0)
 
     await rm(previousOraclePath)
     const missingPriorRaw = await runUnavailable(true, true)

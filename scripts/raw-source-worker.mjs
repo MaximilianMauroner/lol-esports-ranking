@@ -7,6 +7,7 @@ import {
   prepareRawSourceGeneration,
 } from './raw-source-generation.mjs'
 import { parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
+import { validateRawSourceAuthorityMetadata } from './ranking-source-authority.mjs'
 
 const inputPath = process.argv[2]
 const outputPath = process.argv[3]
@@ -25,7 +26,19 @@ await rename(temporaryOutput, resolvedOutput)
 async function restore(options) {
   const started = performance.now()
   const receipt = parseRawSourceReceipt(options.receipt)
+  const validated = validateRawSourceAuthorityMetadata({
+    found: true,
+    receipt,
+    receiptReference: options.receiptReference,
+  }, {
+    importerVersion: options.importerVersion,
+    ...(options.requiredCoverage ? { requiredCoverage: options.requiredCoverage } : {}),
+  })
   const objectFiles = new Map(Object.entries(options.objectFiles ?? {}))
+  const references = rawReceiptObjectReferences(receipt)
+  if (JSON.stringify([...objectFiles.keys()].sort()) !== JSON.stringify(references.map((reference) => reference.key).sort())) {
+    throw new Error('Raw restore worker object file set does not match the receipt graph')
+  }
   const materialized = await materializePreparedRawSourceGeneration({
     receipt,
     objects: [],
@@ -40,8 +53,20 @@ async function restore(options) {
     manifestPath: materialized.manifestPath,
     sourceReceiptDigest: receipt.sourceReceiptDigest,
     generationId: receipt.generationId,
+    identity: validated.identity,
+    objectCount: references.length,
+    receiptDigest: validated.receiptReference.sha256,
     restoreMs: performance.now() - started,
   }
+}
+
+function rawReceiptObjectReferences(receipt) {
+  const references = [
+    ...receipt.oracle.flatMap((source) => [source.baseline, ...source.deltas]),
+    ...receipt.leaguepedia.map((source) => source.object),
+    ...receipt.lolesports.map((source) => source.object),
+  ]
+  return [...new Map(references.map((reference) => [reference.key, reference])).values()]
 }
 
 async function prepare(options) {
