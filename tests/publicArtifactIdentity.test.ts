@@ -30,6 +30,30 @@ import {
   parsePublicTournamentMovementShard,
   type PublicRankingManifest,
 } from '../src/lib/publicArtifacts/schema.ts'
+import {
+  publicArtifactProxyFallbackUrl,
+  resolvePublicArtifactUrl,
+} from '../src/lib/publicArtifacts/urlResolver.ts'
+
+test('one URL resolver preserves delivery forms and proxy query semantics', () => {
+  const digest = 'a'.repeat(64)
+  assert.equal(resolvePublicArtifactUrl('/data/root.json', 'https://rank.example/data/manifest.json'), '/data/root.json')
+  assert.equal(resolvePublicArtifactUrl('scope.json?x=1', 'https://rank.example/data/manifest.json'), 'https://rank.example/data/scope.json?x=1')
+  assert.equal(resolvePublicArtifactUrl('https://cdn.example/object?signature=x', '/data/manifest.json'), 'https://cdn.example/object?signature=x')
+  assert.equal(resolvePublicArtifactUrl('scope.json', '/data/manifest.json', undefined), 'http://localhost/data/scope.json')
+  assert.equal(
+    publicArtifactProxyFallbackUrl(`/data/objects/sha256/${digest}?token=x`, '/data/manifest.json'),
+    `/data/objects/sha256/${digest}?token=x&delivery=proxy`,
+  )
+  assert.equal(
+    publicArtifactProxyFallbackUrl(`/data/objects/sha256/${digest}?delivery=proxy`, '/data/manifest.json'),
+    undefined,
+  )
+  assert.equal(
+    publicArtifactProxyFallbackUrl(`https://cdn.example/data/objects/sha256/${digest}`, 'https://rank.example/data/manifest.json'),
+    undefined,
+  )
+})
 
 test('known logical URL fields have run identity normalized for every index family', async () => {
   const families = [

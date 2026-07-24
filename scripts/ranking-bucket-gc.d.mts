@@ -23,19 +23,7 @@ export type RankingBucketInventory = {
   totals: { objectCount: number; beforeBytes: number; protectedBytes: number; deletionCandidateBytes: number; estimatedAfterBytes: number }
   inventorySha256: string
 }
-export type GcDeletionReceipt = {
-  artifactKind: 'ranking-bucket-gc-deletion-receipt'
-  schemaVersion: 1
-  inventorySha256: string
-  activePointer: { key: string; etag: string }
-  policy: RankingBucketInventory['policy']
-  completedAt: string
-  deleted: Array<{ key: string; bytes: number; lastModified: string; reason: string }>
-  deletedBytes: number
-  estimatedBeforeBytes: number
-  estimatedAfterBytes: number
-}
-export type GcCliOptions = { delete: false } | { delete: true; approvedInventorySha256: string }
+export type GcCliOptions = Record<string, never>
 
 export function parseGcArgs(argv?: string[]): GcCliOptions
 export function buildRankingBucketInventory(options: {
@@ -43,15 +31,3 @@ export function buildRankingBucketInventory(options: {
   client: BucketClient
   now?: () => Date
 }): Promise<RankingBucketInventory>
-export function deleteApprovedRankingBucketInventory(options: {
-  delete: true
-  approvedInventorySha256: string
-  config: BucketStorageConfig
-  client: BucketClient
-  now?: () => Date
-  batchSize?: 1
-  deleteTimeoutMs?: number
-  buildInventory?: typeof buildRankingBucketInventory
-  beforeFirstBatch?: (inventory: RankingBucketInventory) => void | Promise<void>
-  betweenBatches?: (input: { inventory: RankingBucketInventory; offset: number; deleted: GcDeletionReceipt['deleted'] }) => void | Promise<void>
-}): Promise<GcDeletionReceipt>

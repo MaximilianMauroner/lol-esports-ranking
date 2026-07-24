@@ -28,6 +28,7 @@ export const REFRESH_STAGE_NAMES = [
   'artifact-upload',
   'promotion',
   'full-audit-receipt',
+  'post-commit-operations',
 ]
 
 export function createRefreshMetrics({

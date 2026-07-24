@@ -16,11 +16,14 @@ import {
   writeIncrementalStateManifest,
   type PreparedStateObject,
   type StateCompatibility,
+  type StateManifestAuthority,
   type StateObjectReference,
 } from '../scripts/incremental-state-storage.mjs'
+import { persistIncrementalStateBuild } from '../scripts/incremental-ranking-orchestrator'
 import { readActiveRawSourceAuthority, readBucketJson, readPreviousGenerationAuthorities, uploadRankingArtifacts as uploadRankingArtifactsImplementation, writeBucketJson, type BucketClient, type BucketStorageConfig } from '../scripts/railway-bucket.mjs'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
+import type { CanonicalMatchLedger } from '../src/lib/incremental/types'
 
 const config = {
   enabled: true,
@@ -68,6 +71,7 @@ async function uploadRankingArtifacts(options: Parameters<typeof uploadRankingAr
     leaseAuthority: {
       key: 'ops/refresh-lease.json',
       lease: { owner, fencingToken, acquiredAt: leaseValue.leaseAcquiredAt, expiresAt: leaseValue.leaseExpiresAt },
+      promotionEtag: written.etag,
     },
   })
 }
@@ -81,6 +85,54 @@ test('state preparation hashes canonical JSON and creates deterministic gzip byt
   assert.equal(createHash('sha256').update(left.canonicalBytes).digest('hex'), left.digest)
 })
 
+test('persisted state reports stored checkpoint objects as reused publication members', async () => {
+  const client = memoryS3()
+  const storedCheckpoint = prepareStateObject({
+    artifactKind: 'incremental-state-checkpoint-bundle',
+    schemaVersion: 1,
+  })
+  await syncContentAddressedStateObject(client, config, storedCheckpoint)
+  const ledger: CanonicalMatchLedger = {
+    schemaVersion: 2,
+    compatibility: {
+      modelVersion: 'model-v1',
+      modelConfigHash: 'config-v1',
+      importerVersion: 'importer-v1',
+      identityTaxonomyHash: 'taxonomy-v1',
+    },
+    scheduleReceiptIdentity: 'schedule-receipt',
+    contextReceiptIdentity: 'context-receipt',
+    provenanceReceiptIdentity: 'provenance-receipt',
+    scheduleCausalRows: [],
+    rows: [],
+    digest: 'c'.repeat(64),
+  }
+  const persisted = await persistIncrementalStateBuild({
+    state: {
+      ledger,
+      compatibility,
+      sourceReceiptDigest: 'b'.repeat(64),
+      checkpoints: [{
+        boundary: { date: '2026-01-01', matchId: 'match-1' },
+        rawPrefix: { matchCount: 1, digest: 'd'.repeat(64) },
+        storedObjectReference: stateObjectReferenceFor(storedCheckpoint),
+      }],
+    },
+    generationId: 'reused_checkpoint_generation',
+    client,
+    config,
+  })
+  assert.deepEqual(
+    persisted.authority.publicationObjects?.filter((entry) => entry.outcome === 'reused'),
+    [{
+      key: `custom-rankings/state/objects/sha256/${storedCheckpoint.digest}`,
+      digest: storedCheckpoint.digest,
+      bytes: storedCheckpoint.compressedBytes,
+      outcome: 'reused',
+    }],
+  )
+})
+
 test('one active CAS binds public, state, and raw receipt authorities', async () => {
   const root = await mkdtemp(join(tmpdir(), 'triple-authority-'))
   const publicDir = join(root, 'public')
@@ -90,8 +142,7 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
     await writePublicFixture(publicDir, generationId)
     const raw = rawGeneration(generationId)
     const state = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, state.objects)
-    const manifest = await writeIncrementalStateManifest(client, config, state)
+    const manifest = await publishState(client, state)
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId,
@@ -115,8 +166,7 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
     await writePublicFixture(publicDir, nextGenerationId)
     const nextRaw = rawGeneration(nextGenerationId)
     const nextState = preparedStateWithReceipt(nextGenerationId, nextRaw.sourceReceiptDigest)
-    await syncAllStateObjects(client, nextState.objects)
-    const nextManifest = await writeIncrementalStateManifest(client, config, nextState)
+    const nextManifest = await publishState(client, nextState)
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
       generationId: nextGenerationId,
@@ -135,6 +185,11 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       stateManifestDigest: manifest.authority.digest,
       rawReceiptKey: `custom-rankings/${raw.receiptReference.key}`,
       rawReceiptDigest: raw.receiptReference.sha256,
+      publicationSchemaVersion: 1,
+      publicationReceiptKey: active.publicationReceiptKey,
+      publicationReceiptDigest: active.publicationReceiptDigest,
+      publicationReceiptBytes: active.publicationReceiptBytes,
+      publicationReceiptEtag: active.publicationReceiptEtag,
     })
     for (const key of [
       String(active.manifestKey),
@@ -167,7 +222,10 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       mutate(pointer.previousGeneration)
       const bytes = Buffer.from(JSON.stringify(pointer))
       Object.assign(activeObject, { body: bytes.toString('utf8'), bytes, etag: '"invalid-previous"' })
-      await assert.rejects(readPreviousGenerationAuthorities({ config, client }), expected)
+      await assert.rejects(
+        readPreviousGenerationAuthorities({ config, client }),
+        new RegExp(`${expected.source}|pointer and publication receipt authorities differ`),
+      )
       Object.assign(activeObject, originalActive)
     }
     await assertInvalidPrevious((previous) => { previous.generationId = '../unsafe' }, /authority is invalid/)
@@ -183,7 +241,10 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       body: publicWithoutModelBytes.toString('utf8'), bytes: publicWithoutModelBytes, etag: '"missing-model"',
       metadata: { sha256: createHash('sha256').update(publicWithoutModelBytes).digest('hex'), 'semantic-bytes': String(publicWithoutModelBytes.byteLength) },
     })
-    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /public generation manifest is invalid/)
+    await assert.rejects(
+      readPreviousGenerationAuthorities({ config, client }),
+      /public generation manifest is invalid|publication object authority mismatch/,
+    )
     Object.assign(publicObject, originalPublic)
     const installStateMutation = (mutate: (value: Record<string, unknown>) => void) => {
       const value = JSON.parse(originalState.bytes.toString('utf8')) as Record<string, unknown>
@@ -196,13 +257,19 @@ test('one active CAS binds public, state, and raw receipt authorities', async ()
       Object.assign(activeObject, { body: JSON.stringify(pointer), bytes: Buffer.from(JSON.stringify(pointer)), etag: '"mutated-pointer"' })
     }
     installStateMutation((value) => { value.sourceReceiptDigest = 'f'.repeat(64) })
-    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /state and raw source receipt authorities do not match/)
+    await assert.rejects(
+      readPreviousGenerationAuthorities({ config, client }),
+      /state and raw source receipt authorities do not match|pointer and publication receipt authorities differ/,
+    )
     Object.assign(stateObject, originalState)
     Object.assign(activeObject, originalActive)
     installStateMutation((value) => {
       value.compatibility = { ...(value.compatibility as Record<string, unknown>), modelVersion: 'mismatched-model' }
     })
-    await assert.rejects(readPreviousGenerationAuthorities({ config, client }), /public and state model authorities do not match/)
+    await assert.rejects(
+      readPreviousGenerationAuthorities({ config, client }),
+      /public and state model authorities do not match|pointer and publication receipt authorities differ/,
+    )
     Object.assign(stateObject, originalState)
     Object.assign(activeObject, originalActive)
     await assert.rejects(readPreviousGenerationAuthorities({
@@ -226,8 +293,7 @@ test('raw/state receipt mismatch and corrupt raw references never promote', asyn
       await writePublicFixture(publicDir, generationId)
       const raw = rawGeneration(generationId)
       const state = preparedStateWithReceipt(generationId, failure === 'digest-mismatch' ? 'f'.repeat(64) : raw.sourceReceiptDigest)
-      await syncAllStateObjects(client, state.objects)
-      const manifest = await writeIncrementalStateManifest(client, config, state)
+      const manifest = await publishState(client, state)
       await assert.rejects(uploadRankingArtifacts({
         publicDataDir: publicDir,
         generationId,
@@ -384,8 +450,7 @@ test('active pointers without state authority trigger a full rebuild and promoti
     const generationId = 'state-public-generation'
     const raw = rawGeneration(generationId)
     const prepared = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, prepared.objects)
-    const state = await writeIncrementalStateManifest(client, config, prepared)
+    const state = await publishState(client, prepared)
     await writePublicFixture(publicDir, generationId)
     await uploadRankingArtifacts({
       publicDataDir: publicDir,
@@ -434,8 +499,7 @@ test('crashes and stale workers cannot activate prepared state', async () => {
     })
     const raw = rawGeneration('orphan')
     const prepared = preparedStateWithReceipt('orphan', raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, prepared.objects)
-    const state = await writeIncrementalStateManifest(client, config, prepared)
+    const state = await publishState(client, prepared)
     assert.equal(JSON.parse(client.objects.get('custom-rankings/active-generation.json')!.body).generationId, 'current')
 
     await writePublicFixture(publicDir, 'orphan')
@@ -468,8 +532,7 @@ test('state-manifest mutation after preparation blocks public pointer promotion'
     })
     const raw = rawGeneration('state-race')
     const prepared = preparedStateWithReceipt('state-race', raw.sourceReceiptDigest)
-    await syncAllStateObjects(client, prepared.objects)
-    const state = await writeIncrementalStateManifest(client, config, prepared)
+    const state = await publishState(client, prepared)
     await writePublicFixture(publicDir, 'state-race')
     await assert.rejects(uploadRankingArtifacts({
       publicDataDir: publicDir,
@@ -484,7 +547,7 @@ test('state-manifest mutation after preparation blocks public pointer promotion'
       },
       config,
       client,
-    }), /state manifest changed before active pointer promotion/i)
+    }), /Generation publication object authority mismatch|state manifest changed before active pointer promotion/i)
     assert.equal(JSON.parse(client.objects.get('custom-rankings/active-generation.json')!.body).generationId, 'current')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -587,7 +650,38 @@ function objectReference(digest: string, prefix: string): StateObjectReference {
 }
 
 async function syncAllStateObjects(client: ReturnType<typeof memoryS3>, objects: PreparedStateObject[]) {
-  for (const object of objects) await syncContentAddressedStateObject(client, config, object)
+  const results = []
+  for (const object of objects) results.push(await syncContentAddressedStateObject(client, config, object))
+  return results
+}
+
+async function publishState(
+  client: ReturnType<typeof memoryS3>,
+  prepared: ReturnType<typeof preparedStateWithReceipt>,
+): Promise<{
+  result: Record<string, unknown>
+  authority: StateManifestAuthority
+}> {
+  const objectResults = await syncAllStateObjects(client, prepared.objects)
+  const manifest = await writeIncrementalStateManifest(client, config, prepared)
+  const publicationObjects: NonNullable<StateManifestAuthority['publicationObjects']> =
+    [...objectResults, manifest.result].map(publicationObjectFromResult)
+  return {
+    ...manifest,
+    authority: { ...manifest.authority, publicationObjects },
+  }
+}
+
+function publicationObjectFromResult(
+  result: Record<string, unknown>,
+): NonNullable<StateManifestAuthority['publicationObjects']>[number] {
+  const { key, digest, bytes, status } = result
+  if (typeof key !== 'string' || typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)
+    || typeof bytes !== 'number' || !Number.isSafeInteger(bytes) || bytes <= 0
+    || (status !== 'uploaded' && status !== 'unchanged')) {
+    throw new Error('State publication result is invalid')
+  }
+  return { key, digest, bytes, outcome: status }
 }
 
 async function writePublicFixture(publicDir: string, generationId: string) {

@@ -3,9 +3,9 @@ import { Readable } from 'node:stream'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
-import { buildRankingBucketInventory, deleteApprovedRankingBucketInventory, parseGcArgs } from '../scripts/ranking-bucket-gc.mjs'
-import { acquireBucketLease } from '../scripts/railway-bucket.mjs'
+import { buildRankingBucketInventory, parseGcArgs } from '../scripts/ranking-bucket-gc.mjs'
 import { canonicalJsonFor, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { createGenerationPublicationReceipt, publicationReceiptBytes } from '../scripts/generation-publication.mjs'
 import { prepareContentAddressedState, prepareStateObject, stateObjectReferenceFor } from '../scripts/incremental-state-storage.mjs'
 import {
   ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
@@ -27,13 +27,10 @@ const config = {
 }
 const now = () => new Date('2026-07-23T17:00:00.000Z')
 
-test('GC arguments require deletion and an exact lowercase inventory digest together', () => {
-  assert.deepEqual(parseGcArgs([]), { delete: false })
-  const digest = 'a'.repeat(64)
-  assert.deepEqual(parseGcArgs(['--delete', '--approved-inventory-sha256', digest]), { delete: true, approvedInventorySha256: digest })
-  assert.throws(() => parseGcArgs(['--delete']), /requires/)
-  assert.throws(() => parseGcArgs(['--approved-inventory-sha256', digest]), /requires --delete/)
-  assert.throws(() => parseGcArgs(['--delete', '--approved-inventory-sha256', 'A'.repeat(64)]), /lowercase/)
+test('GC is inventory-only and rejects every mutation or approval argument', () => {
+  assert.deepEqual(parseGcArgs([]), {})
+  assert.throws(() => parseGcArgs(['--delete']), /inventory-only/)
+  assert.throws(() => parseGcArgs(['--approved-inventory-sha256', 'a'.repeat(64)]), /inventory-only/)
 })
 
 test('inventory protects retained and operational objects while exposing only old immutable orphans', async () => {
@@ -48,7 +45,7 @@ test('inventory protects retained and operational objects while exposing only ol
     `rankings/raw/objects/sha256/${'d'.repeat(64)}`,
   ])
   assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/generations/g1/manifest.json' && entry.reasons.includes('active-generation-public-manifest')))
-  assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/generations/g0/manifest.json' && entry.reasons.includes('previous-generation-public-manifest')))
+  assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/generations/g0/manifest.json' && entry.reasons.includes('retained-public-generation')))
   assert.ok(inventory.protected.some((entry) => entry.key === `rankings/objects/sha256/${'c'.repeat(64)}` && entry.reasons.includes('minimum-delete-age')))
   assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/raw/files/legacy.csv' && entry.reasons.includes('operational-or-unknown-namespace')))
   for (const key of [
@@ -95,7 +92,7 @@ test('generation retention is the union of the 14-day window and newest 50 roots
   assert.ok(inventory.protected.some((entry) => entry.key === 'rankings/generations/repromoted/manifest.json'))
   assert.ok(inventory.deletionCandidates.some((entry) => entry.key === 'rankings/generations/outside-union/manifest.json'))
   assert.equal(inventory.protected.filter((entry) => entry.key.includes('/generations/new-') && entry.key.endsWith('/manifest.json')).length, 47)
-  assert.equal(inventory.deletionCandidates.filter((entry) => entry.key.includes('/generations/new-')).length, 4)
+  assert.equal(inventory.deletionCandidates.filter((entry) => entry.key.includes('/generations/new-')).length, 8)
 })
 
 test('malformed or truncated generation activity invalidates inventory instead of extending retention', async () => {
@@ -123,7 +120,7 @@ test('missing retained references fail closed with no deletion candidates', asyn
   const inventory = await buildRankingBucketInventory({ config, client, now })
   assert.equal(inventory.valid, false)
   assert.equal(inventory.deletionCandidates.length, 0)
-  assert.ok(inventory.missingReferences.some((entry) => entry.referencedKey === 'rankings/generations/g1/manifest.json'))
+  assert.ok(inventory.errors.some((error) => error.reason === 'active-generation-publication-authority-invalid'))
 })
 
 test('minimum deletion age includes exactly 48 hours and protects just under', async () => {
@@ -156,8 +153,7 @@ test('retained public, recursive state, current raw, and recent audit roots prot
 
 test('corrupt retained content and pointer ETag/reference mutations change or invalidate approval', async () => {
   const client = gcMemoryS3()
-  seedValidBucket(client)
-  const graph = seedRetainedGraph(client)
+  const graph = seedReceiptBoundPointers(client)
   const baseline = await buildRankingBucketInventory({ config, client, now })
   const activeForBadPrevious = JSON.parse(client.objects.get('rankings/active-generation.json')!.bytes.toString('utf8'))
   activeForBadPrevious.previousGeneration = {
@@ -200,134 +196,6 @@ test('corrupt retained content and pointer ETag/reference mutations change or in
   assert.equal(corrupt.deletionCandidates.length, 0)
 })
 
-test('approved deletion removes exact candidates and writes a completion receipt', async () => {
-  const client = gcMemoryS3()
-  seedValidBucket(client)
-  const inventory = await buildRankingBucketInventory({ config, client, now })
-  await assert.rejects(
-    deleteApprovedRankingBucketInventory({ delete: true, config, client, now } as never),
-    /requires/,
-  )
-  assert.equal(client.deleted.length, 0)
-  await assert.rejects(
-    deleteApprovedRankingBucketInventory({ delete: true, approvedInventorySha256: '0'.repeat(64), config, client, now }),
-    /does not match/,
-  )
-  assert.equal(client.deleted.length, 0)
-  const receipt = await deleteApprovedRankingBucketInventory({
-    delete: true,
-    approvedInventorySha256: inventory.inventorySha256,
-    config,
-    client,
-    now,
-  })
-  assert.deepEqual(receipt.deleted.map((entry) => entry.key), inventory.deletionCandidates.map((entry) => entry.key))
-  assert.deepEqual(client.deleted, inventory.deletionCandidates.map((entry) => entry.key))
-  assert.ok([...client.objects.keys()].some((key) => key.startsWith('rankings/gc/deletions/') && key.endsWith(`-${inventory.inventorySha256}.json`)))
-})
-
-test('pointer races before and between batches abort deletion without a success receipt', async () => {
-  const beforeClient = gcMemoryS3()
-  seedValidBucket(beforeClient)
-  const before = await buildRankingBucketInventory({ config, client: beforeClient, now })
-  await assert.rejects(deleteApprovedRankingBucketInventory({
-    delete: true,
-    approvedInventorySha256: before.inventorySha256,
-    config,
-    client: beforeClient,
-    now,
-    beforeFirstBatch: () => { beforeClient.objects.get('rankings/active-generation.json')!.etag = 'changed' },
-  }), /pointer changed/i)
-  assert.equal(beforeClient.deleted.length, 0)
-
-  const betweenClient = gcMemoryS3()
-  seedValidBucket(betweenClient)
-  const between = await buildRankingBucketInventory({ config, client: betweenClient, now })
-  await assert.rejects(deleteApprovedRankingBucketInventory({
-    delete: true,
-    approvedInventorySha256: between.inventorySha256,
-    config,
-    client: betweenClient,
-    now,
-    batchSize: 1,
-    betweenBatches: () => { betweenClient.objects.get('rankings/active-generation.json')!.etag = 'changed' },
-  }), /lease-changed|pointer changed/i)
-  assert.equal(betweenClient.deleted.length, 1)
-  assert.equal([...betweenClient.objects.keys()].some((key) => key.startsWith('rankings/gc/deletions/')), false)
-})
-
-test('live publisher blocks GC and the acquired GC lease excludes publishers', async () => {
-  const blockedClient = gcMemoryS3()
-  seedValidBucket(blockedClient)
-  const blockedActive = JSON.parse(blockedClient.objects.get('rankings/active-generation.json')!.bytes.toString('utf8'))
-  Object.assign(blockedActive, { leaseKey: 'ops/refresh-lease.json', leaseOwner: 'publisher', leaseFencingToken: 9, leaseExpiresAt: '2026-07-24T01:00:00.000Z' })
-  blockedClient.objects.get('rankings/active-generation.json')!.bytes = Buffer.from(JSON.stringify(blockedActive))
-  const blockedInventory = await buildRankingBucketInventory({ config, client: blockedClient, now })
-  await assert.rejects(deleteApprovedRankingBucketInventory({ delete: true, approvedInventorySha256: blockedInventory.inventorySha256, config, client: blockedClient, now }), /live refresh publisher lease/)
-  assert.equal(blockedClient.deleted.length, 0)
-
-  const client = gcMemoryS3()
-  seedValidBucket(client)
-  let clock = new Date('2026-07-23T17:00:00.000Z')
-  const advancingNow = () => new Date(clock)
-  const inventory = await buildRankingBucketInventory({ config, client, now: advancingNow })
-  let publisherAcquired = true
-  await deleteApprovedRankingBucketInventory({
-    delete: true, approvedInventorySha256: inventory.inventorySha256, config, client, now: advancingNow, batchSize: 1,
-    betweenBatches: async () => {
-      clock = new Date(clock.getTime() + 6 * 60_000)
-      const publisher = await acquireBucketLease('ops/refresh-lease.json', { owner: 'publisher', now: advancingNow(), config, client })
-      publisherAcquired = publisher.acquired
-    },
-  })
-  assert.equal(publisherAcquired, false)
-  assert.equal(clock.getTime() - new Date('2026-07-23T17:00:00.000Z').getTime() > 10 * 60_000, true)
-  assert.ok([...client.objects.keys()].some((key) => key.startsWith('rankings/gc/deletions/')))
-})
-
-test('a delete that outlives the GC lease cannot continue after a publisher takes authority', async () => {
-  let clock = new Date('2026-07-23T17:00:00.000Z')
-  const advancingNow = () => new Date(clock)
-  let publisherAcquired = false
-  let first = true
-  const client = gcMemoryS3(1000, async () => {
-    if (!first) return
-    first = false
-    clock = new Date(clock.getTime() + 11 * 60_000)
-    const publisher = await acquireBucketLease('ops/refresh-lease.json', { owner: 'publisher', now: advancingNow(), config, client })
-    publisherAcquired = publisher.acquired
-  })
-  seedValidBucket(client)
-  const inventory = await buildRankingBucketInventory({ config, client, now: advancingNow })
-  await assert.rejects(deleteApprovedRankingBucketInventory({
-    delete: true, approvedInventorySha256: inventory.inventorySha256, config, client, now: advancingNow,
-  }), /renewal failed|lease-changed/i)
-  assert.equal(publisherAcquired, true)
-  assert.equal(client.deleted.length, 1)
-  assert.equal(client.objects.has(inventory.deletionCandidates[1].key), true)
-  assert.equal([...client.objects.keys()].some((key) => key.startsWith('rankings/gc/deletions/')), false)
-})
-
-test('an aborted delete settles without deleting or writing a success receipt', async () => {
-  let abortedRequestSettled = false
-  const client = gcMemoryS3(1000, async (_key, signal) => {
-    await new Promise<never>((_resolve, reject) => {
-      signal?.addEventListener('abort', () => {
-        abortedRequestSettled = true
-        reject(signal.reason)
-      }, { once: true })
-    })
-  })
-  seedValidBucket(client)
-  const inventory = await buildRankingBucketInventory({ config, client, now })
-  await assert.rejects(deleteApprovedRankingBucketInventory({
-    delete: true, approvedInventorySha256: inventory.inventorySha256, config, client, now, deleteTimeoutMs: 5,
-  }), /timed out/)
-  assert.equal(abortedRequestSettled, true)
-  assert.equal(client.deleted.length, 0)
-  assert.equal([...client.objects.keys()].some((key) => key.startsWith('rankings/gc/deletions/')), false)
-})
-
 test('strict publish closure rejects authority omission, body mutation, and metadata mismatch', async () => {
   const setup = () => {
     const client = gcMemoryS3()
@@ -362,11 +230,131 @@ test('strict publish closure rejects authority omission, body mutation, and meta
   assert.ok(metadataInventory.errors.some((error) => error.message?.includes('metadata mismatch')))
 })
 
+test('GC accepts only the exact historical schema-1 legacy cutover authority', async () => {
+  const client = gcMemoryS3()
+  seedValidBucket(client)
+  const inventory = await buildRankingBucketInventory({ config, client, now })
+  assert.equal(inventory.valid, true, JSON.stringify(inventory.errors))
+  assert.equal(inventory.deletionCandidates.length > 0, true)
+})
+
+test('native schema-2 authority stripped of every receipt and public marker fails closed', async () => {
+  for (const keepPreviousGeneration of [false, true]) {
+    const client = gcMemoryS3()
+    seedReceiptBoundPointers(client)
+    const stored = client.objects.get('rankings/active-generation.json')!
+    const active = JSON.parse(stored.bytes.toString('utf8')) as Record<string, unknown>
+    for (const field of [
+      'publicationSchemaVersion',
+      'publicationReceiptKey',
+      'publicationReceiptDigest',
+      'publicationReceiptBytes',
+      'publicationReceiptEtag',
+      'publicManifestSchemaVersion',
+    ]) delete active[field]
+    if (!keepPreviousGeneration) delete active.previousGeneration
+    stored.bytes = Buffer.from(JSON.stringify(active))
+
+    const inventory = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(inventory.valid, false, `previousGeneration=${keepPreviousGeneration}`)
+    assert.equal(inventory.deletionCandidates.length, 0)
+    assert.ok(inventory.errors.some((error) => error.reason === 'active-generation-publication-authority-invalid'))
+  }
+})
+
+test('receipt-bound active and previous pointers require exact schema-1 publication bindings', async () => {
+  const validClient = gcMemoryS3()
+  seedReceiptBoundPointers(validClient)
+  const valid = await buildRankingBucketInventory({ config, client: validClient, now })
+  assert.equal(valid.valid, true, JSON.stringify(valid.errors))
+
+  const mutations = [
+    { name: 'schema marker', mutate: (pointer: Record<string, unknown>) => { pointer.publicationSchemaVersion = 2 } },
+    { name: 'noncanonical key', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptKey = 'rankings/generations/wrong/publish.json' } },
+    { name: 'digest', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptDigest = 'f'.repeat(64) } },
+    { name: 'bytes', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptBytes = Number(pointer.publicationReceiptBytes) + 1 } },
+    { name: 'ETag', mutate: (pointer: Record<string, unknown>) => { pointer.publicationReceiptEtag = '"wrong-etag"' } },
+  ]
+  for (const target of ['active', 'previous'] as const) {
+    for (const mutation of mutations) {
+      const client = gcMemoryS3()
+      seedReceiptBoundPointers(client)
+      const stored = client.objects.get('rankings/active-generation.json')!
+      const active = JSON.parse(stored.bytes.toString('utf8')) as Record<string, unknown>
+      const pointer = target === 'active'
+        ? active
+        : active.previousGeneration
+      assert.ok(pointer && typeof pointer === 'object' && !Array.isArray(pointer))
+      mutation.mutate(pointer as Record<string, unknown>)
+      stored.bytes = Buffer.from(JSON.stringify(active))
+
+      const inventory = await buildRankingBucketInventory({ config, client, now })
+      assert.equal(inventory.valid, false, `${target} ${mutation.name}`)
+      assert.equal(inventory.deletionCandidates.length, 0, `${target} ${mutation.name}`)
+      assert.ok(
+        inventory.errors.some((error) => error.reason === `${target}-generation-publication-authority-invalid`),
+        `${target} ${mutation.name}: ${JSON.stringify(inventory.errors)}`,
+      )
+    }
+  }
+})
+
+test('current receipt-bound pointer requires the native schema-2 content-addressed envelope', async () => {
+  const mutations = [
+    { name: 'missing public manifest schema marker', mutate: (pointer: Record<string, unknown>) => { delete pointer.publicManifestSchemaVersion } },
+    { name: 'unsupported public manifest schema marker', mutate: (pointer: Record<string, unknown>) => { pointer.publicManifestSchemaVersion = 3 } },
+    { name: 'missing storage mode', mutate: (pointer: Record<string, unknown>) => { delete pointer.storageMode } },
+    { name: 'invalid storage mode', mutate: (pointer: Record<string, unknown>) => { pointer.storageMode = 'mutable' } },
+  ]
+  for (const mutation of mutations) {
+    const client = gcMemoryS3()
+    seedReceiptBoundPointers(client)
+    const stored = client.objects.get('rankings/active-generation.json')!
+    const active = JSON.parse(stored.bytes.toString('utf8')) as Record<string, unknown>
+    mutation.mutate(active)
+    stored.bytes = Buffer.from(JSON.stringify(active))
+
+    const inventory = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(inventory.valid, false, mutation.name)
+    assert.equal(inventory.deletionCandidates.length, 0, mutation.name)
+    assert.ok(
+      inventory.errors.some((error) => error.reason === 'active-generation-publication-authority-invalid'),
+      `${mutation.name}: ${JSON.stringify(inventory.errors)}`,
+    )
+  }
+})
+
+test('receipt-bound active and previous authorities reject canonical schema-1 public manifests', async () => {
+  for (const target of ['active', 'previous'] as const) {
+    const client = gcMemoryS3()
+    seedReceiptBoundPointers(client)
+    crossReceiptBoundManifestToSchema1(client, target)
+
+    const inventory = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(inventory.valid, false, target)
+    assert.equal(inventory.deletionCandidates.length, 0, target)
+    assert.ok(
+      inventory.errors.some((error) => error.reason === `${target}-generation-public-authority-invalid`),
+      `${target}: ${JSON.stringify(inventory.errors)}`,
+    )
+  }
+})
+
 type Stored = { bytes: Buffer; etag: string; lastModified: Date; contentType?: string; contentEncoding?: string; metadata?: Record<string, string> }
 
 function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
   const currentManifest = seedGeneration(client, 'g1', '2026-07-22T12:00:00.000Z')
   seedGeneration(client, 'g0', '2026-01-01T00:00:00.000Z')
+  const currentStored = client.objects.get(currentManifest.key)!
+  const schemaV1 = { ...JSON.parse(currentStored.bytes.toString('utf8')), schemaVersion: 1 }
+  currentStored.bytes = Buffer.from(JSON.stringify(schemaV1))
+  currentStored.metadata = {
+    sha256: digest(currentStored.bytes),
+    'semantic-bytes': String(currentStored.bytes.byteLength),
+  }
+  currentManifest.digest = currentStored.metadata.sha256
+  currentManifest.bytes = currentStored.bytes.byteLength
+  seedPublishReceipt(client, 'g1', currentManifest)
   const active = {
     schemaVersion: 2,
     generationId: 'g1',
@@ -377,11 +365,6 @@ function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
     manifestDigest: currentManifest.digest,
     manifestBytes: currentManifest.bytes,
     manifestEtag: currentManifest.etag,
-    previousGeneration: {
-      generationId: 'g0',
-      manifestKey: 'rankings/generations/g0/manifest.json',
-      promotedAt: '2026-01-01T00:00:00.000Z',
-    },
   }
   client.set('rankings/active-generation.json', Buffer.from(JSON.stringify(active)), '2026-07-22T12:00:00.000Z', 'active-etag')
   client.set(`rankings/objects/sha256/${'b'.repeat(64)}`, Buffer.from('old-public-orphan'), '2026-07-10T00:00:00.000Z')
@@ -395,6 +378,157 @@ function seedValidBucket(client: ReturnType<typeof gcMemoryS3>) {
   client.set('rankings/generations/g1/data/%252e%252e/encoded.json', Buffer.from('{}'), '2020-01-01T00:00:00.000Z')
   client.set('rankings/generations/g1/control/delete.json', Buffer.from('{}'), '2020-01-01T00:00:00.000Z')
   client.set('rankings/audits/days/not-a-date.json', Buffer.from('{}'), '2020-01-01T00:00:00.000Z')
+}
+
+function seedReceiptBoundPointers(client: ReturnType<typeof gcMemoryS3>) {
+  seedValidBucket(client)
+  const graph = seedRetainedGraph(client, 2)
+  const activeObject = client.objects.get('rankings/active-generation.json')!
+  const active = JSON.parse(activeObject.bytes.toString('utf8')) as Record<string, unknown>
+  const bindings = new Map<string, {
+    publicationReceiptKey: string
+    publicationReceiptDigest: string
+    publicationReceiptBytes: number
+    publicationReceiptEtag: string
+    rawReceiptKey: string
+    rawReceiptDigest: string
+    stateManifestKey: string
+    stateManifestDigest: string
+  }>()
+
+  for (const generationId of ['g0', 'g1']) {
+    const publishKey = `rankings/generations/${generationId}/publish.json`
+    const legacyStored = client.objects.get(publishKey)!
+    const legacy = JSON.parse(legacyStored.bytes.toString('utf8')) as {
+      authorities: {
+        publicManifest: { key: string; digest: string; bytes: number }
+        rawReceipt: { key: string; digest: string; bytes: number }
+      }
+      artifacts: Array<{ key: string; digest: string; bytes: number }>
+      unchanged: Array<{ key: string; digest: string; bytes: number }>
+    }
+    const stateManifestKey = `rankings/state/generations/${generationId}.json`
+    const stateStored = client.objects.get(stateManifestKey)!
+    const stateManifestDigest = stateStored.metadata!.sha256
+    const receipt = createGenerationPublicationReceipt({
+      generationId,
+      preparedAt: '2026-07-23T00:00:00.000Z',
+      prefix: 'rankings',
+      fencingToken: generationId === 'g1' ? 3 : 2,
+      leaseOwner: 'gc-production-shaped-fixture',
+      promotionEtag: `"promotion-${generationId}"`,
+      provenance: {
+        modelVersion: 'model-v1',
+        modelConfigHash: 'config-v1',
+        source: 'test',
+        dataMode: 'scheduled-public-data',
+        sourceProviders: ['test'],
+      },
+      authorities: {
+        publicManifest: {
+          key: legacy.authorities.publicManifest.key,
+          digest: legacy.authorities.publicManifest.digest,
+          bytes: legacy.authorities.publicManifest.bytes,
+        },
+        stateManifest: {
+          key: stateManifestKey,
+          digest: stateManifestDigest,
+          bytes: stateStored.bytes.byteLength,
+        },
+        rawReceipt: {
+          key: legacy.authorities.rawReceipt.key,
+          digest: legacy.authorities.rawReceipt.digest,
+          bytes: legacy.authorities.rawReceipt.bytes,
+        },
+      },
+      objects: [
+        ...legacy.artifacts,
+        ...legacy.unchanged,
+        {
+          key: stateManifestKey,
+          digest: stateManifestDigest,
+          bytes: stateStored.bytes.byteLength,
+        },
+      ].map(({ key, digest, bytes }) => ({ key, digest, bytes, outcome: 'uploaded' as const })),
+    })
+    seedCanonicalJson(client, publishKey, receipt, '2026-07-23T00:00:00.000Z')
+    const stored = client.objects.get(publishKey)!
+    const prepared = publicationReceiptBytes(receipt)
+    bindings.set(generationId, {
+      publicationReceiptKey: publishKey,
+      publicationReceiptDigest: prepared.digest,
+      publicationReceiptBytes: prepared.bytes,
+      publicationReceiptEtag: stored.etag,
+      rawReceiptKey: legacy.authorities.rawReceipt.key,
+      rawReceiptDigest: legacy.authorities.rawReceipt.digest,
+      stateManifestKey,
+      stateManifestDigest,
+    })
+  }
+
+  const current = bindings.get('g1')!
+  const previous = bindings.get('g0')!
+  Object.assign(active, {
+    publicManifestSchemaVersion: 2,
+    publicationSchemaVersion: 1,
+    ...current,
+    previousGeneration: {
+      generationId: 'g0',
+      manifestKey: 'rankings/generations/g0/manifest.json',
+      promotedAt: '2026-01-01T00:00:00.000Z',
+      publicationSchemaVersion: 1,
+      ...previous,
+    },
+  })
+  activeObject.bytes = Buffer.from(JSON.stringify(active))
+  return graph
+}
+
+function crossReceiptBoundManifestToSchema1(
+  client: ReturnType<typeof gcMemoryS3>,
+  target: 'active' | 'previous',
+) {
+  const generationId = target === 'active' ? 'g1' : 'g0'
+  const manifestKey = `rankings/generations/${generationId}/manifest.json`
+  const manifestStored = client.objects.get(manifestKey)!
+  const manifest = JSON.parse(manifestStored.bytes.toString('utf8')) as Record<string, unknown>
+  manifest.schemaVersion = 1
+  manifestStored.bytes = Buffer.from(JSON.stringify(manifest))
+  const manifestDigest = digest(manifestStored.bytes)
+  manifestStored.metadata = {
+    sha256: manifestDigest,
+    'semantic-bytes': String(manifestStored.bytes.byteLength),
+  }
+
+  const receiptKey = `rankings/generations/${generationId}/publish.json`
+  const receiptStored = client.objects.get(receiptKey)!
+  const receipt = JSON.parse(receiptStored.bytes.toString('utf8')) as {
+    authorities: { publicManifest: { digest: string; bytes: number } }
+    objects: Array<{ key: string; digest: string; bytes: number }>
+  }
+  receipt.authorities.publicManifest.digest = manifestDigest
+  receipt.authorities.publicManifest.bytes = manifestStored.bytes.byteLength
+  const member = receipt.objects.find((entry) => entry.key === manifestKey)
+  assert.ok(member)
+  member.digest = manifestDigest
+  member.bytes = manifestStored.bytes.byteLength
+  seedCanonicalJson(client, receiptKey, receipt, '2026-07-23T00:00:00.000Z')
+  const reboundReceipt = client.objects.get(receiptKey)!
+
+  const activeStored = client.objects.get('rankings/active-generation.json')!
+  const active = JSON.parse(activeStored.bytes.toString('utf8')) as Record<string, unknown>
+  const pointer = target === 'active' ? active : active.previousGeneration
+  assert.ok(pointer && typeof pointer === 'object' && !Array.isArray(pointer))
+  const boundPointer = pointer as Record<string, unknown>
+  boundPointer.publicationReceiptDigest = digest(reboundReceipt.bytes)
+  boundPointer.publicationReceiptBytes = reboundReceipt.bytes.byteLength
+  boundPointer.publicationReceiptEtag = reboundReceipt.etag
+  if (target === 'active') {
+    boundPointer.manifestDigest = manifestDigest
+    boundPointer.manifestBytes = manifestStored.bytes.byteLength
+    boundPointer.manifestEtag = manifestStored.etag
+  }
+  activeStored.bytes = Buffer.from(JSON.stringify(active))
 }
 
 function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: string, lastModified: string) {
@@ -423,13 +557,15 @@ function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: str
   const manifestDigest = digest(body)
   client.set(key, body, lastModified, undefined, { contentType: 'application/json; charset=utf-8', metadata: { sha256: manifestDigest, 'semantic-bytes': String(body.byteLength) } })
   const stored = client.objects.get(key)!
-  return {
+  const result = {
     key, digest: manifestDigest, bytes: body.byteLength, etag: stored.etag,
     publicObject: { key: objectKey, digest: root.digest, bytes: root.compressedBytes },
   }
+  seedPublishReceipt(client, generationId, result, lastModified)
+  return result
 }
 
-function publishReceipt(generationId: string, manifest: { key: string; digest: string; bytes: number; publicObject: { key: string; digest: string; bytes: number } }, raw: { key: string; digest: string; bytes: number }) {
+function publishReceipt(generationId: string, manifest: { key: string; digest: string; bytes: number; publicObject: { key: string; digest: string; bytes: number } }, raw: { key: string; digest: string; bytes: number }, publishedAt = '2026-07-23T00:00:00.000Z') {
   const artifacts = [
     { key: manifest.publicObject.key, bytes: manifest.publicObject.bytes, contentType: 'application/json; charset=utf-8', digest: manifest.publicObject.digest },
     { key: manifest.key, bytes: manifest.bytes, contentType: 'application/json; charset=utf-8', digest: manifest.digest },
@@ -438,7 +574,7 @@ function publishReceipt(generationId: string, manifest: { key: string; digest: s
   return {
     schemaVersion: 2,
     generationId,
-    publishedAt: '2026-07-23T00:00:00.000Z',
+    publishedAt,
     prefix: 'rankings',
     storageMode: 'content-addressed-gzip-v1',
     authorities: {
@@ -460,7 +596,7 @@ function publishReceipt(generationId: string, manifest: { key: string; digest: s
   }
 }
 
-function seedPublishReceipt(client: ReturnType<typeof gcMemoryS3>, generationId: string, manifest: ReturnType<typeof seedGeneration>) {
+function seedPublishReceipt(client: ReturnType<typeof gcMemoryS3>, generationId: string, manifest: ReturnType<typeof seedGeneration>, publishedAt = '2026-07-23T00:00:00.000Z') {
   const baseline = prepareOracleBaseline({
     csv: ['gameid,date,league,side,position,teamname,result', `${generationId}-game,2026-01-01,LCK,Blue,team,Alpha,1`, `${generationId}-game,2026-01-01,LCK,Red,team,Beta,0`].join('\n'),
     sourceFileName: `${generationId}.csv`,
@@ -484,8 +620,8 @@ function seedPublishReceipt(client: ReturnType<typeof gcMemoryS3>, generationId:
   })
   const rawKey = `rankings/raw/objects/sha256/${raw.prepared.digest}`
   seedPrepared(client, rawKey, raw.prepared, '2026-01-01T00:00:00.000Z')
-  const receipt = publishReceipt(generationId, manifest, { key: rawKey, digest: raw.prepared.digest, bytes: raw.prepared.compressedBytes })
-  seedCanonicalJson(client, `rankings/generations/${generationId}/publish.json`, receipt, '2026-01-01T00:00:00.000Z')
+  const receipt = publishReceipt(generationId, manifest, { key: rawKey, digest: raw.prepared.digest, bytes: raw.prepared.compressedBytes }, publishedAt)
+  seedCanonicalJson(client, `rankings/generations/${generationId}/publish.json`, receipt, publishedAt)
   return receipt
 }
 
@@ -497,14 +633,14 @@ function seedCanonicalJson(client: ReturnType<typeof gcMemoryS3>, key: string, v
   })
 }
 
-function seedRetainedGraph(client: ReturnType<typeof gcMemoryS3>) {
+function seedRetainedGraph(client: ReturnType<typeof gcMemoryS3>, publicManifestSchemaVersion = 1) {
   const generationId = 'g1'
   const publicObject = prepareSemanticArtifact({ artifactKind: 'test-public-artifact', rows: [] })
   const sharedPublicKey = `rankings/objects/sha256/${publicObject.digest}`
   seedPrepared(client, sharedPublicKey, publicObject, '2026-01-01T00:00:00.000Z')
   const publicManifest = {
     artifactKind: 'public-artifact-generation-manifest',
-    schemaVersion: 2,
+    schemaVersion: publicManifestSchemaVersion,
     storageMode: 'content-addressed-gzip-v1',
     generationId,
     runId: generationId,
@@ -618,6 +754,21 @@ function seedRetainedGraph(client: ReturnType<typeof gcMemoryS3>) {
     rawIdentityDigest: raw.receipt.rawIdentityDigest,
   })
   activeObject.bytes = Buffer.from(JSON.stringify(active))
+  seedCanonicalJson(
+    client,
+    'rankings/generations/g1/publish.json',
+    publishReceipt('g1', {
+      key: 'rankings/generations/g1/manifest.json',
+      digest: publicManifestDigest,
+      bytes: publicManifestBytes.byteLength,
+      publicObject: { key: sharedPublicKey, digest: publicObject.digest, bytes: publicObject.compressedBytes },
+    }, {
+      key: rawReceiptKey,
+      digest: raw.prepared.digest,
+      bytes: raw.prepared.compressedBytes,
+    }),
+    '2026-07-23T00:00:00.000Z',
+  )
   return {
     requiredKeys: [sharedPublicKey, rawNarrowKey, rawBaselineKey, ...rawDeltaKeys, rawReceiptKey, ledgerKey, 'rankings/state/generations/g1.json', 'rankings/state/generations/g0.json', auditSnapshotKey],
     sharedPublicKey, rawNarrowKey, rawReceiptDigest: raw.prepared.digest, ledgerKey,

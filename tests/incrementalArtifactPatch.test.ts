@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
 import { uploadContentAddressedPublicArtifactPatch, uploadContentAddressedPublicArtifacts } from '../scripts/railway-bucket.mjs'
+import { materializePublicArtifactPatch } from '../scripts/public-artifact-materialization.mjs'
 
 const config = { enabled: true, bucket: 'test', endpoint: 'https://example.invalid', region: 'auto', accessKeyId: 'x', secretAccessKey: 'y', prefix: 'rankings' }
 
@@ -44,6 +45,104 @@ test('partial artifact patch uploads only changed hashes and composes exact comp
       changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: root('bad') }],
       expectedLogicalPaths: ['/data/ranking-summary.json'],
     }), /Incomplete public artifact patch mapping/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('local-only patch verifies reused inputs and atomically materializes the same mapping', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-local-patch-'))
+  const client = memoryS3()
+  try {
+    await writeFile(join(dir, 'ranking-summary.json'), JSON.stringify(root('base-local')))
+    await writeFile(join(dir, 'stable.json'), JSON.stringify({ artifactKind: 'fixture', value: 1 }))
+    await writeFile(join(dir, 'removed.json'), JSON.stringify({ artifactKind: 'fixture', value: 2 }))
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, 'base-local')
+    const patch = {
+      previousManifest: base.manifest,
+      changedArtifacts: [
+        { logicalPath: '/data/ranking-summary.json', value: root('next-local') },
+        { logicalPath: '/data/changed.json', value: { artifactKind: 'fixture', value: 3 } },
+      ],
+      removedLogicalPaths: ['/data/removed.json'],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json', '/data/changed.json'],
+    }
+    const bucket = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId: 'next-local', ...patch })
+    const local = await materializePublicArtifactPatch(dir, patch)
+    const bucketArtifacts = record(bucket.manifest.artifacts)
+    assert.deepEqual(Object.keys(local.mapping).sort(), Object.keys(bucketArtifacts).sort())
+    for (const [logicalPath, identity] of Object.entries(local.mapping)) {
+      assert.equal(identity.sha256, record(bucketArtifacts[logicalPath]).sha256)
+      assert.equal(identity.bytes, record(bucketArtifacts[logicalPath]).bytes)
+    }
+    assert.equal(JSON.parse(await readFile(join(dir, 'changed.json'), 'utf8')).value, 3)
+    await assert.rejects(readFile(join(dir, 'removed.json'), 'utf8'), /ENOENT/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('local patch reports committed backup cleanup failures without masking the new root', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-local-cleanup-warning-'))
+  const client = memoryS3()
+  try {
+    await writeFile(join(dir, 'ranking-summary.json'), JSON.stringify(root('cleanup-base')))
+    await writeFile(join(dir, 'stable.json'), JSON.stringify({ artifactKind: 'fixture', value: 1 }))
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, 'cleanup-base')
+    const result = await materializePublicArtifactPatch(dir, {
+      previousManifest: base.manifest,
+      changedArtifacts: [
+        { logicalPath: '/data/ranking-summary.json', value: root('cleanup-next') },
+        { logicalPath: '/data/changed.json', value: { artifactKind: 'fixture', value: 2 } },
+      ],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json', '/data/changed.json'],
+    }, {
+      remove: async (path, options) => {
+        if (String(path).includes('.previous-')) throw new Error('injected backup cleanup failure')
+        return rm(path, options)
+      },
+    })
+
+    assert.equal(result.materialized, true)
+    assert.equal(result.cleanupWarning?.stage, 'backup-cleanup')
+    assert.match(result.cleanupWarning?.message ?? '', /injected backup cleanup failure/)
+    assert.equal(JSON.parse(await readFile(join(dir, 'ranking-summary.json'), 'utf8')).artifactMeta.runId, 'cleanup-next')
+    assert.equal(JSON.parse(await readFile(join(dir, 'changed.json'), 'utf8')).value, 2)
+    if (result.cleanupWarning) {
+      await rm(result.cleanupWarning.backupPath, { recursive: true, force: true })
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('local patch restores the old root when the staging-to-root rename fails', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-local-swap-rollback-'))
+  const client = memoryS3()
+  try {
+    await writeFile(join(dir, 'ranking-summary.json'), JSON.stringify(root('rollback-base')))
+    await writeFile(join(dir, 'stable.json'), JSON.stringify({ artifactKind: 'fixture', value: 1 }))
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, 'rollback-base')
+    let moveCount = 0
+    await assert.rejects(materializePublicArtifactPatch(dir, {
+      previousManifest: base.manifest,
+      changedArtifacts: [
+        { logicalPath: '/data/ranking-summary.json', value: root('rollback-next') },
+        { logicalPath: '/data/changed.json', value: { artifactKind: 'fixture', value: 2 } },
+      ],
+      expectedLogicalPaths: ['/data/ranking-summary.json', '/data/stable.json', '/data/changed.json'],
+    }, {
+      move: async (from, to) => {
+        moveCount += 1
+        if (moveCount === 2) throw new Error('injected staging-to-root rename failure')
+        return rename(from, to)
+      },
+    }), /injected staging-to-root rename failure/)
+
+    assert.equal(moveCount, 3)
+    assert.equal(JSON.parse(await readFile(join(dir, 'ranking-summary.json'), 'utf8')).artifactMeta.runId, 'rollback-base')
+    assert.equal(JSON.parse(await readFile(join(dir, 'stable.json'), 'utf8')).value, 1)
+    await assert.rejects(readFile(join(dir, 'changed.json'), 'utf8'), /ENOENT/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

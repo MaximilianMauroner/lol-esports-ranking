@@ -42,6 +42,7 @@ import {
   fetchPublicArtifact,
   PublicArtifactRequestError,
 } from '../lib/publicArtifacts/artifactIdentity'
+import { resolvePublicArtifactUrl } from '../lib/publicArtifacts/urlResolver'
 
 export type PublicArtifactState<T> =
   | { status: 'idle' }
@@ -183,7 +184,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     if (!data || !loadPlayers) return
     const manifest = data
     const controller = new AbortController()
-    const url = resolveArtifactUrl(data.playerDirectoryUrl ?? PLAYERS_URL, DATA_URL)
+    const url = resolvePublicArtifactUrl(data.playerDirectoryUrl ?? PLAYERS_URL, DATA_URL)
     setPlayersState({ status: 'loading' })
     async function load() {
       try {
@@ -205,7 +206,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     if (!data || !loadTeamHistory) return
     const manifest = data
     const controller = new AbortController()
-    const url = resolveArtifactUrl(data.teamHistoryIndexUrl ?? TEAM_HISTORY_INDEX_URL, DATA_URL)
+    const url = resolvePublicArtifactUrl(data.teamHistoryIndexUrl ?? TEAM_HISTORY_INDEX_URL, DATA_URL)
     setTeamHistoryRootState({ status: 'loading' })
     setTeamHistoryCache({})
     async function load() {
@@ -231,7 +232,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     if (!data || !loadRegionHistory) return
     const manifest = data
     const controller = new AbortController()
-    const url = resolveArtifactUrl(data.regionHistoryUrl ?? REGION_HISTORY_URL, DATA_URL)
+    const url = resolvePublicArtifactUrl(data.regionHistoryUrl ?? REGION_HISTORY_URL, DATA_URL)
     setRegionHistoryState({ status: 'loading' })
     async function load() {
       try {
@@ -253,7 +254,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     if (!data || !loadTournamentMovements) return
     const manifest = data
     const controller = new AbortController()
-    const url = resolveArtifactUrl(manifest.tournamentMovementIndexUrl ?? TOURNAMENT_MOVEMENT_INDEX_URL, DATA_URL)
+    const url = resolvePublicArtifactUrl(manifest.tournamentMovementIndexUrl ?? TOURNAMENT_MOVEMENT_INDEX_URL, DATA_URL)
     setTournamentMovementIndexState({ status: 'loading' })
     setTournamentMovementCache({})
     tournamentMovementCacheRef.current = {}
@@ -432,7 +433,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
         const loadingEntry: PublicSnapshotCacheEntry = { status: 'loading' }
         snapshotCacheRef.current = { ...snapshotCacheRef.current, [snapshotCacheKey]: loadingEntry }
         setSnapshotCache((current) => ({ ...current, [snapshotCacheKey]: loadingEntry }))
-        const url = resolveArtifactUrl(expected.url, DATA_URL)
+        const url = resolvePublicArtifactUrl(expected.url, DATA_URL)
         void fetchPublicSnapshotShard(url, snapshotCacheKey, expected, manifest)
           .then((next) => {
             const readyEntry: PublicSnapshotCacheEntry = { status: 'ready', snapshot: next }
@@ -493,7 +494,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
       }))
       return
     }
-    const url = resolveArtifactUrl(expected.url, DATA_URL)
+    const url = resolvePublicArtifactUrl(expected.url, DATA_URL)
     const controller = new AbortController()
     setSnapshotCache((current) => ({ ...current, [key]: { status: 'loading' } }))
     async function load() {
@@ -526,7 +527,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
       }))
       return
     }
-    const url = resolveArtifactUrl(expected.url, DATA_URL)
+    const url = resolvePublicArtifactUrl(expected.url, DATA_URL)
     const controller = new AbortController()
     setTeamHistoryCache((current) => ({ ...current, [key]: { status: 'loading' } }))
     async function load() {
@@ -754,15 +755,6 @@ function compatibleTournamentMovementEntries(
 
 function isSeasonYear(value: string) {
   return /^\d{4}$/.test(value)
-}
-
-function resolveArtifactUrl(url: string, baseUrl: string) {
-  if (/^[a-z][a-z\d+.-]*:/i.test(url) || url.startsWith('/')) return url
-  const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
-  const resolvedBase = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
-    ? baseUrl
-    : new URL(baseUrl, origin).toString()
-  return new URL(url, resolvedBase).toString()
 }
 
 function isAbortError(error: unknown) {

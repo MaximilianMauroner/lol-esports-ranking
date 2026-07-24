@@ -143,19 +143,13 @@ A daily audit receipt is created only for a successfully promoted, fenced `daily
 
 Bucket retention is the union of all public generations from the last 14 days, the newest 50 public generations, the active and explicit previous generations, one audit receipt for each of the last 14 UTC dates, and the complete shared public/state/raw/audit reference closure reached from those roots. Unreferenced immutable objects must be at least 48 whole hours old before they can become deletion candidates. Operational, unknown, control, lease, refresh, trigger, reconciliation, GC-receipt, and audit-control objects remain protected.
 
-The GC command is inventory-only by default and prints one canonical JSON document:
+The GC command is inventory-only and prints one canonical JSON document:
 
 ```bash
 pnpm run bucket:gc
 ```
 
-Deletion requires a fresh explicit approval bound to the exact canonical inventory digest and the inventoried active-pointer ETag:
-
-```bash
-pnpm run bucket:gc -- --delete --approved-inventory-sha256 <64-lowercase-hex>
-```
-
-Any malformed, missing, corrupt, or unreadable retained authority/reference makes the inventory invalid and disables deletion. Strict GC accepts only canonical schema-v2 generation publish receipts whose stored digest/byte metadata binds exactly one public manifest authority and exactly one raw receipt authority. Every referenced publish entry is re-read and verified before it is protected. Deletion renews and reasserts the exclusive refresh lease and active pointer around each single-object delete, applies a 30-second abort deadline, and writes a success receipt only after every exact approved candidate settles successfully. Adding this command does not run deletion, deploy code, change cron, modify bucket CORS, or alter Railway variables.
+Delete and approval arguments are rejected. The command has no bucket deletion API, does not acquire a mutation lease, and never writes a deletion receipt. Any malformed, missing, corrupt, or unreadable retained authority/reference makes the inventory invalid and suppresses all candidates. Strict GC requires a canonical receipt for every retained generation and re-reads the complete immutable public/state/raw closure before protecting it. Running the inventory does not deploy code, change cron, modify bucket CORS, or alter Railway variables.
 
 Raw source uploads are content-addressed. Before uploading a file under `rankings/raw/files/**`, the publisher computes its SHA-256 digest, compares it with the object's stored `sha256` metadata and content length, and skips the PUT when both match. Existing objects without digest metadata are uploaded once to establish metadata. Publish logs and `latest-publish.json` report uploaded and unchanged counts/bytes separately, so an operator can verify that an hourly refresh did not resend an unchanged historical baseline. A missing object, missing metadata, or failed comparison falls back to uploading the file so recovery correctness takes priority over egress savings.
 

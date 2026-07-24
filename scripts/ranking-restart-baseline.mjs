@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { createGunzip, gunzipSync } from 'node:zlib'
 import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { parseFullAuditReceipt } from './full-audit-storage.mjs'
+import { parseGenerationPublicationReceipt } from './generation-publication.mjs'
 import { parseIncrementalStateManifest } from './incremental-state-storage.mjs'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import {
@@ -211,7 +212,10 @@ export async function captureRankingRestartBaseline({
     config,
     `generations/${activeGenerationId}/publish.json`,
   )
-  parseGenerationPublishReceipt(activePublish.value, { generationId: activeGenerationId, prefix: config.prefix ?? '' })
+  parseStoredGenerationPublishReceipt(activePublish.value, {
+    generationId: activeGenerationId,
+    prefix: config.prefix ?? '',
+  })
   assertPublishReceiptBindings(activePublish.value, {
     publicManifest: {
       key: publicAuthority.active.manifestKey,
@@ -232,7 +236,10 @@ export async function captureRankingRestartBaseline({
     `generations/${previousGenerationId}/publish.json`,
   )
   if (previousPublish.found) {
-    parseGenerationPublishReceipt(previousPublish.value, { generationId: previousGenerationId, prefix: config.prefix ?? '' })
+    parseStoredGenerationPublishReceipt(previousPublish.value, {
+      generationId: previousGenerationId,
+      prefix: config.prefix ?? '',
+    })
     assertPublishReceiptBindings(previousPublish.value, {
       publicManifest: {
         key: previousAuthority.previous.manifestKey,
@@ -387,6 +394,12 @@ export async function captureRankingRestartBaseline({
     ...receiptWithoutDigest,
     canonicalDigest: canonicalReceiptDigest(receiptWithoutDigest),
   })
+}
+
+function parseStoredGenerationPublishReceipt(value, options) {
+  return value?.artifactKind === 'ranking-generation-publication-readiness'
+    ? parseGenerationPublicationReceipt(value, options)
+    : parseGenerationPublishReceipt(value, options)
 }
 
 export async function readLatestFullAuditAuthority({ config, client, verifiedAt }) {

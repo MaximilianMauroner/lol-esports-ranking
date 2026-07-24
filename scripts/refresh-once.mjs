@@ -677,7 +677,7 @@ export function isDailyAuditDue(env, value, now) {
 }
 
 function successfulDailyAudit(metrics) {
-  if (!metrics || metrics.result === 'failed') return false
+  if (!metrics || metrics.result !== 'completed') return false
   const stages = new Map((metrics.stages ?? []).map((stage) => [stage.name, stage]))
   const parity = stages.get('semantic-parity')
   return stages.get('promotion')?.result === 'completed'

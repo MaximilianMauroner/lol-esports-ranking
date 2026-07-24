@@ -4,6 +4,11 @@ import { pipeline } from 'node:stream/promises'
 import { createGunzip, gunzipSync, gzipSync } from 'node:zlib'
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
+import {
+  assertLegacyGenerationCutoverPointer,
+  classifyActiveGenerationPointer,
+  parseGenerationPublicationReceipt,
+} from './generation-publication.mjs'
 
 export const INCREMENTAL_STATE_STORAGE_MODE = 'content-addressed-state-gzip-v1'
 export const INCREMENTAL_STATE_MANIFEST_KIND = 'incremental-state-generation-manifest'
@@ -251,9 +256,15 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
     throw new Error('Active generation pointer is corrupt', { cause: error })
   }
   assertRecord(active, 'active generation pointer')
+  let publication
+  const pointerKind = classifyActiveGenerationPointer(active)
+  if (pointerKind === 'receipt-bound') {
+    publication = await readStatePublicationReceipt(client, config, active)
+  }
   if (active.stateManifestKey === undefined && active.stateManifestDigest === undefined) {
     return { found: false, reason: 'incremental-state-authority-missing', active, etag: activeObject.ETag }
   }
+  if (pointerKind === 'legacy') await assertLegacyPublicCutoverAuthority(client, config, active)
   assertSafeStateKey(config, active.stateManifestKey, 'active stateManifestKey')
   assertDigest(active.stateManifestDigest, 'active stateManifestDigest')
   const manifestObject = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: active.stateManifestKey }))
@@ -275,6 +286,17 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
   }
   const expectedKey = stateBucketKey(config, `state/generations/${safeStatePath(manifest.generationId)}.json`)
   if (expectedKey !== active.stateManifestKey) throw new Error('Active incremental state manifest key is not canonical')
+  if (publication) {
+    const authority = publication.authorities.stateManifest
+    if (!authority || authority.key !== active.stateManifestKey || authority.digest !== digest
+      || authority.bytes !== manifestBytes.byteLength) {
+      throw new Error('Active incremental state authority is not bound by publication receipt')
+    }
+    if (publication.provenance.modelVersion !== manifest.compatibility.modelVersion
+      || publication.provenance.modelConfigHash !== manifest.compatibility.modelConfigHash) {
+      throw new Error('Active incremental state model authority does not match publication provenance')
+    }
+  }
   const loadCheckpoints = async (candidates = manifest.checkpoints) => {
     const loaded = []
     for (const candidate of candidates) {
@@ -293,6 +315,47 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
     checkpoints = await loadCheckpoints(candidates)
   }
   return { found: true, active, etag: activeObject.ETag, manifest, canonicalLedger, checkpoints, loadCheckpoints }
+}
+
+async function assertLegacyPublicCutoverAuthority(client, config, active) {
+  const expectedKey = stateBucketKey(config, `generations/${safeStatePath(active.generationId)}/manifest.json`)
+  if (active.manifestKey !== expectedKey) {
+    throw new Error('Legacy active public manifest key is not canonical')
+  }
+  const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
+  const bytes = await bodyBytes(object.Body)
+  const digest = createHash('sha256').update(bytes).digest('hex')
+  if (active.manifestDigest !== digest
+    || active.manifestBytes !== bytes.byteLength
+    || active.manifestEtag !== object.ETag
+    || Number(object.ContentLength) !== bytes.byteLength
+    || object.Metadata?.sha256 !== digest) {
+    throw new Error('Legacy active public manifest authority mismatch')
+  }
+  assertLegacyGenerationCutoverPointer(active, JSON.parse(bytes.toString('utf8')))
+}
+
+async function readStatePublicationReceipt(client, config, active) {
+  const expectedKey = stateBucketKey(config, `generations/${safeStatePath(active.generationId)}/publish.json`)
+  if (active.publicationReceiptKey !== expectedKey
+    || !/^[a-f0-9]{64}$/.test(active.publicationReceiptDigest ?? '')
+    || !Number.isSafeInteger(active.publicationReceiptBytes) || active.publicationReceiptBytes <= 0
+    || typeof active.publicationReceiptEtag !== 'string') {
+    throw new Error('Active generation publication receipt binding is incomplete')
+  }
+  const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
+  const bytes = await bodyBytes(object.Body)
+  const digest = createHash('sha256').update(bytes).digest('hex')
+  if (object.ETag !== active.publicationReceiptEtag || digest !== active.publicationReceiptDigest
+    || bytes.byteLength !== active.publicationReceiptBytes || Number(object.ContentLength) !== bytes.byteLength
+    || object.ContentType !== 'application/json; charset=utf-8' || object.ContentEncoding !== undefined
+    || object.Metadata?.sha256 !== digest || object.Metadata?.['semantic-bytes'] !== String(bytes.byteLength)) {
+    throw new Error('Active generation publication receipt authority mismatch')
+  }
+  return parseGenerationPublicationReceipt(JSON.parse(bytes.toString('utf8')), {
+    generationId: active.generationId,
+    prefix: config.prefix ?? '',
+  })
 }
 
 export async function readStoredJsonStateObject(client, config, reference) {

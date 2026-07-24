@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, request, type IncomingHttpHeaders } from 'node:http'
@@ -7,7 +8,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import test from 'node:test'
-import { canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import {
+  createGenerationPublicationReceipt,
+  publicationReceiptBytes,
+  type PublicationObject,
+  type PublicationObjectOutcome,
+} from '../scripts/generation-publication.mjs'
 import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
 import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
@@ -119,6 +126,202 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
   }
 })
 
+test('Railway server reuses its verified root cache and invalidates it when the active ETag changes', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-cache-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(dataDir, { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
+
+  const generationId = 'server-root-cache'
+  const rootManifest = {
+    artifactKind: 'public-ranking-manifest',
+    schemaVersion: 23,
+    generatedAt: '2026-07-23T00:00:00.000Z',
+    source: 'production-shaped-server-test',
+    sources: [{ name: 'fixture' }],
+    dataMode: 'scheduled-public-data',
+    model: { version: 'model-v1', configHash: 'config-v1' },
+    artifactMeta: { runId: generationId },
+    coverage: { sourceProviders: ['fixture'] },
+  }
+  const preparedRoot = prepareSemanticArtifact(rootManifest)
+  const manifest = createGenerationManifest({
+    generationId,
+    rootManifest,
+    entries: [{
+      logicalPath: '/data/ranking-summary.json',
+      digest: preparedRoot.digest,
+      bytes: preparedRoot.bytes,
+    }],
+  })
+  const manifestBody = Buffer.from(canonicalJsonFor(manifest))
+  const manifestDigest = createHash('sha256').update(manifestBody).digest('hex')
+  const manifestEtag = '"manifest-etag"'
+  const rawDigest = 'b'.repeat(64)
+  const uploaded: PublicationObjectOutcome = 'uploaded'
+  const publicationObjects: PublicationObject[] = [
+    {
+      key: `rankings/generations/${generationId}/manifest.json`,
+      digest: manifestDigest,
+      bytes: manifestBody.byteLength,
+      outcome: uploaded,
+    },
+    {
+      key: `rankings/objects/sha256/${preparedRoot.digest}`,
+      digest: preparedRoot.digest,
+      bytes: preparedRoot.compressedBytes,
+      outcome: uploaded,
+    },
+    {
+      key: `rankings/raw/objects/sha256/${rawDigest}`,
+      digest: rawDigest,
+      bytes: 123,
+      outcome: uploaded,
+    },
+  ]
+  const receipt = createGenerationPublicationReceipt({
+    generationId,
+    preparedAt: '2026-07-23T00:00:00.000Z',
+    prefix: 'rankings',
+    fencingToken: 1,
+    leaseOwner: 'server-cache-fixture',
+    promotionEtag: '"promotion-etag"',
+    provenance: {
+      modelVersion: rootManifest.model.version,
+      modelConfigHash: rootManifest.model.configHash,
+      source: rootManifest.source,
+      dataMode: rootManifest.dataMode,
+      sourceProviders: rootManifest.coverage.sourceProviders,
+    },
+    authorities: {
+      publicManifest: {
+        key: `rankings/generations/${generationId}/manifest.json`,
+        digest: manifestDigest,
+        bytes: manifestBody.byteLength,
+      },
+      rawReceipt: {
+        key: `rankings/raw/objects/sha256/${rawDigest}`,
+        digest: rawDigest,
+        bytes: 123,
+      },
+    },
+    objects: publicationObjects,
+  })
+  const preparedReceipt = publicationReceiptBytes(receipt)
+  const receiptEtag = '"receipt-etag"'
+  const activeBody = Buffer.from(JSON.stringify({
+    schemaVersion: 2,
+    generationId,
+    fencingToken: 1,
+    promotedAt: '2026-07-23T00:00:00.000Z',
+    manifestKey: `rankings/generations/${generationId}/manifest.json`,
+    publicManifestSchemaVersion: 2,
+    storageMode: 'content-addressed-gzip-v1',
+    manifestDigest,
+    manifestBytes: manifestBody.byteLength,
+    manifestEtag,
+    rawReceiptKey: `rankings/raw/objects/sha256/${rawDigest}`,
+    rawReceiptDigest: rawDigest,
+    rawReceiptBytes: 100,
+    rawReceiptCompressedBytes: 123,
+    sourceReceiptDigest: 'c'.repeat(64),
+    rawIdentityDigest: 'd'.repeat(64),
+    publicationSchemaVersion: 1,
+    publicationReceiptKey: `rankings/generations/${generationId}/publish.json`,
+    publicationReceiptDigest: preparedReceipt.digest,
+    publicationReceiptBytes: preparedReceipt.bytes,
+    publicationReceiptEtag: receiptEtag,
+  }))
+  let activeEtag = '"active-etag-1"'
+  const bucketReads: string[] = []
+  const bucket = createServer((request, response) => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+    bucketReads.push(pathname)
+    const sendObject = (
+      body: Buffer,
+      {
+        etag,
+        contentType = 'application/json; charset=utf-8',
+        contentEncoding,
+        metadata = {},
+      }: {
+        etag: string
+        contentType?: string
+        contentEncoding?: string
+        metadata?: Record<string, string>
+      },
+    ) => {
+      response.setHeader('ETag', etag)
+      response.setHeader('Content-Type', contentType)
+      response.setHeader('Content-Length', String(body.byteLength))
+      if (contentEncoding) response.setHeader('Content-Encoding', contentEncoding)
+      for (const [key, value] of Object.entries(metadata)) response.setHeader(`x-amz-meta-${key}`, value)
+      response.end(body)
+    }
+    if (pathname === '/test-bucket/rankings/active-generation.json') {
+      sendObject(activeBody, { etag: activeEtag })
+    } else if (pathname === `/test-bucket/rankings/generations/${generationId}/publish.json`) {
+      sendObject(preparedReceipt.body, {
+        etag: receiptEtag,
+        metadata: { sha256: preparedReceipt.digest, 'semantic-bytes': String(preparedReceipt.bytes) },
+      })
+    } else if (pathname === `/test-bucket/rankings/generations/${generationId}/manifest.json`) {
+      sendObject(manifestBody, {
+        etag: manifestEtag,
+        metadata: { sha256: manifestDigest, 'semantic-bytes': String(manifestBody.byteLength) },
+      })
+    } else if (pathname === `/test-bucket/rankings/objects/sha256/${preparedRoot.digest}`) {
+      sendObject(preparedRoot.compressed, {
+        etag: '"root-etag"',
+        contentEncoding: 'gzip',
+        metadata: {
+          sha256: preparedRoot.digest,
+          'semantic-bytes': String(preparedRoot.bytes),
+          encoding: 'gzip',
+        },
+      })
+    } else {
+      response.statusCode = 404
+      response.end()
+    }
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const bucketPort = (bucket.address() as AddressInfo).port
+  const server = await startRailwayServer(distDir, dataDir, {
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${bucketPort}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+  })
+  try {
+    const expectedInitialReads = [
+      '/test-bucket/rankings/active-generation.json',
+      `/test-bucket/rankings/generations/${generationId}/publish.json`,
+      `/test-bucket/rankings/generations/${generationId}/manifest.json`,
+      `/test-bucket/rankings/objects/sha256/${preparedRoot.digest}`,
+    ]
+    const first = await httpRequest(server.port, '/data/ranking-summary.json')
+    assert.equal(first.statusCode, 200)
+    assert.deepEqual(bucketReads, expectedInitialReads)
+
+    const second = await httpRequest(server.port, '/data/ranking-summary.json')
+    assert.equal(second.statusCode, 200)
+    assert.deepEqual(bucketReads.slice(4), ['/test-bucket/rankings/active-generation.json'])
+
+    activeEtag = '"active-etag-2"'
+    const third = await httpRequest(server.port, '/data/ranking-summary.json')
+    assert.equal(third.statusCode, 200)
+    assert.deepEqual(bucketReads.slice(5), expectedInitialReads)
+  } finally {
+    await server.close()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('Railway server serves versioned data from the requested bucket generation', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
   const distDir = join(tempDir, 'dist')
@@ -189,23 +392,37 @@ test('Railway server and production reader support identity and gzip delivery of
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
     if (pathname === '/test-bucket/rankings/active-generation.json') {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({
-        generationId: fixture.generationId,
-        publicManifestSchemaVersion: 2,
-        storageMode: 'content-addressed-gzip-v1',
-      }))
+      response.setHeader('ETag', fixture.activeEtag)
+      response.end(fixture.activeBody)
+      return
+    }
+    if (pathname === `/test-bucket/rankings/generations/${fixture.generationId}/publish.json`) {
+      response.setHeader('Content-Type', 'application/json; charset=utf-8')
+      response.setHeader('Content-Length', String(fixture.receipt.body.byteLength))
+      response.setHeader('ETag', fixture.receiptEtag)
+      response.setHeader('x-amz-meta-sha256', fixture.receipt.digest)
+      response.setHeader('x-amz-meta-semantic-bytes', String(fixture.receipt.bytes))
+      response.end(fixture.receipt.body)
       return
     }
     if (pathname === `/test-bucket/rankings/generations/${fixture.generationId}/manifest.json`) {
-      response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify(fixture.generationManifest))
+      response.setHeader('Content-Type', 'application/json; charset=utf-8')
+      response.setHeader('Content-Length', String(fixture.manifestBody.byteLength))
+      response.setHeader('ETag', fixture.manifestEtag)
+      response.setHeader('x-amz-meta-sha256', fixture.manifestDigest)
+      response.setHeader('x-amz-meta-semantic-bytes', String(fixture.manifestBody.byteLength))
+      response.end(fixture.manifestBody)
       return
     }
     const stored = fixture.objects.get(pathname)
     if (stored) {
-      response.setHeader('Content-Type', 'application/json')
+      response.setHeader('Content-Type', 'application/json; charset=utf-8')
       response.setHeader('Content-Encoding', 'gzip')
-      response.end(stored)
+      response.setHeader('Content-Length', String(stored.compressed.byteLength))
+      response.setHeader('x-amz-meta-sha256', stored.digest)
+      response.setHeader('x-amz-meta-semantic-bytes', String(stored.bytes))
+      response.setHeader('x-amz-meta-encoding', 'gzip')
+      response.end(stored.compressed)
       return
     }
     response.statusCode = 404
@@ -264,14 +481,20 @@ test('Railway server hybrid delivery redirects only eligible immutable objects a
   await mkdir(dataDir, { recursive: true })
   await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
   await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify({ source: 'bundled' }))
-  const largeDigest = 'a'.repeat(64)
-  const smallDigest = 'b'.repeat(64)
-  const failingDigest = 'c'.repeat(64)
-  const bodies = new Map([
-    [largeDigest, gzipSync(JSON.stringify({ source: 'large' }))],
-    [smallDigest, gzipSync(JSON.stringify({ source: 'small' }))],
-    [failingDigest, gzipSync(JSON.stringify({ source: 'head-fallback' }))],
-  ])
+  const storedBodies = [
+    { source: 'large', semantic: Buffer.from(JSON.stringify({ source: 'large' })) },
+    { source: 'small', semantic: Buffer.from(JSON.stringify({ source: 'small' })) },
+    { source: 'head-fallback', semantic: Buffer.from(JSON.stringify({ source: 'head-fallback' })) },
+  ].map((entry) => ({
+    ...entry,
+    digest: createHash('sha256').update(entry.semantic).digest('hex'),
+    compressed: gzipSync(entry.semantic),
+  }))
+  const [large, small, failing] = storedBodies
+  const largeDigest = large.digest
+  const smallDigest = small.digest
+  const failingDigest = failing.digest
+  const bodies = new Map(storedBodies.map((entry) => [entry.digest, entry]))
   const bucketCalls: Array<{ method: string; pathname: string }> = []
   const bucket = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost')
@@ -283,8 +506,8 @@ test('Railway server hybrid delivery redirects only eligible immutable objects a
       return
     }
     const objectDigest = match[1]
-    const body = bodies.get(objectDigest)
-    if (!body) {
+    const stored = bodies.get(objectDigest)
+    if (!stored) {
       response.statusCode = 404
       response.end()
       return
@@ -301,12 +524,12 @@ test('Railway server hybrid delivery redirects only eligible immutable objects a
     response.setHeader('Access-Control-Allow-Origin', '*')
     response.setHeader('Access-Control-Expose-Headers', 'Content-Encoding, ETag, Cache-Control')
     response.setHeader('x-amz-meta-sha256', objectDigest)
-    response.setHeader('x-amz-meta-semantic-bytes', '140000')
+    response.setHeader('x-amz-meta-semantic-bytes', String(stored.semantic.byteLength))
     response.setHeader('x-amz-meta-encoding', 'gzip')
     response.setHeader('Content-Length', request.method === 'HEAD'
       ? String(objectDigest === smallDigest ? 100 : 70_000)
-      : String(body.byteLength))
-    response.end(request.method === 'HEAD' ? undefined : body)
+      : String(stored.compressed.byteLength))
+    response.end(request.method === 'HEAD' ? undefined : stored.compressed)
   })
   await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
   const bucketPort = (bucket.address() as AddressInfo).port
@@ -546,14 +769,98 @@ async function contentAddressedReaderFixture() {
     rootManifest: rootSource as Record<string, unknown>,
     entries,
   })
+  const manifestBody = Buffer.from(canonicalJsonFor(generationManifest))
+  const manifestDigest = createHash('sha256').update(manifestBody).digest('hex')
+  const manifestEtag = '"content-reader-manifest"'
+  const rawDigest = 'f'.repeat(64)
+  const uploaded: PublicationObjectOutcome = 'uploaded'
+  const publicationObjects: PublicationObject[] = [
+    {
+      key: `rankings/generations/${generationId}/manifest.json`,
+      digest: manifestDigest,
+      bytes: manifestBody.byteLength,
+      outcome: uploaded,
+    },
+    ...entries.map((entry): PublicationObject => ({
+      key: `rankings/objects/sha256/${entry.digest}`,
+      digest: entry.digest,
+      bytes: entry.logicalPath === '/data/ranking-summary.json'
+        ? rootArtifact.compressedBytes
+        : entry.logicalPath === canonicalPublicLogicalPath(snapshotEntry.url)
+          ? shardArtifact.compressedBytes
+          : 1,
+      outcome: uploaded,
+    })),
+    {
+      key: `rankings/raw/objects/sha256/${rawDigest}`,
+      digest: rawDigest,
+      bytes: 1,
+      outcome: uploaded,
+    },
+  ]
+  const receipt = createGenerationPublicationReceipt({
+    generationId,
+    preparedAt: rankingManifest.generatedAt,
+    prefix: 'rankings',
+    fencingToken: 1,
+    leaseOwner: 'content-reader-fixture',
+    promotionEtag: '"content-reader-promotion"',
+    provenance: {
+      modelVersion: rankingManifest.model.version,
+      modelConfigHash: rankingManifest.model.configHash,
+      source: rankingManifest.source,
+      dataMode: rankingManifest.dataMode,
+      sourceProviders: rankingManifest.sources.map((source) => source.name),
+    },
+    authorities: {
+      publicManifest: {
+        key: `rankings/generations/${generationId}/manifest.json`,
+        digest: manifestDigest,
+        bytes: manifestBody.byteLength,
+      },
+      rawReceipt: {
+        key: `rankings/raw/objects/sha256/${rawDigest}`,
+        digest: rawDigest,
+        bytes: 1,
+      },
+    },
+    objects: publicationObjects,
+  })
+  const preparedReceipt = publicationReceiptBytes(receipt)
+  const receiptEtag = '"content-reader-receipt"'
+  const activeEtag = '"content-reader-active"'
+  const activeBody = Buffer.from(JSON.stringify({
+    schemaVersion: 2,
+    generationId,
+    fencingToken: 1,
+    promotedAt: rankingManifest.generatedAt,
+    manifestKey: `rankings/generations/${generationId}/manifest.json`,
+    publicManifestSchemaVersion: 2,
+    storageMode: 'content-addressed-gzip-v1',
+    manifestDigest,
+    manifestBytes: manifestBody.byteLength,
+    manifestEtag,
+    publicationSchemaVersion: 1,
+    publicationReceiptKey: `rankings/generations/${generationId}/publish.json`,
+    publicationReceiptDigest: preparedReceipt.digest,
+    publicationReceiptBytes: preparedReceipt.bytes,
+    publicationReceiptEtag: receiptEtag,
+  }))
   return {
     generationId,
     generationManifest,
+    manifestBody,
+    manifestDigest,
+    manifestEtag,
+    receipt: preparedReceipt,
+    receiptEtag,
+    activeBody,
+    activeEtag,
     snapshotKey,
     expectedMatchCount: snapshotEntry.matchCount,
     objects: new Map([
-      [`/test-bucket/rankings/objects/sha256/${rootArtifact.digest}`, rootArtifact.compressed],
-      [`/test-bucket/rankings/objects/sha256/${shardArtifact.digest}`, shardArtifact.compressed],
+      [`/test-bucket/rankings/objects/sha256/${rootArtifact.digest}`, rootArtifact],
+      [`/test-bucket/rankings/objects/sha256/${shardArtifact.digest}`, shardArtifact],
     ]),
   }
 }

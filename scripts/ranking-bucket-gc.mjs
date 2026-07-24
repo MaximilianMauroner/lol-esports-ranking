@@ -1,17 +1,28 @@
 import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 import { pathToFileURL } from 'node:url'
-import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3'
-import { canonicalJsonFor, canonicalPublicLogicalPath } from './public-artifact-storage.mjs'
+import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogicalPath } from './public-artifact-storage.mjs'
 import { parseIncrementalStateManifest } from './incremental-state-storage.mjs'
 import { parseFullAuditReceipt } from './full-audit-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt } from './raw-source-storage.mjs'
-import { assertBucketLease, bucketConfigFromEnv, bucketKey, createBucketClient, parseGenerationPublishReceipt, readBucketJson, releaseBucketLease, renewBucketLease, safeRequestedObjectPath, writeBucketJson } from './railway-bucket.mjs'
+import {
+  bucketConfigFromEnv,
+  bucketKey,
+  createBucketClient,
+  parseGenerationPublishReceipt,
+  readActiveGenerationPublication,
+  readBucketJson,
+  safeRequestedObjectPath,
+} from './railway-bucket.mjs'
+import {
+  assertLegacyGenerationCutoverPointer,
+  classifyActiveGenerationPointer,
+  parseGenerationPublicationReceipt,
+} from './generation-publication.mjs'
 
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000
-const GC_LEASE_TTL_MS = 10 * 60_000
-const DELETE_TIMEOUT_MS = 30_000
 const APPROVED_IMMUTABLE_KEYS = [
   /^generations\/[A-Za-z0-9][A-Za-z0-9._-]*\/(?:manifest\.json|publish\.json|data\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)$/,
   /^objects\/sha256\/[a-f0-9]{64}$/,
@@ -23,32 +34,17 @@ const APPROVED_IMMUTABLE_KEYS = [
 ]
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const options = parseGcArgs(process.argv.slice(2))
+  parseGcArgs(process.argv.slice(2))
   const config = bucketConfigFromEnv()
   const client = createBucketClient(config)
   if (!config.enabled || !client) throw new Error(`Ranking bucket is not configured: ${(config.missing ?? []).join(', ')}`)
-  const result = options.delete
-    ? await deleteApprovedRankingBucketInventory({ ...options, config, client })
-    : await buildRankingBucketInventory({ config, client })
+  const result = await buildRankingBucketInventory({ config, client })
   process.stdout.write(`${canonicalJsonFor(result)}\n`)
 }
 
 export function parseGcArgs(argv = []) {
-  let deleteRequested = false
-  let approvedInventorySha256
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
-    if (arg === '--delete') deleteRequested = true
-    else if (arg === '--approved-inventory-sha256') approvedInventorySha256 = argv[++index]
-    else if (arg.startsWith('--approved-inventory-sha256=')) approvedInventorySha256 = arg.slice(arg.indexOf('=') + 1)
-    else throw new Error(`Unknown bucket GC argument: ${arg}`)
-  }
-  if (approvedInventorySha256 !== undefined && !/^[a-f0-9]{64}$/.test(approvedInventorySha256)) {
-    throw new Error('Approved inventory SHA-256 must be 64 lowercase hexadecimal characters')
-  }
-  if (deleteRequested && !approvedInventorySha256) throw new Error('Deletion requires --approved-inventory-sha256')
-  if (!deleteRequested && approvedInventorySha256) throw new Error('--approved-inventory-sha256 requires --delete')
-  return { delete: deleteRequested, ...(approvedInventorySha256 ? { approvedInventorySha256 } : {}) }
+  if (argv.length > 0) throw new Error('Ranking bucket GC is inventory-only; deletion and approval arguments are unavailable')
+  return {}
 }
 
 export async function buildRankingBucketInventory({
@@ -106,27 +102,42 @@ export async function buildRankingBucketInventory({
     if (!isApprovedImmutableKey(relativeKey(config, object.key))) protect(object.key, 'operational-or-unknown-namespace')
   }
 
+  const pointerAuthorities = []
+  if (active) {
+    const activeKind = await validatePointerPublication(active.value, 'active-generation', activeKey, addError, config, client, true)
+    if (activeKind) {
+      const current = parsePointerGeneration(active.value, 'active generation', activeKey, addError, config, true)
+      if (current) pointerAuthorities.push({
+        ...current,
+        reason: 'active-generation',
+        publicManifestSchemaVersion: activeKind === 'legacy' ? 1 : 2,
+      })
+    }
+    if (active.value.previousGeneration !== undefined) {
+      const previousKind = await validatePointerPublication(
+        active.value.previousGeneration,
+        'previous-generation',
+        activeKey,
+        addError,
+        config,
+        client,
+      )
+      if (previousKind) {
+        const previous = parsePointerGeneration(active.value.previousGeneration, 'previous generation', activeKey, addError, config, false)
+        if (previous) pointerAuthorities.push({
+          ...previous,
+          reason: 'previous-generation',
+          ...(previousKind === 'receipt-bound' ? { publicManifestSchemaVersion: 2 } : {}),
+        })
+      }
+    }
+  }
   const generations = await publicGenerationRoots(objects, config, client, addError)
-  const retainedGenerationIds = new Set()
+  const retainedGenerationIds = new Set(pointerAuthorities.map((authority) => authority.generationId))
   for (const root of generations.filter((entry) => new Date(entry.lastModified) >= generationCutoffDate)) retainedGenerationIds.add(root.generationId)
   for (const root of [...generations]
     .sort((left, right) => right.lastModified.localeCompare(left.lastModified) || left.generationId.localeCompare(right.generationId))
     .slice(0, policy.retainNewestGenerationCount)) retainedGenerationIds.add(root.generationId)
-  const pointerAuthorities = []
-  if (active) {
-    const current = parsePointerGeneration(active.value, 'active generation', activeKey, addError, config, true)
-    if (current) {
-      retainedGenerationIds.add(current.generationId)
-      pointerAuthorities.push({ ...current, reason: 'active-generation' })
-    }
-    if (active.value.previousGeneration !== undefined) {
-      const previous = parsePointerGeneration(active.value.previousGeneration, 'previous generation', activeKey, addError, config, false)
-      if (previous) {
-        retainedGenerationIds.add(previous.generationId)
-        pointerAuthorities.push({ ...previous, reason: 'previous-generation' })
-      }
-    }
-  }
 
   const visitedState = new Map()
   const visitedRaw = new Map()
@@ -219,7 +230,11 @@ export async function buildRankingBucketInventory({
         if (authority.manifestDigest && authority.manifestDigest !== digest) throw new Error('Public manifest pointer digest mismatch')
         if (authority.manifestBytes !== undefined && authority.manifestBytes !== stored.bytes.byteLength) throw new Error('Public manifest pointer byte length mismatch')
         if (authority.manifestEtag && authority.manifestEtag !== stored.etag) throw new Error('Public manifest pointer ETag mismatch')
-        parsePublicGenerationManifest(JSON.parse(stored.bytes.toString('utf8')), authority.generationId)
+        parsePublicGenerationManifest(
+          JSON.parse(stored.bytes.toString('utf8')),
+          authority.generationId,
+          authority.publicManifestSchemaVersion,
+        )
       } catch (error) {
         addError(activeKey, `${authority.reason}-public-authority-invalid`, error)
       }
@@ -277,7 +292,7 @@ export async function buildRankingBucketInventory({
       try {
         const publish = await readVerifiedPublishReceipt(client, config, publishKey, generationId)
         protect(publishKey, 'retained-generation-publish-authority')
-        for (const entry of [...(publish.artifacts ?? []), ...(publish.unchanged ?? [])]) {
+        for (const entry of publishReceiptEntries(publish)) {
           if (typeof entry?.key !== 'string') throw new Error('Publish receipt has an invalid object key')
           const referenced = absoluteReferenceKey(config, entry.key)
           if (requireObject(publishKey, referenced, 'retained-publish-reference')) {
@@ -300,7 +315,7 @@ export async function buildRankingBucketInventory({
       } catch (error) {
         addError(publishKey, 'retained-publish-receipt-invalid', error)
       }
-    }
+    } else addError(publishKey, 'retained-publish-receipt-missing')
   }
 
   for (let day = 0; day < policy.retainAuditDays; day += 1) {
@@ -365,141 +380,39 @@ export async function buildRankingBucketInventory({
   return { ...payload, inventorySha256: sha256(Buffer.from(canonicalJsonFor(payload))) }
 }
 
-export async function deleteApprovedRankingBucketInventory({
-  delete: deleteRequested,
-  approvedInventorySha256,
-  config = bucketConfigFromEnv(),
-  client = createBucketClient(config),
-  now = () => new Date(),
-  batchSize = 1,
-  deleteTimeoutMs = DELETE_TIMEOUT_MS,
-  buildInventory = buildRankingBucketInventory,
-  beforeFirstBatch,
-  betweenBatches,
-} = {}) {
-  if (deleteRequested !== true || !/^[a-f0-9]{64}$/.test(approvedInventorySha256 ?? '')) {
-    throw new Error('Deletion requires --delete and an approved inventory SHA-256')
-  }
-  if (batchSize !== 1) throw new Error('GC deletion batch size must be exactly 1')
-  if (!Number.isInteger(deleteTimeoutMs) || deleteTimeoutMs < 1 || deleteTimeoutMs > DELETE_TIMEOUT_MS) {
-    throw new Error('GC deletion timeout must be between 1 and 30000 milliseconds')
-  }
-  const inventory = await buildInventory({ config, client, now })
-  if (inventory.inventorySha256 !== approvedInventorySha256) throw new Error('Approved inventory SHA-256 does not match the current canonical inventory')
-  if (!inventory.valid || inventory.errors.length > 0 || inventory.missingReferences.length > 0 || !inventory.activePointer.etag) {
-    throw new Error('Invalid inventory cannot be deleted')
-  }
-  if (inventory.deletionCandidates.some((candidate) => candidate.ageHours < inventory.policy.minimumDeleteAgeHours)) {
-    throw new Error('Inventory contains a deletion candidate below the minimum age')
-  }
-  const protectedKeys = new Set(inventory.protected.map((entry) => entry.key))
-  if (inventory.deletionCandidates.some((candidate) => protectedKeys.has(candidate.key))) throw new Error('Inventory candidate overlaps protected storage')
-  await beforeFirstBatch?.(inventory)
-  await assertPointerEtag(config, client, inventory.activePointer)
-  let leaseAuthority = await acquireApprovedDeletionLease(config, client, inventory, now)
-  const deleted = []
+async function validatePointerPublication(value, label, key, addError, config, client, requireLegacyCutover = false) {
   try {
-    for (let offset = 0; offset < inventory.deletionCandidates.length; offset += 1) {
-      leaseAuthority = await renewAndAssertGcAuthority(config, client, leaseAuthority, now)
-      const candidate = inventory.deletionCandidates[offset]
-      await deleteObjectWithDeadline(client, config, candidate.key, deleteTimeoutMs)
-      deleted.push({ key: candidate.key, bytes: candidate.bytes, lastModified: candidate.lastModified, reason: candidate.reason })
-      await betweenBatches?.({ inventory, offset: offset + 1, deleted: [...deleted] })
-      leaseAuthority = await renewAndAssertGcAuthority(config, client, leaseAuthority, now)
+    const kind = classifyActiveGenerationPointer(value)
+    if (kind === 'receipt-bound') {
+      if (requireLegacyCutover && (value.publicManifestSchemaVersion !== 2
+        || value.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE)) {
+        throw new Error('Current active publication authority requires the native schema-2 content-addressed envelope')
+      }
+      const publication = await readActiveGenerationPublication({
+        config,
+        client,
+        active: value,
+        verifyClosure: false,
+      })
+      if (!publication.found) throw new Error(`${label} publication receipt is unavailable`)
+    } else if (requireLegacyCutover) {
+      const expectedKey = bucketKey(config, `generations/${value.generationId}/manifest.json`)
+      if (absoluteReferenceKey(config, value.manifestKey) !== expectedKey) {
+        throw new Error('Legacy active public generation manifest key is not canonical')
+      }
+      const stored = await getStored(client, config, expectedKey)
+      const digest = sha256(stored.bytes)
+      assertStoredPublicManifest(stored, digest)
+      if (value.manifestDigest !== digest || value.manifestBytes !== stored.bytes.byteLength
+        || value.manifestEtag !== stored.etag) {
+        throw new Error('Legacy active public generation manifest authority mismatch')
+      }
+      assertLegacyGenerationCutoverPointer(value, JSON.parse(stored.bytes.toString('utf8')))
     }
-    const completedAt = new Date(now()).toISOString()
-    const deletedBytes = deleted.reduce((sum, object) => sum + object.bytes, 0)
-    const receipt = {
-      artifactKind: 'ranking-bucket-gc-deletion-receipt', schemaVersion: 1, inventorySha256: inventory.inventorySha256,
-      activePointer: inventory.activePointer, policy: inventory.policy, completedAt, deleted, deletedBytes,
-      estimatedBeforeBytes: inventory.totals.beforeBytes, estimatedAfterBytes: inventory.totals.beforeBytes - deletedBytes,
-    }
-    const body = Buffer.from(canonicalJsonFor(receipt))
-    const key = bucketKey(config, `gc/deletions/${completedAt}-${inventory.inventorySha256}.json`)
-    leaseAuthority = await renewAndAssertGcAuthority(config, client, leaseAuthority, now)
-    await client.send(new PutObjectCommand({
-      Bucket: config.bucket, Key: key, Body: body, ContentLength: body.byteLength,
-      ContentType: 'application/json; charset=utf-8', Metadata: { sha256: sha256(body), 'semantic-bytes': String(body.byteLength) }, IfNoneMatch: '*',
-    }))
-    return receipt
-  } finally {
-    await releaseBucketLease(leaseAuthority.key, leaseAuthority, { config, client, now: now() }).catch(() => undefined)
-  }
-}
-
-async function acquireApprovedDeletionLease(config, client, inventory, now) {
-  const current = await readBucketJson('active-generation.json', { config, client })
-  if (!current.found || current.etag !== inventory.activePointer.etag) throw new Error('Active pointer changed before GC lease acquisition')
-  const nowDate = new Date(now())
-  if (new Date(current.value?.leaseExpiresAt).getTime() > nowDate.getTime()) throw new Error('A live refresh publisher lease blocks GC deletion')
-  const owner = `ranking-gc-${inventory.inventorySha256.slice(0, 16)}`
-  const fencingToken = Math.max(Number(current.value?.leaseFencingToken ?? 0), Number(current.value?.fencingToken ?? 0)) + 1
-  const lease = { schemaVersion: 1, owner, fencingToken, acquiredAt: nowDate.toISOString(), expiresAt: new Date(nowDate.getTime() + GC_LEASE_TTL_MS).toISOString() }
-  const write = await writeBucketJson('active-generation.json', {
-    ...current.value,
-    leaseKey: 'ops/refresh-lease.json', leaseOwner: owner, leaseFencingToken: fencingToken,
-    leaseAcquiredAt: lease.acquiredAt, leaseExpiresAt: lease.expiresAt,
-    fencingToken: Math.max(Number(current.value?.fencingToken ?? 0), fencingToken),
-  }, { config, client, ifMatch: inventory.activePointer.etag })
-  if (!write.written || !write.etag) throw new Error('Unable to acquire exclusive GC refresh lease')
-  return {
-    key: 'ops/refresh-lease.json', lease, etag: write.etag, promotionEtag: write.etag,
-    pointerAuthority: canonicalGcPointerAuthority({
-      ...current.value,
-      leaseKey: 'ops/refresh-lease.json', leaseOwner: owner, leaseFencingToken: fencingToken,
-      leaseAcquiredAt: lease.acquiredAt, leaseExpiresAt: lease.expiresAt,
-      fencingToken: Math.max(Number(current.value?.fencingToken ?? 0), fencingToken),
-    }),
-  }
-}
-
-async function assertPointerEtag(config, client, expected) {
-  const current = await readBucketJson('active-generation.json', { config, client })
-  if (!current.found || current.etag !== expected.etag || current.key !== expected.key) throw new Error('Active pointer changed during approved GC deletion')
-}
-
-async function renewAndAssertGcAuthority(config, client, authority, now) {
-  const renewed = await renewBucketLease(authority.key, authority, {
-    ttlMs: GC_LEASE_TTL_MS,
-    now: now(),
-    config,
-    client,
-  })
-  if (!renewed.renewed) throw new Error(`GC refresh lease renewal failed: ${renewed.reason}`)
-  const next = { ...renewed, key: authority.key, pointerAuthority: authority.pointerAuthority }
-  await assertBucketLease(next.key, next, { config, client, now: now(), requireEtag: true })
-  await assertGcPointerAuthority(config, client, next)
-  return next
-}
-
-async function assertGcPointerAuthority(config, client, authority) {
-  const current = await readBucketJson('active-generation.json', { config, client })
-  if (!current.found || current.etag !== authority.etag
-    || canonicalJsonFor(canonicalGcPointerAuthority(current.value)) !== canonicalJsonFor(authority.pointerAuthority)) {
-    throw new Error('Active pointer changed during approved GC deletion')
-  }
-}
-
-function canonicalGcPointerAuthority(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
-  const authority = { ...value }
-  delete authority.leaseAcquiredAt
-  delete authority.leaseExpiresAt
-  delete authority.leaseRenewedAt
-  delete authority.leaseReleasedAt
-  return authority
-}
-
-async function deleteObjectWithDeadline(client, config, key, timeoutMs) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(new Error(`GC delete timed out after ${timeoutMs} milliseconds`)), timeoutMs)
-  try {
-    await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: controller.signal })
+    return kind
   } catch (error) {
-    if (controller.signal.aborted) throw new Error(`GC delete timed out for ${key}`, { cause: error })
-    throw error
-  } finally {
-    clearTimeout(timer)
+    addError(key, `${label}-publication-authority-invalid`, error)
+    return undefined
   }
 }
 
@@ -536,7 +449,8 @@ async function publicGenerationRoots(objects, config, client, addError) {
     if (!objects.some((object) => object.key === publishKey)) continue
     try {
       const publish = await readVerifiedPublishReceipt(client, config, publishKey, root.generationId)
-      if (new Date(publish.publishedAt).getTime() > new Date(root.lastModified).getTime()) root.lastModified = publish.publishedAt
+      const activityAt = publish.preparedAt ?? publish.publishedAt
+      if (new Date(activityAt).getTime() > new Date(root.lastModified).getTime()) root.lastModified = activityAt
     } catch (error) {
       addError(publishKey, 'generation-publish-receipt-invalid', error)
     }
@@ -579,7 +493,11 @@ function parsePointerGeneration(value, label, key, addError, config, current) {
     addError(key, 'active-generation-raw-authority-incomplete')
   }
   if (!current) {
-    const approvedKeys = new Set(['generationId', 'manifestKey', 'promotedAt', 'stateManifestKey', 'stateManifestDigest', 'rawReceiptKey', 'rawReceiptDigest'])
+    const approvedKeys = new Set([
+      'generationId', 'manifestKey', 'promotedAt', 'stateManifestKey', 'stateManifestDigest',
+      'rawReceiptKey', 'rawReceiptDigest', 'publicationSchemaVersion', 'publicationReceiptKey',
+      'publicationReceiptDigest', 'publicationReceiptBytes', 'publicationReceiptEtag',
+    ])
     if (Object.keys(value).some((field) => !approvedKeys.has(field))) addError(key, 'previous-generation-unknown-authority-field')
   }
   if (state.stateManifestKey && absoluteReferenceKey(config, state.stateManifestKey) !== bucketKey(config, `state/generations/${value.generationId}.json`)) {
@@ -605,9 +523,12 @@ function parsePointerGeneration(value, label, key, addError, config, current) {
   }
 }
 
-function parsePublicGenerationManifest(value, generationId) {
+function parsePublicGenerationManifest(value, generationId, expectedSchemaVersion) {
+  const schemaVersionMatches = expectedSchemaVersion === undefined
+    ? [1, 2].includes(value?.schemaVersion)
+    : value?.schemaVersion === expectedSchemaVersion
   if (!value || typeof value !== 'object' || Array.isArray(value)
-    || value.artifactKind !== 'public-artifact-generation-manifest' || value.schemaVersion !== 2
+    || value.artifactKind !== 'public-artifact-generation-manifest' || !schemaVersionMatches
     || value.storageMode !== 'content-addressed-gzip-v1' || value.generationId !== generationId || value.runId !== generationId
     || typeof value.generatedAt !== 'string' || Number.isNaN(new Date(value.generatedAt).getTime())
     || !value.model || typeof value.model.version !== 'string' || value.model.version.length === 0
@@ -656,13 +577,16 @@ async function readVerifiedPublishReceipt(client, config, key, generationId) {
   }
   const value = JSON.parse(stored.bytes.toString('utf8'))
   if (canonicalJsonFor(value) !== stored.bytes.toString('utf8')) throw new Error('Generation publish receipt is not canonical JSON')
-  return parseGenerationPublishReceipt(value, { generationId, prefix: config.prefix ?? '' })
+  return value?.artifactKind === 'ranking-generation-publication-readiness'
+    ? parseGenerationPublicationReceipt(value, { generationId, prefix: config.prefix ?? '' })
+    : parseGenerationPublishReceipt(value, { generationId, prefix: config.prefix ?? '' })
 }
 
 async function verifyPublishEntry(client, config, key, entry) {
   const stored = await getStored(client, config, key)
   if (stored.bytes.byteLength !== entry.bytes || Number(stored.contentLength) !== entry.bytes
-    || stored.contentType !== entry.contentType || stored.metadata?.sha256 !== entry.digest) {
+    || (entry.contentType !== undefined && stored.contentType !== entry.contentType)
+    || stored.metadata?.sha256 !== entry.digest) {
     throw new Error(`Published object authority metadata mismatch: ${key}`)
   }
   let semantic = stored.bytes
@@ -676,6 +600,12 @@ async function verifyPublishEntry(client, config, key, entry) {
     throw new Error(`Published object body authority mismatch: ${key}`)
   }
   return stored
+}
+
+function publishReceiptEntries(receipt) {
+  return Array.isArray(receipt.objects)
+    ? receipt.objects
+    : [...(receipt.artifacts ?? []), ...(receipt.unchanged ?? [])]
 }
 
 function assertStoredPublicManifest(stored, digest) {
