@@ -1397,7 +1397,6 @@ export async function acquireBucketLease(relativeKey, {
     leaseFencingToken: lease.fencingToken,
     leaseAcquiredAt: lease.acquiredAt,
     leaseExpiresAt: lease.expiresAt,
-    fencingToken: Math.max(Number(active.value?.fencingToken ?? 0), lease.fencingToken),
   }, {
     config,
     client,

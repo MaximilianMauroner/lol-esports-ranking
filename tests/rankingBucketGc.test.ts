@@ -299,6 +299,31 @@ test('receipt-bound active and previous pointers require exact schema-1 publicat
   }
 })
 
+test('current receipt-bound pointer requires the native schema-2 content-addressed envelope', async () => {
+  const mutations = [
+    { name: 'missing public manifest schema marker', mutate: (pointer: Record<string, unknown>) => { delete pointer.publicManifestSchemaVersion } },
+    { name: 'unsupported public manifest schema marker', mutate: (pointer: Record<string, unknown>) => { pointer.publicManifestSchemaVersion = 3 } },
+    { name: 'missing storage mode', mutate: (pointer: Record<string, unknown>) => { delete pointer.storageMode } },
+    { name: 'invalid storage mode', mutate: (pointer: Record<string, unknown>) => { pointer.storageMode = 'mutable' } },
+  ]
+  for (const mutation of mutations) {
+    const client = gcMemoryS3()
+    seedReceiptBoundPointers(client)
+    const stored = client.objects.get('rankings/active-generation.json')!
+    const active = JSON.parse(stored.bytes.toString('utf8')) as Record<string, unknown>
+    mutation.mutate(active)
+    stored.bytes = Buffer.from(JSON.stringify(active))
+
+    const inventory = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(inventory.valid, false, mutation.name)
+    assert.equal(inventory.deletionCandidates.length, 0, mutation.name)
+    assert.ok(
+      inventory.errors.some((error) => error.reason === 'active-generation-publication-authority-invalid'),
+      `${mutation.name}: ${JSON.stringify(inventory.errors)}`,
+    )
+  }
+})
+
 test('receipt-bound active and previous authorities reject canonical schema-1 public manifests', async () => {
   for (const target of ['active', 'previous'] as const) {
     const client = gcMemoryS3()

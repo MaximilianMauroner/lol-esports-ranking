@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 import { pathToFileURL } from 'node:url'
 import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import { canonicalJsonFor, canonicalPublicLogicalPath } from './public-artifact-storage.mjs'
+import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogicalPath } from './public-artifact-storage.mjs'
 import { parseIncrementalStateManifest } from './incremental-state-storage.mjs'
 import { parseFullAuditReceipt } from './full-audit-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt } from './raw-source-storage.mjs'
@@ -384,6 +384,10 @@ async function validatePointerPublication(value, label, key, addError, config, c
   try {
     const kind = classifyActiveGenerationPointer(value)
     if (kind === 'receipt-bound') {
+      if (requireLegacyCutover && (value.publicManifestSchemaVersion !== 2
+        || value.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE)) {
+        throw new Error('Current active publication authority requires the native schema-2 content-addressed envelope')
+      }
       const publication = await readActiveGenerationPublication({
         config,
         client,

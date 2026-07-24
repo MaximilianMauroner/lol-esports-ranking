@@ -162,6 +162,42 @@ test('conditional JSON state writes and lease fencing reject stale owners', asyn
   assert.equal(lease2.lease.fencingToken, 2)
 })
 
+test('acquiring the next lease preserves the current receipt-bound publication authority', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-next-lease-authority-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  const generationId = 'current-publication'
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 1,
+      config,
+      client,
+    })
+    const before = await readBucketJson('active-generation.json', { config, client })
+
+    const next = await acquireBucketLease('ops/refresh-lease.json', {
+      owner: 'next-worker',
+      now: '2100-01-01T00:00:00.000Z',
+      ttlMs: 60_000,
+      config,
+      client,
+    })
+    assert.equal(next.acquired, true)
+    const after = await readBucketJson('active-generation.json', { config, client })
+    assert.equal(after.value?.fencingToken, before.value?.fencingToken)
+    assert.equal(after.value?.leaseFencingToken, 2)
+
+    const raw = await readActiveRawSourceAuthority({ config, client })
+    assert.equal(raw.found, true)
+    assert.equal(raw.receipt?.generationId, generationId)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('released leases allow the next scheduled worker to run immediately', async () => {
   const client = memoryS3()
   const first = await acquireBucketLease('lease.json', { owner: 'one', now: '2026-07-11T00:00:00Z', ttlMs: 60_000, config, client })
