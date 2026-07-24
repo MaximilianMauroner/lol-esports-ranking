@@ -7,6 +7,7 @@ export const REFRESH_STAGE_NAMES = [
   'provider-fetch',
   'fingerprint-import',
   'raw-authority-read',
+  'raw-recovery-validation',
   'raw-prepare',
   'raw-materialization',
   'classification',

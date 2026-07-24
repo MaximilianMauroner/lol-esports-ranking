@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import {
   acquireBucketLease,
   assertBucketLease,
+  bucketKey,
   bucketConfigFromEnv,
   createBucketClient,
   readBucketJson,
@@ -13,6 +14,11 @@ import {
   renewBucketLease,
   writeBucketJson,
 } from './railway-bucket.mjs'
+import {
+  parseRankingSourceAuthorityEvidence,
+  parseRankingSourceAuthorityEvidenceEnvelope,
+  rankingSourceAuthorityEvidenceDigest,
+} from './ranking-source-authority.mjs'
 import { fetchScheduleProbe } from './lolesports-schedule-probe.mjs'
 import {
   acknowledgeMatches,
@@ -178,13 +184,47 @@ export async function runRefreshOnce(options = {}) {
 
     const persistRefreshTelemetry = async (record) => {
       await assertLive()
+      const sourceAuthorityEvidence = record?.sourceAuthorityEvidence
+        ? parseRankingSourceAuthorityEvidenceEnvelope(record.sourceAuthorityEvidence)
+        : undefined
+      let sourceAuthorityEvidenceAuthority
+      if (sourceAuthorityEvidence) {
+        const relativeKey = `raw/source-authority-evidence/sha256/${sourceAuthorityEvidence.evidenceDigest}.json`
+        const write = await writeRemote(relativeKey, sourceAuthorityEvidence.evidence, {
+          config,
+          client,
+          ifNoneMatch: '*',
+        })
+        if (!write.written) {
+          if (!write.conflict) throw new Error('Unable to persist immutable source authority evidence')
+          const existing = await readRemote(relativeKey, { config, client })
+          const parsedExisting = existing.found
+            ? parseRankingSourceAuthorityEvidence(existing.value)
+            : undefined
+          if (!parsedExisting
+            || rankingSourceAuthorityEvidenceDigest(parsedExisting) !== sourceAuthorityEvidence.evidenceDigest) {
+            throw new Error('Immutable source authority evidence conflicted with different content')
+          }
+        }
+        sourceAuthorityEvidenceAuthority = {
+          key: bucketKey(config, relativeKey),
+          sha256: sourceAuthorityEvidence.evidenceDigest,
+          bytes: sourceAuthorityEvidence.bytes,
+          runId: sourceAuthorityEvidence.evidence.runId,
+          mode: sourceAuthorityEvidence.evidence.mode,
+        }
+      }
       const local = await readJsonIfExists(refreshStatePath) ?? { schemaVersion: 1, status: 'failed' }
       local.lastRun = record
+      if (sourceAuthorityEvidence) local.sourceAuthorityEvidence = sourceAuthorityEvidence
+      if (sourceAuthorityEvidenceAuthority) local.sourceAuthorityEvidenceAuthority = sourceAuthorityEvidenceAuthority
       await writeLocalState(refreshStatePath, local)
       const remote = await readRemote('raw/refresh-state.json', { config, client })
       const remoteValue = {
         ...(remote.found && remote.value && typeof remote.value === 'object' ? remote.value : local),
         lastRun: record,
+        ...(sourceAuthorityEvidence ? { sourceAuthorityEvidence } : {}),
+        ...(sourceAuthorityEvidenceAuthority ? { sourceAuthorityEvidenceAuthority } : {}),
       }
       const result = await writeRemote('raw/refresh-state.json', remoteValue, {
         config,
