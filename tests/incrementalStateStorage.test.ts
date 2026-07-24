@@ -19,9 +19,11 @@ import {
   type StateManifestAuthority,
   type StateObjectReference,
 } from '../scripts/incremental-state-storage.mjs'
+import { persistIncrementalStateBuild } from '../scripts/incremental-ranking-orchestrator'
 import { readActiveRawSourceAuthority, readBucketJson, readPreviousGenerationAuthorities, uploadRankingArtifacts as uploadRankingArtifactsImplementation, writeBucketJson, type BucketClient, type BucketStorageConfig } from '../scripts/railway-bucket.mjs'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
+import type { CanonicalMatchLedger } from '../src/lib/incremental/types'
 
 const config = {
   enabled: true,
@@ -81,6 +83,54 @@ test('state preparation hashes canonical JSON and creates deterministic gzip byt
   assert.deepEqual(left.compressed, right.compressed)
   assert.equal(gunzipSync(left.compressed).toString('utf8'), left.canonicalJson)
   assert.equal(createHash('sha256').update(left.canonicalBytes).digest('hex'), left.digest)
+})
+
+test('persisted state reports stored checkpoint objects as reused publication members', async () => {
+  const client = memoryS3()
+  const storedCheckpoint = prepareStateObject({
+    artifactKind: 'incremental-state-checkpoint-bundle',
+    schemaVersion: 1,
+  })
+  await syncContentAddressedStateObject(client, config, storedCheckpoint)
+  const ledger: CanonicalMatchLedger = {
+    schemaVersion: 2,
+    compatibility: {
+      modelVersion: 'model-v1',
+      modelConfigHash: 'config-v1',
+      importerVersion: 'importer-v1',
+      identityTaxonomyHash: 'taxonomy-v1',
+    },
+    scheduleReceiptIdentity: 'schedule-receipt',
+    contextReceiptIdentity: 'context-receipt',
+    provenanceReceiptIdentity: 'provenance-receipt',
+    scheduleCausalRows: [],
+    rows: [],
+    digest: 'c'.repeat(64),
+  }
+  const persisted = await persistIncrementalStateBuild({
+    state: {
+      ledger,
+      compatibility,
+      sourceReceiptDigest: 'b'.repeat(64),
+      checkpoints: [{
+        boundary: { date: '2026-01-01', matchId: 'match-1' },
+        rawPrefix: { matchCount: 1, digest: 'd'.repeat(64) },
+        storedObjectReference: stateObjectReferenceFor(storedCheckpoint),
+      }],
+    },
+    generationId: 'reused_checkpoint_generation',
+    client,
+    config,
+  })
+  assert.deepEqual(
+    persisted.authority.publicationObjects?.filter((entry) => entry.outcome === 'reused'),
+    [{
+      key: `custom-rankings/state/objects/sha256/${storedCheckpoint.digest}`,
+      digest: storedCheckpoint.digest,
+      bytes: storedCheckpoint.compressedBytes,
+      outcome: 'reused',
+    }],
+  )
 })
 
 test('one active CAS binds public, state, and raw receipt authorities', async () => {

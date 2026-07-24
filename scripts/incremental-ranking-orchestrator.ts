@@ -25,6 +25,7 @@ import {
   syncContentAddressedStateObject,
   writeIncrementalStateManifest,
   type IncrementalStateManifest,
+  type StateManifestAuthority,
   type StateCompatibility,
   type StateObjectReference,
 } from './incremental-state-storage.mjs'
@@ -197,12 +198,25 @@ export async function persistIncrementalStateBuild({
   // Promotion validates the ledger and every checkpoint body before activation,
   // so avoid repeating that exhaustive audit while writing the immutable manifest.
   const manifest = await writeIncrementalStateManifest(client, config, prepared, { verifyObjects: false })
-  const publicationObjects = [ledgerSync, ...objectResults, manifest.result].map((entry) => ({
+  const publicationObjects: NonNullable<StateManifestAuthority['publicationObjects']> =
+    [ledgerSync, ...objectResults, manifest.result].map((entry) => ({
     key: String(entry.key),
     digest: String(entry.digest),
     bytes: Number(entry.bytes),
     outcome: entry.status === 'uploaded' ? 'uploaded' as const : 'unchanged' as const,
   }))
+  const reportedKeys = new Set(publicationObjects.map((entry) => entry.key))
+  for (const checkpoint of prepared.manifest.checkpoints) {
+    const key = statePublicationKey(config, checkpoint.object.key)
+    if (reportedKeys.has(key)) continue
+    publicationObjects.push({
+      key,
+      digest: checkpoint.object.sha256,
+      bytes: checkpoint.object.compressedBytes,
+      outcome: 'reused',
+    })
+    reportedKeys.add(key)
+  }
   return {
     authority: { ...manifest.authority, publicationObjects },
     uploadedBytes: [ledgerSync, ...objectResults, manifest.result]
@@ -212,6 +226,11 @@ export async function persistIncrementalStateBuild({
     ledgerCompressedBytes: ledgerPrepared.compressedBytes,
     checkpointCount: state.checkpoints.length,
   }
+}
+
+function statePublicationKey(config: BucketStorageConfig, relativeKey: string) {
+  const prefix = String(config.prefix ?? 'rankings').replace(/^\/+|\/+$/g, '')
+  return prefix ? `${prefix}/${relativeKey}` : relativeKey
 }
 
 export async function buildRankingIncrementally({
