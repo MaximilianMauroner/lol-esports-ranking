@@ -1688,6 +1688,27 @@ test('season checkpoint scopes publish an ongoing split after the previous bound
   assert.equal(data.snapshots[snapshotKey({ season: '2026', event: 'All', region: 'All', checkpoint: 'split-3' })]?.matchCount, 1)
 })
 
+test('season checkpoint remains ongoing while its boundary tournament is active', () => {
+  const data = createStaticRankingData({
+    matches: [
+      checkpointMatch('fst-final', '2026-03-22', 'FST 2026', 'FST', 'Gen.G', 'G2 Esports', 'Gen.G'),
+      checkpointMatch('msi-round-one', '2026-07-01', 'MSI 2026', 'MSI', 'T1', 'Gen.G', 'T1'),
+    ],
+    teams,
+    rosters: {},
+    generatedAt: '2026-07-02T00:00:00.000Z',
+    tournamentScheduleReferences: [
+      { leagueName: 'MSI', date: '2026-07-01', state: 'completed', retrievedAt: '2026-07-02T00:00:00Z', coverageStart: '2026-06-20', coverageEnd: '2026-07-12' },
+      { leagueName: 'MSI', date: '2026-07-12', state: 'unstarted', retrievedAt: '2026-07-02T00:00:00Z', coverageStart: '2026-06-20', coverageEnd: '2026-07-12' },
+    ],
+  })
+  const checkpoints = data.filterOptions.checkpoints?.['2026'] ?? []
+
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1', 'split-2'])
+  assert.equal(checkpoints[0]?.ongoing, undefined)
+  assert.equal(checkpoints[1]?.ongoing, true)
+})
+
 function checkpointMatch(
   id: string,
   date: string,

@@ -369,8 +369,11 @@ export async function buildRankingIncrementally({
         ]) }
       : restored.artifacts
     const preliminaryPlan = scopedDependencyPlan(changes, classification, restored.rootArtifact, restored.publicManifest, dependencyArtifacts)
-    const affectedLogicalPaths = new Set(preliminaryPlan.logicalPaths.map(stripDataPrefix))
+    const dynamicCheckpointKeys = dynamicCheckpointKeysForPlan(restored.rootArtifact, changes)
+    addNewCheckpointArtifactsToPlan(preliminaryPlan.logicalPaths, restored.rootArtifact, dynamicCheckpointKeys)
     const affectedSnapshotKeys = snapshotKeysForPlan(restored.rootArtifact, preliminaryPlan.logicalPaths, changes)
+    for (const key of dynamicCheckpointKeys) affectedSnapshotKeys.add(key)
+    const affectedLogicalPaths = new Set(preliminaryPlan.logicalPaths.map(stripDataPrefix))
     const affectedTournamentIds = tournamentIdsForPlan(preliminaryPlan.logicalPaths, changes)
     const previousArtifacts = restored.loadArtifacts
       ? { ...restored.artifacts, ...await restored.loadArtifacts(previousArtifactMergePaths(preliminaryPlan.logicalPaths)) }
@@ -1201,7 +1204,11 @@ function dependencyInventory(
       },
       rankingPath: logicalUrlPath(entry.url) ?? `/data/${publicScopeArtifactPath(key)}`,
       matchCatalogPath: `/data/${publicMatchHistoryShardPath(key)}`,
-      ...(checkpoint ? { checkpointStartUtcDate: checkpoint.startDate, checkpointEndUtcDate: checkpoint.endDate } : {}),
+      ...(checkpoint ? {
+        checkpointStartUtcDate: checkpoint.startDate,
+        checkpointEndUtcDate: checkpoint.endDate,
+        ...(checkpoint.ongoing ? { checkpointOngoing: true } : {}),
+      } : {}),
       matchPages: indexedPages.length > 0
         ? indexedPages.flatMap((page) => {
             const entry = optionalRecord(page)
@@ -1258,7 +1265,8 @@ function changeTouchesSnapshotScope(
     && filter.region !== match.teamBRegion) return false
   if (filter.checkpoint) {
     return Boolean(scope.checkpointStartUtcDate && scope.checkpointEndUtcDate
-      && match.date >= scope.checkpointStartUtcDate && match.date <= scope.checkpointEndUtcDate)
+      && match.date >= scope.checkpointStartUtcDate
+      && (scope.checkpointOngoing || match.date <= scope.checkpointEndUtcDate))
   }
   return filter.region === 'All'
     || filter.region === match.region
@@ -1275,10 +1283,60 @@ function checkpointBounds(rootArtifact: Record<string, unknown>, season: unknown
   for (const value of entries) {
     const entry = optionalRecord(value)
     if (entry?.id === checkpointId && typeof entry.startDate === 'string' && typeof entry.endDate === 'string') {
-      return { startDate: entry.startDate, endDate: entry.endDate }
+      return { startDate: entry.startDate, endDate: entry.endDate, ongoing: entry.ongoing === true }
     }
   }
   return undefined
+}
+
+const checkpointSequence = ['split-1', 'split-2', 'split-3'] as const
+
+function dynamicCheckpointKeysForPlan(
+  rootArtifact: Record<string, unknown>,
+  changes: ReturnType<typeof changesForClassification>,
+) {
+  const selected = new Set<string>()
+  const checkpointOptions = optionalRecord(optionalRecord(rootArtifact.filterOptions)?.checkpoints)
+  for (const change of changes) {
+    for (const match of [change.before, change.after]) {
+      if (!match) continue
+      const season = String(match.season)
+      const entries = checkpointOptions?.[season]
+      if (!Array.isArray(entries)) continue
+      const checkpoints = entries.map(optionalRecord).filter((entry): entry is Record<string, unknown> => Boolean(entry))
+      const ongoing = checkpoints.find((entry) => entry.ongoing === true
+        && typeof entry.startDate === 'string' && match.date >= entry.startDate)
+      if (ongoing && typeof ongoing.id === 'string') {
+        selected.add(snapshotKey({ season, event: 'All', region: 'All', checkpoint: ongoing.id }))
+        continue
+      }
+      const latest = checkpoints.at(-1)
+      if (!latest || typeof latest.id !== 'string' || typeof latest.endDate !== 'string' || match.date <= latest.endDate) continue
+      const latestIndex = checkpointSequence.indexOf(latest.id as typeof checkpointSequence[number])
+      const nextId = latestIndex >= 0 ? checkpointSequence[latestIndex + 1] : undefined
+      if (nextId) selected.add(snapshotKey({ season, event: 'All', region: 'All', checkpoint: nextId }))
+    }
+  }
+  return selected
+}
+
+function addNewCheckpointArtifactsToPlan(
+  logicalPaths: string[],
+  rootArtifact: Record<string, unknown>,
+  checkpointKeys: ReadonlySet<string>,
+) {
+  const snapshotIndex = requiredRecord(rootArtifact.snapshotIndex, 'ranking root snapshot index')
+  for (const key of checkpointKeys) {
+    if (snapshotIndex[key]) continue
+    logicalPaths.push(
+      `/data/${publicScopeArtifactPath(key)}`,
+      `/data/${publicTeamHistoryShardPath(key)}`,
+      `/data/${publicMatchHistoryShardPath(key)}`,
+      `/data/${publicMatchHistoryPagePath(key, 1)}`,
+    )
+  }
+  logicalPaths.splice(0, logicalPaths.length, ...new Set(logicalPaths))
+  logicalPaths.sort()
 }
 
 function matchPageNumber(path: string) {

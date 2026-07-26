@@ -33,6 +33,7 @@ const targets = {
   functionalPeakRssBytes: 750 * 1024 * 1024,
   uploadedBytes: 2 * 1024 * 1024,
   fullSnapshotWritten: false,
+  materializedScopeCount: 3,
 }
 const config = { enabled: true, bucket: 'benchmark', endpoint: 'https://example.invalid', region: 'auto', accessKeyId: 'x', secretAccessKey: 'y', prefix: 'rankings' }
 let root = process.env.RANKING_BENCHMARK_ROOT ?? ''
@@ -360,7 +361,7 @@ async function runBenchmarkParent() {
       && output.corpusValid
       && output.appendedMatches === 1
       && output.replayedMatchCount === 1
-      && output.materializedScopeCount === 2
+      && output.materializedScopeCount === targets.materializedScopeCount
       && output.fullRawRewrite === false
       && Number(output.baselineRawDeltaCount) >= 4
       && Number(output.reconciliationMatchCount) > 0
@@ -633,7 +634,7 @@ async function runBenchmarkWorker() {
     appendedReconciliationStatus: appendedReconciliation?.status,
     target: {
       computeMs: '<15000', safetyPeakRssBytes: '<734003200', functionalPeakRssBytes: '<786432000',
-      uploadedBytes: '<2097152', fullSnapshotWritten: false, parity: true, appendedMatches: 1,
+      uploadedBytes: '<2097152', fullSnapshotWritten: false, parity: true, appendedMatches: 1, materializedScopeCount: 3,
       minimumCorpus: corpusMinimums,
     },
   }
