@@ -11,11 +11,13 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import {
   assertLegacyGenerationCutoverPointer,
+  assertLegacyNativeGenerationCutoverPointer,
   classifyActiveGenerationPointer,
   createGenerationPublicationReceipt,
   deduplicatePublicationOutcomes,
   parseGenerationPublicationReceipt,
   publicationReceiptBytes,
+  readLegacyNativeGenerationPublishReceipt,
 } from './generation-publication.mjs'
 import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { assertStateManifestAuthority, parseIncrementalStateManifest, readStoredJsonStateObject } from './incremental-state-storage.mjs'
@@ -965,6 +967,9 @@ export async function readActiveContentAddressedGeneration({
         verifyClosure: verifyPublicationClosure,
       })
     : undefined
+  const legacyNativePublication = pointerKind === 'legacy-native'
+    ? await readLegacyNativeGenerationPublishReceipt(client, config, active.value)
+    : undefined
   const expectedKey = bucketKey(config, `generations/${safeObjectPath(generationId)}/manifest.json`)
   if (active.value.manifestKey !== expectedKey) throw new Error('Active public generation manifest key is not canonical')
   const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
@@ -981,6 +986,9 @@ export async function readActiveContentAddressedGeneration({
   }
   const storedManifest = JSON.parse(manifestBytes.toString('utf8'))
   if (pointerKind === 'legacy') assertLegacyGenerationCutoverPointer(active.value, storedManifest)
+  if (legacyNativePublication) {
+    assertLegacyNativeGenerationCutoverPointer(active.value, storedManifest, legacyNativePublication)
+  }
   const { manifest, cutover } = compatibleGenerationManifest(storedManifest, generationId, {
     publicManifestSchemaVersion: active.value.publicManifestSchemaVersion,
   })
@@ -1158,7 +1166,7 @@ export async function readActiveRawSourceAuthority({
   if (pointerKind === 'receipt-bound') {
     const publication = await readActiveGenerationPublication({ config, client, active: active.value })
     if (!publication.found) throw new Error('Active raw source publication receipt is unavailable')
-  } else {
+  } else if (pointerKind === 'legacy') {
     const cutover = await readActiveContentAddressedGeneration({
       config,
       client,
@@ -1169,6 +1177,15 @@ export async function readActiveRawSourceAuthority({
     if (!cutover.found || cutover.cutover !== 'schema-v1-active-manifest-to-v2') {
       throw new Error('Legacy active raw source authority is not bound to the schema-v1 cutover')
     }
+  } else {
+    const cutover = await readActiveContentAddressedGeneration({
+      config,
+      client,
+      verifyArtifacts: false,
+      verifyPublicationClosure: false,
+      activeAuthority: active,
+    })
+    if (!cutover.found) throw new Error('Legacy native active raw source authority is unavailable')
   }
   const reference = {
     key: relativeBucketKey(config, active.value.rawReceiptKey),

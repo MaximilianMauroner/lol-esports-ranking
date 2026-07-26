@@ -6,8 +6,10 @@ import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import {
   assertLegacyGenerationCutoverPointer,
+  assertLegacyNativeGenerationCutoverPointer,
   classifyActiveGenerationPointer,
   parseGenerationPublicationReceipt,
+  readLegacyNativeGenerationPublishReceipt,
 } from './generation-publication.mjs'
 
 export const INCREMENTAL_STATE_STORAGE_MODE = 'content-addressed-state-gzip-v1'
@@ -261,10 +263,16 @@ export async function readActiveIncrementalState({ config, client, verifyObjects
   if (pointerKind === 'receipt-bound') {
     publication = await readStatePublicationReceipt(client, config, active)
   }
+  const legacyNativePublication = pointerKind === 'legacy-native'
+    ? await readLegacyNativeGenerationPublishReceipt(client, config, active)
+    : undefined
   if (active.stateManifestKey === undefined && active.stateManifestDigest === undefined) {
     return { found: false, reason: 'incremental-state-authority-missing', active, etag: activeObject.ETag }
   }
   if (pointerKind === 'legacy') await assertLegacyPublicCutoverAuthority(client, config, active)
+  if (legacyNativePublication) {
+    await assertLegacyNativePublicCutoverAuthority(client, config, active, legacyNativePublication)
+  }
   assertSafeStateKey(config, active.stateManifestKey, 'active stateManifestKey')
   assertDigest(active.stateManifestDigest, 'active stateManifestDigest')
   const manifestObject = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: active.stateManifestKey }))
@@ -333,6 +341,28 @@ async function assertLegacyPublicCutoverAuthority(client, config, active) {
     throw new Error('Legacy active public manifest authority mismatch')
   }
   assertLegacyGenerationCutoverPointer(active, JSON.parse(bytes.toString('utf8')))
+}
+
+async function assertLegacyNativePublicCutoverAuthority(client, config, active, publishReceipt) {
+  const expectedKey = stateBucketKey(config, `generations/${safeStatePath(active.generationId)}/manifest.json`)
+  if (active.manifestKey !== expectedKey) {
+    throw new Error('Legacy native active public manifest key is not canonical')
+  }
+  const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
+  const bytes = await bodyBytes(object.Body)
+  const digest = createHash('sha256').update(bytes).digest('hex')
+  if (active.manifestDigest !== digest
+    || active.manifestBytes !== bytes.byteLength
+    || active.manifestEtag !== object.ETag
+    || Number(object.ContentLength) !== bytes.byteLength
+    || object.Metadata?.sha256 !== digest) {
+    throw new Error('Legacy native active public manifest authority mismatch')
+  }
+  assertLegacyNativeGenerationCutoverPointer(
+    active,
+    JSON.parse(bytes.toString('utf8')),
+    publishReceipt,
+  )
 }
 
 async function readStatePublicationReceipt(client, config, active) {

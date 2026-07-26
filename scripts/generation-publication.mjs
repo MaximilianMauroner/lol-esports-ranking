@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 
 export const GENERATION_PUBLICATION_SCHEMA_VERSION = 1
@@ -30,6 +31,11 @@ const legacyPointerFields = new Set([
   'leaseRenewedAt',
   'leaseReleasedAt',
 ])
+const legacyNativePointerFields = new Set([
+  ...legacyPointerFields,
+  'publicManifestSchemaVersion',
+  'previousGeneration',
+])
 
 export function classifyActiveGenerationPointer(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -44,8 +50,11 @@ export function classifyActiveGenerationPointer(value) {
   const present = publicationFields.filter((field) => value[field] !== undefined)
   if (value.publicationSchemaVersion === undefined) {
     if (present.length > 0) throw new Error('Legacy active generation pointer has contradictory publication receipt fields')
-    if (value.publicManifestSchemaVersion !== undefined
-      || value.previousGeneration !== undefined
+    if (value.publicManifestSchemaVersion === 2
+      && Object.keys(value).every((field) => legacyNativePointerFields.has(field))) {
+      return 'legacy-native'
+    }
+    if (value.publicManifestSchemaVersion !== undefined || value.previousGeneration !== undefined
       || Object.keys(value).some((field) => !legacyPointerFields.has(field))) {
       throw new Error('Legacy active generation pointer has unsupported native authority fields')
     }
@@ -62,6 +71,113 @@ export function classifyActiveGenerationPointer(value) {
     throw new Error('Active generation pointer publication receipt binding is incomplete')
   }
   return 'receipt-bound'
+}
+
+export function assertLegacyNativeGenerationCutoverPointer(pointer, publicManifest, publishReceipt) {
+  const parsedReceipt = parseLegacyNativeGenerationPublishReceipt(publishReceipt, {
+    generationId: pointer.generationId,
+    prefix: prefixForAbsoluteKey(pointer.manifestKey),
+  })
+  if (classifyActiveGenerationPointer(pointer) !== 'legacy-native'
+    || pointer.storageMode !== 'content-addressed-gzip-v1'
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(pointer.generationId ?? '')
+    || typeof pointer.manifestKey !== 'string' || pointer.manifestKey.length === 0
+    || !/^[a-f0-9]{64}$/.test(pointer.manifestDigest ?? '')
+    || !Number.isSafeInteger(pointer.manifestBytes) || pointer.manifestBytes <= 0
+    || typeof pointer.manifestEtag !== 'string' || pointer.manifestEtag.length === 0
+    || !publicManifest || typeof publicManifest !== 'object' || Array.isArray(publicManifest)
+    || publicManifest.artifactKind !== 'public-artifact-generation-manifest'
+    || publicManifest.schemaVersion !== 2
+    || publicManifest.generationId !== pointer.generationId
+    || publicManifest.runId !== pointer.generationId
+    || publicManifest.storageMode !== pointer.storageMode
+    || parsedReceipt.authorities.publicManifest.key !== pointer.manifestKey
+    || parsedReceipt.authorities.publicManifest.digest !== pointer.manifestDigest
+    || parsedReceipt.authorities.publicManifest.bytes !== pointer.manifestBytes
+    || parsedReceipt.authorities.rawReceipt.key !== pointer.rawReceiptKey
+    || parsedReceipt.authorities.rawReceipt.digest !== pointer.rawReceiptDigest
+    || parsedReceipt.authorities.rawReceipt.bytes !== pointer.rawReceiptCompressedBytes) {
+    throw new Error('Legacy native active generation pointer is not bound to its schema-v2 publish receipt')
+  }
+  return true
+}
+
+export async function readLegacyNativeGenerationPublishReceipt(client, config, pointer) {
+  if (classifyActiveGenerationPointer(pointer) !== 'legacy-native') {
+    throw new Error('Active generation pointer is not a legacy native publication')
+  }
+  const prefix = config.prefix ?? ''
+  const key = `${prefix ? `${prefix}/` : ''}generations/${pointer.generationId}/publish.json`
+  const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  const bytes = await bodyBytes(object.Body)
+  const digest = createHash('sha256').update(bytes).digest('hex')
+  if (Number(object.ContentLength) !== bytes.byteLength
+    || object.ContentType !== 'application/json; charset=utf-8'
+    || object.ContentEncoding !== undefined
+    || object.Metadata?.sha256 !== digest
+    || object.Metadata?.['semantic-bytes'] !== String(bytes.byteLength)) {
+    throw new Error('Legacy native generation publish receipt authority mismatch')
+  }
+  let value
+  try {
+    value = JSON.parse(bytes.toString('utf8'))
+  } catch (error) {
+    throw new Error('Legacy native generation publish receipt is corrupt', { cause: error })
+  }
+  const receipt = parseLegacyNativeGenerationPublishReceipt(value, {
+    generationId: pointer.generationId,
+    prefix,
+  })
+  if (canonicalJsonFor(receipt) !== bytes.toString('utf8')) {
+    throw new Error('Legacy native generation publish receipt is not canonical JSON')
+  }
+  return receipt
+}
+
+export function parseLegacyNativeGenerationPublishReceipt(value, { generationId, prefix = '' } = {}) {
+  assertRecord(value, 'legacy native generation publish receipt')
+  const required = [
+    'schemaVersion', 'publishedAt', 'prefix', 'generationId', 'artifactCount',
+    'uploadedCount', 'uploadedBytes', 'unchangedCount', 'unchangedBytes',
+    'artifacts', 'unchanged', 'skipped', 'storageMode', 'authorities',
+  ]
+  const optional = new Set(['storage', 'refreshTelemetry'])
+  if (required.some((key) => !Object.hasOwn(value, key))
+    || Object.keys(value).some((key) => !required.includes(key) && !optional.has(key))
+    || value.schemaVersion !== 2 || value.storageMode !== 'content-addressed-gzip-v1'
+    || value.generationId !== generationId || value.prefix !== prefix
+    || typeof value.publishedAt !== 'string' || new Date(value.publishedAt).toISOString() !== value.publishedAt
+    || !Array.isArray(value.artifacts) || !Array.isArray(value.unchanged) || !Array.isArray(value.skipped)) {
+    throw new Error('Invalid legacy native generation publish receipt schema')
+  }
+  const entries = [...value.artifacts, ...value.unchanged]
+  for (const entry of entries) assertLegacyPublishEntry(entry, prefix)
+  if (new Set(entries.map((entry) => entry.key)).size !== entries.length) {
+    throw new Error('Duplicate legacy native generation publish reference')
+  }
+  const expected = {
+    artifactCount: entries.length,
+    uploadedCount: value.artifacts.length,
+    uploadedBytes: sumBytes(value.artifacts),
+    unchangedCount: value.unchanged.length,
+    unchangedBytes: sumBytes(value.unchanged),
+  }
+  if (Object.entries(expected).some(([key, count]) => value[key] !== count)) {
+    throw new Error('Legacy native generation publish receipt counters are inconsistent')
+  }
+  assertRecord(value.authorities, 'legacy native generation publish authorities')
+  if (Object.keys(value.authorities).sort().join(',') !== 'publicManifest,rawReceipt') {
+    throw new Error('Legacy native generation publish authorities are incomplete')
+  }
+  for (const authority of Object.values(value.authorities)) {
+    assertLegacyPublishEntry(authority, prefix)
+    if (authority.contentType !== 'application/json; charset=utf-8'
+      || entries.filter((entry) => entry.key === authority.key && entry.digest === authority.digest
+        && entry.bytes === authority.bytes && entry.contentType === authority.contentType).length !== 1) {
+      throw new Error('Legacy native generation publish authority is not bound to one receipt entry')
+    }
+  }
+  return value
 }
 
 export function assertLegacyGenerationCutoverPointer(pointer, publicManifest) {
@@ -250,6 +366,37 @@ function parseObjectIdentity(value, label, prefix) {
 
 function assertRecord(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Invalid ${label}`)
+}
+
+function assertLegacyPublishEntry(value, prefix) {
+  assertRecord(value, 'legacy native generation publish entry')
+  if (Object.keys(value).some((key) => !['key', 'bytes', 'contentType', 'digest'].includes(key))
+    || typeof value.key !== 'string' || value.key.length === 0
+    || (prefix && !value.key.startsWith(`${prefix}/`))
+    || !Number.isSafeInteger(value.bytes) || value.bytes <= 0
+    || typeof value.contentType !== 'string' || value.contentType.length === 0
+    || !/^[a-f0-9]{64}$/.test(value.digest ?? '')) {
+    throw new Error('Invalid legacy native generation publish entry')
+  }
+}
+
+function prefixForAbsoluteKey(key) {
+  if (typeof key !== 'string') return ''
+  const marker = '/generations/'
+  const index = key.indexOf(marker)
+  return index < 0 ? '' : key.slice(0, index)
+}
+
+function sumBytes(entries) {
+  return entries.reduce((total, entry) => total + (Number(entry?.bytes) || 0), 0)
+}
+
+async function bodyBytes(body) {
+  if (typeof body?.transformToByteArray === 'function') return Buffer.from(await body.transformToByteArray())
+  if (typeof body === 'string' || Buffer.isBuffer(body) || body instanceof Uint8Array) return Buffer.from(body)
+  const chunks = []
+  for await (const chunk of body ?? []) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
 }
 
 function assertExactKeys(value, expected, label) {

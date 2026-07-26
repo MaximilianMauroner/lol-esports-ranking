@@ -17,8 +17,10 @@ import {
 } from './railway-bucket.mjs'
 import {
   assertLegacyGenerationCutoverPointer,
+  assertLegacyNativeGenerationCutoverPointer,
   classifyActiveGenerationPointer,
   parseGenerationPublicationReceipt,
+  readLegacyNativeGenerationPublishReceipt,
 } from './generation-publication.mjs'
 
 const DAY_MS = 86_400_000
@@ -407,7 +409,13 @@ async function validatePointerPublication(value, label, key, addError, config, c
         || value.manifestEtag !== stored.etag) {
         throw new Error('Legacy active public generation manifest authority mismatch')
       }
-      assertLegacyGenerationCutoverPointer(value, JSON.parse(stored.bytes.toString('utf8')))
+      const manifest = JSON.parse(stored.bytes.toString('utf8'))
+      if (kind === 'legacy-native') {
+        const receipt = await readLegacyNativeGenerationPublishReceipt(client, config, value)
+        assertLegacyNativeGenerationCutoverPointer(value, manifest, receipt)
+      } else {
+        assertLegacyGenerationCutoverPointer(value, manifest)
+      }
     }
     return kind
   } catch (error) {
