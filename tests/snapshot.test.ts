@@ -1654,8 +1654,59 @@ test('season checkpoint boundaries ignore domestic Road to MSI and Esports World
   })
   const checkpoints = data.filterOptions.checkpoints?.['2026'] ?? []
 
-  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1'])
-  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.boundaryEvent), ['FST 2026'])
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1', 'split-2'])
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.boundaryEvent), ['FST 2026', 'Latest rated match'])
+  assert.equal(checkpoints[1]?.ongoing, true)
+})
+
+test('season checkpoint scopes publish an ongoing split after the previous boundary', () => {
+  const data = createStaticRankingData({
+    matches: [
+      checkpointMatch('fst-final', '2026-03-22', 'FST 2026', 'FST', 'Gen.G', 'G2 Esports', 'Gen.G'),
+      checkpointMatch('msi-final', '2026-07-12', 'MSI 2026', 'MSI', 'T1', 'Gen.G', 'T1'),
+      checkpointMatch('split-3-opener', '2026-07-18', 'LCP/2026 Season/Split 3', 'LCP', 'Gen.G', 'T1', 'Gen.G'),
+    ],
+    teams,
+    rosters: {},
+    generatedAt: '2026-07-19T00:00:00.000Z',
+  })
+  const checkpoints = data.filterOptions.checkpoints?.['2026'] ?? []
+  const split3 = checkpoints[2]
+
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1', 'split-2', 'split-3'])
+  assert.deepEqual(split3, {
+    id: 'split-3',
+    season: '2026',
+    label: 'Split 3',
+    startDate: '2026-07-13',
+    endDate: '2026-07-18',
+    boundaryEvent: 'Latest rated match',
+    previousEndDate: '2026-07-12',
+    ongoing: true,
+    description: '2026 Split 3 through the latest rated match',
+  })
+  assert.equal(data.snapshots[snapshotKey({ season: '2026', event: 'All', region: 'All', checkpoint: 'split-3' })]?.matchCount, 1)
+})
+
+test('season checkpoint remains ongoing while its boundary tournament is active', () => {
+  const data = createStaticRankingData({
+    matches: [
+      checkpointMatch('fst-final', '2026-03-22', 'FST 2026', 'FST', 'Gen.G', 'G2 Esports', 'Gen.G'),
+      checkpointMatch('msi-round-one', '2026-07-01', 'MSI 2026', 'MSI', 'T1', 'Gen.G', 'T1'),
+    ],
+    teams,
+    rosters: {},
+    generatedAt: '2026-07-02T00:00:00.000Z',
+    tournamentScheduleReferences: [
+      { leagueName: 'MSI', date: '2026-07-01', state: 'completed', retrievedAt: '2026-07-02T00:00:00Z', coverageStart: '2026-06-20', coverageEnd: '2026-07-12' },
+      { leagueName: 'MSI', date: '2026-07-12', state: 'unstarted', retrievedAt: '2026-07-02T00:00:00Z', coverageStart: '2026-06-20', coverageEnd: '2026-07-12' },
+    ],
+  })
+  const checkpoints = data.filterOptions.checkpoints?.['2026'] ?? []
+
+  assert.deepEqual(checkpoints.map((checkpoint) => checkpoint.id), ['split-1', 'split-2'])
+  assert.equal(checkpoints[0]?.ongoing, undefined)
+  assert.equal(checkpoints[1]?.ongoing, true)
 })
 
 function checkpointMatch(

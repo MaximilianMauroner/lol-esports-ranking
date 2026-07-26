@@ -10,6 +10,7 @@ export type ArtifactScopeDependency = {
   matchCatalogPath: string
   checkpointStartUtcDate?: string
   checkpointEndUtcDate?: string
+  checkpointOngoing?: boolean
   matchPages: readonly {
     path: string
     seriesIds: readonly string[]
@@ -165,7 +166,8 @@ function matchTouchesScope(match: MatchRecord, scope: ArtifactScopeDependency, k
     && filter.region !== match.teamBRegion) return false
   if (filter.checkpoint) {
     if (!scope.checkpointStartUtcDate || !scope.checkpointEndUtcDate) return false
-    if (match.date < scope.checkpointStartUtcDate || match.date > scope.checkpointEndUtcDate) return false
+    if (match.date < scope.checkpointStartUtcDate) return false
+    if (!scope.checkpointOngoing && match.date > scope.checkpointEndUtcDate) return false
   }
   return true
 }

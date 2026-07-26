@@ -2066,6 +2066,7 @@ function assertCheckpointOption(value: unknown, label: string): asserts value is
   assertString(value.endDate, `${label} endDate`)
   assertString(value.boundaryEvent, `${label} boundaryEvent`)
   assertOptionalString(value.previousEndDate, `${label} previousEndDate`)
+  if (value.ongoing !== undefined) assertBoolean(value.ongoing, `${label} ongoing`)
   assertString(value.description, `${label} description`)
 }
 

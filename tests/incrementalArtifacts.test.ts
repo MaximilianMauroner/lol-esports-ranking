@@ -113,6 +113,10 @@ test('early corrections rewrite every subsequent inventoried page while post-che
       key: 'closed', filter: { season: '2026', event: 'All', region: 'LCK', checkpoint: 'spring' } as const,
       checkpointStartUtcDate: '2026-01-01', checkpointEndUtcDate: '2026-01-31',
       rankingPath: 'scopes/closed.json', matchCatalogPath: 'matches/closed.json', matchPages: [],
+    }, {
+      key: 'ongoing', filter: { season: '2026', event: 'All', region: 'LCK', checkpoint: 'summer' } as const,
+      checkpointStartUtcDate: '2026-02-01', checkpointEndUtcDate: '2026-02-15', checkpointOngoing: true,
+      rankingPath: 'scopes/ongoing.json', matchCatalogPath: 'matches/ongoing.json', matchPages: [],
     }],
     teamHistoryPaths: {}, tournamentMovementPaths: {},
   }
@@ -122,6 +126,7 @@ test('early corrections rewrite every subsequent inventoried page while post-che
   const appended = match({ id: 'late', sourceMatchId: 'series-late', date: '2026-02-01' })
   const append = affectedPublicArtifacts({ changes: [{ after: appended, kind: 'latest-append' }], inventory })
   assert.equal(append.logicalPaths.includes('scopes/closed.json'), false)
+  assert.equal(append.logicalPaths.includes('scopes/ongoing.json'), true)
 })
 
 function match(overrides: Partial<MatchRecord>): MatchRecord {
