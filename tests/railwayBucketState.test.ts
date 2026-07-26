@@ -821,11 +821,96 @@ test('stripping publication bindings from a native pointer fails public, state, 
       activeObject.etag = removePublicMarker ? '"fully-stripped-native"' : '"stripped-native"'
       const expected = removePublicMarker
         ? /explicit schema-v1 cutover authority/
-        : /unsupported native authority fields/
+        : /Invalid legacy native generation publish receipt schema/
       await assert.rejects(getBucketObject('ranking-summary.json', { config, client }), expected)
       await assert.rejects(readActiveIncrementalState({ config, client }), expected)
       await assert.rejects(readActiveRawSourceAuthority({ config, client }), expected)
     }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('the pre-readiness schema-v2 pointer restores through its legacy publish receipt', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-legacy-native-pointer-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  const generationId = 'legacy-native-pointer'
+  try {
+    await writeContentAddressedFixture(publicDir, generationId)
+    const publicManifest = JSON.parse(await readFile(join(publicDir, 'ranking-summary.json'), 'utf8'))
+    const raw = testRawGeneration(generationId)
+    const state = await testStateAuthority(client, generationId, raw.sourceReceiptDigest, {
+      modelVersion: publicManifest.model.version,
+      modelConfigHash: publicManifest.model.configHash,
+    })
+    await uploadRankingArtifacts({
+      publicDataDir: publicDir,
+      generationId,
+      fencingToken: 1,
+      stateManifestAuthority: state,
+      rawSourceGeneration: raw,
+      config,
+      client,
+    })
+
+    const activeObject = client.objects.get('rankings/active-generation.json')!
+    const pointer = JSON.parse(activeObject.body)
+    for (const field of [
+      'publicationSchemaVersion',
+      'publicationReceiptKey',
+      'publicationReceiptDigest',
+      'publicationReceiptBytes',
+      'publicationReceiptEtag',
+    ]) delete pointer[field]
+    const publicAuthority = {
+      key: pointer.manifestKey,
+      digest: pointer.manifestDigest,
+      bytes: pointer.manifestBytes,
+      contentType: 'application/json; charset=utf-8',
+    }
+    const rawAuthority = {
+      key: pointer.rawReceiptKey,
+      digest: pointer.rawReceiptDigest,
+      bytes: pointer.rawReceiptCompressedBytes,
+      contentType: 'application/json; charset=utf-8',
+    }
+    const artifacts = [publicAuthority, rawAuthority]
+    const legacyReceipt = {
+      schemaVersion: 2,
+      publishedAt: pointer.promotedAt,
+      prefix: 'rankings',
+      generationId,
+      storageMode: 'content-addressed-gzip-v1',
+      authorities: { publicManifest: publicAuthority, rawReceipt: rawAuthority },
+      artifactCount: artifacts.length,
+      uploadedCount: artifacts.length,
+      uploadedBytes: artifacts.reduce((sum, entry) => sum + entry.bytes, 0),
+      unchangedCount: 0,
+      unchangedBytes: 0,
+      artifacts,
+      unchanged: [],
+      skipped: [],
+    }
+    const receiptBytes = Buffer.from(canonicalJsonFor(legacyReceipt))
+    const receiptDigest = createHash('sha256').update(receiptBytes).digest('hex')
+    client.objects.set(`rankings/generations/${generationId}/publish.json`, {
+      body: receiptBytes.toString('utf8'),
+      bytes: receiptBytes,
+      etag: '"legacy-publish"',
+      contentType: 'application/json; charset=utf-8',
+      metadata: { sha256: receiptDigest, 'semantic-bytes': String(receiptBytes.byteLength) },
+    })
+    activeObject.body = JSON.stringify(pointer)
+    activeObject.bytes = Buffer.from(activeObject.body)
+    activeObject.etag = '"legacy-native-pointer"'
+
+    const restoredPublic = await readActiveContentAddressedGeneration({ config, client, verifyArtifacts: false })
+    const restoredState = await readActiveIncrementalState({ config, client, checkpointLimit: 1 })
+    const restoredRaw = await readActiveRawSourceAuthority({ config, client })
+    assert.equal(restoredPublic.found, true)
+    assert.equal(restoredState.found, true)
+    assert.equal(restoredRaw.found, true)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

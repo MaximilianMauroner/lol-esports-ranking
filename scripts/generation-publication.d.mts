@@ -30,8 +30,43 @@ export type GenerationPublicationReceipt = {
 }
 export const GENERATION_PUBLICATION_SCHEMA_VERSION: 1
 export const GENERATION_PUBLICATION_STATUS: 'ready'
-export function classifyActiveGenerationPointer(value: unknown): 'legacy' | 'receipt-bound'
+export function classifyActiveGenerationPointer(value: unknown): 'legacy' | 'legacy-native' | 'receipt-bound'
 export function assertLegacyGenerationCutoverPointer(pointer: Record<string, unknown>, publicManifest: unknown): true
+export function assertLegacyNativeGenerationCutoverPointer(
+  pointer: Record<string, unknown>,
+  publicManifest: unknown,
+  publishReceipt: LegacyNativeGenerationPublishReceipt,
+): true
+export type LegacyNativeGenerationPublishReceipt = {
+  schemaVersion: 2
+  publishedAt: string
+  prefix: string
+  generationId: string
+  artifactCount: number
+  uploadedCount: number
+  uploadedBytes: number
+  unchangedCount: number
+  unchangedBytes: number
+  artifacts: Array<{ key: string; bytes: number; contentType: string; digest: string }>
+  unchanged: Array<{ key: string; bytes: number; contentType: string; digest: string }>
+  skipped: Array<{ key: string; reason: string }>
+  storageMode: 'content-addressed-gzip-v1'
+  storage?: unknown
+  authorities: {
+    publicManifest: { key: string; bytes: number; contentType: string; digest: string }
+    rawReceipt: { key: string; bytes: number; contentType: string; digest: string }
+  }
+  refreshTelemetry?: unknown
+}
+export function readLegacyNativeGenerationPublishReceipt(
+  client: { send(command: unknown): Promise<unknown> },
+  config: { bucket: string; prefix?: string },
+  pointer: Record<string, unknown>,
+): Promise<LegacyNativeGenerationPublishReceipt>
+export function parseLegacyNativeGenerationPublishReceipt(
+  value: unknown,
+  options: { generationId: string; prefix?: string },
+): LegacyNativeGenerationPublishReceipt
 export function createGenerationPublicationReceipt(options: {
   generationId: string
   preparedAt: string
