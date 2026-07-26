@@ -210,6 +210,7 @@ test('checkpoint filters round-trip through public keys and manifest options', (
     endDate: '2026-06-28',
     boundaryEvent: 'MSI 2026',
     previousEndDate: '2026-03-22',
+    ongoing: true,
     description: '2026 Split 2 through MSI 2026',
   }
   const filter = { season: '2026', event: 'All', region: 'All', checkpoint: checkpoint.id } satisfies SnapshotFilter
@@ -241,6 +242,7 @@ test('checkpoint filters round-trip through public keys and manifest options', (
   assert.deepEqual(filterFromSnapshotKey(key), filter)
   assert.equal(snapshotShardUrlPathForKey(key), '/data/scopes/season-2026-split-2.json')
   assert.equal(parsed.filterOptions.checkpoints?.['2026']?.[0]?.boundaryEvent, 'MSI 2026')
+  assert.equal(parsed.filterOptions.checkpoints?.['2026']?.[0]?.ongoing, true)
 })
 
 test('team history index parser requires schemaVersion, matching scopes, and canonical URLs', () => {

@@ -159,6 +159,7 @@ export type SnapshotCheckpointOption = {
   endDate: string
   boundaryEvent: string
   previousEndDate?: string
+  ongoing?: boolean
   description: string
 }
 
@@ -2795,11 +2796,16 @@ type CheckpointBoundaryEvent = {
 
 function buildSeasonCheckpointOptions(matches: MatchRecord[]) {
   const checkpointsBySeason = new Map<string, Map<CheckpointBoundaryKind, CheckpointBoundaryEvent>>()
+  const latestMatchBySeason = new Map<string, MatchRecord>()
 
   for (const match of matches) {
+    const season = matchSeasonKey(match)
+    if (matchBelongsToSeasonScope(match, season)) {
+      const latestMatch = latestMatchBySeason.get(season)
+      if (!latestMatch || match.date > latestMatch.date) latestMatchBySeason.set(season, match)
+    }
     const definition = checkpointBoundaryDefinitionForMatch(match)
     if (!definition) continue
-    const season = matchSeasonKey(match)
     if (!matchBelongsToSeasonScope(match, season)) continue
     const byBoundary = checkpointsBySeason.get(season) ?? new Map<CheckpointBoundaryKind, CheckpointBoundaryEvent>()
     checkpointsBySeason.set(season, byBoundary)
@@ -2816,6 +2822,8 @@ function buildSeasonCheckpointOptions(matches: MatchRecord[]) {
       endDate: match.date > current.endDate ? match.date : current.endDate,
     })
   }
+
+  const latestSeason = Array.from(latestMatchBySeason.keys()).sort().at(-1)
 
   return Object.fromEntries(
     Array.from(checkpointsBySeason.entries())
@@ -2840,6 +2848,24 @@ function buildSeasonCheckpointOptions(matches: MatchRecord[]) {
             return checkpoint
           })
           .filter((checkpoint): checkpoint is SnapshotCheckpointOption => Boolean(checkpoint))
+        const latestMatch = latestMatchBySeason.get(season)
+        const latestCheckpoint = checkpoints.at(-1)
+        const nextDefinition = latestCheckpoint
+          ? checkpointBoundaryDefinitions[checkpointBoundaryDefinitions.findIndex(({ id }) => id === latestCheckpoint.id) + 1]
+          : undefined
+        if (season === latestSeason && latestMatch && latestCheckpoint && nextDefinition && latestMatch.date > latestCheckpoint.endDate) {
+          checkpoints.push({
+            id: nextDefinition.id,
+            season,
+            label: nextDefinition.label,
+            startDate: nextCalendarDate(latestCheckpoint.endDate),
+            endDate: latestMatch.date,
+            boundaryEvent: 'Latest rated match',
+            previousEndDate: latestCheckpoint.endDate,
+            ongoing: true,
+            description: `${season} ${nextDefinition.label} through the latest rated match`,
+          })
+        }
         return checkpoints.length > 0 ? [season, checkpoints] as const : undefined
       })
       .filter((entry): entry is readonly [string, SnapshotCheckpointOption[]] => Boolean(entry)),

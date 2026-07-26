@@ -227,7 +227,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   const regionColumns = regionCompareColumns(activeRegionPicks)
   const movementBaseline = movementBaselineFor(activeCheckpoint, checkpointTabs)
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
-  const ongoingCheckpointId = pendingCheckpoint ? checkpointTabs.at(-1)?.id : undefined
+  const ongoingCheckpointId = checkpointTabs.find((checkpoint) => checkpoint.ongoing)?.id
   const teamCompareAfter = drawerOpen && mode === 'rankings' ? (
     <Suspense fallback={<LoadingState label="Loading team comparison" description="Preparing the selected team analysis." />}>
       <TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />
