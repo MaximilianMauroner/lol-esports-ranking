@@ -145,26 +145,22 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
       return
     }
 
-    if (url.pathname === '/api.php') {
+    if (url.pathname === '/wiki/Special:CargoExport') {
       response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      response.end(`${JSON.stringify({
-        cargoquery: [{
-          title: {
-            OverviewPage: 'LCK 2026',
-            Team1: 'Blue',
-            Team2: 'Red',
-            WinTeam: 'Blue',
-            LossTeam: 'Red',
-            'DateTime UTC': '2026-07-08 12:00:00',
-            Patch: '16.1',
-            GameId: 'leaguepedia-game-1',
-            Team1Kills: '10',
-            Team2Kills: '5',
-            Team1Gold: '50000',
-            Team2Gold: '45000',
-          },
-        }],
-      })}\n`)
+      response.end(`${JSON.stringify([{
+        OverviewPage: 'LCK 2026',
+        Team1: 'Blue',
+        Team2: 'Red',
+        WinTeam: 'Blue',
+        LossTeam: 'Red',
+        'DateTime UTC': '2026-07-08 12:00:00',
+        Patch: '16.1',
+        GameId: 'leaguepedia-game-1',
+        Team1Kills: '10',
+        Team2Kills: '5',
+        Team1Gold: '50000',
+        Team2Gold: '45000',
+      }])}\n`)
       return
     }
 
@@ -193,7 +189,7 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
       '--oracle-drive',
       'false',
       '--leaguepedia-base-url',
-      `http://127.0.0.1:${port}/api.php`,
+      `http://127.0.0.1:${port}/wiki/Special:CargoExport`,
       '--lolesports',
       'false',
       '--riot-gpr',

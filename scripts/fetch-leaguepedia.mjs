@@ -8,7 +8,7 @@ const end = args.end ?? new Date().toISOString().slice(0, 10)
 const output = resolve(args.output ?? 'data/leaguepedia-matches.json')
 const pageSize = Number(args.limit ?? 500)
 const userAgent = args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)'
-const cargoBaseUrl = args.baseUrl ?? args['base-url'] ?? 'https://lol.fandom.com/api.php'
+const cargoExportUrl = args.baseUrl ?? args['base-url'] ?? 'https://lol.fandom.com/wiki/Special:CargoExport'
 const fetchTelemetry = createProviderFetchTelemetry()
 
 const fields = [
@@ -30,7 +30,7 @@ const matches = []
 let offset = 0
 
 while (true) {
-  const result = await cargoQuery({
+  const rows = await cargoExportQuery({
     tables: 'ScoreboardGames',
     fields: fields.join(','),
     where: `DateTime_UTC >= "${start} 00:00:00" AND DateTime_UTC <= "${end} 23:59:59" AND Team1 IS NOT NULL AND Team2 IS NOT NULL AND WinTeam IS NOT NULL`,
@@ -39,12 +39,7 @@ while (true) {
     offset: String(offset),
   })
 
-  if (result.error) {
-    throw new Error(`${result.error.code}: ${result.error.info}`)
-  }
-
-  const rows = result.cargoquery ?? []
-  matches.push(...rows.map((row) => normalizeGame(row.title)))
+  matches.push(...rows.map(normalizeGame))
   if (rows.length < pageSize) break
   offset += rows.length
   await sleep(1200)
@@ -58,9 +53,8 @@ await writeFile(
 
 console.log(`Wrote ${matches.length} matches to ${output}`)
 
-async function cargoQuery(params) {
-  const url = new URL(cargoBaseUrl)
-  url.searchParams.set('action', 'cargoquery')
+async function cargoExportQuery(params) {
+  const url = new URL(cargoExportUrl)
   url.searchParams.set('format', 'json')
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value)
@@ -81,9 +75,16 @@ async function cargoQuery(params) {
     },
   })
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from Leaguepedia Cargo`)
+    throw new Error(`HTTP ${response.status} from Leaguepedia CargoExport`)
   }
-  return response.json()
+  const result = await response.json()
+  if (result?.error) {
+    throw new Error(`${result.error.code}: ${result.error.info}`)
+  }
+  if (!Array.isArray(result)) {
+    throw new Error('Leaguepedia CargoExport returned an unexpected response')
+  }
+  return result
 }
 
 async function writeFailureTelemetry(telemetry) {
