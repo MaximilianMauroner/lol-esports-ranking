@@ -146,21 +146,11 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
     }
 
     if (url.pathname === '/wiki/Special:CargoExport') {
-      response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      response.end(`${JSON.stringify([{
-        OverviewPage: 'LCK 2026',
-        Team1: 'Blue',
-        Team2: 'Red',
-        WinTeam: 'Blue',
-        LossTeam: 'Red',
-        'DateTime UTC': '2026-07-08 12:00:00',
-        Patch: '16.1',
-        GameId: 'leaguepedia-game-1',
-        Team1Kills: '10',
-        Team2Kills: '5',
-        Team1Gold: '50000',
-        Team2Gold: '45000',
-      }])}\n`)
+      response.writeHead(200, { 'content-type': 'text/csv; charset=utf-8' })
+      response.end([
+        'OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold',
+        'LCK 2026,Blue,Red,Blue,Red,2026-07-08 12:00:00,16.10,leaguepedia-game-1,10,5,50000,45000',
+      ].join('\n'))
       return
     }
 
@@ -205,6 +195,8 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
     assert.equal(manifest.sources.leaguepedia.failedThisRun, 0)
     assert.deepEqual(manifest.files.oracleCsv, [])
     assert.equal(manifest.files.leaguepediaJson.length, 1)
+    const leaguepedia = JSON.parse(await readFile(manifest.files.leaguepediaJson[0], 'utf8'))
+    assert.equal(leaguepedia.matches[0].patch, '16.10')
     assert.match(manifest.warnings.join('\n'), /download returned HTML \(Google Drive - Quota exceeded\)/)
     assert.doesNotMatch(manifest.warnings.join('\n'), /Leaguepedia backup download skipped/)
   } finally {

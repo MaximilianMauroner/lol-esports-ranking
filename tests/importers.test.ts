@@ -48,6 +48,18 @@ test('Leaguepedia international rows use known team home leagues when explicit f
   assert.notEqual(lpl.delta, 0)
 })
 
+test('Leaguepedia import accepts numeric and missing CargoExport patch values', () => {
+  const result = importLeaguepediaSnapshot({
+    matches: [
+      { id: 'numeric-patch', date: '2026-08-01', event: 'LCK 2026', patch: 26.14, teamA: 'T1', teamB: 'Gen.G', winner: 'T1' },
+      { id: 'missing-patch', date: '2026-08-01', event: 'LCK 2026', patch: null, teamA: 'T1', teamB: 'Gen.G', winner: 'Gen.G' },
+    ],
+  })
+
+  assert.equal(result.matches[0].patch, '26.14')
+  assert.equal(result.matches[1].patch, '')
+})
+
 test('Leaguepedia competition rows resolve exact team aliases before known identity fallback', () => {
   const result = importLeaguepediaSnapshot({
     source: 'fixture',

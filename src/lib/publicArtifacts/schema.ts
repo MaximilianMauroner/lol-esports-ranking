@@ -1457,7 +1457,8 @@ function assertPublicMatchHistorySeriesRef(value: unknown, label: string) {
 
 function assertPublicMatchHistoryEntry(value: unknown, label: string) {
   assertObject(value, label)
-  for (const key of ['id', 'date', 'event', 'phase', 'league', 'patch', 'seriesId', 'winnerId'] as const) assertString(value[key], `${label} ${key}`)
+  for (const key of ['id', 'date', 'event', 'phase', 'league', 'seriesId', 'winnerId'] as const) assertString(value[key], `${label} ${key}`)
+  assertStringValue(value.patch, `${label} patch`)
   assertOptionalString(value.datetimeUtc, `${label} datetimeUtc`)
   assertString(value.region, `${label} region`)
   assertNonNegativeInteger(value.bestOf, `${label} bestOf`)
@@ -2265,6 +2266,12 @@ function assertArray(value: unknown, label: string): asserts value is unknown[] 
 function assertString(value: unknown, label: string): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`Invalid public artifact: ${label} must be a non-empty string`)
+  }
+}
+
+function assertStringValue(value: unknown, label: string): asserts value is string {
+  if (typeof value !== 'string') {
+    throw new Error(`Invalid public artifact: ${label} must be a string`)
   }
 }
 

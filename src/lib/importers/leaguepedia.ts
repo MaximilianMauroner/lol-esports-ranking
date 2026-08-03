@@ -129,7 +129,7 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
     teamBHomeLeague,
     teamARegion,
     teamBRegion,
-    patch: text(game.patch),
+    patch: patchText(game.patch),
     bestOf: format.bestOf,
     bestOfBasis: format.basis,
     tier: inferEventTier({ league, event, phase }),
@@ -169,6 +169,11 @@ function hasScoreboardStats(game: LeaguepediaGame) {
 
 function text(value: unknown) {
   return typeof value === 'string' ? cleanDisplayName(value) : ''
+}
+
+function patchText(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return text(value)
 }
 
 function numberOrZero(value: unknown) {

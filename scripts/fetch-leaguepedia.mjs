@@ -55,7 +55,7 @@ console.log(`Wrote ${matches.length} matches to ${output}`)
 
 async function cargoExportQuery(params) {
   const url = new URL(cargoExportUrl)
-  url.searchParams.set('format', 'json')
+  url.searchParams.set('format', 'csv')
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value)
   }
@@ -67,7 +67,7 @@ async function cargoExportQuery(params) {
     onFailure: writeFailureTelemetry,
     retryResponse: async (candidate) => {
       try {
-        const body = await candidate.json()
+        const body = await candidate.text()
         return isRateLimited(body) ? 'leaguepedia-body-ratelimited' : undefined
       } catch {
         return undefined
@@ -77,14 +77,7 @@ async function cargoExportQuery(params) {
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from Leaguepedia CargoExport`)
   }
-  const result = await response.json()
-  if (result?.error) {
-    throw new Error(`${result.error.code}: ${result.error.info}`)
-  }
-  if (!Array.isArray(result)) {
-    throw new Error('Leaguepedia CargoExport returned an unexpected response')
-  }
-  return result
+  return parseCsv(await response.text())
 }
 
 async function writeFailureTelemetry(telemetry) {
@@ -100,8 +93,8 @@ async function writeFailureTelemetry(telemetry) {
   }, null, 2)}\n`)
 }
 
-function isRateLimited(result) {
-  return result?.error?.code === 'ratelimited'
+function isRateLimited(body) {
+  return /["']?code["']?\s*:\s*["']ratelimited["']/i.test(body)
 }
 
 function normalizeGame(row) {
@@ -126,6 +119,52 @@ function numberOrNull(value) {
   if (value === undefined || value === null || value === '') return null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function parseCsv(input) {
+  const rows = []
+  let row = []
+  let field = ''
+  let inQuotes = false
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index]
+    const next = input[index + 1]
+
+    if (char === '"' && inQuotes && next === '"') {
+      field += '"'
+      index += 1
+      continue
+    }
+    if (char === '"') {
+      inQuotes = !inQuotes
+      continue
+    }
+    if (char === ',' && !inQuotes) {
+      row.push(field)
+      field = ''
+      continue
+    }
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') index += 1
+      row.push(field)
+      field = ''
+      if (row.some(Boolean)) rows.push(row)
+      row = []
+      continue
+    }
+    field += char
+  }
+
+  if (inQuotes) throw new Error('Leaguepedia CargoExport returned malformed CSV')
+  row.push(field)
+  if (row.some(Boolean)) rows.push(row)
+
+  const [headers, ...body] = rows
+  if (!headers || !fields.every((fieldName) => headers.includes(fieldName.replaceAll('_', ' ')))) {
+    throw new Error('Leaguepedia CargoExport returned an unexpected CSV schema')
+  }
+  return body.map((cells) => Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ''])))
 }
 
 function sleep(ms) {

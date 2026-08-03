@@ -48,6 +48,16 @@ test('match history parser rejects a winner outside the two teams', () => {
   }), /winnerId must identify a team/)
 })
 
+test('match history preserves an unknown patch as an empty string', () => {
+  const match = game(1, 'Gen.G')
+  match.patch = ''
+  const data = createStaticRankingData({ matches: [match], teams, rosters: {} })
+  const artifacts = createMatchHistoryArtifacts(data)
+  const shard = parsePublicMatchHistoryPage(artifacts.pages[data.defaultSnapshotKey][1])
+
+  assert.equal(shard.matches[0].patch, '')
+})
+
 test('match history impact stays tied to the series when published ratings also move for other reasons', () => {
   const opening = game(1, 'Gen.G')
   opening.id = 'opening-game'
