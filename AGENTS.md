@@ -1,10 +1,22 @@
-# Repository Instructions
+# Agent instructions
 
-- Pre 1.0 breaking changes are encouraged when they improve the quality of the codebase or the accuracy of the data.
-- Keep ranking claims tied to the data source and model version that produced them.
-- Do not present seeded or sample data as official LoL Esports data.
-- Use shadcn/ui components from `src/components/ui` wherever they make sense for the UI surface, including dashboard controls and Recharts-backed dashboard charts. Build custom components only when shadcn does not fit the interaction or data-density need.
-- The goal is for the score to be as accurate as possible, so if you have a better way to do something, please suggest it.
-- Another goal is to have a score for leagues that is accurate and fair
-- Not all games should be scored equally - some leagues are more competitive than others, and the scoring should reflect that. And tournaments should be scored more than regular season games.
-- Before starting the dev server check if one is already running. If so, use that one instead of starting a new one.
+## Ranking model
+
+- Tie every ranking claim to the data source, model configuration, schema, and
+  coverage window that produced it.
+- Never present seeded or sample data as official LoL Esports data.
+- Score match impact by competition level and match type. Tournament matches
+  should weigh more than regular-season matches. Document and test any change
+  to this rule.
+- Prefer a fair, explainable score over a complex model with unclear effects.
+  Propose a better method when the evidence supports it.
+
+## Development
+
+- The model is pre-1.0. Breaking changes are allowed when they improve data
+  accuracy or remove a weak design.
+- Use components from `src/components/ui` when they fit the interaction and
+  data density. Build a custom component only when the existing set does not
+  fit.
+- Check for a running development server before you start another one.
+- Run focused model and provenance tests for ranking changes.

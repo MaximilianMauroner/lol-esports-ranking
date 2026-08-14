@@ -1,5 +1,20 @@
 # LoL Esports Power Index
 
+An independent team-strength model for professional League of Legends. The app
+shows rankings, tournament weights, team and player timelines, season and event
+summaries, and the evidence behind each result.
+
+Live site: [lol.lab4code.com](https://lol.lab4code.com/) · [Source code](https://github.com/MaximilianMauroner/lol-esports-ranking) · [Report feedback](https://github.com/MaximilianMauroner/lol-esports-ranking/issues/new?title=%5BFeedback%5D%20)
+
+## Status
+
+Static deployments serve the latest browser-safe snapshot from `public/data/`.
+Railway can serve the same `/data/*` payload from bucket storage after a refresh.
+This is not an official Riot ranking. Each public claim must name the source
+manifest, model configuration, schema version, and coverage window that produced
+it. While the model is pre-1.0, `model.version` stays stable. Use
+`model.configHash` and `schemaVersion` for exact iteration provenance.
+
 ## Ranking restart Phase 0 baseline
 
 Phase 0 freezes the existing six-hour, gated refresh and proxy delivery behavior. It does not activate a new ranking path, change Railway configuration or cadence, publish artifacts, authorize deletion, or run bucket GC.
@@ -20,14 +35,6 @@ Recovery order is strict:
 2. If that is unavailable, perform a forced full replay from the active verified raw authority only with separate recovery authorization.
 
 Scheduled freshness remains strict. Production deployment, incremental activation, five-minute cadence, presigned delivery, delete-mode cleanup, Railway sizing, and billing changes remain unauthorized.
-
-An independent team-strength prototype for LoL esports. The app presents a Power Index rather than a static table: ranking controls, tournament weights, selected-team explanations, team timelines, player timelines, season summaries, event summaries, and methodology notes.
-
-Live site: [lol.lab4code.com](https://lol.lab4code.com/) · [Source code](https://github.com/MaximilianMauroner/lol-esports-ranking) · [Report feedback](https://github.com/MaximilianMauroner/lol-esports-ranking/issues/new?title=%5BFeedback%5D%20)
-
-## Status
-
-For static deployments, the app serves the latest committed browser-safe snapshot from `public/data/`. On Railway, the same `/data/*` payload can be served from Railway Bucket storage after refresh. It is not an official Riot ranking, and each public ranking claim should stay tied to the data source manifest, model version, config hash, and coverage window that produced it. While the model is pre-1.0, `model.version` is intentionally stable; use `model.configHash` and `schemaVersion` for exact iteration provenance.
 
 ## Run
 
@@ -50,7 +57,7 @@ pnpm run release:check
 
 The UI uses shadcn/ui-style React components in `src/components/ui` where they fit the surface, including controls and Recharts-backed dashboard charts. Product tokens and layout styles live in `src/index.css` and the files it imports.
 
-## Static Data Strategy
+## Static data strategy
 
 The frontend loads static JSON from:
 
@@ -85,7 +92,7 @@ Commit the compact generated `public/data` payload after review when you need st
 
 `data:download` treats Oracle's Elixir as the primary game-level source and Leaguepedia as the backup/gap-fill source. It discovers the public Oracle CSV files from the Oracle Google Drive folder, downloads the CSVs that overlap the requested date range, then downloads Leaguepedia Cargo data for the same range. If Google Drive returns a quota/HTML page instead of a CSV for a file, that file is skipped with a manifest warning instead of being recorded as usable data.
 
-## Railway Server Deployment
+## Railway server deployment
 
 `railway.toml` deploys the app as a Railway web service. The production server serves the built Vite app from `dist/`, serves `/data/*` from local `public/data/` when a file is present, falls back to Railway Bucket storage when configured, and keeps background refresh disabled unless `RANKING_REFRESH_ENABLED=true` is explicitly set. Data companion URLs include a run-version query string so Railway CDN can cache shard/entity/history JSON aggressively without mixing artifacts from different generated runs. The manifest keeps a short edge TTL so new runs are discovered quickly.
 
@@ -234,7 +241,7 @@ pnpm run data:build -- --oracle-csv data/raw/oracles-elixir/2026_LoL_esports_mat
 
 Oracle's Elixir has precedence for duplicate games because it carries richer game-stat fields. Leaguepedia Cargo fills gaps and supplies broad match/event coverage. LoL Esports schedule caches are treated as unsupported official-reference metadata: they can attach official event/match/game IDs and audit schedule/result state, but they are not standalone scored model inputs. Overlapping scored rows are merged only when canonical team/winner identity plus source IDs or team stat lines identify the same game; broad date/team/winner matching is reserved for result-only gap-fill rows so separate same-winner games in a series are preserved. Sponsor-era aliases such as DRX/Kiwoom DRX, OKSavingsBank BRION/HANJIN BRION, and DN Freecs/DN SOOPers are normalized before dedupe. Seeded data is explicitly marked as `sourceProvider: "seed"` and should be used only for local demo snapshots.
 
-## Source Strategy
+## Source strategy
 
 The intended free-data pipeline is layered:
 
@@ -292,7 +299,7 @@ Riot's official model should be used as a benchmark layer, not as a formula clon
 
 Every generated snapshot includes `model.version`, `model.configHash`, active model parameters, source provider breakdowns, match coverage dates, source/data quality counts, and whether seeded sample data is present. Current schema version `18` standing rows include rating components and latest latent-strength rating-update ledger fields; league rows include expected wins, wins over expected, opponent-adjusted win rate, and average international opponent rating; region rows include flagship team/league counts and separate ecosystem counts. Walk-forward metrics also include aggregate and segment-level baseline comparisons against coin-flip, pre-game win-rate, and neutral team-only predictors, while full prediction rows expose the prior-only blue/red side adjustment used by the published probability. Compact sourced-player outputs carry latest Oracle observation provenance plus appearance provenance and recent match context, and browser history is split into scoped team-history shards plus first-class region-history artifacts, so player/team/role/region claims can be traced back to the source game, file, date, event, shown-team games, role games, last played opponents, and model provenance. Ranking claims should always be cited with the data source, canonical pre-1.0 model version, config hash, and schema version that produced them.
 
-## Key Files
+## Key files
 
 - `src/App.tsx`: main ranking workbench UI.
 - `src/lib/model.ts`: transparent team and league rating calculations.
