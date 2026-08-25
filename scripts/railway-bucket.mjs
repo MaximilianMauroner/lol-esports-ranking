@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises'
 import { createGunzip, gunzipSync } from 'node:zlib'
 import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
 import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { sendPutWithRetry } from './s3-put-retry.mjs'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 import {
@@ -1237,16 +1238,20 @@ async function syncContentAddressedRawObject(client, config, prepared) {
   const reference = rawObjectReferenceFor(prepared)
   const key = bucketKey(config, reference.key)
   try {
-    await client.send(new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-      Body: prepared.compressedPath ? verifiedFileBackedRawBody(prepared) : prepared.compressed,
-      ContentLength: prepared.compressedBytes,
-      ContentType: 'application/json; charset=utf-8',
-      ContentEncoding: 'gzip',
-      Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' },
-      IfNoneMatch: '*',
-    }))
+    await sendPutWithRetry({
+      client,
+      body: () => prepared.compressedPath ? verifiedFileBackedRawBody(prepared) : prepared.compressed,
+      command: (body) => new PutObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+        Body: body,
+        ContentLength: prepared.compressedBytes,
+        ContentType: 'application/json; charset=utf-8',
+        ContentEncoding: 'gzip',
+        Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' },
+        IfNoneMatch: '*',
+      }),
+    })
     return { status: 'uploaded', key, bytes: prepared.compressedBytes, contentType: 'application/json; charset=utf-8', digest: prepared.digest }
   } catch (error) {
     if (!isPreconditionError(error)) throw error
@@ -2143,14 +2148,18 @@ export async function uploadFile(client, config, filePath, relativeKey, { metada
   const key = bucketKey(config, relativeKey)
   const resolvedContentType = contentType ?? contentTypeForPath(filePath)
   const resolvedDigest = digest ?? await sha256File(filePath)
-  await client.send(new PutObjectCommand({
-    Bucket: config.bucket,
-    Key: key,
-    Body: createReadStream(filePath),
-    ContentLength: fileStat.size,
-    ContentType: resolvedContentType,
-    Metadata: { ...(metadata ?? {}), sha256: resolvedDigest, 'semantic-bytes': String(fileStat.size) },
-  }))
+  await sendPutWithRetry({
+    client,
+    body: () => createReadStream(filePath),
+    command: (body) => new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: body,
+      ContentLength: fileStat.size,
+      ContentType: resolvedContentType,
+      Metadata: { ...(metadata ?? {}), sha256: resolvedDigest, 'semantic-bytes': String(fileStat.size) },
+    }),
+  })
   return {
     status: 'uploaded',
     key,

@@ -7,6 +7,7 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip, createGzip } from 'node:zlib'
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
+import { sendPutWithRetry } from './s3-put-retry.mjs'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import { assertStateManifestAuthority, readStoredJsonStateObject } from './incremental-state-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt } from './raw-source-storage.mjs'
@@ -90,17 +91,21 @@ export async function stageFullAuditSnapshot({
     const key = bucketKey(config, reference.key)
     let status = 'uploaded'
     try {
-      await client.send(new PutObjectCommand({
-        Bucket: config.bucket,
-        Key: key,
-        Body: createReadStream(compressedPath),
-        ContentLength: compressedBytes,
-        ContentType: JSON_TYPE,
-        ContentEncoding: 'gzip',
-        CacheControl: IMMUTABLE,
-        Metadata: { sha256, 'semantic-bytes': String(bytes), encoding: 'gzip' },
-        IfNoneMatch: '*',
-      }))
+      await sendPutWithRetry({
+        client,
+        body: () => createReadStream(compressedPath),
+        command: (body) => new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+          Body: body,
+          ContentLength: compressedBytes,
+          ContentType: JSON_TYPE,
+          ContentEncoding: 'gzip',
+          CacheControl: IMMUTABLE,
+          Metadata: { sha256, 'semantic-bytes': String(bytes), encoding: 'gzip' },
+          IfNoneMatch: '*',
+        }),
+      })
     } catch (error) {
       if (!isPreconditionError(error)) throw error
       status = 'unchanged'
