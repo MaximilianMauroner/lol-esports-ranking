@@ -213,6 +213,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     oracleCsvPaths: readArgList('oracle-csv'),
     leaguepediaJsonPaths: readArgList('leaguepedia-json'),
     lolEsportsJsonPaths: readArgList('lolesports-json'),
+    generatedAt: readArg('generated-at'),
   })
 }
 

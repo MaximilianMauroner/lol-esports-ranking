@@ -26,6 +26,7 @@ import { PageShell } from '../components/ui/page-shell'
 import { Pager } from '../components/ui/pager'
 import { Panel, PanelBody, PanelFooter, PanelHeader } from '../components/ui/panel'
 import { RankingSignals, TierStrip, type RankingShowcaseProps } from '../components/RankingShowcase'
+import { TeamMark } from '../components/TeamMark'
 import { type ChartSeries } from '../components/LineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import {
@@ -658,7 +659,7 @@ export function TeamsView({
                               onFocus={onRequestPlayers}
                               title={`View ${team.team} details`}
                             >
-                              <span className="team-mark sm inline-grid h-7 w-[42px] place-items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] font-mono text-[var(--t-2)] font-extrabold tracking-[0.02em] text-[var(--accent-strong)]">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
+                              <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
                               <div className="ent flex min-w-0 flex-col gap-px overflow-hidden [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[var(--t-2)] [&_small]:text-[var(--faint)]">
                                 <b>{team.team}</b>
                                 <small>{teamSubtitle(team)}</small>
@@ -1655,7 +1656,7 @@ function TeamDetailDrawer({
         {drawerLoading ? <p className="sr-only" role="status" aria-live="polite">Loading {drawerLoading} for {team.team}.</p> : null}
         <SheetHeader className="flex-row items-center gap-3.5 border-b border-[var(--line)] bg-[var(--detail-surface)] px-5 py-4 text-left max-sm:flex-wrap max-sm:p-3.5">
           <div className="mr-auto flex min-w-0 items-center gap-3.5 [&_h2]:text-[var(--t-6)] [&_h2]:font-semibold [&_h2]:tracking-normal [&_h2]:text-[var(--text-strong)] [&_p]:mb-[3px] [&_p]:text-[var(--t-2)] [&_p]:tracking-[0.14em] [&_p]:text-[var(--faint)] [&_p]:uppercase max-[900px]:[&_h2]:text-[var(--t-6)]">
-            <span className="inline-grid h-8 w-[54px] place-items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] font-mono text-[var(--t-3)] font-extrabold tracking-[0.02em] text-[var(--accent-strong)]">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
+            <TeamMark team={team.team} code={team.code} className="size-11 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
             <div>
               <p>Team inspector</p>
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">

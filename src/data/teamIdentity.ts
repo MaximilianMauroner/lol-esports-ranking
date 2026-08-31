@@ -1,7 +1,8 @@
 import type { TeamProfile } from '../types'
+import { teamBrandingFor } from './teamBranding'
 export { regionForLeague } from './competitionTaxonomy'
 
-export const knownTeamIdentities: Record<string, TeamProfile> = {
+const baseKnownTeamIdentities: Record<string, TeamProfile> = {
   "Anyone's Legend": { name: "Anyone's Legend", code: 'AL', region: 'LPL', league: 'LPL' },
   'Bilibili Gaming': { name: 'Bilibili Gaming', code: 'BLG', region: 'LPL', league: 'LPL' },
   'BNK FEARX': { name: 'BNK FEARX', code: 'BFX', region: 'LCK', league: 'LCK' },
@@ -34,6 +35,13 @@ export const knownTeamIdentities: Record<string, TeamProfile> = {
   'Top Esports': { name: 'Top Esports', code: 'TES', region: 'LPL', league: 'LPL' },
   'Weibo Gaming': { name: 'Weibo Gaming', code: 'WBG', region: 'LPL', league: 'LPL' },
 }
+
+export const knownTeamIdentities: Record<string, TeamProfile> = Object.fromEntries(
+  Object.entries(baseKnownTeamIdentities).map(([name, identity]) => [
+    name,
+    { ...identity, code: teamBrandingFor(name)?.code ?? identity.code },
+  ]),
+)
 
 const exactTeamAliases: Record<string, string> = {
   '9Gaming Esports': '9Gaming',
@@ -73,10 +81,15 @@ export function canonicalTeamNameFor(teamName: string) {
 }
 
 export function teamIdentityFor(teamName: string): TeamProfile | undefined {
-  return knownTeamIdentities[canonicalTeamNameFor(teamName)] ?? knownTeamIdentities[cleanDisplayName(teamName)]
+  const canonicalName = canonicalTeamNameFor(teamName)
+  const identity = knownTeamIdentities[canonicalName] ?? knownTeamIdentities[cleanDisplayName(teamName)]
+  const branding = teamBrandingFor(canonicalName)
+  return identity && branding ? { ...identity, code: branding.code } : identity
 }
 
 export function teamCodeFor(teamName: string) {
+  const branding = teamBrandingFor(canonicalTeamNameFor(teamName))
+  if (branding) return branding.code
   const identity = teamIdentityFor(teamName)
   if (identity) return identity.code
   const cleaned = canonicalTeamNameFor(teamName)
