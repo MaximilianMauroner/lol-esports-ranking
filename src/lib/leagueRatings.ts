@@ -1,6 +1,5 @@
 import { leaguePriorFor } from '../data/leagueTiers'
 import type { MatchRecord } from '../types'
-import { leagueKFactorForMatch, type EventWeightContext } from './eventWeighting'
 import { isInternationalMatch } from './ratingCalculations'
 
 export function ensureLeague(
@@ -47,7 +46,6 @@ type LeagueStrengthUpdateBase = LeagueStrengthState & {
   leagueScoreB: number
   leagueExpectedRatingA: number
   leagueExpectedRatingB: number
-  recency: number
 }
 
 export type LeagueStrengthSeriesUpdate = LeagueStrengthUpdateBase & {
@@ -55,8 +53,8 @@ export type LeagueStrengthSeriesUpdate = LeagueStrengthUpdateBase & {
   expectedOutcomeB: number
   observedOutcomeA: number
   observedOutcomeB: number
-  strengthSignal: number
-  eventWeightContext?: EventWeightContext
+  baseLeagueDeltaA: number
+  baseLeagueDeltaB: number
 }
 
 export function updateLeagueStrengthForSeries({
@@ -71,9 +69,8 @@ export function updateLeagueStrengthForSeries({
   expectedOutcomeB,
   observedOutcomeA,
   observedOutcomeB,
-  strengthSignal,
-  eventWeightContext,
-  recency,
+  baseLeagueDeltaA,
+  baseLeagueDeltaB,
   leagueScores,
   previousLeagueScores,
   leagueWins,
@@ -97,8 +94,8 @@ export function updateLeagueStrengthForSeries({
     expectedOutcomeB,
     observedOutcomeA,
     observedOutcomeB,
-    kFactor: leagueKFactorForMatch(match, eventWeightContext) * strengthSignal,
-    recency,
+    deltaA: baseLeagueDeltaA,
+    deltaB: baseLeagueDeltaB,
     leagueScores,
     previousLeagueScores,
     leagueWins,
@@ -124,8 +121,8 @@ function updateLeagueStrength({
   expectedOutcomeB,
   observedOutcomeA,
   observedOutcomeB,
-  kFactor,
-  recency,
+  deltaA: inputDeltaA,
+  deltaB: inputDeltaB,
   leagueScores,
   previousLeagueScores,
   leagueWins,
@@ -141,14 +138,15 @@ function updateLeagueStrength({
   expectedOutcomeB: number
   observedOutcomeA: number
   observedOutcomeB: number
-  kFactor: number
-}) {
-  if (leagueA === leagueB || leagueA === 'Unknown' || leagueB === 'Unknown' || kFactor === 0 || !isInternationalMatch(match)) {
+    deltaA: number
+    deltaB: number
+  }) {
+  if (leagueA === leagueB || leagueA === 'Unknown' || leagueB === 'Unknown' || !isInternationalMatch(match)) {
     return { deltaA: 0, deltaB: 0 }
   }
 
-  const deltaA = Number((kFactor * recency * (observedOutcomeA - expectedOutcomeA)).toFixed(3))
-  const deltaB = Number((kFactor * recency * (observedOutcomeB - expectedOutcomeB)).toFixed(3))
+  const deltaA = Number(inputDeltaA.toFixed(3))
+  const deltaB = Number(inputDeltaB.toFixed(3))
 
   previousLeagueScores.set(leagueA, leagueScoreA)
   previousLeagueScores.set(leagueB, leagueScoreB)

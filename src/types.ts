@@ -25,6 +25,8 @@ export type WalkForwardSegmentKey =
   | 'side-known'
   | 'patch-transition'
   | 'roster-change'
+  | 'partial-lineup'
+  | 'unknown-lineup'
 
 export type PregamePredictionVariantKey =
   | 'published'
@@ -214,6 +216,9 @@ export type MatchRosterSnapshot = {
   sourceProvider: 'oracles-elixir'
   teamId?: string
   observedAt: string
+  knownAt?: string
+  evidenceBasis?: 'official-announcement' | 'official-schedule' | 'scored-series'
+  sourceSeriesId?: string
   completeness: RosterCompleteness
   players: RosterPlayerAppearance[]
 }
@@ -307,6 +312,12 @@ export type RatingUpdateLedger = {
   updateUnit?: string
   eventWeight?: number
   resultEvidence?: number
+  baseTeamStableDelta?: number
+  baseTeamFormDelta?: number
+  baseLeagueDelta?: number
+  uncertaintyMultiplier?: number
+  rosterVolatilityMultiplier?: number
+  stableTransferWeight?: number
   neutralResultResidual?: number
   seriesStrengthSignal?: number
   teamStableShare?: number
@@ -417,6 +428,12 @@ export type PregamePrediction = {
   teamBSideAdjustment?: number
   teamAPlayerRatingCoverage?: number
   teamBPlayerRatingCoverage?: number
+  teamALineupEvidenceBasis?: 'prior-observed' | 'pregame-confirmed' | 'unavailable'
+  teamBLineupEvidenceBasis?: 'prior-observed' | 'pregame-confirmed' | 'unavailable'
+  teamALineupObservedAt?: string
+  teamBLineupObservedAt?: string
+  teamALineupFreshnessWeight?: number
+  teamBLineupFreshnessWeight?: number
   teamAGameWinProbabilityPlayerAdjusted?: number
   teamBGameWinProbabilityPlayerAdjusted?: number
   teamASeriesWinProbabilityPlayerAdjusted?: number

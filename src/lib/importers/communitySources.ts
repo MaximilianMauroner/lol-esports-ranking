@@ -89,6 +89,7 @@ function reconcileSharedSeriesGames(matches: MatchRecord[]) {
 
     const strongestBestOf = Math.max(...group.map((match) => match.bestOf))
     const seriesReference = group.find((match) => match.sourceProvider === 'oracles-elixir') ?? group[0]
+    const phase = group.map((match) => match.phase).sort((left, right) => phaseSpecificity(right) - phaseSpecificity(left))[0] ?? seriesReference.phase
     const byGame = new Map<number, MatchRecord>()
     for (const match of group) {
       const gameNumber = sharedSeriesIdentity(match)?.gameNumber
@@ -107,7 +108,7 @@ function reconcileSharedSeriesGames(matches: MatchRecord[]) {
         ...match,
         sourceMatchId: identity.seriesId,
         event: seriesReference.event,
-        phase: seriesReference.phase,
+        phase,
         region: seriesReference.region,
         league: seriesReference.league,
         tier: seriesReference.tier,
@@ -166,6 +167,9 @@ function enrichWithLolEsportsReference(
   match.officialEventId = reference.matchId
   match.officialMatchId = reference.matchId
   match.officialScheduleState = reference.state
+  if (reference.blockName && phaseSpecificity(reference.blockName) > phaseSpecificity(match.phase)) {
+    match.phase = reference.blockName
+  }
   match.datetimeUtc = reference.startTime ?? match.datetimeUtc
   const officialBestOf = reference.strategy?.count
   if (officialBestOf !== undefined && [1, 2, 3, 5].includes(officialBestOf)) {
@@ -173,6 +177,14 @@ function enrichWithLolEsportsReference(
     match.bestOfBasis = 'official'
   }
   if (options.includeGameId) match.officialGameId = reference.gameIds[0]
+}
+
+function phaseSpecificity(phase: string) {
+  const normalized = phase.toLowerCase()
+  if (/\b(?:grand|upper|lower) final\b|\bsemi ?final\b|\bquarter ?final\b/.test(normalized)) return 4
+  if (/\bfinals?\b|\bswiss\b|\bknockout\b|\bbracket\b|\bplay[ -]?in\b/.test(normalized)) return 3
+  if (/\bgroup\b|\bmain stage\b|\b(?:round|stage)\s*(?:of\s*)?\d+\b/.test(normalized)) return 2
+  return 1
 }
 
 function uniqueReferenceMap(

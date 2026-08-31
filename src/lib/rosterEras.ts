@@ -1,5 +1,6 @@
 import type { DeservedStandingRosterEra, MatchRecord, MatchRosterSnapshot, Role, Side } from '../types'
 import { clamp } from './ratingCalculations'
+import { resolveCanonicalSeries } from './seriesResolver'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -219,7 +220,8 @@ export function dssRosterEraObservationsForMatches(
   options: BuildDssRosterErasOptions = {},
 ): DssRosterEraObservation[] {
   const observations: DssRosterEraObservation[] = []
-  for (const match of matches.toSorted(compareMatchesByDateAndId)) {
+  for (const series of resolveCanonicalSeries(matches)) {
+    const match = series.finalMatch
     addRosterEraObservation(observations, match, 'blue', match.teamA, match.teamARoster, options)
     addRosterEraObservation(observations, match, 'red', match.teamB, match.teamBRoster, options)
   }
@@ -238,18 +240,19 @@ export function buildDssRosterEras(
     let currentEra: DeservedStandingRosterEra | undefined
     let currentSignature: string | undefined
 
-    for (const observation of teamObservations) {
-      const signature = dssRosterEraSignature(observation.roster, observation.coachId)
-      if (!currentEra || signature !== currentSignature) {
-        if (currentEra) currentEra.endDate = observation.date
-        currentEra = createRosterEra(observation, options)
-        currentSignature = signature
+    for (const run of consecutiveRosterRuns(teamObservations)) {
+      const shouldOpenEra = !currentEra || run.signature === currentSignature || dssSubstituteCreatesRosterEra({
+        seriesCount: run.observations.length,
+        splitGameShare: run.observations.length / teamObservations.length,
+      })
+      if (!currentEra || (run.signature !== currentSignature && shouldOpenEra)) {
+        if (currentEra) currentEra.endDate = run.observations[0]!.date
+        currentEra = createRosterEra(run.observations[0]!, options)
+        currentSignature = run.signature
         eras.push(currentEra)
+        appendObservationsToEra(currentEra, run.observations.slice(1))
       } else {
-        currentEra.matches.push(observation.matchId)
-        currentEra.resumeLedger.push(...observation.resumeLedger)
-        currentEra.playerContributionLedger.push(...observation.playerContributionLedger)
-        currentEra.synergyLedger.push(...observation.synergyLedger)
+        appendObservationsToEra(currentEra, run.observations)
       }
     }
   }
@@ -258,6 +261,26 @@ export function buildDssRosterEras(
     ...era,
     uncertainty: options.uncertaintyFor?.(eraWithoutUncertainty(era)) ?? era.uncertainty,
   }))
+}
+
+function consecutiveRosterRuns(observations: DssRosterEraObservation[]) {
+  const runs: Array<{ signature: string; observations: DssRosterEraObservation[] }> = []
+  for (const observation of observations) {
+    const signature = dssRosterEraSignature(observation.roster, observation.coachId)
+    const current = runs.at(-1)
+    if (current?.signature === signature) current.observations.push(observation)
+    else runs.push({ signature, observations: [observation] })
+  }
+  return runs
+}
+
+function appendObservationsToEra(era: DeservedStandingRosterEra, observations: DssRosterEraObservation[]) {
+  for (const observation of observations) {
+    era.matches.push(observation.matchId)
+    era.resumeLedger.push(...observation.resumeLedger)
+    era.playerContributionLedger.push(...observation.playerContributionLedger)
+    era.synergyLedger.push(...observation.synergyLedger)
+  }
 }
 
 export type DssRosterEraCausalSummary = {
@@ -505,10 +528,6 @@ function eraWithoutUncertainty(era: DeservedStandingRosterEra): Omit<DeservedSta
     playerContributionLedger: era.playerContributionLedger,
     synergyLedger: era.synergyLedger,
   }
-}
-
-function compareMatchesByDateAndId(left: MatchRecord, right: MatchRecord) {
-  return left.date.localeCompare(right.date) || left.id.localeCompare(right.id)
 }
 
 function groupBy<T, K extends string>(items: T[], keyFor: (item: T) => K) {

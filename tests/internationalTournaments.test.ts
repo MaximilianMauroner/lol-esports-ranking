@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  completedOfficialMatchIds,
   deriveTournamentInstances,
   teamMatchesTournamentFilter,
   tournamentFamilyForEvent,
@@ -116,7 +117,7 @@ test('derives ongoing lifecycle from future unstarted schedule rows without rati
 test('only claims completed when schedule coverage extends beyond the completed final', () => {
   const [completed] = deriveTournamentInstances({
     generatedAt: '2026-08-01T00:00:00.000Z',
-    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12', officialMatchId: 'msi-final' }],
+    matches: [ratedGame('msi-final', 1, 'Alpha')],
     scheduleReferences: [{ matchId: 'msi-final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true }],
   })
   const [partial] = deriveTournamentInstances({
@@ -135,7 +136,7 @@ test('only claims completed when schedule coverage extends beyond the completed 
 test('completed lifecycle requires retained official results for every completed schedule row', () => {
   const [instance] = deriveTournamentInstances({
     generatedAt: '2026-08-01T00:00:00.000Z',
-    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12', officialMatchId: 'msi-third-place' }],
+    matches: [ratedGame('msi-third-place', 1, 'Alpha')],
     scheduleReferences: [
       { matchId: 'msi-third-place', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true },
       { matchId: 'msi-final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true },
@@ -194,7 +195,7 @@ test('rejects qualifier and regional-final evidence even when event aliases look
 test('uses the newest observation for overlapping official schedule matches', () => {
   const [instance] = deriveTournamentInstances({
     generatedAt: '2026-08-01T00:00:00.000Z',
-    matches: [{ event: 'MSI 2026', season: 2026, date: '2026-07-12', officialMatchId: 'final' }],
+    matches: [ratedGame('final', 1, 'Alpha')],
     scheduleReferences: [
       { matchId: 'final', leagueName: 'MSI', date: '2026-07-12', state: 'unstarted', retrievedAt: '2026-07-11T00:00:00Z', coverageStart: '2026-07-12', coverageEnd: '2026-07-12' },
       { matchId: 'final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', retrievedAt: '2026-08-01T00:00:00Z', coverageStart: '2026-07-12', coverageEnd: '2026-08-01', coverageEndComplete: true },
@@ -202,6 +203,20 @@ test('uses the newest observation for overlapping official schedule matches', ()
   })
 
   assert.equal(instance?.status, 'completed')
+})
+
+test('official completion requires a terminal scored series', () => {
+  const partialBo5 = [ratedGame('bo5', 5, 'Alpha')]
+  const completedBo5 = [
+    ratedGame('bo5', 5, 'Alpha'),
+    ratedGame('bo5', 5, 'Alpha'),
+    ratedGame('bo5', 5, 'Alpha'),
+  ]
+  const tiedBo2 = [ratedGame('bo2', 2, 'Alpha'), ratedGame('bo2', 2, 'Beta')]
+
+  assert.equal(completedOfficialMatchIds(partialBo5).has('bo5'), false)
+  assert.equal(completedOfficialMatchIds(completedBo5).has('bo5'), true)
+  assert.equal(completedOfficialMatchIds(tiedBo2).has('bo2'), true)
 })
 
 function standingWithEvents(
@@ -235,5 +250,19 @@ function movementEntry(id: 'msi:2026', participantCount: number): PublicTourname
     dataLag: false,
     participantCount,
     url: '/data/history/tournament-moves/msi-2026.json',
+  }
+}
+
+function ratedGame(officialMatchId: string, bestOf: 1 | 2 | 3 | 5, winner: 'Alpha' | 'Beta') {
+  return {
+    event: 'MSI 2026',
+    season: 2026,
+    date: '2026-07-12',
+    officialMatchId,
+    teamA: 'Alpha',
+    teamB: 'Beta',
+    winner,
+    bestOf,
+    bestOfBasis: 'official' as const,
   }
 }

@@ -48,6 +48,12 @@ export type RatingRunState = {
   lastRosterByTeam: Map<string, MatchRosterSnapshot>
   currentRosterContinuity: Map<string, number>
   lastPatchByTeam: Map<string, string>
+  teamLastRatedDates: Map<string, string>
+  teamLastSeasons: Map<string, number>
+  teamLastSplits: Map<string, string>
+  leagueLastRatedDates: Map<string, string>
+  leagueLastSeasons: Map<string, number>
+  leagueLastSplits: Map<string, string>
   lastRosterFingerprintByTeam: Map<string, string>
   eventTrackers: ReturnType<typeof buildEventTrackers>
   eventWeightContext: EventWeightContext
@@ -95,6 +101,12 @@ export function createRatingRunState(
     lastRosterByTeam: new Map(),
     currentRosterContinuity: new Map(),
     lastPatchByTeam: new Map(),
+    teamLastRatedDates: new Map(),
+    teamLastSeasons: new Map(),
+    teamLastSplits: new Map(),
+    leagueLastRatedDates: new Map(),
+    leagueLastSeasons: new Map(),
+    leagueLastSplits: new Map(),
     lastRosterFingerprintByTeam: new Map(),
     eventTrackers: buildEventTrackers(sortedMatches, eventWeightContext, tournamentLifecycles),
     eventWeightContext,

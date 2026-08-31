@@ -7,7 +7,7 @@ import { heatBin } from '../lib/display'
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
   return (
     <span
-      className="inline-flex items-baseline gap-1 rounded-full px-[9px] py-[3px] font-mono text-[0.84rem] font-semibold text-[var(--heat-ink)] tabular-nums"
+      className="inline-flex items-baseline gap-1 rounded-full px-[9px] py-[3px] font-mono text-[var(--t-3)] font-semibold text-[var(--heat-ink)] tabular-nums"
       style={{ background: `var(--heat-${heatBin(value, min, max)})` }}
     >
       {label}
@@ -25,6 +25,13 @@ const REGION_BADGE_LOGOS: Partial<Record<string, string>> = {
   CBLOL: '/league-icons/cblol.png',
 }
 
+/**
+ * Every region renders in the same frame: same box, border, fill and inner
+ * padding, tinted by the region hue. Only the contents differ, a league logo
+ * where one exists and the region code where one does not. The badge used to
+ * mix photographic logos with hand-drawn line-art motifs, which read as two
+ * different products inside one column.
+ */
 export function RegionBadge({ region, size = 'md' }: { region: string; size?: 'sm' | 'md' }) {
   const code = region.toUpperCase()
   const key = REGION_BADGE_KEYS.has(code) ? code : 'DEFAULT'
@@ -33,95 +40,18 @@ export function RegionBadge({ region, size = 'md' }: { region: string; size?: 's
 
   return (
     <span
-      className={`region-badge region-badge--${key.toLowerCase()} region-badge--${size}${logoSrc ? ' has-logo' : ''}`}
+      className={`region-badge region-badge--${key.toLowerCase()} region-badge--${size}`}
       data-code-length={displayCode.length}
       role="img"
       aria-label={`${code} region badge`}
     >
       {logoSrc ? (
-        <img className="region-badge__logo" src={logoSrc} alt="" aria-hidden="true" width={44} height={36} />
+        <img className="region-badge__logo" src={logoSrc} alt="" aria-hidden="true" width={44} height={36} loading="lazy" />
       ) : (
-        <>
-          <svg viewBox="0 0 48 40" aria-hidden="true" focusable="false">
-            <BadgeMotif region={key} />
-          </svg>
-          <span className="region-badge__code">{displayCode}</span>
-        </>
+        <span className="region-badge__code">{displayCode}</span>
       )}
     </span>
   )
-}
-
-function BadgeMotif({ region }: { region: string }) {
-  switch (region) {
-    case 'LCK':
-      return (
-        <>
-          <path className="region-badge__mark" d="M13 29 L23 11 L24 29" />
-          <path className="region-badge__mark is-soft" d="M24 23 L35 12" />
-          <path className="region-badge__cut" d="M30 27 L38 20" />
-        </>
-      )
-    case 'LPL':
-      return (
-        <>
-          <path className="region-badge__mark" d="M12 28 L20 12 H29 L21 28 H34" />
-          <path className="region-badge__cut" d="M32 12 L37 12" />
-        </>
-      )
-    case 'LEC':
-      return (
-        <>
-          <path className="region-badge__mark" d="M34 13 A14 14 0 1 0 34 27" />
-          <path className="region-badge__cut" d="M18 20 H35" />
-          <circle className="region-badge__dot" cx="36" cy="20" r="2.2" />
-        </>
-      )
-    case 'LCS':
-      return (
-        <>
-          <path className="region-badge__mark" d="M14 12 V28 H34" />
-          <path className="region-badge__cut" d="M18 13 H34 M18 20 H31 M18 27 H34" />
-        </>
-      )
-    case 'LCP':
-      return (
-        <>
-          <path className="region-badge__mark" d="M14 29 V12 H25 C32 12 35 16 35 20 C35 24 32 28 25 28 H14" />
-          <path className="region-badge__cut" d="M24 16 V32" />
-        </>
-      )
-    case 'CBLOL':
-      return (
-        <>
-          <path className="region-badge__mark" d="M33 13 C29 10 20 10 16 15 C11 21 15 30 24 30 C29 30 33 28 36 24" />
-          <path className="region-badge__cut" d="M17 20 H35" />
-          <circle className="region-badge__dot" cx="14" cy="25" r="2" />
-        </>
-      )
-    case 'PCS':
-      return (
-        <>
-          <path className="region-badge__mark" d="M14 28 V12 H27 C33 12 36 15 36 20 C36 25 33 28 27 28 H14" />
-          <path className="region-badge__cut" d="M18 20 H38" />
-        </>
-      )
-    case 'VCS':
-      return (
-        <>
-          <path className="region-badge__mark" d="M12 12 L23 29 L36 12" />
-          <path className="region-badge__cut" d="M18 12 L24 22 L31 12" />
-          <circle className="region-badge__dot" cx="24" cy="30" r="2" />
-        </>
-      )
-    default:
-      return (
-        <>
-          <path className="region-badge__mark" d="M14 29 V11 H34 V29 Z" />
-          <path className="region-badge__cut" d="M14 20 H34" />
-        </>
-      )
-  }
 }
 
 export function FormDots({ form }: { form?: string[] }) {
@@ -137,7 +67,7 @@ export function FormDots({ form }: { form?: string[] }) {
           <i
             key={`${result}-${index}`}
             className={cn(
-              'grid size-[17px] place-items-center rounded-[5px] text-[0.64rem] font-bold not-italic',
+              'grid size-[17px] place-items-center rounded-[var(--r-1)] text-[var(--t-1)] font-bold not-italic',
               tone === 'w' && 'bg-[var(--win-soft)] text-[var(--win)]',
               tone === 'l' && 'bg-[var(--loss-soft)] text-[var(--loss)]',
               tone === 't' && 'bg-[var(--surface-3)] text-[var(--muted)]',
@@ -156,7 +86,7 @@ export function ConfBar({ value }: { value?: number }) {
   const pct = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
   return (
     <span className="inline-grid min-w-[68px] gap-1">
-      <span className="text-[0.74rem] text-[var(--muted)] tabular-nums">{typeof value === 'number' ? `${Math.round(pct)}%` : '—'}</span>
+      <span className="text-[var(--t-2)] text-[var(--muted)] tabular-nums">{typeof value === 'number' ? `${Math.round(pct)}%` : '—'}</span>
       <span className="relative h-[7px] overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden="true">
         <span
           className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -175,8 +105,8 @@ export function PickButton({ picked, onToggle, label }: { picked: boolean; onTog
       variant="secondary"
       size="icon"
       className={cn(
-        'pick-button border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-2)_74%,transparent)] text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--text-strong)] group-hover/gpr:border-[var(--line-strong)]',
-        picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] group-hover/gpr:border-[var(--accent)]',
+        'pick-button',
+        picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent)]',
       )}
       onClick={onToggle}
       aria-label={tooltip}
@@ -205,17 +135,20 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className={cn('inline-flex max-w-full flex-wrap gap-1 rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface-2)] p-1 max-sm:w-full max-sm:border-0 max-sm:bg-transparent max-sm:p-0', className)}
+      className={cn(
+        'inline-flex h-[var(--control-h)] max-w-full items-center gap-1 rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--surface-2)] p-1 max-sm:w-full',
+        className,
+      )}
     >
       {options.map((option) => (
         <Button
           type="button"
           key={option.value}
-          variant="ghost"
+          variant="tab"
           size="sm"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className={cn('rounded-[7px] text-[var(--muted)] hover:text-[var(--text)]', value === option.value && 'bg-[var(--surface-3)] text-[var(--text-strong)]')}
+          className="h-full min-h-0 flex-1 rounded-[var(--r-1)] border-transparent bg-transparent max-sm:min-w-0"
         >
           {option.label}
         </Button>
@@ -224,19 +157,35 @@ export function Segmented<T extends string>({
   )
 }
 
-export function DataState({ icon, title, children }: { icon: ReactNode; title: string; children?: ReactNode }) {
+/**
+ * Every empty, missing and error state in the product. The `action` slot exists
+ * so that a retry button no longer forces a caller to hand-build its own empty
+ * state: Match history and the snapshot error screen each had their own.
+ */
+export function DataState({
+  icon,
+  title,
+  action,
+  children,
+}: {
+  icon: ReactNode
+  title: string
+  action?: ReactNode
+  children?: ReactNode
+}) {
   return (
-    <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[0.88rem] [&>svg]:text-[var(--faint)]">
+    <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[var(--t-5)] [&>h3]:font-semibold [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[var(--t-3)] [&>svg]:text-[var(--faint)]">
       {icon}
       <h3>{title}</h3>
       {children ? <p>{children}</p> : null}
+      {action ? <div className="mt-1 flex flex-wrap justify-center gap-2">{action}</div> : null}
     </div>
   )
 }
 
 export function CountBadge({ children, variant = 'secondary' }: { children: ReactNode; variant?: 'default' | 'secondary' | 'warning' }) {
   return (
-    <Badge variant={variant} className="w-fit justify-self-start text-[0.76rem] text-[var(--muted)] tabular-nums">
+    <Badge variant={variant} className="w-fit justify-self-start text-[var(--t-2)] text-[var(--muted)] tabular-nums">
       {children}
     </Badge>
   )

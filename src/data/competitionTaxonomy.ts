@@ -255,7 +255,7 @@ export function inferLeagueFromEvent(event: string) {
 
 export function inferEventTier(input: CompetitionTierInput): EventTier {
   const textValue = `${input.league} ${input.event ?? ''}`.toLowerCase()
-  const playoffs = input.playoffs ?? input.phase === 'Playoffs'
+  const playoffs = input.playoffs ?? /^(?:playoffs|bracket|knockout|quarterfinal|semifinal|(?:grand |upper |lower )?finals?)$/i.test(input.phase ?? '')
   if (textValue.includes('road to msi') && !isInternationalCompetitionLeague(input.league)) return 'major-playoffs'
   if (textValue.includes('academic esports world tournament') || textValue.includes('university esports')) return 'qualifier'
   if (textValue.includes('online qualifier') || textValue.includes('online qualifiers')) return 'qualifier'

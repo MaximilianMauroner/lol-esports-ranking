@@ -1215,7 +1215,7 @@ test('Leaguepedia import treats Mid-Season Invitational bracket and final ids as
     ],
   })
 
-  assert.deepEqual(result.matches.map((match) => match.phase), ['Playoffs', 'Playoffs'])
+  assert.deepEqual(result.matches.map((match) => match.phase), ['Bracket', 'Final'])
   assert.deepEqual(result.matches.map((match) => match.tier), ['msi-bracket', 'msi-bracket'])
   assert.deepEqual(result.matches.map((match) => match.bestOf), [5, 5])
 })

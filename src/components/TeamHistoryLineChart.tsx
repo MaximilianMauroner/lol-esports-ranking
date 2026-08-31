@@ -66,8 +66,8 @@ function TeamHistoryTooltip({
 
   if (rows.length === 0) return null
   return (
-    <div className="grid min-w-0 gap-2 border-t border-[var(--line)] pt-3 text-[0.78rem] whitespace-normal">
-      <b className="mb-0.5 text-[0.74rem] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
+    <div className="grid min-w-0 gap-2 border-t border-[var(--line)] pt-3 text-[var(--t-3)] whitespace-normal">
+      <b className="mb-0.5 text-[var(--t-2)] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
         {rows.map((row) => {
           const closeNote = dailyCloseNote(row.detail)
@@ -79,12 +79,12 @@ function TeamHistoryTooltip({
                 <div className="grid justify-items-end gap-px">
                   <strong className="text-[var(--text)] tabular-nums">{yFormat(row.value)}</strong>
                   {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
-                    <b className="text-[0.66rem] font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
+                    <b className="text-[var(--t-1)] font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
                   ) : null}
                 </div>
               </div>
-              {row.influence ? <small className="ml-5 text-[0.72rem] leading-[1.35] text-[var(--faint)]">{row.influence}</small> : null}
-              {closeNote ? <div className="ml-5 text-[0.7rem] leading-[1.35] text-[var(--muted)] [overflow-wrap:anywhere]">{closeNote}</div> : null}
+              {row.influence ? <small className="ml-5 text-[var(--t-2)] leading-[1.35] text-[var(--faint)]">{row.influence}</small> : null}
+              {closeNote ? <div className="ml-5 text-[var(--t-1)] leading-[1.35] text-[var(--muted)] [overflow-wrap:anywhere]">{closeNote}</div> : null}
               <TooltipMatchList detail={row.detail} />
               <TooltipModelDetail detail={row.detail} />
             </div>
@@ -99,7 +99,7 @@ function TooltipMatchList({ detail }: { detail?: ChartPointDetail }) {
   const matches = detail?.dayMatches
   if (!matches || matches.length <= 1) return null
   return (
-    <div className="ml-5 grid gap-[5px] text-[0.7rem] leading-[1.35] text-[var(--muted)] [&>div]:[overflow-wrap:anywhere]">
+    <div className="ml-5 grid gap-[5px] text-[var(--t-1)] leading-[1.35] text-[var(--muted)] [&>div]:[overflow-wrap:anywhere]">
       {matches.map((match, index) => {
         const label = formatChartInfluence(match)
         return label ? <div key={`${match.event ?? 'match'}-${match.opponent ?? index}-${index}`}>{label}</div> : null
@@ -125,7 +125,7 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
   return (
     <div className="ml-5 grid gap-[5px]">
       {expected || residual ? (
-        <div className="text-[0.7rem] leading-[1.35] text-[var(--faint)]">
+        <div className="text-[var(--t-1)] leading-[1.35] text-[var(--faint)]">
           {expected ? `Expected win ${expected}` : null}
           {expected && residual ? ' / ' : null}
           {residual ? `Residual ${residual}` : null}
@@ -134,12 +134,12 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
       {attribution.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {attribution.map((entry) => (
-            <span className="inline-flex w-fit items-center rounded-sm border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-[5px] py-0.5 text-[0.68rem] text-[var(--muted)] tabular-nums" key={entry.key}>{formatChartAttribution(entry)}</span>
+            <span className="inline-flex w-fit items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-[5px] py-0.5 text-[var(--t-1)] text-[var(--muted)] tabular-nums" key={entry.key}>{formatChartAttribution(entry)}</span>
           ))}
         </div>
       ) : null}
       {typeof otherDelta === 'number' ? (
-        <div className="text-[0.7rem] leading-[1.35] text-[var(--faint)]">Unattributed adjustment {formatPreciseSignedDelta(otherDelta)}</div>
+        <div className="text-[var(--t-1)] leading-[1.35] text-[var(--faint)]">Unattributed adjustment {formatPreciseSignedDelta(otherDelta)}</div>
       ) : null}
     </div>
   )

@@ -4,7 +4,19 @@
 
 @import './styles/base.css';
 @import './styles/rankings.css';
-@import "@fontsource-variable/jetbrains-mono";
+
+/* Only the latin subset is declared. The package ships cyrillic, cyrillic-ext,
+   greek, latin-ext and vietnamese subsets in both upright and italic, none of
+   which this product renders. Italic is never used either: the codebase strips
+   it with `not-italic` wherever <em>/<i> carry semantics. */
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant data-open {
@@ -40,28 +52,39 @@
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
-    --radius-sm: var(--r-sm);
-    --radius-md: var(--r);
-    --radius-lg: var(--r-lg);
-    --font-heading: var(--font-mono);
-    --font-mono: 'JetBrains Mono Variable', monospace;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
+
+    /* Tailwind's own scales are remapped onto the design tokens so that
+       `text-sm`, `rounded-md` and `font-semibold` cannot drift away from the
+       scale. There is deliberately no `xl`+ radius: panels are the largest
+       rounded surface in the product. */
+    --radius-sm: var(--r-1);
+    --radius-md: var(--r-2);
+    --radius-lg: var(--r-3);
+    --radius-xl: var(--r-3);
+
+    --text-2xs: var(--t-1);
+    --text-xs: var(--t-2);
+    --text-sm: var(--t-3);
+    --text-md: var(--t-4);
+    --text-base: var(--t-5);
+    --text-lg: var(--t-6);
+    --text-xl: var(--t-7);
+    --text-2xl: var(--t-8);
+
+    --font-weight-normal: var(--w-body);
+    --font-weight-medium: var(--w-label);
+    --font-weight-semibold: var(--w-emph);
+    --font-weight-bold: var(--w-figure);
+    --font-weight-extrabold: var(--w-figure);
+
+    --font-heading: var(--sans);
+    --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
     --color-chart-5: var(--chart-5);
     --color-chart-4: var(--chart-4);
     --color-chart-3: var(--chart-3);
     --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
@@ -70,14 +93,6 @@
     --chart-3: var(--series-3);
     --chart-4: var(--series-4);
     --chart-5: var(--series-5);
-    --sidebar: var(--rail);
-    --sidebar-foreground: var(--text);
-    --sidebar-primary: var(--accent);
-    --sidebar-primary-foreground: var(--on-accent);
-    --sidebar-accent: var(--surface-2);
-    --sidebar-accent-foreground: var(--text-strong);
-    --sidebar-border: var(--line);
-    --sidebar-ring: var(--focus);
 }
 
 @layer base {
@@ -86,8 +101,5 @@
     }
   body {
     @apply bg-background text-foreground;
-    }
-  html {
-    @apply font-mono;
     }
 }

@@ -302,7 +302,11 @@ export type PublicCurrentLineup = {
   teamId: string
   teamCode?: string
   observedAt: string
+  observedEvent?: string
+  freshnessDays?: number
   sourceProvider: string
+  claim?: 'last-observed'
+  evidenceBasis?: 'scored-series' | 'official-announcement' | 'official-schedule'
   completeness: 'complete-five-role' | 'partial'
   coveredRoles: Role[]
   missingRoles: Role[]
@@ -974,6 +978,12 @@ function compactRatingUpdate(update?: Partial<RatingUpdateLedger>): Partial<Rati
     sideAdjustment: update?.sideAdjustment ?? 0,
     patchAdjustment: update?.patchAdjustment ?? 0,
     resultEvidence: update?.resultEvidence ?? 0,
+    baseTeamStableDelta: update?.baseTeamStableDelta ?? 0,
+    baseTeamFormDelta: update?.baseTeamFormDelta ?? 0,
+    baseLeagueDelta: update?.baseLeagueDelta ?? 0,
+    uncertaintyMultiplier: update?.uncertaintyMultiplier ?? 1,
+    rosterVolatilityMultiplier: update?.rosterVolatilityMultiplier ?? 1,
+    stableTransferWeight: update?.stableTransferWeight ?? 1,
     neutralResultResidual: update?.neutralResultResidual ?? 0,
     seriesStrengthSignal: update?.seriesStrengthSignal ?? 1,
     teamStableShare: update?.teamStableShare ?? 0,
@@ -1651,6 +1661,12 @@ function assertRatingUpdate(value: unknown, label: string): asserts value is Par
     'sideAdjustment',
     'patchAdjustment',
     'resultEvidence',
+    'baseTeamStableDelta',
+    'baseTeamFormDelta',
+    'baseLeagueDelta',
+    'uncertaintyMultiplier',
+    'rosterVolatilityMultiplier',
+    'stableTransferWeight',
     'neutralResultResidual',
     'seriesStrengthSignal',
     'teamStableShare',
@@ -2026,7 +2042,11 @@ function assertCurrentLineup(value: unknown, label: string) {
   assertString(value.teamId, `${label} teamId`)
   assertOptionalString(value.teamCode, `${label} teamCode`)
   assertString(value.observedAt, `${label} observedAt`)
+  assertOptionalString(value.observedEvent, `${label} observedEvent`)
+  assertOptionalNumber(value.freshnessDays, `${label} freshnessDays`)
   assertString(value.sourceProvider, `${label} sourceProvider`)
+  if (value.claim !== undefined) assertEnum(value.claim, ['last-observed'], `${label} claim`)
+  if (value.evidenceBasis !== undefined) assertEnum(value.evidenceBasis, ['scored-series', 'official-announcement', 'official-schedule'], `${label} evidenceBasis`)
   assertEnum(value.completeness, ['complete-five-role', 'partial'], `${label} completeness`)
   assertStringArray(value.coveredRoles, `${label} coveredRoles`)
   assertStringArray(value.missingRoles, `${label} missingRoles`)

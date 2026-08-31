@@ -19,8 +19,8 @@ import {
   teamCompareColumns,
 } from './components/compareAnalysisData'
 import { TeamsView, type PlayerLoadState } from './views/TeamsView'
-import { RegionBadge } from './components/ui'
-import { Button } from './components/ui/button'
+import { DataState, RegionBadge } from './components/ui'
+import { Button, buttonVariants } from './components/ui/button'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
 import { LoadingState } from './components/ui/loading'
@@ -29,6 +29,7 @@ import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
 import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { cn } from './lib/utils'
+import { hashParam } from './lib/urlState'
 import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './lib/bootstrap'
 import {
   checkpointFromScope,
@@ -52,25 +53,36 @@ const RegionCompareAnalysis = lazy(() => import('./components/CompareAnalysis').
 const TeamCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.TeamCompareDrawer })))
 const TeamCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.TeamCompareAnalysis })))
 
-const MODES: { id: Mode; label: string; tagline: string; icon: typeof BarChart3 }[] = [
-  { id: 'rankings', label: 'Rankings', tagline: 'Board, tiers, podium', icon: BarChart3 },
-  { id: 'regions', label: 'Regions', tagline: 'Regional strength', icon: Globe2 },
-  { id: 'matches', label: 'Match history', tagline: 'Games and impact', icon: History },
+const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
+  { id: 'rankings', label: 'Rankings', icon: BarChart3 },
+  { id: 'regions', label: 'Regions', icon: Globe2 },
+  { id: 'matches', label: 'Matches', icon: History },
 ]
 
-const MODE_TITLES: Record<Mode, { eyebrow: string; title: string }> = {
-  regions: { eyebrow: 'Regional strength', title: 'Region power scores' },
-  rankings: { eyebrow: 'Tier 1 team strength', title: 'Team Power Index' },
-  matches: { eyebrow: 'Published game ledger', title: 'Match history' },
+/**
+ * One title per view, plus the line that tells a first-time visitor what the
+ * numbers mean. Rankings is the landing view and previously shipped no
+ * explanation at all, while Regions, which nobody lands on, carried one.
+ *
+ * There is no eyebrow. Each view used to render an uppercase grey label above
+ * its title which restated the title in different words.
+ */
+const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
+  rankings: {
+    title: 'Team Power Index',
+    intro: 'Power score rates every tier 1 team on one scale from its match results, weighted by opponent strength and event importance. Higher is stronger, and a 100 point gap is roughly a 64% game win chance for the stronger side. Movement compares against the previous rating update in the selected scope.',
+  },
+  regions: {
+    title: 'Region power',
+    intro: 'Region power is the average Power score of the three strongest ranked teams in a region. Each row compares that against the average across all of the region’s ranked teams: a small gap means depth, a large gap means the region is top-heavy.',
+  },
+  matches: {
+    title: 'Match history',
+    intro: 'Every published series behind the ratings, newest first. Power impact shows how much each side’s score moved as a result, after opponent strength and event weight are applied.',
+  },
 }
 
-function checkpointButtonClassName(active: boolean, ongoing = false) {
-  return cn(
-    'h-[38px] min-w-[86px] shrink-0 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 text-[var(--muted)] shadow-none hover:border-[var(--line-strong)] hover:text-[var(--text)] [&>small]:mt-0.5 [&>small]:block [&>small]:text-[0.68rem] [&>small]:font-[560] [&>small]:leading-[1.1] [&>small]:text-[var(--muted)] [&>span]:block [&>span]:text-[0.86rem] [&>span]:font-bold [&>span]:leading-[1.1]',
-    active && 'border-[color-mix(in_oklch,var(--accent),white_12%)] bg-[color-mix(in_oklch,var(--accent),transparent_86%)] text-[var(--text-strong)]',
-    ongoing && 'border-[color-mix(in_oklch,var(--win),var(--line)_55%)]',
-  )
-}
+const CHECKPOINT_TAB_CLASS = 'shrink-0 flex-col gap-0 px-3 py-1 [&>small]:block [&>small]:text-2xs [&>small]:leading-[1.1] [&>small]:font-normal [&>small]:text-[var(--muted)] [&>span]:block [&>span]:text-sm [&>span]:font-semibold [&>span]:leading-[1.2]'
 
 function App({ initialManifest, initialManifestError }: { initialManifest?: PublicRankingManifest; initialManifestError?: string }) {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
@@ -78,7 +90,9 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   const [loadPlayers, setLoadPlayers] = useState(false)
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
-  const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>('All')
+  // Board filters that App owns are seeded from the hash for the same reason
+  // the ones TeamsView owns are: a shared or reloaded board must come back.
+  const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>(() => (hashParam('tournament') as TournamentFilterValue | undefined) ?? 'All')
   const tournamentId = tournamentIdFromFilter(tournamentFilter)
   const {
     manifestState,
@@ -110,7 +124,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   })
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
-  const [teamSearch, setTeamSearch] = useState('')
+  const [teamSearch, setTeamSearch] = useState(() => hashParam('team') ?? '')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
@@ -251,24 +265,36 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
 
   return (
     <div className="flex min-h-full flex-col">
-      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[0.84rem] font-[650] text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content">Skip to content</a>
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content">Skip to content</a>
       <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} />
 
-      <main id="main-content" className="flex min-w-0 flex-col pb-[calc(var(--tray-h)+24px+env(safe-area-inset-bottom))] max-sm:pb-[calc(96px+24px+env(safe-area-inset-bottom))]" tabIndex={-1} ref={mainRef}>
+      {/* Tray space is reserved only when a tray exists. Match history has no
+          tray at all and used to end with ~80px of dead space below the footer
+          on every page. */}
+      <main
+        id="main-content"
+        className={cn(
+          'flex min-w-0 flex-col pb-6',
+          trayPicks > 0 && 'pb-[calc(var(--tray-h)+24px+env(safe-area-inset-bottom))] max-sm:pb-[calc(96px+24px+env(safe-area-inset-bottom))]',
+        )}
+        tabIndex={-1}
+        ref={mainRef}
+      >
         <ModeHeader mode={mode} />
 
-        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2" aria-label="Snapshot scope controls">
-          <div className="flex min-h-[38px] items-stretch gap-1 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Season">
+        {/* One tab component for both rows. The season row and the checkpoint
+            row used to be two different button shapes with two different
+            active treatments, neither matching the mode nav above them. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2" aria-label="Snapshot scope controls">
+          <div className="flex min-w-0 items-stretch gap-1 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Season">
             {seasonTabs.map((season) => (
               <Button
                 key={season}
                 type="button"
-                variant="ghost"
+                variant="tab"
+                size="tab"
                 aria-pressed={activeSeason === season}
-                className={cn(
-                  'relative h-[38px] min-w-[62px] shrink-0 self-stretch rounded-md border border-transparent bg-[color-mix(in_oklch,var(--surface-2)_58%,transparent)] px-3 text-[0.86rem] font-[680] tracking-normal text-[var(--muted)] shadow-none hover:text-[var(--text)]',
-                  activeSeason === season && 'border-[color-mix(in_oklch,var(--accent),var(--line)_46%)] bg-[color-mix(in_oklch,var(--accent),transparent_88%)] text-[var(--text-strong)]',
-                )}
+                className="shrink-0 font-semibold"
                 onClick={() => selectScope(scopeForSeasonTab(season))}
                 onFocus={() => preloadOnIntent(scopeForSeasonTab(season))}
                 onPointerEnter={() => preloadOnIntent(scopeForSeasonTab(season))}
@@ -279,17 +305,19 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
           </div>
 
           {activeSeason && activeSeason !== 'All' && checkpointTabs.length > 0 ? (
-            <div className="flex min-h-[38px] min-w-0 max-w-full items-center gap-2 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[640px]:flex-[1_1_100%] max-[640px]:flex-wrap max-[640px]:overflow-visible" role="group" aria-label={`${activeSeason} checkpoints`}>
+            <div className="flex min-w-0 max-w-full items-stretch gap-1 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[640px]:flex-[1_1_100%]" role="group" aria-label={`${activeSeason} checkpoints`}>
               <Button
                 type="button"
-                variant="ghost"
+                variant="tab"
+                size="tab"
                 aria-pressed={!activeCheckpoint}
-                className={checkpointButtonClassName(!activeCheckpoint)}
+                className={CHECKPOINT_TAB_CLASS}
                 onClick={() => selectScope(`season:${activeSeason}`)}
                 onFocus={() => preloadOnIntent(`season:${activeSeason}`)}
                 onPointerEnter={() => preloadOnIntent(`season:${activeSeason}`)}
               >
                 <span>Full year</span>
+                <small>{activeSeason}</small>
               </Button>
               {checkpointTabs.map((checkpoint) => {
                 const ongoing = checkpoint.id === ongoingCheckpointId
@@ -297,25 +325,23 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
                   <Button
                     key={checkpoint.id}
                     type="button"
-                    variant="ghost"
+                    variant="tab"
+                    size="tab"
                     title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
                     aria-pressed={activeCheckpoint === checkpoint.id}
-                    className={checkpointButtonClassName(activeCheckpoint === checkpoint.id, ongoing)}
+                    className={CHECKPOINT_TAB_CLASS}
                     onClick={() => selectScope(checkpointScope(activeSeason, checkpoint.id))}
                     onFocus={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
                     onPointerEnter={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
                   >
-                    <span>
-                      {checkpoint.label}
-                      {ongoing ? <em className="ml-[7px] inline-flex items-center rounded-full bg-[var(--win-soft)] px-[5px] pt-px pb-0.5 align-[1px] text-[0.6rem] font-[760] text-[var(--win)] not-italic uppercase">Ongoing</em> : null}
-                    </span>
-                    <small>{formatDate(checkpoint.endDate)}</small>
+                    <span>{checkpoint.label}</span>
+                    <small>{ongoing ? 'Ongoing' : formatDate(checkpoint.endDate)}</small>
                   </Button>
                 )
               })}
               {pendingCheckpoint ? (
                 <div
-                  className="grid h-[38px] min-w-[86px] shrink-0 cursor-default place-content-center rounded-md border border-dashed border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-2),transparent_34%)] px-3 text-[var(--faint)] [&>small]:mt-0.5 [&>small]:block [&>small]:text-[0.68rem] [&>small]:leading-[1.1] [&>small]:text-[var(--faint)] [&>span]:block [&>span]:text-[0.86rem] [&>span]:font-bold [&>span]:leading-[1.1]"
+                  className={cn(CHECKPOINT_TAB_CLASS, 'inline-flex h-[var(--control-h)] cursor-default flex-col justify-center rounded-[var(--r-2)] border border-dashed border-[var(--line)] text-[var(--faint)] [&>small]:text-[var(--faint)] [&>span]:text-[var(--faint)]')}
                   aria-disabled="true"
                   title={`${pendingCheckpoint.label} has not started yet.`}
                 >
@@ -328,8 +354,8 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
         </div>
 
         {seeded ? (
-          <div className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6 pb-0">
-            <Alert className="flex items-center gap-2.5 rounded-[var(--r)] border-[var(--warn-soft)] bg-[var(--warn-soft)] px-3.5 py-[11px] text-[0.84rem] text-[var(--warn)]" role="status">
+          <div className="flex min-w-0 flex-col px-[var(--page-x)] pt-6 pb-0">
+            <Alert variant="warning" className="flex items-center gap-2.5" role="status">
               <AlertTriangle size={17} aria-hidden="true" />
               Seeded sample data is loaded. These are not official LoL Esports rankings.
             </Alert>
@@ -386,6 +412,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
                     rollingWindow: snapshot?.rollingWindow,
                     seeded,
                     sourceBreakdown: snapshot?.sourceBreakdown ?? [],
+                    rosterCoverage: loadedData.dataQuality?.rosterCoverage,
                     notes: loadedData.dataQuality?.notes,
                   }}
                   onToggle={toggleTeam}
@@ -403,7 +430,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
             ) : null}
           </>
         )}
-        <footer className="mx-[var(--page-x)] mt-[30px] flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--line)] pt-[15px] text-[0.72rem] leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
+        <footer className="mx-[var(--page-x)] mt-[30px] flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--line)] pt-[15px] text-[var(--t-2)] leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
           <span>{RIOT_PROJECT_NOTICE}</span>
           <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_REPOSITORY_URL}>Source code</a>
           <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_FEEDBACK_URL}>Report feedback</a>
@@ -414,20 +441,20 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
       </main>
 
       {trayPicks > 0 ? (
-        <div className="fixed right-0 bottom-0 left-[var(--rail-w)] z-40 grid min-h-[var(--tray-h)] items-center border-t border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_92%,var(--bg))] pt-2 pr-[max(var(--page-x),env(safe-area-inset-right))] pb-[calc(8px+env(safe-area-inset-bottom))] pl-[max(var(--page-x),env(safe-area-inset-left))] max-sm:pr-[max(12px,env(safe-area-inset-right))] max-sm:pl-[max(12px,env(safe-area-inset-left))]">
+        <div className="fixed right-0 bottom-0 left-0 z-40 grid min-h-[var(--tray-h)] items-center border-t border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_92%,var(--bg))] pt-2 pr-[max(var(--page-x),env(safe-area-inset-right))] pb-[calc(8px+env(safe-area-inset-bottom))] pl-[max(var(--page-x),env(safe-area-inset-left))] max-sm:pr-[max(12px,env(safe-area-inset-right))] max-sm:pl-[max(12px,env(safe-area-inset-left))]">
           <div className="mx-auto grid min-h-10 w-full max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 max-sm:min-h-[76px] max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-2" role="region" aria-label={`${trayLabel}: ${trayPicks} selected`}>
-            <span className="whitespace-nowrap text-[0.8rem] font-[650] text-[var(--muted)]">{trayLabel}</span>
+            <span className="whitespace-nowrap text-[var(--t-3)] font-semibold text-[var(--muted)]">{trayLabel}</span>
             <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-sm:col-span-full max-sm:col-start-1 max-sm:row-start-2 max-sm:w-full">
               {mode === 'regions'
                 ? activeRegionPicks.map((region) => (
-                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[0.78rem] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-[650]" key={regionKey(region)}>
+                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[var(--t-3)] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-semibold" key={regionKey(region)}>
                       <RegionBadge region={region.region} size="sm" />
                       <b>{region.region}</b>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-sm)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
+                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-1)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
                         onClick={() => toggleRegion(region)}
                         aria-label={`Remove ${region.region}`}
                       >
@@ -438,13 +465,13 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
                 : null}
               {mode === 'rankings'
                 ? activeTeamPicks.map((team) => (
-                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[0.78rem] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-[650]" key={teamKey(team)}>
+                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[var(--t-3)] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-semibold" key={teamKey(team)}>
                       <b>{team.code ?? team.team}</b>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-sm)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
+                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-1)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
                         onClick={() => toggleTeam(team)}
                         aria-label={`Remove ${team.team}`}
                       >
@@ -483,7 +510,10 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
                 }}
                 disabled={trayPicks < 2}
               >
-                Compare {trayPicks}
+                {/* The tray appears at one pick but comparing needs two. It
+                    used to greet the user with a greyed-out primary action and
+                    no explanation of why. */}
+                {trayPicks < 2 ? 'Pick 1 more' : `Compare ${trayPicks}`}
               </Button>
             </div>
           </div>
@@ -550,22 +580,29 @@ function ManifestRouteShell({
 }) {
   return (
     <div className="flex min-h-full flex-col">
-      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[0.84rem] font-[650] text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] focus-visible:top-3" href="#main-content">Skip to content</a>
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] focus-visible:top-3" href="#main-content">Skip to content</a>
       <AppNavigation mode={mode} scope={scope} onGoHome={onGoHome} />
       <main id="main-content" className="flex min-w-0 flex-col" tabIndex={-1}>
         <ModeHeader mode={mode} />
-        <div className="flex min-h-[55px] items-center border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-[0.78rem] text-[var(--muted)]">
+        <div className="flex min-h-[55px] items-center border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-[var(--t-3)] text-[var(--muted)]">
           Requested scope: <b className="ml-2 text-[var(--text)]">{scopeLabel(scope)}</b>
         </div>
         {error ? (
           <section className="px-[var(--page-x)] pt-6">
-            <Alert className="grid gap-4 rounded-[var(--r)] border-[var(--line-strong)] bg-[var(--surface)] p-5 text-[var(--muted)]" role="alert">
-              <p>{error}</p>
-              <Button type="button" variant="default" className="w-fit" onClick={() => window.location.reload()}>
-                <RefreshCw size={15} aria-hidden="true" />
-                Retry
-              </Button>
-            </Alert>
+            <Card role="alert">
+              <DataState
+                icon={<AlertTriangle size={26} aria-hidden="true" />}
+                title="Rankings could not be loaded"
+                action={
+                  <Button type="button" variant="default" onClick={() => window.location.reload()}>
+                    <RefreshCw size={15} aria-hidden="true" />
+                    Retry
+                  </Button>
+                }
+              >
+                {error}
+              </DataState>
+            </Card>
           </section>
         ) : (
           <LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} description="Fetching the published ranking manifest." />
@@ -575,29 +612,34 @@ function ManifestRouteShell({
   )
 }
 
+/**
+ * Title and the one explanatory line, rendered in the same slot for every view
+ * so no view can ship without one. Rankings, the landing view, previously went
+ * straight from its title into a filter bar.
+ */
 function ModeHeader({ mode }: { mode: Mode }) {
   return (
-    <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b border-[var(--line)] bg-[oklch(0.125_0.004_250/0.72)] px-[var(--page-x)] pt-[18px] pb-3.5">
-      <div className="mr-auto min-w-0 flex-[1_1_320px]">
-        <p className="text-[0.7rem] tracking-[0.16em] text-[var(--muted)] uppercase">{MODE_TITLES[mode].eyebrow}</p>
-        <h1 className="text-[1.7rem] font-[640] tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
-      </div>
+    <header className="grid gap-1.5 border-b border-[var(--line)] px-[var(--page-x)] pt-4 pb-3.5">
+      <h1 className="text-xl font-semibold tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
+      <p className="max-w-[86ch] text-sm leading-[1.55] text-[var(--muted)]">{MODE_TITLES[mode].intro}</p>
     </header>
   )
 }
 
 function AppNavigation({ mode, scope, onGoHome }: { mode: Mode; scope: string; onGoHome: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   return (
-    <nav className="sticky top-0 z-50 grid min-h-[var(--app-nav-h)] grid-cols-[minmax(158px,max-content)_minmax(0,1fr)] items-center gap-[clamp(10px,1.6vw,22px)] border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.96)] px-[var(--page-x)] py-2.5 backdrop-blur-[16px] max-[1040px]:gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)] max-[900px]:items-stretch max-[900px]:gap-x-3 max-[900px]:gap-y-2 max-[900px]:px-3 max-[900px]:pt-2 max-[900px]:pb-2.5" aria-label="Primary">
-      <a className="flex min-w-0 items-center gap-[11px] rounded-[var(--r-sm)] text-left text-inherit no-underline transition-colors duration-160 hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)] max-[1040px]:min-w-auto max-[900px]:mr-auto max-[900px]:min-h-9 max-[900px]:justify-self-start [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
-        <span className="grid size-[37px] shrink-0 place-items-center overflow-hidden rounded-[7px]"><img className="block size-full" src="/logo.png" alt="" aria-hidden="true" width={37} height={37} /></span>
-        <div className="min-w-0">
-          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.94rem] tracking-normal text-[var(--text-strong)]">Power Index</b>
-          <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] tracking-[0.13em] text-[var(--faint)] uppercase">LoL Esports Rankings</span>
-        </div>
+    <nav className="sticky top-0 z-50 flex min-h-[var(--app-nav-h)] flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.97)] px-[var(--page-x)] py-2.5 backdrop-blur-[8px] max-[900px]:px-3" aria-label="Primary">
+      <a className="mr-auto flex min-w-0 items-center gap-2.5 rounded-[var(--r-2)] py-1 pr-2 text-left text-inherit no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)]" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
+        {/* logo.svg is 400 bytes. The 512x512 PNG this replaced was 226 KB and
+            rendered into a 36px box on first paint. */}
+        <img className="block size-9 shrink-0 rounded-[var(--r-2)]" src="/logo.svg" alt="" aria-hidden="true" width={36} height={36} />
+        <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)]">Power Index</b>
       </a>
-      <div className="hidden">Compare</div>
-      <div className="-m-0.5 flex min-w-0 items-center justify-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:m-0 max-[900px]:w-full max-[900px]:justify-start max-[900px]:p-0 max-[480px]:overflow-visible">
+      {/* Same tab treatment as the scope rows below. The active item used to be
+          marked with a gold underline, which collided with --rank-gold's other
+          meaning of rank quality. Taglines are gone: they restated the label
+          and were hidden below 1040px anyway. */}
+      <div className="-m-0.5 flex min-w-0 items-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:w-full">
         {MODES.map((entry) => {
           const Icon = entry.icon
           return (
@@ -605,13 +647,13 @@ function AppNavigation({ mode, scope, onGoHome }: { mode: Mode; scope: string; o
               key={entry.id}
               href={hashForModeAndScope(entry.id, scope)}
               className={cn(
-                'flex min-h-11 min-w-0 flex-[1_1_132px] max-w-[min(186px,100%)] cursor-pointer items-center gap-[9px] rounded-[var(--r-sm)] border border-transparent px-2.5 py-[7px] text-left text-[var(--muted)] no-underline transition-[background,color,border-color] duration-160 hover:bg-[var(--surface-2)] hover:text-[var(--text)] max-[900px]:min-h-10 max-[900px]:flex-[0_0_min(38vw,144px)] max-[900px]:justify-start max-[900px]:px-1.5 max-[480px]:max-w-none max-[480px]:flex-1 max-[480px]:basis-0 max-[480px]:justify-center max-[480px]:px-1 max-[480px]:[&>svg]:hidden max-[480px]:[&_b]:text-[0.76rem] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [&>svg]:shrink-0 [&>span]:min-w-0 [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[0.88rem] [&_b]:font-semibold [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[0.72rem] [&_small]:text-[var(--faint)] max-[1040px]:[&_small]:hidden',
-                mode === entry.id && 'border-[color-mix(in_oklch,var(--rank-gold),var(--line)_38%)] bg-[var(--surface-2)] text-[var(--text-strong)] shadow-[inset_0_-2px_0_var(--rank-gold)] [&_small]:text-[var(--rank-gold)]',
+                buttonVariants({ variant: 'tab', size: 'tab' }),
+                'min-w-0 shrink-0 gap-2 font-semibold no-underline max-[900px]:flex-1',
               )}
               aria-current={mode === entry.id ? 'page' : undefined}
             >
-              <Icon size={18} aria-hidden="true" />
-              <span><b>{entry.label}</b><small>{entry.tagline}</small></span>
+              <Icon size={17} aria-hidden="true" />
+              {entry.label}
             </a>
           )
         })}
@@ -745,13 +787,11 @@ function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotSt
     return <LoadingState presentation="page" label={`Loading ${scope}`} description="Fetching the exact public shard for this scope." />
   }
   return (
-    <section className="flex min-w-0 flex-col gap-[22px] px-[var(--page-x)] pt-6">
-      <Card className="min-w-0 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)]">
-        <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[1.05rem] [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[0.88rem] [&>svg]:text-[var(--faint)]">
-          <AlertTriangle size={26} aria-hidden="true" />
-          <h3>{`Snapshot unavailable for ${scope}`}</h3>
-          <p>{state.message}</p>
-        </div>
+    <section className="flex min-w-0 flex-col px-[var(--page-x)] pt-6">
+      <Card>
+        <DataState icon={<AlertTriangle size={26} aria-hidden="true" />} title={`Snapshot unavailable for ${scope}`}>
+          {state.message}
+        </DataState>
       </Card>
     </section>
   )
@@ -760,16 +800,19 @@ function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotSt
 function ErrorScreen({ message }: { message: string }) {
   return (
     <main className="grid min-h-screen place-items-center p-6">
-      <Card className="grid w-[min(440px,92vw)] gap-3.5 rounded-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] p-[26px] shadow-[var(--shadow-2)]">
-        <div className="flex items-center gap-[11px] font-semibold text-[var(--text-strong)] [&>svg]:text-[var(--loss)]">
-          <AlertTriangle size={20} aria-hidden="true" />
-          Snapshot unavailable
-        </div>
-        <p className="text-[var(--muted)]">{message}</p>
-        <Button type="button" variant="default" onClick={() => window.location.reload()}>
-          <RefreshCw size={15} aria-hidden="true" />
-          Retry
-        </Button>
+      <Card className="w-[min(460px,92vw)] shadow-[var(--shadow-2)]">
+        <DataState
+          icon={<AlertTriangle size={26} aria-hidden="true" />}
+          title="Snapshot unavailable"
+          action={
+            <Button type="button" variant="default" onClick={() => window.location.reload()}>
+              <RefreshCw size={15} aria-hidden="true" />
+              Retry
+            </Button>
+          }
+        >
+          {message}
+        </DataState>
       </Card>
     </main>
   )

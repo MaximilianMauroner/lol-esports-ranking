@@ -24,7 +24,8 @@ import {
   type EventWeightContext,
 } from './eventWeighting'
 import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
-import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam } from './seriesResolver'
+import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from './seriesResolver'
+import { mergeRosterObservation } from './rosters'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -124,6 +125,14 @@ export type PregamePlayerRatingEdge = {
   teamBAdjustment: number
   teamACoverage: number
   teamBCoverage: number
+  teamAEvidenceBasis: 'prior-observed' | 'pregame-confirmed' | 'unavailable'
+  teamBEvidenceBasis: 'prior-observed' | 'pregame-confirmed' | 'unavailable'
+  teamAObservedAt?: string
+  teamBObservedAt?: string
+  teamALineupCompleteness?: MatchRosterSnapshot['completeness']
+  teamBLineupCompleteness?: MatchRosterSnapshot['completeness']
+  teamAFreshnessWeight: number
+  teamBFreshnessWeight: number
 }
 
 export type PlayerRatingContext = {
@@ -358,39 +367,77 @@ export function buildPregamePlayerRatingEdges(
   const state = createSourcedPlayerState(false)
   const edges = new Map<string, PregamePlayerRatingEdge>()
   const leagueRatings = leagueRatingsFor(resolvedContext.leagueStrengths)
-  const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+  const lastObservedRosterByTeam = new Map<string, MatchRosterSnapshot>()
 
-  for (const dateMatches of matchesByDate(sortedMatches)) {
-    const dateStartRatings = new Map(state.ratings)
-    const dateStartGames = new Map(state.games)
-
-    for (const match of dateMatches) {
-      const teamAEdge = playerEdgeForRoster(
-        match.teamARoster,
-        dateStartRatings,
-        dateStartGames,
-        leagueForSide(match, 'A', resolvedContext),
-        leagueRatings,
-      )
-      const teamBEdge = playerEdgeForRoster(
-        match.teamBRoster,
-        dateStartRatings,
-        dateStartGames,
-        leagueForSide(match, 'B', resolvedContext),
-        leagueRatings,
-      )
+  for (const series of resolveCanonicalSeries(matches)) {
+    const preSeriesRatings = new Map(state.ratings)
+    const preSeriesGames = new Map(state.games)
+    const firstMatch = series.games[0]!
+    const teamARoster = lastObservedRosterByTeam.get(firstMatch.teamA)
+    const teamBRoster = lastObservedRosterByTeam.get(firstMatch.teamB)
+    const edgeByTeam = new Map([
+      [firstMatch.teamA, {
+        ...playerEdgeForRoster(
+          teamARoster,
+          preSeriesRatings,
+          preSeriesGames,
+          leagueForSide(firstMatch, 'A', resolvedContext),
+          leagueRatings,
+          firstMatch.date,
+        ),
+        roster: teamARoster,
+      }],
+      [firstMatch.teamB, {
+        ...playerEdgeForRoster(
+          teamBRoster,
+          preSeriesRatings,
+          preSeriesGames,
+          leagueForSide(firstMatch, 'B', resolvedContext),
+          leagueRatings,
+          firstMatch.date,
+        ),
+        roster: teamBRoster,
+      }],
+    ])
+    for (const match of series.games) {
+      const teamAEdge = edgeByTeam.get(match.teamA)!
+      const teamBEdge = edgeByTeam.get(match.teamB)!
       edges.set(match.id, {
         teamAAdjustment: teamAEdge.adjustment,
         teamBAdjustment: teamBEdge.adjustment,
         teamACoverage: teamAEdge.coverage,
         teamBCoverage: teamBEdge.coverage,
+        teamAEvidenceBasis: teamAEdge.roster ? 'prior-observed' : 'unavailable',
+        teamBEvidenceBasis: teamBEdge.roster ? 'prior-observed' : 'unavailable',
+        teamAObservedAt: teamAEdge.roster?.observedAt,
+        teamBObservedAt: teamBEdge.roster?.observedAt,
+        teamALineupCompleteness: teamAEdge.roster?.completeness,
+        teamBLineupCompleteness: teamBEdge.roster?.completeness,
+        teamAFreshnessWeight: teamAEdge.freshnessWeight,
+        teamBFreshnessWeight: teamBEdge.freshnessWeight,
       })
     }
 
-    for (const match of dateMatches) {
+    for (const match of series.games) {
       registerSourcedRosters(match, state, resolvedContext, leagueRatings)
     }
-    applySourcedPlayerUpdates(dateMatches, state, dateStartRatings, resolvedContext, leagueRatings)
+    applySourcedPlayerUpdates(series.games, state, preSeriesRatings, resolvedContext, leagueRatings)
+    for (const match of series.games) {
+      if (match.teamARoster) {
+        lastObservedRosterByTeam.set(match.teamA, mergeRosterObservation(lastObservedRosterByTeam.get(match.teamA), {
+          ...match.teamARoster,
+          evidenceBasis: match.teamARoster.evidenceBasis ?? 'scored-series',
+          sourceSeriesId: series.id,
+        })!)
+      }
+      if (match.teamBRoster) {
+        lastObservedRosterByTeam.set(match.teamB, mergeRosterObservation(lastObservedRosterByTeam.get(match.teamB), {
+          ...match.teamBRoster,
+          evidenceBasis: match.teamBRoster.evidenceBasis ?? 'scored-series',
+          sourceSeriesId: series.id,
+        })!)
+      }
+    }
   }
 
   return edges
@@ -1098,8 +1145,9 @@ function playerEdgeForRoster(
   games: Map<string, number>,
   league: string,
   leagueRatings: Map<string, number>,
+  asOfDate: string,
 ) {
-  if (!roster || roster.completeness !== 'complete-five-role') return { adjustment: 0, coverage: 0 }
+  if (!roster || roster.players.length === 0) return { adjustment: 0, coverage: 0, freshnessWeight: 0 }
 
   const leagueBaseline = playerBaselineForLeague(league, leagueRatings)
   const leagueSignalMultiplier = playerSignalMultiplierForLeague(league)
@@ -1114,16 +1162,23 @@ function playerEdgeForRoster(
   }
 
   if (coverage < playerPregameMinCoverage) {
-    return { adjustment: 0, coverage: roundShare(coverage) }
+    return { adjustment: 0, coverage: roundShare(coverage), freshnessWeight: lineupFreshnessWeight(roster.observedAt, asOfDate) }
   }
 
   const weightedMeanEdge = weightedRatingEdge / coverage
-  const adjustment = cappedPlayerPregameEdge(playerPregameEdgeCoefficient * weightedMeanEdge * coverage)
+  const freshnessWeight = lineupFreshnessWeight(roster.observedAt, asOfDate)
+  const adjustment = cappedPlayerPregameEdge(playerPregameEdgeCoefficient * weightedMeanEdge * coverage * freshnessWeight)
 
   return {
     adjustment: Number(adjustment.toFixed(1)),
     coverage: roundShare(coverage),
+    freshnessWeight,
   }
+}
+
+function lineupFreshnessWeight(observedAt: string, asOfDate: string) {
+  const elapsedDays = Math.max(0, (Date.parse(`${asOfDate}T00:00:00Z`) - Date.parse(`${observedAt}T00:00:00Z`)) / 86_400_000)
+  return roundShare(2 ** (-elapsedDays / 90))
 }
 
 function cappedPlayerPregameEdge(value: number) {

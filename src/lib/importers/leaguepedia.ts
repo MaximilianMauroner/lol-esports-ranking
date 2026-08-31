@@ -235,23 +235,28 @@ function teamRegion(game: LeaguepediaGame, side: 'A' | 'B', homeLeague: string, 
 
 function inferPhase(event: string) {
   const textValue = event.toLowerCase()
-  if (
-    textValue.includes('playoff')
-    || textValue.includes('bracket')
-    || textValue.includes('knockout')
-    || /(^|[^a-z0-9])(grand[\s_-]+)?finals?([^a-z0-9]|$)/.test(textValue)
-    || /(^|[^a-z0-9])semi[\s_-]*finals?([^a-z0-9]|$)/.test(textValue)
-    || /(^|[^a-z0-9])quarter[\s_-]*finals?([^a-z0-9]|$)/.test(textValue)
-  ) return 'Playoffs'
+  if (/(^|[^a-z0-9])grand[\s_-]+finals?([^a-z0-9]|$)/.test(textValue)) return 'Grand Final'
+  if (/(^|[^a-z0-9])upper[\s_-]+(?:bracket[\s_-]+)?finals?([^a-z0-9]|$)/.test(textValue)) return 'Upper Final'
+  if (/(^|[^a-z0-9])lower[\s_-]+(?:bracket[\s_-]+)?finals?([^a-z0-9]|$)/.test(textValue)) return 'Lower Final'
+  if (/(^|[^a-z0-9])semi[\s_-]*finals?([^a-z0-9]|$)/.test(textValue)) return 'Semifinal'
+  if (/(^|[^a-z0-9])quarter[\s_-]*finals?([^a-z0-9]|$)/.test(textValue)) return 'Quarterfinal'
+  if (/(^|[^a-z0-9])finals?([^a-z0-9]|$)/.test(textValue)) return 'Final'
+  if (textValue.includes('knockout')) return 'Knockout'
+  if (textValue.includes('bracket')) return 'Bracket'
   if (textValue.includes('play-in') || textValue.includes('play in')) return 'Play-in'
   if (textValue.includes('swiss')) return 'Swiss'
+  if (textValue.includes('group')) return 'Group Stage'
+  if (textValue.includes('playoff')) return 'Playoffs'
   return 'Regular season'
 }
 
 function bestOfForGame(game: LeaguepediaGame, phase: string) {
   const explicit = numberOrZero(game.bestOf) || numberOrZero(game.matchBestOf) || numberOrZero(game.gamesInMatch)
   if ([1, 2, 3, 5].includes(explicit)) return { bestOf: explicit, basis: 'provider' as const }
-  return { bestOf: phase === 'Playoffs' ? 5 : 1, basis: 'fallback' as const }
+  return {
+    bestOf: /^(?:playoffs|bracket|knockout|quarterfinal|semifinal|(?:grand |upper |lower )?finals?)$/i.test(phase) ? 5 : 1,
+    basis: 'fallback' as const,
+  }
 }
 
 function makeTeamCode(teamName: string) {

@@ -15,6 +15,9 @@
     "data:build": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data",
     "data:download": "node scripts/download-local-data.mjs",
     "data:crunch": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --manifest data/raw/manifest.json",
+    "data:freshness": "tsx scripts/raw-manifest-freshness.ts data/raw/manifest.json",
+    "calibration:export": "tsx scripts/export-ranking-predictions.ts",
+    "calibration:paired": "node scripts/paired-prediction-calibration.mjs",
     "data:refresh": "tsx scripts/refresh-data-if-changed.mjs",
     "data:build:oracle": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --oracle-csv",
     "data:build:leaguepedia": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --leaguepedia-json",
@@ -26,7 +29,7 @@
     "benchmark:incremental:smoke": "node --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --smoke",
     "benchmark:player-memory": "node --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --player-memory-profile",
     "benchmark:incremental:gate": "node --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --enforce-targets",
-    "release:check": "pnpm run data:crunch && pnpm test && pnpm run typecheck && pnpm run lint && pnpm run benchmark:incremental:gate && pnpm run build",
+    "release:check": "pnpm run data:freshness && pnpm run data:crunch && pnpm test && pnpm run typecheck && pnpm run lint && pnpm run benchmark:incremental:gate && pnpm run build",
     "verify": "pnpm run typecheck && pnpm run lint && pnpm test",
     "railway:build": "pnpm run verify && pnpm run bundle",
     "preview": "vite preview",
@@ -41,7 +44,6 @@
     "rollout:implementation-evidence": "node scripts/rollout-implementation-evidence.mjs",
     "rollout:shadow-gate": "node scripts/rollout-shadow-gate.mjs",
     "rollout:gate": "node scripts/validate-rollout-gate.mjs",
-    "rollout:cost": "node scripts/railway-cost-report.mjs",
     "ranking:baseline": "node scripts/ranking-restart-baseline.mjs verify"
   },
   "dependencies": {

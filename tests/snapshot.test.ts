@@ -202,9 +202,14 @@ test('createPlayerDirectory flattens sourced players and joins region/league fro
   assert.equal(chovy.appearance?.roleGames, 100)
   const lineup = directory.currentLineups[chovy.teamId!]
   assert.equal(lineup.completeness, 'partial')
+  assert.equal(lineup.claim, 'last-observed')
+  assert.equal(lineup.evidenceBasis, 'scored-series')
+  assert.equal(lineup.observedEvent, 'LCK 2026 Rounds 1-2')
+  assert.equal(lineup.freshnessDays, 0)
   assert.deepEqual(lineup.coveredRoles, ['Mid'])
   assert.deepEqual(lineup.missingRoles, ['Top', 'Jungle', 'Bot', 'Support'])
   assert.deepEqual(lineup.starters.map((player) => player.name), ['Chovy'])
+  assert.deepEqual(lineup.substitutes, [])
   assert.deepEqual(chovy.appearance?.teamHistory, [{
     team: 'Gen.G',
     games: 100,
@@ -1836,7 +1841,7 @@ test('generated snapshots carry model and source provenance', () => {
   assert.equal(typeof data.dataQuality.rosterCoverage.missingRosterSides, 'number')
   assert.equal(Array.isArray(data.dataQuality.identityCoverage.unresolvedLeagueSummaries), true)
   assert.equal(data.sources.some((source) => source.kind === 'seed'), true)
-  assert.equal(data.model.version, 'transparent-power-index-v0.0.0')
+  assert.equal(data.model.version, 'transparent-power-index-v0.2.0')
   assert.match(data.model.configHash, /^fnv1a-/)
   assert.equal(data.snapshots[data.defaultSnapshotKey].artifactKind, 'full-ranking-snapshot')
   assert.equal(data.snapshots[data.defaultSnapshotKey].modelVersion, data.model.version)

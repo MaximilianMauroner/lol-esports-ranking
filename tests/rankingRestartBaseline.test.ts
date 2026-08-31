@@ -45,7 +45,7 @@ const lessons = [
   'Publication is transactional; immutable objects/state/receipts first, reassert fencing, active pointer last; immutable receipt members only.',
   'Correctness covers local-only, upload-disabled, content-addressed full, patch, no-data.',
   'Artifact dependencies need typed domain evidence including tournament invalidation and endpoint-state ratings.',
-  'Rollout evidence measures the exact gate; one canonical schema/path resolver across CLI/runtime/runbook/tests/cost; audit success exact zero-mutation/full-comparison.',
+  'Rollout evidence measures the exact gate; one canonical schema/path resolver across CLI/runtime/runbook/tests; audit success exact zero-mutation/full-comparison.',
   'Large stacked PRs hide risk; one current-main contract PR with production-shaped test at a time.',
 ]
 const dispositions = new Set(['proven-fixed', 'still-exposed', 'intentionally-unsupported'])

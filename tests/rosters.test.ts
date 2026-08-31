@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { latestRosterByTeam, rosterBasisByTeam, rosterContinuity } from '../src/lib/rosters.ts'
+import { latestRosterByTeam, mergeRosterObservation, rosterBasisByTeam, rosterContinuity, rosterKnowledgeByTeam } from '../src/lib/rosters.ts'
 import type { MatchRecord, MatchRosterSnapshot } from '../src/types.ts'
 
 test('rosterBasisByTeam returns sourced for latest complete five-role roster', () => {
@@ -50,6 +50,36 @@ test('partial-only sourced appearances become assumed-continuous', () => {
   ])
 
   assert.equal(basis.get('T1'), 'assumed-continuous')
+})
+
+test('a later partial observation does not erase the latest complete lineup', () => {
+  const knowledge = rosterKnowledgeByTeam([
+    matchFixture({ id: 'complete', date: '2026-01-01', teamARoster: rosterFixture() }),
+    matchFixture({
+      id: 'partial',
+      date: '2026-01-02',
+      teamARoster: rosterFixture({ completeness: 'partial', players: playerList(['Mid'], { Mid: 'new-mid' }) }),
+    }),
+  ]).get('T1')
+
+  assert.equal(knowledge?.latestObserved?.completeness, 'partial')
+  assert.equal(knowledge?.latestComplete?.completeness, 'complete-five-role')
+  assert.equal(rosterBasisByTeam([
+    matchFixture({ id: 'complete', date: '2026-01-01', teamARoster: rosterFixture() }),
+    matchFixture({ id: 'partial', date: '2026-01-02', teamARoster: rosterFixture({ completeness: 'partial', players: playerList(['Mid']) }) }),
+  ]).get('T1'), 'sourced')
+})
+
+test('partial observations update known roles without dropping the last complete roles', () => {
+  const merged = mergeRosterObservation(
+    rosterFixture(),
+    rosterFixture({ completeness: 'partial', observedAt: '2026-01-02', players: playerList(['Mid'], { Mid: 'new-mid' }) }),
+  )
+
+  assert.equal(merged?.completeness, 'complete-five-role')
+  assert.equal(merged?.players.length, 5)
+  assert.equal(merged?.players.find((player) => player.role === 'Mid')?.id, 'new-mid')
+  assert.equal(merged?.players.find((player) => player.role === 'Top')?.id, 'player-top')
 })
 
 test('matches without sourced roster rows leave teams unknown', () => {

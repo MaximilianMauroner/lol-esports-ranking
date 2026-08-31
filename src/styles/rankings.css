@@ -1,60 +1,120 @@
+/* Power Index table.
+
+   The head/cell/row styling below used to live in an 815-character inline
+   `className` on the <Table> element in TeamsView. It is table chrome that
+   applies to exactly one table, so it belongs in a stylesheet where it can be
+   read. */
+
+.ranking-table thead th {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--faint);
+  font-size: var(--t-1);
+  font-weight: var(--w-emph);
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ranking-table tbody td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.ranking-table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.ranking-table tbody tr:hover {
+  background: var(--surface-2);
+}
+
+.ranking-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* The one selected treatment: soft accent fill plus an inset leading bar.
+   A picked row used to get the fill only, while a tier-highlighted row and a
+   picked region row each got fill plus bar, so "selected" read three ways. */
+.ranking-table tbody tr.is-picked {
+  background: var(--selected-bg);
+  box-shadow: var(--selected-bar);
+}
+
+.ranking-table tbody tr.is-picked:hover {
+  background: var(--selected-bg-hover);
+}
+
+.ranking-table th.center,
+.ranking-table td.center {
+  text-align: center;
+}
+
+.ranking-table th.right,
+.ranking-table td.right {
+  text-align: right;
+}
+
 /* Power Index table refinements */
 
-table.ranking-table.gpr-grid {
+table.ranking-table.board-grid {
   table-layout: fixed;
   width: 100%;
   min-width: 660px;
 }
 
-table.ranking-table.gpr-grid .gpr-col-rank {
+table.ranking-table.board-grid .board-col-rank {
   width: 108px;
 }
 
-table.ranking-table.gpr-grid .gpr-col-score,
-table.ranking-table.gpr-grid .gpr-col-record {
+table.ranking-table.board-grid .board-col-score,
+table.ranking-table.board-grid .board-col-record {
   width: 128px;
 }
 
-table.ranking-table.gpr-grid .gpr-col-trend {
+table.ranking-table.board-grid .board-col-trend {
   width: 136px;
 }
 
-table.ranking-table.gpr-grid .gpr-col-action {
+table.ranking-table.board-grid .board-col-action {
   width: 56px;
 }
 
-table.ranking-table.gpr-grid tbody td,
-table.ranking-table.gpr-grid thead th {
+table.ranking-table.board-grid tbody td,
+table.ranking-table.board-grid thead th {
   padding-inline: 12px;
 }
 
 @media (max-width: 640px) {
-  table.ranking-table.gpr-grid {
+  table.ranking-table.board-grid {
     min-width: 100%;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-rank {
+  table.ranking-table.board-grid .board-col-rank {
     width: 74px;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-score {
+  table.ranking-table.board-grid .board-col-score {
     width: 76px;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-trend {
+  table.ranking-table.board-grid .board-col-trend {
     width: 64px;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-action {
+  table.ranking-table.board-grid .board-col-action {
     width: 44px;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-record {
+  table.ranking-table.board-grid .board-col-record {
     display: none;
   }
 
-  table.ranking-table.gpr-grid tbody td,
-  table.ranking-table.gpr-grid thead th {
+  table.ranking-table.board-grid tbody td,
+  table.ranking-table.board-grid thead th {
     padding-inline: 6px;
   }
 
@@ -69,7 +129,7 @@ table.ranking-table.gpr-grid thead th {
   }
 
   .rank-trend-cell__move {
-    font-size: 0.76rem;
+    font-size: var(--t-2);
     min-width: 0;
   }
 
@@ -80,47 +140,47 @@ table.ranking-table.gpr-grid thead th {
 
   .tournament-move-cell__ranks b,
   .tournament-move-cell__delta {
-    font-size: 0.68rem;
+    font-size: var(--t-1);
   }
 
-  table.ranking-table.gpr-grid thead th:first-child {
+  table.ranking-table.board-grid thead th:first-child {
     padding-inline: 6px;
-    font-size: 0.64rem;
+    font-size: var(--t-1);
     letter-spacing: 0.05em;
   }
 
-  table.ranking-table.gpr-grid td.center,
-  table.ranking-table.gpr-grid th.center {
+  table.ranking-table.board-grid td.center,
+  table.ranking-table.board-grid th.center {
     padding-inline: 0;
   }
 
-  table.ranking-table.gpr-grid .team-mark.sm {
+  table.ranking-table.board-grid .team-mark.sm {
     width: 36px;
     height: 28px;
-    font-size: 0.66rem;
+    font-size: var(--t-1);
   }
 
-  table.ranking-table.gpr-grid .team-cell {
+  table.ranking-table.board-grid .team-cell {
     align-items: flex-start;
     gap: 8px;
     overflow: visible;
   }
 
-  table.ranking-table.gpr-grid .team-cell .ent b,
-  table.ranking-table.gpr-grid .team-cell .ent small {
+  table.ranking-table.board-grid .team-cell .ent b,
+  table.ranking-table.board-grid .team-cell .ent small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: normal;
     overflow-wrap: anywhere;
   }
 
-  table.ranking-table.gpr-grid .team-cell .ent b {
+  table.ranking-table.board-grid .team-cell .ent b {
     line-height: 1.24;
     overflow-wrap: normal;
     white-space: nowrap;
   }
 
-  table.ranking-table.gpr-grid .team-cell .ent small {
+  table.ranking-table.board-grid .team-cell .ent small {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -130,13 +190,13 @@ table.ranking-table.gpr-grid thead th {
 
   .team-score-value {
     min-width: 0;
-    font-size: 0.84rem;
+    font-size: var(--t-3);
   }
 
   .score-meta {
     display: block;
     margin-top: 3px;
-    font-size: 0.62rem;
+    font-size: var(--t-0);
     line-height: 1.15;
     text-align: right;
   }
@@ -145,81 +205,81 @@ table.ranking-table.gpr-grid thead th {
     display: none;
   }
 
-  .gpr-rankcell {
+  .board-rankcell {
     gap: 5px;
   }
 
-  .gpr-rank {
+  .board-rank {
     min-width: 1.2em;
-    font-size: 1rem;
+    font-size: var(--t-5);
   }
 
-  .gpr-rank--excluded {
-    font-size: 0.68rem;
+  .board-rank--excluded {
+    font-size: var(--t-1);
   }
 
   .rank-context-pill {
     max-width: 72px;
     padding-inline: 4px;
-    font-size: 0.58rem;
+    font-size: var(--t-0);
   }
 
   .tier-badge {
     min-width: 22px;
     height: 22px;
     padding-inline: 5px;
-    font-size: 0.74rem;
+    font-size: var(--t-2);
   }
 
 }
 
 @media (max-width: 360px) {
-  table.ranking-table.gpr-grid .gpr-col-trend {
+  table.ranking-table.board-grid .board-col-trend {
     display: none;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-rank {
+  table.ranking-table.board-grid .board-col-rank {
     width: 70px;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-score {
+  table.ranking-table.board-grid .board-col-score {
     width: 76px;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-trend {
+  table.ranking-table.board-grid .board-col-trend {
     width: 58px;
   }
 
-  table.ranking-table.gpr-grid .gpr-col-action {
+  table.ranking-table.board-grid .board-col-action {
     width: 44px;
   }
 
-  table.ranking-table.gpr-grid thead th:first-child {
+  table.ranking-table.board-grid thead th:first-child {
     padding-inline: 5px;
-    font-size: 0.62rem;
+    font-size: var(--t-0);
     letter-spacing: 0.04em;
   }
 
-  table.ranking-table.gpr-grid .team-cell {
+  table.ranking-table.board-grid .team-cell {
     gap: 6px;
   }
 
-  table.ranking-table.gpr-grid .team-mark.sm {
+  table.ranking-table.board-grid .team-mark.sm {
     width: 32px;
     height: 24px;
-    font-size: 0.62rem;
+    font-size: var(--t-0);
   }
 
-  .gpr-rankcell {
+  .board-rankcell {
     gap: 2px;
   }
 
-  .gpr-rank {
+  .board-rank {
     min-width: 1.1em;
-    font-size: 0.95rem;
+    font-size: var(--t-4);
   }
 
-  .gpr-rank-stack {
+  .board-rank-stack {
     gap: 2px;
   }
 
@@ -229,116 +289,59 @@ table.ranking-table.gpr-grid thead th {
 
 }
 
+/* One frame for every region. Size, radius and code size are driven by four
+   custom properties so the `sm` variant is a token override rather than a
+   second set of rules. The inset border ring, the 145deg gradient, the double
+   box-shadow and the text shadow were decorative and are gone. */
 .region-badge {
   --badge-hue: 205;
-  --badge-accent: oklch(0.76 0.12 var(--badge-hue));
   --badge-ink: oklch(0.92 0.045 var(--badge-hue));
-  --badge-surface: oklch(0.76 0.12 var(--badge-hue) / 0.13);
+  --badge-surface: oklch(0.76 0.12 var(--badge-hue) / 0.14);
   --badge-line: oklch(0.76 0.12 var(--badge-hue) / 0.44);
-  position: relative;
+  --badge-w: 44px;
+  --badge-h: 36px;
+  --badge-r: var(--r-2);
+  /* Glyph-fitting size for a fixed-width box, not a step on the text scale. */
+  --badge-code: var(--t-1);
+
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 44px;
-  height: 36px;
+  width: var(--badge-w);
+  height: var(--badge-h);
   border: 1px solid var(--badge-line);
-  border-radius: 7px;
-  background:
-    linear-gradient(145deg, var(--badge-surface), oklch(0.15 0.01 var(--badge-hue) / 0.78)),
-    var(--surface-2);
-  box-shadow: inset 0 1px 0 oklch(0.95 0.01 var(--badge-hue) / 0.12), 0 1px 0 oklch(0 0 0 / 0.28);
+  border-radius: var(--badge-r);
+  background: var(--badge-surface);
   color: var(--badge-ink);
   overflow: hidden;
-  isolation: isolate;
-}
-
-.region-badge::after {
-  content: "";
-  position: absolute;
-  inset: 5px;
-  border: 1px solid oklch(0.96 0.02 var(--badge-hue) / 0.08);
-  border-radius: 4px;
-  z-index: -1;
-}
-
-.region-badge svg {
-  position: absolute;
-  inset: 1px;
-  width: calc(100% - 2px);
-  height: calc(100% - 2px);
-  opacity: 0.54;
-}
-
-.region-badge__logo {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 76%;
-  height: 76%;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.54));
-}
-
-.region-badge--sm .region-badge__logo {
-  width: 82%;
-  height: 82%;
-}
-
-.region-badge__mark,
-.region-badge__cut {
-  fill: none;
-  stroke: var(--badge-accent);
-  stroke-linecap: square;
-  stroke-linejoin: round;
-  stroke-width: 4;
-}
-
-.region-badge__mark.is-soft,
-.region-badge__cut {
-  stroke-width: 2.6;
-  opacity: 0.72;
-}
-
-.region-badge__dot {
-  fill: var(--badge-accent);
-  opacity: 0.84;
-}
-
-.region-badge__code {
-  position: relative;
-  z-index: 1;
-  margin-top: 1px;
-  color: var(--badge-ink);
-  font-family: var(--mono);
-  font-size: 0.64rem;
-  font-weight: 850;
-  letter-spacing: 0;
-  line-height: 1;
-  text-shadow: 0 1px 2px oklch(0 0 0 / 0.55);
-}
-
-.region-badge[data-code-length="5"] .region-badge__code {
-  font-size: 0.5rem;
 }
 
 .region-badge--sm {
-  width: 28px;
-  height: 24px;
-  border-radius: 5px;
+  --badge-w: 28px;
+  --badge-h: 24px;
+  --badge-r: var(--r-1);
+  --badge-code: var(--t-0);
 }
 
-.region-badge--sm::after {
-  inset: 4px;
-  border-radius: 3px;
+.region-badge__logo {
+  display: block;
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
 }
 
-.region-badge--sm .region-badge__code {
-  font-size: 0.48rem;
+.region-badge__code {
+  font-family: var(--mono);
+  font-size: var(--badge-code);
+  font-weight: var(--w-figure);
+  line-height: 1;
+  letter-spacing: 0;
 }
 
-.region-badge--sm[data-code-length="5"] .region-badge__code {
-  font-size: 0.36rem;
-}
+.region-badge[data-code-length="4"] { --badge-code: var(--t-0); }
+.region-badge[data-code-length="5"] { --badge-code: 0.52rem; }
+.region-badge--sm[data-code-length="4"] { --badge-code: 0.46rem; }
+.region-badge--sm[data-code-length="5"] { --badge-code: 0.38rem; }
 
 .region-badge--lck { --badge-hue: 215; }
 .region-badge--lpl { --badge-hue: 28; }
@@ -435,7 +438,7 @@ table.ranking-table.gpr-grid thead th {
   padding: 9px 14px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--t-2);
   line-height: 1.4;
 }
 
@@ -476,7 +479,7 @@ table.ranking-table.gpr-grid thead th {
 .player-rank-skeleton {
   display: grid;
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-1);
   overflow: hidden;
   background: var(--detail-surface, var(--surface));
 }
@@ -576,13 +579,13 @@ table.ranking-table.gpr-grid thead th {
     justify-self: end;
     width: auto;
     color: var(--muted);
-    font-size: 0.76rem;
+    font-size: var(--t-2);
   }
 
   .player-rank-table td:nth-child(5)::before {
     content: "Games ";
     color: var(--faint);
-    font-size: 0.68rem;
+    font-size: var(--t-1);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -601,7 +604,7 @@ table.ranking-table.gpr-grid thead th {
   gap: 12px;
   padding: 18px 16px 14px;
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: var(--r-2);
   background: var(--detail-surface, var(--surface));
 }
 
@@ -622,5 +625,102 @@ table.ranking-table.gpr-grid thead th {
   .player-rank-skeleton__score {
     grid-column: 2 / -1;
     justify-items: start;
+  }
+}
+
+/* Comparison drawer table.
+
+   Like .ranking-table above, this replaces an inline `className` that had grown
+   past 1,700 characters. */
+
+.compare-table {
+  min-width: 620px;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.compare-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
+
+.compare-table thead th b {
+  font-size: var(--t-5);
+}
+
+.compare-table th[scope="row"] {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  color: var(--faint);
+  font-size: var(--t-2);
+  font-weight: var(--w-emph);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.compare-table td {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-table td.best {
+  color: var(--text-strong);
+  font-weight: var(--w-emph);
+}
+
+@media (max-width: 640px) {
+  .compare-table {
+    min-width: 520px;
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 10px 12px;
+  }
+
+  .compare-table thead th b {
+    max-width: none;
+    overflow: visible;
+    line-height: 1.2;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* Two columns fit the viewport, so drop the horizontal scroll entirely. */
+  .compare-table[data-compare-count="2"] {
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  .compare-table[data-compare-count="2"] th,
+  .compare-table[data-compare-count="2"] td {
+    padding-inline: 8px;
+  }
+
+  .compare-table[data-compare-count="2"] thead th:first-child,
+  .compare-table[data-compare-count="2"] th[scope="row"] {
+    width: 36%;
+  }
+
+  .compare-table[data-compare-count="2"] thead th:not(:first-child) {
+    width: 32%;
+  }
+
+  .compare-table[data-compare-count="2"] th[scope="row"] {
+    font-size: var(--t-1);
+    letter-spacing: 0.06em;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }

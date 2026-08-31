@@ -3,6 +3,7 @@ import type { MatchRecord, RatingUpdateLedger, TeamProfile } from '../types'
 import { eventWeightMultiplierForMatch, type EventWeightContext } from './eventWeighting'
 import { homeLeagueForMatch } from './matchContext'
 import { tournamentInstanceForEvent, type TournamentLifecycleStatus } from './internationalTournaments'
+import { resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
 import {
   initialTeamRating,
   maximumUncertainty,
@@ -35,7 +36,31 @@ type PlacementEventTracker = {
   started: boolean
   applied: boolean
   lifecycle?: PlacementTournamentLifecycle
+  placementAudit?: PlacementResidualAudit
 }
+
+export type PlacementResidualAudit = {
+  recognizedSeries: number
+  totalSeries: number
+  recognizedPhaseCoverage: number
+  actualPointPool: number
+  expectedPointPool: number
+  centeredDeltaTotal: number
+  skipReason?: 'insufficient-phase-coverage' | 'unresolved-terminal-final'
+}
+
+export type NormalizedTournamentPhase =
+  | 'final'
+  | 'upper-final'
+  | 'lower-final'
+  | 'semifinal'
+  | 'quarterfinal'
+  | 'knockout'
+  | 'swiss'
+  | 'group'
+  | 'play-in'
+  | 'participation'
+  | 'unknown'
 
 export type PlacementTournamentLifecycle = {
   status: TournamentLifecycleStatus
@@ -160,18 +185,47 @@ export function applyCompletedPlacementResiduals({
       continue
     }
 
-    const actual = actualStagePointsByLeague(tracker, teams)
-    const expected = expectedStagePointsByLeague(tracker, teams, config)
-    const representatives = representativesByLeague(tracker, teams)
-    const leagues = new Set([...actual.keys(), ...expected.keys()])
+    const series = resolveCanonicalSeries(tracker.matches)
+    const phaseAudit = tournamentPhaseAudit(series)
+    tracker.placementAudit = {
+      ...phaseAudit,
+      actualPointPool: 0,
+      expectedPointPool: 0,
+      centeredDeltaTotal: 0,
+    }
+    if (phaseAudit.recognizedPhaseCoverage < 0.9) {
+      tracker.placementAudit.skipReason = 'insufficient-phase-coverage'
+      tracker.applied = true
+      continue
+    }
+    if (!hasResolvedTerminalFinal(series)) {
+      tracker.placementAudit.skipReason = 'unresolved-terminal-final'
+      tracker.applied = true
+      continue
+    }
 
-    for (const league of leagues) {
-      if (league === 'Unknown') continue
+    const actual = actualStagePointsByLeague(tracker, teams, series)
+    const actualPointPool = sumMapValues(actual)
+    const expected = expectedStagePointsByLeague(tracker, teams, config, actualPointPool)
+    const expectedPointPool = sumMapValues(expected)
+    const representatives = representativesByLeague(tracker, teams)
+    const leagues = [...new Set([...actual.keys(), ...expected.keys()])].filter((league) => league !== 'Unknown')
+    const k = config.k * tracker.eventWeightMultiplier
+    const cap = config.cap * tracker.eventWeightMultiplier
+    const rawDeltas = new Map(leagues.map((league) => {
       const representativeCount = representatives.get(league) ?? 1
       const residual = (actual.get(league) ?? 0) - (expected.get(league) ?? 0)
-      const k = config.k * tracker.eventWeightMultiplier
-      const cap = config.cap * tracker.eventWeightMultiplier
-      const delta = Number(clamp(k * residual / Math.sqrt(Math.max(1, representativeCount)), -cap, cap).toFixed(1))
+      return [league, k * residual / Math.sqrt(Math.max(1, representativeCount))]
+    }))
+    const centeredDeltas = centeredCappedDeltas(rawDeltas, cap)
+    tracker.placementAudit = {
+      ...phaseAudit,
+      actualPointPool,
+      expectedPointPool,
+      centeredDeltaTotal: Number(sumMapValues(centeredDeltas).toFixed(6)),
+    }
+
+    for (const [league, delta] of centeredDeltas) {
       if (Math.abs(delta) < 0.05) continue
       const currentScore = leagueScores.get(league) ?? leaguePriorFor(league)
       previousLeagueScores.set(league, currentScore)
@@ -213,12 +267,16 @@ function teamsForLeague(
   return names
 }
 
-function actualStagePointsByLeague(tracker: PlacementEventTracker, teams: Record<string, TeamProfile>) {
+function actualStagePointsByLeague(
+  tracker: PlacementEventTracker,
+  teams: Record<string, TeamProfile>,
+  series: CanonicalSeries[],
+) {
   const teamPoints = new Map<string, number>()
-  for (const match of tracker.matches) {
-    const points = stagePointsForMatch(match)
-    teamPoints.set(match.teamA, Math.max(teamPoints.get(match.teamA) ?? 0, points.teamA))
-    teamPoints.set(match.teamB, Math.max(teamPoints.get(match.teamB) ?? 0, points.teamB))
+  for (const entry of series) {
+    const points = stagePointsForSeries(entry)
+    teamPoints.set(entry.teamA, Math.max(teamPoints.get(entry.teamA) ?? 0, points.teamA))
+    teamPoints.set(entry.teamB, Math.max(teamPoints.get(entry.teamB) ?? 0, points.teamB))
   }
   const byLeague = new Map<string, number>()
   for (const [team, points] of teamPoints.entries()) {
@@ -232,6 +290,7 @@ function expectedStagePointsByLeague(
   tracker: PlacementEventTracker,
   teams: Record<string, TeamProfile>,
   config: NonNullable<ReturnType<typeof placementResidualConfigFor>>,
+  actualPointPool: number,
 ) {
   const powers = Array.from(tracker.participants, (team) => ({
     team,
@@ -244,10 +303,19 @@ function expectedStagePointsByLeague(
   const totalWeight = softmaxWeights.reduce((total, value) => total + value, 0) || 1
   const byLeague = new Map<string, number>()
 
-  powers.forEach((entry, index) => {
-    const league = tracker.teamLeagues.get(entry.team) ?? teams[entry.team]?.league ?? 'Unknown'
+  const rawTeamPoints = powers.map((entry, index) => {
     const contenderShare = softmaxWeights[index] / totalWeight
-    const expectedPoints = config.baseStagePoints + contenderShare * (config.maxStagePoints - config.baseStagePoints)
+    return {
+      ...entry,
+      points: config.baseStagePoints + contenderShare * (config.maxStagePoints - config.baseStagePoints),
+    }
+  })
+  const rawExpectedPool = rawTeamPoints.reduce((total, entry) => total + entry.points, 0) || 1
+  const poolScale = actualPointPool / rawExpectedPool
+
+  rawTeamPoints.forEach((entry) => {
+    const league = tracker.teamLeagues.get(entry.team) ?? teams[entry.team]?.league ?? 'Unknown'
+    const expectedPoints = entry.points * poolScale
     byLeague.set(league, (byLeague.get(league) ?? 0) + expectedPoints)
   })
 
@@ -265,18 +333,76 @@ function representativesByLeague(tracker: PlacementEventTracker, teams: Record<s
   return new Map(Array.from(byLeague.entries()).map(([league, representatives]) => [league, representatives.size]))
 }
 
-function stagePointsForMatch(match: MatchRecord) {
-  const phase = `${match.phase} ${match.event}`.toLowerCase()
-  const finalPhase = /\b(grand\s+final|finals?|championship)\b/.test(phase) && !/\bsemi/.test(phase) && !/\bquarter/.test(phase)
-  const semifinalPhase = /\bsemi/.test(phase)
-  const quarterfinalPhase = /\bquarter/.test(phase)
-  const bracketFloor = match.tier === 'worlds-playoffs' || match.tier === 'msi-bracket' ? 3 : 1
-  const participantPoints = quarterfinalPhase ? 3 : semifinalPhase ? 5 : finalPhase ? 8 : bracketFloor
-  if (!finalPhase) return { teamA: participantPoints, teamB: participantPoints }
+function stagePointsForSeries(series: CanonicalSeries) {
+  const match = series.finalMatch
+  const phase = normalizeTournamentPhase(match.phase)
+  const participantPoints = phase === 'final' ? 8
+    : phase === 'upper-final' || phase === 'lower-final' || phase === 'semifinal' ? 5
+      : phase === 'quarterfinal' || phase === 'knockout' ? 3
+        : 1
+  if (phase !== 'final') return { teamA: participantPoints, teamB: participantPoints }
   return {
-    teamA: match.winner === match.teamA ? 11 : 8,
-    teamB: match.winner === match.teamB ? 11 : 8,
+    teamA: series.outcomeA === 1 ? 11 : 8,
+    teamB: series.outcomeA === 0 ? 11 : 8,
   }
+}
+
+export function normalizeTournamentPhase(input: string): NormalizedTournamentPhase {
+  const phase = input.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  if (!phase) return 'unknown'
+  if (/\bgrand final\b/.test(phase) || /^(?:the )?finals?$/.test(phase)) return 'final'
+  if (/\bupper (?:bracket )?finals?\b/.test(phase)) return 'upper-final'
+  if (/\blower (?:bracket )?finals?\b/.test(phase)) return 'lower-final'
+  if (/\bsemi ?finals?\b/.test(phase)) return 'semifinal'
+  if (/\bquarter ?finals?\b/.test(phase)) return 'quarterfinal'
+  if (/\b(?:knockout|elimination|bracket)\b/.test(phase) || /\b(?:upper|lower) round\b/.test(phase)) return 'knockout'
+  if (/\bswiss\b/.test(phase)) return 'swiss'
+  if (/\b(?:group|main) stage\b/.test(phase) || /^groups?$/.test(phase)) return 'group'
+  if (/\bplay[ -]?in\b/.test(input.toLowerCase())) return 'play-in'
+  if (/\b(?:round|stage)\s*(?:of\s*)?\d+\b/.test(phase) || /^round\s+\w+$/.test(phase)) return 'participation'
+  return 'unknown'
+}
+
+function tournamentPhaseAudit(series: CanonicalSeries[]) {
+  const recognizedSeries = series.filter((entry) => normalizeTournamentPhase(entry.finalMatch.phase) !== 'unknown').length
+  return {
+    recognizedSeries,
+    totalSeries: series.length,
+    recognizedPhaseCoverage: series.length === 0 ? 0 : recognizedSeries / series.length,
+  }
+}
+
+function hasResolvedTerminalFinal(series: CanonicalSeries[]) {
+  return series.some((entry) => normalizeTournamentPhase(entry.finalMatch.phase) === 'final' && entry.state === 'completed')
+}
+
+function centeredCappedDeltas(rawDeltas: Map<string, number>, cap: number) {
+  if (rawDeltas.size < 2) return new Map(Array.from(rawDeltas.keys(), (league) => [league, 0]))
+  const entries = [...rawDeltas.entries()]
+  let low = Math.min(...entries.map(([, value]) => value - cap))
+  let high = Math.max(...entries.map(([, value]) => value + cap))
+  for (let iteration = 0; iteration < 80; iteration += 1) {
+    const offset = (low + high) / 2
+    const total = entries.reduce((sum, [, value]) => sum + clamp(value - offset, -cap, cap), 0)
+    if (total > 0) low = offset
+    else high = offset
+  }
+  const offset = (low + high) / 2
+  const rounded = new Map(entries.map(([league, value]) => [league, Number(clamp(value - offset, -cap, cap).toFixed(1))]))
+  let remainingTenths = Math.round(-sumMapValues(rounded) * 10)
+  const direction = Math.sign(remainingTenths)
+  for (const [league, value] of [...rounded.entries()].sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]))) {
+    if (remainingTenths === 0) break
+    const adjusted = Number((value + direction * 0.1).toFixed(1))
+    if (Math.abs(adjusted) > cap + 1e-9) continue
+    rounded.set(league, adjusted)
+    remainingTenths -= direction
+  }
+  return rounded
+}
+
+function sumMapValues(values: ReadonlyMap<string, number>) {
+  return [...values.values()].reduce((total, value) => total + value, 0)
 }
 
 function placementResidualConfigFor(event: MatchRecord | PlacementEventTracker) {

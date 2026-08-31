@@ -57,9 +57,7 @@ export const directHeadToHeadContextConfig = {
   maxAdjustment: 3,
   overtakeMargin: 0.8,
 } as const
-export const recencyFloor = 0.62
-export const recencyRange = 0.38
-export const recencyDecayDays = 180
+export const recencyHalfLifeDays = 454.1791071114875
 export const normalPatchTeamRetention = 0.985
 export const splitBreakTeamRetention = 0.92
 export const seasonStartTeamRetention = 0.8
@@ -70,21 +68,24 @@ export const sideAdjustmentShrinkageGames = 24
 export const sideAdjustmentLearning = 'walk-forward-prior-only'
 export const publishedPredictionSideAdjustment = 'side-aware-prior-only'
 export const winProbabilityCalibrationPolicy = 'less-shrunk-favorite-calibration-v1'
-export const winProbabilityEloScale = 360
+export const winProbabilityEloScale = 250
 export const winProbabilityUncertaintyScale = 620
 export const winProbabilityUncertaintyFloor = 0.45
 export const sameDayPredictionBatching = true
-export const onlineRecencyDecay = 'state-gap-regression'
+export const onlineRecencyDecay = 'entity-local-composable-half-life-regression-v1'
 export const ratingUpdateRecencyWeight = 1
 export const leagueExpectedScoreSource = 'pregame-neutral-series-team-power'
-export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-v13'
+export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-roster-evidence-v14'
+export const lineupEvidencePolicy = 'prior-observed-series-evidence-with-90-day-half-life-v1'
+export const partialLineupPolicy = 'role-weighted-known-player-evidence-v1'
+export const substituteEraPolicy = 'three-series-or-twenty-percent-split-share-v1'
 export const snapshotSeasonScopePolicy = 'calendar-aligned-season-ranking-profile-with-prior-baseline'
 export const validationBaselinePolicy = ['coin-flip', 'pregame-win-rate', 'team-only'] as const
 export const rankingTarget = 'context-neutral-latent-team-strength'
 export const matchOutcomeTargetPolicy = 'match-outcomes-are-evidence-not-ranking-target'
 export const canonicalUpdateUnitPolicy = 'series-atomic-team-and-league-strength'
-export const residualBudgetPolicy = 'latent-strength-result-budget-v1'
-export const latentStrengthBudgetShareSemantics = 'teamStable/teamForm split remaining team-local evidence after eligible league-anchor reservations'
+export const residualBudgetPolicy = 'base-evidence-and-realized-delta-budget-v2'
+export const latentStrengthBudgetShareSemantics = 'configured shares apply to base evidence; uncertainty, roster volatility, transfer shrinkage, momentum decay, caps, and rounding determine realized movement'
 export const latentStrengthResultBudgetShares = {
   teamStable: 0.9,
   teamForm: 0.1,
@@ -152,9 +153,7 @@ export const playerRatingPredictionPolicy = {
 } as const satisfies PredictionFeaturePolicy
 export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingPredictionPolicy)
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)
-// Before 1.0, the public model version intentionally stays stable; the
-// config hash carries exact provenance for breaking experimental iterations.
-export const transparentGprModelVersion = 'transparent-power-index-v0.0.0'
+export const transparentGprModelVersion = 'transparent-power-index-v0.2.0'
 export const transparentGprModelParameters = {
   initialTeamRating,
   initialLeagueRating,
@@ -169,9 +168,7 @@ export const transparentGprModelParameters = {
   publishedLeagueAnchorReliefConfig,
   directHeadToHeadContextPolicy,
   directHeadToHeadContextConfig,
-  recencyFloor,
-  recencyRange,
-  recencyDecayDays,
+  recencyHalfLifeDays,
   normalPatchTeamRetention,
   splitBreakTeamRetention,
   seasonStartTeamRetention,
@@ -190,6 +187,9 @@ export const transparentGprModelParameters = {
   ratingUpdateRecencyWeight,
   leagueExpectedScoreSource,
   sourcePipelineVersion,
+  lineupEvidencePolicy,
+  partialLineupPolicy,
+  substituteEraPolicy,
   snapshotSeasonScopePolicy,
   validationBaselinePolicy,
   rankingTarget,
@@ -242,7 +242,6 @@ export const transparentGprModelParameters = {
   ratingUniverse: ratedTeamUniverseModelParameters,
   walkForwardSegments: walkForwardSegmentKeys,
   eventKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.kFactor])),
-  leagueKFactors: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.leagueKFactor])),
   eventWeights: Object.fromEntries(Object.entries(eventTierConfig).map(([tier, config]) => [tier, config.weight])),
 } as const
 

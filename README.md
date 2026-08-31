@@ -19,7 +19,7 @@ Recovery order is strict:
 1. Restore the previous complete generation.
 2. If that is unavailable, perform a forced full replay from the active verified raw authority only with separate recovery authorization.
 
-Scheduled freshness remains strict. Production deployment, incremental activation, five-minute cadence, presigned delivery, delete-mode cleanup, Railway sizing, and billing changes remain unauthorized.
+Scheduled freshness remains strict. Production deployment, incremental activation, five-minute cadence, presigned delivery, and delete-mode cleanup remain unauthorized.
 
 An independent team-strength prototype for LoL esports. The app presents a Power Index rather than a static table: ranking controls, tournament weights, selected-team explanations, team timelines, player timelines, season summaries, event summaries, and methodology notes.
 

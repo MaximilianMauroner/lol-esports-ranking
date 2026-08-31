@@ -10,6 +10,8 @@ export const walkForwardSegmentKeys = [
   'side-known',
   'patch-transition',
   'roster-change',
+  'partial-lineup',
+  'unknown-lineup',
 ] as const satisfies readonly WalkForwardSegmentKey[]
 
 export function predictionSegmentsFor(

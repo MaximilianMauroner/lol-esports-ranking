@@ -23,9 +23,8 @@ import {
   applyCompletedPlacementResiduals,
   startEventTrackersForDate,
 } from './placementResiduals'
-import { applyContextDecayToRatingChannels } from './ratingContext'
+import { applyEntityLocalContextDecayForDate } from './ratingContext'
 import {
-  applyMomentumBoundaryDecay,
   clamp,
   evidenceWeightedPublishedLeagueAnchor,
   evidenceWeightedPublishedStanding,
@@ -40,7 +39,7 @@ import {
 import { createRatingRunState, ensureMatchRunEntities, type RatingRunState } from './ratingRunState'
 import type { PlacementTournamentLifecycle } from './placementResiduals'
 import { emitPregamePredictionsForDate, processRatingSeriesForDate } from './ratingSeriesEngine'
-import { applyRosterContinuityForDate, roundedContinuity } from './rosterContinuityRating'
+import { roundedContinuity } from './rosterContinuityRating'
 import { rosterBasisByTeam } from './rosters'
 import { sideAdjustmentsFromSamples } from './sideAdjustments'
 import {
@@ -49,10 +48,10 @@ import {
   initialTeamRating,
   leagueEloWeight,
   maximumUncertainty,
+  momentumPatchRetention,
+  momentumSplitRetention,
   normalPatchTeamRetention,
-  recencyDecayDays,
-  recencyFloor,
-  recencyRange,
+  recencyHalfLifeDays,
   seasonStartLeagueRetention,
   seasonStartTeamRetention,
   splitBreakLeagueRetention,
@@ -205,26 +204,34 @@ export function processRatingUtcDateBoundary({
     latestRatingUpdates: state.latestRatingUpdates,
   })
 
-  applyContextDecayToRatingChannels(
-    firstMatch,
-    state.previousMatch,
+  applyEntityLocalContextDecayForDate(
+    dateMatches,
     teams,
     [state.ratings, state.executionRatings],
+    state.momentums,
     state.leagueScores,
     {
+      teamLastRatedDates: state.teamLastRatedDates,
+      teamLastSeasons: state.teamLastSeasons,
+      teamLastSplits: state.teamLastSplits,
+      leagueLastRatedDates: state.leagueLastRatedDates,
+      leagueLastSeasons: state.leagueLastSeasons,
+      leagueLastSplits: state.leagueLastSplits,
+      lastPatchByTeam: state.lastPatchByTeam,
+    },
+    {
       initialTeamRating,
-      recencyFloor,
-      recencyRange,
-      recencyDecayDays,
+      recencyHalfLifeDays,
       normalPatchTeamRetention,
       splitBreakTeamRetention,
       seasonStartTeamRetention,
       splitBreakLeagueRetention,
       seasonStartLeagueRetention,
       splitBreakMinimumGapDays,
+      momentumSplitRetention,
+      momentumPatchRetention,
     },
   )
-  applyMomentumBoundaryDecay(firstMatch, state.previousMatch, state.momentums)
 
   for (const match of dateMatches) {
     ensureMatchRunEntities(state, match, teams)
@@ -232,7 +239,6 @@ export function processRatingUtcDateBoundary({
     ensureLeague(homeLeagueForMatch(match, 'B', teams), state.leagueScores, state.previousLeagueScores, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums, state.leagueForms, state.leagueMatchCounts)
   }
 
-  applyRosterContinuityForDate(dateMatches, state.ratings, state.executionRatings, state.uncertainties, state.lastRosterByTeam, state.currentRosterContinuity)
   startEventTrackersForDate(dateMatches, state.eventTrackers, teams, state.ratings, state.momentums, state.rosterPriorOffsets, state.uncertainties, state.leagueScores, state.leagueMatchCounts)
 
   const sideAdjustments = sideAdjustmentsFromSamples(state.sideAdjustmentSamples)

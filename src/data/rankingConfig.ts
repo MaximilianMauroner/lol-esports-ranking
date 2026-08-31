@@ -9,64 +9,55 @@ export const eventTierConfig: Record<
   {
     label: string
     kFactor: number
-    leagueKFactor: number
     weight: number
     description: string
   }
 > = {
   'worlds-playoffs': {
     label: 'Worlds playoffs',
-    kFactor: 34,
-    leagueKFactor: 24,
-    weight: 34 / 14,
+    kFactor: 39,
+    weight: 39 / 14,
     description: 'Highest leverage international knockout series and games.',
   },
   'worlds-main': {
     label: 'Worlds main stage',
-    kFactor: 24,
-    leagueKFactor: 18,
-    weight: 24 / 14,
+    kFactor: 27,
+    weight: 27 / 14,
     description: 'World Championship games before the final bracket peak.',
   },
   'msi-bracket': {
     label: 'MSI bracket',
-    kFactor: 34,
-    leagueKFactor: 24,
-    weight: 34 / 14,
+    kFactor: 39,
+    weight: 39 / 14,
     description: 'International bracket games with current-season regional champions.',
   },
   'msi-play-in': {
     label: 'MSI play-in',
-    kFactor: 24,
-    leagueKFactor: 18,
-    weight: 24 / 14,
+    kFactor: 27,
+    weight: 27 / 14,
     description: 'International qualification games with meaningful cross-region signal.',
   },
   'major-playoffs': {
     label: 'Major regional playoffs',
     kFactor: 22,
-    leagueKFactor: 0,
     weight: 22 / 14,
     description: 'Domestic playoff games with Worlds/MSI qualification pressure.',
   },
   'regional-regular': {
     label: 'Regional regular season',
     kFactor: 14,
-    leagueKFactor: 0,
     weight: 1,
     description: 'High-volume domestic games, useful but less decisive alone.',
   },
   'minor-international': {
     label: 'Minor international',
-    kFactor: 20,
-    leagueKFactor: 12,
-    weight: 20 / 14,
+    kFactor: 23,
+    weight: 23 / 14,
     description: 'Cross-region events below MSI and Worlds in global signal strength.',
   },
   qualifier: {
     label: 'Qualifier',
     kFactor: 12,
-    leagueKFactor: 0,
     weight: 12 / 14,
     description: 'Qualification matches with stakes but often narrower fields.',
   },

@@ -1,5 +1,17 @@
-import { baseRoleShares } from './playerModel'
 import type { MatchRecord, MatchRosterSnapshot, Role, RosterBasis } from '../types'
+
+const rosterRoleShares: Record<Role, number> = {
+  Top: 0.18,
+  Jungle: 0.22,
+  Mid: 0.22,
+  Bot: 0.2,
+  Support: 0.18,
+}
+
+export type TeamRosterKnowledge = {
+  latestObserved?: MatchRosterSnapshot
+  latestComplete?: MatchRosterSnapshot
+}
 
 export type RosterContinuityConfig = {
   roleValueWeights: Record<Role, number>
@@ -7,28 +19,55 @@ export type RosterContinuityConfig = {
 }
 
 export const defaultRosterContinuityConfig: RosterContinuityConfig = {
-  roleValueWeights: baseRoleShares,
+  roleValueWeights: rosterRoleShares,
   requiresCompleteLineups: true,
 }
 
 export function latestRosterByTeam(matches: MatchRecord[]): Map<string, MatchRosterSnapshot> {
-  const latest = new Map<string, MatchRosterSnapshot>()
+  return new Map(
+    [...rosterKnowledgeByTeam(matches)].flatMap(([team, knowledge]) =>
+      knowledge.latestObserved ? [[team, knowledge.latestObserved] as const] : []),
+  )
+}
+
+export function rosterKnowledgeByTeam(matches: readonly MatchRecord[]): Map<string, TeamRosterKnowledge> {
+  const knowledge = new Map<string, TeamRosterKnowledge>()
 
   for (const match of matches.toSorted(compareMatchesByDateAndId)) {
-    if (match.teamARoster) latest.set(match.teamA, match.teamARoster)
-    if (match.teamBRoster) latest.set(match.teamB, match.teamBRoster)
+    recordRosterKnowledge(knowledge, match.teamA, match.teamARoster)
+    recordRosterKnowledge(knowledge, match.teamB, match.teamBRoster)
   }
 
-  return latest
+  return knowledge
 }
 
 export function rosterBasisByTeam(matches: MatchRecord[]): Map<string, RosterBasis> {
   return new Map(
-    Array.from(latestRosterByTeam(matches).entries()).map(([team, roster]) => [
+    Array.from(rosterKnowledgeByTeam(matches).entries()).map(([team, knowledge]) => [
       team,
-      roster.completeness === 'complete-five-role' ? 'sourced' : 'assumed-continuous',
+      knowledge.latestComplete ? 'sourced' : 'assumed-continuous',
     ]),
   )
+}
+
+export function mergeRosterObservation(
+  previous: MatchRosterSnapshot | undefined,
+  observed: MatchRosterSnapshot | undefined,
+): MatchRosterSnapshot | undefined {
+  if (!observed) return previous
+  if (!previous || observed.completeness === 'complete-five-role') return observed
+
+  const observedByRole = new Map(observed.players.map((player) => [player.role, player]))
+  const players = previous.players
+    .map((player) => observedByRole.get(player.role) ?? player)
+    .concat(observed.players.filter((player) => !previous.players.some((prior) => prior.role === player.role)))
+    .toSorted((left, right) => roleOrder(left.role) - roleOrder(right.role))
+  const coveredRoles = new Set(players.map((player) => player.role))
+  return {
+    ...observed,
+    completeness: coveredRoles.size === 5 ? 'complete-five-role' : 'partial',
+    players,
+  }
 }
 
 export function rosterContinuity(
@@ -66,7 +105,21 @@ export function rosterFingerprint(roster?: MatchRosterSnapshot) {
 }
 
 function compareMatchesByDateAndId(left: MatchRecord, right: MatchRecord) {
-  return left.date.localeCompare(right.date) || left.id.localeCompare(right.id)
+  return left.date.localeCompare(right.date)
+    || (left.datetimeUtc ?? '').localeCompare(right.datetimeUtc ?? '')
+    || left.id.localeCompare(right.id)
+}
+
+function recordRosterKnowledge(
+  knowledge: Map<string, TeamRosterKnowledge>,
+  team: string,
+  roster: MatchRosterSnapshot | undefined,
+) {
+  if (!roster) return
+  const current = knowledge.get(team) ?? {}
+  current.latestObserved = roster
+  if (roster.completeness === 'complete-five-role') current.latestComplete = roster
+  knowledge.set(team, current)
 }
 
 function roleOrder(role: Role) {

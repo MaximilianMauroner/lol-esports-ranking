@@ -1,15 +1,16 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-16T14:21:35.498Z",
+  "generatedAt": "2026-07-26T16:58:58.255Z",
   "start": "2025-01-01",
-  "end": "2026-07-16",
+  "end": "2026-07-26",
   "files": {
     "leaguepediaJson": [
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json",
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-06_to_2026-07-08.json",
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-09_to_2026-07-10.json",
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-04_to_2026-07-11.json",
-      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-12_to_2026-07-16.json"
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-12_to_2026-07-16.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-19_to_2026-07-26.json"
     ],
     "oracleCsv": [
       "/home/codex/work/lol-esports-ranking/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
@@ -19,7 +20,8 @@
       "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2011-01-01_to_2026-07-09.json",
       "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-09_to_2026-07-10.json",
       "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-04_to_2026-07-11.json",
-      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2011-01-01_to_2026-07-16.json"
+      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2011-01-01_to_2026-07-16.json",
+      "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-19_to_2026-07-26.json"
     ]
   },
   "sources": {
@@ -61,12 +63,12 @@
     }
   },
   "warnings": [
-    "Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-12 through 2026-07-16 scored window successfully.",
+    "Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-19 through 2026-07-26 scored window successfully.",
     "Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines.",
     "LoL Esports schedule APIs are unsupported reference endpoints; the refreshed cache is reference-only."
   ],
   "refreshWindow": {
-    "start": "2026-07-12",
-    "end": "2026-07-16"
+    "start": "2026-07-19",
+    "end": "2026-07-26"
   }
 }

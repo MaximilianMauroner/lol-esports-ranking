@@ -6,7 +6,7 @@ import {
 } from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
 
-export const RATING_CHECKPOINT_SCHEMA_VERSION = 3 as const
+export const RATING_CHECKPOINT_SCHEMA_VERSION = 4 as const
 
 export type RatingCheckpointIdentity = {
   importerVersion: string
@@ -448,9 +448,20 @@ function isRatingRunState(value: unknown): value is RatingRunState {
     'leagueOpponentRatingSums',
     'leagueMatchCounts',
     'currentRosterContinuity',
+    'teamLastSeasons',
+    'leagueLastSeasons',
   ].every((field) => isMapOf(value[field], isString, isNumber))
     && ['forms', 'leagueForms'].every((field) => isMapOf(value[field], isString, isStringArray))
-    && ['leagueLastEvents', 'leagueLastUpdated', 'lastPatchByTeam', 'lastRosterFingerprintByTeam']
+    && [
+      'leagueLastEvents',
+      'leagueLastUpdated',
+      'lastPatchByTeam',
+      'lastRosterFingerprintByTeam',
+      'teamLastRatedDates',
+      'teamLastSplits',
+      'leagueLastRatedDates',
+      'leagueLastSplits',
+    ]
       .every((field) => isMapOf(value[field], isString, isString))
     && isMapOf(value.latestRatingUpdates, isString, isSerializableRecord)
     && isMapOf(value.histories, isString, isSerializableRecordArray)

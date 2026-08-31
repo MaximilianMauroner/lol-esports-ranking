@@ -245,6 +245,8 @@ export type DataQualityAudit = {
     partialRosterSides: number
     missingRosterSides: number
     playerStatRows: number
+    unresolvedPlayerRows?: number
+    postgameObservedRosterSides?: number
   }
   identityCoverage: {
     teamProfileCount: number
@@ -1821,7 +1823,7 @@ function playerDirectoryFromCompact(
     roles: ROLE_ORDER.filter((role) => players.some((player) => player.role === role)),
     players,
     ...(Object.keys(scopedPlayers).length > 0 ? { scopedPlayers } : {}),
-    currentLineups: currentLineupsForPlayers(players),
+    currentLineups: currentLineupsForPlayers(players, data.generatedAt),
   }
 }
 
@@ -1952,7 +1954,7 @@ function compactPlayersForSnapshot(
   return assignCompactPlayerResidualRanks(compactPlayers)
 }
 
-function currentLineupsForPlayers(players: CompactPlayer[]): Record<string, PublicCurrentLineup> {
+function currentLineupsForPlayers(players: CompactPlayer[], generatedAt: string): Record<string, PublicCurrentLineup> {
   const byTeamId = new Map<string, CompactPlayer[]>()
   for (const player of players) {
     if (!player.teamId || !player.latestObservedAt) continue
@@ -1970,11 +1972,9 @@ function currentLineupsForPlayers(players: CompactPlayer[]): Record<string, Publ
         || right.games - left.games
         || left.name.localeCompare(right.name))
     const starters: CompactPlayer[] = []
-    const substitutes: CompactPlayer[] = []
     const occupiedRoles = new Set<Role>()
     for (const player of observedPlayers) {
-      if (occupiedRoles.has(player.role)) substitutes.push(player)
-      else {
+      if (!occupiedRoles.has(player.role)) {
         starters.push(player)
         occupiedRoles.add(player.role)
       }
@@ -1994,15 +1994,23 @@ function currentLineupsForPlayers(players: CompactPlayer[]): Record<string, Publ
       teamId,
       teamCode: first.teamCode,
       observedAt,
+      observedEvent: first.latestObservedEvent,
+      freshnessDays: wholeDaysBetween(observedAt, generatedAt.slice(0, 10)),
       sourceProvider: first.sourceProvider ?? 'oracles-elixir',
+      claim: 'last-observed',
+      evidenceBasis: 'scored-series',
       completeness: missingRoles.length === 0 ? 'complete-five-role' : 'partial',
       coveredRoles,
       missingRoles,
       starters: starters.map(compactLineupPlayer),
-      substitutes: substitutes.map(compactLineupPlayer),
+      substitutes: [],
     }
     return [teamId, lineup]
   }))
+}
+
+function wholeDaysBetween(start: string, end: string) {
+  return Math.max(0, Math.floor((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000))
 }
 
 function assignCompactPlayerResidualRanks(players: CompactPlayer[]): CompactPlayer[] {
@@ -2235,6 +2243,10 @@ function dataQualityFor(
   const missingRosterSides = rosterSides.filter((roster) => !roster).length
   const duplicateTeamCodes = duplicateTeamCodesFor(teams)
   const unresolvedLineages = unresolvedTeamLineagesFor(teams)
+  const unresolvedPlayerRows = rosterSides.reduce(
+    (total, roster) => total + (roster?.players.filter((player) => player.id.startsWith('oe:player:unresolved:')).length ?? 0),
+    0,
+  )
 
   return {
     matchCount: matches.length,
@@ -2257,6 +2269,8 @@ function dataQualityFor(
       partialRosterSides: rosterSides.filter((roster) => roster?.completeness === 'partial').length,
       missingRosterSides,
       playerStatRows: rosterSides.reduce((total, roster) => total + (roster?.players.filter((player) => player.stats).length ?? 0), 0),
+      unresolvedPlayerRows,
+      postgameObservedRosterSides: rosterSides.filter(Boolean).length,
     },
     identityCoverage: {
       teamProfileCount: Object.keys(teams).length,

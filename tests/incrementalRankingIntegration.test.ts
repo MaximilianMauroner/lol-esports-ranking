@@ -85,7 +85,7 @@ test('releasing import audit rows before snapshot preserves roster/player public
       }).digest,
       '8619633cd62e81ccf4549654dfe013298a2f421ec836d2597f2d99b1f33531f5',
     )
-    assert.equal(normalIdentities['entities/players.json'], '5a0a99651117e85e2c4af847504168634fb7128abb614e154e85768695658e9e')
+    assert.equal(normalIdentities['entities/players.json'], '03c12374e2dbae1daa505c31d76dfb865fa8bb1f4dc9fa76fc77f3823c180e75')
     const compactSnapshot = createStaticRankingData({
       matches: structuredClone(normalSource.matches),
       teams: structuredClone(normalSource.teams),

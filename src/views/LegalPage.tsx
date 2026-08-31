@@ -21,7 +21,7 @@ export function LegalPage({ page }: { page: LegalPageName }) {
       <div className="mx-auto grid w-full max-w-[900px] gap-6">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] pb-5">
           <div>
-            <a className="text-[0.72rem] tracking-[0.16em] text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
+            <a className="text-[var(--t-2)] tracking-[0.16em] text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
             <h1 className="mt-2 text-3xl font-bold text-[var(--text-strong)]">{title}</h1>
             <p className="mt-1 text-sm text-[var(--muted)]">Last updated: {UPDATED_AT}</p>
           </div>
@@ -115,7 +115,7 @@ function Licenses() {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-[var(--r)] border border-[var(--line)] bg-[var(--surface)] p-5 text-sm leading-7 text-[var(--muted)] shadow-[var(--shadow-1)]">
+    <section className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] p-5 text-sm leading-7 text-[var(--muted)] shadow-[var(--shadow-1)]">
       <h2 className="mb-3 text-lg font-bold text-[var(--text-strong)]">{title}</h2>
       {children}
     </section>

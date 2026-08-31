@@ -36,7 +36,7 @@ test('normal public-board uncertainty keeps favorites meaningfully separated', (
   )
 
   assert.equal(prediction.uncertaintyPenalty, 0.7765)
-  assert.equal(prediction.teamAGameWinProbability, 0.6201)
+  assert.equal(prediction.teamAGameWinProbability, 0.6671)
 })
 
 test('series probability amplifies a single-game edge', () => {

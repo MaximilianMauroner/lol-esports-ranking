@@ -16,7 +16,7 @@ import {
   executionSoftOutcome,
   teamExecutionIndex,
 } from './executionResidual'
-import { eventKFactorForMatch, eventWeightForMatch, leagueKFactorForMatch } from './eventWeighting'
+import { eventKFactorForMatch, eventWeightForMatch } from './eventWeighting'
 import { updateLeagueStrengthForSeries } from './leagueRatings'
 import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
 import type { PregamePlayerRatingEdge } from './playerModel'
@@ -42,7 +42,7 @@ import {
 } from './ratingCalculations'
 import type { RatingRunState } from './ratingRunState'
 import { makeRankMap } from './ratingRunState'
-import { roundedContinuity } from './rosterContinuityRating'
+import { applyRosterContinuityForSeries, roundedContinuity } from './rosterContinuityRating'
 import { recordSideAdjustmentSample, sideAdjustmentFor } from './sideAdjustments'
 import { resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
 import { neutralWinProbability } from './winProbability'
@@ -91,7 +91,7 @@ export function emitPregamePredictionsForDate({
   sideAdjustments: Map<string, number>
 }) {
   const batch = ratingBatchSnapshot(state)
-  for (const series of resolveCanonicalSeries(matches).toSorted((left, right) => left.id.localeCompare(right.id))) {
+  for (const series of resolveCanonicalSeries(matches)) {
     for (const match of series.games) {
       state.predictions.push(pregamePredictionForMatch({
         match,
@@ -122,7 +122,15 @@ export function processRatingSeriesForDate({
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
 }) {
   const batch = ratingBatchSnapshot(state)
-  for (const series of ratingSeriesGroupsForDate(matches).toSorted((left, right) => left.key.localeCompare(right.key))) {
+  for (const series of ratingSeriesGroupsForDate(matches)) {
+    applyRosterContinuityForSeries(
+      series.finalMatch,
+      state.ratings,
+      state.executionRatings,
+      state.uncertainties,
+      state.lastRosterByTeam,
+      state.currentRosterContinuity,
+    )
     processRatingSeries({ series, teams, state, batch, sideAdjustments, lastDate, pregamePlayerRatingEdges })
   }
 }
@@ -255,6 +263,12 @@ function pregamePredictionForMatch({
     teamBSideAdjustment: Number(sideAdjustmentB.toFixed(1)),
     teamAPlayerRatingCoverage: playerRatingEdge?.teamACoverage ?? 0,
     teamBPlayerRatingCoverage: playerRatingEdge?.teamBCoverage ?? 0,
+    teamALineupEvidenceBasis: playerRatingEdge?.teamAEvidenceBasis ?? 'unavailable',
+    teamBLineupEvidenceBasis: playerRatingEdge?.teamBEvidenceBasis ?? 'unavailable',
+    teamALineupObservedAt: playerRatingEdge?.teamAObservedAt,
+    teamBLineupObservedAt: playerRatingEdge?.teamBObservedAt,
+    teamALineupFreshnessWeight: playerRatingEdge?.teamAFreshnessWeight ?? 0,
+    teamBLineupFreshnessWeight: playerRatingEdge?.teamBFreshnessWeight ?? 0,
     teamAGameWinProbabilityPlayerAdjusted: playerAdjustedPrediction.teamAGameWinProbability,
     teamBGameWinProbabilityPlayerAdjusted: playerAdjustedPrediction.teamBGameWinProbability,
     teamASeriesWinProbabilityPlayerAdjusted: playerAdjustedPrediction.teamASeriesWinProbability,
@@ -268,13 +282,22 @@ function pregamePredictionForMatch({
     teamBSeriesWinProbabilityExecutionAdjusted: executionAdjustedPrediction.teamBSeriesWinProbability,
     executionResidualPredictionWeight,
     variants,
-    segments: predictionSegmentsFor(match, teams, state.lastPatchByTeam, state.lastRosterFingerprintByTeam, series.format),
+    segments: [
+      ...predictionSegmentsFor(match, teams, state.lastPatchByTeam, state.lastRosterFingerprintByTeam, series.format),
+      ...lineupCoverageSegments(playerRatingEdge),
+    ],
     trainingMatchCount: state.processedMatchCount,
     dataCutoff: state.previousMatch?.date,
     modelVersion: transparentGprModelMetadata.version,
     modelConfigHash: transparentGprModelMetadata.configHash,
     source: sourceTraceFor(match, series),
   }
+}
+
+function lineupCoverageSegments(edge: PregamePlayerRatingEdge | undefined): Array<'partial-lineup' | 'unknown-lineup'> {
+  if (!edge || edge.teamAEvidenceBasis === 'unavailable' || edge.teamBEvidenceBasis === 'unavailable') return ['unknown-lineup']
+  if (edge.teamALineupCompleteness === 'partial' || edge.teamBLineupCompleteness === 'partial') return ['partial-lineup']
+  return []
 }
 
 function rosterPriorOffsetsForMatch(
@@ -346,32 +369,38 @@ function processRatingSeries({
   const hasLeagueSignal = seriesLeagueA !== seriesLeagueB
     && seriesLeagueA !== 'Unknown'
     && seriesLeagueB !== 'Unknown'
-    && leagueKFactorForMatch(finalMatch, state.eventWeightContext) !== 0
     && isInternationalMatch(finalMatch)
   const leagueSignalShare = hasLeagueSignal ? latentStrengthResultBudgetShares.leagueAnchor : 0
   const teamStableShare = (1 - leagueSignalShare) * latentStrengthResultBudgetShares.teamStable
   const teamFormShare = (1 - leagueSignalShare) * latentStrengthResultBudgetShares.teamForm
-  const effectiveSeriesKA = eventK
-    * series.strengthSignal
-    * uncertaintyKMultiplier(seriesUncertaintyA)
-    * rosterVolatilityMultiplier(state.currentRosterContinuity.get(series.teamA))
-  const effectiveSeriesKB = eventK
-    * series.strengthSignal
-    * uncertaintyKMultiplier(seriesUncertaintyB)
-    * rosterVolatilityMultiplier(state.currentRosterContinuity.get(series.teamB))
   const seriesResidualA = series.observedOutcomeA - expectedOutcomeA
   const seriesResidualB = series.observedOutcomeB - expectedOutcomeB
-  const seriesResultEvidenceA = effectiveSeriesKA * ratingUpdateRecencyWeight * seriesResidualA
-  const seriesResultEvidenceB = effectiveSeriesKB * ratingUpdateRecencyWeight * seriesResidualB
+  const seriesResultEvidenceA = eventK * series.strengthSignal * ratingUpdateRecencyWeight * seriesResidualA
+  const seriesResultEvidenceB = -seriesResultEvidenceA
+  const uncertaintyMultiplierA = uncertaintyKMultiplier(seriesUncertaintyA)
+  const uncertaintyMultiplierB = uncertaintyKMultiplier(seriesUncertaintyB)
+  const rosterMultiplierA = rosterVolatilityMultiplier(state.currentRosterContinuity.get(series.teamA))
+  const rosterMultiplierB = rosterVolatilityMultiplier(state.currentRosterContinuity.get(series.teamB))
   const stableTransferWeightA = teamStableTransferWeightForSeries(finalMatch, seriesLeagueA, seriesLeagueB)
   const stableTransferWeightB = teamStableTransferWeightForSeries(finalMatch, seriesLeagueB, seriesLeagueA)
-  const appliedTeamStableShareA = teamStableShare * stableTransferWeightA
-  const appliedTeamStableShareB = teamStableShare * stableTransferWeightB
-  const seriesDeltaA = Math.round(seriesResultEvidenceA * appliedTeamStableShareA)
-  const seriesDeltaB = Math.round(seriesResultEvidenceB * appliedTeamStableShareB)
+  const appliedTeamStableShareA = teamStableShare
+  const appliedTeamStableShareB = teamStableShare
+  const baseStableDeltaA = seriesResultEvidenceA * teamStableShare
+  const baseStableDeltaB = seriesResultEvidenceB * teamStableShare
+  const baseFormDeltaA = seriesResultEvidenceA * teamFormShare
+  const baseFormDeltaB = seriesResultEvidenceB * teamFormShare
+  const baseLeagueDeltaA = seriesResultEvidenceA * leagueSignalShare
+  const baseLeagueDeltaB = seriesResultEvidenceB * leagueSignalShare
+  const seriesDeltaA = Math.round(baseStableDeltaA * uncertaintyMultiplierA * rosterMultiplierA * stableTransferWeightA)
+  const seriesDeltaB = Math.round(baseStableDeltaB * uncertaintyMultiplierB * rosterMultiplierB * stableTransferWeightB)
   const seriesDeltaByTeam = new Map([[series.teamA, seriesDeltaA], [series.teamB, seriesDeltaB]])
   const seriesResidualByTeam = new Map([[series.teamA, seriesResidualA], [series.teamB, seriesResidualB]])
   const seriesEvidenceByTeam = new Map([[series.teamA, seriesResultEvidenceA], [series.teamB, seriesResultEvidenceB]])
+  const seriesBaseStableByTeam = new Map([[series.teamA, baseStableDeltaA], [series.teamB, baseStableDeltaB]])
+  const seriesBaseFormByTeam = new Map([[series.teamA, baseFormDeltaA], [series.teamB, baseFormDeltaB]])
+  const seriesBaseLeagueByTeam = new Map([[series.teamA, baseLeagueDeltaA], [series.teamB, baseLeagueDeltaB]])
+  const seriesUncertaintyMultiplierByTeam = new Map([[series.teamA, uncertaintyMultiplierA], [series.teamB, uncertaintyMultiplierB]])
+  const seriesRosterMultiplierByTeam = new Map([[series.teamA, rosterMultiplierA], [series.teamB, rosterMultiplierB]])
   const seriesExpectedByTeam = new Map([[series.teamA, expectedOutcomeA], [series.teamB, expectedOutcomeB]])
   const seriesObservedByTeam = new Map([[series.teamA, series.observedOutcomeA], [series.teamB, series.observedOutcomeB]])
   const seriesExecutionRatings = new Map(batch.executionRatings)
@@ -390,6 +419,11 @@ function processRatingSeries({
       seriesDeltaByTeam,
       seriesResidualByTeam,
       seriesEvidenceByTeam,
+      seriesBaseStableByTeam,
+      seriesBaseFormByTeam,
+      seriesBaseLeagueByTeam,
+      seriesUncertaintyMultiplierByTeam,
+      seriesRosterMultiplierByTeam,
       seriesExpectedByTeam,
       seriesObservedByTeam,
       stableTransferWeightA,
@@ -402,6 +436,7 @@ function processRatingSeries({
     })
   }
 }
+
 
 function processSeriesMember({
   match,
@@ -416,6 +451,11 @@ function processSeriesMember({
   seriesDeltaByTeam,
   seriesResidualByTeam,
   seriesEvidenceByTeam,
+  seriesBaseStableByTeam,
+  seriesBaseFormByTeam,
+  seriesBaseLeagueByTeam,
+  seriesUncertaintyMultiplierByTeam,
+  seriesRosterMultiplierByTeam,
   seriesExpectedByTeam,
   seriesObservedByTeam,
   stableTransferWeightA,
@@ -438,6 +478,11 @@ function processSeriesMember({
   seriesDeltaByTeam: Map<string, number>
   seriesResidualByTeam: Map<string, number>
   seriesEvidenceByTeam: Map<string, number>
+  seriesBaseStableByTeam: Map<string, number>
+  seriesBaseFormByTeam: Map<string, number>
+  seriesBaseLeagueByTeam: Map<string, number>
+  seriesUncertaintyMultiplierByTeam: Map<string, number>
+  seriesRosterMultiplierByTeam: Map<string, number>
   seriesExpectedByTeam: Map<string, number>
   seriesObservedByTeam: Map<string, number>
   stableTransferWeightA: number
@@ -499,6 +544,16 @@ function processSeriesMember({
   const resultResidualB = isSeriesFinal ? (seriesResidualByTeam.get(match.teamB) ?? 0) : 0
   const resultEvidenceA = isSeriesFinal ? (seriesEvidenceByTeam.get(match.teamA) ?? 0) : 0
   const resultEvidenceB = isSeriesFinal ? (seriesEvidenceByTeam.get(match.teamB) ?? 0) : 0
+  const baseStableDeltaA = isSeriesFinal ? (seriesBaseStableByTeam.get(match.teamA) ?? 0) : 0
+  const baseStableDeltaB = isSeriesFinal ? (seriesBaseStableByTeam.get(match.teamB) ?? 0) : 0
+  const baseFormDeltaA = isSeriesFinal ? (seriesBaseFormByTeam.get(match.teamA) ?? 0) : 0
+  const baseFormDeltaB = isSeriesFinal ? (seriesBaseFormByTeam.get(match.teamB) ?? 0) : 0
+  const baseLeagueDeltaA = isSeriesFinal ? (seriesBaseLeagueByTeam.get(match.teamA) ?? 0) : 0
+  const baseLeagueDeltaB = isSeriesFinal ? (seriesBaseLeagueByTeam.get(match.teamB) ?? 0) : 0
+  const uncertaintyMultiplierA = isSeriesFinal ? (seriesUncertaintyMultiplierByTeam.get(match.teamA) ?? 1) : 1
+  const uncertaintyMultiplierB = isSeriesFinal ? (seriesUncertaintyMultiplierByTeam.get(match.teamB) ?? 1) : 1
+  const rosterMultiplierA = isSeriesFinal ? (seriesRosterMultiplierByTeam.get(match.teamA) ?? 1) : 1
+  const rosterMultiplierB = isSeriesFinal ? (seriesRosterMultiplierByTeam.get(match.teamB) ?? 1) : 1
   const deltaA = isSeriesFinal ? (seriesDeltaByTeam.get(match.teamA) ?? 0) : 0
   const deltaB = isSeriesFinal ? (seriesDeltaByTeam.get(match.teamB) ?? 0) : 0
   const ledgerTeamStableShareA = isSeriesFinal ? appliedTeamStableShareA : 0
@@ -540,9 +595,8 @@ function processSeriesMember({
       expectedOutcomeB: seriesExpectedByTeam.get(match.teamB) ?? 0,
       observedOutcomeA: seriesObservedByTeam.get(match.teamA) ?? 0,
       observedOutcomeB: seriesObservedByTeam.get(match.teamB) ?? 0,
-      strengthSignal: series.strengthSignal,
-      recency: ratingUpdateRecencyWeight,
-      eventWeightContext: state.eventWeightContext,
+      baseLeagueDeltaA,
+      baseLeagueDeltaB,
       leagueScores: new Map(state.leagueScores),
       previousLeagueScores: new Map(state.previousLeagueScores),
       leagueWins: state.leagueWins,
@@ -577,8 +631,8 @@ function processSeriesMember({
   const liveRatingAfterB = state.ratings.get(match.teamB) ?? initialTeamRating
   const updatedLeagueAdjustmentA = leagueAdjustment(liveRatingAfterA, updatedLeagueScoreA)
   const updatedLeagueAdjustmentB = leagueAdjustment(liveRatingAfterB, updatedLeagueScoreB)
-  const momentumDeltaA = resultEvidenceA * ledgerTeamFormShare
-  const momentumDeltaB = resultEvidenceB * ledgerTeamFormShare
+  const momentumDeltaA = baseFormDeltaA
+  const momentumDeltaB = baseFormDeltaB
   const updatedMomentumA = isSeriesFinal ? clamp(liveMomentumBeforeA * momentumGameDecay + momentumDeltaA, -momentumCap, momentumCap) : liveMomentumBeforeA
   const updatedMomentumB = isSeriesFinal ? clamp(liveMomentumBeforeB * momentumGameDecay + momentumDeltaB, -momentumCap, momentumCap) : liveMomentumBeforeB
   state.momentums.set(match.teamA, updatedMomentumA)
@@ -627,6 +681,12 @@ function processSeriesMember({
     updateUnit: isSeriesFinal ? 'series-atomic' : 'series-member-no-team-update',
     eventWeight: matchEventWeight,
     resultEvidence: resultEvidenceA,
+    baseTeamStableDelta: baseStableDeltaA,
+    baseTeamFormDelta: baseFormDeltaA,
+    baseLeagueDelta: baseLeagueDeltaA,
+    uncertaintyMultiplier: uncertaintyMultiplierA,
+    rosterVolatilityMultiplier: rosterMultiplierA,
+    stableTransferWeight: stableTransferWeightA,
     neutralResultResidual: resultResidualA,
     seriesStrengthSignal,
     teamStableShare: ledgerTeamStableShareA,
@@ -653,6 +713,12 @@ function processSeriesMember({
     updateUnit: isSeriesFinal ? 'series-atomic' : 'series-member-no-team-update',
     eventWeight: matchEventWeight,
     resultEvidence: resultEvidenceB,
+    baseTeamStableDelta: baseStableDeltaB,
+    baseTeamFormDelta: baseFormDeltaB,
+    baseLeagueDelta: baseLeagueDeltaB,
+    uncertaintyMultiplier: uncertaintyMultiplierB,
+    rosterVolatilityMultiplier: rosterMultiplierB,
+    stableTransferWeight: stableTransferWeightB,
     neutralResultResidual: resultResidualB,
     seriesStrengthSignal,
     teamStableShare: ledgerTeamStableShareB,

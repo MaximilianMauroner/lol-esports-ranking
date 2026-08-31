@@ -102,7 +102,7 @@ test('future roster observations do not change earlier pre-game predictions', ()
   )
 })
 
-test('roster continuity regresses ratings and raises uncertainty before the roster-change prediction', () => {
+test('a scored-game roster change affects later predictions but not its own pregame state', () => {
   const unchanged = buildWalkForwardBacktest([
     matchFixture({ id: 'm1', date: '2026-01-01', winner: 'Alpha', teamARoster: rosterFixture('alpha'), teamBRoster: rosterFixture('beta') }),
     matchFixture({ id: 'm2', date: '2026-01-02', winner: 'Alpha', teamARoster: rosterFixture('alpha'), teamBRoster: rosterFixture('beta') }),
@@ -117,9 +117,9 @@ test('roster continuity regresses ratings and raises uncertainty before the rost
   assert.ok(unchanged)
   assert.ok(changed)
   assert.equal(unchanged.teamARosterContinuity, 1)
-  assert.equal(changed.teamARosterContinuity, 0)
-  assert.ok(changed.teamARating < unchanged.teamARating)
-  assert.ok(changed.teamAUncertainty > unchanged.teamAUncertainty)
+  assert.equal(changed.teamARosterContinuity, 1)
+  assert.equal(changed.teamARating, unchanged.teamARating)
+  assert.equal(changed.teamAUncertainty, unchanged.teamAUncertainty)
 })
 
 test('result of a roster-change match does not alter its pre-game continuity prediction', () => {
@@ -305,7 +305,7 @@ test('future player stats do not change earlier player-shadow predictions', () =
   )
 })
 
-test('same-day player ratings are frozen before all same-day predictions', () => {
+test('a completed same-day series can inform a later distinct series', () => {
   const backtest = buildWalkForwardBacktest([
     matchFixture({
       id: 'same-day-1',
@@ -334,8 +334,11 @@ test('same-day player ratings are frozen before all same-day predictions', () =>
   const nextDay = backtest.predictions[2]
 
   assert.equal(first?.teamAPlayerRatingAdjustment, 0)
-  assert.equal(second?.teamAPlayerRatingAdjustment, 0)
-  assert.equal(second?.teamAGameWinProbabilityPlayerAdjusted, first?.teamAGameWinProbabilityPlayerAdjusted)
+  assert.equal(first?.teamALineupEvidenceBasis, 'unavailable')
+  assert.ok((second?.teamAPlayerRatingAdjustment ?? 0) > 0)
+  assert.equal(second?.teamALineupEvidenceBasis, 'prior-observed')
+  assert.equal(second?.teamALineupObservedAt, '2026-01-01')
+  assert.ok((second?.teamAGameWinProbabilityPlayerAdjusted ?? 0) > (first?.teamAGameWinProbabilityPlayerAdjusted ?? 0))
   assert.ok((nextDay?.teamAPlayerRatingAdjustment ?? 0) > 0)
 })
 
@@ -449,13 +452,14 @@ test('walk-forward predictions label validation segments from prior state only',
 
   assert.ok(first)
   assert.ok(second)
-  assert.deepEqual(first.segments, ['bo1'])
+  assert.deepEqual(first.segments, ['bo1', 'unknown-lineup'])
   assert.equal(second.segments.includes('bo3-bo5'), true)
   assert.equal(second.segments.includes('international'), true)
   assert.equal(second.segments.includes('cross-region'), true)
   assert.equal(second.segments.includes('side-known'), true)
   assert.equal(second.segments.includes('patch-transition'), true)
   assert.equal(second.segments.includes('roster-change'), true)
+  assert.equal(second.segments.includes('unknown-lineup'), true)
 })
 
 test('walk-forward metrics score game probabilities because rows are games', () => {

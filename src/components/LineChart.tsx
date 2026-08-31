@@ -168,7 +168,7 @@ export function LineChart({
 
       <div className="flex flex-wrap gap-3.5 px-0.5 pt-3 pb-0.5">
         {meta.map(({ key, series: entry }) => (
-          <span className="inline-flex items-center gap-[7px] text-[0.8rem] text-[var(--muted)]" key={entry.id}>
+          <span className="inline-flex items-center gap-[7px] text-[var(--t-3)] text-[var(--muted)]" key={entry.id}>
             <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: `var(--color-${key})` }} aria-hidden="true" />
             {entry.label}
           </span>
@@ -302,8 +302,8 @@ function LineChartTooltip({
   if (rows.length === 0) return null
 
   return (
-    <div className="pointer-events-none static z-2 grid gap-[3px] whitespace-nowrap rounded-[var(--r)] border border-[var(--line-strong)] bg-[oklch(0.15_0.006_250/0.96)] px-[11px] py-[9px] text-[0.78rem] shadow-[var(--shadow-2)]">
-      <b className="mb-0.5 text-[0.74rem] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
+    <div className="pointer-events-none static z-2 grid gap-[3px] whitespace-nowrap rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_96%,transparent)] px-[11px] py-[9px] text-[var(--t-3)] shadow-[var(--shadow-2)]">
+      <b className="mb-0.5 text-[var(--t-2)] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
       <div className="grid gap-2">
         {rows.map((row) => (
           <div className="grid gap-1" key={row.key}>

@@ -7,8 +7,6 @@ import {
   leagueEloWeight,
   maximumUncertainty,
   minimumUncertainty,
-  momentumPatchRetention,
-  momentumSplitRetention,
   normalUncertainty,
   publishedLeagueAnchorReliefConfig,
   publishedLeagueAnchorShrinkageConfig,
@@ -16,11 +14,8 @@ import {
   publishedSparseStandingConfig,
   publishedRosterPriorConfig,
   publishedTeamStableOffsetConfig,
-  recencyDecayDays,
-  recencyFloor,
-  recencyRange,
+  recencyHalfLifeDays,
   rosterVolatilityKCeiling,
-  splitBreakMinimumGapDays,
   uncertaintyKMultiplierCeiling,
   uncertaintyKMultiplierFloor,
   uncertaintyKScale,
@@ -32,29 +27,7 @@ export function expectedScore(ratingA: number, ratingB: number) {
 
 export function recencyWeight(date: string, lastDate: string) {
   const days = Math.max(0, (Date.parse(lastDate) - Date.parse(date)) / 86_400_000)
-  return Number((recencyFloor + recencyRange * Math.exp(-days / recencyDecayDays)).toFixed(3))
-}
-
-export function applyMomentumBoundaryDecay(
-  match: MatchRecord,
-  previousMatch: MatchRecord | undefined,
-  momentums: Map<string, number>,
-) {
-  if (!previousMatch) return
-  if (match.season !== previousMatch.season) {
-    for (const team of momentums.keys()) momentums.set(team, 0)
-    return
-  }
-  const gapDays = Math.max(0, Math.floor((Date.parse(match.date) - Date.parse(previousMatch.date)) / 86_400_000))
-  if (splitLabel(match.event) !== splitLabel(previousMatch.event) && gapDays >= splitBreakMinimumGapDays) {
-    for (const [team, momentum] of momentums.entries()) momentums.set(team, momentum * momentumSplitRetention)
-    return
-  }
-  if (match.patch && previousMatch.patch && match.patch !== previousMatch.patch) {
-    for (const team of [match.teamA, match.teamB]) {
-      momentums.set(team, (momentums.get(team) ?? 0) * momentumPatchRetention)
-    }
-  }
+  return Number((2 ** (-days / recencyHalfLifeDays)).toFixed(3))
 }
 
 export function nextUncertainty(
@@ -289,6 +262,12 @@ export function emptyRatingUpdateLedger(): RatingUpdateLedger {
     ratingTarget: 'context-neutral-latent-team-strength',
     updateUnit: 'series-atomic',
     resultEvidence: 0,
+    baseTeamStableDelta: 0,
+    baseTeamFormDelta: 0,
+    baseLeagueDelta: 0,
+    uncertaintyMultiplier: 1,
+    rosterVolatilityMultiplier: 1,
+    stableTransferWeight: 1,
     neutralResultResidual: 0,
     seriesStrengthSignal: 1,
     teamStableShare: 0,
@@ -318,6 +297,12 @@ export function roundedRatingUpdateLedger(update: RatingUpdateLedger): RatingUpd
     updateUnit: update.updateUnit,
     ...(update.eventWeight !== undefined ? { eventWeight: roundOptional(update.eventWeight, 3) } : {}),
     resultEvidence: roundOptional(update.resultEvidence, 1),
+    baseTeamStableDelta: roundOptional(update.baseTeamStableDelta, 1),
+    baseTeamFormDelta: roundOptional(update.baseTeamFormDelta, 1),
+    baseLeagueDelta: roundOptional(update.baseLeagueDelta, 1),
+    uncertaintyMultiplier: roundOptional(update.uncertaintyMultiplier, 3),
+    rosterVolatilityMultiplier: roundOptional(update.rosterVolatilityMultiplier, 3),
+    stableTransferWeight: roundOptional(update.stableTransferWeight, 3),
     neutralResultResidual: roundOptional(update.neutralResultResidual, 3),
     seriesStrengthSignal: roundOptional(update.seriesStrengthSignal, 3),
     teamStableShare: roundOptional(update.teamStableShare, 2),
@@ -364,9 +349,4 @@ export function rosterVolatilityMultiplier(continuity?: number) {
 
 export function isInternationalMatch(match: MatchRecord) {
   return match.region === 'International' || ['worlds-playoffs', 'worlds-main', 'msi-bracket', 'msi-play-in', 'minor-international'].includes(match.tier)
-}
-
-function splitLabel(eventName: string) {
-  const match = eventName.match(/\b(Winter|Spring|Summer|Fall|Autumn)\b/i)
-  return match?.[1]?.toLowerCase() ?? eventName.toLowerCase()
 }

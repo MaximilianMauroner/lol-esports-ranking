@@ -33,12 +33,18 @@ export type TournamentScheduleReference = {
 }
 
 export type TournamentRatedMatchReference = {
+  id?: string
   event: string
   season: number
   date: string
   officialMatchId?: string
   phase?: string
   tier?: EventTier
+  teamA?: string
+  teamB?: string
+  winner?: string
+  bestOf?: number
+  bestOfBasis?: 'official' | 'provider' | 'fallback'
 }
 
 export type NormalizedTournamentInstance = {
@@ -163,11 +169,7 @@ export function deriveTournamentInstances({
           .filter((reference) => isCompletedScheduleState(reference.state) && reference.matchId)
           .map((reference) => reference.matchId!),
       )
-      const ratedOfficialMatchIds = new Set(
-        reconciledMatches
-          .map((match) => match.officialMatchId)
-          .filter((matchId): matchId is string => Boolean(matchId)),
-      )
+      const terminalOfficialMatchIds = completedOfficialMatchIds(reconciledMatches)
       const scheduleCoversTournament = Boolean(
         scheduledStartDate
         && scheduledEndDate
@@ -191,7 +193,7 @@ export function deriveTournamentInstances({
           : ratedThroughDate
       const resultCoverageComplete = allScheduleRowsCompleted
         && completedScheduleMatchIds.size > 0
-        && [...completedScheduleMatchIds].every((matchId) => ratedOfficialMatchIds.has(matchId))
+        && [...completedScheduleMatchIds].every((matchId) => terminalOfficialMatchIds.has(matchId))
 
       return [{
         ...identity,
@@ -205,6 +207,34 @@ export function deriveTournamentInstances({
       }]
     })
     .sort((left, right) => right.startDate.localeCompare(left.startDate) || left.label.localeCompare(right.label))
+}
+
+export function completedOfficialMatchIds(matches: readonly TournamentRatedMatchReference[]) {
+  const gamesByMatchId = new Map<string, TournamentRatedMatchReference[]>()
+  for (const match of matches) {
+    if (!match.officialMatchId) continue
+    gamesByMatchId.set(match.officialMatchId, [...(gamesByMatchId.get(match.officialMatchId) ?? []), match])
+  }
+
+  const completed = new Set<string>()
+  for (const [matchId, games] of gamesByMatchId) {
+    const officialFormats = games
+      .filter((game) => game.bestOfBasis === 'official' && isSeriesFormat(game.bestOf))
+      .map((game) => game.bestOf!)
+    const bestOf = officialFormats.length > 0 ? Math.max(...officialFormats) : undefined
+    if (!isSeriesFormat(bestOf)) continue
+    const teams = [...new Set(games.flatMap((game) => [game.teamA, game.teamB]).filter((team): team is string => Boolean(team)))]
+    if (teams.length !== 2 || games.some((game) => !game.winner || !teams.includes(game.winner))) continue
+    const winsA = games.filter((game) => game.winner === teams[0]).length
+    const winsB = games.filter((game) => game.winner === teams[1]).length
+    if (bestOf === 2) {
+      if (games.length === 2 && winsA === 1 && winsB === 1) completed.add(matchId)
+      continue
+    }
+    const winsNeeded = Math.floor(bestOf / 2) + 1
+    if (Math.max(winsA, winsB) >= winsNeeded) completed.add(matchId)
+  }
+  return completed
 }
 
 export function tournamentFamiliesForStanding(
@@ -377,6 +407,10 @@ function isCompletedScheduleState(state: string | undefined) {
 
 function isDateString(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function isSeriesFormat(value: number | undefined): value is 1 | 2 | 3 | 5 {
+  return value === 1 || value === 2 || value === 3 || value === 5
 }
 
 function uniqueTournamentFamilies(families: InternationalTournamentFamilyId[]) {

@@ -7,7 +7,6 @@ import {
   eventWeightContextForMatches,
   eventWeightForMatch,
   isPostWorldsPreseasonMatch,
-  leagueKFactorForMatch,
 } from '../src/lib/eventWeighting.ts'
 import { ensureLeague, updateLeagueStrengthForSeries } from '../src/lib/leagueRatings.ts'
 import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
@@ -52,7 +51,7 @@ test('team latent strength is result-only and allocates evidence across stable a
   assert.ok(bo5Alpha.baseRating > 1500)
   assert.equal(dominantAlpha.ratingUpdate.teamStableShare, 0.9)
   assert.equal(dominantAlpha.ratingUpdate.teamFormShare, 0.1)
-  assert.ok((dominantAlpha.ratingUpdate.resultEvidence ?? 0) > dominantAlpha.ratingUpdate.teamStableDelta)
+  assert.ok((dominantAlpha.ratingUpdate.resultEvidence ?? 0) > (dominantAlpha.ratingUpdate.baseTeamStableDelta ?? 0))
   assert.ok(dominantAlpha.ratingUpdate.momentumDelta > 0)
   assert.equal(dominantAlpha.ratingUpdate.neutralResultResidual, 0.5)
   assert.equal(dominantAlpha.ratingUpdate.updateUnit, 'series-atomic')
@@ -89,6 +88,39 @@ test('series rows publish one atomic team and league strength update', () => {
   assert.ok((alphaHistory.at(-1)?.ratingUpdate.teamStableDelta ?? 0) > 0)
   assert.equal(leagueFor(model, 'LCK').internationalMatches, 1)
   assert.equal(leagueFor(model, 'LCS').internationalMatches, 1)
+})
+
+test('international ledger separates configured evidence shares from realized movement', () => {
+  const model = buildRankingModel([matchFixture({
+    id: 'budget-ledger',
+    event: 'MSI 2026 Bracket',
+    phase: 'Upper Bracket',
+    region: 'International',
+    league: 'MSI',
+    tier: 'msi-bracket',
+    teamB: 'Gamma',
+    teamBHomeLeague: 'LPL',
+    teamBRegion: 'LPL',
+  })], { ...teams })
+  const update = standingFor(model, 'Alpha').ratingUpdate
+  const baseEvidence = update.resultEvidence ?? 0
+  const baseStable = update.baseTeamStableDelta ?? 0
+  const baseForm = update.baseTeamFormDelta ?? 0
+  const baseLeague = update.baseLeagueDelta ?? 0
+
+  assert.equal(update.teamStableShare, 0.79)
+  assert.equal(update.teamFormShare, 0.09)
+  assert.equal(update.leagueSignalShare, 0.12)
+  assert.ok(Math.abs(baseStable + baseForm + baseLeague - baseEvidence) <= 0.2)
+  assert.ok(Math.abs(baseStable / baseEvidence - 0.792) <= 0.01)
+  assert.ok(Math.abs(baseLeague / baseEvidence - 0.12) <= 0.01)
+  const realizedStable = Math.round(
+    baseStable
+      * (update.uncertaintyMultiplier ?? 1)
+      * (update.rosterVolatilityMultiplier ?? 1)
+      * (update.stableTransferWeight ?? 1),
+  )
+  assert.ok(Math.abs(update.teamStableDelta - realizedStable) <= 1)
 })
 
 test('a completed Bo2 tie is neutral in ratings, provenance, and head-to-head context', () => {
@@ -513,7 +545,8 @@ test('domestic stable gains in weaker leagues are shrunk before global publicati
   const lecLeader = standingFor(model, 'LecLeader')
 
   assert.equal(lckLeader.ratingUpdate.teamStableShare, 0.9)
-  assert.equal(lecLeader.ratingUpdate.teamStableShare, 0.59)
+  assert.equal(lecLeader.ratingUpdate.teamStableShare, 0.9)
+  assert.equal(lecLeader.ratingUpdate.stableTransferWeight, 0.65)
   assert.ok(lckLeader.ratingComponents.teamStableOffset > lecLeader.ratingComponents.teamStableOffset)
   assert.ok(lckLeader.rating - lecLeader.rating > 55)
   assert.equal(lecLeader.ratingUpdate.unavailableChannels?.includes('domestic-relative-strength:global-transfer-shrunk'), true)
@@ -578,8 +611,6 @@ test('post-Worlds preseason games use discounted event weight until the next cal
   assert.equal(isPostWorldsPreseasonMatch(nextYearMatch, context), false)
   assert.equal(eventKFactorForMatch(demaciaCup, context), 14 * preseasonEventWeightMultiplier)
   assert.equal(eventWeightForMatch(demaciaCup, context), preseasonEventWeightMultiplier)
-  assert.equal(leagueKFactorForMatch(kespaCup, context), 12 * preseasonEventWeightMultiplier)
-
   const ranking = buildRankingModel([worldsFinal, demaciaCup], { ...teams })
   const demaciaHistory = standingFor(ranking, 'Alpha').history.find((point) => point.event === demaciaCup.event)
   assert.equal(demaciaHistory?.ratingUpdate.eventWeight, preseasonEventWeightMultiplier)
@@ -670,8 +701,8 @@ test('league Elo preserves fractional international residual evidence', () => {
     expectedOutcomeB: 0.437,
     observedOutcomeA: 1,
     observedOutcomeB: 0,
-    strengthSignal: 1,
-    recency: 0.83,
+    baseLeagueDeltaA: 6.25,
+    baseLeagueDeltaB: -6.25,
     leagueScores,
     previousLeagueScores,
     leagueWins,
@@ -684,10 +715,10 @@ test('league Elo preserves fractional international residual evidence', () => {
     leagueLastUpdated,
   })
 
-  assert.equal(delta.deltaA, 8.705)
-  assert.equal(delta.deltaB, -8.705)
-  assert.equal(leagueScores.get('LCK'), 1508.705)
-  assert.equal(leagueScores.get('LPL'), 1491.295)
+  assert.equal(delta.deltaA, 6.25)
+  assert.equal(delta.deltaB, -6.25)
+  assert.equal(leagueScores.get('LCK'), 1506.25)
+  assert.equal(leagueScores.get('LPL'), 1493.75)
 })
 
 test('emerging league effective ratings cannot publish above tier-three baseline', () => {
@@ -812,7 +843,7 @@ test('international league resume accounts for participating opponent strength',
   assert.ok(strongLck.score > weakLck.score)
 })
 
-test('new season roster rebuild starts from league anchor instead of full old team rating', () => {
+test('a scored new-season lineup does not alter its own pregame prediction', () => {
   const priorAlphaWins = Array.from({ length: 10 }, (_, index) => matchFixture({
     id: `alpha-prior-${index}`,
     date: `2025-01-${String(index + 1).padStart(2, '0')}`,
@@ -849,10 +880,9 @@ test('new season roster rebuild starts from league anchor instead of full old te
   assert.ok(stablePrediction)
   assert.ok(rebuiltPrediction)
   assert.equal(stablePrediction.teamARosterContinuity, 1)
-  assert.equal(rebuiltPrediction.teamARosterContinuity, 0)
-  assert.ok(rebuiltPrediction.teamARating < stablePrediction.teamARating)
-  assert.ok(Math.abs(rebuiltPrediction.teamARating - 1500) < Math.abs(stablePrediction.teamARating - 1500))
-  assert.ok(rebuiltPrediction.teamAUncertainty > stablePrediction.teamAUncertainty)
+  assert.equal(rebuiltPrediction.teamARosterContinuity, 1)
+  assert.equal(rebuiltPrediction.teamARating, stablePrediction.teamARating)
+  assert.equal(rebuiltPrediction.teamAUncertainty, stablePrediction.teamAUncertainty)
 })
 
 test('same-region Worlds final skips league game delta while placement residual rewards two finalists', () => {
@@ -924,6 +954,41 @@ test('same-region Worlds final skips league game delta while placement residual 
   assert.equal(lck.internationalMatches, 2)
   assert.ok(lck.score > leagueFor(pathOnly, 'LCK').score)
   assert.ok(standingFor(withSameRegionFinal, 'Alpha').ratingUpdate.leaguePlacementDelta > 0)
+  const placementTotal = ['LCK', 'LPL'].reduce((total, league) => (
+    total + standingFor(withSameRegionFinal, league === 'LCK' ? 'Alpha' : 'Gamma').ratingUpdate.leaguePlacementDelta
+  ), 0)
+  assert.ok(Math.abs(placementTotal) <= 0.1)
+})
+
+test('tournament placement depends on phase data, not the event title alias', () => {
+  const completedWorlds = {
+    tournamentLifecycles: new Map([['worlds:2026', {
+      status: 'completed' as const,
+      boundaryDate: '2026-11-02',
+      ratedThroughDate: '2026-11-02',
+      dataLag: false,
+      resultCoverageComplete: true,
+    }]]),
+  }
+  const build = (event: string) => buildRankingModel([
+    matchFixture({
+      id: `${event}-quarter`, date: '2026-10-20', event, phase: 'Quarterfinals', region: 'International',
+      league: 'Worlds', tier: 'worlds-playoffs', teamB: 'Gamma', teamBHomeLeague: 'LPL', teamBRegion: 'LPL',
+    }),
+    matchFixture({
+      id: `${event}-final`, date: '2026-11-02', event, phase: 'Grand Final', region: 'International',
+      league: 'Worlds', tier: 'worlds-playoffs', teamB: 'Gamma', teamBHomeLeague: 'LPL', teamBRegion: 'LPL',
+    }),
+  ], { ...teams }, completedWorlds)
+  const worlds = build('Worlds 2026')
+  const championship = build('World Championship 2026')
+
+  assert.equal(leagueFor(worlds, 'LCK').score, leagueFor(championship, 'LCK').score)
+  assert.equal(leagueFor(worlds, 'LPL').score, leagueFor(championship, 'LPL').score)
+  assert.equal(
+    standingFor(worlds, 'Alpha').ratingUpdate.leaguePlacementDelta,
+    standingFor(championship, 'Alpha').ratingUpdate.leaguePlacementDelta,
+  )
 })
 
 test('ongoing tournaments keep match movement but do not apply placement residuals', () => {
@@ -1213,7 +1278,7 @@ test('sourced Oracle player diagnostics preserve missing optional stat fields', 
   assert.equal(Number.isFinite(residual.score), true)
 })
 
-test('same-day rating updates use match-local roster prior offsets', () => {
+test('same-day predictions use the latest previously observed roster prior', () => {
   const model = buildRankingModel([
     matchFixture({
       id: 'player-history',
@@ -1250,12 +1315,10 @@ test('same-day rating updates use match-local roster prior offsets', () => {
   ], { ...teams })
   const noRosterPrediction = model.predictions.find((prediction) => prediction.id === 'same-day-no-roster')
   const sourcedRosterPrediction = model.predictions.find((prediction) => prediction.id === 'same-day-sourced-roster')
-  const noRosterPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'same-day-no-roster')
   const sourcedRosterPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'same-day-sourced-roster')
 
-  assert.equal(noRosterPrediction?.teamAPlayerRatingAdjustment, 0)
+  assert.ok((noRosterPrediction?.teamAPlayerRatingAdjustment ?? 0) > 0)
   assert.ok((sourcedRosterPrediction?.teamAPlayerRatingAdjustment ?? 0) > 0)
-  assert.equal(noRosterPoint?.ratingComponents.rosterPriorOffset, 0)
   assert.ok((sourcedRosterPoint?.ratingComponents.rosterPriorOffset ?? 0) > 0)
 })
 

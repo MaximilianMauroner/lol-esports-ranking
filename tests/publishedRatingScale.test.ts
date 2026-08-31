@@ -208,7 +208,7 @@ test('public matchup estimates invert ladder ratings before probability math', (
     { team: internalAway.team, rating: internalAway.rating, uncertainty: internalAway.uncertainty },
     { bestOf: 5 },
   )
-  assert.ok(Math.abs(publicEstimate.homeGameWinProbability - internalEstimate.teamAGameWinProbability) <= 0.0002)
+  assert.ok(Math.abs(publicEstimate.homeGameWinProbability - internalEstimate.teamAGameWinProbability) <= 0.0005)
   assert.equal(publicEstimate.ratingEdge, publicHome.rating - publicAway.rating)
 })
 

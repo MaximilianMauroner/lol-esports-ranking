@@ -40,13 +40,6 @@ export function eventKFactorForMatch(
   return eventTierConfig[match.tier].kFactor * eventWeightMultiplierForMatch(match, context)
 }
 
-export function leagueKFactorForMatch(
-  match: MatchRecord,
-  context: EventWeightContext = emptyEventWeightContext,
-) {
-  return eventTierConfig[match.tier].leagueKFactor * eventWeightMultiplierForMatch(match, context)
-}
-
 export function eventWeightForMatch(
   match: MatchRecord,
   context: EventWeightContext = emptyEventWeightContext,

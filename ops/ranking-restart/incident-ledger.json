@@ -151,11 +151,10 @@
     },
     {
       "id": "lesson-09-one-canonical-rollout-gate",
-      "lesson": "Rollout evidence measures the exact gate; one canonical schema/path resolver across CLI/runtime/runbook/tests/cost; audit success exact zero-mutation/full-comparison.",
+      "lesson": "Rollout evidence measures the exact gate; one canonical schema/path resolver across CLI/runtime/runbook/tests; audit success exact zero-mutation/full-comparison.",
       "currentPaths": [
         "scripts/rollout-evidence.mjs",
         "scripts/validate-rollout-gate.mjs",
-        "scripts/railway-cost-report.mjs",
         "tests/rolloutEvidence.test.ts",
         "tests/refreshOnceEarlyReceipts.test.ts"
       ],
