@@ -136,11 +136,17 @@ export function Segmented<T extends string>({
       role="group"
       aria-label={ariaLabel}
       className={cn(
-        'inline-flex h-[var(--control-h)] max-w-full items-center gap-1 rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--surface-2)] p-1 max-sm:w-full',
+        // The segments are clipped by the container's radius instead of
+        // carrying their own. A rounded child inset inside a rounded parent
+        // only looks right when its radius is exactly outer minus the inset,
+        // which here is 8px - (1px border + 4px padding) = 3px, off the scale.
+        // Removing the inset removes the problem: there is one radius, and the
+        // active segment inherits its corners from the container.
+        'inline-flex h-[var(--control-h)] max-w-full items-stretch overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--surface-2)] max-sm:w-full',
         className,
       )}
     >
-      {options.map((option) => (
+      {options.map((option, index) => (
         <Button
           type="button"
           key={option.value}
@@ -148,7 +154,15 @@ export function Segmented<T extends string>({
           size="sm"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className="h-full min-h-0 flex-1 rounded-[var(--r-1)] border-transparent bg-transparent max-sm:min-w-0"
+          className={cn(
+            // Fill and text carry the selection, with no ring. An inset ring on
+            // a square-cornered child inside a clipped rounded parent gets its
+            // corners sliced off by the clip rather than following the curve,
+            // which reads as a square ring inside a rounded box.
+            'h-auto min-h-0 flex-1 rounded-none border-y-0 border-r-0 border-l border-l-[var(--line)] px-3 max-sm:min-w-0',
+            'aria-pressed:bg-[color-mix(in_oklch,var(--accent)_22%,var(--surface))] aria-pressed:font-semibold aria-pressed:text-[var(--text-strong)]',
+            index === 0 && 'border-l-0',
+          )}
         >
           {option.label}
         </Button>
