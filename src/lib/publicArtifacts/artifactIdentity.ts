@@ -8,6 +8,7 @@ import {
   publicArtifactResponseFollowedRedirect,
   resolvePublicArtifactUrl,
 } from './urlResolver'
+import { withAuditedTeamCodes } from '../../data/teamBranding'
 
 export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 2 as const
 export const PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION = 1 as const
@@ -184,7 +185,7 @@ export async function fetchPublicArtifact<T extends object>(
       headers: { Accept: 'application/json' },
     })
     if (!response.ok) throw new PublicArtifactRequestError(response.status)
-    return parse(await response.json())
+    return withAuditedTeamCodes(parse(await response.json()))
   }
 
   const logicalPath = canonicalPublicLogicalPath(logicalUrl)
@@ -209,7 +210,7 @@ export async function fetchPublicArtifact<T extends object>(
   }
 
   const hydrated = hydrateSemanticArtifact(semanticArtifact, context.manifest)
-  const parsed = parse(hydrated)
+  const parsed = withAuditedTeamCodes(parse(hydrated))
   assertArtifactModelIdentity(parsed, context.manifest, logicalPath)
   registerGenerationContext(parsed, context.manifest, context.manifestUrl)
   return parsed
