@@ -59,3 +59,6 @@ public/data/**/*.tmp
 *.njsproj
 *.sln
 *.sw?
+
+# Generated agent reports are local and uploaded separately.
+/.agents/artifacts/
