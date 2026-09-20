@@ -755,8 +755,10 @@ function retainedPlayerHistorySeries(matches: MatchRecord[], limit: number) {
     const candidate = series[index]!
     if (candidate.state !== 'completed') continue
     for (const match of candidate.games) {
-      for (const { roster } of teamRosterEntries(match)) {
-        for (const player of roster?.players ?? []) {
+      for (const { roster, opponentRoster } of teamRosterEntries(match)) {
+        if (!roster || !opponentRoster || !isCompleteSourcedMatchup(roster, opponentRoster)) continue
+        for (const player of roster.players) {
+          if (!player.stats || !opponentRoster.players.some((opponent) => opponent.role === player.role && opponent.stats)) continue
           const playerSeries = retained.get(player.id) ?? new Set<string>()
           if (playerSeries.size < limit) playerSeries.add(candidate.id)
           retained.set(player.id, playerSeries)

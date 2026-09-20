@@ -207,6 +207,48 @@ test('compact player history keeps published ratings, career games, and recent s
   assert.deepEqual(compactPlayerRecentMatches(compact), compactPlayerRecentMatches(full))
 })
 
+test('compact player history does not let recent unrateable series evict older rateable series', () => {
+  const rateable = Array.from({ length: 3 }, (_, index) => matchFixture({
+    id: `compact-rateable-${index}`,
+    date: dateInJanuary(index + 1),
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: `compact-rateable-${index}`,
+    teamARoster: sourcedRosterFixture('alpha', 'blue', true),
+    teamBRoster: sourcedRosterFixture('beta', 'red', false),
+    winner: 'Alpha',
+  }))
+  const partial = matchFixture({
+    id: 'compact-unrateable-partial', date: dateInJanuary(4), sourceProvider: 'oracles-elixir',
+    sourceGameId: 'compact-unrateable-partial',
+    teamARoster: { ...sourcedRosterFixture('alpha', 'blue', true), completeness: 'partial' },
+    teamBRoster: sourcedRosterFixture('beta', 'red', false), winner: 'Alpha',
+  })
+  const missingStatsRoster = sourcedRosterFixture('alpha', 'blue', true)
+  missingStatsRoster.players = missingStatsRoster.players.map((player) => ({ ...player, stats: undefined }))
+  const missingStats = matchFixture({
+    id: 'compact-unrateable-missing-stats', date: dateInJanuary(5), sourceProvider: 'oracles-elixir',
+    sourceGameId: 'compact-unrateable-missing-stats', teamARoster: missingStatsRoster,
+    teamBRoster: sourcedRosterFixture('beta', 'red', false), winner: 'Alpha',
+  })
+  const missingOpponentRole = sourcedRosterFixture('beta', 'red', false)
+  missingOpponentRole.players = missingOpponentRole.players.map((player) =>
+    player.role === 'Mid' ? { ...player, stats: undefined } : player,
+  )
+  const noSameRoleOpponent = matchFixture({
+    id: 'compact-unrateable-opponent', date: dateInJanuary(6), sourceProvider: 'oracles-elixir',
+    sourceGameId: 'compact-unrateable-opponent', teamARoster: sourcedRosterFixture('alpha', 'blue', true),
+    teamBRoster: missingOpponentRole, winner: 'Alpha',
+  })
+  const matches = [...rateable, partial, missingStats, noSameRoleOpponent]
+  const full = playerFor(buildPlayerModel(matches, {}, { teams }), 'alpha-Mid')
+  const compact = playerFor(buildPlayerModel(matches, {}, { teams, historySeriesLimit: 3 }), 'alpha-Mid')
+
+  assert.equal(full.games, 3)
+  assert.equal(compact.games, 3)
+  assert.deepEqual(compact.history, full.history)
+  assert.deepEqual(compactPlayerRecentMatches(compact), compactPlayerRecentMatches(full))
+})
+
 test('an ambiguous fallback 1-1 prefix stays incomplete and does not count for eligibility', () => {
   const model = buildRankingModel([
     matchFixture({ id: 'fallback-prefix-a', sourceGameId: 'opaque-prefix-a', bestOf: 1, bestOfBasis: 'fallback', winner: 'Alpha' }),
