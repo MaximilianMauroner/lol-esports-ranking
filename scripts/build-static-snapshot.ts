@@ -153,17 +153,20 @@ const publicPlan = createPublicArtifactWritePlan(snapshot, {
 })
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)
 const summarySnapshots = Object.entries(publicPlan.snapshots)
+// Validate the canonical values that will be published. Parsing every already
+// serialized artifact here used to retain a second object graph briefly; on a
+// production-sized incremental refresh that transient graph made peak RSS
+// depend on when V8 happened to collect it.
+for (const write of publicPlan.writes) {
+  write.validate(write.value)
+}
 const publicWrites = publicPlan.writes.map((entry) => ({
   path: resolve(publicDataDir, entry.relativePath),
   contents: entry.contents,
-  validate: entry.validate,
 }))
 
 await rm(publicDataDir, { recursive: true, force: true })
 try {
-  for (const write of publicWrites) {
-    write.validate(JSON.parse(write.contents))
-  }
   for (const write of publicWrites) {
     await atomicWriteFile(write.path, write.contents)
   }

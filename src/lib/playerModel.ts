@@ -139,11 +139,13 @@ export type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
   leagueStrengths?: LeagueStrength[]
   eventWeightContext?: EventWeightContext
+  /** Retain only the newest completed series needed by compact public player rows. */
+  historySeriesLimit?: number
 }
 
 export type SourcedPlayerCausalContext = {
   rosters: Record<string, PlayerProfile[]>
-  ratingContext: Required<PlayerRatingContext>
+  ratingContext: Required<Pick<PlayerRatingContext, 'teams' | 'leagueStrengths' | 'eventWeightContext'>>
 }
 
 export function buildPlayerModel(
@@ -261,14 +263,21 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
   const finalShares = new Map<string, PlayerShare>()
   const latestRosterByTeam = new Map<string, { team: string; roster: MatchRosterSnapshot }>()
   const leagueRatings = leagueRatingsFor(context.leagueStrengths)
-  const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+  const sortedMatches = matches.toSorted((a, b) =>
+    a.date.localeCompare(b.date)
+    || (a.datetimeUtc ?? '').localeCompare(b.datetimeUtc ?? '')
+    || a.id.localeCompare(b.id),
+  )
   const residualControlModel = buildIndividualResidualControlModel(sortedMatches, context, leagueRatings)
+  const retainedHistorySeries = context.historySeriesLimit
+    ? retainedPlayerHistorySeries(sortedMatches, context.historySeriesLimit)
+    : undefined
 
   for (const dateMatches of matchesByDate(sortedMatches)) {
     for (const match of dateMatches) {
       registerSourcedRosters(match, state, context, leagueRatings)
     }
-    applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings), context, leagueRatings, latestRosterByTeam, residualControlModel)
+    applySourcedPlayerUpdates(dateMatches, state, new Map(state.ratings), context, leagueRatings, latestRosterByTeam, residualControlModel, retainedHistorySeries)
   }
 
   for (const { team, roster } of latestRosterByTeam.values()) {
@@ -292,10 +301,10 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
         name: profile.name,
         team: profile.team,
         role: profile.role,
-        games: history.length,
+        games: state.games.get(id) ?? history.length,
         ratingBasis: 'sourced-player-stats' as const,
         rating: rolePowerRating,
-        delta: Number((history.at(-1)?.delta ?? 0).toFixed(1)),
+        delta: Number((state.lastDeltas.get(id) ?? 0).toFixed(1)),
         rank: 0,
         baseShare: roundShare(playerShare.baseShare),
         playerShare: roundShare(playerShare.playerShare),
@@ -548,6 +557,7 @@ type SourcedPlayerState = {
   appearances?: Map<string, PlayerAppearanceAccumulator>
   diagnostics?: Map<string, PlayerDiagnosticsAccumulator>
   individualResiduals?: Map<string, PlayerIndividualResidualAccumulator>
+  lastDeltas: Map<string, number>
 }
 
 type PlayerAppearanceAccumulator = {
@@ -609,6 +619,7 @@ function createSourcedPlayerState(includeAuditFields: boolean): SourcedPlayerSta
     appearances: includeAuditFields ? new Map() : undefined,
     diagnostics: includeAuditFields ? new Map() : undefined,
     individualResiduals: includeAuditFields ? new Map() : undefined,
+    lastDeltas: new Map(),
   }
 }
 
@@ -646,6 +657,7 @@ function applySourcedPlayerUpdates(
   leagueRatings: Map<string, number>,
   latestRosterByTeam?: Map<string, { team: string; roster: MatchRosterSnapshot }>,
   residualControlModel?: IndividualResidualControlModel,
+  retainedHistorySeries?: Map<string, Set<string>>,
 ) {
   const seriesByMatchId = canonicalSeriesForMatches(matches)
   for (const match of matches) {
@@ -686,19 +698,23 @@ function applySourcedPlayerUpdates(
         state.profiles.set(player.id, profile)
         state.games.set(player.id, (state.games.get(player.id) ?? 0) + 1)
         appendPlayerForm(state.forms, player.id, player.stats.won ? 'W' : 'L')
-        appendMapArray(state.histories, player.id, {
-          date: match.date,
-          event: match.event,
-          opponent,
-          playerTeam: team,
-          result: player.stats.won ? 'W' : 'L',
-          bestOf: series.format,
-          teamKills: side === 'A' ? match.teamAKills : match.teamBKills,
-          opponentKills: side === 'A' ? match.teamBKills : match.teamAKills,
-          source: playerSource,
-          rating: nextPublishedRating,
-          delta: Number((nextPublishedRating - currentPublishedRating).toFixed(1)),
-        })
+        const publishedDelta = Number((nextPublishedRating - currentPublishedRating).toFixed(1))
+        state.lastDeltas.set(player.id, publishedDelta)
+        if (!retainedHistorySeries || retainedHistorySeries.get(player.id)?.has(series.id)) {
+          appendMapArray(state.histories, player.id, {
+            date: match.date,
+            event: match.event,
+            opponent,
+            playerTeam: team,
+            result: player.stats.won ? 'W' : 'L',
+            bestOf: series.format,
+            teamKills: side === 'A' ? match.teamAKills : match.teamBKills,
+            opponentKills: side === 'A' ? match.teamBKills : match.teamAKills,
+            source: playerSource,
+            rating: nextPublishedRating,
+            delta: publishedDelta,
+          })
+        }
         state.sources?.set(player.id, playerSource)
         recordPlayerDiagnostics(player.id, player, opponentPlayer, state)
         recordIndividualResidual(
@@ -734,6 +750,27 @@ function appendMapArray<T>(map: Map<string, T[]> | undefined, key: string, value
     return
   }
   map.set(key, [value])
+}
+
+function retainedPlayerHistorySeries(matches: MatchRecord[], limit: number) {
+  const retained = new Map<string, Set<string>>()
+  const series = resolveCanonicalSeries(matches)
+  for (let index = series.length - 1; index >= 0; index -= 1) {
+    const candidate = series[index]!
+    if (candidate.state !== 'completed') continue
+    for (const match of candidate.games) {
+      for (const { roster, opponentRoster } of teamRosterEntries(match)) {
+        if (!roster || !opponentRoster || !isCompleteSourcedMatchup(roster, opponentRoster)) continue
+        for (const player of roster.players) {
+          if (!player.stats || !opponentRoster.players.some((opponent) => opponent.role === player.role && opponent.stats)) continue
+          const playerSeries = retained.get(player.id) ?? new Set<string>()
+          if (playerSeries.size < limit) playerSeries.add(candidate.id)
+          retained.set(player.id, playerSeries)
+        }
+      }
+    }
+  }
+  return retained
 }
 
 function appendPlayerForm(forms: Map<string, string[]>, playerId: string, result: 'W' | 'L') {

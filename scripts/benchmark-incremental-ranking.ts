@@ -395,6 +395,8 @@ async function runBenchmarkParent() {
       reconciliationMatchCount: Number(output.reconciliationMatchCount),
       appendedReconciliationStatus: output.appendedReconciliationStatus,
       restoreDurationMs: refreshStageDuration(output.refreshStages, 'restore') ?? Number.NaN,
+      refreshStages: output.refreshStages,
+      memoryCollections: output.memoryCollections,
       verifierMs: Number(output.verifierMs),
       verifierMaxRssBytes: Number(output.verifierMaxRssBytes),
     }))
