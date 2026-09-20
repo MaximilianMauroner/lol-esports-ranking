@@ -249,6 +249,33 @@ test('compact player history does not let recent unrateable series evict older r
   assert.deepEqual(compactPlayerRecentMatches(compact), compactPlayerRecentMatches(full))
 })
 
+test('compact player history follows canonical start time when same-day ids sort differently', () => {
+  const matches = [
+    { id: 'z-first', datetimeUtc: '2026-01-10T10:00:00.000Z' },
+    { id: 'y-second', datetimeUtc: '2026-01-10T12:00:00.000Z' },
+    { id: 'b-third', datetimeUtc: '2026-01-10T14:00:00.000Z' },
+    { id: 'a-fourth', datetimeUtc: '2026-01-10T16:00:00.000Z' },
+  ].map(({ id, datetimeUtc }, index) => matchFixture({
+    id,
+    date: '2026-01-10',
+    datetimeUtc,
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: id,
+    officialMatchId: `official-${id}`,
+    teamARoster: sourcedRosterFixture('alpha', 'blue', index % 2 === 0),
+    teamBRoster: sourcedRosterFixture('beta', 'red', index % 2 !== 0),
+    winner: index % 2 === 0 ? 'Alpha' : 'Beta',
+  }))
+  const full = playerFor(buildPlayerModel(matches, {}, { teams }), 'alpha-Mid')
+  const compact = playerFor(buildPlayerModel(matches, {}, { teams, historySeriesLimit: 3 }), 'alpha-Mid')
+
+  assert.deepEqual(compactPlayerRecentMatches(compact), compactPlayerRecentMatches(full))
+  assert.deepEqual(
+    compact.history.map((entry) => entry.source?.matchId),
+    full.history.slice(-3).map((entry) => entry.source?.matchId),
+  )
+})
+
 test('an ambiguous fallback 1-1 prefix stays incomplete and does not count for eligibility', () => {
   const model = buildRankingModel([
     matchFixture({ id: 'fallback-prefix-a', sourceGameId: 'opaque-prefix-a', bestOf: 1, bestOfBasis: 'fallback', winner: 'Alpha' }),

@@ -263,7 +263,11 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
   const finalShares = new Map<string, PlayerShare>()
   const latestRosterByTeam = new Map<string, { team: string; roster: MatchRosterSnapshot }>()
   const leagueRatings = leagueRatingsFor(context.leagueStrengths)
-  const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+  const sortedMatches = matches.toSorted((a, b) =>
+    a.date.localeCompare(b.date)
+    || (a.datetimeUtc ?? '').localeCompare(b.datetimeUtc ?? '')
+    || a.id.localeCompare(b.id),
+  )
   const residualControlModel = buildIndividualResidualControlModel(sortedMatches, context, leagueRatings)
   const retainedHistorySeries = context.historySeriesLimit
     ? retainedPlayerHistorySeries(sortedMatches, context.historySeriesLimit)
