@@ -1340,9 +1340,18 @@ export function createStaticRankingData({
     })
     return result
   }
+  // Incremental setup derives several full-corpus indexes before player work.
+  // They are no longer needed once the scope closures above exist, and the
+  // refresh worker exposes GC so their transient allocations do not overlap
+  // the player replay.
+  if (compactPlayerDirectory) (globalThis as { gc?: () => void }).gc?.()
   let globalPlayers = runPlayerLifecycleStage('player-build', 'global', 'All__All__All', () => (
     hasObservedGameRosters || hasRosterProfiles
-      ? buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
+      ? buildPlayerModel(matches, rosters, {
+          teams,
+          leagueStrengths: globalRanking.leagues,
+          ...(compactPlayerDirectory ? { historySeriesLimit: 3 } : {}),
+        })
       : []
   ))
   const seasonPlayerCache = compactPlayerDirectory ? undefined : new Map<string, PlayerStanding[]>()
@@ -1353,7 +1362,11 @@ export function createStaticRankingData({
     const cached = seasonPlayerCache?.get(cacheKey)
     if (cached) return cached
     const players = runPlayerLifecycleStage('player-build', 'season', cacheKey, () => (
-      buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
+      buildPlayerModel(filteredMatches, rosters, {
+        teams: scope.teams,
+        leagueStrengths: scope.ranking.leagues,
+        ...(compactPlayerDirectory ? { historySeriesLimit: 3 } : {}),
+      })
     ))
     seasonPlayerCache?.set(cacheKey, players)
     return players

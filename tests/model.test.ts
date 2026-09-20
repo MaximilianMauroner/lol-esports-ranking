@@ -186,6 +186,27 @@ test('sourced player histories share one immutable source trace per match and te
   assert.notEqual(playerFor(players, 'beta-Mid').history[0]?.source, alphaSources[0])
 })
 
+test('compact player history keeps published ratings, career games, and recent series exact', () => {
+  const matches = Array.from({ length: 6 }, (_, index) => matchFixture({
+    id: `compact-player-history-${index}`,
+    date: dateInJanuary(index + 1),
+    sourceProvider: 'oracles-elixir',
+    sourceGameId: `compact-player-history-${index}`,
+    teamARoster: sourcedRosterFixture('alpha', 'blue', index % 2 === 0),
+    teamBRoster: sourcedRosterFixture('beta', 'red', index % 2 !== 0),
+    winner: index % 2 === 0 ? 'Alpha' : 'Beta',
+  }))
+  const full = playerFor(buildPlayerModel(matches, {}, { teams }), 'alpha-Mid')
+  const compact = playerFor(buildPlayerModel(matches, {}, { teams, historySeriesLimit: 3 }), 'alpha-Mid')
+  const { history: fullHistory, ...fullStanding } = full
+  const { history: compactHistory, ...compactStanding } = compact
+
+  assert.deepEqual(compactStanding, fullStanding)
+  assert.equal(fullHistory.length, 6)
+  assert.equal(compactHistory.length, 3)
+  assert.deepEqual(compactPlayerRecentMatches(compact), compactPlayerRecentMatches(full))
+})
+
 test('an ambiguous fallback 1-1 prefix stays incomplete and does not count for eligibility', () => {
   const model = buildRankingModel([
     matchFixture({ id: 'fallback-prefix-a', sourceGameId: 'opaque-prefix-a', bestOf: 1, bestOfBasis: 'fallback', winner: 'Alpha' }),
