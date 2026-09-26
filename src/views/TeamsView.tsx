@@ -39,7 +39,7 @@ import {
   type RankingTierLabel,
 } from '../lib/rankingFlair'
 import type { ChartPoint } from '../lib/chartPoints'
-import { chartPointDetailFromHistoryPoint, dailyChartPointsFromHistoryPoints, deriveDailyRankSeries, withVisibleDeltas } from '../lib/teamHistoryChart'
+import { dailyChartPointsFromHistoryPoints, deriveDailyRankSeries, tournamentChartPoints } from '../lib/teamHistoryChart'
 import { cn } from '../lib/utils'
 import type {
   TeamHistoryArtifactState,
@@ -489,7 +489,7 @@ export function TeamsView({
           <Panel>
             <PanelHeader
               title="Ranked board"
-              description={`Published standings · history movement ${movementBaseline}`}
+              description={activeTournament ? `Event endpoint ${formatDate(activeTournament.boundaryDate)} · history movement ${movementBaseline}` : `Published standings · history movement ${movementBaseline}`}
               actions={<span className="whitespace-nowrap text-xs text-[var(--faint)] tabular-nums">{resultSummary}</span>}
             />
             {/* The controls carry no per-control height, radius or background
@@ -717,7 +717,7 @@ export function TeamsView({
                 </Table>
             )}
 
-            <p className="px-4 py-2 text-xs text-[var(--muted)]">Published scores and ranks are the selected snapshot. History movement: {movementBaseline}; its endpoints can differ after standing adjustments.</p>
+            <p className="px-4 py-2 text-xs text-[var(--muted)]">{activeTournament ? `Scores and ranks are the event endpoint on ${formatDate(activeTournament.boundaryDate)}. History movement: ${movementBaseline}.` : `Published scores and ranks are the selected snapshot. History movement: ${movementBaseline}; its endpoints can differ after standing adjustments.`}</p>
             {sorted.length > 0 ? (
               <PanelFooter>
                 <Pager
@@ -1398,21 +1398,6 @@ function rankAxisForSeries(series: ChartSeries[]) {
   }
 }
 
-function tournamentChartPoints(
-  points: PublicTournamentMovementTeam['points'],
-  metric: TrajectoryMetric,
-): ChartPoint[] {
-  const offsetsByDate = new Map<string, number>()
-  return withVisibleDeltas(points.map((point) => {
-    const offset = offsetsByDate.get(point[0]) ?? 0
-    offsetsByDate.set(point[0], offset + 1)
-    return {
-      t: Date.parse(point[0]) + offset * 60_000,
-      y: metric === 'rank' ? point[2] : point[1],
-      detail: chartPointDetailFromHistoryPoint(point),
-    }
-  }))
-}
 
 function uniqueSorted(values: number[]) {
   return [...new Set(values.filter((value) => Number.isFinite(value) && value >= 1).map(Math.round))].sort((a, b) => a - b)

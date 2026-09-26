@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chartPointFromHistoryPoint, dailyChartPointsFromHistoryPoints, deriveDailyRankSeries } from '../src/lib/teamHistoryChart.ts'
+import { chartPointFromHistoryPoint, dailyChartPointsFromHistoryPoints, deriveDailyRankSeries, tournamentChartPoints } from '../src/lib/teamHistoryChart.ts'
 import { formatChartInfluence, nonMatchDeltaFor } from '../src/lib/chartPoints.ts'
 import type { TeamHistorySeries } from '../src/lib/snapshot.ts'
 
@@ -142,4 +142,20 @@ test('rank chart keeps Power match annotations separate from unchanged rank', ()
   assert.equal(detail?.delta, -26)
   assert.equal(nonMatchDeltaFor(detail), undefined)
   assert.match(formatChartInfluence(detail)!, /-26 Power points/)
+})
+
+test('tournament rank movement never reconciles Power attribution as rank positions', () => {
+  const points: HistoryPoint[] = [
+    ['2026-07-01', 2000, 1, { kind: 'tournament-start' }],
+    ['2026-07-02', 1974, 1, { result: 'L', delta: -26, model: { a: [['s', -26]] } }],
+  ]
+  const rank = tournamentChartPoints(points, 'rank')[1]
+  assert.equal(rank.y, 1)
+  assert.equal(rank.detail?.visibleDelta, 0)
+  assert.equal(rank.detail?.visibleDeltaUnit, 'rank')
+  assert.equal(nonMatchDeltaFor(rank.detail), undefined)
+  const power = tournamentChartPoints(points, 'rating')[1]
+  assert.equal(power.detail?.visibleDelta, -26)
+  assert.equal(power.detail?.visibleDeltaUnit, 'power')
+  assert.equal(nonMatchDeltaFor(power.detail), undefined)
 })

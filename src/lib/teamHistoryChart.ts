@@ -301,3 +301,19 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): T | undefin
   const entries = Object.entries(value).filter(([, entry]) => entry !== undefined)
   return entries.length > 0 ? Object.fromEntries(entries) as T : undefined
 }
+
+export function tournamentChartPoints(
+  points: TeamHistoryPoint[],
+  metric: 'rating' | 'rank',
+): ChartPoint[] {
+  const offsetsByDate = new Map<string, number>()
+  return withVisibleDeltas(points.map((point) => {
+    const offset = offsetsByDate.get(point[0]) ?? 0
+    offsetsByDate.set(point[0], offset + 1)
+    return {
+      t: Date.parse(point[0]) + offset * 60_000,
+      y: metric === 'rank' ? point[2] : point[1],
+      detail: { ...chartPointDetailFromHistoryPoint(point), visibleDeltaUnit: metric === 'rank' ? 'rank' as const : 'power' as const },
+    }
+  }))
+}
