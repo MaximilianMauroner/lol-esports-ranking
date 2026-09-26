@@ -114,8 +114,8 @@ export function CompareDock({
         </div>
       ) : (
         <p className="min-w-0 flex-1 text-sm text-[var(--muted)]">
-          {entities.length === 0 ? 'Pick two to compare' : `Pick ${2 - entities.length} more`}
-          {matchup === undefined ? null : <span className="max-sm:hidden"> to see the matchup odds</span>}
+          {ready ? `Ready to compare · ${entities.length} selected` : entities.length === 0 ? 'Pick two to compare' : 'Pick 1 more'}
+          {ready || matchup === undefined ? null : <span className="max-sm:hidden"> to see the matchup odds</span>}
         </p>
       )}
 

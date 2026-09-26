@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Globe2, Info, Plus, Swords, Trophy, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Globe2, Plus, Swords, Trophy, X } from 'lucide-react'
 import {
   displayRegionPowerScore,
   displayRegionTotalTeamRating,
@@ -28,7 +28,6 @@ import { Card } from '../components/ui/card'
 import { PageShell, StatCell, StatRibbon } from '../components/ui/page-shell'
 import { Panel, PanelHeader } from '../components/ui/panel'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { cn } from '../lib/utils'
 import { TeamMark } from '../components/TeamMark'
 
@@ -262,6 +261,7 @@ function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistory
       <div>
         <small className="block text-[var(--t-1)] tracking-[0.08em] text-[var(--faint)] uppercase">Power trajectory</small>
         <b className={`mt-[3px] block tabular-nums ${deltaTone === 'up' ? 'text-[var(--up)]' : deltaTone === 'down' ? 'text-[var(--down)]' : 'text-[var(--text-strong)]'}`}>{formatSignedDecimal(delta)}</b>
+        <span className="mt-1 block text-xs text-[var(--muted)]">{formatDate(first[0])} to {formatDate(last[0])}</span>
       </div>
       <svg viewBox={`0 0 ${REGION_SPARKLINE_WIDTH} ${REGION_SPARKLINE_HEIGHT}`} role="img" focusable="false">
         <polyline points={shape.points} />
@@ -358,12 +358,18 @@ function RegionDetailDrawer({
               <RegionPowerSparkline series={series} region={region.region} />
             </section>
 
-            <section className="grid grid-cols-3 overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] [&>*:nth-child(3n)]:border-r-0 [&>*:nth-last-child(-n+3)]:border-b-0 max-[820px]:grid-cols-2 max-[820px]:[&>*:nth-child(3n)]:border-r max-[820px]:[&>*:nth-child(2n)]:border-r-0 max-[820px]:[&>*:nth-last-child(-n+3)]:border-b max-[820px]:[&>*:nth-last-child(-n+2)]:border-b-0 max-[560px]:grid-cols-1 max-[560px]:[&>*]:border-r-0 max-[560px]:[&>*]:border-b max-[560px]:[&>*:last-child]:border-b-0" aria-label={`${region.region} metrics`}>
+            <div className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)]">
               <DetailStat
                 label="International series equivalents"
                 value={formatRecord(region.internationalWins, region.internationalLosses)}
                 description={`Cross-region series outcomes from the region’s main leagues. A tied Bo2 allocates 0.5 win and 0.5 loss; 1 win plus 1 tie is 1.5–0.5. Event weight affects Power, not this count. Allocated win rate: ${formatRatio(region.internationalWinRate)}.`}
               />
+            </div>
+            <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] p-3">
+              <summary className="cursor-pointer text-sm font-semibold">Regional evidence and definitions</summary>
+              <p className="my-3 text-sm text-[var(--muted)]">Flagship means a region’s main league. Connectivity measures how much cross-region match evidence connects its teams to the wider ranking.</p>
+            <section className="grid grid-cols-3 overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] [&>*:nth-child(3n)]:border-r-0 [&>*:nth-last-child(-n+3)]:border-b-0 max-[820px]:grid-cols-2 max-[820px]:[&>*:nth-child(3n)]:border-r max-[820px]:[&>*:nth-child(2n)]:border-r-0 max-[820px]:[&>*:nth-last-child(-n+3)]:border-b max-[820px]:[&>*:nth-last-child(-n+2)]:border-b-0 max-[560px]:grid-cols-1 max-[560px]:[&>*]:border-r-0 max-[560px]:[&>*]:border-b max-[560px]:[&>*:last-child]:border-b-0" aria-label={`${region.region} metrics`}>
+
               <DetailStat
                 label="Adjusted international rate"
                 value={formatRatio(region.opponentAdjustedWinRate)}
@@ -400,6 +406,8 @@ function RegionDetailDrawer({
                 description="How strongly this region is linked into the global match graph."
               />
             </section>
+
+            </details>
 
             <RegionMatchHistory key={region.region} region={region} teams={displayedTeams} series={series} state={matchHistoryState} onRequestPages={onRequestMatchHistoryPages} />
 
@@ -667,21 +675,9 @@ function flagshipTeamsForRegion(region: RegionStrength, standings: RegionStandin
 function DetailStat({ label, value, description }: { label: string; value: string; description: string }) {
   return (
     <div className="grid min-w-0 gap-[5px] border-r border-b border-[var(--line)] px-4 py-3.5">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-fit min-w-0 cursor-help gap-[5px] border-0 bg-transparent p-0 text-left font-[inherit] text-[var(--faint)] hover:bg-transparent hover:text-[var(--text)] focus-visible:rounded-[var(--r-1)] focus-visible:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--focus)] [&_span]:text-[var(--t-1)] [&_span]:font-semibold [&_span]:tracking-[0.1em] [&_span]:uppercase [&_svg]:shrink-0 [&_svg]:opacity-72"
-            aria-label={`${label}: ${description}`}
-          >
-            <span>{label}</span>
-            <Info size={13} aria-hidden="true" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{description}</TooltipContent>
-      </Tooltip>
+      <span className="text-xs font-semibold text-[var(--faint)]">{label}</span>
       <strong className="text-[var(--t-5)] text-[var(--text-strong)] tabular-nums [overflow-wrap:anywhere]">{value}</strong>
+      <p className="text-xs leading-relaxed text-[var(--muted)]">{description}</p>
     </div>
   )
 }
