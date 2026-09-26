@@ -553,6 +553,22 @@ export function TeamsView({
                   ) : null}
                 </div>
               </div>
+              <label className="board-sort flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+                Sort by
+                <Select value={`${sortKey}:${sortDirection}`} onChange={(event) => {
+                  const [key, direction] = event.target.value.split(':') as [SortKey, SortDirection]
+                  setSortKey(key)
+                  setSortDirection(direction)
+                }}>
+                  <option value="rank:ascending">Rank · best first</option>
+                  <option value="rank:descending">Rank · last first</option>
+                  <option value="rating:descending">Power · highest first</option>
+                  <option value="rating:ascending">Power · lowest first</option>
+                  <option value="wins:descending">Match wins · most first</option>
+                  <option value="wins:ascending">Match wins · fewest first</option>
+                </Select>
+              </label>
+              <p className="text-xs text-[var(--faint)]">Use + on a row to compare up to four teams.</p>
               {eligibilityNote ? <p className="text-xs leading-[1.35] text-[var(--faint)]">{eligibilityNote}</p> : null}
             </PanelBody>
 
@@ -586,11 +602,8 @@ export function TeamsView({
               </DataState>
             ) : (
                 <Table containerRef={tableWrapRef} containerClassName="max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[660px] border-collapse text-sm max-sm:min-w-full">
-                  {/* Direction A: five columns, not six. Movement folds into
-                      the score cell it describes, and the record stays a
-                      sortable column while also appearing in the team meta
-                      line so nothing is lost when it is hidden on narrow
-                      screens. */}
+                  {/* Score movement shares a cell; the record remains visible
+                      and sortable in both the table and card layouts. */}
                   <colgroup>
                     <col className="board-col-rank" />
                     <col className="board-col-team" />
@@ -605,7 +618,7 @@ export function TeamsView({
                       <TableHead>Team</TableHead>
                       <TableHead className="board-col-form" title="Most recent five results, oldest first.">Form</TableHead>
                       <SortHeader
-                        label={activeTournament ? 'Power score / tournament move' : 'Power score / 30D move'}
+                        label="Power score"
                         columnKey="rating"
                         sortKey={sortKey}
                         descending={sortDirection === 'descending'}
@@ -664,7 +677,7 @@ export function TeamsView({
                               <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
                               <div className="ent flex min-w-0 flex-col gap-px overflow-hidden [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[var(--t-2)] [&_small]:text-[var(--faint)]">
                                 <b>{team.team}</b>
-                                <small>{teamSubtitle(team, total > 0 ? `${formatRecord(team.wins, team.losses)} · ${formatRatio(team.wins / total)}` : undefined)}</small>
+                                <small>{teamSubtitle(team)}</small>
                               </div>
                             </Button>
                           </TableCell>

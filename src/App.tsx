@@ -283,7 +283,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
 
   return (
     <div className="flex min-h-full flex-col">
-      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content">Skip to content</a>
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
       <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} />
 
       {/* Space is reserved for the dock only where the dock is fixed, which is
@@ -292,7 +292,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
         id="main-content"
         className={cn(
           'flex min-w-0 flex-col pb-6',
-          (mode === 'rankings' || mode === 'regions') && 'max-sm:pb-[calc(84px+env(safe-area-inset-bottom))]',
+          compareEntities.length > 0 && (mode === 'rankings' || mode === 'regions') && 'max-sm:pb-[calc(84px+env(safe-area-inset-bottom))]',
         )}
         tabIndex={-1}
         ref={mainRef}
@@ -321,7 +321,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
             an inline dock would scroll out of reach the moment you started
             picking. Sticky cannot do this, because the dock's natural position
             is above the fold rather than below it. */}
-        {mode === 'rankings' || mode === 'regions' ? (
+        {(mode === 'rankings' || mode === 'regions') && compareEntities.length > 0 ? (
           <div className="px-[var(--page-x)] pt-4 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-40 max-sm:border-t max-sm:border-[var(--line-strong)] max-sm:bg-[color-mix(in_oklch,var(--surface)_92%,var(--bg))] max-sm:px-3 max-sm:pt-2 max-sm:pb-[max(8px,env(safe-area-inset-bottom))]">
             <CompareDock
               label={trayLabel}
@@ -329,10 +329,12 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
               entities={compareEntities}
               matchup={compareMatchup}
               onRemove={(id) => {
+                if (compareEntities.length === 1) mainRef.current?.focus({ preventScroll: true })
                 if (mode === 'regions') setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))
                 else setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))
               }}
               onClear={() => {
+                mainRef.current?.focus({ preventScroll: true })
                 if (mode === 'regions') setRegionPicks([])
                 else setTeamPicks([])
               }}
@@ -496,7 +498,7 @@ function ManifestRouteShell({
 }) {
   return (
     <div className="flex min-h-full flex-col">
-      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] focus-visible:top-3" href="#main-content">Skip to content</a>
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); document.getElementById('main-content')?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
       <AppNavigation mode={mode} scope={scope} onGoHome={onGoHome} />
       <main id="main-content" className="flex min-w-0 flex-col" tabIndex={-1}>
         <ModeHeader mode={mode} />
@@ -537,7 +539,7 @@ function ModeHeader({ mode }: { mode: Mode }) {
   return (
     <header className="grid gap-1.5 border-b border-[var(--line)] px-[var(--page-x)] pt-4 pb-3.5">
       <h1 className="text-xl font-semibold tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
-      <p className="max-w-[86ch] text-sm leading-[1.55] text-[var(--muted)]">{MODE_TITLES[mode].intro}</p>
+      <details className="max-w-[86ch] text-sm leading-[1.55] text-[var(--muted)]"><summary className="cursor-pointer">About these {mode === 'matches' ? 'results' : 'ratings'}</summary><p className="pt-2">{MODE_TITLES[mode].intro}</p></details>
     </header>
   )
 }

@@ -98,7 +98,7 @@ export function RegionsView({
       }
     >
       <Panel>
-        <PanelHeader title="Regional standings" description="Select a region to open its power history and international record." />
+        <PanelHeader title="Regional standings" description="Select a region for its history. Use + to compare up to four regions." />
 
         <div className="flex flex-col">
           {regions.map((region) => {
