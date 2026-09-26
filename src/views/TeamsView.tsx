@@ -18,6 +18,7 @@ import { eventTierConfig } from '../data/rankingConfig'
 import { CountBadge, DataState, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
+import { PlayerPerformancePanel } from '../components/PlayerPerformancePanel'
 import { Input } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { LoadingState } from '../components/ui/loading'
@@ -2449,6 +2450,7 @@ function PlayerRankingCard({
             ))}
           </TableBody>
         </Table>
+        <PlayerPerformancePanel players={players} scopeLabel={playerScopeLabel} />
     </div>
   )
 }

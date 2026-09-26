@@ -294,6 +294,8 @@ Every generated snapshot includes `model.version`, `model.configHash`, active mo
 
 ## Key Files
 
+Player-stat additions and their independent review are documented in [research/player-performance-stats.md](research/player-performance-stats.md). Public schema 24 adds observed player statistics with per-metric coverage to team details; these descriptive metrics have no rating effect. Run `pnpm performance:audit <oracle.csv> [oracle.csv ...]` to audit normalized source coverage before proposing scoring changes.
+
 - `src/App.tsx`: main ranking workbench UI.
 - `src/lib/model.ts`: transparent team and league rating calculations.
 - `src/lib/playerModel.ts`: seeded player-share model plus sourced Oracle player-game rating updates.

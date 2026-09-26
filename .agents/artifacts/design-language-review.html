@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Index design unification: before and after</title>
+<style>
+  /* ---------- page chrome ---------- */
+  :root {
+    color-scheme: dark;
+    --page: #000;
+    --card: #0a0a0a;
+    --edge: #242424;
+    --edge2: #333;
+    --ink: #fff;
+    --ink2: #a3a3a3;
+    --ink3: #737373;
+    --cy: #5fd3e8;
+    --gold: #e6b74a;
+    --bad: #f0705f;
+    --good: #6fd08c;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 96px;
+    background: var(--page); color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1140px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.05rem; font-weight: 700; margin: 48px 0 6px; padding-bottom: 8px; border-bottom: 1px solid var(--edge); }
+  h3 { font-size: 0.9rem; font-weight: 700; margin: 26px 0 10px; }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 20px; }
+  li { margin: 0 0 6px; }
+  code, .m { font-family: var(--mono); font-size: 0.86em; }
+  code { color: var(--cy); overflow-wrap: anywhere; }
+  .lede { color: var(--ink2); margin-bottom: 22px; }
+  .why { color: var(--ink2); margin: 0 0 16px; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin: 0; }
+  table.data th, table.data td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--edge); white-space: nowrap; }
+  table.data th { font-weight: 700; color: var(--ink2); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  table.data td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  table.data td.w { white-space: normal; }
+  .scroll { overflow-x: auto; border: 1px solid var(--edge); border-radius: 10px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .stat { border: 1px solid var(--edge); border-radius: 10px; padding: 11px 13px; background: var(--card); }
+  .stat b { display: block; font-family: var(--mono); font-size: 1.25rem; font-weight: 700; line-height: 1.15; }
+  .stat b s { color: var(--ink3); font-size: 0.72em; text-decoration: line-through; font-weight: 400; }
+  .stat b i { font-style: normal; color: var(--good); }
+  .stat span { display: block; margin-top: 4px; font-size: 0.74rem; color: var(--ink2); }
+
+  /* ---------- before/after frame ---------- */
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 0 8px; }
+  @media (max-width: 860px) { .cmp { grid-template-columns: 1fr; } }
+  .pane { border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .pane > figcaption {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--edge);
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink2);
+  }
+  .pane > figcaption .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--bad); }
+  .pane.after > figcaption .dot { background: var(--good); }
+  .stage { padding: 16px; background: var(--bg); }
+  .note { margin: 6px 0 0; font-size: 0.8rem; color: var(--ink3); }
+  .note b { color: var(--ink2); font-weight: 600; }
+
+  /* ---------- shared product palette for both stages ---------- */
+  .stage {
+    --bg: oklch(0.125 0.004 250);
+    --surface: oklch(0.173 0.005 250);
+    --surface-2: oklch(0.205 0.005 250);
+    --surface-3: oklch(0.245 0.006 250);
+    --line: oklch(0.29 0.006 250);
+    --line-strong: oklch(0.405 0.008 250);
+    --text: oklch(0.91 0.006 250);
+    --text-strong: oklch(0.97 0.004 250);
+    --muted: oklch(0.69 0.006 250);
+    --faint: oklch(0.64 0.006 250);
+    --accent: oklch(0.79 0.155 205);
+    --accent-strong: oklch(0.86 0.145 200);
+    --accent-soft: oklch(0.79 0.155 205 / 0.13);
+    --accent-line: oklch(0.79 0.155 205 / 0.52);
+    --rank-gold: oklch(0.84 0.1 86);
+    --win: oklch(0.74 0.14 152);
+    --loss: oklch(0.66 0.17 26);
+    --up: oklch(0.78 0.14 150);
+    --down: oklch(0.7 0.16 28);
+    --mono-f: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--text);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  /* BEFORE: the radius, type and weight values that were actually in the code. */
+  .before .stage {
+    --r-sm: 4px; --r: 8px; --r-lg: 8px;
+    --sel-bg: var(--accent-soft);
+  }
+  /* AFTER: three radius steps, eight type steps, four weights. */
+  .after .stage {
+    --r-1: 4px; --r-2: 8px; --r-3: 12px;
+    --t-0: 0.6rem; --t-1: 0.68rem; --t-2: 0.75rem; --t-3: 0.82rem;
+    --t-4: 0.92rem; --t-5: 1.05rem; --t-6: 1.25rem; --t-7: 1.7rem;
+    --w-label: 550; --w-emph: 680; --w-figure: 800;
+    --sel-bg: color-mix(in oklch, var(--accent) 14%, var(--surface));
+    --sel-line: color-mix(in oklch, var(--accent), var(--line) 42%);
+  }
+  .stage * { box-sizing: border-box; }
+  .stage h4, .stage p, .stage b, .stage small, .stage span, .stage strong, .stage em { margin: 0; }
+
+  /* ---------- demo primitives ---------- */
+  .demo-nav { display: flex; align-items: center; gap: 14px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: oklch(0.135 0.004 250); }
+  .brand { display: flex; align-items: center; gap: 9px; margin-right: auto; }
+  .brand img, .brand .sq { width: 32px; height: 32px; flex: 0 0 auto; }
+  .tabs { display: flex; gap: 6px; }
+  .demo-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: color-mix(in oklch, var(--surface) 76%, var(--bg)); }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grow { margin-left: auto; }
+  .sep { height: 1px; background: var(--line); }
+  .swatchrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  .swatch { display: grid; gap: 5px; justify-items: center; font-family: var(--mono); font-size: 0.62rem; color: var(--ink3); }
+  .swatch i { display: block; width: 46px; height: 34px; border: 1px solid var(--line-strong); background: var(--surface-2); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Power Index design unification</h1>
+<p class="lede">Every pair below is <b>Before</b> on the left and <b>After</b> on the right, rendered live from the exact token values in each version of the code. Implemented, typechecked, linted, and 679 tests passing.</p>
+
+<div class="stats">
+  <div class="stat"><b><s>40</s> <i>8</i></b><span>text sizes</span></div>
+  <div class="stat"><b><s>18</s> <i>4</i></b><span>font weights</span></div>
+  <div class="stat"><b><s>9</s> <i>3</i></b><span>corner radii</span></div>
+  <div class="stat"><b><s>1728</s> <i>817</i></b><span>longest className</span></div>
+  <div class="stat"><b><s>153</s> <i>124</i> KB</b><span>CSS bundle</span></div>
+  <div class="stat"><b><s>84</s> <i>40</i> KB</b><span>font payload</span></div>
+</div>
+
+<h2>1. Nav and scope bar</h2>
+<p class="why">Three rows of tabs sat on top of each other in three different shapes with two different active colours. Gold marked the active nav item while cyan marked the active season, so <code>--rank-gold</code> meant both "rank quality" and "you are here". Now one <code>Button variant="tab"</code> serves all three rows, one <code>--selected-*</code> treatment marks selection everywhere, and gold is reserved for rank quality.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before</figcaption>
+    <div class="stage" style="padding:0">
+      <div class="demo-nav">
+        <div class="brand">
+          <span class="sq" style="display:grid;place-items:center;border-radius:7px;overflow:hidden;background:#10191d;font:700 9px var(--mono-f);color:var(--faint)">226<br>KB</span>
+          <span>
+            <b style="display:block;font-size:0.94rem;font-weight:700;color:var(--text-strong)">Power Index</b>
+            <small style="display:block;font-size:0.68rem;letter-spacing:0.13em;text-transform:uppercase;color:var(--faint)">LoL Esports Rankings</small>
+          </span>
+        </div>
+        <div class="tabs">
+          <span style="display:flex;align-items:center;gap:9px;padding:7px 10px;border:1px solid color-mix(in oklch,var(--rank-gold),var(--line) 38%);border-radius:4px;background:var(--surface-2);box-shadow:inset 0 -2px 0 var(--rank-gold)">
+            <span><b style="display:block;font-size:0.88rem;font-weight:600;color:var(--text-strong)">Rankings</b><small style="display:block;font-size:0.72rem;color:var(--rank-gold)">Board, tiers, podium</small></span>
+          </span>
+          <span style="display:flex;align-items:center;gap:9px;padding:7px 10px;border:1px solid transparent;border-radius:4px;color:var(--muted)">
+            <span><b style="display:block;font-size:0.88rem;font-weight:600">Regions</b><small style="display:block;font-size:0.72rem;color:var(--faint)">Regional strength</small></span>
+          </span>
+        </div>
+      </div>
+      <div class="demo-scope">
+        <span style="height:38px;min-width:62px;display:grid;place-items:center;padding:0 12px;border:1px solid color-mix(in oklch,var(--accent),var(--line) 46%);border-radius:6px;background:color-mix(in oklch,var(--accent),transparent 88%);font-size:0.86rem;font-weight:680;color:var(--text-strong)">2026</span>
+        <span style="height:38px;min-width:62px;display:grid;place-items:center;padding:0 12px;border:1px solid transparent;border-radius:6px;background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:0.86rem;font-weight:680;color:var(--muted)">2025</span>
+        <span style="height:38px;min-width:86px;display:grid;align-content:center;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);color:var(--muted)">
+          <b style="font-size:0.86rem;font-weight:700;line-height:1.1">Split 1</b><small style="font-size:0.68rem;font-weight:560;line-height:1.1;color:var(--muted)">31 Mar</small>
+        </span>
+        <span style="height:38px;min-width:86px;display:grid;align-content:center;padding:0 12px;border:1px dashed var(--line);border-radius:6px;background:color-mix(in oklch,var(--surface-2),transparent 34%);color:var(--faint)">
+          <b style="font-size:0.86rem;font-weight:700;line-height:1.1">Split 3</b><small style="font-size:0.68rem;line-height:1.1">Not started</small>
+        </span>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After</figcaption>
+    <div class="stage" style="padding:0">
+      <div class="demo-nav">
+        <div class="brand">
+          <svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true" style="border-radius:var(--r-2)">
+            <rect width="64" height="64" rx="12" fill="#10191d"/>
+            <path d="M12 16h40l-4 28-16 8-16-8-4-28Z" fill="#172329" stroke="#d7aa48" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M22 41V23h20v6H29v3h11v6H29v3h-7Z" fill="#78d6ea"/>
+            <path d="M39 24l7-4-2 8-5-4Z" fill="#d7aa48"/>
+          </svg>
+          <b style="font-size:var(--t-4);font-weight:var(--w-emph);color:var(--text-strong)">Power Index</b>
+        </div>
+        <div class="tabs">
+          <span style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--sel-line);border-radius:var(--r-2);background:var(--sel-bg);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--text-strong)">Rankings</span>
+          <span style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--muted)">Regions</span>
+        </div>
+      </div>
+      <div class="demo-scope" style="--scope-h:42px">
+        <span style="height:var(--scope-h);min-width:64px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--sel-line);border-radius:var(--r-2);background:var(--sel-bg);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--text-strong)">2026</span>
+        <span style="height:var(--scope-h);min-width:64px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--muted)">2025</span>
+        <span style="height:var(--scope-h);min-width:64px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--muted)">All</span>
+        <span style="align-self:stretch;width:1px;background:var(--line);margin:0 4px"></span>
+        <span style="height:var(--scope-h);min-width:96px;display:grid;align-content:center;justify-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);color:var(--muted)">
+          <b style="font-size:var(--t-3);font-weight:var(--w-emph);line-height:1.2">Full year</b><small style="font-size:var(--t-1);line-height:1.15;color:var(--muted)">All splits</small>
+        </span>
+        <span style="height:var(--scope-h);min-width:96px;display:grid;align-content:center;justify-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);color:var(--muted)">
+          <b style="font-size:var(--t-3);font-weight:var(--w-emph);line-height:1.2">Split 1</b><small style="font-size:var(--t-1);line-height:1.15;color:var(--muted)">22 Mar 2026</small>
+        </span>
+        <span style="height:var(--scope-h);min-width:96px;display:grid;align-content:center;justify-items:center;padding:0 12px;border:1px solid var(--sel-line);border-radius:var(--r-2);background:var(--sel-bg);color:var(--text-strong)">
+          <b style="font-size:var(--t-3);font-weight:var(--w-emph);line-height:1.2">Split 3</b><small style="font-size:var(--t-1);line-height:1.15;color:var(--muted)">Ongoing</small>
+        </span>
+      </div>
+    </div>
+  </figure>
+</div>
+<p class="note"><b>Also.</b> The 226 KB, 512x512 <code>logo.png</code> that rendered into a 36px box is replaced by the 400-byte <code>logo.svg</code> that was already in the repo, unused. Nav taglines are gone: they restated the label and were hidden below 1040px anyway.</p>
+
+<h3>Corrected after review: the split tabs</h3>
+<p class="why">The first pass left the checkpoint tabs taller than the season tabs beside them, ragged in width, and with a "Full year / 2026" subtitle that repeated the season tab three places to its left. Both rows now share one explicit <code>--scope-h</code>, checkpoints share a <code>min-w</code>, and a divider separates the two groups.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>First attempt, rejected</figcaption>
+    <div class="stage" style="padding:0">
+      <div class="demo-scope">
+        <span style="height:36px;min-width:62px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--sel-line, color-mix(in oklch,var(--accent),var(--line) 42%));border-radius:8px;background:color-mix(in oklch,var(--accent) 14%,var(--surface));font-size:0.82rem;font-weight:680;color:var(--text-strong)">2026</span>
+        <span style="height:36px;min-width:62px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:0.82rem;font-weight:680;color:var(--muted)">2025</span>
+        <span style="height:36px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:0.82rem;font-weight:680;color:var(--muted)">All</span>
+        <span style="height:44px;display:grid;align-content:center;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:color-mix(in oklch,var(--surface-2) 58%,transparent);color:var(--muted)">
+          <b style="font-size:0.82rem;font-weight:680;line-height:1.2">Full year</b><small style="font-size:0.68rem;line-height:1.1;color:var(--muted)">2026</small>
+        </span>
+        <span style="height:44px;display:grid;align-content:center;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:color-mix(in oklch,var(--surface-2) 58%,transparent);color:var(--muted)">
+          <b style="font-size:0.82rem;font-weight:680;line-height:1.2">Split 1</b><small style="font-size:0.68rem;line-height:1.1;color:var(--muted)">22 Mar 2026</small>
+        </span>
+        <span style="height:44px;display:grid;align-content:center;padding:0 12px;border:1px solid color-mix(in oklch,var(--accent),var(--line) 42%);border-radius:8px;background:color-mix(in oklch,var(--accent) 14%,var(--surface));color:var(--text-strong)">
+          <b style="font-size:0.82rem;font-weight:680;line-height:1.2">Split 3</b><small style="font-size:0.68rem;line-height:1.1;color:var(--muted)">Ongoing</small>
+        </span>
+      </div>
+      <p class="note" style="padding:10px 12px 12px;color:var(--down);font-size:0.76rem">Two heights in one bar, ragged widths, redundant subtitle, no separation between the two groups.</p>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>Now</figcaption>
+    <div class="stage" style="padding:0">
+      <div class="demo-scope" style="--scope-h:42px">
+        <span style="height:var(--scope-h);min-width:64px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--sel-line);border-radius:var(--r-2);background:var(--sel-bg);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--text-strong)">2026</span>
+        <span style="height:var(--scope-h);min-width:64px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--muted)">2025</span>
+        <span style="height:var(--scope-h);min-width:64px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);font-size:var(--t-3);font-weight:var(--w-emph);color:var(--muted)">All</span>
+        <span style="align-self:stretch;width:1px;background:var(--line);margin:0 4px"></span>
+        <span style="height:var(--scope-h);min-width:96px;display:grid;align-content:center;justify-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);color:var(--muted)">
+          <b style="font-size:var(--t-3);font-weight:var(--w-emph);line-height:1.2">Full year</b><small style="font-size:var(--t-1);line-height:1.15;color:var(--muted)">All splits</small>
+        </span>
+        <span style="height:var(--scope-h);min-width:96px;display:grid;align-content:center;justify-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:color-mix(in oklch,var(--surface-2) 58%,transparent);color:var(--muted)">
+          <b style="font-size:var(--t-3);font-weight:var(--w-emph);line-height:1.2">Split 1</b><small style="font-size:var(--t-1);line-height:1.15;color:var(--muted)">22 Mar 2026</small>
+        </span>
+        <span style="height:var(--scope-h);min-width:96px;display:grid;align-content:center;justify-items:center;padding:0 12px;border:1px solid var(--sel-line);border-radius:var(--r-2);background:var(--sel-bg);color:var(--text-strong)">
+          <b style="font-size:var(--t-3);font-weight:var(--w-emph);line-height:1.2">Split 3</b><small style="font-size:var(--t-1);line-height:1.15;color:var(--muted)">Ongoing</small>
+        </span>
+      </div>
+      <p class="note" style="padding:10px 12px 12px;color:var(--faint);font-size:var(--t-2)">One height, one radius, even widths, group divider.</p>
+    </div>
+  </figure>
+</div>
+
+<h2>2. Page header and the first-visit explanation</h2>
+<p class="why">Regions opened with a clear paragraph explaining its metric. Rankings, the view every first-time visitor lands on, opened with a filter bar. The explanation now lives in <code>ModeHeader</code>, so no view can ship without one, and the grey uppercase eyebrow that restated each title in different words is gone.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before</figcaption>
+    <div class="stage" style="padding:0">
+      <div style="padding:18px 16px 14px;border-bottom:1px solid var(--line);background:oklch(0.125 0.004 250/0.72)">
+        <p style="font-size:0.7rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted)">Tier 1 team strength</p>
+        <h4 style="font-size:1.7rem;font-weight:640;color:var(--text-strong)">Team Power Index</h4>
+      </div>
+      <div style="padding:14px 16px;display:flex;gap:8px;align-items:center">
+        <span style="flex:1;height:36px;border:1px solid var(--line-strong);border-radius:4px;background:color-mix(in oklch,var(--surface-2) 72%,transparent);display:flex;align-items:center;padding:0 10px;font-size:0.82rem;color:var(--muted)">Filter teams...</span>
+        <span style="height:36px;border:1px solid var(--line-strong);border-radius:4px;background:color-mix(in oklch,var(--surface-2) 72%,transparent);display:flex;align-items:center;padding:0 10px;font-size:0.82rem;color:var(--muted)">Eligible only</span>
+      </div>
+      <p class="note" style="padding:0 16px 14px;color:var(--faint);font-size:0.78rem">No statement anywhere on this screen of what a Power score is or what its numbers mean.</p>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After</figcaption>
+    <div class="stage" style="padding:0">
+      <div style="padding:16px;border-bottom:1px solid var(--line);display:grid;gap:6px">
+        <h4 style="font-size:var(--t-7);font-weight:var(--w-emph);color:var(--text-strong)">Team Power Index</h4>
+        <p style="font-size:var(--t-3);line-height:1.55;color:var(--muted)">Power score rates every tier 1 team on one scale from its match results, weighted by opponent strength and event importance. Higher is stronger, and a 100 point gap is roughly a 64% game win chance for the stronger side. Movement compares against the previous rating update in the selected scope.</p>
+      </div>
+      <div style="padding:14px 16px;display:flex;gap:8px;align-items:center">
+        <span style="flex:1;height:36px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:flex;align-items:center;padding:0 12px;font-size:var(--t-3);color:var(--muted)">Filter teams...</span>
+        <span style="height:36px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:flex;align-items:center;padding:0 12px;font-size:var(--t-3);color:var(--muted)">Eligible only</span>
+      </div>
+    </div>
+  </figure>
+</div>
+
+<h2>3. The panel</h2>
+<p class="why">The same object was hand-built four different ways: <code>Card</code> vs raw <code>section</code>, <code>--r</code> vs <code>--r-lg</code>, <code>--line</code> vs <code>--line-strong</code>, filled header vs no header. One <code>&lt;Panel&gt;</code> now owns all four decisions, so a fifth variant cannot appear by accident.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before, three of the four variants</figcaption>
+    <div class="stage" style="display:grid;gap:12px">
+      <div style="border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden">
+        <div style="padding:16px;border-bottom:1px solid var(--line)">
+          <p style="font-size:0.67rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--faint);font-family:var(--mono-f);font-weight:650">Table readout</p>
+          <b style="display:block;margin-top:3px;font-size:1rem;font-weight:690;color:var(--text-strong)">Filtered signals</b>
+          <p style="margin-top:4px;font-size:0.82rem;color:var(--muted)">Movement, upset, and evidence context.</p>
+        </div>
+        <div style="padding:14px 16px;font-size:0.84rem;color:var(--muted)">Rankings, <span class="m">Card</span>, r-lg, --line, no header fill</div>
+      </div>
+      <div style="border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);overflow:hidden">
+        <div style="padding:16px;border-bottom:1px solid var(--line);background:var(--surface-2)">
+          <p style="font-size:0.66rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--faint)">Regional standings</p>
+          <b style="display:block;font-size:1rem;font-weight:660;color:var(--text-strong)">Select a region to explore its history</b>
+        </div>
+        <div style="padding:14px 16px;font-size:0.84rem;color:var(--muted)">Regions, raw <span class="m">section</span>, r-lg, --line-strong, filled header</div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden">
+        <div style="padding:14px 16px;font-size:0.84rem;color:var(--muted)">Matches, <span class="m">Card</span>, r, --line, no header at all</div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After, one Panel</figcaption>
+    <div class="stage" style="display:grid;gap:12px">
+      <div style="border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
+          <b style="display:block;font-size:var(--t-5);font-weight:var(--w-emph);color:var(--text-strong)">Ranked board</b>
+          <p style="margin-top:2px;font-size:var(--t-3);line-height:1.45;color:var(--muted)">Scale: +50 score is about a 57% neutral single-game edge before uncertainty.</p>
+        </div>
+        <div style="padding:14px 16px;font-size:var(--t-3);color:var(--muted)">Rankings</div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
+          <b style="display:block;font-size:var(--t-5);font-weight:var(--w-emph);color:var(--text-strong)">Regional standings</b>
+          <p style="margin-top:2px;font-size:var(--t-3);line-height:1.45;color:var(--muted)">Select a region to open its power history and international record.</p>
+        </div>
+        <div style="padding:14px 16px;font-size:var(--t-3);color:var(--muted)">Regions</div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
+          <b style="display:block;font-size:var(--t-5);font-weight:var(--w-emph);color:var(--text-strong)">Series ledger</b>
+          <p style="margin-top:2px;font-size:var(--t-3);line-height:1.45;color:var(--muted)">Filter by team, league or event. Expand a series to see its games.</p>
+        </div>
+        <div style="padding:14px 16px;font-size:var(--t-3);color:var(--muted)">Matches</div>
+      </div>
+    </div>
+  </figure>
+</div>
+<p class="note"><b>Note the vertical gain.</b> Dropping the eyebrow line returns roughly 18px per panel, on a page that stacks four of them.</p>
+
+<h2>4. Selection</h2>
+<p class="why">"Selected" rendered five ways: a gold underline on nav, a cyan tint on tabs, a soft fill on a picked team row, a soft fill plus inset bar on a picked region row, and a different mix plus bar on a tier-highlighted row. One treatment now covers all of them.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before</figcaption>
+    <div class="stage" style="display:grid;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)">
+      <div style="padding:11px 14px;background:var(--accent-soft);font-size:0.86rem">Picked team row <small style="color:var(--faint)">fill only</small></div>
+      <div style="padding:11px 14px;border-top:1px solid var(--line);background:color-mix(in oklch,var(--accent) 12%,var(--surface));box-shadow:inset 3px 0 0 var(--accent);font-size:0.86rem">Tier-highlighted row <small style="color:var(--faint)">different mix + bar</small></div>
+      <div style="padding:11px 14px;border-top:1px solid var(--line);background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent);font-size:0.86rem">Picked region row <small style="color:var(--faint)">fill + bar</small></div>
+      <div style="padding:11px 14px;border-top:1px solid var(--line);box-shadow:inset 0 -2px 0 var(--rank-gold);background:var(--surface-2);font-size:0.86rem">Active nav item <small style="color:var(--rank-gold)">gold underline</small></div>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After</figcaption>
+    <div class="stage" style="display:grid;gap:0;border:1px solid var(--line);border-radius:var(--r-3);overflow:hidden;background:var(--surface)">
+      <div style="padding:11px 14px;background:var(--sel-bg);box-shadow:inset 3px 0 0 var(--accent);font-size:var(--t-3)">Picked team row</div>
+      <div style="padding:11px 14px;border-top:1px solid var(--line);background:var(--sel-bg);box-shadow:inset 3px 0 0 var(--accent);font-size:var(--t-3)">Tier-highlighted row</div>
+      <div style="padding:11px 14px;border-top:1px solid var(--line);background:var(--sel-bg);box-shadow:inset 3px 0 0 var(--accent);font-size:var(--t-3)">Picked region row</div>
+      <div style="padding:11px 14px;border-top:1px solid var(--line);background:var(--sel-bg);box-shadow:inset 3px 0 0 var(--accent);font-size:var(--t-3)">Active nav item</div>
+    </div>
+  </figure>
+</div>
+<p class="note">Defined once in <code>base.css</code> as <code>--selected-bg</code>, <code>--selected-line</code> and <code>--selected-bar</code>. <code>--rank-gold</code> now means rank quality only: podium, S tier, confidence.</p>
+
+<h2>5. Pagination</h2>
+<p class="why">Three shapes: the team board, the match ledger with its rows-per-page select stranded up in the filter card, and the drawer's copy of the board markup with a pile of size overrides. One <code>&lt;Pager&gt;</code> with a <code>density</code> prop now serves all three, and it shows both the row range and the page number instead of one or the other.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before</figcaption>
+    <div class="stage" style="display:grid;gap:14px">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:22px;font-size:0.82rem;color:var(--muted)">
+        <span class="row" style="gap:8px">Rows per page <span style="height:32px;min-width:70px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface-2);display:grid;place-items:center;font-size:0.78rem">25</span></span>
+        <span style="min-width:92px;text-align:center;color:var(--text);font-weight:560">Page 2 of 9</span>
+        <span class="row" style="gap:8px">
+          <i style="width:32px;height:32px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:0.7rem">«</i>
+          <i style="width:32px;height:32px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:0.7rem">‹</i>
+          <i style="width:32px;height:32px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:0.7rem">›</i>
+          <i style="width:32px;height:32px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:0.7rem">»</i>
+        </span>
+      </div>
+      <div class="sep"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:var(--muted)">
+        <span>26–50 of 214</span>
+        <span class="row" style="gap:8px">
+          <i style="width:32px;height:32px;border:1px solid var(--line);border-radius:0;display:grid;place-items:center;font-style:normal;font-size:0.7rem">‹</i>
+          <span style="min-width:80px;text-align:center;font-weight:600;color:var(--text)">Page 2 of 9</span>
+          <i style="width:32px;height:32px;border:1px solid var(--line);border-radius:0;display:grid;place-items:center;font-style:normal;font-size:0.7rem">›</i>
+        </span>
+      </div>
+      <p class="note" style="color:var(--faint);font-size:0.76rem">Match ledger, no rows-per-page here, square buttons, no edge jumps.</p>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After</figcaption>
+    <div class="stage" style="display:grid;gap:14px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;font-size:var(--t-3);color:var(--muted)">
+        <span class="row" style="gap:8px">Rows <span style="height:32px;min-width:74px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:grid;place-items:center;font-size:var(--t-2)">25</span></span>
+        <span style="font-variant-numeric:tabular-nums">26–50 of 214</span>
+        <span class="row grow" style="gap:8px">
+          <span style="color:var(--text);font-weight:var(--w-label);font-variant-numeric:tabular-nums">Page 2 of 9</span>
+          <span class="row" style="gap:6px">
+            <i style="width:32px;height:32px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:0.7rem">«</i>
+            <i style="width:32px;height:32px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:0.7rem">‹</i>
+            <i style="width:32px;height:32px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:0.7rem">›</i>
+            <i style="width:32px;height:32px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:0.7rem">»</i>
+          </span>
+        </span>
+      </div>
+      <div class="sep"></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;font-size:var(--t-2);color:var(--muted)">
+        <span style="font-variant-numeric:tabular-nums">1–8 of 31</span>
+        <span class="row grow" style="gap:8px">
+          <span style="color:var(--text);font-weight:var(--w-label);font-variant-numeric:tabular-nums">Page 1 of 4</span>
+          <span class="row" style="gap:6px">
+            <i style="width:28px;height:28px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:0.66rem">‹</i>
+            <i style="width:28px;height:28px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);display:grid;place-items:center;font-style:normal;font-size:0.66rem">›</i>
+          </span>
+        </span>
+      </div>
+      <p class="note" style="color:var(--faint);font-size:var(--t-2)">Same component, <span class="m">density="compact"</span> inside the drawer.</p>
+    </div>
+  </figure>
+</div>
+
+<h2>6. Empty and error states</h2>
+<p class="why"><code>DataState</code> already existed and was good, but it had no slot for a retry button, so every caller that needed one hand-built its own state instead. Adding an <code>action</code> slot removed three bespoke copies.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before, Match history</figcaption>
+    <div class="stage">
+      <div style="border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);padding:20px;font-size:0.78rem;color:var(--muted)">
+        The published match ledger for this scope could not be loaded.
+      </div>
+      <p class="note" style="color:var(--faint);font-size:0.76rem">A bare alert. No icon, no title, no retry.</p>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After</figcaption>
+    <div class="stage">
+      <div style="border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);display:grid;place-items:center;gap:12px;padding:34px 24px;text-align:center;color:var(--muted)">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+        <b style="font-size:var(--t-5);font-weight:var(--w-emph);color:var(--text-strong)">Match ledger unavailable</b>
+        <p style="max-width:46ch;font-size:var(--t-3)">The published match ledger for this scope could not be loaded.</p>
+        <span style="margin-top:4px;height:32px;padding:0 14px;display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);font-size:var(--t-3);color:var(--text-strong)">Retry</span>
+      </div>
+    </div>
+  </figure>
+</div>
+
+<h2>7. Region badges</h2>
+<p class="why">Six regions rendered as photographic league logos and three as hand-drawn line-art glyphs, in the same column. The frame is now identical for every region and the line-art motifs are gone: contents differ only as logo or code.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before</figcaption>
+    <div class="stage">
+      <div class="swatchrow" style="align-items:center">
+        <span style="position:relative;display:inline-grid;place-items:center;width:44px;height:36px;border:1px solid oklch(0.76 0.12 215/0.44);border-radius:7px;background:linear-gradient(145deg,oklch(0.76 0.12 215/0.13),oklch(0.15 0.01 215/0.78)),var(--surface-2);box-shadow:inset 0 1px 0 oklch(0.95 0.01 215/0.12),0 1px 0 oklch(0 0 0/0.28)">
+          <span style="font-family:var(--mono-f);font-size:0.72rem;font-weight:800;color:oklch(0.92 0.045 215)">LCK</span>
+        </span>
+        <span style="position:relative;display:inline-grid;place-items:center;width:44px;height:36px;border:1px solid oklch(0.76 0.12 244/0.44);border-radius:7px;background:linear-gradient(145deg,oklch(0.76 0.12 244/0.13),oklch(0.15 0.01 244/0.78)),var(--surface-2);box-shadow:inset 0 1px 0 oklch(0.95 0.01 244/0.12),0 1px 0 oklch(0 0 0/0.28);overflow:hidden">
+          <svg viewBox="0 0 48 40" style="position:absolute;inset:1px;width:calc(100% - 2px);height:calc(100% - 2px);opacity:0.54" aria-hidden="true">
+            <path d="M14 28 V12 H27 C33 12 36 15 36 20 C36 25 33 28 27 28 H14" fill="none" stroke="oklch(0.76 0.12 244)" stroke-width="4" stroke-linejoin="round"/>
+            <path d="M18 20 H38" fill="none" stroke="oklch(0.76 0.12 244)" stroke-width="2.6" opacity="0.72"/>
+          </svg>
+          <span style="position:relative;font-family:var(--mono-f);font-size:0.64rem;font-weight:850;color:oklch(0.92 0.045 244);text-shadow:0 1px 2px oklch(0 0 0/0.55)">PCS</span>
+        </span>
+        <span style="position:relative;display:inline-grid;place-items:center;width:44px;height:36px;border:1px solid oklch(0.76 0.12 18/0.44);border-radius:7px;background:linear-gradient(145deg,oklch(0.76 0.12 18/0.13),oklch(0.15 0.01 18/0.78)),var(--surface-2);box-shadow:inset 0 1px 0 oklch(0.95 0.01 18/0.12),0 1px 0 oklch(0 0 0/0.28);overflow:hidden">
+          <svg viewBox="0 0 48 40" style="position:absolute;inset:1px;width:calc(100% - 2px);height:calc(100% - 2px);opacity:0.54" aria-hidden="true">
+            <path d="M12 12 L23 29 L36 12" fill="none" stroke="oklch(0.76 0.12 18)" stroke-width="4" stroke-linejoin="round"/>
+            <path d="M18 12 L24 22 L31 12" fill="none" stroke="oklch(0.76 0.12 18)" stroke-width="2.6" opacity="0.72"/>
+          </svg>
+          <span style="position:relative;font-family:var(--mono-f);font-size:0.64rem;font-weight:850;color:oklch(0.92 0.045 18);text-shadow:0 1px 2px oklch(0 0 0/0.55)">VCS</span>
+        </span>
+        <span style="font-size:0.76rem;color:var(--faint)">Inner ring, 145deg gradient, double shadow, text shadow, overlaid glyph</span>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After</figcaption>
+    <div class="stage">
+      <div class="swatchrow" style="align-items:center">
+        <span style="display:inline-grid;place-items:center;width:44px;height:36px;border:1px solid oklch(0.76 0.12 215/0.44);border-radius:var(--r-2);background:oklch(0.76 0.12 215/0.14);overflow:hidden">
+          <span style="font-family:var(--mono-f);font-size:var(--t-1);font-weight:var(--w-figure);color:oklch(0.92 0.045 215)">LCK</span>
+        </span>
+        <span style="display:inline-grid;place-items:center;width:44px;height:36px;border:1px solid oklch(0.76 0.12 244/0.44);border-radius:var(--r-2);background:oklch(0.76 0.12 244/0.14);overflow:hidden">
+          <span style="font-family:var(--mono-f);font-size:var(--t-1);font-weight:var(--w-figure);color:oklch(0.92 0.045 244)">PCS</span>
+        </span>
+        <span style="display:inline-grid;place-items:center;width:44px;height:36px;border:1px solid oklch(0.76 0.12 18/0.44);border-radius:var(--r-2);background:oklch(0.76 0.12 18/0.14);overflow:hidden">
+          <span style="font-family:var(--mono-f);font-size:var(--t-1);font-weight:var(--w-figure);color:oklch(0.92 0.045 18)">VCS</span>
+        </span>
+        <span style="font-size:var(--t-2);color:var(--faint)">One frame, four custom properties, region hue preserved</span>
+      </div>
+    </div>
+  </figure>
+</div>
+
+<h2>8. The rail</h2>
+<p class="why">The rail stacked seven summary surfaces next to a table that is already the summary, each with its own grey subtitle line. It is now three panels. The tier strip stays in the rail.</p>
+<p class="why"><b>Corrected after review.</b> The first pass moved the tier strip into the board panel. That was wrong twice over: it is not where you expect it, and the cells were sized in proportion to team count, which works in a narrow rail but falls apart at full board width. With a real distribution of S=2, A=3, B=32, C=16, the B cell swallowed most of the row and left a large gap before C. Cells are now an even grid.</p>
+
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before, seven rail surfaces</figcaption>
+    <div class="stage" style="display:grid;gap:8px">
+      <div style="border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);padding:10px;font-size:0.8rem;color:var(--muted)">Regional strength teaser</div>
+      <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;display:grid;gap:1px;background:var(--line)">
+        <div style="background:var(--surface);padding:9px 12px;font-size:0.8rem;color:var(--muted)">Top three <small style="color:var(--faint)">restates rows 1-3 of the table</small></div>
+        <div style="background:var(--surface);padding:9px 12px;font-size:0.8rem;color:var(--muted)">Tier density</div>
+        <div style="background:var(--surface);padding:9px 12px;font-size:0.8rem;color:var(--muted)">Biggest riser</div>
+        <div style="background:var(--surface);padding:9px 12px;font-size:0.8rem;color:var(--muted)">Biggest faller</div>
+        <div style="background:var(--surface);padding:9px 12px;font-size:0.8rem;color:var(--muted)">Upset signal</div>
+        <div style="background:var(--surface);padding:9px 12px;font-size:0.8rem;color:var(--muted)">Spicy confidence band</div>
+      </div>
+      <p class="note" style="color:var(--faint);font-size:0.76rem">Each with its own grey subtitle line, beside a table that is already the summary.</p>
+    </div>
+  </figure>
+
+  <figure class="pane after"><figcaption><span class="dot"></span>After, three rail panels</figcaption>
+    <div class="stage" style="display:grid;gap:10px">
+      <div style="border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--line)"><b style="font-size:var(--t-5);font-weight:var(--w-emph);color:var(--text-strong)">Tier density</b></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)">
+          <div style="background:var(--surface-2);padding:8px 12px">
+            <span style="display:block;font-size:var(--t-2);font-weight:var(--w-label);color:var(--muted)">S-tier</span>
+            <b style="display:block;font-size:var(--t-6);font-weight:var(--w-figure);color:var(--rank-gold);font-variant-numeric:tabular-nums">2</b>
+            <small style="display:block;font-size:var(--t-1);color:var(--faint)">GEN, HLE</small>
+          </div>
+          <div style="background:var(--surface-2);padding:8px 12px">
+            <span style="display:block;font-size:var(--t-2);font-weight:var(--w-label);color:var(--muted)">A-tier</span>
+            <b style="display:block;font-size:var(--t-6);font-weight:var(--w-figure);color:var(--text-strong);font-variant-numeric:tabular-nums">3</b>
+            <small style="display:block;font-size:var(--t-1);color:var(--faint)">DK, BLG, T1</small>
+          </div>
+          <div style="background:var(--sel-bg);box-shadow:inset 0 0 0 1px var(--sel-line);padding:8px 12px">
+            <span style="display:block;font-size:var(--t-2);font-weight:var(--w-label);color:var(--muted)">B-tier</span>
+            <b style="display:block;font-size:var(--t-6);font-weight:var(--w-figure);color:var(--text-strong);font-variant-numeric:tabular-nums">32</b>
+            <small style="display:block;font-size:var(--t-1);color:var(--faint)">KT, KC, BFX <em style="font-style:normal;font-weight:var(--w-emph);color:var(--muted)">+29</em></small>
+          </div>
+          <div style="background:var(--surface-2);padding:8px 12px">
+            <span style="display:block;font-size:var(--t-2);font-weight:var(--w-label);color:var(--muted)">C-tier</span>
+            <b style="display:block;font-size:var(--t-6);font-weight:var(--w-figure);color:var(--text-strong);font-variant-numeric:tabular-nums">16</b>
+            <small style="display:block;font-size:var(--t-1);color:var(--faint)">GAM, SG, FURI <em style="font-style:normal;font-weight:var(--w-emph);color:var(--muted)">+13</em></small>
+          </div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--line)"><b style="font-size:var(--t-5);font-weight:var(--w-emph);color:var(--text-strong)">Movement</b></div>
+        <div style="padding:14px 16px;display:grid;gap:14px">
+          <div style="display:grid;gap:2px">
+            <span style="font-size:var(--t-2);font-weight:var(--w-label);color:var(--muted)">▲ Biggest riser</span>
+            <span style="display:flex;gap:8px;align-items:baseline"><b style="font-size:var(--t-4);font-weight:var(--w-emph);color:var(--text-strong)">GEN</b><span style="font-family:var(--mono-f);font-size:var(--t-2);font-weight:var(--w-figure);color:var(--up)">#6 → #2</span></span>
+          </div>
+          <div style="display:grid;gap:2px">
+            <span style="font-size:var(--t-2);font-weight:var(--w-label);color:var(--muted)">▼ Biggest faller</span>
+            <span style="display:flex;gap:8px;align-items:baseline"><b style="font-size:var(--t-4);font-weight:var(--w-emph);color:var(--text-strong)">FNC</b><span style="font-family:var(--mono-f);font-size:var(--t-2);font-weight:var(--w-figure);color:var(--down)">#4 → #9</span></span>
+          </div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid var(--line);display:grid;gap:6px">
+          <span style="display:flex;justify-content:space-between;font-size:var(--t-2);font-weight:var(--w-label);color:var(--muted)">Confidence <b style="font-size:var(--t-3);font-weight:var(--w-figure);color:var(--text-strong)">71%</b></span>
+          <span style="display:block;height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden"><span style="display:block;height:100%;width:71%;background:var(--rank-gold)"></span></span>
+        </div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);padding:12px 16px;font-size:var(--t-3);color:var(--muted)">Region power</div>
+    </div>
+  </figure>
+</div>
+
+<h2>9. Token scales</h2>
+
+<h3>Radius</h3>
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before, 9 values in use</figcaption>
+    <div class="stage"><div class="swatchrow">
+      <span class="swatch"><i style="border-radius:0"></i>0</span>
+      <span class="swatch"><i style="border-radius:2px"></i>2px</span>
+      <span class="swatch"><i style="border-radius:3px"></i>3px</span>
+      <span class="swatch"><i style="border-radius:4px"></i>4px<br>--r-sm</span>
+      <span class="swatch"><i style="border-radius:5px"></i>5px</span>
+      <span class="swatch"><i style="border-radius:6px"></i>6px<br>md</span>
+      <span class="swatch"><i style="border-radius:7px"></i>7px</span>
+      <span class="swatch"><i style="border-radius:8px"></i>8px<br>--r / --r-lg</span>
+      <span class="swatch"><i style="border-radius:999px"></i>pill</span>
+    </div>
+    <p class="note" style="color:var(--faint);font-size:0.76rem;margin-top:12px">--r and --r-lg were both 8px, so panels and controls were the same radius and everyone hardcoded their own step.</p>
+    </div>
+  </figure>
+  <figure class="pane after"><figcaption><span class="dot"></span>After, 3 steps plus a pill</figcaption>
+    <div class="stage"><div class="swatchrow">
+      <span class="swatch"><i style="border-radius:4px"></i>4px<br>--r-1</span>
+      <span class="swatch"><i style="border-radius:8px"></i>8px<br>--r-2</span>
+      <span class="swatch"><i style="border-radius:12px"></i>12px<br>--r-3</span>
+      <span class="swatch"><i style="border-radius:999px"></i>pill</span>
+    </div>
+    <p class="note" style="color:var(--faint);font-size:var(--t-2);margin-top:12px">Chips, controls, panels. Panels are visibly rounder than what sits inside them, which is what makes the surface hierarchy readable. Tailwind's rounded-sm / md / lg are remapped onto the same three so they cannot drift.</p>
+    </div>
+  </figure>
+</div>
+
+<h3>Type</h3>
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before, 40 sizes</figcaption>
+    <div class="stage" style="display:grid;gap:1px">
+      <span style="font-size:0.68rem;color:var(--muted)">0.68rem &nbsp; Power score</span>
+      <span style="font-size:0.7rem;color:var(--muted)">0.70rem &nbsp; Power score</span>
+      <span style="font-size:0.72rem;color:var(--muted)">0.72rem &nbsp; Power score</span>
+      <span style="font-size:0.73rem;color:var(--muted)">0.73rem &nbsp; Power score</span>
+      <span style="font-size:0.74rem;color:var(--muted)">0.74rem &nbsp; Power score</span>
+      <span style="font-size:0.75rem;color:var(--muted)">0.75rem &nbsp; Power score</span>
+      <span style="font-size:0.76rem;color:var(--muted)">0.76rem &nbsp; Power score</span>
+      <span style="font-size:0.78rem;color:var(--muted)">0.78rem &nbsp; Power score</span>
+      <span style="font-size:0.8rem;color:var(--muted)">0.80rem &nbsp; Power score</span>
+      <p class="note" style="color:var(--faint);font-size:0.76rem;margin-top:10px">Nine sizes inside a 2px band, used 158 times between them. No reviewer can tell a decision from a typo.</p>
+    </div>
+  </figure>
+  <figure class="pane after"><figcaption><span class="dot"></span>After, 8 steps</figcaption>
+    <div class="stage" style="display:grid;gap:5px">
+      <span style="font-size:var(--t-1);color:var(--muted)">--t-1 &nbsp; 0.68 &nbsp; chips, table meta</span>
+      <span style="font-size:var(--t-2);color:var(--muted)">--t-2 &nbsp; 0.75 &nbsp; secondary text</span>
+      <span style="font-size:var(--t-3);color:var(--muted)">--t-3 &nbsp; 0.82 &nbsp; default UI</span>
+      <span style="font-size:var(--t-4);color:var(--text)">--t-4 &nbsp; 0.92 &nbsp; emphasised row</span>
+      <span style="font-size:var(--t-5);color:var(--text-strong)">--t-5 &nbsp; 1.05 &nbsp; panel title</span>
+      <span style="font-size:var(--t-6);color:var(--text-strong)">--t-6 &nbsp; 1.25 &nbsp; figure</span>
+      <span style="font-size:var(--t-7);color:var(--text-strong)">--t-7 &nbsp; 1.7 &nbsp; page title</span>
+      <p class="note" style="color:var(--faint);font-size:var(--t-2);margin-top:6px">Plus --t-8 for headline figures and --t-0 (0.6rem), documented as dense mobile chrome only, used in five media-query rules so narrow-screen table cells keep fitting.</p>
+    </div>
+  </figure>
+</div>
+
+<h3>Weight</h3>
+<div class="cmp">
+  <figure class="pane before"><figcaption><span class="dot"></span>Before, 18 weights</figcaption>
+    <div class="stage" style="display:grid;gap:2px;font-size:0.9rem;color:var(--text-strong)">
+      <span style="font-weight:620">620 &nbsp; Gen.G Esports</span>
+      <span style="font-weight:640">640 &nbsp; Gen.G Esports</span>
+      <span style="font-weight:650">650 &nbsp; Gen.G Esports</span>
+      <span style="font-weight:660">660 &nbsp; Gen.G Esports</span>
+      <span style="font-weight:680">680 &nbsp; Gen.G Esports</span>
+      <span style="font-weight:690">690 &nbsp; Gen.G Esports</span>
+      <p class="note" style="color:var(--faint);font-size:0.76rem;margin-top:8px">Six weights in a 70-unit band, alongside font-semibold and font-bold.</p>
+    </div>
+  </figure>
+  <figure class="pane after"><figcaption><span class="dot"></span>After, 4 weights</figcaption>
+    <div class="stage" style="display:grid;gap:5px;font-size:var(--t-4);color:var(--text-strong)">
+      <span style="font-weight:400">400 &nbsp; Gen.G Esports &nbsp; <small style="color:var(--faint);font-size:var(--t-2)">body</small></span>
+      <span style="font-weight:550">550 &nbsp; Gen.G Esports &nbsp; <small style="color:var(--faint);font-size:var(--t-2)">label</small></span>
+      <span style="font-weight:680">680 &nbsp; Gen.G Esports &nbsp; <small style="color:var(--faint);font-size:var(--t-2)">emphasis</small></span>
+      <span style="font-weight:800">800 &nbsp; Gen.G Esports &nbsp; <small style="color:var(--faint);font-size:var(--t-2)">figure</small></span>
+      <p class="note" style="color:var(--faint);font-size:var(--t-2);margin-top:6px">Tailwind's font-medium / semibold / bold map onto these, so the utilities cannot reintroduce a fifth.</p>
+    </div>
+  </figure>
+</div>
+
+<h2>10. What else changed</h2>
+
+<div class="scroll">
+<table class="data">
+  <tr><th>Area</th><th class="w">Change</th></tr>
+  <tr><td>Primitives</td><td class="w">Card, Button, Input, Select, Table, Badge, Skeleton and Alert now carry the design language by default. The override string that followed all 28 <code>Card</code> call sites is deleted. Added <code>Button variant="tab"</code> / <code>size="tab"</code> and <code>Badge variant="rank" | "event" | "win" | "loss"</code> so the four chip treatments that were built inline have a home.</td></tr>
+  <tr><td>Control height</td><td class="w">One <code>--control-h</code> (36px, 44px on coarse pointers) replaces per-view <code>--gpr-control-h</code> and <code>--pager-control-h</code>. Filter-bar inputs, selects, segments and buttons now share a baseline without per-control overrides.</td></tr>
+  <tr><td>Table chrome</td><td class="w">The 815-character inline board-table className and the 1,728-character compare-table className moved into <code>rankings.css</code> as <code>.ranking-table</code> and <code>.compare-table</code>. Longest remaining className: 817.</td></tr>
+  <tr><td>URL state</td><td class="w">New <code>lib/urlState.ts</code>. The board's search, region, tournament, eligibility, sort, page and page-size now round-trip through the hash, so a filtered board can be shared and survives a reload. Match history was rewritten onto the same helper, so param naming and the omit-the-default rule are identical across views.</td></tr>
+  <tr><td>Skeletons</td><td class="w">The infinite <code>background-position</code> sheen across a 220% gradient is replaced by a static fill plus one opacity fade on the container. No more per-frame repaint for every skeleton on screen.</td></tr>
+  <tr><td>Scroll paint</td><td class="w">The body's three ambient gradients moved off <code>background-attachment: fixed</code> onto a fixed, painted-once pseudo-element. Nav backdrop blur reduced from 16px to 8px.</td></tr>
+  <tr><td>Fonts</td><td class="w">JetBrains Mono shipped five subsets in upright and italic. Only the latin upright subset is declared now: 84 KB to 40 KB. The dead <code>html { font-mono }</code> rule, which lost to an unlayered <code>:root</code> rule and never applied, is gone.</td></tr>
+  <tr><td>Surfaces</td><td class="w">The team drawer defined a private warm-hue surface ramp (hue 68 to 72) against the app's cool 250. It now uses the shared <code>--surface</code> steps. Nine raw <code>oklch()</code> literals in components mapped back onto tokens.</td></tr>
+  <tr><td>Dead code</td><td class="w"><code>--rail-w</code> and the eight <code>--sidebar-*</code> tokens for a removed rail are deleted, as are nine hand-drawn SVG region motifs. The <code>gpr-</code> class prefix, left over from an earlier product name, is renamed to <code>board-</code> across 15 classes and variables.</td></tr>
+  <tr><td>Tray</td><td class="w">Tray space is reserved only when a tray exists; Match history no longer ends with ~80px of dead space. The Compare button reads "Pick 1 more" at one selection instead of appearing greyed out with no explanation.</td></tr>
+  <tr><td>Naming</td><td class="w">One product name and one metric name. "Power Index" and "Power score" everywhere, including the CSS class prefix.</td></tr>
+</table>
+</div>
+
+<h2>11. Verification</h2>
+<ul>
+  <li><b>Typecheck</b> <code>tsc -b</code> clean.</li>
+  <li><b>Lint</b> <code>eslint .</code> clean.</li>
+  <li><b>Tests</b> 679 passing, 0 failing. No test files were modified.</li>
+  <li><b>Build</b> succeeds. CSS 152,855 to 124,293 bytes. Main JS 403,560 to 388,760 bytes. Font payload 84 KB to 40 KB.</li>
+  <li><b>Render</b> every new component server-rendered once to catch render-time faults the type checker cannot see, including ref forwarding through <code>Panel</code>.</li>
+</ul>
+<p class="note"><b>Not verified visually.</b> Browser screenshot capture was unavailable in this environment, so the panes above are rendered from the token values rather than captured from the running app. The layout changes are worth a look in a real browser before merging, particularly the board filter bar at narrow widths and the tier strip inside the board panel.</p>
+
+<h2>12. One deviation from the review</h2>
+<p>The published review proposed <code>--t-6: 1.35rem</code>. It shipped as <code>1.25rem</code>: six existing sizes (1.15, 1.2, 1.32, 1.35, 1.36, 1.4) collapse onto that step within about 10% each, where 1.35 would have pushed the 1.15rem tier-count figures up by nearly 18%.</p>
+<p>The review also proposed dropping the league logos in favour of a code badge everywhere. That was not done: the logos are the strongest recognition cue in an esports product. The inconsistency was the hand-drawn line-art glyphs sitting beside photographs, so the frame was unified and the glyphs removed instead. Regions without a logo show their code in the same frame.</p>
+
+</main>
+</body>
+</html>

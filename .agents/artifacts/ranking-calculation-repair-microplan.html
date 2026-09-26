@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ranking calculation repair Microplan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #5d6875;
+      --line: #d8dee6;
+      --accent: #2056a8;
+      --accent-soft: #eaf1fc;
+      --high: #a62525;
+      --medium: #8b5a00;
+      --good: #176b42;
+      --code: #eef1f5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101419;
+        --panel: #171c22;
+        --text: #edf1f5;
+        --muted: #aab4c0;
+        --line: #35404c;
+        --accent: #8cb7ff;
+        --accent-soft: #1d2c43;
+        --high: #ff9b9b;
+        --medium: #f1c46d;
+        --good: #79d5a6;
+        --code: #202730;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1120px, 100%); margin: 0 auto; padding: 28px 18px 56px; }
+    h1, h2, h3 { line-height: 1.2; margin: 0; }
+    h1 { font-size: clamp(1.65rem, 4vw, 2.25rem); }
+    h2 { margin-top: 34px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 1.35rem; }
+    h3 { margin-top: 22px; font-size: 1.05rem; }
+    p { margin: 10px 0; }
+    ul, ol { padding-left: 1.35rem; }
+    li + li { margin-top: 7px; }
+    code {
+      padding: 0.12rem 0.32rem;
+      border-radius: 4px;
+      background: var(--code);
+      font: 0.92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .summary, .decision, .risk, .gate {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 16px;
+    }
+    .summary { margin-top: 18px; border-left: 4px solid var(--accent); }
+    .meta { color: var(--muted); font-size: 0.92rem; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); margin-top: 14px; }
+    .decision h3, .risk h3, .gate h3 { margin-top: 0; }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .high { color: var(--high); }
+    .medium { color: var(--medium); }
+    .good { color: var(--good); }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; background: var(--panel); }
+    th, td { border: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
+    th { background: var(--accent-soft); }
+    .table-wrap { overflow-x: auto; }
+    .step { margin-top: 16px; padding-left: 16px; border-left: 3px solid var(--line); }
+    .step h3 { margin-top: 0; }
+    .checklist li { list-style: square; }
+    .small { font-size: 0.9rem; color: var(--muted); }
+    @media (max-width: 640px) {
+      main { padding: 20px 12px 42px; }
+      th, td { min-width: 170px; padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Ranking calculation repair Microplan</h1>
+    <p class="meta">Project: LoL Esports Power Index · Scope: model correctness, league fairness, tournament scoring, and source freshness</p>
+  </header>
+
+  <section class="summary">
+    <h2 style="margin-top:0;border:0;padding:0">Recommendation</h2>
+    <p>Ship these repairs as one versioned model revision followed by a full historical replay. The four calculation changes interact through team ratings, league anchors, tournament placement, uncertainty, and later match expectations. Publishing only one fix at a time would create intermediate rankings that are hard to explain or compare.</p>
+    <p><strong>Target release:</strong> <code>transparent-power-index-v0.1.0</code>, with a new config hash and fresh source manifest. Keep the public schema version unchanged unless implementation adds or renames serialized fields.</p>
+  </section>
+
+  <h2>Goal</h2>
+  <p>Make rating movement invariant to unrelated scheduling, make tournament scoring independent of event labels, enforce the stated result-signal budget, center placement adjustments, and prevent stale or contradictory source state from reaching published artifacts.</p>
+
+  <h2>Scope</h2>
+  <div class="grid">
+    <div class="decision">
+      <h3>Included</h3>
+      <ul>
+        <li>Recency and boundary decay calculations.</li>
+        <li>International team and league signal allocation.</li>
+        <li>Tournament phase and placement residual calculations.</li>
+        <li>Schedule-result reconciliation and lifecycle completion.</li>
+        <li>Raw manifest freshness checks.</li>
+        <li>Full replay, calibration comparison, and regenerated public artifacts.</li>
+      </ul>
+    </div>
+    <div class="decision">
+      <h3>Not included</h3>
+      <ul>
+        <li>UI redesign or ranking-table changes.</li>
+        <li>Changing the rated league universe.</li>
+        <li>Replacing Oracle's Elixir or Leaguepedia.</li>
+        <li>New player metrics or execution-residual promotion.</li>
+        <li>Production cadence or bucket-retention changes.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Decisions</h2>
+  <div class="grid">
+    <article class="decision">
+      <span class="tag">Decision 1</span>
+      <h3>Use entity-local context and composable time decay</h3>
+      <p>Replace the floor-plus-exponential gap function with anchor regression based on an exponential rate. Track the last rated date, normalized split, and patch per team. Track elapsed time and split context per league anchor. Apply each boundary when that team or league next participates, never by comparison with the globally previous match.</p>
+      <p class="small">Reason: inserting matches from another team or league must not trigger, suppress, or split any decay or boundary adjustment.</p>
+    </article>
+    <article class="decision">
+      <span class="tag">Decision 2</span>
+      <h3>Use phase data for stage points</h3>
+      <p>Normalize <code>match.phase</code> into explicit stages. Cover provider labels such as upper final, lower final, lower round, Swiss, knockout stage, quarterfinal, semifinal, and grand final. Do not search the event title for stage tokens. Skip placement scoring when recognized-phase coverage is below 90% of tournament series or the terminal final is not recognized and resolved.</p>
+      <p class="small">Reason: changing an event label must not change rating movement.</p>
+    </article>
+    <article class="decision">
+      <span class="tag">Decision 3</span>
+      <h3>Separate base evidence from realized movement</h3>
+      <p>Calculate one signed <code>baseEvidence</code> value per side, allocate 12% to league strength, then divide the remaining 88% between stable team strength and form. Exact configured shares apply to these base allocations. Team uncertainty, roster volatility, domestic transfer shrinkage, momentum decay, caps, and rounding produce separate <code>realizedDelta</code> values. Remove the independent league K-factor from the live calculation.</p>
+      <p class="small">Reason: configured shares can reconcile exactly at the evidence layer while realized team movement remains honest about entity-specific modifiers.</p>
+    </article>
+    <article class="decision">
+      <span class="tag">Decision 4</span>
+      <h3>Center placement movement</h3>
+      <p>Scale expected stage points to the actual tournament point pool before computing residuals. After league aggregation, center and cap deltas with redistribution so the final league placement adjustments sum to zero within rounding tolerance.</p>
+      <p class="small">Reason: tournament placement should redistribute league strength, not create rating points.</p>
+    </article>
+    <article class="decision">
+      <span class="tag">Decision 5</span>
+      <h3>Reconcile completed series with schedule state</h3>
+      <p>Keep provider schedule state as reference data, but derive effective completion at series level. Scored data corroborates completion only when the canonical series reaches the official wins-needed threshold, or completes a valid best-of-two tie. One scored game sharing an <code>officialMatchId</code> is insufficient. An official completed state is accepted only when scored coverage does not contradict its final score.</p>
+      <p class="small">Reason: a stale <code>unstarted</code> flag must not override a completed series, and a partial Bo5 must not be promoted to complete.</p>
+    </article>
+    <article class="decision">
+      <span class="tag">Decision 6</span>
+      <h3>Fail publication on semantic manifest drift</h3>
+      <p>Parse managed raw inputs and compare scored coverage, retrieval timestamps, content digests, and manifest references. Do not use filesystem modification time. A refresh may preserve a verified prior authority during provider outage, but it must not silently ignore a successfully downloaded scored file with new coverage or content.</p>
+      <p class="small">Reason: the repository already contains files through July 26 while the manifest ends July 16.</p>
+    </article>
+  </div>
+
+  <h2>Ordered implementation</h2>
+
+  <section class="step">
+    <h3>1. Lock the defects with invariant tests</h3>
+    <ul>
+      <li>Add a recency test that compares one 180-day gap with the same gap split by unrelated match dates.</li>
+      <li>Add unrelated-match insertion tests around team patch changes, team split changes, and league-anchor split changes.</li>
+      <li>Add an event-label test using identical phase, tier, teams, and result with <code>Worlds</code> and <code>World Championship</code> titles.</li>
+      <li>Add a channel-budget test that reconciles <code>baseEvidence</code> allocations against declared shares, then separately verifies realized-delta modifiers.</li>
+      <li>Add a placement test asserting that final league placement deltas sum to zero.</li>
+      <li>Add source tests for partial Bo5 coverage, completed sweeps, best-of-two ties, stale schedule states, and semantically unreferenced raw files.</li>
+    </ul>
+    <p><strong>Files:</strong> <code>tests/model.test.ts</code>, new focused tests for rating context, placement residuals, and manifest freshness.</p>
+  </section>
+
+  <section class="step">
+    <h3>2. Replace recency decay</h3>
+    <ul>
+      <li>Add a named half-life or decay-rate parameter to <code>modelConfig.ts</code>.</li>
+      <li>Change time retention to <code>exp(-rate × elapsedDays)</code>.</li>
+      <li>Add checkpointed maps for team last-rated date, patch, and normalized split, plus league last-rated date and normalized split.</li>
+      <li>Apply team decay and boundaries before that team's first series on a date. Apply league decay and boundaries before reading that league anchor.</li>
+      <li>Use sourced normalized split identity. If split identity is unknown, apply time decay only rather than comparing event-title strings.</li>
+      <li>Keep team ratings and league anchors symmetric around their own priors.</li>
+      <li>Invalidate old checkpoints through the model config and checkpoint compatibility identity.</li>
+    </ul>
+    <p><strong>Files:</strong> <code>src/lib/ratingContext.ts</code>, <code>src/lib/modelConfig.ts</code>, checkpoint tests.</p>
+  </section>
+
+  <section class="step">
+    <h3>3. Repair tournament stage and placement math</h3>
+    <ul>
+      <li>Inventory phase labels across the complete source corpus before defining the mapping.</li>
+      <li>Extract a tested phase normalizer for final, upper and lower finals, semifinal, quarterfinal, knockout rounds, Swiss, main-stage, play-in, and unknown.</li>
+      <li>Make stage points consume the normalized phase only.</li>
+      <li>Require at least 90% recognized series-phase coverage and a recognized resolved final. Otherwise skip placement scoring and publish an audit reason.</li>
+      <li>Scale expected team points so expected total equals actual total.</li>
+      <li>Aggregate by home league, apply representative normalization, then center and cap without changing the zero-sum total.</li>
+      <li>Record actual pool, expected pool, and centered residual total in full audit output.</li>
+    </ul>
+    <p><strong>Files:</strong> <code>src/lib/placementResiduals.ts</code>, tournament tests, audit snapshot types if diagnostics are serialized.</p>
+  </section>
+
+  <section class="step">
+    <h3>4. Unify the international result budget</h3>
+    <ul>
+      <li>Compute <code>baseEvidenceA = eventK × strengthSignal × (observedA - expectedA)</code> and <code>baseEvidenceB = -baseEvidenceA</code>.</li>
+      <li>Allocate <code>baseLeague = baseEvidence × 0.12</code>, <code>baseStable = baseEvidence × 0.88 × 0.90</code>, and <code>baseForm = baseEvidence × 0.88 × 0.10</code>.</li>
+      <li>Apply league base allocations symmetrically so league movement remains zero-sum.</li>
+      <li>Calculate realized stable movement after uncertainty, roster volatility, and domestic transfer multipliers.</li>
+      <li>Calculate realized form movement after momentum decay and caps.</li>
+      <li>Remove or retire live <code>leagueKFactor</code> parameters and update explanations.</li>
+      <li>Publish base allocations, realized deltas, and modifier values in the full audit ledger. Exact share reconciliation applies only to base allocations.</li>
+    </ul>
+    <p><strong>Files:</strong> <code>src/lib/ratingSeriesEngine.ts</code>, <code>src/lib/leagueRatings.ts</code>, <code>src/data/rankingConfig.ts</code>, <code>src/lib/modelConfig.ts</code>, explanation tests.</p>
+  </section>
+
+  <section class="step">
+    <h3>5. Fix source and lifecycle reconciliation</h3>
+    <ul>
+      <li>Store schedule state as provider evidence rather than unquestioned match state.</li>
+      <li>Group enriched scored games by canonical series and official match identity.</li>
+      <li>Corroborate completion only when official best-of and scored wins resolve a terminal result. Accept a best-of-two tie only at 1-1.</li>
+      <li>Reject one-game and otherwise partial multi-game coverage as completion evidence.</li>
+      <li>Keep tournament completion strict about schedule coverage and rated-match coverage.</li>
+      <li>Add a manifest inventory check based on parsed scored date range, provider retrieval time, content digest, and referenced authority.</li>
+      <li>Regenerate the manifest from the complete verified raw authority.</li>
+    </ul>
+    <p><strong>Files:</strong> <code>src/lib/importers/communitySources.ts</code>, <code>src/lib/internationalTournaments.ts</code>, refresh scripts, source authority tests.</p>
+  </section>
+
+  <section class="step">
+    <h3>6. Recalibrate and compare</h3>
+    <ul>
+      <li>Run a full historical replay under the old and new model using the same source authority.</li>
+      <li>Run paired chronological walk-forward comparisons on the same predictions, with series-clustered bootstrap intervals for Brier score and log loss.</li>
+      <li>Require global non-inferiority with a predeclared margin of 0.0005 Brier and 0.001 log loss at the 95% upper confidence bound.</li>
+      <li>Require the cross-region Brier point estimate to improve and its 95% upper bound to remain at or below the global non-inferiority margin.</li>
+      <li>Report cross-region Brier, calibration slope, and expected calibration error by home league when the slice has at least 50 predictions. No reported league may breach a 0.001 Brier non-inferiority margin.</li>
+      <li>Compare patch transitions, roster changes, and tournament slices with the same paired method.</li>
+      <li>Run the Riot GPR comparison and inspect large rank changes manually.</li>
+      <li>Review league anchor movement, especially LCK, LPL, LEC, LCS, LCP, and CBLOL.</li>
+      <li>Adjust only named parameters. Do not add one-off team or league corrections.</li>
+    </ul>
+    <p><strong>Output:</strong> a checked-in model/config change and local before-and-after audit evidence tied to source digest and model versions.</p>
+  </section>
+
+  <section class="step">
+    <h3>7. Publish one coherent generation</h3>
+    <ul>
+      <li>Bump the model version to <code>transparent-power-index-v0.1.0</code>.</li>
+      <li>Generate a new config hash and rebuild every scope, history, entity, region, tournament, and match artifact.</li>
+      <li>Run the full release check before promotion.</li>
+      <li>Publish only when the manifest coverage date matches the latest verified scored input.</li>
+      <li>Keep the prior complete generation as the rollback target.</li>
+    </ul>
+  </section>
+
+  <h2>Validation gates</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Gate</th><th>Required result</th><th>Check</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Schedule invariance</td><td>Inserting unrelated dates, patches, or splits changes another team or league by at most 0.001 internal point.</td><td>Entity-local rating-context tests.</td></tr>
+        <tr><td>Label invariance</td><td>Changing only the event title produces identical stage points and rating deltas.</td><td>Focused placement test.</td></tr>
+        <tr><td>Signal budget</td><td>Base allocations reconcile exactly with configured shares. Realized deltas reconcile with recorded modifiers, decay, caps, and rounding.</td><td>Series ledger test and full-artifact audit.</td></tr>
+        <tr><td>Placement conservation</td><td>League placement deltas sum to at most 0.1 absolute point per tournament.</td><td>Tournament fixture matrix.</td></tr>
+        <tr><td>Series completion</td><td>No partial Bo3 or Bo5 is treated as complete. Completed sweeps and valid best-of-two ties resolve correctly.</td><td>Canonical-series and lifecycle tests.</td></tr>
+        <tr><td>Phase coverage</td><td>Placement scoring runs only with at least 90% recognized series phases and a recognized resolved final.</td><td>Corpus inventory and tournament fixtures.</td></tr>
+        <tr><td>Freshness</td><td>Latest published scored coverage equals the latest verified manifest authority, with matching parsed dates, retrieval evidence, and digests.</td><td>Semantic release gate.</td></tr>
+        <tr><td>Prediction quality</td><td>Paired 95% confidence bounds pass global non-inferiority, cross-region point performance improves, and eligible league slices stay within their predeclared margins.</td><td>Series-clustered walk-forward comparison.</td></tr>
+        <tr><td>External comparison</td><td>Existing Riot GPR benchmark passes with no new elite-team coverage failure.</td><td><code>pnpm run benchmark:riot-gpr</code>.</td></tr>
+        <tr><td>Repository checks</td><td>Typecheck, lint, tests, incremental gate, and production build pass.</td><td><code>pnpm run release:check</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Risks and controls</h2>
+  <div class="grid">
+    <article class="risk">
+      <h3 class="high">Large ranking movement</h3>
+      <p>League anchors and international teams may move sharply because current international results affect both team and league channels more than the metadata claims.</p>
+      <p><strong>Control:</strong> publish old-versus-new rank, rating, and component diffs before promotion.</p>
+    </article>
+    <article class="risk">
+      <h3 class="medium">Under-reactive league ratings</h3>
+      <p>Making the 12% share literal may slow league learning.</p>
+      <p><strong>Control:</strong> tune the declared share through walk-forward and cross-region results, not through a second hidden K-factor.</p>
+    </article>
+    <article class="risk">
+      <h3 class="medium">Sparse tournament metadata</h3>
+      <p>Some providers use vague phase names.</p>
+      <p><strong>Control:</strong> inventory real provider labels, publish recognized coverage, and skip placement scoring when the 90% coverage and resolved-final gate fails.</p>
+    </article>
+    <article class="risk">
+      <h3 class="medium">Historical incompatibility</h3>
+      <p>Existing histories and checkpoints describe the old calculation.</p>
+      <p><strong>Control:</strong> force a full replay, reject old checkpoints for the new config hash, and preserve the old generation for rollback.</p>
+    </article>
+  </div>
+
+  <h2>Done criteria</h2>
+  <ul class="checklist">
+    <li>All six audit findings have regression tests.</li>
+    <li>The four calculation invariants pass on fixtures and the full audit artifact.</li>
+    <li>Team and league boundary state is entity-local and checkpointed.</li>
+    <li>The model metadata and audit ledger distinguish base evidence from realized movement.</li>
+    <li>No partial official series can satisfy tournament completion.</li>
+    <li>Placement scoring fails closed when phase coverage is insufficient.</li>
+    <li>The raw manifest includes every verified scored input selected for publication using semantic coverage and digest checks.</li>
+    <li>The new model passes prediction, Riot GPR, incremental, and release gates.</li>
+    <li>Every public ranking artifact carries the new model version, config hash, source authority, and coverage window.</li>
+    <li>The prior complete generation remains available for rollback.</li>
+  </ul>
+
+  <h2>Implementation sequence at a glance</h2>
+  <p><span class="tag">Tests</span> → <span class="tag">Recency</span> → <span class="tag">Tournament math</span> → <span class="tag">Signal budget</span> → <span class="tag">Source reconciliation</span> → <span class="tag">Calibration</span> → <span class="tag">Full replay</span> → <span class="tag">Publication</span></p>
+</main>
+</body>
+</html>

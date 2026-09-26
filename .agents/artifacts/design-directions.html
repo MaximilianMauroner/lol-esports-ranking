@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Index: five design directions</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #000; --card: #0a0a0a; --edge: #242424; --edge2: #333;
+    --ink: #fff; --ink2: #a3a3a3; --ink3: #737373;
+    --cy: #5fd3e8; --gold: #e6b74a; --bad: #f0705f; --good: #6fd08c;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 96px; background: var(--page); color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 1.45rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.1rem; font-weight: 700; margin: 52px 0 4px; padding-bottom: 9px; border-bottom: 1px solid var(--edge); display: flex; align-items: baseline; gap: 11px; }
+  h2 .tag { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: var(--cy); border: 1px solid #16323a; background: #0c1f24; border-radius: 6px; padding: 2px 8px; flex: 0 0 auto; }
+  h3 { font-size: 0.74rem; font-weight: 700; margin: 22px 0 9px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.08em; }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 14px; padding-left: 20px; } li { margin: 0 0 5px; }
+  code, .m { font-family: var(--mono); font-size: 0.86em; }
+  code { color: var(--cy); overflow-wrap: anywhere; }
+  .lede { color: var(--ink2); margin-bottom: 20px; }
+  .prob { color: var(--ink2); margin: 12px 0 12px; border-left: 2px solid var(--edge2); padding-left: 13px; font-size: 0.9rem; }
+  .prob b { color: var(--ink); }
+  .idx { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 0 0 8px; }
+  .idx div { border: 1px solid var(--edge); border-radius: 10px; padding: 11px 13px; background: var(--card); font-size: 0.84rem; color: var(--ink2); }
+  .idx b { display: block; color: var(--ink); font-size: 0.88rem; margin-bottom: 3px; }
+  .idx i { font-style: normal; font-family: var(--mono); color: var(--cy); font-size: 0.76rem; }
+
+  /* ---------- device frames ---------- */
+  .frames { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .frames { grid-template-columns: minmax(0, 1fr); } }
+  .frame { border: 1px solid var(--edge); border-radius: 12px; overflow: hidden; background: var(--card); min-width: 0; }
+  .frame > figcaption { padding: 7px 12px; border-bottom: 1px solid var(--edge); font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); }
+  .frame.phone { max-width: 390px; }
+
+  /* ---------- product surface, shared by every mock ---------- */
+  .ui {
+    --bg: oklch(0.125 0.004 250);
+    --surface: oklch(0.173 0.005 250);
+    --surface-2: oklch(0.205 0.005 250);
+    --surface-3: oklch(0.245 0.006 250);
+    --line: oklch(0.29 0.006 250);
+    --line-strong: oklch(0.405 0.008 250);
+    --text: oklch(0.91 0.006 250);
+    --text-strong: oklch(0.97 0.004 250);
+    --muted: oklch(0.69 0.006 250);
+    --faint: oklch(0.64 0.006 250);
+    --accent: oklch(0.79 0.155 205);
+    --accent-strong: oklch(0.86 0.145 200);
+    --accent-soft: oklch(0.79 0.155 205 / 0.13);
+    --rank-gold: oklch(0.84 0.1 86);
+    --win: oklch(0.74 0.14 152);
+    --loss: oklch(0.66 0.17 26);
+    --up: oklch(0.78 0.14 150);
+    --down: oklch(0.7 0.16 28);
+    --sel: color-mix(in oklch, var(--accent) 14%, var(--surface));
+    --sel-line: color-mix(in oklch, var(--accent), var(--line) 42%);
+    --r1: 4px; --r2: 8px; --r3: 12px;
+    --t0: 0.6rem; --t1: 0.68rem; --t2: 0.75rem; --t3: 0.82rem; --t4: 0.92rem; --t5: 1.05rem; --t6: 1.25rem; --t7: 1.7rem; --t8: 2.1rem;
+    --mono-f: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--bg); color: var(--text); padding: 14px;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  .ui * { box-sizing: border-box; }
+  .ui p, .ui b, .ui span, .ui small, .ui strong, .ui em, .ui h4 { margin: 0; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--mono-f); font-variant-numeric: tabular-nums; }
+
+  /* shared bits */
+  .crest { display: inline-grid; place-items: center; width: 40px; height: 28px; flex: 0 0 auto;
+    border: 1px solid color-mix(in oklch, var(--accent) 32%, transparent); border-radius: var(--r1);
+    background: color-mix(in oklch, var(--accent) 11%, transparent);
+    font-family: var(--mono-f); font-size: var(--t1); font-weight: 800; color: var(--accent-strong); }
+  .tier { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: var(--r1);
+    font-size: var(--t1); font-weight: 800; background: var(--surface-3); color: var(--muted); }
+  .tier.s { background: color-mix(in oklch, var(--rank-gold) 20%, transparent); color: var(--rank-gold); }
+  .tier.a { background: color-mix(in oklch, var(--accent) 18%, transparent); color: var(--accent-strong); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px;
+    padding: 1px 7px; font-size: var(--t1); font-weight: 600; color: var(--muted); background: var(--surface-2); }
+  .chip.up { color: var(--up); border-color: color-mix(in oklch, var(--up) 40%, var(--line)); }
+  .chip.down { color: var(--down); border-color: color-mix(in oklch, var(--down) 40%, var(--line)); }
+  .panel { border: 1px solid var(--line); border-radius: var(--r3); background: var(--surface); overflow: hidden; }
+  .phead { padding: 11px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 10px; }
+  .phead b { font-size: var(--t5); font-weight: 680; color: var(--text-strong); }
+  .phead small { font-size: var(--t2); color: var(--faint); margin-left: auto; }
+  .foot { margin-top: 48px; padding-top: 14px; border-top: 1px solid var(--edge); font-size: 0.8rem; color: var(--ink3); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Five design directions</h1>
+<p class="lede">Five independent directions, each targeting one part of the page. They do not depend on each other, so pick any subset. Every mock is rendered live at both a desktop width and a 390px phone width, on the product's real palette and the new token scale.</p>
+
+<div class="idx">
+  <div><b>A. Score-led board row</b>Rank the visual weight the way the product ranks teams. <i>Rankings table</i></div>
+  <div><b>B. Mobile card list</b>Stop squeezing a desktop table onto a phone. <i>Rankings, mobile only</i></div>
+  <div><b>C. Season timeline</b>Two rows of scope tabs become one. <i>Scope bar, all views</i></div>
+  <div><b>D. Stat strip, no rail</b>Give the table the 340px the rail takes. <i>Rankings layout</i></div>
+  <div><b>E. Compare dock</b>Make the product's best feature visible before you use it. <i>Rankings and Regions</i></div>
+</div>
+
+<!-- ============================== A ============================== -->
+<h2><span class="tag">A</span> Score-led board row</h2>
+<p class="prob"><b>Problem.</b> Every cell in the row carries the same weight: rank, crest, name, score, movement, sparkline, record, pick button all sit at roughly one size and one colour. The Power score is what the whole product exists to produce, and it reads as one number among six. Eight columns also means the first thing to break on a narrow screen is the data.</p>
+<ul>
+  <li>Two lines per row instead of eight columns. Line one is identity and score, line two is the supporting evidence.</li>
+  <li>Score at <code>--t-6</code> weight 800, right-aligned, the only large number in the row.</li>
+  <li>Movement becomes a signed chip next to the score rather than a column with its own sparkline.</li>
+  <li>Nothing needs hiding below 640px, because there are no columns to drop.</li>
+</ul>
+
+<div class="frames">
+  <figure class="frame"><figcaption>Desktop</figcaption>
+    <div class="ui">
+      <div class="panel">
+        <div class="phead"><b>Ranked board</b><small>1-25 of 51</small></div>
+        <div style="display:grid">
+          <div style="display:grid;grid-template-columns:34px 1fr auto;gap:0 12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--sel);box-shadow:inset 3px 0 0 var(--accent)">
+            <span class="mono" style="font-size:var(--t6);font-weight:800;color:var(--rank-gold);text-align:right">1</span>
+            <span style="display:flex;align-items:center;gap:9px;min-width:0"><span class="crest">HLE</span><b style="font-size:var(--t4);font-weight:680;color:var(--text-strong)">Hanwha Life Esports</b><span class="tier s">S</span></span>
+            <span style="display:flex;align-items:baseline;gap:9px"><span class="chip up">&#9650; 2</span><b class="mono" style="font-size:var(--t6);font-weight:800;color:var(--text-strong)">2,369</b></span>
+            <span></span>
+            <span style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:var(--t2);color:var(--faint);padding-top:3px"><span>LCK</span><span>27-8 &middot; 77%</span><span>&plusmn;65</span></span>
+            <span style="font-size:var(--t2);color:var(--faint);text-align:right;padding-top:3px">+137 in 30d</span>
+          </div>
+          <div style="display:grid;grid-template-columns:34px 1fr auto;gap:0 12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)">
+            <span class="mono" style="font-size:var(--t6);font-weight:800;color:var(--muted);text-align:right">2</span>
+            <span style="display:flex;align-items:center;gap:9px;min-width:0"><span class="crest">BLG</span><b style="font-size:var(--t4);font-weight:680;color:var(--text-strong)">Bilibili Gaming</b><span class="tier s">S</span></span>
+            <span style="display:flex;align-items:baseline;gap:9px"><span class="chip">&mdash; 0</span><b class="mono" style="font-size:var(--t6);font-weight:800;color:var(--text-strong)">2,362</b></span>
+            <span></span>
+            <span style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:var(--t2);color:var(--faint);padding-top:3px"><span>LPL</span><span>36-8 &middot; 82%</span><span>&plusmn;65</span></span>
+            <span style="font-size:var(--t2);color:var(--faint);text-align:right;padding-top:3px">+91 in 30d</span>
+          </div>
+          <div style="display:grid;grid-template-columns:34px 1fr auto;gap:0 12px;align-items:center;padding:11px 14px">
+            <span class="mono" style="font-size:var(--t6);font-weight:800;color:var(--muted);text-align:right">3</span>
+            <span style="display:flex;align-items:center;gap:9px;min-width:0"><span class="crest">GEN</span><b style="font-size:var(--t4);font-weight:680;color:var(--text-strong)">Gen.G</b><span class="tier s">S</span></span>
+            <span style="display:flex;align-items:baseline;gap:9px"><span class="chip down">&#9660; 2</span><b class="mono" style="font-size:var(--t6);font-weight:800;color:var(--text-strong)">2,320</b></span>
+            <span></span>
+            <span style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:var(--t2);color:var(--faint);padding-top:3px"><span>LCK</span><span>27-6 &middot; 82%</span><span>&plusmn;65</span></span>
+            <span style="font-size:var(--t2);color:var(--faint);text-align:right;padding-top:3px">+39 in 30d</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="frame phone"><figcaption>390px</figcaption>
+    <div class="ui">
+      <div class="panel">
+        <div class="phead"><b>Ranked board</b></div>
+        <div style="display:grid">
+          <div style="display:grid;grid-template-columns:26px 1fr auto;gap:0 10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--sel);box-shadow:inset 3px 0 0 var(--accent)">
+            <span class="mono" style="font-size:var(--t5);font-weight:800;color:var(--rank-gold);text-align:right">1</span>
+            <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="crest" style="width:34px;height:24px">HLE</span><b style="font-size:var(--t3);font-weight:680;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Hanwha Life</b></span>
+            <b class="mono" style="font-size:var(--t5);font-weight:800;color:var(--text-strong)">2,369</b>
+            <span></span>
+            <span style="display:flex;align-items:center;gap:7px;font-size:var(--t1);color:var(--faint);padding-top:2px"><span class="tier s" style="width:16px;height:16px">S</span><span>LCK</span><span>27-8</span></span>
+            <span class="chip up" style="justify-self:end;margin-top:2px">&#9650; 2</span>
+          </div>
+          <div style="display:grid;grid-template-columns:26px 1fr auto;gap:0 10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)">
+            <span class="mono" style="font-size:var(--t5);font-weight:800;color:var(--muted);text-align:right">2</span>
+            <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="crest" style="width:34px;height:24px">BLG</span><b style="font-size:var(--t3);font-weight:680;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Bilibili Gaming</b></span>
+            <b class="mono" style="font-size:var(--t5);font-weight:800;color:var(--text-strong)">2,362</b>
+            <span></span>
+            <span style="display:flex;align-items:center;gap:7px;font-size:var(--t1);color:var(--faint);padding-top:2px"><span class="tier s" style="width:16px;height:16px">S</span><span>LPL</span><span>36-8</span></span>
+            <span class="chip" style="justify-self:end;margin-top:2px">&mdash; 0</span>
+          </div>
+          <div style="display:grid;grid-template-columns:26px 1fr auto;gap:0 10px;align-items:center;padding:10px 12px">
+            <span class="mono" style="font-size:var(--t5);font-weight:800;color:var(--muted);text-align:right">3</span>
+            <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="crest" style="width:34px;height:24px">GEN</span><b style="font-size:var(--t3);font-weight:680;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Gen.G</b></span>
+            <b class="mono" style="font-size:var(--t5);font-weight:800;color:var(--text-strong)">2,320</b>
+            <span></span>
+            <span style="display:flex;align-items:center;gap:7px;font-size:var(--t1);color:var(--faint);padding-top:2px"><span class="tier s" style="width:16px;height:16px">S</span><span>LCK</span><span>27-6</span></span>
+            <span class="chip down" style="justify-self:end;margin-top:2px">&#9660; 2</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+</div>
+
+<!-- ============================== B ============================== -->
+<h2><span class="tag">B</span> Mobile card list</h2>
+<p class="prob"><b>Problem.</b> Mobile currently renders the desktop table with columns progressively removed. Below 640px the record column disappears, the sparkline disappears, the rank context pill disappears, and type drops to 0.6rem to fit. Below 360px the whole movement column goes. A phone user ends up with less information than the table was built to carry, in the least readable type on the page.</p>
+<ul>
+  <li>Not a table. A list of cards, laid out for the width they actually get.</li>
+  <li>Every field survives: rank, crest, name, league, tier, score, uncertainty, record, movement.</li>
+  <li>Form shown as five outcome pips, which costs almost no width and is faster to read than "27-8".</li>
+  <li>Tap target is the whole card. The compare control is a corner button, not a 44px column stealing width from the name.</li>
+</ul>
+
+<div class="frames">
+  <figure class="frame"><figcaption>Desktop, for reference the table stays as it is</figcaption>
+    <div class="ui" style="display:grid;place-items:center;min-height:140px">
+      <p style="font-size:var(--t3);color:var(--faint);text-align:center;max-width:44ch">Direction B changes the phone layout only. Above 640px the board keeps whichever row design you pick from A.</p>
+    </div>
+  </figure>
+
+  <figure class="frame phone"><figcaption>390px</figcaption>
+    <div class="ui">
+      <div style="display:grid;gap:8px">
+        <div class="panel" style="border-radius:var(--r3);padding:11px 12px;box-shadow:inset 3px 0 0 var(--accent);background:var(--sel)">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="mono" style="font-size:var(--t6);font-weight:800;color:var(--rank-gold);min-width:22px">1</span>
+            <span class="crest">HLE</span>
+            <span style="min-width:0;flex:1">
+              <b style="display:block;font-size:var(--t4);font-weight:680;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Hanwha Life Esports</b>
+              <small style="display:block;font-size:var(--t1);color:var(--faint)">LCK &middot; S-tier</small>
+            </span>
+            <span style="text-align:right">
+              <b class="mono" style="display:block;font-size:var(--t6);font-weight:800;color:var(--text-strong)">2,369</b>
+              <small class="mono" style="display:block;font-size:var(--t1);color:var(--faint)">&plusmn;65</small>
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;border-top:1px dotted var(--line)">
+            <span style="display:inline-flex;gap:3px">
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--loss) 22%,transparent);color:var(--loss);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">L</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+            </span>
+            <span class="mono" style="font-size:var(--t1);color:var(--muted)">27-8</span>
+            <span class="chip up" style="margin-left:auto">&#9650; 2 &middot; +137</span>
+            <span style="display:grid;place-items:center;width:26px;height:26px;border:1px solid var(--accent);border-radius:var(--r1);background:var(--accent);color:oklch(0.14 0.03 220);font-weight:800;font-size:var(--t2)">&check;</span>
+          </div>
+        </div>
+
+        <div class="panel" style="border-radius:var(--r3);padding:11px 12px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="mono" style="font-size:var(--t6);font-weight:800;color:var(--muted);min-width:22px">2</span>
+            <span class="crest">BLG</span>
+            <span style="min-width:0;flex:1">
+              <b style="display:block;font-size:var(--t4);font-weight:680;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Bilibili Gaming</b>
+              <small style="display:block;font-size:var(--t1);color:var(--faint)">LPL &middot; S-tier</small>
+            </span>
+            <span style="text-align:right">
+              <b class="mono" style="display:block;font-size:var(--t6);font-weight:800;color:var(--text-strong)">2,362</b>
+              <small class="mono" style="display:block;font-size:var(--t1);color:var(--faint)">&plusmn;65</small>
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;border-top:1px dotted var(--line)">
+            <span style="display:inline-flex;gap:3px">
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--loss) 22%,transparent);color:var(--loss);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">L</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+            </span>
+            <span class="mono" style="font-size:var(--t1);color:var(--muted)">36-8</span>
+            <span class="chip" style="margin-left:auto">&mdash; 0 &middot; +91</span>
+            <span style="display:grid;place-items:center;width:26px;height:26px;border:1px solid var(--line);border-radius:var(--r1);background:var(--surface-2);color:var(--muted);font-weight:800;font-size:var(--t2)">+</span>
+          </div>
+        </div>
+
+        <div class="panel" style="border-radius:var(--r3);padding:11px 12px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="mono" style="font-size:var(--t6);font-weight:800;color:var(--muted);min-width:22px">3</span>
+            <span class="crest">GEN</span>
+            <span style="min-width:0;flex:1">
+              <b style="display:block;font-size:var(--t4);font-weight:680;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Gen.G</b>
+              <small style="display:block;font-size:var(--t1);color:var(--faint)">LCK &middot; S-tier</small>
+            </span>
+            <span style="text-align:right">
+              <b class="mono" style="display:block;font-size:var(--t6);font-weight:800;color:var(--text-strong)">2,320</b>
+              <small class="mono" style="display:block;font-size:var(--t1);color:var(--faint)">&plusmn;65</small>
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;border-top:1px dotted var(--line)">
+            <span style="display:inline-flex;gap:3px">
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--loss) 22%,transparent);color:var(--loss);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">L</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--win) 22%,transparent);color:var(--win);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">W</i>
+              <i style="width:15px;height:15px;border-radius:3px;background:color-mix(in oklch,var(--loss) 22%,transparent);color:var(--loss);font-style:normal;font-size:var(--t0);font-weight:800;display:grid;place-items:center">L</i>
+            </span>
+            <span class="mono" style="font-size:var(--t1);color:var(--muted)">27-6</span>
+            <span class="chip down" style="margin-left:auto">&#9660; 2 &middot; +39</span>
+            <span style="display:grid;place-items:center;width:26px;height:26px;border:1px solid var(--line);border-radius:var(--r1);background:var(--surface-2);color:var(--muted);font-weight:800;font-size:var(--t2)">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+</div>
+
+<!-- ============================== C ============================== -->
+<h2><span class="tag">C</span> Season timeline</h2>
+<p class="prob"><b>Problem.</b> The scope bar is up to eight controls across two logical groups, and it sits between the page title and the data on every view. It also hides the one thing a season selector should make obvious: where the current split sits in the year, and how far through it we are.</p>
+<ul>
+  <li>The season becomes a single pill. Years are rarely switched, so they do not deserve three permanent tabs.</li>
+  <li>Splits become one continuous track. Position carries the ordering, so each segment needs a label but not a box.</li>
+  <li>The ongoing split shows real progress, which the current "Ongoing" text cannot.</li>
+  <li>"Full year" stops being a tab competing with the splits and becomes the track's own label.</li>
+  <li>On a phone the whole thing collapses to one pill that opens a sheet.</li>
+</ul>
+
+<div class="frames">
+  <figure class="frame"><figcaption>Desktop</figcaption>
+    <div class="ui">
+      <div style="display:flex;align-items:center;gap:16px;border:1px solid var(--line);border-radius:var(--r3);background:var(--surface);padding:10px 14px">
+        <span style="display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid var(--line-strong);border-radius:var(--r2);background:var(--surface-2)">
+          <b class="mono" style="font-size:var(--t4);font-weight:800;color:var(--text-strong)">2026</b>
+          <em style="font-style:normal;font-size:var(--t1);color:var(--faint)">&#9662;</em>
+        </span>
+        <span style="width:1px;align-self:stretch;background:var(--line)"></span>
+        <span style="flex:1;min-width:0">
+          <span style="display:flex;justify-content:space-between;font-size:var(--t1);color:var(--faint);margin-bottom:5px">
+            <span>Full year</span><span>Jan &ndash; Dec 2026</span>
+          </span>
+          <span style="display:flex;gap:3px;height:34px">
+            <span style="flex:1;display:grid;align-content:center;padding:0 10px;border-radius:var(--r1);background:var(--surface-2);color:var(--muted)">
+              <b style="font-size:var(--t2);font-weight:680">Split 1</b><small style="font-size:var(--t0);color:var(--faint)">to 22 Mar</small>
+            </span>
+            <span style="flex:1;display:grid;align-content:center;padding:0 10px;border-radius:var(--r1);background:var(--surface-2);color:var(--muted)">
+              <b style="font-size:var(--t2);font-weight:680">Split 2</b><small style="font-size:var(--t0);color:var(--faint)">to 12 Jul</small>
+            </span>
+            <span style="position:relative;flex:1;display:grid;align-content:center;padding:0 10px;border-radius:var(--r1);background:var(--sel);box-shadow:inset 0 0 0 1px var(--sel-line);color:var(--text-strong);overflow:hidden">
+              <span style="position:absolute;inset:auto 0 0 0;height:2px;background:var(--line)"></span>
+              <span style="position:absolute;inset:auto auto 0 0;width:62%;height:2px;background:var(--accent)"></span>
+              <b style="font-size:var(--t2);font-weight:680">Split 3</b><small style="font-size:var(--t0);color:var(--accent-strong)">62% through</small>
+            </span>
+            <span style="flex:1;display:grid;align-content:center;padding:0 10px;border-radius:var(--r1);border:1px dashed var(--line);color:var(--faint)">
+              <b style="font-size:var(--t2);font-weight:680">Worlds</b><small style="font-size:var(--t0)">Not started</small>
+            </span>
+          </span>
+        </span>
+      </div>
+      <p style="margin-top:9px;font-size:var(--t2);color:var(--faint)">One row, 62px tall. The current bar is two rows and about 100px.</p>
+    </div>
+  </figure>
+
+  <figure class="frame phone"><figcaption>390px</figcaption>
+    <div class="ui">
+      <div style="display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:var(--r3);background:var(--surface);padding:9px 12px">
+        <span style="flex:1;min-width:0">
+          <small style="display:block;font-size:var(--t1);color:var(--faint)">Scope</small>
+          <b class="mono" style="display:block;font-size:var(--t4);font-weight:800;color:var(--text-strong)">2026 &middot; Split 3</b>
+        </span>
+        <span style="display:grid;gap:3px;justify-items:end">
+          <span class="chip" style="border-color:var(--sel-line);color:var(--accent-strong)">62% through</span>
+          <small style="font-size:var(--t0);color:var(--faint)">Jul 12 &rarr; ongoing</small>
+        </span>
+        <em style="font-style:normal;font-size:var(--t4);color:var(--muted)">&#9662;</em>
+      </div>
+      <div style="display:flex;gap:3px;margin-top:7px">
+        <span style="flex:1;height:3px;border-radius:99px;background:var(--surface-3)"></span>
+        <span style="flex:1;height:3px;border-radius:99px;background:var(--surface-3)"></span>
+        <span style="flex:1;height:3px;border-radius:99px;background:linear-gradient(to right,var(--accent) 62%,var(--surface-3) 62%)"></span>
+        <span style="flex:1;height:3px;border-radius:99px;background:var(--surface-3);opacity:0.4"></span>
+      </div>
+      <p style="margin-top:9px;font-size:var(--t2);color:var(--faint)">One tap opens a sheet with the years and splits. Saves roughly 60px above the fold on every view.</p>
+    </div>
+  </figure>
+</div>
+
+<!-- ============================== D ============================== -->
+<h2><span class="tag">D</span> Stat strip, no rail</h2>
+<p class="prob"><b>Problem.</b> The 320px rail costs the table a fifth of its width on a 1440px screen, which is why the board needs a 660px minimum and starts dropping columns. On a phone the rail is not a rail at all: it becomes three panels stacked below the board that most people never scroll to.</p>
+<ul>
+  <li>Rail contents become four tiles in a strip above the board. The table then goes full width and gains about 340px.</li>
+  <li>Tier density becomes a single proportional bar with counts, which is what it was trying to be. It stays clickable to filter.</li>
+  <li>On a phone the strip is a horizontal snap-scroller, so the same information sits above the board instead of far below it.</li>
+  <li>This is the direction that also fixes the mobile tier legend ordering, without moving the legend into the board.</li>
+</ul>
+
+<div class="frames">
+  <figure class="frame"><figcaption>Desktop</figcaption>
+    <div class="ui">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r3);overflow:hidden">
+        <div style="background:var(--surface);padding:11px 13px">
+          <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:3px">Top team</small>
+          <b style="display:block;font-size:var(--t5);font-weight:680;color:var(--text-strong)">Hanwha Life</b>
+          <small class="mono" style="font-size:var(--t2);color:var(--rank-gold)">2,369</small>
+        </div>
+        <div style="background:var(--surface);padding:11px 13px">
+          <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:3px">Biggest riser</small>
+          <b style="display:block;font-size:var(--t5);font-weight:680;color:var(--text-strong)">Team Liquid</b>
+          <small class="mono" style="font-size:var(--t2);color:var(--up)">#26 &rarr; #13</small>
+        </div>
+        <div style="background:var(--surface);padding:11px 13px">
+          <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:3px">Biggest faller</small>
+          <b style="display:block;font-size:var(--t5);font-weight:680;color:var(--text-strong)">Deep Cross</b>
+          <small class="mono" style="font-size:var(--t2);color:var(--down)">#23 &rarr; #38</small>
+        </div>
+        <div style="background:var(--surface);padding:11px 13px">
+          <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:5px">Tier spread &middot; 51 teams</small>
+          <span style="display:flex;height:16px;border-radius:var(--r1);overflow:hidden;gap:1px">
+            <span style="flex:3;background:color-mix(in oklch,var(--rank-gold) 42%,var(--surface-2));display:grid;place-items:center;font-size:var(--t0);font-weight:800;color:oklch(0.2 0.03 60)">3</span>
+            <span style="flex:1;background:color-mix(in oklch,var(--accent) 34%,var(--surface-2));display:grid;place-items:center;font-size:var(--t0);font-weight:800;color:oklch(0.15 0.02 220)">1</span>
+            <span style="flex:7;background:var(--surface-3);display:grid;place-items:center;font-size:var(--t0);font-weight:800;color:var(--text)">7</span>
+            <span style="flex:40;background:var(--surface-2);display:grid;place-items:center;font-size:var(--t0);font-weight:800;color:var(--muted)">40</span>
+          </span>
+          <small style="display:block;margin-top:4px;font-size:var(--t0);color:var(--faint)">S &middot; A &middot; B &middot; C</small>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <div class="phead"><b>Ranked board</b><small>full width, no 320px rail</small></div>
+        <div style="display:grid;grid-template-columns:44px 1fr 110px 110px 90px 44px;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line);background:var(--surface-2);font-size:var(--t1);letter-spacing:0.08em;text-transform:uppercase;color:var(--faint)">
+          <span>Rank</span><span>Team</span><span style="text-align:right">Power</span><span style="text-align:right">30d</span><span style="text-align:right">W/L</span><span></span>
+        </div>
+        <div style="display:grid;grid-template-columns:44px 1fr 110px 110px 90px 44px;gap:12px;padding:11px 14px;align-items:center">
+          <span class="mono" style="font-size:var(--t5);font-weight:800;color:var(--rank-gold)">1</span>
+          <span style="display:flex;align-items:center;gap:9px"><span class="crest">HLE</span><b style="font-size:var(--t4);color:var(--text-strong)">Hanwha Life Esports</b><span class="tier s">S</span><small style="color:var(--faint);font-size:var(--t2)">LCK</small></span>
+          <b class="mono" style="text-align:right;font-size:var(--t5);font-weight:800;color:var(--text-strong)">2,369</b>
+          <span class="mono" style="text-align:right;font-size:var(--t3);color:var(--up)">&#9650; 2 &middot; +137</span>
+          <span class="mono" style="text-align:right;font-size:var(--t3);color:var(--text)">27-8</span>
+          <span style="display:grid;place-items:center;width:26px;height:26px;border:1px solid var(--line);border-radius:var(--r1);background:var(--surface-2);color:var(--muted);font-weight:800;font-size:var(--t2)">+</span>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="frame phone"><figcaption>390px</figcaption>
+    <div class="ui">
+      <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:6px">Swipe &rarr;</small>
+      <div style="display:flex;gap:8px;overflow:hidden">
+        <div class="panel" style="flex:0 0 62%;padding:10px 12px">
+          <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:5px">Tier spread &middot; 51</small>
+          <span style="display:flex;height:16px;border-radius:var(--r1);overflow:hidden;gap:1px">
+            <span style="flex:3;background:color-mix(in oklch,var(--rank-gold) 42%,var(--surface-2));display:grid;place-items:center;font-size:var(--t0);font-weight:800;color:oklch(0.2 0.03 60)">3</span>
+            <span style="flex:1;background:color-mix(in oklch,var(--accent) 34%,var(--surface-2))"></span>
+            <span style="flex:7;background:var(--surface-3);display:grid;place-items:center;font-size:var(--t0);font-weight:800;color:var(--text)">7</span>
+            <span style="flex:40;background:var(--surface-2);display:grid;place-items:center;font-size:var(--t0);font-weight:800;color:var(--muted)">40</span>
+          </span>
+          <small style="display:block;margin-top:4px;font-size:var(--t0);color:var(--faint)">S &middot; A &middot; B &middot; C</small>
+        </div>
+        <div class="panel" style="flex:0 0 52%;padding:10px 12px">
+          <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:3px">Top team</small>
+          <b style="display:block;font-size:var(--t4);font-weight:680;color:var(--text-strong)">Hanwha Life</b>
+          <small class="mono" style="font-size:var(--t2);color:var(--rank-gold)">2,369</small>
+        </div>
+        <div class="panel" style="flex:0 0 40%;padding:10px 12px">
+          <small style="display:block;font-size:var(--t1);color:var(--faint);margin-bottom:3px">Riser</small>
+          <b style="display:block;font-size:var(--t4);color:var(--text-strong)">TL</b>
+        </div>
+      </div>
+      <p style="margin-top:10px;font-size:var(--t2);color:var(--faint)">The rail's contents arrive before the board rather than a full screen below it.</p>
+    </div>
+  </figure>
+</div>
+
+<!-- ============================== E ============================== -->
+<h2><span class="tag">E</span> Compare dock</h2>
+<p class="prob"><b>Problem.</b> Comparison is the most interesting thing the product does, and nothing on a first visit says it exists. The tray only appears after a pick, and the first thing it shows is a disabled primary button. Then the answer arrives in a full-screen drawer, so you cannot see the board and the comparison at once.</p>
+<ul>
+  <li>A slim dock is always present under the scope bar with two empty slots, so the feature announces itself.</li>
+  <li>The moment two teams are in, the headline answer appears inline: score gap and the win probability it implies. No drawer needed for the common case.</li>
+  <li>The drawer stays for the full metric table, opened by choice rather than as the only way to see anything.</li>
+  <li>On a phone the dock is one line pinned to the bottom, expanding on tap.</li>
+</ul>
+
+<div class="frames">
+  <figure class="frame"><figcaption>Desktop, two teams picked</figcaption>
+    <div class="ui">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;border:1px solid var(--sel-line);border-radius:var(--r3);background:var(--sel);padding:10px 14px">
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="crest">HLE</span>
+          <span><b style="display:block;font-size:var(--t3);font-weight:680;color:var(--text-strong)">Hanwha Life</b><small class="mono" style="font-size:var(--t1);color:var(--faint)">2,369 &middot; #1</small></span>
+        </span>
+        <b style="font-size:var(--t3);color:var(--faint)">vs</b>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="crest">GEN</span>
+          <span><b style="display:block;font-size:var(--t3);font-weight:680;color:var(--text-strong)">Gen.G</b><small class="mono" style="font-size:var(--t1);color:var(--faint)">2,320 &middot; #3</small></span>
+        </span>
+        <span style="width:1px;align-self:stretch;background:var(--sel-line);margin:0 4px"></span>
+        <span style="flex:1 1 260px;min-width:200px">
+          <span style="display:flex;justify-content:space-between;gap:12px;font-size:var(--t1);color:var(--faint);margin-bottom:5px;white-space:nowrap">
+            <span>HLE <b class="mono" style="color:var(--text-strong)">55%</b></span>
+            <span>+49 score gap</span>
+            <span><b class="mono" style="color:var(--text)">45%</b> GEN</span>
+          </span>
+          <span style="display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--surface-3)">
+            <span style="width:55%;background:var(--accent)"></span>
+            <span style="width:45%;background:var(--surface-3)"></span>
+          </span>
+        </span>
+        <span style="display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:var(--r2);background:var(--accent);color:oklch(0.14 0.03 220);font-size:var(--t3);font-weight:680">Full compare</span>
+      </div>
+      <p style="margin-top:10px;font-size:var(--t2);color:var(--faint)">Empty state, nothing picked yet:</p>
+      <div style="display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:var(--r3);background:var(--surface);padding:10px 14px;margin-top:6px">
+        <span style="display:grid;place-items:center;width:40px;height:28px;border:1px dashed var(--line-strong);border-radius:var(--r1);color:var(--faint);font-size:var(--t2)">1</span>
+        <span style="display:grid;place-items:center;width:40px;height:28px;border:1px dashed var(--line-strong);border-radius:var(--r1);color:var(--faint);font-size:var(--t2)">2</span>
+        <span style="font-size:var(--t3);color:var(--muted)">Pick two teams to see the matchup odds</span>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="frame phone"><figcaption>390px, pinned to the bottom</figcaption>
+    <div class="ui" style="display:grid;gap:10px">
+      <div style="border:1px solid var(--sel-line);border-radius:var(--r3);background:var(--sel);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="crest" style="width:34px;height:24px">HLE</span>
+          <b style="font-size:var(--t2);color:var(--faint)">vs</b>
+          <span class="crest" style="width:34px;height:24px">GEN</span>
+          <span style="margin-left:auto;text-align:right">
+            <b class="mono" style="display:block;font-size:var(--t4);font-weight:800;color:var(--text-strong)">55 / 45</b>
+            <small style="display:block;font-size:var(--t0);color:var(--faint)">+49 gap</small>
+          </span>
+        </div>
+        <span style="display:flex;height:5px;border-radius:99px;overflow:hidden;background:var(--surface-3);margin-top:8px">
+          <span style="width:55%;background:var(--accent)"></span>
+        </span>
+        <span style="display:flex;justify-content:center;margin-top:9px;padding-top:9px;border-top:1px solid var(--sel-line);font-size:var(--t2);font-weight:680;color:var(--accent-strong)">Full compare &rarr;</span>
+      </div>
+      <div style="border:1px dashed var(--line);border-radius:var(--r3);background:var(--surface);padding:10px 12px;display:flex;align-items:center;gap:8px">
+        <span style="display:grid;place-items:center;width:34px;height:24px;border:1px dashed var(--line-strong);border-radius:var(--r1);color:var(--faint);font-size:var(--t1)">1</span>
+        <span style="display:grid;place-items:center;width:34px;height:24px;border:1px dashed var(--line-strong);border-radius:var(--r1);color:var(--faint);font-size:var(--t1)">2</span>
+        <span style="font-size:var(--t2);color:var(--muted)">Pick two teams</span>
+      </div>
+    </div>
+  </figure>
+</div>
+
+<h2>How they combine</h2>
+<div class="idx">
+  <div><b>Smallest useful set</b>C plus D. Both are pure layout, both give back vertical space above the fold, and neither touches the row design. <i>lowest risk</i></div>
+  <div><b>Biggest readability gain</b>A plus B. The board is the product; these two decide how it reads on each device. <i>most visible</i></div>
+  <div><b>Conflicts</b>D replaces the rail, so it supersedes the current rail panels including tier density. Everything else is independent. <i>D vs rail only</i></div>
+  <div><b>Order if you take all five</b>C, D, A, B, E. Chrome first, then layout, then the row, then mobile, then the new interaction. <i>each ships alone</i></div>
+</div>
+
+<p class="foot">Mocks only. No component was changed to produce this document.</p>
+
+</main>
+</body>
+</html>

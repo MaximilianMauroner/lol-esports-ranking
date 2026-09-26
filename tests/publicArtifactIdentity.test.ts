@@ -1,3 +1,4 @@
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schema.ts'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
@@ -59,7 +60,7 @@ test('known logical URL fields have run identity normalized for every index fami
   const families = [
     (runId: string, target = 'players.json', locale = 'en') => ({
       artifactKind: 'public-ranking-manifest',
-      schemaVersion: 23,
+      schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
       generatedAt: generatedAtFor(runId),
       artifactMeta: artifactMeta(runId),
       playerDirectoryUrl: `/data/entities/${target}?locale=${locale}&v=${runId}`,
@@ -67,26 +68,26 @@ test('known logical URL fields have run identity normalized for every index fami
       snapshotIndex: { All__All__All: { url: `/data/scopes/all.json?v=${runId}&locale=${locale}` } },
     }),
     (runId: string, target = 'All__All__All.json') => ({
-      artifactKind: 'team-history-index', schemaVersion: 23, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
+      artifactKind: 'team-history-index', schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
       scopeIndex: { All__All__All: { url: `/data/history/team-series/${target}?v=${runId}` } },
     }),
     (runId: string, target = 'ewc-2026.json') => ({
-      artifactKind: 'tournament-movement-index', schemaVersion: 23, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
+      artifactKind: 'tournament-movement-index', schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
       tournaments: [{ url: `/data/history/tournament-moves/${target}?v=${runId}` }],
     }),
     (runId: string, target = 'all.json') => ({
-      artifactKind: 'match-history-index', schemaVersion: 23, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
+      artifactKind: 'match-history-index', schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
       scopeIndex: { All__All__All: {
         url: `/data/matches/${target}?v=${runId}`,
         pages: [{ url: `/data/matches/pages/${target.replace('.json', '-1.json')}?v=${runId}` }],
       } },
     }),
     (runId: string, target = 'all-1.json') => ({
-      artifactKind: 'match-history-catalog', schemaVersion: 23, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
+      artifactKind: 'match-history-catalog', schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
       pages: [{ url: `/data/matches/pages/${target}?v=${runId}` }],
     }),
     (runId: string, target = 'All') => ({
-      artifactKind: 'region-history', schemaVersion: 23, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
+      artifactKind: 'region-history', schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION, generatedAt: generatedAtFor(runId), artifactMeta: artifactMeta(runId),
       scopes: { [target]: { pointCount: 0 } },
     }),
   ]
@@ -310,7 +311,7 @@ function artifactEntry(
 function artifactSource(runId: string) {
   return {
     artifactKind: 'example-public-artifact',
-    schemaVersion: 23,
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     generatedAt: generatedAtFor(runId),
     artifactMeta: artifactMeta(runId),
     value: { stable: true },
@@ -350,7 +351,7 @@ function generationFor(
 function matchPageWithSource(runId: string, sourceUrl: string) {
   return {
     artifactKind: 'match-history-page',
-    schemaVersion: 23,
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     generatedAt: generatedAtFor(runId),
     artifactMeta: artifactMeta(runId),
     matches: [{ source: { url: sourceUrl } }],
@@ -362,7 +363,7 @@ function generatedAtFor(runId: string) {
 }
 
 function artifactMeta(runId: string) {
-  return { schemaVersion: 23, runId, generatedAt: generatedAtFor(runId), modelVersion: 'test-model', modelConfigHash: 'test-config' }
+  return { schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION, runId, generatedAt: generatedAtFor(runId), modelVersion: 'test-model', modelConfigHash: 'test-config' }
 }
 
 async function identityFor(value: object) {

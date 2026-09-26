@@ -1933,6 +1933,14 @@ function compactPlayersForSnapshot(
         rating: player.rating,
         games: player.games,
         delta: player.delta,
+        ...(player.diagnostics?.performance ? {
+          diagnostics: {
+            sourceProvider: player.diagnostics.sourceProvider,
+            scope: player.diagnostics.scope,
+            sampleGames: player.diagnostics.sampleGames,
+            performance: player.diagnostics.performance,
+          },
+        } : {}),
         ...(detail === 'default' ? {
           form: player.form,
           availability: player.availability,

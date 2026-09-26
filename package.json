@@ -18,6 +18,7 @@
     "data:freshness": "tsx scripts/raw-manifest-freshness.ts data/raw/manifest.json",
     "calibration:export": "tsx scripts/export-ranking-predictions.ts",
     "calibration:paired": "node scripts/paired-prediction-calibration.mjs",
+    "performance:audit": "tsx scripts/audit-player-performance.ts",
     "data:refresh": "tsx scripts/refresh-data-if-changed.mjs",
     "data:build:oracle": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --oracle-csv",
     "data:build:leaguepedia": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --leaguepedia-json",

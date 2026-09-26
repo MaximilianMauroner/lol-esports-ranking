@@ -12,11 +12,11 @@ test('homepage prerender includes ranking snapshot content from public artifacts
   assert.match(html, /Top teams/)
   assert.match(html, /Region power/)
   assert.match(html, /Bilibili Gaming|Gen\.G|T1|Hanwha Life Esports/)
-  assert.match(html, /Oracle&#39;s Elixir primary with Leaguepedia Cargo gap-fill/)
   assert.match(html, new RegExp(escapeRegExp(escapedNotice())))
   assert.doesNotMatch(html, /<script\b/i)
 
   const manifest = JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8'))
+  assert.ok(html.includes(`Source: ${escapeHtml(manifest.source)}`))
   const expectedKey = preferredPublicSnapshotKey(Object.keys(manifest.snapshotIndex), manifest.defaultSnapshotKey)
   assert.ok(expectedKey)
   assert.match(html, new RegExp(`data-snapshot-key="${escapeRegExp(expectedKey)}"`))

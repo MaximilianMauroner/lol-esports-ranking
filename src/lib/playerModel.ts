@@ -18,6 +18,7 @@ import type {
   TeamProfile,
 } from '../types'
 import { executionIndexFromStats } from './executionResidual'
+import { createPlayerPerformanceAccumulator, playerPerformancePolicy, recordPlayerPerformance, summarizePlayerPerformance, type PlayerPerformanceAccumulator } from './playerPerformance'
 import {
   eventWeightContextForMatches,
   eventWeightForMatch,
@@ -118,6 +119,7 @@ export const playerModelParameters = {
   individualResidualScoreScale,
   individualResidualMinimumRankedGames,
   roleStatBaselines,
+  playerPerformancePolicy,
 } as const
 
 export type PregamePlayerRatingEdge = {
@@ -562,6 +564,7 @@ type DiagnosticAverageAccumulator = {
 }
 
 type PlayerDiagnosticsAccumulator = {
+  performance: PlayerPerformanceAccumulator
   sampleGames: number
   wins: number
   losses: number
@@ -839,6 +842,7 @@ function recordPlayerDiagnostics(
   recordDiagnosticValue(current.kda, stats ? kdaFor(stats) : undefined)
   recordDiagnosticValue(current.visionScore, stats?.visionScore)
   recordDiagnosticValue(current.vspm, stats?.vspm)
+  recordPlayerPerformance(current.performance, stats)
 
   const noWinScore = noWinStatScoreFor(player)
   const opponentNoWinScore = noWinStatScoreFor(opponent)
@@ -853,6 +857,7 @@ function recordPlayerDiagnostics(
 
 function createPlayerDiagnosticsAccumulator(): PlayerDiagnosticsAccumulator {
   return {
+    performance: createPlayerPerformanceAccumulator(),
     sampleGames: 0,
     wins: 0,
     losses: 0,
@@ -896,6 +901,7 @@ function diagnosticsSummaryFor(playerId: string, state: SourcedPlayerState): Pla
     kda: diagnosticAverage(diagnostics.kda, diagnostics.sampleGames, 2),
     visionScore: diagnosticAverage(diagnostics.visionScore, diagnostics.sampleGames, 1),
     vspm: diagnosticAverage(diagnostics.vspm, diagnostics.sampleGames, 2),
+    performance: summarizePlayerPerformance(diagnostics.performance, diagnostics.sampleGames),
   }
 }
 

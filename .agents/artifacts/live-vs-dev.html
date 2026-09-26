@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Index: live vs dev</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #000; --card: #0a0a0a; --edge: #242424; --edge2: #333;
+    --ink: #fff; --ink2: #a3a3a3; --ink3: #737373;
+    --cy: #5fd3e8; --gold: #e6b74a; --bad: #f0705f; --good: #6fd08c;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 96px; background: var(--page); color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1320px; margin: 0 auto; }
+  h1 { font-size: 1.45rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.05rem; font-weight: 700; margin: 44px 0 4px; padding-bottom: 8px; border-bottom: 1px solid var(--edge); }
+  h3 { font-size: 0.74rem; font-weight: 700; margin: 20px 0 8px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.07em; }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 20px; } li { margin: 0 0 5px; }
+  code, .m { font-family: var(--mono); font-size: 0.86em; }
+  code { color: var(--cy); overflow-wrap: anywhere; }
+  .lede { color: var(--ink2); margin-bottom: 18px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 20px; }
+  .key { display: flex; gap: 9px; align-items: flex-start; flex: 1 1 320px; border: 1px solid var(--edge); border-radius: 10px; padding: 11px 13px; background: var(--card); font-size: 0.84rem; color: var(--ink2); }
+  .key b { display: block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink2); margin-bottom: 3px; }
+  .key .bar { width: 3px; align-self: stretch; border-radius: 3px; background: var(--bad); flex: 0 0 auto; }
+  .key.dev .bar { background: var(--good); }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .tag { font-family: var(--mono); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 999px; border: 1px solid #16323a; background: #0c1f24; color: var(--cy); }
+  .tag.n { border-color: var(--edge2); background: var(--card); color: var(--ink3); }
+
+  .controls { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin: 0 0 20px; padding: 10px 12px; border: 1px solid var(--edge2); border-radius: 10px; background: #050505; }
+  .controls p { margin: 0; font-size: 0.78rem; color: var(--ink3); }
+  .seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--edge2); border-radius: 999px; background: var(--card); }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--ink2); cursor: pointer;
+    font: inherit; font-size: 0.8rem; font-weight: 600; padding: 5px 13px; border-radius: 999px; }
+  .seg button[aria-pressed="true"] { background: #16323a; color: var(--cy); }
+  .seg button:focus-visible { outline: 2px solid var(--cy); outline-offset: 2px; }
+
+  figure { margin: 0; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 10px; }
+  .pair.mobile { grid-template-columns: repeat(2, minmax(0, 270px)); justify-content: start; }
+  @media (max-width: 800px) { .pair, .pair.mobile { grid-template-columns: 1fr; } }
+  .shot { border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .shot > figcaption { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border-bottom: 1px solid var(--edge);
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink2); }
+  .shot > figcaption i { width: 7px; height: 7px; border-radius: 999px; background: var(--bad); flex: 0 0 auto; }
+  .shot.dev > figcaption i { background: var(--good); }
+  .shot a { display: block; line-height: 0; }
+  .shot img { display: block; width: 100%; height: auto; }
+  body[data-mode="live"] .shot.dev, body[data-mode="dev"] .shot.live { display: none; }
+  body[data-mode="live"] .pair, body[data-mode="dev"] .pair { grid-template-columns: minmax(0, 940px); }
+  body[data-mode="live"] .pair.mobile, body[data-mode="dev"] .pair.mobile { grid-template-columns: minmax(0, 390px); }
+
+  .diff { border-left: 2px solid var(--edge2); padding: 2px 0 2px 14px; margin: 0 0 10px; font-size: 0.86rem; color: var(--ink2); }
+  .diff b { color: var(--ink); font-weight: 600; }
+  .diff .open { color: var(--gold); font-weight: 600; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  table.data th, table.data td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--edge); vertical-align: top; }
+  table.data th { font-weight: 700; color: var(--ink2); font-size: 0.71rem; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+  table.data td.k { white-space: nowrap; font-family: var(--mono); color: var(--cy); }
+  .scroll { overflow-x: auto; border: 1px solid var(--edge); border-radius: 10px; }
+  .foot { margin-top: 44px; padding-top: 14px; border-top: 1px solid var(--edge); font-size: 0.8rem; color: var(--ink3); }
+</style>
+</head>
+<body data-mode="both">
+<main>
+
+<h1>Power Index: live vs dev</h1>
+<p class="lede">Real screenshots of both builds, same routes, same viewports, captured in one pass.</p>
+
+<div class="legend">
+  <div class="key live"><span class="bar"></span><div><b>Live</b>lol.lab4code.com at commit <span class="m">7856d38</span>. The first-pass redesign, already deployed.</div></div>
+  <div class="key dev"><span class="bar"></span><div><b>Dev</b>Local build: live, plus the two corrections you asked for, plus all five design directions and the segmented radius fix.</div></div>
+</div>
+
+<div class="tags">
+  <span class="tag">A score-led row</span>
+  <span class="tag">B mobile card list</span>
+  <span class="tag">C season timeline</span>
+  <span class="tag n">D reverted, rail kept</span>
+  <span class="tag">E compare dock</span>
+  <span class="tag n">segmented + scope bar fixes</span>
+</div>
+
+<p class="diff">Live has a fresher snapshot than the local data (53 ranked teams against 51, different top team). Ignore the numbers, compare the layout.</p>
+
+<div class="controls">
+  <div class="seg" role="group" aria-label="Which version to show">
+    <button type="button" data-mode="both" aria-pressed="true">Side by side</button>
+    <button type="button" data-mode="live" aria-pressed="false">Live only</button>
+    <button type="button" data-mode="dev" aria-pressed="false">Dev only</button>
+  </div>
+  <p>Flip between Live only and Dev only to see what moves. Click any shot for full size.</p>
+</div>
+
+<h2>Rankings, desktop</h2>
+<p class="diff"><b>The rail is unchanged from the version you liked.</b> Tier density as a 2x2 grid with counts and the team names under each, Movement with riser, faller, upset and the confidence bar, then Region power. Sticky, 320px, on the right. Direction D briefly replaced it with a strip and then a compact list; both are reverted.</p>
+<p class="diff"><b>Above the table</b> the two scope rows became one timeline with a progress fill on the ongoing split (C), and the compare dock sits under it announcing the feature before you use it (E).</p>
+<p class="diff"><b>In the row itself</b> the score is now the only figure at <code>--t-6</code> and movement sits under it rather than in its own column (A). A <b>Form</b> column was added: <code>form</code> was on every standing and the board had never shown it.</p>
+<h3>1440 x 900, top 1400px</h3>
+<div class="pair">
+  <figure class="shot live"><figcaption><i></i>Live</figcaption><a href="https://tools.mauroner.net/files/hjf0Ie1niD5XSZF2kaTszYYzjB9FePMu/rankings-desktop-live.jpg"><img src="https://tools.mauroner.net/files/hjf0Ie1niD5XSZF2kaTszYYzjB9FePMu/rankings-desktop-live.jpg" alt="Live rankings, desktop" width="1440" height="1400" loading="lazy"></a></figure>
+  <figure class="shot dev"><figcaption><i></i>Dev</figcaption><a href="https://tools.mauroner.net/files/vhPzpaLm3nZcLufcvMvSTtALglj_iV3u/rankings-desktop-dev.jpg"><img src="https://tools.mauroner.net/files/vhPzpaLm3nZcLufcvMvSTtALglj_iV3u/rankings-desktop-dev.jpg" alt="Dev rankings, desktop" width="1440" height="1400" loading="lazy"></a></figure>
+</div>
+
+<h2>Rankings, mobile</h2>
+<p class="diff"><b>The board is no longer a squeezed table.</b> Each row is a card: rank, tier, crest, name, league, record, win rate, score, movement and the pick control, all at readable sizes. Live drops the record column, the sparkline and the rank pill, and shrinks type to 0.6rem to fit.</p>
+<p class="diff"><b>The compare dock is fixed to the bottom edge here</b>, not inline. The board is over 4,000px long on a phone, so an inline dock scrolls out of reach the moment you start picking.</p>
+<h3>390 x 844, top 750pt</h3>
+<div class="pair mobile">
+  <figure class="shot live"><figcaption><i></i>Live</figcaption><a href="https://tools.mauroner.net/files/hmqhd6cbrmCefN9OrsosoUwB3cedTzjO/rankings-mobile-live.jpg"><img src="https://tools.mauroner.net/files/hmqhd6cbrmCefN9OrsosoUwB3cedTzjO/rankings-mobile-live.jpg" alt="Live rankings, mobile" width="780" height="1500" loading="lazy"></a></figure>
+  <figure class="shot dev"><figcaption><i></i>Dev</figcaption><a href="https://tools.mauroner.net/files/XxPCP4SrYeLfT8_O_A7SdjwCJ4ISo6rz/rankings-mobile-dev.jpg"><img src="https://tools.mauroner.net/files/XxPCP4SrYeLfT8_O_A7SdjwCJ4ISo6rz/rankings-mobile-dev.jpg" alt="Dev rankings, mobile" width="780" height="1500" loading="lazy"></a></figure>
+</div>
+
+<h2>Regions, desktop and mobile</h2>
+<p class="diff">Gets the new scope bar and the compare dock. The rest of the view is unchanged, so this is the cleanest place to judge C and E on their own.</p>
+<div class="pair">
+  <figure class="shot live"><figcaption><i></i>Live</figcaption><a href="https://tools.mauroner.net/files/0NLV01LKD4P80L-J5tMTY0BHUOMEcmQF/regions-desktop-live.jpg"><img src="https://tools.mauroner.net/files/0NLV01LKD4P80L-J5tMTY0BHUOMEcmQF/regions-desktop-live.jpg" alt="Live regions, desktop" width="1440" height="1151" loading="lazy"></a></figure>
+  <figure class="shot dev"><figcaption><i></i>Dev</figcaption><a href="https://tools.mauroner.net/files/xGnuGn3z_MnG5UU2jpLYm8apzibZbmhg/regions-desktop-dev.jpg"><img src="https://tools.mauroner.net/files/xGnuGn3z_MnG5UU2jpLYm8apzibZbmhg/regions-desktop-dev.jpg" alt="Dev regions, desktop" width="1440" height="1203" loading="lazy"></a></figure>
+</div>
+<h3>390px</h3>
+<div class="pair mobile">
+  <figure class="shot live"><figcaption><i></i>Live</figcaption><a href="https://tools.mauroner.net/files/ZP1p70T_S0vNUvZRiH1Fh1EXrf37EhUT/regions-mobile-live.jpg"><img src="https://tools.mauroner.net/files/ZP1p70T_S0vNUvZRiH1Fh1EXrf37EhUT/regions-mobile-live.jpg" alt="Live regions, mobile" width="780" height="1500" loading="lazy"></a></figure>
+  <figure class="shot dev"><figcaption><i></i>Dev</figcaption><a href="https://tools.mauroner.net/files/vgjfQcPuGSeWjkCLHy8RTHEBAy41Kq4f/regions-mobile-dev.jpg"><img src="https://tools.mauroner.net/files/vgjfQcPuGSeWjkCLHy8RTHEBAy41Kq4f/regions-mobile-dev.jpg" alt="Dev regions, mobile" width="780" height="1500" loading="lazy"></a></figure>
+</div>
+
+<h2>Matches, desktop and mobile</h2>
+<p class="diff">Only the scope bar changed. Match history has no compare dock, so no space is reserved for one.</p>
+<div class="pair">
+  <figure class="shot live"><figcaption><i></i>Live</figcaption><a href="https://tools.mauroner.net/files/EbKCOLZA1olgwfmge5a6Oq8mtWr5dQ_0/matches-desktop-live.jpg"><img src="https://tools.mauroner.net/files/EbKCOLZA1olgwfmge5a6Oq8mtWr5dQ_0/matches-desktop-live.jpg" alt="Live matches, desktop" width="1440" height="1400" loading="lazy"></a></figure>
+  <figure class="shot dev"><figcaption><i></i>Dev</figcaption><a href="https://tools.mauroner.net/files/eo6Uyt5gRaMkXNmZLFHHZDwjwVVFMTp9/matches-desktop-dev.jpg"><img src="https://tools.mauroner.net/files/eo6Uyt5gRaMkXNmZLFHHZDwjwVVFMTp9/matches-desktop-dev.jpg" alt="Dev matches, desktop" width="1440" height="1400" loading="lazy"></a></figure>
+</div>
+<h3>390px</h3>
+<div class="pair mobile">
+  <figure class="shot live"><figcaption><i></i>Live</figcaption><a href="https://tools.mauroner.net/files/PCcr8HYDpwbEtHhnXKUyIYT24YcG5BQM/matches-mobile-live.jpg"><img src="https://tools.mauroner.net/files/PCcr8HYDpwbEtHhnXKUyIYT24YcG5BQM/matches-mobile-live.jpg" alt="Live matches, mobile" width="780" height="1500" loading="lazy"></a></figure>
+  <figure class="shot dev"><figcaption><i></i>Dev</figcaption><a href="https://tools.mauroner.net/files/cqBHCpSJzJhsrjCypVEEjvGk1Nnb0sOw/matches-mobile-dev.jpg"><img src="https://tools.mauroner.net/files/cqBHCpSJzJhsrjCypVEEjvGk1Nnb0sOw/matches-mobile-dev.jpg" alt="Dev matches, mobile" width="780" height="1500" loading="lazy"></a></figure>
+</div>
+
+<h2>What changed, and where</h2>
+<div class="scroll">
+<table class="data">
+  <tr><th>Direction</th><th>Files</th><th>What to look at</th></tr>
+  <tr>
+    <td class="k">A</td>
+    <td class="k">TeamsView, rankings.css</td>
+    <td>Six columns to five, movement folded into the score cell, score at <code>--t-6</code>/800. New Form column. Record also appears in the team meta line, so hiding that column below 1180px no longer loses it.</td>
+  </tr>
+  <tr>
+    <td class="k">B</td>
+    <td class="k">rankings.css</td>
+    <td>Below 640px the table becomes a card grid. Pure CSS, no second JSX tree and no JS breakpoint.</td>
+  </tr>
+  <tr>
+    <td class="k">C</td>
+    <td class="k">ScopeBar.tsx (new), App</td>
+    <td>Season select plus one split track. The ongoing split's fill uses the latest rated match date, not the wall clock, so what you see matches the data the page is built from.</td>
+  </tr>
+  <tr>
+    <td class="k">D</td>
+    <td class="k">RankingShowcase, TeamsView</td>
+    <td>Reverted. The rail keeps the three panels you liked: Tier density, Movement, Region power. The only thing kept from D is that the board table now carries a Form column, which fills the width the row layout freed up.</td>
+  </tr>
+  <tr>
+    <td class="k">E</td>
+    <td class="k">CompareDock.tsx (new), App</td>
+    <td>Always present with two empty slots. At two picks it shows the score gap and win probability inline, computed by the existing <code>estimatePublicMatchup</code> rather than a second implementation.</td>
+  </tr>
+  <tr>
+    <td class="k">radius</td>
+    <td class="k">ui.tsx</td>
+    <td>Two passes. The inset child needed a 3px radius to nest inside an 8px parent, off the scale, so the inset went and the container now clips the segments. The accent ring I added with it was then clipped at the corners instead of following them, which read as a square ring in a rounded box, so the ring went too: fill and weight carry the selection. Separately the scope bar's select and split buttons did not share a top edge, because a bare select was centred against the whole track block. Both groups are now a fixed-height label over a control at <code>--control-h</code>, verified at 0px offset rather than by eye.</td>
+  </tr>
+</table>
+</div>
+
+<h2>Open questions</h2>
+<ul>
+  <li><span class="open">The team meta line truncates on a phone.</span> "LCK &middot; 29-10 &middot; 74%" becomes "LCK &middot; 29-10 &middot; ...". The record survives, the win rate is what gets cut. Tell me if you would rather drop the league or the win rate there.</li>
+  <li><span class="open">Rankings is still taller on desktop</span>, 2796px to 3193px, because the scope timeline and the compare dock both sit above the board.</li>
+  <li><span class="open">The "Full year" control is now a small ghost link</span> above the split track rather than a tab. It is easy to miss.</li>
+  <li>On mobile the rail stacks under the board again, as it did before. That is how you had it, so I left it, but it does mean the S/A/B/C badges in the rank column arrive before the tier legend explains them.</li>
+  <li>Direction B hides the uncertainty band (<code>&plusmn;65</code>) on phone cards. It is still in the row tooltip and the team drawer.</li>
+</ul>
+
+<p class="foot">Typecheck and lint clean, 679 tests passing, no horizontal overflow at either viewport on any of the six pages. Screenshots are temporary uploads and expire after about three days.</p>
+
+</main>
+<script>
+  (function () {
+    var buttons = document.querySelectorAll('.seg button')
+    function apply(mode) {
+      document.body.setAttribute('data-mode', mode)
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].setAttribute('aria-pressed', String(buttons[i].getAttribute('data-mode') === mode))
+      }
+    }
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener('click', function () { apply(this.getAttribute('data-mode')) })
+    }
+  })()
+</script>
+</body>
+</html>

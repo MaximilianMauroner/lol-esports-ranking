@@ -152,6 +152,25 @@ export type PlayerGameStats = {
   visionScore?: number
   vspm?: number
   gpr?: number
+  killParticipation?: number
+  goldDiffAt15?: number
+  xpDiffAt15?: number
+  csDiffAt15?: number
+  damagePerMinute?: number
+  csPerMinute?: number
+  wardsPlacedPerMinute?: number
+  wardsClearedPerMinute?: number
+}
+
+export type PlayerPerformanceMetric = 'killParticipation' | 'damageGoldShareGap'
+  | 'goldDiffAt15' | 'xpDiffAt15' | 'csDiffAt15' | 'damagePerMinute'
+  | 'csPerMinute' | 'wardsPlacedPerMinute' | 'wardsClearedPerMinute'
+
+export type PlayerPerformanceSummary = {
+  version: 'observed-player-performance-v1'
+  aggregation: 'unweighted-per-game-mean'
+  ratingEffect: 'none'
+  metrics: Record<PlayerPerformanceMetric, PlayerDiagnosticAverage>
 }
 
 export type PlayerDiagnosticAverage = {
@@ -174,6 +193,7 @@ export type PlayerDiagnostics = {
   kda: PlayerDiagnosticAverage
   visionScore: PlayerDiagnosticAverage
   vspm: PlayerDiagnosticAverage
+  performance?: PlayerPerformanceSummary
 }
 
 export type PlayerIndividualResidual = {

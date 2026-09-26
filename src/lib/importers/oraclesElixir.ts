@@ -219,7 +219,35 @@ function playerStatsFor(row: CsvRecord, side: string) {
     visionScore: optionalNumberValue(row, 'visionscore'),
     vspm: optionalNumberValue(row, 'vspm'),
     gpr: optionalNumberValue(row, 'gpr'),
+    killParticipation: killParticipationFor(row),
+    goldDiffAt15: at15Value(row, 'golddiffat15'),
+    xpDiffAt15: at15Value(row, 'xpdiffat15'),
+    csDiffAt15: at15Value(row, 'csdiffat15'),
+    damagePerMinute: nonnegativeValue(row, 'dpm'),
+    csPerMinute: nonnegativeValue(row, 'cspm'),
+    wardsPlacedPerMinute: nonnegativeValue(row, 'wpm'),
+    wardsClearedPerMinute: nonnegativeValue(row, 'wcpm'),
   }
+}
+
+function killParticipationFor(row: CsvRecord) {
+  const kills = nonnegativeValue(row, 'kills')
+  const assists = nonnegativeValue(row, 'assists')
+  const teamKills = nonnegativeValue(row, 'teamkills')
+  if (kills === undefined || assists === undefined || teamKills === undefined || teamKills === 0) return undefined
+  const participation = (kills + assists) / teamKills
+  return participation <= 1 ? participation : undefined
+}
+
+function nonnegativeValue(row: CsvRecord, key: string) {
+  const number = optionalNumberValue(row, key)
+  return number !== undefined && number >= 0 ? number : undefined
+}
+
+function at15Value(row: CsvRecord, key: string) {
+  const duration = gameLengthSeconds(value(row, 'gamelength'))
+  if (duration !== undefined && duration < 900) return undefined
+  return optionalNumberValue(row, key)
 }
 
 function unresolvedPlayerIdFor(row: CsvRecord) {
@@ -383,7 +411,7 @@ function numberValue(row: CsvRecord, key: string) {
 
 function optionalNumberValue(row: CsvRecord, key: string) {
   const raw = value(row, key)
-  if (raw === '') return undefined
+  if (raw.trim() === '') return undefined
   const parsed = Number(raw)
   return Number.isFinite(parsed) ? parsed : undefined
 }

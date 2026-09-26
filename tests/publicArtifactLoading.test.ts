@@ -1,3 +1,4 @@
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schema.ts'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -146,7 +147,7 @@ test('semantic identity excludes volatile run metadata and uses deterministic ke
   const changedRun = {
     generatedAt: '2099-12-31T23:59:59.000Z',
     artifactMeta: {
-      schemaVersion: 23,
+      schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
       runId: 'run_different',
       generatedAt: '2099-12-31T23:59:59.000Z',
       modelVersion: 'different-run-label',
@@ -156,7 +157,7 @@ test('semantic identity excludes volatile run metadata and uses deterministic ke
   }
   changedRun.generatedAt = '2099-12-31T23:59:59.000Z'
   changedRun.artifactMeta = {
-    schemaVersion: 23,
+    schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
     runId: 'run_different',
     generatedAt: '2099-12-31T23:59:59.000Z',
     modelVersion: 'different-run-label',

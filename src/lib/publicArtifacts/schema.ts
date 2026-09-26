@@ -37,10 +37,11 @@ import type {
   SnapshotSourceBreakdown,
 } from '../snapshot'
 import type { WalkForwardMetrics } from '../predictionModel'
+import { playerPerformanceMetricKeys, playerPerformancePolicy } from '../playerPerformance'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
-export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 23 as const
+export const PUBLIC_ARTIFACT_SCHEMA_VERSION = 24 as const
 const PUBLIC_TEAM_RECENT_MATCH_LIMIT = 25
 
 export type ArtifactMeta = {
@@ -1241,12 +1242,49 @@ export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirector
   if ('comparisonMetrics' in value) assertArray(value.comparisonMetrics, 'player directory comparisonMetrics')
   if ('diagnostics' in value) assertObject(value.diagnostics, 'player directory diagnostics')
   assertArray(value.players, 'player directory players')
-  if ('scopedPlayers' in value) assertObject(value.scopedPlayers, 'player directory scopedPlayers')
+  value.players.forEach(assertPlayerPerformance)
+  if ('scopedPlayers' in value) {
+    assertObject(value.scopedPlayers, 'player directory scopedPlayers')
+    for (const rows of Object.values(value.scopedPlayers)) {
+      assertArray(rows, 'player directory scoped players')
+      rows.forEach(assertPlayerPerformance)
+    }
+  }
   assertObject(value.currentLineups, 'player directory currentLineups')
   for (const [teamId, lineup] of Object.entries(value.currentLineups)) {
     assertCurrentLineup(lineup, `player directory currentLineups ${teamId}`)
   }
   return value as PublicPlayerDirectory
+}
+
+function assertPlayerPerformance(player: unknown) {
+  assertObject(player, 'player')
+  if (player.diagnostics === undefined) return
+  assertObject(player.diagnostics, 'player diagnostics')
+  const { performance, sampleGames } = player.diagnostics
+  if (performance === undefined) return
+  assertEqual(player.diagnostics.sourceProvider, 'oracles-elixir', 'performance source')
+  assertEqual(player.diagnostics.scope, 'rated-complete-role-matchups', 'performance scope')
+  assertNonNegativeInteger(sampleGames, 'performance sampleGames')
+  assertObject(performance, 'player performance')
+  assertEqual(performance.version, playerPerformancePolicy.version, 'performance version')
+  assertEqual(performance.aggregation, playerPerformancePolicy.aggregation, 'performance aggregation')
+  assertEqual(performance.ratingEffect, 'none', 'performance ratingEffect')
+  assertObject(performance.metrics, 'performance metrics')
+  for (const key of playerPerformanceMetricKeys) {
+    const metric: unknown = performance.metrics[key]
+    assertObject(metric, `performance ${key}`)
+    assertNonNegativeInteger(metric.games, `${key} games`)
+    assertNonNegativeInteger(metric.missing, `${key} missing`)
+    if (metric.games + metric.missing !== sampleGames) throw new Error(`Invalid public artifact: ${key} coverage must match sampleGames`)
+    if (metric.games === 0) assertEqual(metric.value, null, `${key} unavailable value`)
+    else {
+      assertNumber(metric.value, `${key} value`)
+      if (key === 'killParticipation' && (metric.value < 0 || metric.value > 1)) throw new Error('Invalid public artifact: kill participation range')
+      if (key === 'damageGoldShareGap' && Math.abs(metric.value) > 1) throw new Error('Invalid public artifact: damage–gold share gap range')
+      if (key.endsWith('PerMinute') && metric.value < 0) throw new Error(`Invalid public artifact: ${key} negative rate`)
+    }
+  }
 }
 
 export function parsePublicTeamDirectory(value: unknown): PublicTeamDirectory {

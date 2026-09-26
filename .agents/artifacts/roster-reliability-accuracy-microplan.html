@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roster, substitute, reliability, and accuracy Microplan</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f7fa; --panel:#fff; --text:#17202a; --muted:#52606d; --line:#d9e1e8; --accent:#1d4ed8; --good:#166534; --warn:#92400e; --bad:#991b1b; --code:#eef2f7; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#10151b; --panel:#171e26; --text:#edf2f7; --muted:#aab7c4; --line:#34404c; --accent:#8ab4ff; --good:#86efac; --warn:#fcd34d; --bad:#fca5a5; --code:#202a35; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1120px,100%); margin:0 auto; padding:28px 18px 64px; }
+    h1,h2,h3 { line-height:1.2; margin:0; }
+    h1 { font-size:clamp(1.75rem,4vw,2.45rem); }
+    h2 { margin-top:34px; padding-bottom:8px; border-bottom:1px solid var(--line); font-size:1.35rem; }
+    h3 { margin-top:20px; font-size:1rem; }
+    p { margin:10px 0; }
+    ul,ol { padding-left:22px; }
+    li + li { margin-top:6px; }
+    a { color:var(--accent); }
+    code { background:var(--code); border-radius:4px; padding:1px 5px; }
+    pre { overflow:auto; background:var(--code); border:1px solid var(--line); border-radius:8px; padding:14px; font-size:.86rem; }
+    .meta,.callout,.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
+    .meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:18px; }
+    .meta span { display:block; color:var(--muted); font-size:.78rem; }
+    .meta b { display:block; margin-top:3px; }
+    .callout { margin:18px 0; border-left:4px solid var(--accent); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin-top:14px; }
+    .card h3 { margin-top:0; }
+    .priority { display:inline-block; border:1px solid currentColor; border-radius:999px; padding:2px 8px; font-size:.72rem; font-weight:700; }
+    .p0 { color:var(--bad); } .p1 { color:var(--warn); } .p2 { color:var(--good); }
+    table { width:100%; border-collapse:collapse; margin-top:14px; font-size:.9rem; }
+    th,td { padding:9px 10px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background:var(--code); }
+    .small { color:var(--muted); font-size:.86rem; }
+    .done { color:var(--good); font-weight:700; }
+    @media (max-width:700px) { main { padding:18px 12px 48px; } table { display:block; overflow-x:auto; white-space:nowrap; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Roster, substitute, reliability, and accuracy Microplan</h1>
+  <p>This plan replaces inferred "current" roster claims with dated evidence, connects substitute participation to scoring, prevents postgame lineup knowledge from entering pregame evaluation, and makes data quality visible on the site.</p>
+
+  <div class="meta">
+    <div><span>Primary goal</span><b>More accurate roster-aware ratings</b></div>
+    <div><span>Secondary goal</span><b>Honest lineup and freshness language</b></div>
+    <div><span>Release policy</span><b>Shadow first, gated promotion</b></div>
+    <div><span>Expected shape</span><b>Five implementation phases</b></div>
+  </div>
+
+  <div class="callout">
+    <strong>Recommendation.</strong> Implement the evidence model and evaluation gates before adding lineup simulation controls. A polished "what if" control built on unreliable starter labels would make the problem harder to spot.
+  </div>
+
+  <h2>Goal</h2>
+  <p>Represent what is known about a team's lineup at a specific time, distinguish short substitutions from lasting roster changes, and price lineup uncertainty without discarding useful partial evidence.</p>
+
+  <h2>Scope</h2>
+  <div class="grid">
+    <section class="card">
+      <h3>Included</h3>
+      <ul>
+        <li>Canonical series-level lineup observations.</li>
+        <li>Starter, substitute, role-swap, and roster-era classification.</li>
+        <li>Evidence timestamps and pregame knowledge checks.</li>
+        <li>Coverage-weighted player priors for partial lineups.</li>
+        <li>Roster-sensitive uncertainty and calibration slices.</li>
+        <li>Lineup history, freshness, and source display in the team UI.</li>
+        <li>Build-time source disagreement and data-health checks.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h3>Not included</h3>
+      <ul>
+        <li>Manual editorial roster maintenance as the primary source.</li>
+        <li>Rumor ingestion or unsourced injury reports.</li>
+        <li>A public prediction market or user-submitted roster database.</li>
+        <li>Changing the published ranking solely because the UI changes.</li>
+        <li>Calling inferred appearances an officially confirmed roster.</li>
+      </ul>
+    </section>
+  </div>
+
+  <h2>Current problems to fix</h2>
+  <table>
+    <thead><tr><th>Priority</th><th>Problem</th><th>Observed behavior</th><th>Required outcome</th></tr></thead>
+    <tbody>
+      <tr><td><span class="priority p0">P0</span></td><td>False current-roster certainty</td><td>The latest appearance date supplies starters. Duplicate roles on that date become "current substitutes."</td><td>Publish "last observed" unless a dated source confirms a current or scheduled lineup.</td></tr>
+      <tr><td><span class="priority p0">P0</span></td><td>Pregame knowledge is not proven</td><td>Scored-game rosters can describe the actual participants after the game.</td><td>Walk-forward predictions may use a lineup only when its evidence timestamp precedes match start.</td></tr>
+      <tr><td><span class="priority p0">P0</span></td><td>Substitute thresholds are disconnected</td><td>Types and threshold helpers exist, but match substitute inputs do not drive production roster eras.</td><td>Series participation must create temporary states or permanent eras according to audited thresholds.</td></tr>
+      <tr><td><span class="priority p1">P1</span></td><td>Five-player coverage cliff</td><td>One missing role zeros the entire player lineup adjustment.</td><td>Use known role evidence, a prior for missing roles, and a coverage multiplier.</td></tr>
+      <tr><td><span class="priority p1">P1</span></td><td>Partial snapshots overwrite complete knowledge</td><td>The latest roster observation becomes the roster basis even when it has fewer roles.</td><td>Keep latest observation, latest complete lineup, and confirmed changes as separate state.</td></tr>
+      <tr><td><span class="priority p1">P1</span></td><td>Same-day lineup changes collapse</td><td>Continuity runs once per team per date.</td><td>Apply roster state at canonical series boundaries.</td></tr>
+      <tr><td><span class="priority p2">P2</span></td><td>Freshness is hard to judge</td><td>Pages show generated dates, but lineup age and recent source gaps are not prominent.</td><td>Show scored coverage, retrieval time, lineup age, missing roles, and gate status.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Decisions</h2>
+  <ol>
+    <li><strong>Observed is not confirmed.</strong> A scored game proves who played that game. It does not prove the next lineup.</li>
+    <li><strong>Knowledge has time.</strong> Every lineup claim records when the system could know it, not only when the match occurred.</li>
+    <li><strong>Series are the roster update unit.</strong> Do not collapse two same-day series into one roster event.</li>
+    <li><strong>Partial evidence shrinks; it does not disappear.</strong> Missing roles use league-role priors and widen uncertainty.</li>
+    <li><strong>Temporary substitutes do not erase team history.</strong> They reduce coordination confidence and add a player-quality adjustment for the affected role.</li>
+    <li><strong>Permanent changes open roster eras.</strong> Use repeated series, split participation share, or explicit sourced permanence.</li>
+    <li><strong>No public model promotion without paired evidence.</strong> Global, cross-region, and roster-change gates all apply.</li>
+  </ol>
+
+  <h2>Target data model</h2>
+  <pre><code>type LineupEvidence = {
+  team: string
+  seriesId: string
+  effectiveAt: string
+  knownAt: string
+  sourceProvider: string
+  sourceUrl?: string
+  basis: 'official-announcement' | 'official-schedule' | 'scored-series'
+  roles: Partial&lt;Record&lt;Role, LineupPlayerEvidence&gt;&gt;
+}
+
+type LineupPlayerEvidence = {
+  playerId: string
+  role: Role
+  status: 'starter' | 'substitute' | 'role-swap'
+  confidence: number
+}
+
+type TeamLineupState = {
+  lastObserved?: LineupEvidence
+  latestComplete?: LineupEvidence
+  latestPregameKnown?: LineupEvidence
+  rosterEraId?: string
+  expectedRoles: Partial&lt;Record&lt;Role, ExpectedRolePlayers&gt;&gt;
+  coverage: number
+  freshnessDays: number
+}</code></pre>
+  <p class="small">The persisted checkpoint must include the current roster-era identity, latest usable evidence per team, and substitute counters needed for incremental parity.</p>
+
+  <h2>Calculation policy</h2>
+  <h3>Partial lineup adjustment</h3>
+  <pre><code>observedEdge = sum(roleWeight × knownPlayerEdge)
+missingPrior = sum(roleWeight × leagueRolePrior for missing roles)
+rawLineupEdge = observedEdge + missingPrior
+effectiveLineupEdge = rawLineupEdge × sourcedCoverage × freshnessWeight</code></pre>
+  <p>Coverage and freshness also contribute to prediction uncertainty. Keep the player prior and coordination retention as separate ledger channels.</p>
+
+  <h3>Temporary substitute</h3>
+  <pre><code>teamStableRetention = prior roster-era retention
+coordinationPenalty = roleWeight × temporarySubPenalty × evidenceConfidence
+playerQualityDelta = substitutePlayerPrior - expectedStarterPrior
+uncertaintyIncrease = substitutionAmbiguity + thinPlayerSamplePenalty</code></pre>
+  <p>Do not open a new era until the substitute reaches the configured series count, split share, or permanent-source threshold.</p>
+
+  <h3>Unknown future lineup</h3>
+  <p>Use an expected role mixture when recent rotation supplies enough evidence. Otherwise use the last pregame-known complete lineup, shrink it by age, and widen the uncertainty interval. Never use a scored-series lineup whose <code>knownAt</code> is after match start.</p>
+
+  <h2>Ordered implementation</h2>
+  <section class="card">
+    <h3>Phase 1. Establish roster truth and terminology</h3>
+    <ol>
+      <li>Add series-level lineup evidence types and canonical builders.</li>
+      <li>Group game rows by canonical series before deriving one lineup per team.</li>
+      <li>Preserve evidence basis, source, effective time, and known time.</li>
+      <li>Replace public "current starter" and "current substitute" claims with "last observed" labels.</li>
+      <li>Retain latest observation and latest complete lineup separately.</li>
+    </ol>
+    <p><strong>Exit:</strong> no UI or artifact calls a lineup current without confirmation evidence.</p>
+  </section>
+
+  <section class="card">
+    <h3>Phase 2. Connect substitutes and roster eras</h3>
+    <ol>
+      <li>Derive substitute participation by team, player, role, series count, and split game share.</li>
+      <li>Feed derived substitute inputs into roster-era construction.</li>
+      <li>Represent one-off and short substitutions as temporary states.</li>
+      <li>Open a permanent era when the threshold or explicit source proves permanence.</li>
+      <li>Move continuity updates from date boundaries to series boundaries.</li>
+      <li>Bump checkpoint schema and inventory every new persisted map.</li>
+    </ol>
+    <p><strong>Exit:</strong> same-day lineup changes, returning starters, and permanent replacements replay identically in full and incremental builds.</p>
+  </section>
+
+  <section class="card">
+    <h3>Phase 3. Improve lineup-aware calculations</h3>
+    <ol>
+      <li>Replace the complete-five-role cutoff with coverage-weighted role priors.</li>
+      <li>Separate player-quality delta, coordination retention, and lineup uncertainty in the rating ledger.</li>
+      <li>Add freshness decay for lineup evidence without treating elapsed time as a roster change.</li>
+      <li>Add expected role mixtures for teams that rotate players.</li>
+      <li>Require pregame-known evidence in exported walk-forward predictions.</li>
+      <li>Record base evidence and realized movement for every roster-related channel.</li>
+    </ol>
+    <p><strong>Exit:</strong> four sourced roles contribute less than five but more than zero, and postgame roster knowledge cannot affect pregame evaluation.</p>
+  </section>
+
+  <section class="card">
+    <h3>Phase 4. Add reliability checks</h3>
+    <ol>
+      <li>Generate provider disagreement reports for lineup, role, match identity, format, winner, and phase.</li>
+      <li>Block promotion for unresolved recent disagreements in high-weight series.</li>
+      <li>Add data-health metrics for complete roster sides, partial sides, stale lineup evidence, unresolved player IDs, and postgame-only lineups.</li>
+      <li>Add roster-change, substitute, role-swap, partial-lineup, and unknown-lineup calibration slices.</li>
+      <li>Require exact full-versus-incremental parity for roster-era state.</li>
+    </ol>
+    <p><strong>Exit:</strong> every published build has a machine-readable roster health report and paired accuracy result.</p>
+  </section>
+
+  <section class="card">
+    <h3>Phase 5. Improve the website</h3>
+    <ol>
+      <li>Add a lineup card with observation date, source basis, completeness, freshness, and missing roles.</li>
+      <li>Add a roster timeline for starters, temporary substitutes, role swaps, and permanent changes.</li>
+      <li>Show team power, expected lineup adjustment, and uncertainty as separate values.</li>
+      <li>Add a "what if this player starts?" control only after the calculation gates pass.</li>
+      <li>Add a site-wide data-health panel with coverage end, retrieval time, source gaps, and model gate status.</li>
+      <li>Link lineup claims to the source series or official announcement.</li>
+    </ol>
+    <p><strong>Exit:</strong> a user can tell what lineup was observed, how old it is, whether it is confirmed, and how it changes the rating.</p>
+  </section>
+
+  <h2>Test plan</h2>
+  <div class="grid">
+    <section class="card"><h3>Unit tests</h3><ul><li>Partial roster merge preserves known roles.</li><li>Duplicate roles do not imply a current substitute.</li><li>Threshold edges at two and three series, and below and at 20% share.</li><li>Role swaps remain distinct from player replacements.</li><li>Expected lineup mixtures sum to one per role.</li><li>Evidence after match start is rejected for pregame use.</li></ul></section>
+    <section class="card"><h3>Replay tests</h3><ul><li>Two same-day series with different lineups.</li><li>Emergency substitute followed by returning starter.</li><li>Permanent replacement after repeated substitution.</li><li>Historical lineup correction.</li><li>Future lineup announcement does not change earlier predictions.</li><li>Checkpoint round-trip and incremental parity.</li></ul></section>
+    <section class="card"><h3>Corpus tests</h3><ul><li>Complete, partial, and missing lineup coverage by league.</li><li>Provider disagreement rate by competition tier.</li><li>Unresolved player identity count.</li><li>Lineup freshness distribution.</li><li>Known-before-start coverage for evaluated predictions.</li></ul></section>
+    <section class="card"><h3>UI tests</h3><ul><li>Observed lineups never render as confirmed without evidence.</li><li>Stale and partial states remain visible on mobile.</li><li>Source links identify the supporting series.</li><li>What-if changes announce updated probability and uncertainty.</li><li>Missing player data does not imply zero player strength.</li></ul></section>
+  </div>
+
+  <h2>Accuracy gates</h2>
+  <p>Use paired walk-forward predictions clustered by canonical series. Compare against the currently published model on the same source corpus.</p>
+  <table>
+    <thead><tr><th>Slice</th><th>Required result</th></tr></thead>
+    <tbody>
+      <tr><td>Global</td><td>Statistically non-inferior Brier score and log loss.</td></tr>
+      <tr><td>Cross-region</td><td>Upper 95% Brier-delta bound no worse than the existing strict margin.</td></tr>
+      <tr><td>Roster change</td><td>No Brier regression beyond 0.001 and improved calibration or uncertainty coverage.</td></tr>
+      <tr><td>Substitute matches</td><td>Better than the team-only roster-continuity baseline, with a reported confidence interval.</td></tr>
+      <tr><td>Partial lineup</td><td>Coverage-weighted model must beat the zero-adjustment behavior.</td></tr>
+      <tr><td>Unknown lineup</td><td>Prediction intervals must meet the configured empirical coverage target.</td></tr>
+      <tr><td>League slices</td><td>No eligible league worsens by more than 0.001 Brier.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Release sequence</h2>
+  <ol>
+    <li>Ship terminology and artifact schema changes without changing published ratings.</li>
+    <li>Run the new calculations in shadow mode and retain both prediction exports.</li>
+    <li>Gather enough substitute and roster-change series for stable slice estimates.</li>
+    <li>Promote calculation changes only when every required accuracy and parity gate passes.</li>
+    <li>Regenerate public artifacts into a new versioned generation while preserving the prior generation for rollback.</li>
+    <li>Enable the what-if UI after the promoted artifacts expose lineup probabilities and provenance.</li>
+  </ol>
+
+  <h2>Risks and controls</h2>
+  <table>
+    <thead><tr><th>Risk</th><th>Control</th></tr></thead>
+    <tbody>
+      <tr><td>Official lineup timestamps are sparse.</td><td>Use scored-series evidence only for later matches, mark it observed, and widen uncertainty.</td></tr>
+      <tr><td>Small substitute sample sizes encourage overfitting.</td><td>Start with pooled role effects, shrink toward zero, and require slice confidence intervals.</td></tr>
+      <tr><td>Provider role labels disagree.</td><td>Keep the disagreement in the health report and avoid opening a permanent era until identity and role are resolved.</td></tr>
+      <tr><td>Checkpoint state grows.</td><td>Persist compact counters and current evidence identities, not full raw observations.</td></tr>
+      <tr><td>UI implies precision the model lacks.</td><td>Display evidence basis, freshness, coverage, and uncertainty beside lineup effects.</td></tr>
+      <tr><td>Model improves roster matches but harms ordinary matches.</td><td>Keep global and league non-inferiority gates alongside roster-specific gates.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Done criteria</h2>
+  <ul>
+    <li class="done">No inferred lineup is labeled current or confirmed.</li>
+    <li class="done">Every prediction records which lineup evidence was available before match start.</li>
+    <li class="done">Temporary substitutes and permanent roster changes produce different state transitions.</li>
+    <li class="done">Partial lineups contribute coverage-weighted player evidence.</li>
+    <li class="done">Same-day series with different lineups replay correctly.</li>
+    <li class="done">Roster state survives checkpoint round-trip and matches clean full replay.</li>
+    <li class="done">Data-health output reports lineup coverage, age, identity gaps, and provider disagreements.</li>
+    <li class="done">All static checks, tests, artifact validation, and incremental benchmarks pass.</li>
+    <li class="done">The new calculation clears global, cross-region, league, roster-change, substitute, partial-lineup, and unknown-lineup gates.</li>
+    <li class="done">Public artifact promotion remains blocked until every required gate passes.</li>
+  </ul>
+
+  <h2>Likely code ownership</h2>
+  <table>
+    <thead><tr><th>Area</th><th>Likely modules</th></tr></thead>
+    <tbody>
+      <tr><td>Canonical lineup evidence</td><td><code>src/lib/rosters.ts</code>, <code>src/lib/seriesResolver.ts</code>, importer modules, <code>src/types.ts</code></td></tr>
+      <tr><td>Roster eras and substitute state</td><td><code>src/lib/rosterEras.ts</code>, <code>src/lib/rosterContinuityRating.ts</code>, rating run state and checkpoints</td></tr>
+      <tr><td>Player and prediction calculations</td><td><code>src/lib/playerModel.ts</code>, <code>src/lib/ratingSeriesEngine.ts</code>, <code>src/lib/predictionModel.ts</code></td></tr>
+      <tr><td>Artifacts and health data</td><td><code>src/lib/snapshot.ts</code>, public artifact schemas, manifest and freshness scripts</td></tr>
+      <tr><td>Website</td><td><code>src/views/TeamsView.tsx</code>, <code>src/views/MatchesView.tsx</code>, shadcn components in <code>src/components/ui</code></td></tr>
+      <tr><td>Evaluation</td><td>paired calibration scripts, model tests, roster tests, incremental parity tests</td></tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>
