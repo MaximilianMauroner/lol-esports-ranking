@@ -178,6 +178,31 @@ test('invalid times in allowed cancelled or postponed source rows prevent a comp
   }
 })
 
+test('malformed schedule rows cannot replace a prior feed after collection', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-malformed-row-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  try {
+    for (const sourceRows of [[null], [event('series', 'lcs', at), null]]) {
+      const fetcher = (async (urlValue: string | URL | Request) => {
+        const path = new URL(String(urlValue)).pathname.split('/').at(-1)
+        return new Response(JSON.stringify(path === 'getSchedule'
+          ? { data: { schedule: { events: sourceRows, pages: {} } } }
+          : { data: { event: detail('series') } }))
+      }) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false)
+      assert.match(collected.feed.coverage.warnings.join(' '), /malformed schedule rows/i)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false)
+      assert.equal(await readFile(output, 'utf8'), original)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('a rolling coverage window is published even when event rows are unchanged', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tournament-coverage-test-'))
   const output = join(directory, 'feed.json')

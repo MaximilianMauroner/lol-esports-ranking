@@ -66,6 +66,11 @@ export async function collectTournamentFeed(options: {
       warnings.push(`${direction} page limit reached before the requested window boundary.`)
     }
   }
+  const malformedRows = pages.reduce((count, page) => count + (page.events as unknown[]).filter((item) => !record(item)).length, 0)
+  if (malformedRows) {
+    complete = false
+    warnings.push(`${malformedRows} malformed schedule rows were omitted; their window coverage is unknown.`)
+  }
   const sourceRows = pages.flatMap((page) => rows(page.events))
   const allowedRows = sourceRows.filter((row) => competitionForLeague(row.league))
   const invalidTimes = allowedRows.filter((row) => eventTime(row.startTime) === null)
