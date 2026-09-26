@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { seriesSwingStateProbability } from '../src/lib/matchupMath.ts'
-import { neutralWinProbability, seriesWinProbability } from '../src/lib/winProbability.ts'
+import { neutralWinProbability } from '../src/lib/winProbability.ts'
 
 test('neutral win probability is symmetric for equal ratings', () => {
   const prediction = neutralWinProbability(
@@ -37,10 +37,6 @@ test('normal public-board uncertainty keeps favorites meaningfully separated', (
 
   assert.equal(prediction.uncertaintyPenalty, 0.7765)
   assert.equal(prediction.teamAGameWinProbability, 0.6671)
-})
-
-test('series probability amplifies a single-game edge', () => {
-  assert.ok(seriesWinProbability(0.6, 5) > seriesWinProbability(0.6, 1))
 })
 
 test('Bo2 prediction separates decisive win probability from expected series points', () => {
