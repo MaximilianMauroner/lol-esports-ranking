@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Select } from '../components/ui/select'
 import { LoadingState } from '../components/ui/loading'
 import { currentHashQuery, hashParam } from '../lib/urlState'
-import { formatTournamentTime, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
+import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
 
 type FeedHealth = { checkedAt: string; complete: boolean; warnings: string[] }
 type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed; health: FeedHealth | null; error?: string } | { status: 'error'; message: string }
@@ -47,15 +47,7 @@ export function TournamentsView() {
   const events = state.status === 'ready' ? state.feed.events : []
   const selected = events.find((event) => event.id === selectedId) ?? nextEvent(events, now)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time'
-  const grouped = useMemo(() => {
-    const result: Record<'live' | 'upcoming' | 'results', TournamentSeries[]> = { live: [], upcoming: [], results: [] }
-    for (const series of selected?.series ?? []) {
-      if (series.status === 'live') result.live.push(series)
-      else if (series.status === 'completed' || series.status === 'cancelled') result.results.push(series)
-      else result.upcoming.push(series)
-    }
-    return result
-  }, [selected])
+  const grouped = useMemo(() => groupTournamentSeries(selected?.series ?? []), [selected])
 
   if (state.status === 'loading') return <LoadingState presentation="page" label="Loading tournament schedule" />
   if (state.status === 'error') return <div className="px-[var(--page-x)] py-6"><Alert variant="warning" role="alert">Tournament schedule unavailable: {state.message} <Button className="ml-2" onClick={() => void refresh()}>Retry</Button></Alert></div>
@@ -82,8 +74,8 @@ export function TournamentsView() {
       {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : (
         <>
           <h2 className="text-lg font-semibold">{selected.label}</h2>
-          {(['live', 'upcoming', 'results'] as const).map((group) => <section key={group} aria-label={group} className="grid gap-3">
-            <h3 className="text-base font-semibold capitalize">{group}</h3>
+          {(['live', 'upcoming', 'results', 'unresolved'] as const).map((group) => <section key={group} aria-label={group} className="grid gap-3">
+            <h3 className="text-base font-semibold capitalize">{group === 'unresolved' ? 'Unresolved results' : group}</h3>
             {grouped[group].length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{grouped[group].map((series) => <SeriesCard key={series.id} series={series} timezone={timezone} />)}</div> : <p className="text-sm text-[var(--muted)]">No {group} series in this schedule window.</p>}
           </section>)}
         </>

@@ -62,9 +62,13 @@ export function normalizeTournamentFeed(input: {
   const warnings = [...(input.warnings ?? [])]
   const byMatch = new Map<string, Observation>()
   const conflicts = new Set<string>()
+  let missingMatchId = 0
   for (const observation of input.observations) {
     const matchId = str(asRecord(observation.event.match)?.id) || str(observation.event.id)
-    if (!matchId) continue
+    if (!matchId) {
+      if (competitionForLeague(observation.event.league ?? observation.detail?.league)) missingMatchId += 1
+      continue
+    }
     const previous = byMatch.get(matchId)
     if (previous && JSON.stringify(previous.event) !== JSON.stringify(observation.event)) {
       // A page has no per-row revision. A conflict cannot be ordered safely.
@@ -74,6 +78,7 @@ export function normalizeTournamentFeed(input: {
     byMatch.set(matchId, { event: observation.event, detail: observation.detail ?? previous?.detail })
   }
   if (conflicts.size) warnings.push(`Conflicting overlapping source rows for ${[...conflicts].sort().join(', ')}; coverage is incomplete.`)
+  if (missingMatchId) warnings.push(`${missingMatchId} allowed source rows lack a match ID and were withheld.`)
 
   const grouped = new Map<string, TournamentEvent>()
   let missingIdentity = 0
@@ -101,12 +106,13 @@ export function normalizeTournamentFeed(input: {
       const team = asRecord(teamValue)
       const matchingDetail = detailTeams.map(asRecord).find((candidate) => candidate && (str(candidate.id) && str(candidate.id) === str(team?.id) || str(candidate.name) && str(candidate.name) === str(team?.name)))
       const result = asRecord(team?.result)
+      const detailResult = asRecord(matchingDetail?.result)
       return {
         id: str(team?.id) || str(matchingDetail?.id) || null,
         name: str(team?.name) || str(matchingDetail?.name) || null,
         code: str(team?.code) || str(matchingDetail?.code) || null,
-        gameWins: nonnegativeInteger(result?.gameWins),
-        outcome: str(result?.outcome) || null,
+        gameWins: nonnegativeInteger(result?.gameWins) ?? nonnegativeInteger(detailResult?.gameWins),
+        outcome: str(result?.outcome) || str(detailResult?.outcome) || null,
       }
     })
     const sourceState = str(raw.state)
@@ -136,7 +142,7 @@ export function normalizeTournamentFeed(input: {
     version: TOURNAMENT_FEED_VERSION,
     source: 'lolesports-persisted-site-api', unsupportedApi: true,
     fetchedAt: input.fetchedAt, sourceUpdatedAt: null,
-    coverage: { start: input.coverageStart, end: input.coverageEnd, complete: input.coverageComplete && !conflicts.size && !missingIdentity, warnings },
+    coverage: { start: input.coverageStart, end: input.coverageEnd, complete: input.coverageComplete && !conflicts.size && !missingMatchId && !missingIdentity, warnings },
     events: [...grouped.values()].sort((a, b) => (a.series[0]?.startTime ?? '').localeCompare(b.series[0]?.startTime ?? '') || a.id.localeCompare(b.id)),
   }
 }
@@ -162,11 +168,23 @@ export function normalizeStatus(source: string): TournamentSeriesStatus {
   }
 }
 
+export function groupTournamentSeries(series: readonly TournamentSeries[]) {
+  const result: Record<'live' | 'upcoming' | 'results' | 'unresolved', TournamentSeries[]> = { live: [], upcoming: [], results: [], unresolved: [] }
+  for (const entry of series) {
+    if (entry.status === 'live') result.live.push(entry)
+    else if (entry.status === 'completed' || entry.status === 'cancelled') result.results.push(entry)
+    else if (entry.status === 'unknown' && /^(?:complete|completed)$/i.test(entry.sourceState)) result.unresolved.push(entry)
+    else result.upcoming.push(entry)
+  }
+  return result
+}
+
 export function isTournamentFeed(value: unknown): value is TournamentFeed {
   const feed = asRecord(value)
   const coverage = asRecord(feed?.coverage)
   return feed?.version === TOURNAMENT_FEED_VERSION && feed.source === 'lolesports-persisted-site-api'
     && feed.unsupportedApi === true && Boolean(validDate(feed.fetchedAt))
+    && (feed.dataMode === undefined || feed.dataMode === 'synthetic-fixture')
     && typeof coverage?.start === 'string' && typeof coverage.end === 'string'
     && typeof coverage.complete === 'boolean' && Array.isArray(coverage.warnings)
     && coverage.warnings.every((warning) => typeof warning === 'string')

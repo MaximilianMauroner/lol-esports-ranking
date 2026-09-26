@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { collectTournamentFeed } from '../scripts/tournament-feed-collector'
-import { competitionForLeague, formatTournamentTime, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/lib/tournamentFeed'
+import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
+import { hostname, tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { acquireCollectorLock, collectTournamentFeed } from '../scripts/tournament-feed-collector'
+import { competitionForLeague, formatTournamentTime, groupTournamentSeries, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/lib/tournamentFeed'
 
 const at = '2026-09-26T12:00:00.000Z'
 
@@ -25,6 +28,7 @@ test('discovers an allowed upcoming event without rated games or a manually supp
   assert.equal(result.coverage.complete, true)
   assert.equal(isTournamentFeed(result), true)
   assert.equal(isTournamentFeed({ ...result, events: [{ ...result.events[0], series: [{ ...result.events[0]?.series[0], vodUrls: ['javascript:alert(1)'] }] }] }), false)
+  assert.equal(isTournamentFeed({ ...result, dataMode: 'seeded-sample' }), false)
 })
 
 test('competition allowlist covers four domestic and three international families', () => {
@@ -58,7 +62,45 @@ test('preserves source state, corrections, TBD slots and confirmed terminal stat
   assert.equal(postponed.events[0]?.series[0]?.status, 'postponed')
   assert.equal(completed.events[0]?.series[0]?.status, 'completed')
   assert.equal(feed([{ event: event('series', 'lcs', at, 'completed'), detail: detail('series') }]).events[0]?.series[0]?.status, 'unknown')
+  const unresolved = feed([{ event: event('series', 'lcs', at, 'completed'), detail: detail('series') }]).events[0]?.series[0]
+  assert.equal(groupTournamentSeries([unresolved!]).unresolved.length, 1)
+  assert.equal(groupTournamentSeries([unresolved!]).upcoming.length, 0)
   assert.equal(feed([{ event: event('series', 'lcs', '2026-09-20T12:00:00Z'), detail: detail('series') }]).events[0]?.series[0]?.status, 'upcoming')
+})
+
+test('withholds identifier-less rows and recovers result evidence from event details', () => {
+  const withoutId = feed([{ event: { ...event('series', 'lcs', at), match: { ...event('series', 'lcs', at).match, id: '' } }, detail: detail('series') }])
+  assert.equal(withoutId.coverage.complete, false)
+  assert.match(withoutId.coverage.warnings.join(' '), /lack a match ID/)
+  const corrected = feed([{
+    event: event('series', 'lcs', at, 'completed'),
+    detail: { ...detail('series'), match: { teams: [
+      { name: 'LCK representative', result: { gameWins: 3, outcome: 'win' } },
+      { name: 'LCP representative', result: { gameWins: 1, outcome: 'loss' } },
+    ] } },
+  }])
+  assert.equal(corrected.events[0]?.series[0]?.status, 'completed')
+  assert.deepEqual(corrected.events[0]?.series[0]?.teams.map((team) => team.gameWins), [3, 1])
+})
+
+test('collector lock rejects a live owner and reclaims a dead local owner', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-lock-test-'))
+  const lock = join(directory, 'feed.lock')
+  try {
+    const release = await acquireCollectorLock(lock)
+    await assert.rejects(acquireCollectorLock(lock), /lock is held/)
+    await release()
+    await mkdir(lock)
+    await writeFile(join(lock, 'owner.json'), JSON.stringify({ host: hostname(), pid: 999999999, startedAt: '2020-01-01T00:00:00Z' }))
+    const staleTime = new Date('2020-01-01T00:00:00Z')
+    await utimes(lock, staleTime, staleTime)
+    const releaseRecovered = await acquireCollectorLock(lock)
+    const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { pid: number }
+    assert.equal(owner.pid, process.pid)
+    await releaseRecovered()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('partial and contradictory observations cannot replace complete last-good state', () => {
