@@ -64,7 +64,7 @@ export function buildCanonicalMatchLedger(
   const duplicate = rows.find((row, index) => row.key === rows[index - 1]?.key)
   if (duplicate) throw new Error(`Duplicate canonical match ledger key ${duplicate.key}`)
   const compatibility = compatibilityFrom(context)
-  const scheduleCausalRows = [...(context.scheduleCausalRows ?? [])].sort(compareScheduleRows)
+  const scheduleCausalRows = parseScheduleRows(context.scheduleCausalRows ?? [])
   return {
     schemaVersion: CANONICAL_MATCH_LEDGER_SCHEMA_VERSION,
     compatibility,
@@ -317,8 +317,11 @@ function parseScheduleRows(value: unknown) {
       digest: requiredString(record.digest, `scheduleCausalRows[${index}].digest`),
     }
   }).sort(compareScheduleRows)
-  const duplicate = rows.find((row, index) => row.key === rows[index - 1]?.key)
-  if (duplicate) throw new Error(`Duplicate canonical schedule row ${duplicate.key}`)
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (seen.has(row.key)) throw new Error(`Duplicate canonical schedule row ${row.key}`)
+    seen.add(row.key)
+  }
   return rows
 }
 

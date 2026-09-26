@@ -13,6 +13,7 @@ import { buildStaticSnapshot } from '../scripts/build-static-snapshot.ts'
 import { createStaticRankingData } from '../src/lib/snapshot.ts'
 import { buildPlayerModel } from '../src/lib/model.ts'
 import { runRefreshOnce } from '../scripts/refresh-once.mjs'
+import { parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier.ts'
 
 test('partial player directory preserves valid unaffected season players and diagnostics', () => {
   const merged = mergePartialPlayerDirectoryArtifact({
@@ -414,6 +415,56 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     assert.equal(mismatch.diagnostic?.kind, 'shadow-parity')
     assert.equal(mismatch.diagnostic?.parity?.equal, false)
     assert.equal(outcomeForBuild(mismatch), 'parity-failure')
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('overlapping schedule snapshots persist restorable state and recover from an old duplicate ledger', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-overlapping-schedule-'))
+  try {
+    const source = fixtureSource(baseMatches())
+    const latest = {
+      matchId: 'overlapping-match', leagueName: 'MSI', date: '2026-01-02',
+      state: 'completed', retrievedAt: '2026-01-05T00:00:00.000Z',
+      coverageStart: '2025-12-20', coverageEnd: '2026-01-04', coverageEndComplete: true,
+    }
+    source.tournamentScheduleReferences = [
+      { ...latest, state: 'unstarted', retrievedAt: '2026-01-03T00:00:00.000Z' },
+      { ...latest, matchId: 'other-match', date: '2026-01-03' },
+      latest,
+      { ...latest },
+    ]
+    const baseline = await run(root, 'overlap-base', source, { mode: 'gated', cause: 'daily-audit', enabled: false })
+    const restored = restoreFrom(baseline)
+    const ledger = parseCanonicalMatchLedger(restored.canonicalLedger)
+    assert.equal(ledger.scheduleCausalRows.length, 2)
+
+    const reordered = structuredClone(source)
+    reordered.tournamentScheduleReferences.reverse()
+    const unchanged = await run(root, 'overlap-reordered', reordered, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    assert.equal(unchanged.metrics.classification, 'no-change', unchanged.metrics.fallbackReason)
+    assert.equal(unchanged.action, 'no-change')
+    assert.equal(unchanged.metrics.fallbackReason, undefined)
+
+    // Previously published duplicate ledgers must fail closed once, then heal.
+    const corrupt = structuredClone(restored)
+    corrupt.canonicalLedger.scheduleCausalRows = [...ledger.scheduleCausalRows, ...ledger.scheduleCausalRows]
+    const recovered = await run(root, 'overlap-recovered', source, { mode: 'gated', cause: 'pending-match', enabled: true, restored: corrupt })
+    assert.equal(recovered.action, 'publish-full')
+    assert.match(recovered.metrics.fallbackReason ?? '', /Duplicate canonical schedule row/)
+    assert.deepEqual(semanticMap(recovered), semanticMap(baseline))
+    const recoveredState = restoreFrom(recovered)
+    assert.equal(parseCanonicalMatchLedger(recoveredState.canonicalLedger).scheduleCausalRows.length, 2)
+    const next = await run(root, 'overlap-after-recovery', source, { mode: 'gated', cause: 'pending-match', enabled: true, restored: recoveredState })
+    assert.equal(next.action, 'no-change', next.metrics.fallbackReason)
+
+    const corrected = structuredClone(source)
+    corrected.tournamentScheduleReferences.push({ ...latest, state: 'unstarted', retrievedAt: '2026-01-06T00:00:00.000Z' })
+    const changed = await run(root, 'overlap-corrected', corrected, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    assert.equal(changed.metrics.classification, 'historical-correction')
+    const full = await run(root, 'overlap-corrected-full', corrected, { mode: 'gated', cause: 'daily-audit', enabled: false })
+    assert.deepEqual(semanticMap(changed), semanticMap(full))
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }

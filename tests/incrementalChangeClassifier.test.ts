@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { MatchRecord, MatchRosterSnapshot } from '../src/types.ts'
-import { buildCanonicalMatchLedger, classifyRankingChange } from '../src/lib/incremental/changeClassifier.ts'
+import { buildCanonicalMatchLedger, classifyRankingChange, parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier.ts'
 import type { CanonicalMatchLedgerContext } from '../src/lib/incremental/types.ts'
 
 const context: CanonicalMatchLedgerContext = {
@@ -26,6 +26,18 @@ test('canonical ledger uses provider priority, deterministic ordering, and rejec
   ])
   assert.equal(ledger.rows.every((row) => row.scoringDigest === row.artifactDigest), true)
   assert.throws(() => buildCanonicalMatchLedger([matches[0]!, { ...matches[0]!, id: 'duplicate' }], context), /Duplicate/)
+})
+
+test('canonical schedule keys must be unique across dates before persistence and after restore', () => {
+  const first = { key: 'match:repeated', utcDate: '2026-01-01', digest: 'first' }
+  const between = { key: 'match:other', utcDate: '2026-01-02', digest: 'other' }
+  const moved = { ...first, utcDate: '2026-01-03', digest: 'moved' }
+  for (const duplicate of [first, moved]) {
+    const scheduleCausalRows = [first, between, duplicate]
+    assert.throws(() => buildCanonicalMatchLedger([], { ...context, scheduleCausalRows }), /Duplicate canonical schedule row/)
+    const valid = buildCanonicalMatchLedger([], { ...context, scheduleCausalRows: [first, between] })
+    assert.throws(() => parseCanonicalMatchLedger({ ...valid, scheduleCausalRows }), /Duplicate canonical schedule row/)
+  }
 })
 
 test('canonical ledger digests roster inputs without retaining or aliasing raw roster payloads', () => {

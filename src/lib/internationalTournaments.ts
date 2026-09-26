@@ -381,9 +381,9 @@ function coverageLeadDays(values: Array<string | undefined>, scheduledStartDate:
   return coverageStart ? daysBetween(coverageStart, scheduledStartDate) : -1
 }
 
-function canonicalScheduleReferences(references: readonly TournamentScheduleReference[]) {
-  const latestByMatchId = new Map<string, TournamentScheduleReference>()
-  const withoutMatchId: TournamentScheduleReference[] = []
+export function canonicalScheduleReferences<T extends TournamentScheduleReference>(references: readonly T[]) {
+  const latestByMatchId = new Map<string, T>()
+  const withoutMatchId: T[] = []
   for (const reference of references) {
     if (!reference.matchId) {
       withoutMatchId.push(reference)
