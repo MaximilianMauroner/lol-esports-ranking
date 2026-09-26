@@ -7,13 +7,13 @@ import { buildCanonicalMatchLedger, canonicalMatchLedgerKey, classifyRankingChan
 import { buildExternalCausalBundle, reconcileExternalCausalBundle, REQUIRED_EXTERNAL_CAUSAL_SURFACES, type ExternalCausalBundle, type ExternalCausalSurfaceInput } from '../src/lib/incremental/externalCausalState'
 import { replayRankingState } from '../src/lib/incremental/replayOrchestrator'
 import { compareSemanticArtifactMaps, type SemanticArtifactMap } from '../src/lib/incremental/semanticParity'
-import { stableDigest, stableJson, type CanonicalMatchLedger, type RankingChangeClassification } from '../src/lib/incremental/types'
+import { compareCodeUnits, stableDigest, stableJson, type CanonicalMatchLedger, type RankingChangeClassification } from '../src/lib/incremental/types'
 import { createRatingReplayContext, replayRatingDates, transparentGprModelMetadata } from '../src/lib/model'
 import { RATING_CHECKPOINT_SCHEMA_VERSION, encodeRatingCheckpoint, selectSafeCheckpoint } from '../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract, reconcileRatingCheckpointEvents } from '../src/lib/ratingCheckpointInventory'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, artifactMetaFor, snapshotKey } from '../src/lib/publicArtifacts/schema'
 import { PUBLIC_ARTIFACT_PATHS, publicMatchHistoryPagePath, publicMatchHistoryShardPath, publicScopeArtifactPath, publicTeamHistoryShardPath, publicTournamentMovementShardPath } from '../src/lib/publicArtifacts/writePlan'
-import { deriveTournamentInstances, tournamentInstanceForEvent, type TournamentInstanceId } from '../src/lib/internationalTournaments'
+import { canonicalScheduleReferences, deriveTournamentInstances, tournamentInstanceForEvent, type TournamentInstanceId } from '../src/lib/internationalTournaments'
 import type { MatchRecord } from '../src/types'
 import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { buildStaticSnapshot, writeReconciliationOutput } from './build-static-snapshot.ts'
@@ -1397,7 +1397,9 @@ function stripDataPrefix(value: string) {
 }
 
 function scheduleCausalRowsFor(sourceData: RankingSourceImport) {
-  return sourceData.tournamentScheduleReferences.map((reference, index) => {
+  // Overlapping cached windows contain repeated observations of a match. Bind
+  // the same latest observation used by tournament lifecycle calculations.
+  return canonicalScheduleReferences(sourceData.tournamentScheduleReferences).map((reference, index) => {
     const utcDate = scheduleReferenceDate(reference)
     const key = reference.matchId
       ? `match:${reference.matchId}`
@@ -1411,7 +1413,7 @@ function scheduleCausalRowsFor(sourceData: RankingSourceImport) {
         coverageStart: reference.coverageStart, coverageEnd: reference.coverageEnd, coverageEndComplete: reference.coverageEndComplete,
       }),
     }
-  })
+  }).sort((left, right) => compareCodeUnits(left.utcDate ?? '', right.utcDate ?? '') || compareCodeUnits(left.key, right.key))
 }
 
 function scheduleReferenceDate(reference: RankingSourceImport['tournamentScheduleReferences'][number]) {
