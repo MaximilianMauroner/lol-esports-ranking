@@ -155,6 +155,7 @@ export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingP
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)
 export const transparentGprModelVersion = 'transparent-power-index-v0.2.0'
 export const transparentGprModelParameters = {
+  matchHistoryDeltaPolicy: 'public-components-before-and-after-v2',
   initialTeamRating,
   initialLeagueRating,
   publishedRatingScale,
