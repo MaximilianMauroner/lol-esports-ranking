@@ -20,3 +20,5 @@ Code verification and merge/release readiness are separate. No source/calculatio
 Implemented F01/F02/F09/F10/F11. Cards through 1100px; fixed 190px desktop score column; full team name wraps with separate visible record. Labeled sort control exposes all six existing sort orders. Skip prevents hash navigation and focuses current main in loaded/loading/error shells. Empty dock is collapsed, + affordances remain explained, and clearing/removing the final pick returns focus to main. Intro is an optional native disclosure (no existing shadcn disclosure component).
 
 Verification: typecheck, lint, all 694 tests passed; bundle check pending final log inspection. Live pre-fix reproduction recorded above. T3 preview subsequently failed open/navigation/evaluation and timed out, so post-fix viewport/keyboard acceptance is pending browser recovery; do not claim UI PASS or merge readiness from source checks alone.
+
+PR40: https://github.com/MaximilianMauroner/lol-esports-ranking/pull/40. Prometheus found that TableCell nowrap still clipped card records at 320px; explicitly wrap the record cell and keep the numeric W/L on its own line. Browser acceptance remains pending.

@@ -172,6 +172,12 @@ table.ranking-table.board-grid thead th {
     grid-column: 1 / 3;
     grid-row: 2;
     text-align: left;
+    white-space: normal;
+    overflow: visible;
+  }
+  table.ranking-table.board-grid td.board-col-record b {
+    display: block;
+    white-space: nowrap;
   }
   table.ranking-table.board-grid td.board-col-record::before {
     content: "Match W/L ";
