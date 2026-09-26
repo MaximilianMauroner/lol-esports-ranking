@@ -526,8 +526,19 @@ function processSeriesMember({
   const liveMomentumBeforeB = state.momentums.get(match.teamB) ?? 0
   const liveUncertaintyBeforeA = state.uncertainties.get(match.teamA) ?? maximumUncertainty
   const liveUncertaintyBeforeB = state.uncertainties.get(match.teamB) ?? maximumUncertainty
-  const previousPublishedPowerRatingA = powerRating(liveRatingBeforeA, liveLeagueScoreBeforeA) + publishedRosterPriorOffsetA + liveMomentumBeforeA
-  const previousPublishedPowerRatingB = powerRating(liveRatingBeforeB, liveLeagueScoreBeforeB) + publishedRosterPriorOffsetB + liveMomentumBeforeB
+  // Use the same public component projection on both sides of the update.
+  // The latent team offset may exceed the public soft cap; subtracting it
+  // directly manufactured negative impact even for a winning team.
+  const previousPublishedPowerRatingA = ratingFromComponents(ratingComponents({
+    teamRating: liveRatingBeforeA, leagueScore: liveLeagueScoreBeforeA,
+    rosterPriorOffset: publishedRosterPriorOffsetA, momentum: liveMomentumBeforeA,
+    contextAdjustment: 0, uncertainty: liveUncertaintyBeforeA,
+  }))
+  const previousPublishedPowerRatingB = ratingFromComponents(ratingComponents({
+    teamRating: liveRatingBeforeB, leagueScore: liveLeagueScoreBeforeB,
+    rosterPriorOffset: publishedRosterPriorOffsetB, momentum: liveMomentumBeforeB,
+    contextAdjustment: 0, uncertainty: liveUncertaintyBeforeB,
+  }))
   const currentPowerRatingA = powerRatingA + rosterPriorOffsetA + momentumA
   const currentPowerRatingB = powerRatingB + rosterPriorOffsetB + momentumB
   const effectiveRatingA = currentPowerRatingA + sideAdjustmentA

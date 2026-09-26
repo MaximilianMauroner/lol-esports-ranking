@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createRatingReplayContext, replayRatingDates } from '../src/lib/model.ts'
+import { createRatingRunState } from '../src/lib/ratingRunState.ts'
 import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/lib/snapshot.ts'
 import { parsePublicMatchHistoryCatalog, parsePublicMatchHistoryIndex, parsePublicMatchHistoryPage, snapshotKey } from '../src/lib/publicArtifacts/schema.ts'
 import type { MatchRecord, TeamProfile } from '../src/types.ts'
@@ -134,3 +136,20 @@ function game(gameNumber: number, winner: 'Gen.G' | 'T1'): MatchRecord {
     teamBGold: winner === (swapped ? 'Gen.G' : 'T1') ? 65_000 : 58_000,
   }
 }
+
+// A strong team's public stable offset is compressed. Compare public power
+// against public power, rather than subtracting the uncompressed latent score.
+test('a strong team win does not acquire a negative impact from the public soft cap', () => {
+  const match = { ...game(1, 'Gen.G'), bestOf: 1 as const, bestOfBasis: 'provider' as const }
+  const context = createRatingReplayContext([match], teams)
+  const state = createRatingRunState([match], teams, context.eventWeightContext)
+  state.ratings.set('Gen.G', 1800)
+  state.ratings.set('T1', 1600)
+  replayRatingDates({ context, state, replayMatches: [match] })
+  const winner = state.histories.get('Gen.G')?.at(-1)
+  const loser = state.histories.get('T1')?.at(-1)
+  assert.ok(winner && loser)
+  assert.ok(winner.delta > 0, `winner impact ${winner.delta} must not contain a soft-cap subtraction`)
+  assert.ok(loser.delta < 0)
+  assert.equal(winner.rating - winner.delta, state.previousDisplayRatings.get('Gen.G'))
+})

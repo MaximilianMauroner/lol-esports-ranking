@@ -22,3 +22,18 @@ Implemented F01/F02/F09/F10/F11. Cards through 1100px; fixed 190px desktop score
 Verification: typecheck, lint, all 694 tests passed; bundle check pending final log inspection. Live pre-fix reproduction recorded above. T3 preview subsequently failed open/navigation/evaluation and timed out, so post-fix viewport/keyboard acceptance is pending browser recovery; do not claim UI PASS or merge readiness from source checks alone.
 
 PR40: https://github.com/MaximilianMauroner/lol-esports-ranking/pull/40. Prometheus found that TableCell nowrap still clipped card records at 320px; explicitly wrap the record cell and keep the numeric W/L on its own line. Browser acceptance remains pending.
+
+## Slice 2 — match provenance and context
+
+F03: SHA256-verified immutable live generation `run_20260926060805_transparent-power-index-v0-2-0_fnv1a-169aeb58`, model `transparent-power-index-v0.2.0` contains:
+
+- `official-match\u0000115570934355614551`, final `LOLTMNT01_418707`, Jul6 BLG 3–0 LYON, deltas -32/-16, expectedA .873.
+- `official-match\u0000115570934355614575`, final `LOLTMNT01_422152`, Jul9 BLG 3–1 HLE, deltas -23/-42, expectedA .578.
+
+Producer trace: matchImpactLookup sums history deltas. ratingSeriesEngine subtracted uncompressed `powerRating` before from soft-capped `ratingFromComponents` after. Controlled strong-team replay reproduced winner delta -159; symmetric component projection fixes it. New `matchHistoryDeltaPolicy` participates in model config hash to invalidate incompatible checkpoints. Existing publication is not rewritten. Original integrity checks remain and old bad rows provide plain-language per-series fallback/report context (IDs, source, publication, model hash). Corrected production impacts require authorized full replay/publication after code release; no deployment performed here.
+
+Q01: Gen.G's three 2026 `msi-bracket` points are FST 2026 on March17/19/21, weight2.786. This is a shared weighting tier, not MSI attendance. Inspector now names actual events/counts and identifies the shared tier in help. No match-truth change.
+
+F12: visible labels, league-compatible event options, preserved raw identifiers with readable separators, clear filters. Q02: both desktop/mobile cumulative scores label A/B codes beside the score; series orientation is canonical team order, independent of winner-first presentation.
+
+Regression: strong-team replay failed before and passed after. Scoped filter and legacy-invalid-record/report-context cases added. Full verification pending shared heavy-work lock.

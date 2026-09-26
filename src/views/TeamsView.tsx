@@ -1615,10 +1615,11 @@ function summarizeTeamMatchWeights(series?: TeamHistorySeries): MatchWeightSumma
   if (entries.length === 0) return null
   const [tier, summary] = entries.sort(([, left], [, right]) => right.maximumWeight - left.maximumWeight)[0]
   const config = eventTierConfig[tier]
+  const events = [...new Set((series?.points ?? []).filter((point) => point[3]?.tier === tier).map((point) => point[3]?.event).filter(Boolean))]
   return {
     label: `Up to ${formatEventWeight(summary.maximumWeight)}`,
-    detail: `${config.label} (${formatNumber(summary.count)} ${summary.count === 1 ? 'match' : 'matches'})`,
-    title: config.description,
+    detail: `${events.join(', ')} · ${formatNumber(summary.count)} series`,
+    title: `${config.label} weighting tier (shared across events). ${config.description}`,
   }
 }
 
