@@ -121,14 +121,18 @@ export function CompareProfileChart<E>({
         </div>
         <span className={compareChartMetaClassName}>{entities.length} selected</span>
       </div>
+      <p className="px-[18px] pt-3 text-xs text-[var(--muted)]">Bars compare the selected range of each metric, not a zero baseline. Longer means better; the shortest bar keeps a 6% visibility mark. Equal values have equal full bars.</p>
       <div className="grid min-w-0 gap-[15px] px-[18px] pt-[15px] pb-[18px] max-sm:px-3.5 max-sm:py-3">
         {metrics.map((metric) => {
           const values = entities.map(metric.value)
           const best = bestProfileIds(values, columns, metric.better)
+          const finiteValues = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+          const range = finiteValues.length ? `${metric.format(Math.min(...finiteValues))} – ${metric.format(Math.max(...finiteValues))}` : 'Unavailable'
           return (
             <div className="grid grid-cols-[minmax(120px,150px)_minmax(0,1fr)] items-start gap-3.5 max-[900px]:grid-cols-1 max-[900px]:gap-2" key={metric.key}>
               <div className="min-w-0 pt-[3px]">
                 <span className="block text-[var(--t-2)] font-semibold tracking-[0.08em] text-[var(--faint)] uppercase">{metric.label}</span>
+                <span className="mt-1 block text-xs text-[var(--muted)]">Selected range: {range}. {metric.better === 'low' ? 'Lower' : 'Higher'} is better.</span>
               </div>
               <div className="grid min-w-0 gap-[7px]">
                 {entities.map((entity, index) => {

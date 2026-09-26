@@ -1398,7 +1398,6 @@ function rankAxisForSeries(series: ChartSeries[]) {
   }
 }
 
-
 function uniqueSorted(values: number[]) {
   return [...new Set(values.filter((value) => Number.isFinite(value) && value >= 1).map(Math.round))].sort((a, b) => a - b)
 }
@@ -1700,10 +1699,10 @@ function TeamDetailDrawer({
               <span className="text-[var(--t-8)] font-semibold leading-[0.95] tracking-normal text-[var(--text-strong)] tabular-nums max-sm:text-[var(--t-8)]">{teamBoardRankLabel(team, rank)}</span>
               <div>
                 <strong>{formatRating(score)}</strong>
-                <small>Power score{typeof uncertainty === 'number' ? ` ${formatUncertaintyBand(uncertainty)}` : ''}</small>
+                <small>{tournament ? 'Event endpoint Power' : 'Published Power'}{typeof uncertainty === 'number' ? ` ${formatUncertaintyBand(uncertainty)}` : ''}</small>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--line)] [&_b]:mt-1 [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[var(--t-4)] [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_b.down]:text-[var(--down)] [&_b.flat]:text-[var(--faint)] [&_b.up]:text-[var(--up)] [&_em]:mt-0.5 [&_em]:block [&_em]:overflow-hidden [&_em]:text-ellipsis [&_em]:whitespace-nowrap [&_em]:text-[var(--t-1)] [&_em]:not-italic [&_em]:text-[var(--faint)] [&_small]:block [&_small]:whitespace-nowrap [&_small]:text-[var(--t-1)] [&_small]:tracking-[0.08em] [&_small]:text-[var(--faint)] [&_small]:uppercase [&>span]:min-w-0 [&>span]:bg-[var(--detail-surface,var(--surface))] [&>span]:px-3 [&>span]:py-2.5 max-sm:grid-cols-1">
+            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--line)] [&_b]:mt-1 [&_b]:block [&_b]:text-[var(--t-4)] [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_b.down]:text-[var(--down)] [&_b.flat]:text-[var(--faint)] [&_b.up]:text-[var(--up)] [&_em]:mt-0.5 [&_em]:block [&_em]:text-[var(--t-1)] [&_em]:not-italic [&_em]:text-[var(--faint)] [&_small]:block [&_small]:text-[var(--t-1)] [&_small]:tracking-[0.08em] [&_small]:text-[var(--faint)] [&_small]:uppercase [&>span]:min-w-0 [&>span]:bg-[var(--detail-surface,var(--surface))] [&>span]:px-3 [&>span]:py-2.5 max-sm:grid-cols-1">
               {!tournament && series?.currentStanding ? (
                 <span title="Current published state is separate from match history and may include league-anchor, roster, and form components.">
                   <small>Published state</small>
@@ -1732,16 +1731,6 @@ function TeamDetailDrawer({
                     <b className={rankMovementTone(tournamentMovement.rankMovement)}>{formatRankMovementLabel(tournamentMovement.rankMovement)}</b>
                     <em>Score {formatRatingMovement(tournamentMovement.ratingDelta)}</em>
                   </span>
-                  <span>
-                    <small>Match weighting</small>
-                    <b title={weightSummary?.title}>{weightSummary?.label ?? 'Tier pending'}</b>
-                    <em>{weightSummary?.detail ?? 'history rows show weights'}</em>
-                  </span>
-                  <span>
-                    <small>Endpoint eligibility</small>
-                    <b>{tournamentMovement.eligible ? 'Eligible' : 'Excluded'}</b>
-                    <em>{tournamentMovement.eligibilityReasons.join(', ') || 'ranking checks passed'}</em>
-                  </span>
                 </>
               ) : (
                 <>
@@ -1750,11 +1739,7 @@ function TeamDetailDrawer({
                     <b>{formatRecord(team.wins, team.losses)} ({formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})</b>
                     <em>{recordBasisLabel(team.recordBasis)}</em>
                   </span>
-                  <span title={powerResumeGap?.title}>
-                    <small>Power vs resume</small>
-                    <b>{powerResumeGap?.label ?? 'No resume check'}</b>
-                    <em>{powerResumeGap?.detail ?? 'deserved standing unavailable'}</em>
-                  </span>
+
                   <span>
                     <small>Likely rank range</small>
                     <b title={rankConfidence?.title}>{rankConfidence?.label ?? 'Unavailable'}</b>
@@ -1765,17 +1750,32 @@ function TeamDetailDrawer({
                     <b className={movementTone(team.delta)}>{formatRatingMovement(team.delta)}</b>
                     <TeamRatingSparkline series={series} summary={trendSummary} teamName={team.team} />
                   </span>
-                  <span>
+
+                </>
+              )}
+            </div>
+          </section>
+
+          <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--detail-surface-2)] p-3">
+            <summary className="cursor-pointer text-sm font-semibold">Score evidence and definitions</summary>
+            <p className="mt-3 text-sm text-[var(--muted)]">Resume is results-based standing. A flagship league is a region’s main league. Connectivity describes evidence from cross-region matches. Uncertainty describes how precisely the model estimates a team’s Power; it is not a guaranteed outcome range.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-[var(--muted)] [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-[var(--muted)]">
+              {!tournament ? (<span title={powerResumeGap?.title}>
+                    <small>Power vs resume</small>
+                    <b>{powerResumeGap?.label ?? 'No resume check'}</b>
+                    <em>{powerResumeGap?.detail ?? 'deserved standing unavailable'}</em>
+                  </span>) : null}
+              <span>
                     <small>Match weighting</small>
                     <b title={weightSummary?.title}>{weightSummary?.label ?? 'Tier pending'}</b>
                     <em>{weightSummary?.detail ?? 'history rows show weights'}</em>
                   </span>
-                  <span title="Normalized opponent-strength signal from this team's scored schedule.">
+              {!tournament ? (<span title="Normalized opponent-strength signal from this team's scored schedule.">
                     <small>Schedule quality</small>
                     <b>{opponentFactor}%</b>
                     <em>opponent signal</em>
-                  </span>
-                  <span>
+                  </span>) : null}
+              {!tournament ? (<span>
                     <small>Score evidence</small>
                     <b>{team.deservedStanding?.eligibility ?? (team.eligibility?.eligible === false ? 'Limited' : 'Eligible')}</b>
                     <em>
@@ -1783,11 +1783,14 @@ function TeamDetailDrawer({
                         ? `Roster coverage ${formatRatio(team.deservedStanding.rosterValidity)}`
                         : 'match-based rating'}
                     </em>
-                  </span>
-                </>
-              )}
+                  </span>) : null}
+              {tournamentMovement ? (<span>
+                    <small>Endpoint eligibility</small>
+                    <b>{tournamentMovement.eligible ? 'Eligible' : 'Excluded'}</b>
+                    <em>{tournamentMovement.eligibilityReasons.join(', ') || 'ranking checks passed'}</em>
+                  </span>) : null}
             </div>
-          </section>
+          </details>
 
           <div className="grid gap-4">
             <div className="overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-5 max-[900px]:p-[18px]">
@@ -1810,8 +1813,8 @@ function TeamDetailDrawer({
 
             {tournament ? (
               <p className={tournamentDataNoteClassName}>Component and uncertainty breakdowns are hidden here because the tournament shard publishes exact endpoint rank, score, eligibility, and match evidence only.</p>
-            ) : <ComponentBreakdown team={team} />}
-            <PlayerRankingCard team={team} players={players} currentLineup={currentLineup} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} />
+            ) : <details className="rounded-[var(--r-2)] border border-[var(--line)] p-3"><summary className="cursor-pointer text-sm font-semibold">Power components</summary><ComponentBreakdown team={team} /></details>}
+            <details className="rounded-[var(--r-2)] border border-[var(--line)] p-3"><summary className="cursor-pointer text-sm font-semibold">Player evidence and coverage</summary><PlayerRankingCard team={team} players={players} currentLineup={currentLineup} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} /></details>
           </div>
 
           <div className="flex flex-col overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] [&_h3]:text-[var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&>.trend-chart-skeleton]:mx-5 [&>.trend-chart-skeleton]:mt-[18px] [&>.trend-chart-skeleton]:mb-5">
