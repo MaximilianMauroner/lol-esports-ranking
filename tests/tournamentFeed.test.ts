@@ -3,7 +3,7 @@ import test from 'node:test'
 import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { acquireCollectorLock, collectTournamentFeed } from '../scripts/tournament-feed-collector'
+import { acquireCollectorLock, collectTournamentFeed, publishTournamentFeed } from '../scripts/tournament-feed-collector'
 import { competitionForLeague, formatTournamentTime, groupTournamentSeries, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/lib/tournamentFeed'
 
 const at = '2026-09-26T12:00:00.000Z'
@@ -156,4 +156,52 @@ test('collector retries 429 with the shared provider helper and rejects malforme
     collectTournamentFeed({ fetcher: (async () => new Response(JSON.stringify({ data: { schedule: { events: null } } }))) as typeof fetch }),
     /Malformed getSchedule/,
   )
+})
+
+test('invalid times in allowed cancelled or postponed source rows prevent a complete replacement', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-invalid-time-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('moved', 'lcs', at), detail: detail('moved') }])
+  await writeFile(output, JSON.stringify(prior))
+  try {
+    for (const [badTime, status] of [['', 'postponed'], ['not-a-date', 'cancelled'], ['2026-02-30T12:00:00Z', 'postponed']] as const) {
+      const sourceRow = event('moved', 'lcs', badTime, status)
+      const fetcher = (async () => new Response(JSON.stringify({ data: { schedule: { events: [sourceRow], pages: {} } } }))) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, `time=${badTime}`)
+      assert.match(collected.feed.coverage.warnings.join(' '), /start time/i)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false)
+      assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), prior)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('a rolling coverage window is published even when event rows are unchanged', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-coverage-test-'))
+  const output = join(directory, 'feed.json')
+  try {
+    const prior = feed([{ event: event('series', 'lec', at), detail: detail('series') }])
+    await writeFile(output, JSON.stringify(prior))
+    const next = { ...prior, fetchedAt: '2026-09-27T12:00:00.000Z', coverage: { ...prior.coverage, start: '2026-09-02T00:00:00Z', end: '2026-11-01T00:00:00Z' } }
+    assert.equal(await publishTournamentFeed(output, prior, next), true)
+    const published = JSON.parse(await readFile(output, 'utf8')) as typeof prior
+    assert.deepEqual(published.coverage, next.coverage)
+    assert.equal(published.fetchedAt, next.fetchedAt)
+    const checkedAgain = { ...next, fetchedAt: '2026-09-27T12:01:00.000Z' }
+    assert.equal(await publishTournamentFeed(output, next, checkedAgain), false)
+    assert.equal((JSON.parse(await readFile(output, 'utf8')) as typeof prior).fetchedAt, next.fetchedAt)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('coverage bounds roll by UTC day rather than every unchanged poll', async () => {
+  const fetcher = (async () => new Response(JSON.stringify({ data: { schedule: { events: [], pages: {} } } }))) as typeof fetch
+  const first = (await collectTournamentFeed({ fetcher, now: new Date('2026-09-26T12:00:00Z') })).feed
+  const sameDay = (await collectTournamentFeed({ fetcher, now: new Date('2026-09-26T12:01:00Z') })).feed
+  const nextDay = (await collectTournamentFeed({ fetcher, now: new Date('2026-09-27T00:01:00Z') })).feed
+  assert.deepEqual(sameDay.coverage, first.coverage)
+  assert.notDeepEqual(nextDay.coverage, first.coverage)
 })

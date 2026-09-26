@@ -4,7 +4,7 @@ import { hostname } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createProviderFetchTelemetry, fetchWithRetry } from './provider-fetch-retry.mjs'
-import { competitionForLeague, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/lib/tournamentFeed'
+import { competitionForLeague, isTournamentFeed, normalizeTournamentFeed } from '../src/lib/tournamentFeed'
 
 const BASE_URL = 'https://esports-api.lolesports.com/persisted/gw'
 const PUBLIC_SITE_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
@@ -23,8 +23,9 @@ export async function collectTournamentFeed(options: {
 } = {}) {
   const now = options.now ?? new Date()
   const fetchedAt = now.toISOString()
-  const start = new Date(now.getTime() - (options.daysBack ?? 14) * 86_400_000).toISOString()
-  const end = new Date(now.getTime() + (options.daysAhead ?? 45) * 86_400_000).toISOString()
+  const utcDayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const start = new Date(utcDayStart - (options.daysBack ?? 14) * 86_400_000).toISOString()
+  const end = new Date(utcDayStart + ((options.daysAhead ?? 45) + 1) * 86_400_000 - 1).toISOString()
   const maxPages = options.maxPagesPerDirection ?? 8
   const maxDetails = options.maxDetails ?? 120
   const telemetry = createProviderFetchTelemetry()
@@ -65,9 +66,18 @@ export async function collectTournamentFeed(options: {
       warnings.push(`${direction} page limit reached before the requested window boundary.`)
     }
   }
-  const withinWindow = pages.flatMap((page) => rows(page.events)).filter((row) => {
-    const time = str(row.startTime)
-    return time >= start && time <= end && competitionForLeague(row.league)
+  const sourceRows = pages.flatMap((page) => rows(page.events))
+  const allowedRows = sourceRows.filter((row) => competitionForLeague(row.league))
+  const invalidTimes = allowedRows.filter((row) => eventTime(row.startTime) === null)
+  if (invalidTimes.length) {
+    complete = false
+    warnings.push(`${invalidTimes.length} allowed schedule rows have missing or invalid start times; their window coverage is unknown.`)
+  }
+  const windowStartMs = Date.parse(start)
+  const windowEndMs = Date.parse(end)
+  const withinWindow = allowedRows.filter((row) => {
+    const time = eventTime(row.startTime)
+    return time !== null && time >= windowStartMs && time <= windowEndMs
   })
   const matchIds = [...new Set(withinWindow.map((row) => str(record(row.match)?.id) || str(row.id)).filter(Boolean))]
   const details = new Map<string, Row>()
@@ -95,14 +105,25 @@ export async function collectTournamentFeed(options: {
 function record(value: unknown): Row | null { return value && typeof value === 'object' && !Array.isArray(value) ? value as Row : null }
 function rows(value: unknown): Row[] { return Array.isArray(value) ? value.filter((item): item is Row => Boolean(record(item))) : [] }
 function str(value: unknown): string { return typeof value === 'string' ? value : '' }
+function eventTime(value: unknown): number | null {
+  const text = str(value)
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.exec(text)
+  if (!parts) return null
+  const [, year, month, day, hour, minute, second] = parts
+  const daysInMonth = new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate()
+  if (Number(month) < 1 || Number(month) > 12 || Number(day) < 1 || Number(day) > daysInMonth
+    || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return null
+  const time = Date.parse(text)
+  return Number.isFinite(time) ? time : null
+}
 function schedule(body: Row): Row {
   const value = record(record(body.data)?.schedule)
   if (!value || !Array.isArray(value.events) || !record(value.pages)) throw new Error('Malformed getSchedule response')
   return value
 }
 function boundaryReached(page: Row, direction: 'older' | 'newer', start: string, end: string) {
-  const times = rows(page.events).map((row) => str(row.startTime)).filter(Boolean).sort()
-  return direction === 'older' ? Boolean(times.length && times[0]! <= start) : Boolean(times.length && times.at(-1)! >= end)
+  const times = rows(page.events).map((row) => eventTime(row.startTime)).filter((time): time is number => time !== null).sort((a, b) => a - b)
+  return direction === 'older' ? Boolean(times.length && times[0]! <= Date.parse(start)) : Boolean(times.length && times.at(-1)! >= Date.parse(end))
 }
 
 async function main() {
@@ -118,11 +139,7 @@ async function main() {
     const prior = isTournamentFeed(parsedPrior) ? parsedPrior : null
     try {
       const result = await collectTournamentFeed()
-      const candidate = reconcileTournamentFeed(prior, result.feed)
-      if (candidate.coverage.complete && JSON.stringify(candidate.events) !== JSON.stringify(prior?.events)) {
-        await writeFile(`${output}.tmp`, `${JSON.stringify(candidate, null, 2)}\n`)
-        await rename(`${output}.tmp`, output)
-      }
+      await publishTournamentFeed(output, prior, result.feed)
       await writeHealth(output, { checkedAt: new Date().toISOString(), complete: result.feed.coverage.complete, requests: result.requests, retries: result.retries, warnings: result.feed.coverage.warnings })
       console.log(`Tournament reference check: ${result.feed.events.length} events, ${result.requests} requests, complete=${result.feed.coverage.complete}`)
     } catch (error) {
@@ -132,6 +149,14 @@ async function main() {
   } finally {
     await releaseLock()
   }
+}
+
+export async function publishTournamentFeed(output: string, prior: ReturnType<typeof normalizeTournamentFeed> | null, candidate: ReturnType<typeof normalizeTournamentFeed>) {
+  if (!candidate.coverage.complete) return false
+  if (prior && JSON.stringify({ ...candidate, fetchedAt: '' }) === JSON.stringify({ ...prior, fetchedAt: '' })) return false
+  await writeFile(`${output}.tmp`, `${JSON.stringify(candidate, null, 2)}\n`)
+  await rename(`${output}.tmp`, output)
+  return true
 }
 
 /** A dead local owner can be reclaimed; a live or remote owner cannot. */
