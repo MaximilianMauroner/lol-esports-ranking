@@ -1,4 +1,4 @@
-import { formatDate } from '../src/lib/display.ts'
+import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { rankingScopePeriod } from '../src/lib/rankingScopeLabel.ts'
@@ -24,16 +24,13 @@ test('probability copy reconciles with comparisons for the same scale and assump
 })
 
 test('calendar scope boundaries do not roll into the previous date west of UTC', () => {
-  const original = process.env.TZ
-  process.env.TZ = 'America/Los_Angeles'
-  try {
-    assert.equal(rankingScopePeriod('2026'), 'Season window: Jan 1, 2026 to Dec 31, 2026')
-    assert.equal(formatDate('2026-07-26'), 'Jul 26, 2026') // match coverage
-    assert.equal(formatDate('2026-07-12'), 'Jul 12, 2026') // event endpoint
-  } finally {
-    if (original === undefined) delete process.env.TZ
-    else process.env.TZ = original
-  }
+  // Set TZ before importing module-level Intl formatters, as a browser would.
+  const output = execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
+    import { rankingScopePeriod } from './src/lib/rankingScopeLabel.ts'
+    import { formatDate } from './src/lib/display.ts'
+    console.log(JSON.stringify([rankingScopePeriod('2026'), formatDate('2026-07-26'), formatDate('2026-07-12')]))
+  `], { cwd: new URL('..', import.meta.url), env: { ...process.env, TZ: 'America/Los_Angeles' }, encoding: 'utf8' })
+  assert.deepEqual(JSON.parse(output), ['Season window: Jan 1, 2026 to Dec 31, 2026', 'Jul 26, 2026', 'Jul 12, 2026'])
 })
 
 test('published model calibration controls examples and game/series estimates', () => {
