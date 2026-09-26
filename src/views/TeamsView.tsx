@@ -48,7 +48,7 @@ import type {
 } from '../hooks/usePublicArtifacts'
 import { useHistoryDetail } from '../hooks/useHistoryDetail'
 import { hashEnum, hashInt, hashParam, useHashSync } from '../lib/urlState'
-import { publishedRatingScale, winProbabilityEloScale } from '../lib/modelConfig'
+import { publicScoreGapExplanation } from '../lib/publicMatchup'
 import { POWER_COMPONENT_LABELS } from '../lib/ratingComponentLabels'
 import {
   teamMatchesTournamentFilter,
@@ -281,9 +281,9 @@ export function TeamsView({
   const tierAssignments: RankingTierAssignment[] = rankingFlair.tiers
   const rankingSignals = useMemo(
     () => activeTournament
-      ? tournamentRankingSignalsProps(rankingFlair, activeTournament)
+      ? tournamentRankingSignalsProps(rankingFlair, { ...activeTournament, teams: activeTournament.teams.filter((entry) => filtered.some((team) => team.teamId === entry.teamId)) })
       : rankingSignalsProps(rankingFlair, movementBaseline),
-    [activeTournament, rankingFlair, movementBaseline],
+    [activeTournament, rankingFlair, movementBaseline, filtered],
   )
   const tierByTeam = useMemo(
     () => new Map(tierAssignments.map((tier) => [tier.team.toLocaleLowerCase('en'), tier.tier])),
@@ -489,7 +489,7 @@ export function TeamsView({
           <Panel>
             <PanelHeader
               title="Ranked board"
-              description={scoreScaleNote()}
+              description={`Published standings · history movement ${movementBaseline}`}
               actions={<span className="whitespace-nowrap text-xs text-[var(--faint)] tabular-nums">{resultSummary}</span>}
             />
             {/* The controls carry no per-control height, radius or background
@@ -568,7 +568,9 @@ export function TeamsView({
                   <option value="wins:ascending">Match wins · fewest first</option>
                 </Select>
               </label>
+              <details className="text-xs text-[var(--muted)]"><summary className="cursor-pointer">How Power maps to game odds</summary><p className="pt-2">{publicScoreGapExplanation(model)}</p></details>
               <p className="text-xs text-[var(--faint)]">Use + on a row to compare up to four teams.</p>
+              {activeTournament ? <p className="text-xs text-[var(--faint)]">Tournament selection includes all participants, including teams outside current ranking eligibility. Movement follows the board filters.</p> : null}
               {eligibilityNote ? <p className="text-xs leading-[1.35] text-[var(--faint)]">{eligibilityNote}</p> : null}
             </PanelBody>
 
@@ -689,6 +691,7 @@ export function TeamsView({
                           </TableCell>
                           <TableCell className="right board-col-score" aria-label={`Power score ${formatRating(teamScoreFor(team))}`}>
                             <span className="flex flex-col items-end gap-1">
+                              <small className="text-[var(--t-1)] text-[var(--faint)]">{activeTournament ? 'Event endpoint' : 'Published'}</small>
                               <TeamScoreCell team={team} min={ratingMin} max={ratingMax} exactTournament={Boolean(activeTournament)} />
                               {activeTournament ? (
                                 <TournamentRankTrendCell
@@ -714,6 +717,7 @@ export function TeamsView({
                 </Table>
             )}
 
+            <p className="px-4 py-2 text-xs text-[var(--muted)]">Published scores and ranks are the selected snapshot. History movement: {movementBaseline}; its endpoints can differ after standing adjustments.</p>
             {sorted.length > 0 ? (
               <PanelFooter>
                 <Pager
@@ -758,7 +762,7 @@ export function TeamsView({
               ? `${tournamentBoundaryLabel(activeTournament.status)} boundary ${formatDate(activeTournament.boundaryDate)}, rated through ${formatDate(activeTournament.ratedThroughDate)}.`
               : metric === 'rank'
               ? 'Daily closing global rank within the current scope. #1 is pinned to the top.'
-              : 'Daily closing Power score for the selected comparison set.'
+              : 'Match-history daily closing Power for the selected teams; excludes published standing adjustments.'
           }
           actions={
             <>
@@ -993,9 +997,10 @@ function TeamRankTrendCell({
   const rankMovement = movement.rankMovement ?? 0
   const ratingDelta = movement.ratingDelta ?? 0
   const tone = rankMovementTone(rankMovement)
-  const title = `${team.team} · #${movement.baselineRank} to #${movement.currentRank} · ${formatRating(movement.baselineRating!)} to ${formatRating(movement.currentRating)} Power (${formatRatingMovement(ratingDelta)}) · ${formatNumber(movement.scoredSeries)} scored series · ${movementBaseline}`
+  const title = `${team.team} · Match-history basis · #${movement.baselineRank} to #${movement.currentRank} · ${formatRating(movement.baselineRating!)} to ${formatRating(movement.currentRating)} Power (${formatRatingMovement(ratingDelta)}) · ${formatNumber(movement.scoredSeries)} scored series · ${movementBaseline}`
   return (
     <span className="rank-trend-cell inline-flex min-w-0 items-center justify-end gap-2 text-[var(--rank-movement-color,var(--faint))]" role="img" title={title} aria-label={title} style={rankMovementStyle(rankMovement)}>
+      <small className="text-[var(--t-1)] text-[var(--faint)]">History</small>
       {/* One line, ordered the way it reads: rank move, then rating delta.
           Movement now sits beneath the score it describes rather than in its
           own column, so it stays compact. */}
@@ -1084,7 +1089,7 @@ function teamScoreTitle(team: RankingSummaryStanding) {
   const dss = team.deservedStanding
   const base = [
     `Power score ${formatRating(team.rating)}`,
-    scoreScaleNote(),
+    'Published Power score; trend movement uses match history.',
     team.scoreFamily ? `score family ${scoreFamilyLabel(team.scoreFamily)}` : undefined,
     team.recordBasis ? `record basis ${recordBasisLabel(team.recordBasis)}` : undefined,
     typeof team.uncertainty === 'number' ? `uncertainty ${formatUncertaintyBand(team.uncertainty)}` : undefined,
@@ -1334,15 +1339,6 @@ function rankSparklineShape(values: number[], width: number, height: number): Ra
 function teamSubtitle(team: RankingSummaryStanding, record?: string) {
   const reasons = team.eligibility?.eligible === false ? eligibilitySummary(team) : undefined
   return [formatCompetitionLeagueLabel(team.league ?? team.region), record, reasons].filter(Boolean).join(' · ')
-}
-
-function scoreScaleNote() {
-  return `Scale: +50 score is about a ${formatRatio(neutralGameWinProbabilityForScoreGap(50))} neutral single-game edge before uncertainty.`
-}
-
-function neutralGameWinProbabilityForScoreGap(scoreGap: number) {
-  const internalGap = scoreGap / publishedRatingScale.spreadMultiplier
-  return 1 / (1 + 10 ** (-internalGap / winProbabilityEloScale))
 }
 
 function eligibilitySummary(team: RankingSummaryStanding) {
@@ -1780,7 +1776,7 @@ function TeamDetailDrawer({
                     <em>{rankConfidence?.detail ?? 'uncertainty missing'}</em>
                   </span>
                   <span>
-                    <small>Latest delta</small>
+                    <small>Published update delta</small>
                     <b className={movementTone(team.delta)}>{formatRatingMovement(team.delta)}</b>
                     <TeamRatingSparkline series={series} summary={trendSummary} teamName={team.team} />
                   </span>

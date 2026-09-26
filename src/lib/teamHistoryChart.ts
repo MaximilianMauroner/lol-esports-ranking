@@ -239,9 +239,9 @@ function withRankVisibleDeltas(points: ChartPoint[]): ChartPoint[] {
     previous = point
     if (typeof visibleDelta !== 'number') return point
     if (point.detail) {
-      return { ...point, detail: detailWithVisibleDelta(point.detail, previousPoint?.detail, visibleDelta) }
+      return { ...point, detail: { ...detailWithVisibleDelta(point.detail, previousPoint?.detail, visibleDelta), visibleDeltaUnit: 'rank' } }
     }
-    return visibleDelta === 0 ? point : { ...point, detail: { passive: true, visibleDelta } }
+    return visibleDelta === 0 ? point : { ...point, detail: { passive: true, visibleDelta, visibleDeltaUnit: 'rank' } }
   })
 }
 

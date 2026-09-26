@@ -140,7 +140,7 @@ export function RegionsView({
                   </span>
                   <span className="grid min-w-0 gap-0.5 text-[var(--t-3)] text-[var(--muted)] tabular-nums [&_b]:font-semibold [&_b]:text-[var(--text)] [&_small]:block [&_small]:leading-[1.25] [&_small]:text-[var(--faint)] [&_span]:block max-[1180px]:hidden">
                     <span>
-                      <b>{formatRecord(region.internationalWins, region.internationalLosses)}</b> intl ·{' '}
+                      <b>{formatRecord(region.internationalWins, region.internationalLosses)}</b> series equivalents ·{' '}
                       {formatRatio(region.internationalWinRate)}
                     </span>
                     <small>
@@ -360,9 +360,9 @@ function RegionDetailDrawer({
 
             <section className="grid grid-cols-3 overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] [&>*:nth-child(3n)]:border-r-0 [&>*:nth-last-child(-n+3)]:border-b-0 max-[820px]:grid-cols-2 max-[820px]:[&>*:nth-child(3n)]:border-r max-[820px]:[&>*:nth-child(2n)]:border-r-0 max-[820px]:[&>*:nth-last-child(-n+3)]:border-b max-[820px]:[&>*:nth-last-child(-n+2)]:border-b-0 max-[560px]:grid-cols-1 max-[560px]:[&>*]:border-r-0 max-[560px]:[&>*]:border-b max-[560px]:[&>*:last-child]:border-b-0" aria-label={`${region.region} metrics`}>
               <DetailStat
-                label="International record"
+                label="International series equivalents"
                 value={formatRecord(region.internationalWins, region.internationalLosses)}
-                description={`Wins and losses by flagship leagues against teams from other regions. Raw rate: ${formatRatio(region.internationalWinRate)}.`}
+                description={`Cross-region series outcomes from the region’s main leagues. A tied Bo2 allocates 0.5 win and 0.5 loss; 1 win plus 1 tie is 1.5–0.5. Event weight affects Power, not this count. Allocated win rate: ${formatRatio(region.internationalWinRate)}.`}
               />
               <DetailStat
                 label="Adjusted international rate"

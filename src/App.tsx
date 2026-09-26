@@ -73,7 +73,7 @@ const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
 const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   rankings: {
     title: 'Team Power Index',
-    intro: 'Power score rates every tier 1 team on one scale from its match results, weighted by opponent strength and event importance. Higher is stronger, and a 100 point gap is roughly a 64% game win chance for the stronger side. Movement compares against the previous rating update in the selected scope.',
+    intro: 'Power score rates every tier 1 team on one scale from its match results, weighted by opponent strength and event importance. Higher is stronger. The board uses published ratings; movement uses the labeled match-history period.',
   },
   regions: {
     title: 'Region power',
@@ -306,6 +306,8 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
           activeCheckpoint={activeCheckpoint}
           pendingCheckpoint={pendingCheckpoint}
           throughDate={loadedData.coverage?.latestMatchDate}
+          scopeThroughDate={snapshot?.rollingWindow?.endDate}
+          publishedAt={loadedData.generatedAt}
           onSelectSeason={(season) => selectScope(scopeForSeasonTab(season))}
           onSelectCheckpoint={(checkpointId) =>
             selectScope(checkpointId && activeSeason ? checkpointScope(activeSeason, checkpointId) : `season:${activeSeason}`)

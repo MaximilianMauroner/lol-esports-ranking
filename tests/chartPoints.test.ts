@@ -12,7 +12,7 @@ test('chart influence formatter describes the match behind a rating point', () =
       event: 'LCK 2026 Rounds 1-2',
       delta: 11,
     }),
-    'W 3-2 vs Gen.G · LCK 2026 Rounds 1-2 · +11',
+    'W 3-2 vs Gen.G · LCK 2026 Rounds 1-2 · +11 Power points',
   )
 })
 
@@ -28,7 +28,7 @@ test('chart influence formatter describes aggregated day-close points', () => {
       dayMatchCount: 3,
       delta: -8,
     }),
-    'Day close · 3 matches · match ledger -8',
+    'Day close · 3 matches · match ledger -8 Power points',
   )
 })
 
@@ -46,4 +46,10 @@ test('chart helpers reconcile visible movement against model attribution', () =>
     }),
     -1,
   )
+})
+
+
+test('rank movement is never reconciled against Power-point attribution', () => {
+  assert.equal(nonMatchDeltaFor({ visibleDelta: 0, visibleDeltaUnit: 'rank', delta: -26 }), undefined)
+  assert.equal(nonMatchDeltaFor({ visibleDelta: 0, visibleDeltaUnit: 'power', delta: -26 }), 26)
 })
