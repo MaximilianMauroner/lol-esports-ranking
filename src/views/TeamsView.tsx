@@ -2025,7 +2025,7 @@ function RecentMatches({
 
   return (
     <section className="mt-3.5 overflow-hidden rounded-[var(--r-1)] border border-[var(--line-strong)] bg-[var(--detail-surface,var(--surface))]" aria-label="Recent form matches">
-      <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(86px,auto)] items-center gap-2.5 border-b border-[var(--line)] px-3.5 py-2 text-[var(--t-1)] font-bold tracking-[0.08em] text-[var(--faint)] uppercase [&>span:last-child]:text-right" aria-hidden="true">
+      <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(86px,auto)] items-center gap-2.5 border-b border-[var(--line)] px-3.5 py-2 text-[var(--t-1)] font-bold tracking-[0.08em] text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
         <span>Result</span>
         <span>Opponent</span>
         <span>Rating after</span>
@@ -2044,10 +2044,10 @@ function RecentMatches({
                 <span className={cn('grid size-[22px] place-items-center rounded-full text-[var(--t-1)] font-extrabold', match.result === 'W' ? 'bg-[var(--win-soft)] text-[var(--win)]' : match.result === 'L' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--surface-3)] text-[var(--muted)]')}>{match.result}</span>
                 <div className="min-w-0">
                   <span className="flex min-w-0 items-baseline gap-2 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
-                    <b className="inline-block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[var(--t-3)] font-bold text-[var(--text-strong)]">vs {match.opponent}</b>
+                    <b className="inline-block min-w-0 whitespace-normal [overflow-wrap:anywhere] text-[var(--t-3)] font-bold text-[var(--text-strong)]">vs {match.opponent}</b>
                     {opponent ? <span className="shrink-0 whitespace-nowrap text-[var(--t-1)] font-semibold text-[var(--muted)] tabular-nums" title="Current opponent rank and power score in this scope">{formatOpponentContext(opponent)}</span> : null}
                   </span>
-                  <small className="mt-0.5 block overflow-hidden text-ellipsis whitespace-nowrap text-[var(--t-2)] text-[var(--faint)]" title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
+                  <small className="mt-0.5 block whitespace-normal [overflow-wrap:anywhere] text-[var(--t-2)] text-[var(--faint)]" title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
                   <span className="mt-1.5 flex flex-wrap items-center gap-[5px] [&>span]:inline-flex [&>span]:min-h-[18px] [&>span]:max-w-full [&>span]:items-center [&>span]:whitespace-nowrap [&>span]:rounded-full [&>span]:border [&>span]:border-[var(--line)] [&>span]:bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_72%,transparent)] [&>span]:px-1.5 [&>span]:py-0.5 [&>span]:text-[var(--t-1)] [&>span]:font-bold [&>span]:leading-none [&>span]:text-[var(--muted)] [&>span.miss]:border-[color-mix(in_oklch,var(--down)_44%,var(--line))] [&>span.miss]:text-[var(--down)] [&>span.upset]:border-[color-mix(in_oklch,var(--up)_44%,var(--line))] [&>span.upset]:text-[var(--up)]" aria-label="Match context">
                     {tierChip ? <span title={tierChip.title}>{tierChip.label}</span> : null}
                     {typeof match.expectedWinProbability === 'number' ? (
@@ -2061,7 +2061,8 @@ function RecentMatches({
                     ) : null}
                   </span>
                 </div>
-                <div className="pt-px text-right tabular-nums [&_small]:mt-0.5 [&_small]:block [&_small]:text-[var(--t-2)] [&_small]:font-bold [&_small]:text-[var(--muted)] [&_small.down]:text-[var(--down)] [&_small.flat]:text-[var(--faint)] [&_small.up]:text-[var(--up)] [&_strong]:block [&_strong]:text-[var(--t-4)] [&_strong]:font-bold [&_strong]:text-[var(--text-strong)] max-sm:col-start-2 max-sm:flex max-sm:justify-self-start max-sm:gap-2 max-sm:text-left">
+                <div className="pt-px text-right tabular-nums [&_small]:mt-0.5 [&_small]:block [&_small]:text-[var(--t-2)] [&_small]:font-bold [&_small]:text-[var(--muted)] [&_small.down]:text-[var(--down)] [&_small.flat]:text-[var(--faint)] [&_small.up]:text-[var(--up)] [&_strong]:block [&_strong]:text-[var(--t-4)] [&_strong]:font-bold [&_strong]:text-[var(--text-strong)] max-sm:col-start-2 max-sm:flex max-sm:flex-wrap max-sm:items-baseline max-sm:justify-self-start max-sm:gap-2 max-sm:text-left">
+                  <span className="hidden text-xs text-[var(--muted)] max-sm:block">Post-match Power</span>
                   <strong>{formatRating(match.rating)}</strong>
                   <small className={movementTone(match.ratingMovement)} title={formatRatingMovementTitle(match)}>
                     {formatRatingMovement(match.ratingMovement)}

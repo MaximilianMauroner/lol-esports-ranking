@@ -261,6 +261,7 @@ function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistory
       <div>
         <small className="block text-[var(--t-1)] tracking-[0.08em] text-[var(--faint)] uppercase">Power trajectory</small>
         <b className={`mt-[3px] block tabular-nums ${deltaTone === 'up' ? 'text-[var(--up)]' : deltaTone === 'down' ? 'text-[var(--down)]' : 'text-[var(--text-strong)]'}`}>{formatSignedDecimal(delta)}</b>
+        <span className="mt-1 block text-xs text-[var(--muted)]">{formatDate(first[0])} to {formatDate(last[0])}</span>
       </div>
       <svg viewBox={`0 0 ${REGION_SPARKLINE_WIDTH} ${REGION_SPARKLINE_HEIGHT}`} role="img" focusable="false">
         <polyline points={shape.points} />
