@@ -203,6 +203,42 @@ test('malformed schedule rows cannot replace a prior feed after collection', asy
   }
 })
 
+test('missing league identity and accepted-row fields retain the prior feed', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-row-shape-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ['empty object', {}],
+    ['null league', { league: null }],
+    ['empty league', { league: {} }],
+    ['invalid league slug', { league: { slug: 42 } }],
+    ['missing source state', { ...event('series', 'lcs', at), state: undefined }],
+    ['missing match identity', { ...event('series', 'lcs', at), match: { teams: [] } }],
+  ]
+  try {
+    for (const [label, sourceRow] of cases) {
+      const fetcher = (async (urlValue: string | URL | Request) => {
+        const path = new URL(String(urlValue)).pathname.split('/').at(-1)
+        return new Response(JSON.stringify(path === 'getSchedule'
+          ? { data: { schedule: { events: [sourceRow], pages: {} } } }
+          : { data: { event: detail('series') } }))
+      }) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, label)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false, label)
+      assert.equal(await readFile(output, 'utf8'), original, label)
+    }
+    const excluded = (async () => new Response(JSON.stringify({ data: { schedule: { events: [event('excluded', 'cblol-brazil', at)], pages: {} } } }))) as typeof fetch
+    const collectedExcluded = await collectTournamentFeed({ fetcher: excluded, now: new Date(at) })
+    assert.equal(collectedExcluded.feed.coverage.complete, true)
+    assert.equal(collectedExcluded.feed.events.length, 0)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('a rolling coverage window is published even when event rows are unchanged', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tournament-coverage-test-'))
   const output = join(directory, 'feed.json')

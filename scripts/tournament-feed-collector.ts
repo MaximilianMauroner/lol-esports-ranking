@@ -72,7 +72,17 @@ export async function collectTournamentFeed(options: {
     warnings.push(`${malformedRows} malformed schedule rows were omitted; their window coverage is unknown.`)
   }
   const sourceRows = pages.flatMap((page) => rows(page.events))
+  const missingLeagues = sourceRows.filter((row) => !hasLeagueIdentity(row.league))
+  if (missingLeagues.length) {
+    complete = false
+    warnings.push(`${missingLeagues.length} schedule rows lack a valid league identity; their competition coverage is unknown.`)
+  }
   const allowedRows = sourceRows.filter((row) => competitionForLeague(row.league))
+  const missingStates = allowedRows.filter((row) => !str(row.state).trim())
+  if (missingStates.length) {
+    complete = false
+    warnings.push(`${missingStates.length} allowed schedule rows lack a source state.`)
+  }
   const invalidTimes = allowedRows.filter((row) => eventTime(row.startTime) === null)
   if (invalidTimes.length) {
     complete = false
@@ -110,6 +120,11 @@ export async function collectTournamentFeed(options: {
 function record(value: unknown): Row | null { return value && typeof value === 'object' && !Array.isArray(value) ? value as Row : null }
 function rows(value: unknown): Row[] { return Array.isArray(value) ? value.filter((item): item is Row => Boolean(record(item))) : [] }
 function str(value: unknown): string { return typeof value === 'string' ? value : '' }
+function hasLeagueIdentity(value: unknown): boolean {
+  const league = record(value)
+  return Boolean(league && [league.slug, league.name].some((part) => str(part).trim())
+    && [league.slug, league.name].every((part) => part == null || typeof part === 'string'))
+}
 function eventTime(value: unknown): number | null {
   const text = str(value)
   const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.exec(text)
