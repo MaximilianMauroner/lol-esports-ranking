@@ -659,7 +659,7 @@ export function TeamsView({
                             openTeamDetail()
                           }}
                         >
-                          <TableCell className="board-col-rank">
+                          <TableCell className="board-col-rank" aria-label={excludedFromRankedBoard ? 'Excluded from ranking' : `Rank ${rank}`} >
                             <span className="board-rankcell flex items-center gap-[9px] whitespace-nowrap">
                               <TeamBoardRank team={team} rank={rank} rawScoreRank={rawScoreRank} />
                               {tier ? <TierBadge tier={tier} /> : null}
@@ -687,7 +687,7 @@ export function TeamsView({
                           <TableCell className="board-col-form">
                             <FormDots form={team.form} />
                           </TableCell>
-                          <TableCell className="right board-col-score">
+                          <TableCell className="right board-col-score" aria-label={`Power score ${formatRating(teamScoreFor(team))}`}>
                             <span className="flex flex-col items-end gap-1">
                               <TeamScoreCell team={team} min={ratingMin} max={ratingMax} exactTournament={Boolean(activeTournament)} />
                               {activeTournament ? (
@@ -700,7 +700,7 @@ export function TeamsView({
                               )}
                             </span>
                           </TableCell>
-                          <TableCell className="right num board-col-record">
+                          <TableCell className="right num board-col-record" aria-label={`Match wins ${formatNumber(team.wins)}, losses ${formatNumber(team.losses)}; win rate ${formatRatio(total > 0 ? team.wins / total : undefined)}`}>
                             <b className="font-semibold text-[var(--text-strong)]">{formatRecord(team.wins, team.losses)}</b>{' '}
                             <span className="text-[var(--t-3)] text-[var(--faint)]">{formatRatio(total > 0 ? team.wins / total : undefined)}</span>
                           </TableCell>
@@ -906,7 +906,7 @@ function TeamBoardRank({
   if (team.eligibility?.eligible === false) {
     return (
       <span className="board-rank-stack inline-flex min-w-0 flex-col items-start gap-[3px]">
-        <span className="board-rank board-rank--excluded min-w-0 text-[var(--t-2)] font-bold text-[var(--muted)] uppercase tabular-nums">Excluded</span>
+        <span className="board-rank board-rank--excluded min-w-0 text-[var(--t-2)] font-bold text-[var(--muted)] uppercase tabular-nums"><span aria-hidden="true" className="hidden max-[1100px]:inline">—</span><span className="max-[1100px]:sr-only">Excluded</span></span>
         {typeof rawScoreRank === 'number' ? (
           <span className="rank-context-pill inline-flex min-w-0 max-w-[92px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-[var(--r-1)] border border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-3)_72%,transparent)] px-1.5 py-0.5 text-[var(--t-1)] font-bold leading-none text-[var(--faint)]" title="Raw score order if eligibility gates were ignored.">
             Score #{formatNumber(rawScoreRank)}
