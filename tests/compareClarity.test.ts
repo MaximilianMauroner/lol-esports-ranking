@@ -15,7 +15,7 @@ test('region comparison is ready for every supported selection count above one',
       onRemove: noop, onClear: noop, onOpen: noop,
     }))
     assert.doesNotMatch(html, /Pick (?:0|-\d+) more/)
-    assert.match(html, count >= 2 ? new RegExp(`Ready to compare ${count} regions`) : count === 1 ? /Pick 1 more/ : /Pick two to compare/)
+    assert.match(html, count >= 2 ? new RegExp(`Ready to compare · ${count} selected`) : count === 1 ? /Pick 1 more/ : /Pick two to compare/)
     assert.equal(/disabled=""/.test(html), count < 2)
     assert.equal(html.includes('Picking another replaces the oldest'), count === 4)
   }

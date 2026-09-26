@@ -121,7 +121,7 @@ export function CompareProfileChart<E>({
         </div>
         <span className={compareChartMetaClassName}>{entities.length} selected</span>
       </div>
-      <p className="px-[18px] pt-3 text-xs text-[var(--muted)]">Bars compare the selected range of each metric, not a zero baseline. Longer means better; the shortest bar keeps a 6% visibility mark. Equal values have equal full bars.</p>
+      <p className="px-[18px] pt-3 text-xs text-[var(--muted)]">Bars compare the selected range of each metric, not a zero baseline. Longer means better; the shortest bar keeps a 6% visibility mark. When all selected values are equal, all bars are full.</p>
       <div className="grid min-w-0 gap-[15px] px-[18px] pt-[15px] pb-[18px] max-sm:px-3.5 max-sm:py-3">
         {metrics.map((metric) => {
           const values = entities.map(metric.value)
