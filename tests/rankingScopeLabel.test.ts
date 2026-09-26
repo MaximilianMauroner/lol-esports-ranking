@@ -1,3 +1,4 @@
+import { formatDate } from '../src/lib/display.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { rankingScopePeriod } from '../src/lib/rankingScopeLabel.ts'
@@ -27,6 +28,8 @@ test('calendar scope boundaries do not roll into the previous date west of UTC',
   process.env.TZ = 'America/Los_Angeles'
   try {
     assert.equal(rankingScopePeriod('2026'), 'Season window: Jan 1, 2026 to Dec 31, 2026')
+    assert.equal(formatDate('2026-07-26'), 'Jul 26, 2026') // match coverage
+    assert.equal(formatDate('2026-07-12'), 'Jul 12, 2026') // event endpoint
   } finally {
     if (original === undefined) delete process.env.TZ
     else process.env.TZ = original
