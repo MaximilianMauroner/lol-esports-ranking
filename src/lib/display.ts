@@ -5,6 +5,7 @@ const ratingFormatter = new Intl.NumberFormat('en', { maximumFractionDigits: 0 }
 const oneDecimal = new Intl.NumberFormat('en', { maximumFractionDigits: 1 })
 const twoDecimal = new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const dateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
+const calendarDateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 const dateTimeFormatter = new Intl.DateTimeFormat('en', {
   month: 'short',
   day: 'numeric',
@@ -86,7 +87,9 @@ export function formatRecord(wins?: number, losses?: number) {
 export function formatDate(value?: string) {
   if (!value) return 'Unknown'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? 'Unknown' : dateFormatter.format(date)
+  // Date-only artifact values are calendar dates; timestamps retain local display semantics.
+  const formatter = /^\d{4}-\d{2}-\d{2}$/.test(value) ? calendarDateFormatter : dateFormatter
+  return Number.isNaN(date.getTime()) ? 'Unknown' : formatter.format(date)
 }
 
 export function formatDateTime(value?: string) {

@@ -27,10 +27,10 @@ export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
   { key: 'topteam', label: 'Top team power', cell: (r) => formatRating(r.topTeamRating), score: (r) => r.topTeamRating, better: 'high' },
   { key: 'topthree', label: 'Top-three average', cell: (r) => formatRating(displayRegionPowerScore(r)), score: displayRegionPowerScore, better: 'high' },
   { key: 'totalregion', label: 'Flagship-team average', cell: (r) => formatRating(displayRegionTotalTeamRating(r)), score: displayRegionTotalTeamRating, better: 'high' },
-  { key: 'record', label: 'International record', cell: (r) => formatRecord(r.internationalWins, r.internationalLosses) },
+  { key: 'record', label: 'International series equivalents', cell: (r) => formatRecord(r.internationalWins, r.internationalLosses) },
   {
     key: 'winrate',
-    label: 'International win rate',
+    label: 'Allocated international win rate',
     cell: (r) => formatRatio(r.internationalWinRate),
     score: (r) => r.internationalWinRate ?? Number.NEGATIVE_INFINITY,
     better: 'high',

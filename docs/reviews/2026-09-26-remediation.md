@@ -37,3 +37,14 @@ Q01: Gen.G's three 2026 `msi-bracket` points are FST 2026 on March17/19/21, weig
 F12: visible labels, league-compatible event options, preserved raw identifiers with readable separators, clear filters. Q02: both desktop/mobile cumulative scores label A/B codes beside the score; series orientation is canonical team order, independent of winner-first presentation.
 
 Regression: strong-team replay failed before and passed after. Scoped filter and legacy-invalid-record/report-context cases added. Full verification pending shared heavy-work lock.
+
+## Slice 3 — scope and metric bases
+
+F04: season selection now names the full calendar-year window; checkpoint windows are explicitly separate. Coverage through the selected snapshot's rolling endpoint and publication date are separately labeled. No dates/data are invented from the last checkpoint.
+F05: remove obsolete 100pt=64% claim; one generated example uses the same public scale and matchup engine as comparison, with neutral single-game, zero-uncertainty and series assumptions named. Numeric copy is disclosed on demand.
+F07: tournament riser/faller is restricted to the board's filtered team IDs, including eligibility selection. Tournament auto-selection of all participants is explained.
+F08: score says Published/Event endpoint, movement says History; visible board text supplies movement dates/basis; published update delta and trajectory basis clarified.
+F15: region record sums flagship league series outcomes (leagueRatings updateLeagueRecord adds observed outcome and complement); tied Bo2 outcomes contribute .5/.5. Label series equivalents and explain a concrete example; no event weighting applies to these counts.
+Q03: rank chart was subtracting Power attribution from rank positions. Tag rank deltas, stop cross-unit subtraction and sign reconciliation, and label Power annotations/components explicitly. Regression reproduces unchanged #1 with -26 Power, now without invented +26 adjustment.
+
+T3 acceptance recovered via tailnet HTTPS port5174. Candidate at 320/390/767/768/820/1024/1280: no document overflow, full sampled identities/records/scores, mobile sort visible, empty dock absent. 320px screenshot: browser-screenshot-coding-tailbc92d-ts-net-muie1lv6-6159dc24.png. Tab/Enter on all three routes focuses main-content and preserves exact hash/filter state. Native Prometheus code PASS: PR40 head68f8b07; PR41 headcc31a923. Both exact-head hosted CI green. PR41 local 697 tests and bundle passed; local production gate still running. Hosted Codex review on PR40 additionally requested accessible card field labels and compact excluded status; repairs remain in scope.

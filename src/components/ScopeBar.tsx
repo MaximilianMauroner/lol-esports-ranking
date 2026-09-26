@@ -1,4 +1,5 @@
 import type { SnapshotCheckpointOption } from '../lib/publicArtifacts/schema'
+import { rankingScopePeriod } from '../lib/rankingScopeLabel'
 import { formatDate } from '../lib/display'
 import { Button } from './ui/button'
 import { Select } from './ui/select'
@@ -28,6 +29,8 @@ export function ScopeBar({
   activeCheckpoint,
   pendingCheckpoint,
   throughDate,
+  scopeThroughDate,
+  publishedAt,
   onSelectSeason,
   onSelectCheckpoint,
   onIntent,
@@ -38,12 +41,14 @@ export function ScopeBar({
   activeCheckpoint?: string
   pendingCheckpoint?: PendingCheckpoint
   throughDate?: string
+  scopeThroughDate?: string
+  publishedAt?: string
   onSelectSeason: (season: string) => void
   onSelectCheckpoint: (checkpointId: string | undefined) => void
   onIntent?: (checkpointId: string | undefined) => void
 }) {
   const showTrack = Boolean(activeSeason && activeSeason !== 'All' && checkpoints.length > 0)
-  const seasonRange = showTrack ? seasonRangeLabel(checkpoints) : undefined
+  const seasonRange = rankingScopePeriod(activeSeason, checkpoints.find((entry) => entry.id === activeCheckpoint))
 
   return (
     // Both groups are a label line over a control at --control-h, and the row
@@ -74,7 +79,7 @@ export function ScopeBar({
           {/* Capped, because a track stretched across a 1440px page turns four
               splits into four billboards. */}
           <div className="min-w-0 max-w-[720px] flex-1 max-[720px]:max-w-none max-[720px]:basis-full">
-            <div className="mb-1 flex h-4 items-center justify-between gap-3 text-2xs leading-none text-[var(--faint)]">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-3 text-2xs leading-none text-[var(--faint)]">
               <Button
                 type="button"
                 variant="ghost"
@@ -87,7 +92,7 @@ export function ScopeBar({
               >
                 Full year
               </Button>
-              {seasonRange ? <span className="truncate">{seasonRange}</span> : null}
+              {seasonRange ? <span>{seasonRange}</span> : null}
             </div>
             <div
               className="flex min-w-0 items-stretch gap-0.5 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -137,15 +142,13 @@ export function ScopeBar({
           </div>
         </>
       ) : null}
+      <p className="basis-full text-xs text-[var(--muted)]">
+        {scopeThroughDate ? `Match coverage through ${formatDate(scopeThroughDate)}. ` : ''}
+        {publishedAt ? `Publication ${formatDate(publishedAt)}. ` : ''}
+        Split buttons select checkpoint windows.
+      </p>
     </div>
   )
-}
-
-function seasonRangeLabel(checkpoints: SnapshotCheckpointOption[]) {
-  const first = checkpoints[0]
-  const last = checkpoints.at(-1)
-  if (!first || !last) return undefined
-  return `${formatDate(first.startDate)} to ${formatDate(last.endDate)}`
 }
 
 /**

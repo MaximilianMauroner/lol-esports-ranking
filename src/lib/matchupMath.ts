@@ -1,6 +1,6 @@
 import type { Side } from '../types'
 import { normalizedDecisiveBestOf, type DecisiveBestOf } from './matchFormat'
-import { neutralWinProbability, type ProbabilityTeam } from './winProbability'
+import { neutralWinProbability, type ProbabilityTeam, type ProbabilityCalibration } from './winProbability'
 
 export const DEFAULT_BLUE_SIDE_RATING_EDGE = 24
 
@@ -25,6 +25,7 @@ export type MatchupUncertaintyBand = {
 }
 
 export type MatchupProbabilityOptions = {
+  calibration?: ProbabilityCalibration
   bestOf?: DecisiveBestOf | number
   sideAssumption?: MatchupSideAssumption
   blueSideRatingEdge?: number
@@ -82,7 +83,7 @@ export function estimateMatchupProbability(
   const teamBSideOffset = -teamASideOffset
   const adjustedTeamA = { ...teamA, rating: teamA.rating + teamASideOffset }
   const adjustedTeamB = { ...teamB, rating: teamB.rating + teamBSideOffset }
-  const prediction = neutralWinProbability(adjustedTeamA, adjustedTeamB, bestOf)
+  const prediction = neutralWinProbability(adjustedTeamA, adjustedTeamB, bestOf, options.calibration)
   const ratingEdge = teamA.rating - teamB.rating
   const sideRatingEdge = teamASideOffset - teamBSideOffset
 
@@ -107,6 +108,7 @@ export function estimateMatchupProbability(
       prediction.teamAGameWinProbability,
       prediction.teamASeriesWinProbability,
       options.uncertaintyBands,
+      options.calibration,
     ),
   }
 }
@@ -167,6 +169,7 @@ function uncertaintyBandFor(
   gameEstimate: number,
   seriesEstimate: number,
   requested?: boolean | UncertaintyBandOptions,
+  calibration?: ProbabilityCalibration,
 ): MatchupUncertaintyBand | undefined {
   if (!requested) return undefined
 
@@ -176,11 +179,13 @@ function uncertaintyBandFor(
     { ...teamA, rating: teamA.rating - edgeDeviation / 2 },
     { ...teamB, rating: teamB.rating + edgeDeviation / 2 },
     bestOf,
+    calibration,
   )
   const upper = neutralWinProbability(
     { ...teamA, rating: teamA.rating + edgeDeviation / 2 },
     { ...teamB, rating: teamB.rating - edgeDeviation / 2 },
     bestOf,
+    calibration,
   )
   const gameBand = probabilityBand(lower.teamAGameWinProbability, gameEstimate, upper.teamAGameWinProbability, sigma)
   const seriesBand = probabilityBand(lower.teamASeriesWinProbability, seriesEstimate, upper.teamASeriesWinProbability, sigma)

@@ -79,7 +79,7 @@ function TeamHistoryTooltip({
                 <div className="grid justify-items-end gap-px">
                   <strong className="text-[var(--text)] tabular-nums">{yFormat(row.value)}</strong>
                   {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
-                    <b className="text-[var(--t-1)] font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)}</b>
+                    <b className="text-[var(--t-1)] font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)} {row.detail.visibleDeltaUnit === 'rank' ? 'rank positions' : 'Power points'}</b>
                   ) : null}
                 </div>
               </div>
@@ -134,18 +134,19 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
       {attribution.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {attribution.map((entry) => (
-            <span className="inline-flex w-fit items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-[5px] py-0.5 text-[var(--t-1)] text-[var(--muted)] tabular-nums" key={entry.key}>{formatChartAttribution(entry)}</span>
+            <span className="inline-flex w-fit items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-[5px] py-0.5 text-[var(--t-1)] text-[var(--muted)] tabular-nums" key={entry.key}>{formatChartAttribution(entry)} Power points</span>
           ))}
         </div>
       ) : null}
       {typeof otherDelta === 'number' ? (
-        <div className="text-[var(--t-1)] leading-[1.35] text-[var(--faint)]">Unattributed adjustment {formatPreciseSignedDelta(otherDelta)}</div>
+        <div className="text-[var(--t-1)] leading-[1.35] text-[var(--faint)]">Other daily change {formatPreciseSignedDelta(otherDelta)} Power points</div>
       ) : null}
     </div>
   )
 }
 
 function dailyCloseNote(detail?: ChartPointDetail) {
+  if (detail?.visibleDeltaUnit === 'rank') return 'Match annotations and components are Power points; they do not add up to rank positions.'
   const visibleDelta = finiteNumber(detail?.visibleDelta)
   if (typeof visibleDelta !== 'number' || visibleDelta === 0) return undefined
 

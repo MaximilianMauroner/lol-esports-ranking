@@ -25,6 +25,7 @@ export type ChartPointDetail = {
   bestOf?: number
   delta?: number
   visibleDelta?: number
+  visibleDeltaUnit?: 'power' | 'rank'
   passive?: boolean
   dayMatchCount?: number
   dayMatches?: ChartPointDetail[]
@@ -52,7 +53,7 @@ export function formatChartInfluence(detail?: ChartPointDetail) {
   if (detail.dayMatchCount && detail.dayMatchCount > 1) {
     const parts = [
       `Day close · ${detail.dayMatchCount} matches`,
-      typeof detail.delta === 'number' && Number.isFinite(detail.delta) ? `match ledger ${formatSignedDelta(detail.delta)}` : undefined,
+      typeof detail.delta === 'number' && Number.isFinite(detail.delta) ? `match ledger ${formatSignedDelta(detail.delta)} Power points` : undefined,
     ].filter((part): part is string => Boolean(part))
     return parts.join(' · ')
   }
@@ -63,7 +64,7 @@ export function formatChartInfluence(detail?: ChartPointDetail) {
   const parts = [
     detail.opponent ? [result, `vs ${detail.opponent}`].filter(Boolean).join(' ') : result,
     detail.event,
-    typeof detail.delta === 'number' && Number.isFinite(detail.delta) ? formatSignedDelta(detail.delta) : undefined,
+    typeof detail.delta === 'number' && Number.isFinite(detail.delta) ? `${formatSignedDelta(detail.delta)} Power points` : undefined,
   ].filter((part): part is string => Boolean(part))
 
   return parts.length > 0 ? parts.join(' · ') : undefined
@@ -117,6 +118,8 @@ export function modelDeltaFor(detail?: ChartPointDetail) {
 }
 
 export function nonMatchDeltaFor(detail?: ChartPointDetail) {
+  // Match/model attribution is Power, never rank positions.
+  if (detail?.visibleDeltaUnit === 'rank') return undefined
   if (typeof detail?.visibleDelta !== 'number' || !Number.isFinite(detail.visibleDelta)) return undefined
   const modelDelta = modelDeltaFor(detail)
   if (typeof modelDelta !== 'number' || !Number.isFinite(modelDelta)) return undefined

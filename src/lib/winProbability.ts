@@ -8,6 +8,18 @@ import {
 
 export type ProbabilityTeam = Pick<TeamStanding, 'team' | 'rating' | 'uncertainty'>
 
+export type ProbabilityCalibration = {
+  eloScale: number
+  uncertaintyScale: number
+  uncertaintyFloor: number
+}
+
+export const defaultProbabilityCalibration: ProbabilityCalibration = {
+  eloScale: winProbabilityEloScale,
+  uncertaintyScale: winProbabilityUncertaintyScale,
+  uncertaintyFloor: winProbabilityUncertaintyFloor,
+}
+
 export type NeutralWinProbability = {
   teamA: string
   teamB: string
@@ -21,9 +33,9 @@ export type NeutralWinProbability = {
   uncertaintyPenalty: number
 }
 
-export function neutralWinProbability(teamA: ProbabilityTeam, teamB: ProbabilityTeam, bestOf = 1): NeutralWinProbability {
-  const rawGameProbability = expectedScore(teamA.rating, teamB.rating)
-  const uncertaintyPenalty = uncertaintyPenaltyFor(teamA.uncertainty, teamB.uncertainty)
+export function neutralWinProbability(teamA: ProbabilityTeam, teamB: ProbabilityTeam, bestOf = 1, calibration: ProbabilityCalibration = defaultProbabilityCalibration): NeutralWinProbability {
+  const rawGameProbability = expectedScore(teamA.rating, teamB.rating, calibration.eloScale)
+  const uncertaintyPenalty = uncertaintyPenaltyFor(teamA.uncertainty, teamB.uncertainty, calibration)
   const gameProbability = 0.5 + (rawGameProbability - 0.5) * uncertaintyPenalty
   const normalizedFormat = normalizedBestOf(bestOf)
   const teamASeriesWinProbability = seriesWinProbability(gameProbability, normalizedFormat)
@@ -62,13 +74,13 @@ export function expectedSeriesPoints(gameWinProbability: number, bestOf = 1) {
   return seriesWinProbability(gameWinProbability, games)
 }
 
-function expectedScore(ratingA: number, ratingB: number) {
-  return 1 / (1 + 10 ** ((ratingB - ratingA) / winProbabilityEloScale))
+function expectedScore(ratingA: number, ratingB: number, eloScale: number) {
+  return 1 / (1 + 10 ** ((ratingB - ratingA) / eloScale))
 }
 
-function uncertaintyPenaltyFor(uncertaintyA: number, uncertaintyB: number) {
+function uncertaintyPenaltyFor(uncertaintyA: number, uncertaintyB: number, calibration: ProbabilityCalibration) {
   const combined = Math.sqrt(uncertaintyA ** 2 + uncertaintyB ** 2)
-  return clamp(1 - combined / winProbabilityUncertaintyScale, winProbabilityUncertaintyFloor, 1)
+  return clamp(1 - combined / calibration.uncertaintyScale, calibration.uncertaintyFloor, 1)
 }
 
 function binomial(n: number, k: number) {
