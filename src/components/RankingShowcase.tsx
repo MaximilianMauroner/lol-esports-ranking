@@ -1,5 +1,4 @@
 import { ArrowDownRight, ArrowUpRight, Flame, Zap } from 'lucide-react'
-import type { CSSProperties } from 'react'
 import { Badge } from './ui/badge'
 import { Panel, PanelBody, PanelFooter, PanelHeader } from './ui/panel'
 import { cn } from '../lib/utils'
@@ -83,14 +82,14 @@ const DEFAULT_TIER_ORDER = ['S', 'A', 'B', 'C']
 const VISIBLE_TIER_TEAMS = 3
 
 /**
- * Tier legend and filter.
+ * Tier legend and filter, in the right rail.
  *
- * This used to live in the right rail, which drops below the table under
- * 1180px. The S/A/B/C badges render in the board's rank column, so on tablet
- * and phone the badges were seen first and explained last, if at all. It also
- * filters the board, so it belongs beside the board at every width.
+ * Cells are an even 2x2 grid, not proportional to team count. Width-by-count
+ * reads as a distribution bar, but the counts are wildly uneven (a C tier
+ * holding 40 teams next to an S tier holding 3), so the small tiers collapse
+ * and the strip stops working as a legend.
  */
-export function TierStrip({
+export function TierPanel({
   tierCounts,
   tierStrips,
   selectedTier,
@@ -101,26 +100,20 @@ export function TierStrip({
   if (tiers.length === 0) return null
 
   return (
-    <div
-      className={cn('flex items-stretch gap-px overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--line)]', className)}
-      role="group"
-      aria-label="Tier density"
-    >
-      {tiers.map((tier) => (
-        <TierCard key={tier.tier} tier={tier} selected={selectedTier === tier.tier} onSelect={onTierSelect} />
-      ))}
-    </div>
+    <Panel className={className}>
+      <PanelHeader title="Tier density" />
+      <div className="grid grid-cols-2 gap-px bg-[var(--line)]" role="group" aria-label="Tier density">
+        {tiers.map((tier) => (
+          <TierCard key={tier.tier} tier={tier} selected={selectedTier === tier.tier} onSelect={onTierSelect} />
+        ))}
+      </div>
+    </Panel>
   )
 }
 
 /**
- * The rail panel: the two movement spotlights, with the upset and confidence
- * readouts folded into a footer.
- *
- * The rail used to stack six sub-panels (podium, tier density, riser, faller,
- * upset, confidence), each with its own grey subtitle line, next to a table
- * that is already the summary. The podium restated the first three rows of that
- * table and is gone; the tier strip moved to the board.
+ * The movement panel: the two spotlights, with the upset headline and the
+ * confidence readout folded into a footer.
  */
 export function RankingSignals({
   biggestRiser,
@@ -145,21 +138,20 @@ export function RankingSignals({
             Upset signal
           </span>
           <b className="text-sm font-semibold text-[var(--text-strong)]">{upsetHeadline(upset)}</b>
-          {upset?.event || upset?.score || typeof upset?.probability === 'number' ? (
+          {upset?.event || upset?.score ? (
             <span className="flex flex-wrap items-center gap-1.5 text-2xs text-[var(--faint)]">
               {upset?.event ? <Badge variant="event">{upset.event}</Badge> : null}
               {upset?.score ? <span className="tabular-nums">{upset.score}</span> : null}
-              {typeof upset?.probability === 'number' ? <span className="tabular-nums">{formatProbability(upset.probability)} pre-match</span> : null}
             </span>
           ) : null}
         </div>
         <div className="grid gap-1.5">
           <span className="flex items-center justify-between gap-2 text-xs font-medium text-[var(--muted)]">
-            <span className="flex items-center gap-2">
-              <Flame className="size-3.5 text-[var(--faint)]" aria-hidden="true" />
-              {confidenceBand?.label ?? 'Confidence'}
+            <span className="flex min-w-0 items-center gap-2">
+              <Flame className="size-3.5 shrink-0 text-[var(--faint)]" aria-hidden="true" />
+              <span className="truncate">{confidenceBand?.label ?? 'Confidence'}</span>
             </span>
-            <b className="text-sm font-bold text-[var(--text-strong)] tabular-nums">{formatPercentValue(confidence)}</b>
+            <b className="shrink-0 text-sm font-bold text-[var(--text-strong)] tabular-nums">{formatPercentValue(confidence)}</b>
           </span>
           {/* --rank-gold reads as rank quality here, which is what a confidence
               band in a ranking product measures. It no longer also marks the
@@ -192,7 +184,7 @@ function MovementSpotlight({
       {movement ? (
         <>
           <span className="flex flex-wrap items-baseline gap-x-2">
-            <b className="text-md font-semibold text-[var(--text-strong)]">{movement.name ?? movement.team ?? 'Unknown team'}</b>
+            <b className="min-w-0 truncate text-md font-semibold text-[var(--text-strong)]">{movement.name ?? movement.team ?? 'Unknown team'}</b>
             <span className={cn('font-mono text-xs font-bold tabular-nums', tone === 'up' ? 'text-[var(--up)]' : 'text-[var(--down)]')}>{movementRange(movement)}</span>
           </span>
           {movement.description ?? movement.reason ? (
@@ -233,7 +225,7 @@ function TierCard({
   onSelect?: (tier: string) => void
 }) {
   const className = cn(
-    'grid h-auto min-h-0 min-w-[64px] shrink flex-[max(var(--tier-size),1)_1_56px] content-start items-stretch justify-stretch rounded-none border-0 bg-[var(--surface-2)] px-3 py-2 text-left font-[inherit] whitespace-normal text-inherit',
+    'grid h-auto min-h-0 min-w-0 content-start items-stretch justify-stretch rounded-none border-0 bg-[var(--surface-2)] px-3 py-2 text-left font-[inherit] whitespace-normal text-inherit',
     '[&>b]:block [&>b]:text-lg [&>b]:font-bold [&>b]:text-[var(--text-strong)] [&>b]:tabular-nums',
     '[&>small]:block [&>small]:overflow-hidden [&>small]:text-ellipsis [&>small]:whitespace-nowrap [&>small]:text-2xs [&>small]:text-[var(--faint)]',
     '[&>span]:block [&>span]:text-xs [&>span]:font-medium [&>span]:text-[var(--muted)]',
@@ -242,7 +234,6 @@ function TierCard({
     selected && 'bg-[var(--selected-bg)] shadow-[inset_0_0_0_1px_var(--selected-line)]',
     onSelect && tier.count > 0 && 'cursor-pointer hover:bg-[var(--surface-3)] focus-visible:relative focus-visible:z-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--focus)]',
   )
-  const style = { '--tier-size': tier.count } as CSSProperties
   const content = (
     <>
       <span>{tier.label ?? tier.tier}</span>
@@ -252,11 +243,7 @@ function TierCard({
   )
 
   if (!onSelect || tier.count === 0) {
-    return (
-      <div className={className} style={style}>
-        {content}
-      </div>
-    )
+    return <div className={className}>{content}</div>
   }
 
   return (
@@ -265,7 +252,6 @@ function TierCard({
       variant="ghost"
       size="default"
       className={className}
-      style={style}
       aria-pressed={selected}
       title={`${selected ? 'Clear' : 'Highlight'} ${tier.label ?? tier.tier} teams in the ranking list`}
       onClick={() => onSelect(tier.tier)}
@@ -309,10 +295,6 @@ function upsetHeadline(upset?: RankingUpsetHeadline) {
   if (upset.headline ?? upset.title) return upset.headline ?? upset.title
   if (upset.winner && upset.loser) return `${upset.winner} over ${upset.loser}`
   return 'Upset signal pending'
-}
-
-function formatProbability(value: number) {
-  return value <= 1 ? formatPercentValue(value * 100) : formatPercentValue(value)
 }
 
 function confidencePercent(band?: RankingConfidenceBand) {

@@ -73,6 +73,7 @@ The normal local refresh workflow is:
 ```bash
 pnpm run data:download
 pnpm run data:crunch
+pnpm run data:team-branding
 pnpm run release:check
 git add data/raw/manifest.json public/data/ranking-summary.json public/data/entities public/data/history public/data/scopes
 git commit -m "Refresh LoL esports ranking data"
@@ -80,6 +81,8 @@ git push
 ```
 
 `data:download` stores raw provider files under `data/raw/` and writes `data/raw/manifest.json`. Raw provider downloads are local inputs and are ignored by Git; the manifest is committed for provenance. By default the downloader fetches Oracle's Elixir CSVs and Leaguepedia ScoreboardGames from 2011-01-01 through today. `data:crunch` reads the local manifest and raw files, writes the full local calculation artifact to `data/derived/ranking-snapshot.full.json`, and writes the deployable client payload to `public/data/ranking-summary.json`, `public/data/entities/*.json`, `public/data/history/**/*.json`, and `public/data/scopes/*.json`.
+
+`data:team-branding` audits every team in the public team directory. It prefers shorthand and logos cached from the LoL Esports schedule feed, fills gaps from Leaguepedia team metadata, downloads logos into `public/team-logos/`, and records the source of each result in `src/data/teamBranding.generated.ts`. Teams without published metadata keep a text mark and an explicit `name-derived` source.
 
 Commit the compact generated `public/data` payload after review when you need static-host fallback files. Railway deployments can instead publish that payload to the private Railway Bucket during refresh. Do not commit raw provider downloads, `data/derived/ranking-snapshot.full.json`, or other full audit artifacts. The full public snapshot files `public/data/ranking-snapshot.json` and `public/data/*.full.json` are intentionally blocked because they can exceed GitHub file limits; the compact manifest and shards are the browser contract. Official LoL Esports ranking snapshots are not part of the local data-source manifest.
 

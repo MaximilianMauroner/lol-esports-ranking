@@ -142,6 +142,7 @@ function dateRange(matches: { date?: string }[]) {
   return { start: dates[0], end: dates.at(-1) }
 }
 function describeCommunitySource(oracleCount: number, leaguepediaCount: number) {
+  if (oracleCount && leaguepediaCount) return "Oracle's Elixir primary with Leaguepedia Cargo gap-fill"
   return [oracleCount ? "Oracle's Elixir" : '', leaguepediaCount ? 'Leaguepedia Cargo' : ''].filter(Boolean).join(' + ')
 }
 function sourceRefreshReceipt(provider: 'oracle' | 'leaguepedia' | 'lolesports', manifest?: LocalDataManifest) {

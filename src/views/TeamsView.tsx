@@ -26,7 +26,8 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../com
 import { PageShell } from '../components/ui/page-shell'
 import { Pager } from '../components/ui/pager'
 import { Panel, PanelBody, PanelFooter, PanelHeader } from '../components/ui/panel'
-import { RankingSignals, TierStrip, type RankingShowcaseProps } from '../components/RankingShowcase'
+import { RankingSignals, TierPanel, type RankingShowcaseProps } from '../components/RankingShowcase'
+import { TeamMark } from '../components/TeamMark'
 import { type ChartSeries } from '../components/LineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import {
@@ -552,16 +553,6 @@ export function TeamsView({
                   ) : null}
                 </div>
               </div>
-              {/* The tier legend sits with the board it filters. It used to be
-                  in the right rail, which drops below the table under 1180px,
-                  so the S/A/B/C badges in the rank column arrived first and
-                  their legend arrived last. */}
-              <TierStrip
-                tierCounts={rankingSignals.tierCounts}
-                tierStrips={rankingSignals.tierStrips}
-                selectedTier={activeSelectedTier}
-                onTierSelect={selectTier}
-              />
               {eligibilityNote ? <p className="text-xs leading-[1.35] text-[var(--faint)]">{eligibilityNote}</p> : null}
             </PanelBody>
 
@@ -595,11 +586,16 @@ export function TeamsView({
               </DataState>
             ) : (
                 <Table containerRef={tableWrapRef} containerClassName="max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[660px] border-collapse text-sm max-sm:min-w-full">
+                  {/* Direction A: five columns, not six. Movement folds into
+                      the score cell it describes, and the record stays a
+                      sortable column while also appearing in the team meta
+                      line so nothing is lost when it is hidden on narrow
+                      screens. */}
                   <colgroup>
                     <col className="board-col-rank" />
                     <col className="board-col-team" />
+                    <col className="board-col-form" />
                     <col className="board-col-score" />
-                    <col className="board-col-trend" />
                     <col className="board-col-record" />
                     <col className="board-col-action" />
                   </colgroup>
@@ -607,10 +603,16 @@ export function TeamsView({
                     <TableRow>
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} />
                       <TableHead>Team</TableHead>
-                      <SortHeader label="Power score" columnKey="rating" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" />
-                      <TableHead className="board-col-trend" title={`Movement = rank and Power-score change from ${movementBaseline}.`}>
-                        {activeTournament ? 'Tournament move' : '30D move'}
-                      </TableHead>
+                      <TableHead className="board-col-form" title="Most recent five results, oldest first.">Form</TableHead>
+                      <SortHeader
+                        label={activeTournament ? 'Power score / tournament move' : 'Power score / 30D move'}
+                        columnKey="rating"
+                        sortKey={sortKey}
+                        descending={sortDirection === 'descending'}
+                        onSort={onSort}
+                        align="right"
+                        className="board-col-score"
+                      />
                       <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" className="board-col-record" />
                       <TableHead className="center" aria-label="Add to comparison" />
                     </TableRow>
@@ -644,7 +646,7 @@ export function TeamsView({
                             openTeamDetail()
                           }}
                         >
-                          <TableCell className="board-col-trend">
+                          <TableCell className="board-col-rank">
                             <span className="board-rankcell flex items-center gap-[9px] whitespace-nowrap">
                               <TeamBoardRank team={team} rank={rank} rawScoreRank={rawScoreRank} />
                               {tier ? <TierBadge tier={tier} /> : null}
@@ -659,25 +661,31 @@ export function TeamsView({
                               onFocus={onRequestPlayers}
                               title={`View ${team.team} details`}
                             >
-                              <span className="team-mark sm inline-grid h-7 w-[42px] place-items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] font-mono text-[var(--t-2)] font-extrabold tracking-[0.02em] text-[var(--accent-strong)]">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
+                              <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
                               <div className="ent flex min-w-0 flex-col gap-px overflow-hidden [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[var(--t-2)] [&_small]:text-[var(--faint)]">
                                 <b>{team.team}</b>
-                                <small>{teamSubtitle(team)}</small>
+                                <small>{teamSubtitle(team, total > 0 ? `${formatRecord(team.wins, team.losses)} · ${formatRatio(team.wins / total)}` : undefined)}</small>
                               </div>
                             </Button>
                           </TableCell>
-                          <TableCell className="right">
-                            <TeamScoreCell team={team} min={ratingMin} max={ratingMax} exactTournament={Boolean(activeTournament)} />
+                          {/* Form was in the data all along and the board never
+                              showed it. It also earns the width the table
+                              gained when the rail went away. */}
+                          <TableCell className="board-col-form">
+                            <FormDots form={team.form} />
                           </TableCell>
-                          <TableCell>
-                            {activeTournament ? (
-                              <TournamentRankTrendCell
-                                movement={movementByTeamId.get(team.teamId)}
-                                endpointLabel={tournamentBoundaryLabel(activeTournament.status)}
-                              />
-                            ) : (
-                              <TeamRankTrendCell team={team} movementBaseline={movementBaseline} />
-                            )}
+                          <TableCell className="right board-col-score">
+                            <span className="flex flex-col items-end gap-1">
+                              <TeamScoreCell team={team} min={ratingMin} max={ratingMax} exactTournament={Boolean(activeTournament)} />
+                              {activeTournament ? (
+                                <TournamentRankTrendCell
+                                  movement={movementByTeamId.get(team.teamId)}
+                                  endpointLabel={tournamentBoundaryLabel(activeTournament.status)}
+                                />
+                              ) : (
+                                <TeamRankTrendCell team={team} movementBaseline={movementBaseline} />
+                              )}
+                            </span>
                           </TableCell>
                           <TableCell className="right num board-col-record">
                             <b className="font-semibold text-[var(--text-strong)]">{formatRecord(team.wins, team.losses)}</b>{' '}
@@ -711,9 +719,15 @@ export function TeamsView({
           </Panel>
         </div>
 
-        {/* Two panels, not seven. The rail used to stack a region teaser and a
-            six-part showcase beside a table that is already the summary. */}
-        <aside className="board-sidebar sticky top-[76px] grid min-w-0 gap-4 max-[1180px]:static max-[1180px]:grid-cols-2 max-[900px]:grid-cols-1">
+        {/* Sticky beside the board on wide screens, stacked underneath it in
+            two columns below 1180px. */}
+        <aside className="board-sidebar sticky top-[76px] grid min-w-0 content-start gap-4 max-[1180px]:static max-[1180px]:grid-cols-2 max-[900px]:grid-cols-1">
+          <TierPanel
+            tierCounts={rankingSignals.tierCounts}
+            tierStrips={rankingSignals.tierStrips}
+            selectedTier={activeSelectedTier}
+            onTierSelect={selectTier}
+          />
           <RankingSignals {...rankingSignals} />
           <RegionalStrengthTeaser regions={regions} href={regionsHref} />
         </aside>
@@ -856,7 +870,9 @@ function TeamScoreCell({
   return (
     <span className="team-score-stack grid w-full min-w-0 justify-items-end gap-[3px] overflow-hidden" title={exactTournament ? `Tournament endpoint Power score ${formatRating(score)}` : teamScoreTitle(team)}>
       {typeof score === 'number' ? (
-        <span className="team-score-value inline-block min-w-[68px] max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-right font-mono text-[var(--t-4)] font-bold leading-[1.2] text-[var(--text-strong)] tabular-nums">{formatRating(score)}</span>
+        // Direction A: the score is the only figure at --t-6 in the row, so
+        // the eye lands on the number the product exists to produce.
+        <span className="team-score-value inline-block min-w-[68px] max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-right font-mono text-[var(--t-6)] font-extrabold leading-[1.15] text-[var(--text-strong)] tabular-nums">{formatRating(score)}</span>
       ) : (
         <span className="score-unavailable inline-flex min-w-11 items-center justify-end font-mono text-[var(--t-3)] font-semibold text-[var(--faint)]">—</span>
       )}
@@ -966,17 +982,18 @@ function TeamRankTrendCell({
   const tone = rankMovementTone(rankMovement)
   const title = `${team.team} · #${movement.baselineRank} to #${movement.currentRank} · ${formatRating(movement.baselineRating!)} to ${formatRating(movement.currentRating)} Power (${formatRatingMovement(ratingDelta)}) · ${formatNumber(movement.scoredSeries)} scored series · ${movementBaseline}`
   return (
-    <span className="rank-trend-cell grid min-w-0 grid-cols-[58px_minmax(0,1fr)] items-center gap-2 text-[var(--rank-movement-color,var(--faint))]" role="img" title={title} aria-label={title} style={rankMovementStyle(rankMovement)}>
-      <span
-        className={`${tone} flex min-w-0 flex-col text-current`}
-        aria-hidden="true"
-      >
-        <span className="inline-flex items-center gap-[3px]"><RankMovementIcon tone={tone} /><b className={`rank-trend-cell__move ${tone} tabular-nums`}>{formatRankMovementCompact(rankMovement)}</b></span>
+    <span className="rank-trend-cell inline-flex min-w-0 items-center justify-end gap-2 text-[var(--rank-movement-color,var(--faint))]" role="img" title={title} aria-label={title} style={rankMovementStyle(rankMovement)}>
+      {/* One line, ordered the way it reads: rank move, then rating delta.
+          Movement now sits beneath the score it describes rather than in its
+          own column, so it stays compact. */}
+      <span className={`${tone} inline-flex min-w-0 items-center gap-1.5 text-current`} aria-hidden="true">
+        <RankMovementIcon tone={tone} />
+        <b className={`rank-trend-cell__move ${tone} tabular-nums`}>{formatRankMovementCompact(rankMovement)}</b>
         <small className="whitespace-nowrap text-[var(--t-1)] text-[var(--faint)]">{formatRatingMovement(ratingDelta)}</small>
       </span>
       {sparkline ? (
         <svg
-          className="rank-trend-cell__sparkline block h-6 w-full min-w-0 overflow-visible text-current [&_circle]:fill-current [&_circle]:opacity-90 [&_circle]:stroke-[var(--surface)] [&_circle]:[stroke-width:1.5] [&_polyline]:fill-none [&_polyline]:stroke-current [&_polyline]:opacity-75 [&_polyline]:[stroke-linecap:square] [&_polyline]:[stroke-linejoin:miter] [&_polyline]:[stroke-width:1.8]"
+          className="rank-trend-cell__sparkline block h-5 w-14 shrink-0 overflow-visible text-current [&_circle]:fill-current [&_circle]:opacity-90 [&_circle]:stroke-[var(--surface)] [&_circle]:[stroke-width:1.5] [&_polyline]:fill-none [&_polyline]:stroke-current [&_polyline]:opacity-75 [&_polyline]:[stroke-linecap:square] [&_polyline]:[stroke-linejoin:miter] [&_polyline]:[stroke-width:1.8]"
           viewBox={`0 0 ${RANK_SPARKLINE_WIDTH} ${RANK_SPARKLINE_HEIGHT}`}
           aria-hidden="true"
           focusable="false"
@@ -1296,9 +1313,14 @@ function rankSparklineShape(values: number[], width: number, height: number): Ra
   }
 }
 
-function teamSubtitle(team: RankingSummaryStanding) {
+/**
+ * The team meta line. `record` is folded in so the board still shows a team's
+ * record once the W/L column is hidden on narrow screens, which is where the
+ * old layout simply dropped it.
+ */
+function teamSubtitle(team: RankingSummaryStanding, record?: string) {
   const reasons = team.eligibility?.eligible === false ? eligibilitySummary(team) : undefined
-  return [formatCompetitionLeagueLabel(team.league ?? team.region), reasons].filter(Boolean).join(' · ')
+  return [formatCompetitionLeagueLabel(team.league ?? team.region), record, reasons].filter(Boolean).join(' · ')
 }
 
 function scoreScaleNote() {
@@ -1656,7 +1678,7 @@ function TeamDetailDrawer({
         {drawerLoading ? <p className="sr-only" role="status" aria-live="polite">Loading {drawerLoading} for {team.team}.</p> : null}
         <SheetHeader className="flex-row items-center gap-3.5 border-b border-[var(--line)] bg-[var(--detail-surface)] px-5 py-4 text-left max-sm:flex-wrap max-sm:p-3.5">
           <div className="mr-auto flex min-w-0 items-center gap-3.5 [&_h2]:text-[var(--t-6)] [&_h2]:font-semibold [&_h2]:tracking-normal [&_h2]:text-[var(--text-strong)] [&_p]:mb-[3px] [&_p]:text-[var(--t-2)] [&_p]:tracking-[0.14em] [&_p]:text-[var(--faint)] [&_p]:uppercase max-[900px]:[&_h2]:text-[var(--t-6)]">
-            <span className="inline-grid h-8 w-[54px] place-items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] font-mono text-[var(--t-3)] font-extrabold tracking-[0.02em] text-[var(--accent-strong)]">{team.code ?? team.team.slice(0, 3).toUpperCase()}</span>
+            <TeamMark team={team.team} code={team.code} className="size-11 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
             <div>
               <p>Team inspector</p>
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
@@ -2534,6 +2556,12 @@ function rankingSignalsProps(flair: RankingFlair, movementBaseline: string): Ran
   return {
     title: 'Movement',
     tierCounts: tierCountsFor(flair.tiers),
+    confidenceBand: spicy ? {
+      label: `${spicy.code}: evidence coverage`,
+      value: spicy.score,
+      tone: spicy.band === 'high' ? 'spicy' : spicy.band === 'medium' ? 'warm' : 'cool',
+      description: `${formatNumber(spicy.recentMatchCount)} recent scored matches, rating uncertainty +/-${formatNumber(spicy.uncertainty)}.`,
+    } : undefined,
     biggestRiser: movementSpotlight(flair.movement.biggestRiser, movementBaseline),
     biggestFaller: movementSpotlight(flair.movement.biggestFaller, movementBaseline),
     upset: flair.upsetHeadline ? {
@@ -2544,12 +2572,6 @@ function rankingSignalsProps(flair: RankingFlair, movementBaseline: string): Ran
       score: `${Math.round(flair.upsetHeadline.expectedWinProbability * 100)}% pre-match`,
       date: flair.upsetHeadline.date,
       description: `Pre-series model expectation for the winner; lower probability means a larger surprise.`,
-    } : undefined,
-    confidenceBand: spicy ? {
-      label: `${spicy.code}: evidence coverage`,
-      value: spicy.score,
-      tone: spicy.band === 'high' ? 'spicy' : spicy.band === 'medium' ? 'warm' : 'cool',
-      description: `${formatNumber(spicy.recentMatchCount)} recent scored matches, rating uncertainty +/-${formatNumber(spicy.uncertainty)}.`,
     } : undefined,
   }
 }

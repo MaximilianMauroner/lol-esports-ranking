@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { AlertTriangle, BarChart3, Globe2, History, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Globe2, History, RefreshCw } from 'lucide-react'
 import type {
   PublicRankingManifest,
   SnapshotCheckpointOption,
@@ -8,6 +8,7 @@ import type {
 import type { PublicSnapshotState } from './lib/publicArtifacts/resolver'
 import {
   formatDate,
+  formatRating,
   teamKey,
 } from './lib/display'
 import type { RegionStrength } from './lib/regionStrength'
@@ -20,6 +21,8 @@ import {
 } from './components/compareAnalysisData'
 import { TeamsView, type PlayerLoadState } from './views/TeamsView'
 import { DataState, RegionBadge } from './components/ui'
+import { ScopeBar } from './components/ScopeBar'
+import { CompareDock, type CompareDockEntity } from './components/CompareDock'
 import { Button, buttonVariants } from './components/ui/button'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
@@ -82,7 +85,6 @@ const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   },
 }
 
-const CHECKPOINT_TAB_CLASS = 'shrink-0 flex-col gap-0 px-3 py-1 [&>small]:block [&>small]:text-2xs [&>small]:leading-[1.1] [&>small]:font-normal [&>small]:text-[var(--muted)] [&>span]:block [&>span]:text-sm [&>span]:font-semibold [&>span]:leading-[1.2]'
 
 function App({ initialManifest, initialManifestError }: { initialManifest?: PublicRankingManifest; initialManifestError?: string }) {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
@@ -204,7 +206,6 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
   const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, comparisonStandings, teamKey), [comparisonStandings, teamPicks])
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
-  const trayPicks = mode === 'regions' ? activeRegionPicks.length : mode === 'rankings' ? activeTeamPicks.length : 0
 
   function toggleRegion(region: RegionStrength) {
     setRegionPicks((current) => toggleLimitedPick(reconcilePicks(current, regions, regionKey), region, regionKey))
@@ -237,11 +238,28 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   const seeded = loadedData.dataMode === 'seeded-sample' || loadedData.coverage?.seededSample === true
   const matchCount = snapshot?.matchCount ?? loadedData.coverage?.matchCount
   const trayLabel = mode === 'regions' ? 'Region compare' : 'Team compare'
+  const compareEntities: CompareDockEntity[] = mode === 'regions'
+    ? activeRegionPicks.map((region) => ({
+        id: regionKey(region),
+        code: region.region,
+        name: region.region,
+        meta: `${region.teamCount} flagship teams`,
+        badge: <RegionBadge region={region.region} size="sm" />,
+      }))
+    : activeTeamPicks.map((team) => ({
+        id: teamKey(team),
+        code: team.code ?? team.team.slice(0, 3).toUpperCase(),
+        name: team.code ?? team.team,
+        meta: `${formatRating(team.rating)}${team.rank ? ` · #${team.rank}` : ''}`,
+      }))
+  // Only the team board has a matchup model. Two regions do not play each other.
+  const compareMatchup = mode === 'rankings' && activeTeamPicks.length >= 2
+    ? { home: activeTeamPicks[0], away: activeTeamPicks[1], model: loadedData.model }
+    : undefined
   const teamColumns = teamCompareColumns(activeTeamPicks)
   const regionColumns = regionCompareColumns(activeRegionPicks)
   const movementBaseline = movementBaselineFor(activeCheckpoint, checkpointTabs)
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
-  const ongoingCheckpointId = checkpointTabs.find((checkpoint) => checkpoint.ongoing)?.id
   const teamCompareAfter = drawerOpen && mode === 'rankings' ? (
     <Suspense fallback={<LoadingState label="Loading team comparison" description="Preparing the selected team analysis." />}>
       <TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />
@@ -268,90 +286,68 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
       <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content">Skip to content</a>
       <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} />
 
-      {/* Tray space is reserved only when a tray exists. Match history has no
-          tray at all and used to end with ~80px of dead space below the footer
-          on every page. */}
+      {/* Space is reserved for the dock only where the dock is fixed, which is
+          phones on the two views that have one. */}
       <main
         id="main-content"
         className={cn(
           'flex min-w-0 flex-col pb-6',
-          trayPicks > 0 && 'pb-[calc(var(--tray-h)+24px+env(safe-area-inset-bottom))] max-sm:pb-[calc(96px+24px+env(safe-area-inset-bottom))]',
+          (mode === 'rankings' || mode === 'regions') && 'max-sm:pb-[calc(84px+env(safe-area-inset-bottom))]',
         )}
         tabIndex={-1}
         ref={mainRef}
       >
         <ModeHeader mode={mode} />
 
-        {/* One tab component for both rows. The season row and the checkpoint
-            row used to be two different button shapes with two different
-            active treatments, neither matching the mode nav above them. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2" aria-label="Snapshot scope controls">
-          <div className="flex min-w-0 items-stretch gap-1 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Season">
-            {seasonTabs.map((season) => (
-              <Button
-                key={season}
-                type="button"
-                variant="tab"
-                size="tab"
-                aria-pressed={activeSeason === season}
-                className="shrink-0 font-semibold"
-                onClick={() => selectScope(scopeForSeasonTab(season))}
-                onFocus={() => preloadOnIntent(scopeForSeasonTab(season))}
-                onPointerEnter={() => preloadOnIntent(scopeForSeasonTab(season))}
-              >
-                {season}
-              </Button>
-            ))}
-          </div>
+        <ScopeBar
+          seasons={seasonTabs}
+          activeSeason={activeSeason}
+          checkpoints={checkpointTabs}
+          activeCheckpoint={activeCheckpoint}
+          pendingCheckpoint={pendingCheckpoint}
+          throughDate={loadedData.coverage?.latestMatchDate}
+          onSelectSeason={(season) => selectScope(scopeForSeasonTab(season))}
+          onSelectCheckpoint={(checkpointId) =>
+            selectScope(checkpointId && activeSeason ? checkpointScope(activeSeason, checkpointId) : `season:${activeSeason}`)
+          }
+          onIntent={(checkpointId) => {
+            if (!activeSeason) return
+            preloadOnIntent(checkpointId ? checkpointScope(activeSeason, checkpointId) : `season:${activeSeason}`)
+          }}
+        />
 
-          {activeSeason && activeSeason !== 'All' && checkpointTabs.length > 0 ? (
-            <div className="flex min-w-0 max-w-full items-stretch gap-1 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[640px]:flex-[1_1_100%]" role="group" aria-label={`${activeSeason} checkpoints`}>
-              <Button
-                type="button"
-                variant="tab"
-                size="tab"
-                aria-pressed={!activeCheckpoint}
-                className={CHECKPOINT_TAB_CLASS}
-                onClick={() => selectScope(`season:${activeSeason}`)}
-                onFocus={() => preloadOnIntent(`season:${activeSeason}`)}
-                onPointerEnter={() => preloadOnIntent(`season:${activeSeason}`)}
-              >
-                <span>Full year</span>
-                <small>{activeSeason}</small>
-              </Button>
-              {checkpointTabs.map((checkpoint) => {
-                const ongoing = checkpoint.id === ongoingCheckpointId
-                return (
-                  <Button
-                    key={checkpoint.id}
-                    type="button"
-                    variant="tab"
-                    size="tab"
-                    title={ongoing ? `${checkpoint.description}. This split is still ongoing.` : checkpoint.description}
-                    aria-pressed={activeCheckpoint === checkpoint.id}
-                    className={CHECKPOINT_TAB_CLASS}
-                    onClick={() => selectScope(checkpointScope(activeSeason, checkpoint.id))}
-                    onFocus={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
-                    onPointerEnter={() => preloadOnIntent(checkpointScope(activeSeason, checkpoint.id))}
-                  >
-                    <span>{checkpoint.label}</span>
-                    <small>{ongoing ? 'Ongoing' : formatDate(checkpoint.endDate)}</small>
-                  </Button>
-                )
-              })}
-              {pendingCheckpoint ? (
-                <div
-                  className={cn(CHECKPOINT_TAB_CLASS, 'inline-flex h-[var(--control-h)] cursor-default flex-col justify-center rounded-[var(--r-2)] border border-dashed border-[var(--line)] text-[var(--faint)] [&>small]:text-[var(--faint)] [&>span]:text-[var(--faint)]')}
-                  aria-disabled="true"
-                  title={`${pendingCheckpoint.label} has not started yet.`}
-                >
-                  <span>{pendingCheckpoint.label}</span>
-                  <small>Not started</small>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        {/* Inline under the scope bar on desktop. On a phone it is fixed to the
+            bottom edge instead: the board is thousands of pixels long there, so
+            an inline dock would scroll out of reach the moment you started
+            picking. Sticky cannot do this, because the dock's natural position
+            is above the fold rather than below it. */}
+        {mode === 'rankings' || mode === 'regions' ? (
+          <div className="px-[var(--page-x)] pt-4 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-40 max-sm:border-t max-sm:border-[var(--line-strong)] max-sm:bg-[color-mix(in_oklch,var(--surface)_92%,var(--bg))] max-sm:px-3 max-sm:pt-2 max-sm:pb-[max(8px,env(safe-area-inset-bottom))]">
+            <CompareDock
+              label={trayLabel}
+              limit={COMPARE_LIMIT}
+              entities={compareEntities}
+              matchup={compareMatchup}
+              onRemove={(id) => {
+                if (mode === 'regions') setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))
+                else setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))
+              }}
+              onClear={() => {
+                if (mode === 'regions') setRegionPicks([])
+                else setTeamPicks([])
+              }}
+              onOpen={() => {
+                if (mode === 'regions') {
+                  requestRegionHistory()
+                  requestTeamHistory()
+                } else {
+                  requestTeamHistory()
+                }
+                setDrawerOpen(true)
+              }}
+            />
+          </div>
+        ) : null}
 
         {seeded ? (
           <div className="flex min-w-0 flex-col px-[var(--page-x)] pt-6 pb-0">
@@ -439,86 +435,6 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
           <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href="/licenses">Licenses</a>
         </footer>
       </main>
-
-      {trayPicks > 0 ? (
-        <div className="fixed right-0 bottom-0 left-0 z-40 grid min-h-[var(--tray-h)] items-center border-t border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_92%,var(--bg))] pt-2 pr-[max(var(--page-x),env(safe-area-inset-right))] pb-[calc(8px+env(safe-area-inset-bottom))] pl-[max(var(--page-x),env(safe-area-inset-left))] max-sm:pr-[max(12px,env(safe-area-inset-right))] max-sm:pl-[max(12px,env(safe-area-inset-left))]">
-          <div className="mx-auto grid min-h-10 w-full max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 max-sm:min-h-[76px] max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-2" role="region" aria-label={`${trayLabel}: ${trayPicks} selected`}>
-            <span className="whitespace-nowrap text-[var(--t-3)] font-semibold text-[var(--muted)]">{trayLabel}</span>
-            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-sm:col-span-full max-sm:col-start-1 max-sm:row-start-2 max-sm:w-full">
-              {mode === 'regions'
-                ? activeRegionPicks.map((region) => (
-                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[var(--t-3)] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-semibold" key={regionKey(region)}>
-                      <RegionBadge region={region.region} size="sm" />
-                      <b>{region.region}</b>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-1)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
-                        onClick={() => toggleRegion(region)}
-                        aria-label={`Remove ${region.region}`}
-                      >
-                        <X aria-hidden="true" />
-                      </Button>
-                    </span>
-                  ))
-                : null}
-              {mode === 'rankings'
-                ? activeTeamPicks.map((team) => (
-                    <span className="inline-flex min-h-7 max-w-[min(220px,38vw)] items-center gap-1.5 whitespace-nowrap rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] py-[3px] pr-1 pl-2 text-[var(--t-3)] text-[var(--text)] max-sm:max-w-[min(180px,48vw)] [&>b]:min-w-0 [&>b]:overflow-hidden [&>b]:text-ellipsis [&>b]:font-semibold" key={teamKey(team)}>
-                      <b>{team.code ?? team.team}</b>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-[22px] shrink-0 cursor-pointer rounded-[var(--r-1)] border border-transparent bg-transparent text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] hover:text-[var(--loss)]"
-                        onClick={() => toggleTeam(team)}
-                        aria-label={`Remove ${team.team}`}
-                      >
-                        <X aria-hidden="true" />
-                      </Button>
-                    </span>
-                  ))
-                : null}
-            </div>
-            <div className="flex min-w-max items-center justify-end gap-2 max-sm:col-start-2 max-sm:row-start-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-[var(--muted)]"
-                onClick={() => {
-                  if (mode === 'regions') setRegionPicks([])
-                  else setTeamPicks([])
-                }}
-              >
-                Clear
-              </Button>
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                className="min-w-[92px]"
-                onClick={() => {
-                  if (mode === 'regions') {
-                    requestRegionHistory()
-                    requestTeamHistory()
-                  } else {
-                    requestTeamHistory()
-                  }
-                  setDrawerOpen(true)
-                }}
-                disabled={trayPicks < 2}
-              >
-                {/* The tray appears at one pick but comparing needs two. It
-                    used to greet the user with a greyed-out primary action and
-                    no explanation of why. */}
-                {trayPicks < 2 ? 'Pick 1 more' : `Compare ${trayPicks}`}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {drawerOpen && mode === 'regions' ? (
         <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6"><LoadingState label="Opening region comparison" /></div>}>

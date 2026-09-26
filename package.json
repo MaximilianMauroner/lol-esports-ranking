@@ -14,6 +14,7 @@
     "start": "node scripts/railway-server.mjs",
     "data:build": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data",
     "data:download": "node scripts/download-local-data.mjs",
+    "data:team-branding": "node scripts/sync-team-branding.mjs",
     "data:crunch": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --manifest data/raw/manifest.json",
     "data:freshness": "tsx scripts/raw-manifest-freshness.ts data/raw/manifest.json",
     "calibration:export": "tsx scripts/export-ranking-predictions.ts",

@@ -106,6 +106,7 @@ import type {
   PublicMatchHistoryIndex,
   PublicMatchHistoryEntry,
   PublicMatchHistoryPage,
+  PublicMatchHistoryPageRef,
   PublicMatchHistorySeriesRef,
   SameTeamTopFiveClusteringDiagnostic,
 } from './publicArtifacts/schema'
@@ -1340,9 +1341,18 @@ export function createStaticRankingData({
     })
     return result
   }
+  // Incremental setup derives several full-corpus indexes before player work.
+  // They are no longer needed once the scope closures above exist, and the
+  // refresh worker exposes GC so their transient allocations do not overlap
+  // the player replay.
+  if (compactPlayerDirectory) (globalThis as { gc?: () => void }).gc?.()
   let globalPlayers = runPlayerLifecycleStage('player-build', 'global', 'All__All__All', () => (
     hasObservedGameRosters || hasRosterProfiles
-      ? buildPlayerModel(matches, rosters, { teams, leagueStrengths: globalRanking.leagues })
+      ? buildPlayerModel(matches, rosters, {
+          teams,
+          leagueStrengths: globalRanking.leagues,
+          ...(compactPlayerDirectory ? { historySeriesLimit: 3 } : {}),
+        })
       : []
   ))
   const seasonPlayerCache = compactPlayerDirectory ? undefined : new Map<string, PlayerStanding[]>()
@@ -1353,7 +1363,11 @@ export function createStaticRankingData({
     const cached = seasonPlayerCache?.get(cacheKey)
     if (cached) return cached
     const players = runPlayerLifecycleStage('player-build', 'season', cacheKey, () => (
-      buildPlayerModel(filteredMatches, rosters, { teams: scope.teams, leagueStrengths: scope.ranking.leagues })
+      buildPlayerModel(filteredMatches, rosters, {
+        teams: scope.teams,
+        leagueStrengths: scope.ranking.leagues,
+        ...(compactPlayerDirectory ? { historySeriesLimit: 3 } : {}),
+      })
     ))
     seasonPlayerCache?.set(cacheKey, players)
     return players
@@ -1693,23 +1707,32 @@ export function createMatchHistoryArtifacts(
         url: matchHistoryPageUrlForKey(key, page.page),
         seriesCount: page.seriesCount,
         gameCount: page.gameCount,
-        seriesIds: [...new Set(page.matches.map((match) => match.seriesId))],
-        startUtcDate: page.matches.map((match) => match.date).sort()[0]!,
-        endUtcDate: page.matches.map((match) => match.date).sort().at(-1)!,
       })),
       series: catalogSeries,
     }
-    return [key, { catalog, pages }] as const
+    const dependencyPages: PublicMatchHistoryPageRef[] = Object.values(pages).map((page) => ({
+      page: page.page,
+      url: matchHistoryPageUrlForKey(key, page.page),
+      seriesCount: page.seriesCount,
+      gameCount: page.gameCount,
+      seriesIds: [...new Set(page.matches.map((match) => match.seriesId))],
+      startUtcDate: page.matches.map((match) => match.date).sort()[0]!,
+      endUtcDate: page.matches.map((match) => match.date).sort().at(-1)!,
+    }))
+    return [key, { catalog, pages, dependencyPages }] as const
   })
   const catalogs = Object.fromEntries(artifacts.map(([key, artifact]) => [key, artifact.catalog]))
   const pages = Object.fromEntries(artifacts.map(([key, artifact]) => [key, artifact.pages]))
-  const scopeIndex = Object.fromEntries(Object.entries(catalogs).map(([key, catalog]) => [key, {
+  const scopeIndex = Object.fromEntries(artifacts.map(([key, { catalog, dependencyPages }]) => [key, {
     filter: catalog.filter,
     url: matchHistoryCatalogUrlForKey(key),
     gameCount: catalog.gameCount,
     seriesCount: catalog.seriesCount,
     pageCount: catalog.pages.length,
-    pages: catalog.pages,
+    // Dependency metadata belongs only in the index consumed by the refresh
+    // planner. Repeating it in browser catalogs adds no runtime capability and
+    // made every series identifier count twice against the public byte budget.
+    pages: dependencyPages,
   }]))
   return {
     index: {

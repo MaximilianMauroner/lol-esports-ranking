@@ -133,6 +133,10 @@
   /* One height for every control that sits in a filter or scope bar, so tabs,
      selects, inputs and buttons share a baseline. */
   --control-h: 36px;
+  /* Scope tabs are taller than a plain control because the checkpoint tabs
+     carry a second line. Season and checkpoint tabs share it so the two rows
+     of the scope bar line up. */
+  --scope-h: 42px;
 
   font-family: var(--sans);
   font-synthesis: none;
@@ -233,6 +237,9 @@ input {
 @media (max-width: 640px), (pointer: coarse) {
   :root {
     --control-h: 44px;
+    /* Matches the 44px minimum the touch rule below forces onto buttons, so
+       the scope rows do not desynchronise on touch devices. */
+    --scope-h: 44px;
   }
 }
 

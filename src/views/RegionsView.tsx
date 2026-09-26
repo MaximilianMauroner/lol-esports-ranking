@@ -30,6 +30,7 @@ import { Panel, PanelHeader } from '../components/ui/panel'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { cn } from '../lib/utils'
+import { TeamMark } from '../components/TeamMark'
 
 export function RegionsView({
   regions,
@@ -148,7 +149,8 @@ export function RegionsView({
                   </span>
                   <span className="flex flex-wrap gap-1 max-[900px]:hidden">
                     {region.topTeams.slice(0, 3).map((team) => (
-                      <Badge variant="secondary" key={team.team}>
+                      <Badge className="gap-1.5" variant="secondary" key={team.team}>
+                        <TeamMark team={team.team} code={team.code} className="size-5 border-0 bg-transparent" imageClassName="p-0" />
                         <b className="font-bold text-[var(--text)]">{team.code ?? team.team.slice(0, 3).toUpperCase()}</b>
                         {formatRating(team.rating)}
                       </Badge>
@@ -409,8 +411,9 @@ function RegionDetailDrawer({
               <div className="grid max-h-[min(420px,42vh)] overflow-y-auto pr-1.5 [scrollbar-gutter:stable]">
                 {displayedTeams.length > 0 ? (
                   displayedTeams.map((team, index) => (
-                    <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 border-t border-[var(--line)] py-[11px] first:border-t-0 max-[560px]:grid-cols-[38px_minmax(0,1fr)_auto]" key={team.team}>
+                    <div className="grid grid-cols-[52px_36px_minmax(0,1fr)_auto] items-center gap-3 border-t border-[var(--line)] py-[11px] first:border-t-0 max-[560px]:grid-cols-[38px_32px_minmax(0,1fr)_auto] max-[560px]:gap-2" key={team.team}>
                       <span className="font-mono text-[var(--t-2)] text-[var(--faint)]">{team.rank ? `#${team.rank}` : `#${index + 1}`}</span>
+                      <TeamMark team={team.team} code={team.code} className="size-9 max-[560px]:size-8" />
                       <div>
                         <b className="block text-[var(--t-4)] text-[var(--text-strong)] [overflow-wrap:anywhere]">{team.team}</b>
                         {team.code ? <small className="mt-0.5 block text-[var(--t-2)] text-[var(--muted)]">{team.code}</small> : null}
