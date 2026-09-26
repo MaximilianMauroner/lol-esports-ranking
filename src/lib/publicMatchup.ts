@@ -1,3 +1,4 @@
+import { defaultProbabilityCalibration, type ProbabilityCalibration } from './winProbability'
 import type { ModelInfo, RankingSummaryStanding } from './snapshot'
 import { publishedRatingScale } from './modelConfig'
 import {
@@ -89,6 +90,7 @@ export function estimatePublicMatchup(
     },
     {
       ...options,
+      calibration: calibrationForPublicMatchup(model),
       sideAssumption: toMatchupSideAssumption(options.sideAssumption),
     },
   )
@@ -157,7 +159,18 @@ export function publicScoreGapExplanation(model?: PublicMatchupModel, gap = 100)
   const estimate = estimateMatchupProbability(
     { team: 'Higher', rating: scale.internalAnchor + toInternalRatingDelta(gap, scale), uncertainty: 0 },
     { team: 'Lower', rating: scale.internalAnchor, uncertainty: 0 },
-    { bestOf: 1, sideAssumption: 'neutral' },
+    { bestOf: 1, sideAssumption: 'neutral', calibration: calibrationForPublicMatchup(model) },
   )
   return `+${gap} Power points ≈ ${Math.round(estimate.teamAGameWinProbability * 100)}% neutral single-game win chance before uncertainty. Team uncertainty can move estimates toward 50%; series odds depend on format. Model ${model?.version ?? 'current'}${model?.configHash ? ` / ${model.configHash}` : ''}.`
+}
+
+function calibrationForPublicMatchup(model?: PublicMatchupModel): ProbabilityCalibration {
+  const parameters = model?.parameters as Record<string, unknown> | undefined
+  const positive = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+  const floor = parameters?.winProbabilityUncertaintyFloor
+  return {
+    eloScale: positive(parameters?.winProbabilityEloScale, defaultProbabilityCalibration.eloScale),
+    uncertaintyScale: positive(parameters?.winProbabilityUncertaintyScale, defaultProbabilityCalibration.uncertaintyScale),
+    uncertaintyFloor: typeof floor === 'number' && Number.isFinite(floor) && floor >= 0 && floor <= 1 ? floor : defaultProbabilityCalibration.uncertaintyFloor,
+  }
 }
