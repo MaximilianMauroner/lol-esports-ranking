@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { AlertTriangle, BarChart3, Globe2, History, RefreshCw } from 'lucide-react'
+import { AlertTriangle, BarChart3, CalendarDays, Globe2, History, RefreshCw } from 'lucide-react'
 import type {
   PublicRankingManifest,
   SnapshotCheckpointOption,
@@ -51,6 +51,8 @@ const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 const RegionsView = lazy(() => import('./views/RegionsView').then((module) => ({ default: module.RegionsView })))
 const MatchesView = lazy(() => import('./views/MatchesView').then((module) => ({ default: module.MatchesView })))
+const TournamentsView = lazy(() => import('./views/TournamentsView').then((module) => ({ default: module.TournamentsView })))
+const TOURNAMENT_HUB_ENABLED = import.meta.env.VITE_TOURNAMENT_HUB_ENABLED === '1'
 const RegionCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.RegionCompareDrawer })))
 const RegionCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.RegionCompareAnalysis })))
 const TeamCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.TeamCompareDrawer })))
@@ -60,6 +62,7 @@ const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
   { id: 'rankings', label: 'Rankings', icon: BarChart3 },
   { id: 'regions', label: 'Regions', icon: Globe2 },
   { id: 'matches', label: 'Matches', icon: History },
+  ...(TOURNAMENT_HUB_ENABLED ? [{ id: 'tournaments' as const, label: 'Tournaments', icon: CalendarDays }] : []),
 ]
 
 /**
@@ -82,6 +85,10 @@ const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   matches: {
     title: 'Match history',
     intro: 'Every published series behind the ratings, newest first. Power impact shows how much each side’s score moved as a result, after opponent strength and event weight are applied.',
+  },
+  tournaments: {
+    title: 'Tournaments',
+    intro: 'Upcoming, live and completed series from the LoL Esports site schedule reference. This feed is separate from the published Power Index and does not score matches.',
   },
 }
 
@@ -222,6 +229,23 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
       for (const preloadScope of preloadScopes) prefetchScope(preloadScope)
     })
   }, [prefetchScope, preloadScopes, preloadScopesKey])
+
+  if (mode === 'tournaments') {
+    return (
+      <div className="flex min-h-full flex-col">
+        <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 focus-visible:top-3" href="#main-content">Skip to content</a>
+        <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} />
+        <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1">
+          <ModeHeader mode={mode} />
+          {TOURNAMENT_HUB_ENABLED ? (
+            <Suspense fallback={<LoadingState presentation="page" label="Loading tournaments" />}><TournamentsView /></Suspense>
+          ) : (
+            <div className="px-[var(--page-x)] py-6"><Alert variant="warning">Tournament feed is not enabled in this environment.</Alert></div>
+          )}
+        </main>
+      </div>
+    )
+  }
 
   if (manifestState.status === 'loading') {
     return <ManifestRouteShell mode={mode} scope={effectiveScope} onGoHome={goHome} />
@@ -541,7 +565,7 @@ function ModeHeader({ mode }: { mode: Mode }) {
   return (
     <header className="grid gap-1.5 border-b border-[var(--line)] px-[var(--page-x)] pt-4 pb-3.5">
       <h1 className="text-xl font-semibold tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
-      <details className="max-w-[86ch] text-sm leading-[1.55] text-[var(--muted)]"><summary className="cursor-pointer">About these {mode === 'matches' ? 'results' : 'ratings'}</summary><p className="pt-2">{MODE_TITLES[mode].intro}</p></details>
+      <details className="max-w-[86ch] text-sm leading-[1.55] text-[var(--muted)]"><summary className="cursor-pointer">About these {mode === 'matches' ? 'results' : mode === 'tournaments' ? 'fixtures' : 'ratings'}</summary><p className="pt-2">{MODE_TITLES[mode].intro}</p></details>
     </header>
   )
 }

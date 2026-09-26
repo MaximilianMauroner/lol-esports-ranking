@@ -47,6 +47,7 @@ test('only ranking startup holds the prerender while the manifest loads', () => 
   assert.equal(shouldHoldPrerenderForManifest('#rankings?scope=season%3A2026', '/', false), true)
   assert.equal(shouldHoldPrerenderForManifest('#teams?scope=season%3A2026', '/', false), true)
   assert.equal(shouldHoldPrerenderForManifest('#matches', '/', false), false)
+  assert.equal(shouldHoldPrerenderForManifest('#tournaments?event=worlds%3A2026', '/', false), false)
   assert.equal(shouldHoldPrerenderForManifest('#regions', '/', false), false)
   assert.equal(shouldHoldPrerenderForManifest('', '/matches', false), false)
   assert.equal(shouldHoldPrerenderForManifest('', '/teams', false), true)
@@ -55,6 +56,7 @@ test('only ranking startup holds the prerender while the manifest loads', () => 
 
 test('non-ranking manifest errors stay in the app shell', () => {
   assert.equal(showsManifestErrorInAppShell('matches'), true)
+  assert.equal(showsManifestErrorInAppShell('tournaments'), true)
   assert.equal(showsManifestErrorInAppShell('regions'), true)
   assert.equal(showsManifestErrorInAppShell('rankings'), false)
 })

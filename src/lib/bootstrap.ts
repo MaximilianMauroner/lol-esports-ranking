@@ -1,4 +1,4 @@
-export type AppMode = 'rankings' | 'regions' | 'matches'
+export type AppMode = 'rankings' | 'regions' | 'matches' | 'tournaments'
 
 export function initialModeFromLocation(hash: string, pathname: string): AppMode {
   return modeFromSegment(hash.slice(1).split(/[/?]/, 1)[0])
@@ -16,6 +16,6 @@ export function showsManifestErrorInAppShell(mode: AppMode) {
 
 function modeFromSegment(segment: string): AppMode | undefined {
   if (segment === 'teams') return 'rankings'
-  if (segment === 'rankings' || segment === 'regions' || segment === 'matches') return segment
+  if (segment === 'rankings' || segment === 'regions' || segment === 'matches' || segment === 'tournaments') return segment
   return undefined
 }
