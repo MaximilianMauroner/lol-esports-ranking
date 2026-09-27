@@ -21,7 +21,8 @@ function series(bestOf = 5): TournamentSeries {
 }
 
 test('synthetic tournament card keeps published pre-match odds through live and finished states', { timeout: 60_000 }, async () => {
-  const manifest = parsePublicRankingManifest(JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8')))
+  const manifestJson = await readFile('public/data/ranking-summary.json', 'utf8')
+  const manifest = parsePublicRankingManifest(JSON.parse(manifestJson))
   const shard = parsePublicRankingShard(JSON.parse(await readFile('public/data/scopes/all.json', 'utf8')))
   const forecastBasis = { snapshotId: `${manifest.artifactMeta?.runId ?? manifest.generatedAt}/${manifest.defaultSnapshotKey}`,
     ratingDataAsOf: manifest.coverage.latestMatchDate!, ratingPublishedAt: manifest.generatedAt,
@@ -30,7 +31,7 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   const estimate = forecastTournamentSeries(upcoming, forecastBasis)
   assert.equal(estimate.status, 'ready')
   let ledger = emptyForecastLedger
-  let ledgerStatus = 200
+  let ledgerStatus = 503
   let feed: TournamentFeed = { version: 1, source: 'lolesports-persisted-site-api', unsupportedApi: true, dataMode: 'synthetic-fixture',
     fetchedAt: at, sourceUpdatedAt: null, coverage: { start: at, end: '2026-11-01T00:00:00.000Z', complete: true, warnings: [] },
     events: [{ id: eventId, sourceTournamentId: 'fixture-worlds', competition: 'worlds', label: 'Worlds 2026', season: '2026',
@@ -38,6 +39,11 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   const fixturePlugin: Plugin = { name: 'forecast-fixture', configureServer(server) {
     server.middlewares.use((request, response, next) => {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname
+      if (path === '/data/ranking-summary.json') {
+        response.setHeader('content-type', 'application/json')
+        setTimeout(() => response.end(manifestJson), 500)
+        return
+      }
       if (!path.startsWith('/data/tournaments/')) return next()
       response.setHeader('content-type', 'application/json')
       const body = path === '/data/tournaments/feed.json' ? feed
@@ -69,12 +75,14 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     await page.clock.install({ time: new Date(at) })
     await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
     await page.getByText('Current model estimate · not archived').waitFor()
+    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
     assert.match(await page.locator('body').innerText(), /Game win: T1 .* Gen\.G/)
     assert.match(await page.locator('body').innerText(), /Series win \(Bo5\): T1 .* Gen\.G/)
     assert.match(await page.locator('body').innerText(), /Only decisive Bo1, Bo3 and Bo5 are supported/)
     assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
     assert.match(await page.locator('body').innerText(), /Power data through 2026-07-26/)
 
+    ledgerStatus = 200
     const created = createPreMatchReceipt({ series: upcoming, forecast: estimate, forecastRevision: 'fixture-rev-1',
       generatedAt: at, publishedAt: '2026-09-27T12:00:01.000Z', observedAt: at })
     assert.equal(created.status, 'ready')

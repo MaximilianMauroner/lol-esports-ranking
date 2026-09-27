@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -21,15 +21,19 @@ export function TournamentsView() {
   const [selectedId, setSelectedId] = useState(() => hashParam('event') ?? '')
   const [now, setNow] = useState(() => Date.now())
   const [forecastArtifacts, setForecastArtifacts] = useState<ForecastArtifacts>({ basis: null, ledger: emptyForecastLedger, reason: 'Forecast inputs are loading.' })
+  const refreshSequence = useRef(0)
 
   useEffect(() => {
     if (!FORECASTS_ENABLED) return
     let active = true
-    void loadTournamentForecastArtifacts().then((loaded) => { if (active) setForecastArtifacts(loaded) })
+    void loadTournamentForecastArtifacts().then((loaded) => {
+      if (active) setForecastArtifacts((previous) => ({ ...previous, ...loaded }))
+    })
     return () => { active = false }
   }, [])
 
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current
     try {
       const response = await fetch('/data/tournaments/feed.json', { cache: 'no-store' })
       if (!response.ok) throw new Error(`Tournament feed returned HTTP ${response.status}`)
@@ -38,16 +42,20 @@ export function TournamentsView() {
       const healthResponse = await fetch('/data/tournaments/feed.json.health.json', { cache: 'no-store' }).catch(() => null)
       const healthBody: unknown = healthResponse?.ok ? await healthResponse.json().catch(() => null) : null
       const health = isHealth(healthBody) ? healthBody : null
+      if (sequence !== refreshSequence.current) return
       setState({ status: 'ready', feed: body, health })
       if (FORECASTS_ENABLED) {
         try {
           const ledger = await loadTournamentForecastLedger()
+          if (sequence !== refreshSequence.current) return
           setForecastArtifacts((previous) => ({ ...previous, ledger, ledgerWarning: undefined }))
         } catch {
+          if (sequence !== refreshSequence.current) return
           setForecastArtifacts((previous) => ({ ...previous, ledgerWarning: 'Forecast receipt check failed; showing the last valid ledger.' }))
         }
       }
     } catch (error) {
+      if (sequence !== refreshSequence.current) return
       const message = error instanceof Error ? error.message : String(error)
       setState((previous) => previous.status === 'ready' ? { ...previous, error: message } : { status: 'error', message })
     }

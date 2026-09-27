@@ -1,7 +1,7 @@
 import { createPublicRankingManifestLoader } from './publicArtifacts/manifestLoader'
 import { fetchPublicSnapshotShard } from './publicArtifacts/resolver'
 import { resolvePublicArtifactUrl } from './publicArtifacts/urlResolver'
-import { emptyForecastLedger, isForecastLedger, isTournamentTeamIdentityMap, type ForecastBasis, type ForecastLedger } from './tournamentForecast'
+import { isForecastLedger, isTournamentTeamIdentityMap, type ForecastBasis, type ForecastLedger } from './tournamentForecast'
 
 const MANIFEST_URL = import.meta.env.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
 const IDENTITY_URL = '/data/tournaments/forecasts/team-ids.json'
@@ -9,9 +9,8 @@ const LEDGER_URL = '/data/tournaments/forecasts/ledger.json'
 
 /** Optional read-only artifacts; absence leaves the schedule usable. No collector or publisher calls occur here. */
 export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fetch): Promise<{
-  basis: ForecastBasis | null; ledger: ForecastLedger; reason?: string
+  basis: ForecastBasis | null; reason?: string
 }> {
-  const ledger = await loadTournamentForecastLedger(fetcher).catch(() => emptyForecastLedger)
   try {
     const identityResponse = await fetcher(IDENTITY_URL, { cache: 'no-store' })
     if (!identityResponse.ok) throw new Error('No reviewed source-to-ranking team ID map is published.')
@@ -26,9 +25,9 @@ export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fe
       snapshotId: `${manifest.artifactMeta?.runId ?? manifest.generatedAt}/${key}`,
       ratingDataAsOf: manifest.coverage.latestMatchDate ?? '', ratingPublishedAt: manifest.generatedAt,
       dataMode: manifest.dataMode, model: manifest.model, snapshot, identityMap: identityValue,
-    }, ledger }
+    } }
   } catch (error) {
-    return { basis: null, ledger, reason: error instanceof Error ? error.message : 'Forecast inputs are unavailable.' }
+    return { basis: null, reason: error instanceof Error ? error.message : 'Forecast inputs are unavailable.' }
   }
 }
 
