@@ -66,6 +66,14 @@ export async function collectTournamentFeed(options: {
       warnings.push(`${direction} page limit reached before the requested window boundary.`)
     }
   }
+  const malformedCursors = pages.reduce((count, page) => count + (['older', 'newer'] as const).filter((direction) => {
+    const cursor = record(page.pages)?.[direction]
+    return cursor !== undefined && cursor !== null && typeof cursor !== 'string'
+  }).length, 0)
+  if (malformedCursors) {
+    complete = false
+    warnings.push(`${malformedCursors} malformed page cursors were treated as missing; schedule coverage is unknown.`)
+  }
   const malformedRows = pages.reduce((count, page) => count + (page.events as unknown[]).filter((item) => !record(item)).length, 0)
   if (malformedRows) {
     complete = false

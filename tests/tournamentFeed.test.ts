@@ -142,6 +142,35 @@ test('collector follows both cursors and withholds a capped incomplete read', as
   assert.equal(capped.feed.coverage.complete, false)
 })
 
+test('malformed present page cursors cannot publish a truncated feed over last-good', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-cursor-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  try {
+    for (const [label, firstPages, laterPages] of [
+      ['non-string older', { older: 42 }, null],
+      ['array newer', { newer: [] }, null],
+      ['non-string cursor on a fetched page', { older: 'old' }, { older: 42 }],
+    ] as const) {
+      const fetcher = (async (urlValue: string | URL | Request) => {
+        const token = new URL(String(urlValue)).searchParams.get('pageToken')
+        return new Response(JSON.stringify({ data: { schedule: { events: [], pages: token ? laterPages : firstPages } } }))
+      }) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, label)
+      assert.match(collected.feed.coverage.warnings.join(' '), /malformed.*cursor/i, label)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false, label)
+      assert.equal(await readFile(output, 'utf8'), original, label)
+    }
+    const ended = (async () => new Response(JSON.stringify({ data: { schedule: { events: [], pages: { older: null, newer: null } } } }))) as typeof fetch
+    assert.equal((await collectTournamentFeed({ fetcher: ended, now: new Date(at) })).feed.coverage.complete, true)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('collector retries 429 with the shared provider helper and rejects malformed coverage', async () => {
   let calls = 0
   const fetcher = (async () => {
