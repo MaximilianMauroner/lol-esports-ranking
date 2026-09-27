@@ -67,6 +67,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     assert.match(await page.locator('body').innerText(), /Gamma.*Delta/)
     assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
+    assert.match(await page.locator('body').innerText(), /Forecast unavailable: rules not verified/)
     assert.ok(dataRequests.includes(tournamentPath))
     assert.ok(dataRequests.every((path) => path === tournamentPath || path === healthPath), `Unexpected data requests: ${dataRequests}`)
     assert.deepEqual(externalRequests, [])
@@ -75,6 +76,12 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
     assert.match(page.url(), /event=lcs%3A2026%3Afixture-lcs/)
     assert.match(await page.locator('body').innerText(), /Alpha.*Beta/)
+    await page.goBack()
+    await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), 'worlds:2026')
+    await page.goForward()
+    await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
 
     feed.events[0]!.series[0] = series('lcs-series', 'lcs:2026:fixture-lcs', [team('alpha', 'Alpha', 3, 'win'), team('beta', 'Beta', 1, 'loss')], 'completed', 'completed')
     feed.fetchedAt = '2026-09-27T12:01:00.000Z'
@@ -101,9 +108,28 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     health = { checkedAt: '2026-09-27T12:05:00.000Z', complete: true, warnings: [] }
     await page.clock.fastForward(60_000)
     await page.getByText(/Schedule may be stale/).waitFor({ state: 'hidden' })
-    await page.setViewportSize({ width: 320, height: 740 })
-    const layout = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }))
-    assert.ok(layout.content <= layout.viewport, `Horizontal overflow: ${JSON.stringify(layout)}`)
+    const originalEvents = feed.events
+    feed.events = []
+    feed.fetchedAt = '2026-09-27T12:06:00.000Z'
+    health.checkedAt = feed.fetchedAt
+    await page.clock.fastForward(60_000)
+    await page.getByText('No supported tournament is in the available schedule window.').waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), '')
+    feed.events = originalEvents
+    feed.fetchedAt = '2026-09-27T12:07:00.000Z'
+    health.checkedAt = feed.fetchedAt
+    await page.clock.fastForward(60_000)
+    await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
+
+    await page.locator('a[href="#main-content"]').focus()
+    await page.keyboard.press('Enter')
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content')
+    for (const width of [320, 390, 768, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 800 })
+      const layout = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }))
+      assert.ok(layout.content <= layout.viewport, `Horizontal overflow at ${width}px: ${JSON.stringify(layout)}`)
+    }
     assert.deepEqual(externalRequests, [])
   } finally {
     await browser?.close()
