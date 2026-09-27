@@ -102,15 +102,16 @@ export function TournamentsView() {
 
 function SeriesCard({ series, timezone, now, forecasts }: { series: TournamentSeries; timezone: string; now: number; forecasts: ForecastArtifacts | null }) {
   const [first, second] = series.teams
+  const scheduledStartPassed = !series.startTime || now >= Date.parse(series.startTime)
   const forecast = useMemo<TournamentForecast | ForecastReceipt | null>(() => {
     if (!forecasts) return null
     if (series.status === 'upcoming') {
-      if (!series.startTime || now >= Date.parse(series.startTime)) return { status: 'unavailable', reason: 'already-started', detail: 'Scheduled start has passed; a new pre-match estimate is withheld.' }
+      if (scheduledStartPassed) return { status: 'unavailable', reason: 'already-started', detail: 'Scheduled start has passed; a new pre-match estimate is withheld.' }
       return forecasts.basis ? forecastTournamentSeries(series, forecasts.basis)
         : { status: 'unavailable', reason: 'stale-model-basis', detail: forecasts.reason ?? 'Current ratings are unavailable.' }
     }
-    return pinnedForecast(forecasts.ledger, series.id)
-  }, [forecasts, now, series])
+    return pinnedForecast(forecasts.ledger, series)
+  }, [forecasts, scheduledStartPassed, series])
   const receipt = forecast?.status === 'ready' && 'receiptKey' in forecast ? forecast : null
   const conditional = receipt && (series.status === 'live' || series.status === 'completed') ? scoreConditionedSeriesOdds(receipt, series) : null
   return <Card size="sm">

@@ -9,7 +9,7 @@ import { estimatePublicMatchup } from '../src/lib/publicMatchup'
 import type { PublicRankingShard, PublicTeamStanding } from '../src/lib/publicArtifacts/schema'
 import type { TournamentSeries } from '../src/lib/tournamentFeed'
 import {
-  appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries,
+  appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries, isForecastLedger,
   pinPreMatchReceipt, pinnedForecast, scoreConditionedSeriesOdds, type ForecastBasis, type ForecastReceipt,
 } from '../src/lib/tournamentForecast'
 
@@ -104,12 +104,12 @@ test('receipt is pinned before play, remains frozen across model revisions and r
   assert.throws(() => appendForecastReceipt(ledger, { ...first, modelVersion: 'tampered' }), /different content/)
   const live = { ...series(), status: 'live' as const, sourceState: 'inProgress', teams: series().teams.map((team, index) => ({ ...team, gameWins: index === 0 ? 1 : 0 })) }
   ledger = pinPreMatchReceipt(ledger, live, after)
-  const pinned = pinnedForecast(ledger, live.id)
+  const pinned = pinnedForecast(ledger, live)
   assert.equal(pinned.status, 'ready')
   const revised = basis()
   revised.snapshot.standings[0]!.rating = 1100
   revised.model.version = 'fixture-v2'
-  assert.deepEqual(pinnedForecast(ledger, live.id), pinned)
+  assert.deepEqual(pinnedForecast(ledger, live), pinned)
   assert.equal(createPreMatchReceipt({ series: live, forecast: forecastTournamentSeries(series(), basis()), forecastRevision: 'late',
     generatedAt: after, publishedAt: after, observedAt: after }).status, 'unavailable')
   assert.equal(receipt(basis(), series(), after).status, 'unavailable')
@@ -136,6 +136,52 @@ test('score-conditioned odds use frozen game probability and reject impossible o
   live.teams[1]!.gameWins = 3
   assert.deepEqual(scoreConditionedSeriesOdds(frozen, live).status, 'unavailable')
   assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, bestOf: 3 }).status, 'unavailable')
+  assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, eventId: 'worlds:2027' }).status, 'unavailable')
+})
+
+test('participant and event corrections cannot relabel a pinned forecast', () => {
+  const created = receipt()
+  assert.equal(created.status, 'ready')
+  if (created.status !== 'ready') return
+  const initial = appendForecastReceipt(emptyForecastLedger, created)
+  const live = { ...series(), status: 'live' as const, sourceState: 'inProgress' }
+  const corrected = { ...live, teams: [{ ...live.teams[0]!, id: 'source-c' }, live.teams[1]!] }
+  assert.equal(pinnedForecast(pinPreMatchReceipt(initial, corrected, after), corrected).status, 'unavailable')
+  const pinned = pinPreMatchReceipt(initial, live, after)
+  assert.equal(pinnedForecast(pinned, live).status, 'ready')
+  assert.deepEqual(pinnedForecast(pinned, corrected).status, 'unavailable')
+  assert.deepEqual(pinnedForecast(pinned, { ...live, eventId: 'worlds:2027' }).status, 'unavailable')
+  assert.deepEqual(pinnedForecast(pinned, { ...live, bestOf: 3 }).status, 'unavailable')
+})
+
+test('receipt parser rejects backdated, mismatched and non-upcoming persisted artifacts', () => {
+  const created = receipt()
+  assert.equal(created.status, 'ready')
+  if (created.status !== 'ready') return
+  const wrapped = (candidate: ForecastReceipt) => ({ version: 1, receipts: { [candidate.receiptKey]: candidate }, pinned: { [candidate.matchId]: candidate.receiptKey } })
+  assert.equal(isForecastLedger(wrapped(created)), true)
+  assert.equal(isForecastLedger(wrapped({ ...created, generatedAt: after })), false)
+  assert.equal(isForecastLedger(wrapped({ ...created, ratingPublishedAt: after })), false)
+  assert.equal(isForecastLedger(wrapped({ ...created, sourceObservedAt: after })), false)
+  assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'live', 'inProgress', 5,
+    [['source-a', 1, null], ['source-b', 0, null]]]) })), false)
+  assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'upcoming', 'inProgress', 5,
+    [['source-a', null, null], ['source-b', null, null]]]) })), false)
+})
+
+test('Bo1 score conditioning requires one integer completed-game win', () => {
+  const created = receipt(basis(), series(1))
+  assert.equal(created.status, 'ready')
+  if (created.status !== 'ready') return
+  const live = { ...series(1), status: 'live' as const, sourceState: 'inProgress', teams: [
+    { ...series(1).teams[0]!, gameWins: 0.5 }, { ...series(1).teams[1]!, gameWins: 0.5 },
+  ] }
+  assert.deepEqual(scoreConditionedSeriesOdds(created, live).status, 'unavailable')
+  live.teams[0]!.gameWins = 1
+  live.teams[1]!.gameWins = 0
+  const terminal = scoreConditionedSeriesOdds(created, live)
+  assert.equal(terminal.status, 'ready')
+  if (terminal.status === 'ready') assert.equal(terminal.homeSeriesWinProbability, 1)
 })
 
 test('offline store writes each receipt and pin once without overwriting a revision', async () => {
@@ -151,7 +197,7 @@ test('offline store writes each receipt and pin once without overwriting a revis
     await assert.rejects(publishPreMatchReceiptOffline(root, { ...input, forecast: changed }, new Date(before)), /Immutable forecast artifact/)
     const live = { ...current, status: 'live' as const, sourceState: 'inProgress' }
     const ledger = await pinPreMatchReceiptOffline(root, live, after)
-    assert.equal(pinnedForecast(ledger, current.id).status, 'ready')
+    assert.equal(pinnedForecast(ledger, live).status, 'ready')
     assert.deepEqual(await readForecastLedgerOffline(root), ledger)
     assert.equal((await publishPreMatchReceiptOffline(root, input, new Date(after))).status, 'unavailable')
   } finally {
