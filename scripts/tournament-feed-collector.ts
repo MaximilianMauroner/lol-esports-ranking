@@ -4,7 +4,7 @@ import { hostname } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createProviderFetchTelemetry, fetchWithRetry } from './provider-fetch-retry.mjs'
-import { competitionForLeague, isTournamentFeed, normalizeTournamentFeed } from '../src/lib/tournamentFeed'
+import { competitionForLeague, conflictingLeagueIdentity, isTournamentFeed, normalizeTournamentFeed } from '../src/lib/tournamentFeed'
 
 const BASE_URL = 'https://esports-api.lolesports.com/persisted/gw'
 const PUBLIC_SITE_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
@@ -50,7 +50,7 @@ export async function collectTournamentFeed(options: {
   const warnings: string[] = []
   let complete = true
   for (const direction of ['older', 'newer'] as const) {
-    let token = str(record(firstSchedule.pages)?.[direction])
+    let token = str(record(firstSchedule.pages)?.[direction]).trim()
     const seen = new Set<string>()
     let reachedBoundary = boundaryReached(firstSchedule, direction, start, end)
     for (let index = 0; token && !reachedBoundary && index < maxPages; index += 1) {
@@ -59,7 +59,7 @@ export async function collectTournamentFeed(options: {
       const next = schedule(await request('getSchedule', { pageToken: token }))
       pages.push(next)
       reachedBoundary = boundaryReached(next, direction, start, end)
-      token = str(record(next.pages)?.[direction])
+      token = str(record(next.pages)?.[direction]).trim()
     }
     if (token && !reachedBoundary) {
       complete = false
@@ -68,7 +68,7 @@ export async function collectTournamentFeed(options: {
   }
   const malformedCursors = pages.reduce((count, page) => count + (['older', 'newer'] as const).filter((direction) => {
     const cursor = record(page.pages)?.[direction]
-    return cursor !== undefined && cursor !== null && typeof cursor !== 'string'
+    return cursor !== undefined && cursor !== null && (typeof cursor !== 'string' || !cursor.trim())
   }).length, 0)
   if (malformedCursors) {
     complete = false
@@ -84,6 +84,11 @@ export async function collectTournamentFeed(options: {
   if (missingLeagues.length) {
     complete = false
     warnings.push(`${missingLeagues.length} schedule rows lack a valid league identity; their competition coverage is unknown.`)
+  }
+  const conflictingLeagues = sourceRows.filter((row) => conflictingLeagueIdentity(row.league))
+  if (conflictingLeagues.length) {
+    complete = false
+    warnings.push(`${conflictingLeagues.length} schedule rows have conflicting league identities; their competition coverage is unknown.`)
   }
   const allowedRows = sourceRows.filter((row) => competitionForLeague(row.league))
   const missingStates = allowedRows.filter((row) => !str(row.state).trim())
@@ -111,8 +116,9 @@ export async function collectTournamentFeed(options: {
   for (const id of matchIds.slice(0, maxDetails)) {
     try {
       const detail = record(record((await request('getEventDetails', { id })).data)?.event)
-      if (detail) details.set(id, detail)
-      else { complete = false; warnings.push(`Missing event detail for match ${id}.`) }
+      if (!detail) { complete = false; warnings.push(`Missing event detail for match ${id}.`) }
+      else if (str(detail.id).trim() !== id) { complete = false; warnings.push(`Event detail ID does not match requested match ${id}.`) }
+      else details.set(id, detail)
     } catch (error) {
       complete = false
       warnings.push(`Event detail unavailable for match ${id}: ${error instanceof Error ? error.message : String(error)}`)

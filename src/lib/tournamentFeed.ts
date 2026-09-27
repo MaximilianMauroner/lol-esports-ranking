@@ -42,12 +42,35 @@ type Observation = { event: JsonRecord; detail?: JsonRecord }
 /** Only explicit league identities enter the feed; teams are never region-filtered. */
 export function competitionForLeague(league: unknown): TournamentCompetition | null {
   const record = asRecord(league)
-  const slug = str(record?.slug).toLowerCase()
-  const name = str(record?.name).toLowerCase()
+  const slug = str(record?.slug).trim().toLowerCase()
+  const name = str(record?.name).trim().toLowerCase()
+  const slugCompetition = competitionForSlug(slug)
+  const nameCompetition = competitionForName(name)
+  if (nameCompetition && slug && (!slugCompetition || slugCompetition !== nameCompetition)) return null
+  return slugCompetition ?? nameCompetition
+}
+
+/** A known name cannot override a different or unidentified source slug. */
+export function conflictingLeagueIdentity(league: unknown): boolean {
+  const record = asRecord(league)
+  const slug = str(record?.slug).trim().toLowerCase()
+  const nameCompetition = competitionForName(str(record?.name).trim().toLowerCase())
+  return Boolean(nameCompetition && slug && competitionForSlug(slug) !== nameCompetition)
+}
+
+function competitionForSlug(slug: string): TournamentCompetition | null {
   if (['lcs', 'lec', 'lpl', 'lck'].includes(slug)) return slug as TournamentCompetition
-  if (slug === 'worlds' || /\bworld championship\b/.test(name)) return 'worlds'
-  if (slug === 'msi' || name === 'mid-season invitational') return 'msi'
-  if (slug === 'first_stand' || slug === 'first-stand' || name === 'first stand') return 'first-stand'
+  if (slug === 'worlds') return 'worlds'
+  if (slug === 'msi') return 'msi'
+  if (slug === 'first_stand' || slug === 'first-stand') return 'first-stand'
+  return null
+}
+
+function competitionForName(name: string): TournamentCompetition | null {
+  if (['lcs', 'lec', 'lpl', 'lck'].includes(name)) return name as TournamentCompetition
+  if (/\bworld championship\b/.test(name)) return 'worlds'
+  if (name === 'mid-season invitational') return 'msi'
+  if (name === 'first stand') return 'first-stand'
   return null
 }
 

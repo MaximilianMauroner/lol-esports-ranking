@@ -36,6 +36,8 @@ test('competition allowlist covers four domestic and three international familie
     assert.ok(competitionForLeague({ slug, name: slug }), slug)
   }
   for (const slug of ['cblol-brazil', 'lcp', 'ewc', 'emea_masters']) assert.equal(competitionForLeague({ slug, name: slug }), null)
+  for (const name of ['LCS', 'LEC', 'LPL', 'LCK']) assert.equal(competitionForLeague({ name }), name.toLowerCase())
+  assert.equal(competitionForLeague({ slug: 'lcs', name: 'LCK' }), null)
 })
 
 test('accepts only HTTPS VOD destinations and formats Vienna daylight changes', () => {
@@ -153,6 +155,9 @@ test('malformed present page cursors cannot publish a truncated feed over last-g
       ['non-string older', { older: 42 }, null],
       ['array newer', { newer: [] }, null],
       ['non-string cursor on a fetched page', { older: 'old' }, { older: 42 }],
+      ['empty older', { older: '' }, null],
+      ['whitespace newer', { newer: '  ' }, null],
+      ['empty cursor on a fetched page', { older: 'old' }, { older: '' }],
     ] as const) {
       const fetcher = (async (urlValue: string | URL | Request) => {
         const token = new URL(String(urlValue)).searchParams.get('pageToken')
@@ -243,6 +248,8 @@ test('missing league identity and accepted-row fields retain the prior feed', as
     ['null league', { league: null }],
     ['empty league', { league: {} }],
     ['invalid league slug', { league: { slug: 42 } }],
+    ['conflicting known league names', { ...event('series', 'lcs', at), league: { slug: 'lcs', name: 'LCK' } }],
+    ['unknown slug with included name', { ...event('series', 'lcs', at), league: { slug: 'other', name: 'LCS' } }],
     ['missing source state', { ...event('series', 'lcs', at), state: undefined }],
     ['missing match identity', { ...event('series', 'lcs', at), match: { teams: [] } }],
   ]
@@ -263,6 +270,37 @@ test('missing league identity and accepted-row fields retain the prior feed', as
     const collectedExcluded = await collectTournamentFeed({ fetcher: excluded, now: new Date(at) })
     assert.equal(collectedExcluded.feed.coverage.complete, true)
     assert.equal(collectedExcluded.feed.events.length, 0)
+    const nameOnly = (async (urlValue: string | URL | Request) => new Response(JSON.stringify(new URL(String(urlValue)).pathname.endsWith('getSchedule')
+      ? { data: { schedule: { events: [{ ...event('series', 'lcs', at), league: { name: 'LCS' } }], pages: {} } } }
+      : { data: { event: detail('series') } }))) as typeof fetch
+    const collectedNameOnly = await collectTournamentFeed({ fetcher: nameOnly, now: new Date(at) })
+    assert.equal(collectedNameOnly.feed.coverage.complete, true)
+    assert.equal(collectedNameOnly.feed.events[0]?.competition, 'lcs')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('mismatched or absent detail event IDs retain the prior feed', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-detail-identity-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  try {
+    for (const [label, detailRow] of [
+      ['different ID', detail('different', 'wrong-tournament')],
+      ['missing ID', { tournament: { id: 'wrong-tournament' } }],
+    ] as const) {
+      const fetcher = (async (urlValue: string | URL | Request) => new Response(JSON.stringify(new URL(String(urlValue)).pathname.endsWith('getSchedule')
+        ? { data: { schedule: { events: [event('series', 'lcs', at)], pages: {} } } }
+        : { data: { event: detailRow } }))) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, label)
+      assert.match(collected.feed.coverage.warnings.join(' '), /event detail.*ID/i, label)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false, label)
+      assert.equal(await readFile(output, 'utf8'), original, label)
+    }
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
