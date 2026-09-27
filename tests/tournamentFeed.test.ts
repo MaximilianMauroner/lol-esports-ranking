@@ -38,6 +38,7 @@ test('competition allowlist covers four domestic and three international familie
   for (const slug of ['cblol-brazil', 'lcp', 'ewc', 'emea_masters']) assert.equal(competitionForLeague({ slug, name: slug }), null)
   for (const name of ['LCS', 'LEC', 'LPL', 'LCK']) assert.equal(competitionForLeague({ name }), name.toLowerCase())
   assert.equal(competitionForLeague({ slug: 'lcs', name: 'LCK' }), null)
+  assert.equal(competitionForLeague({ slug: 'lcs', name: 'CBLOL' }), null)
 })
 
 test('accepts only HTTPS VOD destinations and formats Vienna daylight changes', () => {
@@ -249,6 +250,8 @@ test('missing league identity and accepted-row fields retain the prior feed', as
     ['empty league', { league: {} }],
     ['invalid league slug', { league: { slug: 42 } }],
     ['conflicting known league names', { ...event('series', 'lcs', at), league: { slug: 'lcs', name: 'LCK' } }],
+    ['included slug with excluded name', { ...event('series', 'lcs', at), league: { slug: 'lcs', name: 'CBLOL' } }],
+    ['included slug with LCP name', { ...event('series', 'lcs', at), league: { slug: 'lcs', name: 'LCP' } }],
     ['unknown slug with included name', { ...event('series', 'lcs', at), league: { slug: 'other', name: 'LCS' } }],
     ['missing source state', { ...event('series', 'lcs', at), state: undefined }],
     ['missing match identity', { ...event('series', 'lcs', at), match: { teams: [] } }],

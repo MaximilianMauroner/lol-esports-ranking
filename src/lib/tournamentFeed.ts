@@ -46,16 +46,20 @@ export function competitionForLeague(league: unknown): TournamentCompetition | n
   const name = str(record?.name).trim().toLowerCase()
   const slugCompetition = competitionForSlug(slug)
   const nameCompetition = competitionForName(name)
-  if (nameCompetition && slug && (!slugCompetition || slugCompetition !== nameCompetition)) return null
+  if (conflictingLeagueIdentity(league)) return null
   return slugCompetition ?? nameCompetition
 }
 
-/** A known name cannot override a different or unidentified source slug. */
+/** Recognized league identities must agree; unknown slugs cannot claim an included name. */
 export function conflictingLeagueIdentity(league: unknown): boolean {
   const record = asRecord(league)
   const slug = str(record?.slug).trim().toLowerCase()
-  const nameCompetition = competitionForName(str(record?.name).trim().toLowerCase())
-  return Boolean(nameCompetition && slug && competitionForSlug(slug) !== nameCompetition)
+  const name = str(record?.name).trim().toLowerCase()
+  const nameIdentity = competitionForName(name) ?? excludedLeagueForName(name)
+  const slugIdentity = competitionForSlug(slug) ?? excludedLeagueForSlug(slug)
+  if (!nameIdentity || !slug) return false
+  if (slugIdentity) return slugIdentity !== nameIdentity
+  return Boolean(competitionForName(name))
 }
 
 function competitionForSlug(slug: string): TournamentCompetition | null {
@@ -71,6 +75,21 @@ function competitionForName(name: string): TournamentCompetition | null {
   if (/\bworld championship\b/.test(name)) return 'worlds'
   if (name === 'mid-season invitational') return 'msi'
   if (name === 'first stand') return 'first-stand'
+  return null
+}
+
+function excludedLeagueForSlug(slug: string): string | null {
+  if (slug === 'cblol-brazil' || slug === 'cblol') return 'cblol'
+  if (slug === 'lcp' || slug === 'ewc') return slug
+  if (slug === 'emea_masters' || slug === 'emea-masters') return 'emea-masters'
+  return null
+}
+
+function excludedLeagueForName(name: string): string | null {
+  if (name === 'cblol') return 'cblol'
+  if (name === 'lcp') return 'lcp'
+  if (name === 'ewc' || name === 'esports world cup') return 'ewc'
+  if (name === 'emea masters') return 'emea-masters'
   return null
 }
 
