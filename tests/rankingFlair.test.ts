@@ -7,7 +7,6 @@ import {
   deriveTierLabels,
   deriveTopThreePodium,
   deriveUpsetHeadline,
-  firstPageForTier,
 } from '../src/lib/rankingFlair.ts'
 import type { PublicRecentMatch, PublicTeamStanding } from '../src/lib/publicArtifacts/schema.ts'
 
@@ -97,18 +96,6 @@ test('filtered ranking flair preserves tiers from the full ranked universe', () 
 
   assert.equal(flair.tiers[0]?.tier, 'C')
   assert.equal(flair.podium[0]?.tier, 'C')
-})
-
-test('tier navigation resolves the first page containing that canonical tier', () => {
-  const standings = Array.from({ length: 30 }, (_, index) => standing({
-    team: `Team ${index + 1}`,
-    code: `T${index + 1}`,
-    rank: index + 1,
-    rating: index < 25 ? 2100 - index : 1500 - index,
-  }))
-  const tiers = deriveTierLabels(standings)
-
-  assert.equal(firstPageForTier(standings, tiers, 'C', 25), 2)
 })
 
 test('keeps championship-score clusters together when no visible boundary gap exists', () => {

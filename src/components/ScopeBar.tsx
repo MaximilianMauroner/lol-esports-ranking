@@ -1,26 +1,24 @@
 import type { SnapshotCheckpointOption } from '../lib/publicArtifacts/schema'
 import { rankingScopePeriod } from '../lib/rankingScopeLabel'
 import { formatDate } from '../lib/display'
-import { Button } from './ui/button'
+import { Segmented, type SegmentedOption } from './ui'
 import { Select } from './ui/select'
 
 export type PendingCheckpoint = { id: string; label: string }
 
+const FULL_YEAR = 'full-year'
+
 /**
- * Season and split scope, as one row.
+ * Season and split scope, as one row plus one sentence.
  *
- * This replaced two rows of tabs, up to eight controls, sitting between the
- * page title and the data on every view. Two changes carry it:
+ * The season is a select because years are switched rarely. The full year and
+ * the splits are one segmented control, so exactly one segment is filled and
+ * that fill is the selection. The previous track marked "Full year" with a
+ * small text button and drew a progress bar under the ongoing split, which
+ * read as the selected tab while the full year was active.
  *
- * 1. The season is a select, not tabs. Years are switched rarely, so they do
- *    not earn permanent horizontal space.
- * 2. The splits are one continuous track rather than separate pills. Position
- *    already carries the ordering, so each segment needs a label, not a box.
- *    The track can then show where the season actually is, which a row of tabs
- *    cannot: the ongoing split fills in proportion to how far through it is.
- *
- * `throughDate` is the latest rated match date, not the wall clock, so the
- * progress a reader sees matches the data the page is built from.
+ * The sentence under the controls repeats the selection in words, with the
+ * date of the latest rated match and the publication date.
  */
 export function ScopeBar({
   seasons,
@@ -40,121 +38,87 @@ export function ScopeBar({
   checkpoints: SnapshotCheckpointOption[]
   activeCheckpoint?: string
   pendingCheckpoint?: PendingCheckpoint
+  /** Latest rated match overall, used for the ongoing split's progress. */
   throughDate?: string
+  /** Latest rated match inside the selected scope. */
   scopeThroughDate?: string
   publishedAt?: string
   onSelectSeason: (season: string) => void
   onSelectCheckpoint: (checkpointId: string | undefined) => void
   onIntent?: (checkpointId: string | undefined) => void
 }) {
-  const showTrack = Boolean(activeSeason && activeSeason !== 'All' && checkpoints.length > 0)
-  const seasonRange = rankingScopePeriod(activeSeason, checkpoints.find((entry) => entry.id === activeCheckpoint))
+  const showSplits = Boolean(activeSeason && activeSeason !== 'All' && checkpoints.length > 0)
+  const active = checkpoints.find((entry) => entry.id === activeCheckpoint)
+  const options: SegmentedOption<string>[] = [
+    { value: FULL_YEAR, label: 'Full year', title: rankingScopePeriod(activeSeason) },
+    ...checkpoints.map((checkpoint) => {
+      const progress = checkpoint.ongoing ? checkpointProgress(checkpoint, throughDate) : undefined
+      return {
+        value: checkpoint.id,
+        label: checkpoint.label,
+        title: `${formatDate(checkpoint.startDate)} to ${formatDate(checkpoint.endDate)}${progress === undefined ? '' : `. Ongoing: results cover ${progress}% of the split's dates.`}`,
+        marker: checkpoint.ongoing ? <LiveMarker /> : undefined,
+      }
+    }),
+    ...(pendingCheckpoint ? [{ value: pendingCheckpoint.id, label: pendingCheckpoint.label, title: `${pendingCheckpoint.label} has not started yet.`, disabled: true }] : []),
+  ]
+  const selection = !activeSeason || activeSeason === 'All'
+    ? 'all seasons'
+    : active ? `${activeSeason}, ${active.label}` : `${activeSeason}, full year`
 
   return (
-    // Both groups are a label line over a control at --control-h, and the row
-    // aligns them from the top. Centring a bare select against the whole track
-    // block put it half a line above the split buttons it belongs beside.
     <div
-      className="flex flex-wrap items-start gap-x-5 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2.5"
-      aria-label="Snapshot scope controls"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2.5"
+      role="group"
+      aria-label="Ranking period"
     >
-      <div className="shrink-0">
-        <label className="mb-1 flex h-4 items-center text-2xs leading-none text-[var(--faint)]" htmlFor="scope-season">Season</label>
-        <Select
-          id="scope-season"
-          className="min-w-[104px] font-mono font-bold text-[var(--text-strong)]"
-          value={activeSeason ?? 'All'}
-          onChange={(event) => onSelectSeason(event.target.value)}
-        >
-          {seasons.map((season) => (
-            <option key={season} value={season}>
-              {season === 'All' ? 'All seasons' : season}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <label className="sr-only" htmlFor="scope-season">Season</label>
+      <Select
+        id="scope-season"
+        className="min-w-[104px] font-mono font-bold text-[var(--text-strong)]"
+        value={activeSeason ?? 'All'}
+        onChange={(event) => onSelectSeason(event.target.value)}
+      >
+        {seasons.map((season) => (
+          <option key={season} value={season}>
+            {season === 'All' ? 'All seasons' : season}
+          </option>
+        ))}
+      </Select>
 
-      {showTrack ? (
-        <>
-          {/* Capped, because a track stretched across a 1440px page turns four
-              splits into four billboards. */}
-          <div className="min-w-0 max-w-[720px] flex-1 max-[720px]:max-w-none max-[720px]:basis-full">
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-3 text-2xs leading-none text-[var(--faint)]">
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                aria-pressed={!activeCheckpoint}
-                className="-ml-1 h-4 px-1 py-0 text-2xs leading-none aria-pressed:text-[var(--accent-strong)]"
-                onClick={() => onSelectCheckpoint(undefined)}
-                onPointerEnter={() => onIntent?.(undefined)}
-                onFocus={() => onIntent?.(undefined)}
-              >
-                Full year
-              </Button>
-              {seasonRange ? <span>{seasonRange}</span> : null}
-            </div>
-            <div
-              className="flex min-w-0 items-stretch gap-0.5 overflow-x-auto [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              role="group"
-              aria-label={`${activeSeason} splits`}
-            >
-              {checkpoints.map((checkpoint) => {
-                const active = activeCheckpoint === checkpoint.id
-                const progress = checkpoint.ongoing ? checkpointProgress(checkpoint, throughDate) : undefined
-                return (
-                  <Button
-                    key={checkpoint.id}
-                    type="button"
-                    variant="tab"
-                    size="default"
-                    aria-pressed={active}
-                    title={checkpoint.description}
-                    className="relative h-[var(--control-h)] min-w-[92px] flex-1 flex-col items-start justify-center gap-0 overflow-hidden rounded-[var(--r-2)] px-2.5 py-0"
-                    onClick={() => onSelectCheckpoint(checkpoint.id)}
-                    onPointerEnter={() => onIntent?.(checkpoint.id)}
-                    onFocus={() => onIntent?.(checkpoint.id)}
-                  >
-                    <span className="text-sm font-semibold leading-[1.2]">{checkpoint.label}</span>
-                    <span className="text-2xs font-normal leading-[1.15] text-[var(--muted)]">
-                      {progress === undefined ? `to ${formatDate(checkpoint.endDate)}` : `${progress}% through`}
-                    </span>
-                    {progress === undefined ? null : (
-                      <>
-                        <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--line)]" aria-hidden="true" />
-                        <span className="absolute bottom-0 left-0 h-[2px] bg-[var(--accent)]" style={{ width: `${progress}%` }} aria-hidden="true" />
-                      </>
-                    )}
-                  </Button>
-                )
-              })}
-              {pendingCheckpoint ? (
-                <div
-                  className="grid h-[var(--control-h)] min-w-[92px] flex-1 cursor-default content-center rounded-[var(--r-2)] border border-dashed border-[var(--line)] px-2.5 text-[var(--faint)]"
-                  aria-disabled="true"
-                  title={`${pendingCheckpoint.label} has not started yet.`}
-                >
-                  <span className="text-sm font-semibold leading-[1.2]">{pendingCheckpoint.label}</span>
-                  <span className="text-2xs leading-[1.15]">Not started</span>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </>
+      {showSplits ? (
+        <Segmented
+          value={activeCheckpoint ?? FULL_YEAR}
+          options={options}
+          onChange={(value) => onSelectCheckpoint(value === FULL_YEAR ? undefined : value)}
+          onIntent={onIntent ? (value) => onIntent(value === FULL_YEAR ? undefined : value) : undefined}
+          ariaLabel={`${activeSeason} period`}
+          className="max-sm:basis-full"
+        />
       ) : null}
-      <p className="basis-full text-xs text-[var(--muted)]">
-        {scopeThroughDate ? `Match coverage through ${formatDate(scopeThroughDate)}. ` : ''}
-        {publishedAt ? `Publication ${formatDate(publishedAt)}. ` : ''}
-        Split buttons select checkpoint windows.
+
+      <p className="text-xs text-[var(--muted)] max-md:basis-full" aria-live="polite">
+        Showing <b className="font-semibold text-[var(--text-strong)]">{selection}</b>
+        {scopeThroughDate ? <> · results through <b className="font-semibold text-[var(--text)]">{formatDate(scopeThroughDate)}</b></> : null}
+        {publishedAt ? <span className="max-sm:hidden"> · updated {formatDate(publishedAt)}</span> : null}
       </p>
     </div>
+  )
+}
+
+function LiveMarker() {
+  return (
+    <span className="inline-flex items-center gap-1 text-2xs font-semibold text-[var(--up)]">
+      <span className="size-1.5 rounded-full bg-[var(--up)]" aria-hidden="true" />
+      <span className="max-sm:sr-only">live</span>
+    </span>
   )
 }
 
 /**
  * How far through an ongoing split the published data reaches, as a percentage
  * clamped to 0-100. Returns undefined when the dates cannot support an honest
- * answer, so the caller falls back to showing the end date.
+ * answer, so the caller leaves the progress out.
  */
 function checkpointProgress(checkpoint: SnapshotCheckpointOption, throughDate?: string) {
   if (!throughDate) return undefined

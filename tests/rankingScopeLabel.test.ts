@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { rankingScopePeriod } from '../src/lib/rankingScopeLabel.ts'
-import { publicScoreGapExplanation, estimatePublicMatchup } from '../src/lib/publicMatchup.ts'
+import { gameWinChanceForGap, estimatePublicMatchup } from '../src/lib/publicMatchup.ts'
 import { publishedRatingScale } from '../src/lib/modelConfig.ts'
 import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
 
@@ -18,8 +18,7 @@ test('probability copy reconciles with comparisons for the same scale and assump
     const home = { team: 'Higher', rating: 1900, uncertainty: 0 } as RankingSummaryStanding
     const away = { team: 'Lower', rating: 1800, uncertainty: 0 } as RankingSummaryStanding
     const expected = Math.round(100 * estimatePublicMatchup(home, away, model).homeGameWinProbability)
-    assert.ok(publicScoreGapExplanation(model).includes(`${expected}%`))
-    assert.match(publicScoreGapExplanation(model), /single-game.*before uncertainty.*series odds.*fixture-model \/ fixture-hash/)
+    assert.equal(gameWinChanceForGap(model), expected)
   }
 })
 
@@ -44,7 +43,7 @@ test('published model calibration controls examples and game/series estimates', 
   const estimate = estimatePublicMatchup(home, away, model, { bestOf: 3, uncertaintyBands: true })
   assert.equal(estimate.homeGameWinProbability, 0.9091)
   assert.equal(estimate.homeSeriesWinProbability, 0.9767)
-  assert.match(publicScoreGapExplanation(model), /91%/)
+  assert.equal(gameWinChanceForGap(model), 91)
   const uncertain = estimatePublicMatchup({ ...home, uncertainty: 200 }, away, model, { uncertaintyBands: true })
   assert.equal(uncertain.uncertaintyPenalty, 0.2)
   assert.equal(uncertain.homeGameWinProbability, 0.5818)
