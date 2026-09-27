@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { AlertTriangle, BarChart3, Globe2, History, RefreshCw } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from 'react'
+import { AlertTriangle, BarChart3, Globe2, History, RefreshCw, Search } from 'lucide-react'
 import type {
   PublicRankingManifest,
   SnapshotCheckpointOption,
@@ -23,7 +23,9 @@ import { TeamsView, type PlayerLoadState } from './views/TeamsView'
 import { DataState, RegionBadge } from './components/ui'
 import { ScopeBar } from './components/ScopeBar'
 import { CompareDock, type CompareDockEntity } from './components/CompareDock'
+import { HeadToHead } from './components/HeadToHead'
 import { Button, buttonVariants } from './components/ui/button'
+import { Input } from './components/ui/input'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
 import { LoadingState } from './components/ui/loading'
@@ -63,25 +65,22 @@ const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
 ]
 
 /**
- * One title per view, plus the line that tells a first-time visitor what the
- * numbers mean. Rankings is the landing view and previously shipped no
- * explanation at all, while Regions, which nobody lands on, carried one.
- *
- * There is no eyebrow. Each view used to render an uppercase grey label above
- * its title which restated the title in different words.
+ * One title per view, plus one visible sentence that tells a first-time
+ * visitor what the numbers mean. The sentence used to sit in a collapsed
+ * "About these ratings" disclosure, so nobody read it.
  */
 const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   rankings: {
     title: 'Team Power Index',
-    intro: 'Power score rates every tier 1 team on one scale from its match results, weighted by opponent strength and event importance. Higher is stronger. The board uses published ratings; movement uses the labeled match-history period.',
+    intro: 'Every team on one Power scale, built from match results and weighted by opponent strength and event importance. Higher is stronger.',
   },
   regions: {
     title: 'Region power',
-    intro: 'Region power is the average Power score of the three strongest ranked teams in a region. Each row compares that against the average across all of the region’s ranked teams: a small gap means depth, a large gap means the region is top-heavy.',
+    intro: 'A region\u2019s power is the average Power of its three strongest ranked teams. The spread of the rest shows how deep it is.',
   },
   matches: {
     title: 'Match history',
-    intro: 'Every published series behind the ratings, newest first. Power impact shows how much each side’s score moved as a result, after opponent strength and event weight are applied.',
+    intro: 'Every series behind the ratings, newest first, with how much each team\u2019s rating changed.',
   },
 }
 
@@ -133,6 +132,26 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   const selectScope = useCallback((nextScope: string) => {
     setTournamentFilter('All')
     setScope(nextScope)
+  }, [])
+
+  const searchRef = useRef<HTMLInputElement | null>(null)
+  const searchTeams = useCallback((value: string) => {
+    setTeamSearch(value)
+    // The search finds teams on the board, so typing from another view takes
+    // the reader to the board rather than filtering a view with no teams.
+    setMode('rankings')
+  }, [])
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select'))) return
+      event.preventDefault()
+      searchRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
   useEffect(() => {
@@ -235,9 +254,9 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
   }
 
   const loadedData = manifestState.data
+  const hasCompareTray = mode === 'rankings' || mode === 'regions'
   const seeded = loadedData.dataMode === 'seeded-sample' || loadedData.coverage?.seededSample === true
   const matchCount = snapshot?.matchCount ?? loadedData.coverage?.matchCount
-  const trayLabel = mode === 'regions' ? 'Region compare' : 'Team compare'
   const compareEntities: CompareDockEntity[] = mode === 'regions'
     ? activeRegionPicks.map((region) => ({
         id: regionKey(region),
@@ -283,16 +302,17 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
 
   return (
     <div className="flex min-h-full flex-col">
-      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
-      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} />
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[length:var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
+      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} search={teamSearch} onSearch={searchTeams} searchRef={searchRef} />
 
-      {/* Space is reserved for the dock only where the dock is fixed, which is
-          phones on the two views that have one. */}
+      {/* Space is reserved for the fixed compare tray on the two views that have
+          one, and for the bottom tab bar on phones. */}
       <main
         id="main-content"
         className={cn(
-          'flex min-w-0 flex-col pb-6',
-          compareEntities.length > 0 && (mode === 'rankings' || mode === 'regions') && 'max-sm:pb-[calc(84px+env(safe-area-inset-bottom))]',
+          'flex min-w-0 flex-col pb-6 max-sm:pb-[calc(var(--tabbar-h)+24px+env(safe-area-inset-bottom))]',
+          hasCompareTray && 'pb-[calc(var(--tray-h)+24px)]',
+          hasCompareTray && compareEntities.length > 0 && 'max-sm:pb-[calc(var(--tabbar-h)+var(--tray-h)+24px+env(safe-area-inset-bottom))]',
         )}
         tabIndex={-1}
         ref={mainRef}
@@ -318,15 +338,16 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
           }}
         />
 
-        {/* Inline under the scope bar on desktop. On a phone it is fixed to the
-            bottom edge instead: the board is thousands of pixels long there, so
-            an inline dock would scroll out of reach the moment you started
-            picking. Sticky cannot do this, because the dock's natural position
-            is above the fold rather than below it. */}
-        {(mode === 'rankings' || mode === 'regions') && compareEntities.length > 0 ? (
-          <div className="px-[var(--page-x)] pt-4 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-40 max-sm:border-t max-sm:border-[var(--line-strong)] max-sm:bg-[color-mix(in_oklch,var(--surface)_92%,var(--bg))] max-sm:px-3 max-sm:pt-2 max-sm:pb-[max(8px,env(safe-area-inset-bottom))]">
+        {/* Fixed to the bottom edge and, on wider screens, present before the
+            first pick. Inline, it scrolled out of view while the reader picked
+            teams further down the board, and it only appeared after the first
+            pick, so nothing said the feature existed. Phones show it from the
+            first pick: there the labelled row checkbox announces the feature
+            and the screen height is better spent on teams. */}
+        {hasCompareTray ? (
+          <div className={cn('fixed inset-x-0 bottom-0 z-40 border-t border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_94%,var(--bg))] px-[var(--page-x)] py-2 shadow-[0_-8px_24px_oklch(0_0_0/0.35)] max-sm:bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] max-sm:px-3', compareEntities.length === 0 && 'max-sm:hidden')}>
             <CompareDock
-              label={trayLabel}
+              subject={mode === 'regions' ? 'regions' : 'teams'}
               limit={COMPARE_LIMIT}
               entities={compareEntities}
               matchup={compareMatchup}
@@ -430,7 +451,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
             ) : null}
           </>
         )}
-        <footer className="mx-[var(--page-x)] mt-[30px] flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--line)] pt-[15px] text-[var(--t-2)] leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
+        <footer className="mx-[var(--page-x)] mt-[30px] flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--line)] pt-[15px] text-[length:var(--t-2)] leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
           <span>{RIOT_PROJECT_NOTICE}</span>
           <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_REPOSITORY_URL}>Source code</a>
           <a className="text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline" href={PROJECT_FEEDBACK_URL}>Report feedback</a>
@@ -462,6 +483,7 @@ function App({ initialManifest, initialManifestError }: { initialManifest?: Publ
             entities={activeTeamPicks}
             columns={teamColumns}
             rows={TEAM_COMPARE_ROWS}
+            before={compareMatchup ? <HeadToHead home={compareMatchup.home} away={compareMatchup.away} model={compareMatchup.model} /> : undefined}
             after={teamCompareAfter}
             onClose={() => setDrawerOpen(false)}
             onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
@@ -500,11 +522,11 @@ function ManifestRouteShell({
 }) {
   return (
     <div className="flex min-h-full flex-col">
-      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); document.getElementById('main-content')?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
+      <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[length:var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); document.getElementById('main-content')?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
       <AppNavigation mode={mode} scope={scope} onGoHome={onGoHome} />
       <main id="main-content" className="flex min-w-0 flex-col" tabIndex={-1}>
         <ModeHeader mode={mode} />
-        <div className="flex min-h-[55px] items-center border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-[var(--t-3)] text-[var(--muted)]">
+        <div className="flex min-h-[55px] items-center border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-[length:var(--t-3)] text-[var(--muted)]">
           Requested scope: <b className="ml-2 text-[var(--text)]">{scopeLabel(scope)}</b>
         </div>
         {error ? (
@@ -534,51 +556,88 @@ function ManifestRouteShell({
 
 /**
  * Title and the one explanatory line, rendered in the same slot for every view
- * so no view can ship without one. Rankings, the landing view, previously went
- * straight from its title into a filter bar.
+ * so no view can ship without one.
  */
 function ModeHeader({ mode }: { mode: Mode }) {
   return (
-    <header className="grid gap-1.5 border-b border-[var(--line)] px-[var(--page-x)] pt-4 pb-3.5">
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-[var(--page-x)] pt-4 pb-3">
       <h1 className="text-xl font-semibold tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
-      <details className="max-w-[86ch] text-sm leading-[1.55] text-[var(--muted)]"><summary className="cursor-pointer">About these {mode === 'matches' ? 'results' : 'ratings'}</summary><p className="pt-2">{MODE_TITLES[mode].intro}</p></details>
-    </header>
+      <p className="max-w-[80ch] text-sm leading-[1.5] text-[var(--muted)]">{MODE_TITLES[mode].intro}</p>
+    </div>
   )
 }
 
-function AppNavigation({ mode, scope, onGoHome }: { mode: Mode; scope: string; onGoHome: (event: MouseEvent<HTMLAnchorElement>) => void }) {
-  return (
-    <nav className="sticky top-0 z-50 flex min-h-[var(--app-nav-h)] flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.97)] px-[var(--page-x)] py-2.5 backdrop-blur-[8px] max-[900px]:px-3" aria-label="Primary">
-      <a className="mr-auto flex min-w-0 items-center gap-2.5 rounded-[var(--r-2)] py-1 pr-2 text-left text-inherit no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)]" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
-        {/* logo.svg is 400 bytes. The 512x512 PNG this replaced was 226 KB and
-            rendered into a 36px box on first paint. */}
-        <img className="block size-9 shrink-0 rounded-[var(--r-2)]" src="/logo.svg" alt="" aria-hidden="true" width={36} height={36} />
-        <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)]">Power Index</b>
+function AppNavigation({
+  mode,
+  scope,
+  onGoHome,
+  search,
+  onSearch,
+  searchRef,
+}: {
+  mode: Mode
+  scope: string
+  onGoHome: (event: MouseEvent<HTMLAnchorElement>) => void
+  search?: string
+  onSearch?: (value: string) => void
+  searchRef?: RefObject<HTMLInputElement | null>
+}) {
+  const tabs = MODES.map((entry) => {
+    const Icon = entry.icon
+    return (
+      <a
+        key={entry.id}
+        href={hashForModeAndScope(entry.id, scope)}
+        className={cn(
+          buttonVariants({ variant: 'tab', size: 'tab' }),
+          'min-w-0 shrink-0 gap-2 font-semibold no-underline max-sm:h-full max-sm:flex-1 max-sm:flex-col max-sm:gap-0.5 max-sm:rounded-none max-sm:border-0 max-sm:text-2xs',
+        )}
+        aria-current={mode === entry.id ? 'page' : undefined}
+      >
+        <Icon size={17} aria-hidden="true" />
+        {entry.label}
       </a>
-      {/* Same tab treatment as the scope rows below. The active item used to be
-          marked with a gold underline, which collided with --rank-gold's other
-          meaning of rank quality. Taglines are gone: they restated the label
-          and were hidden below 1040px anyway. */}
-      <div className="-m-0.5 flex min-w-0 items-center gap-1.5 overflow-x-auto p-0.5 [overscroll-behavior-x:contain] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[900px]:w-full">
-        {MODES.map((entry) => {
-          const Icon = entry.icon
-          return (
-            <a
-              key={entry.id}
-              href={hashForModeAndScope(entry.id, scope)}
-              className={cn(
-                buttonVariants({ variant: 'tab', size: 'tab' }),
-                'min-w-0 shrink-0 gap-2 font-semibold no-underline max-[900px]:flex-1',
-              )}
-              aria-current={mode === entry.id ? 'page' : undefined}
-            >
-              <Icon size={17} aria-hidden="true" />
-              {entry.label}
-            </a>
-          )
-        })}
-      </div>
-    </nav>
+    )
+  })
+
+  return (
+    <>
+      <header className="sticky top-0 z-50 flex min-h-[var(--app-nav-h)] items-center gap-x-4 border-b border-[var(--line)] bg-[oklch(0.135_0.004_250/0.98)] px-[var(--page-x)] py-2.5 max-[900px]:px-3">
+        <a className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-[var(--r-2)] py-1 pr-2 text-left text-inherit no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)]" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
+          {/* logo.svg is 400 bytes. The 512x512 PNG this replaced was 226 KB and
+              rendered into a 36px box on first paint. */}
+          <img className="block size-9 shrink-0 rounded-[var(--r-2)]" src="/logo.svg" alt="" aria-hidden="true" width={36} height={36} />
+          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)] max-[420px]:sr-only">Power Index</b>
+        </a>
+        {/* The active tab uses the shared selected treatment. Gold stays
+            reserved for rank quality. */}
+        <nav className="flex min-w-0 items-center gap-1.5 max-sm:hidden" aria-label="Primary">{tabs}</nav>
+        {onSearch ? (
+          <label className="relative ml-auto w-[min(280px,100%)] min-w-0 max-sm:flex-1">
+            <span className="sr-only">Find a team</span>
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
+            <Input
+              ref={searchRef}
+              type="search"
+              className="pr-9 pl-9"
+              value={search ?? ''}
+              placeholder="Find a team"
+              aria-keyshortcuts="/"
+              onChange={(event) => onSearch(event.target.value)}
+            />
+            <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded-[var(--r-1)] border border-[var(--line-strong)] px-1.5 font-mono text-2xs text-[var(--faint)] max-sm:hidden" aria-hidden="true">/</kbd>
+          </label>
+        ) : null}
+      </header>
+      {/* Phones get the views as a bottom tab bar, so the top of the screen
+          holds data instead of three full-width buttons. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] items-stretch border-t border-[var(--line)] bg-[oklch(0.135_0.004_250)] pb-[env(safe-area-inset-bottom)] sm:hidden"
+        aria-label="Primary"
+      >
+        {tabs}
+      </nav>
+    </>
   )
 }
 

@@ -29,6 +29,8 @@ export type CompareDrawerProps<E> = {
   entities: E[]
   columns: CompareColumn[]
   rows: CompareRow<E>[]
+  /** Shown above the table, for the answer most people open a comparison for. */
+  before?: ReactNode
   after?: ReactNode
   onClose: () => void
   onRemove: (id: string) => void
@@ -40,6 +42,7 @@ export function CompareDrawer<E>({
   entities,
   columns,
   rows,
+  before,
   after,
   onClose,
   onRemove,
@@ -54,7 +57,7 @@ export function CompareDrawer<E>({
         className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
       >
         <SheetHeader className="flex-row items-center gap-3 border-b border-[var(--line)] p-[18px_22px] text-left">
-          <SheetTitle className="mr-auto text-[var(--t-5)] font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
+          <SheetTitle className="mr-auto text-[length:var(--t-5)] font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
           <SheetClose asChild>
             <Button type="button" variant="ghost">
               <X size={16} aria-hidden="true" />
@@ -69,6 +72,7 @@ export function CompareDrawer<E>({
             </DataState>
           ) : (
             <>
+                {before}
                 <Table
                   containerClassName="max-w-full border-b border-[var(--line)] [contain:paint] [overscroll-behavior-x:contain] [scrollbar-gutter:stable]"
                   className="compare-table w-full border-collapse"
@@ -79,7 +83,7 @@ export function CompareDrawer<E>({
                       <TableHead aria-label="Metric" />
                       {columns.map((column) => (
                         <TableHead key={column.id}>
-                          <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-[var(--t-2)] [&_small]:text-[var(--faint)]">
+                          <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-[length:var(--t-2)] [&_small]:text-[var(--faint)]">
                             <span className="inline-flex min-w-0 items-center gap-[7px]">
                               {column.badge}
                               <b>{column.name}</b>
@@ -111,7 +115,7 @@ export function CompareDrawer<E>({
                             <TableCell key={columns[index].id} className={best.has(columns[index].id) ? 'best' : ''}>
                               {row.cell(entity)}
                               {best.has(columns[index].id) ? (
-                                <Badge variant="default" className="ml-2 px-1.5 text-[var(--t-1)] leading-[1.2] tracking-[0.06em] uppercase" aria-label={`Best ${row.label.toLowerCase()} value`}>
+                                <Badge variant="default" className="ml-2 px-1.5 text-[length:var(--t-1)] leading-[1.2] tracking-[0.06em] uppercase" aria-label={`Best ${row.label.toLowerCase()} value`}>
                                   Best
                                 </Badge>
                               ) : null}

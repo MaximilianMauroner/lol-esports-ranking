@@ -25,6 +25,11 @@ export type ChartSeries = {
 
 type ChartDatum = { t: number } & Record<string, unknown>
 
+/**
+ * One drawn line. A series with a long gap in its data is split into several
+ * segments that share its colour and label, so the chart shows the gap instead
+ * of a straight diagonal that reads as a steady trend.
+ */
 type SeriesMeta = {
   key: string
   series: ChartSeries
@@ -55,6 +60,13 @@ export type LineChartProps = {
 }
 
 const tickDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
+/** Longer than a normal break between matches; shorter than an off-season. */
+const SEGMENT_GAP_MS = 21 * 86_400_000
+/** Direct labels help from two lines; past six the right edge gets crowded. */
+const MAX_DIRECT_LABELS = 6
+const DIRECT_LABEL_WIDTH = 52
+const DIRECT_LABEL_MIN_GAP_PX = 13
+const CHART_VERTICAL_CHROME_PX = 92
 const fullDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
 
 export function LineChart({
@@ -95,11 +107,15 @@ export function LineChart({
   }
 
   const { minT, maxT, minY, maxY } = domain
+  const directLabels = series.length >= 2 && series.length <= MAX_DIRECT_LABELS
+    ? directLabelPositions(series, { minY, maxY, plotHeight: height - CHART_VERTICAL_CHROME_PX, reversed: yReverse })
+    : undefined
+  const lastSegmentKey = new Map(meta.map(({ key, series: entry }) => [entry.id, key]))
   const yTicks = providedYTicks ?? niceTicks(minY, maxY, 4)
   const formatYTick = yTickFormat ?? yFormat
   const xTicks = timeTicks(minT, maxT, 5)
   const lineType = curve === 'step' ? 'stepAfter' : 'linear'
-  const summaries = meta.flatMap(({ series: entry }) => {
+  const summaries = series.flatMap((entry) => {
     const summary = summarizeSeries(entry)
     return summary ? [summary] : []
   })
@@ -109,6 +125,15 @@ export function LineChart({
 
   return (
     <div className="chart-shell">
+      {/* Names come before the lines they identify. */}
+      <div className="flex flex-wrap gap-x-3.5 gap-y-1 px-[18px] pt-3">
+        {series.map((entry) => (
+          <span className="inline-flex items-center gap-[7px] text-[length:var(--t-3)] text-[var(--muted)]" key={entry.id}>
+            <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: entry.color }} aria-hidden="true" />
+            {entry.label}
+          </span>
+        ))}
+      </div>
       <ChartContainer
         id={chartId}
         config={config}
@@ -118,7 +143,7 @@ export function LineChart({
         aria-label={`${yLabel} over time for ${series.map((entry) => entry.label).join(', ')}`}
         aria-describedby={summaryId}
       >
-        <RechartsLineChart data={data} margin={{ top: 18, right: 20, bottom: 16, left: 4 }}>
+        <RechartsLineChart data={data} margin={{ top: 18, right: directLabels ? DIRECT_LABEL_WIDTH : 20, bottom: 16, left: 4 }}>
           <CartesianGrid vertical={false} strokeDasharray="0" />
           <XAxis
             dataKey="t"
@@ -141,7 +166,7 @@ export function LineChart({
             tickFormatter={(value) => formatYTick(Number(value))}
           />
           <RechartsTooltip
-            cursor={{ stroke: 'var(--line-strong)', strokeDasharray: '3 3' }}
+            cursor={{ stroke: 'var(--line-strong)' }}
             content={tooltipContent ?? <LineChartTooltip yFormat={yFormat} />}
             portal={tooltipPortal}
             wrapperStyle={tooltipWrapperStyle}
@@ -150,30 +175,33 @@ export function LineChart({
           />
           {meta.map(({ key, series: entry }) => (
             <Line
-              key={entry.id}
+              key={key}
               dataKey={key}
               name={entry.label}
               type={lineType}
-              stroke={`var(--color-${key})`}
-              strokeWidth={2.4}
+              stroke={entry.color}
+              strokeWidth={2}
               connectNulls
               dot={entry.points.length <= 36 && series.length <= 2 ? { r: 3.2, strokeWidth: 2 } : false}
               activeDot={{ r: 4, stroke: 'var(--surface)', strokeWidth: 2 }}
               isAnimationActive={false}
+              label={directLabels && lastSegmentKey.get(entry.id) === key
+                ? (props: { x?: number | string; y?: number | string; index?: number }) => {
+                    const target = directLabels.get(entry.id)
+                    if (!target || props.index !== target.index || typeof props.x !== 'number') return <g />
+                    return (
+                      <text x={props.x + 7} y={target.y(Number(props.y))} dy="0.32em" fill="var(--text)" fontSize={11} fontWeight={700} className="font-mono">
+                        {entry.label}
+                      </text>
+                    )
+                  }
+                : undefined}
             />
           ))}
         </RechartsLineChart>
       </ChartContainer>
       <div id={summaryId} className="sr-only">{summaryText}</div>
 
-      <div className="flex flex-wrap gap-3.5 px-0.5 pt-3 pb-0.5">
-        {meta.map(({ key, series: entry }) => (
-          <span className="inline-flex items-center gap-[7px] text-[var(--t-3)] text-[var(--muted)]" key={entry.id}>
-            <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: `var(--color-${key})` }} aria-hidden="true" />
-            {entry.label}
-          </span>
-        ))}
-      </div>
     </div>
   )
 }
@@ -204,25 +232,58 @@ function formatPointSummary(point: ChartSeries['points'][number], formatValue: (
 
 function buildChartData(series: ChartSeries[]) {
   const dataByTime = new Map<number, ChartDatum>()
-  const meta: SeriesMeta[] = series.map((entry, index) => ({
-    key: `series${index}`,
-    series: entry,
-  }))
+  const meta: SeriesMeta[] = []
 
-  for (const { key, series: entry } of meta) {
+  series.forEach((entry, index) => {
+    let segment = 0
+    let previousT: number | undefined
     for (const point of entry.points) {
       if (!isValidPoint(point)) continue
+      if (previousT !== undefined && point.t - previousT > SEGMENT_GAP_MS) segment += 1
+      previousT = point.t
+      const key = `series${index}_${segment}`
+      if (meta.at(-1)?.key !== key) meta.push({ key, series: entry })
       const datum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
       datum[key] = point.y
       if (point.detail) datum[chartDetailDataKey(key)] = point.detail
       dataByTime.set(point.t, datum)
     }
-  }
+  })
 
   return {
     data: [...dataByTime.values()].sort((left, right) => left.t - right.t),
     meta,
   }
+}
+
+/**
+ * Where each series' end label goes: the data index of its last point, and a
+ * pixel nudge so labels whose lines end close together do not overlap. The
+ * nudge is worked out in value space, because Recharts only reveals pixel
+ * positions one label at a time.
+ */
+function directLabelPositions(
+  series: ChartSeries[],
+  { minY, maxY, plotHeight, reversed }: { minY: number; maxY: number; plotHeight: number; reversed: boolean },
+) {
+  const times = [...new Set(series.flatMap((entry) => entry.points.filter(isValidPoint).map((point) => point.t)))].sort((left, right) => left - right)
+  const pxPerUnit = plotHeight / Math.max(1, maxY - minY)
+  const ends = series.flatMap((entry) => {
+    const last = entry.points.filter(isValidPoint).at(-1)
+    if (!last) return []
+    const naturalPx = (reversed ? last.y - minY : maxY - last.y) * pxPerUnit
+    return [{ id: entry.id, index: times.indexOf(last.t), naturalPx, labelPx: naturalPx }]
+  }).sort((left, right) => left.naturalPx - right.naturalPx)
+
+  ends.forEach((end, position) => {
+    const previous = ends[position - 1]
+    if (previous && end.labelPx - previous.labelPx < DIRECT_LABEL_MIN_GAP_PX) end.labelPx = previous.labelPx + DIRECT_LABEL_MIN_GAP_PX
+  })
+
+  return new Map(ends.map((end) => [end.id, {
+    index: end.index,
+    y: (lineEndY: number) => lineEndY + (end.labelPx - end.naturalPx),
+  }]))
 }
 
 function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: number }) {
@@ -302,8 +363,8 @@ function LineChartTooltip({
   if (rows.length === 0) return null
 
   return (
-    <div className="pointer-events-none static z-2 grid gap-[3px] whitespace-nowrap rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_96%,transparent)] px-[11px] py-[9px] text-[var(--t-3)] shadow-[var(--shadow-2)]">
-      <b className="mb-0.5 text-[var(--t-2)] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
+    <div className="pointer-events-none static z-2 grid gap-[3px] whitespace-nowrap rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_96%,transparent)] px-[11px] py-[9px] text-[length:var(--t-3)] shadow-[var(--shadow-2)]">
+      <b className="mb-0.5 text-[length:var(--t-2)] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
       <div className="grid gap-2">
         {rows.map((row) => (
           <div className="grid gap-1" key={row.key}>

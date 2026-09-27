@@ -51,7 +51,7 @@ export type PublicMatchupEstimate = {
   modelConfigHash: string
 }
 
-type PublicMatchupModel = Pick<ModelInfo, 'version' | 'configHash'> & Partial<Pick<ModelInfo, 'parameters' | 'ratingScale'>>
+export type PublicMatchupModel = Pick<ModelInfo, 'version' | 'configHash'> & Partial<Pick<ModelInfo, 'parameters' | 'ratingScale'>>
 
 export function estimatePublicMatchup(
   home: RankingSummaryStanding,
@@ -153,15 +153,20 @@ function toPublicUncertaintyBand(band: MatchupUncertaintyBand | undefined): Publ
   }
 }
 
-/** Illustration on the same public scale and forecast engine as comparisons. */
-export function publicScoreGapExplanation(model?: PublicMatchupModel, gap = 100) {
+/**
+ * Neutral single-game win chance, in whole percent, for the higher of two
+ * teams `gap` published points apart, before team uncertainty. The same scale
+ * and forecast engine as comparisons, so the legend's "100 points is about N%"
+ * always matches the model that produced the board.
+ */
+export function gameWinChanceForGap(model?: PublicMatchupModel, gap = 100) {
   const scale = ratingScaleForPublicMatchup(model)
   const estimate = estimateMatchupProbability(
     { team: 'Higher', rating: scale.internalAnchor + toInternalRatingDelta(gap, scale), uncertainty: 0 },
     { team: 'Lower', rating: scale.internalAnchor, uncertainty: 0 },
     { bestOf: 1, sideAssumption: 'neutral', calibration: calibrationForPublicMatchup(model) },
   )
-  return `+${gap} Power points ≈ ${Math.round(estimate.teamAGameWinProbability * 100)}% neutral single-game win chance before uncertainty. Team uncertainty can move estimates toward 50%; series odds depend on format. Model ${model?.version ?? 'current'}${model?.configHash ? ` / ${model.configHash}` : ''}.`
+  return Math.round(estimate.teamAGameWinProbability * 100)
 }
 
 function calibrationForPublicMatchup(model?: PublicMatchupModel): ProbabilityCalibration {
