@@ -77,7 +77,8 @@ export function forecastTournamentSeries(
   basis: ForecastBasis,
   options: { sideAssumption?: PublicMatchupSideAssumption; sideBasis?: string; blueSideRatingEdge?: number } = {},
 ): TournamentForecast {
-  if (series.status !== 'upcoming') return unavailable('not-upcoming', 'Only a source-upcoming series can receive a new pre-match forecast.')
+  if (series.status !== 'upcoming' || normalizeStatus(series.sourceState) !== 'upcoming') return unavailable('not-upcoming', 'Only a source-upcoming series can receive a new pre-match forecast.')
+  if (!noCompletedGameEvidence(series)) return unavailable('already-started', 'The upcoming source row already contains played-game or result evidence.')
   if (series.bestOf !== 1 && series.bestOf !== 3 && series.bestOf !== 5) return unavailable('unsupported-format', 'Only decisive Bo1, Bo3 and Bo5 are supported; tie-capable or unknown formats need reviewed rules.')
   if (series.teams.length !== 2 || series.teams.some((team) => !team.id)) return unavailable('missing-team-id', 'Both source team IDs must be known.')
   if (!isTournamentTeamIdentityMap(basis.identityMap)) return unavailable('ambiguous-identity', 'A valid, explicit source-to-ranking team ID crosswalk is required.')
@@ -191,9 +192,9 @@ export function createPreMatchReceipt(input: {
 }): ForecastReceipt | ForecastUnavailable {
   const { series, forecast, forecastRevision, generatedAt, publishedAt, observedAt } = input
   if (forecast.status !== 'ready') return forecast
-  if (forecast.matchId !== series.id || forecast.eventId !== series.eventId || !forecastRevision) return unavailable('stale-model-basis', 'Forecast and source series identity or revision disagree.')
+  if (!forecastMatchesSeries(forecast, series) || !forecastRevision) return unavailable('stale-model-basis', 'Forecast and source series identity, participants, format or revision disagree.')
   if (!validTime(series.startTime) || !validTime(generatedAt) || !validTime(publishedAt) || !validTime(observedAt)) return unavailable('invalid-time', 'A valid scheduled start, observation, generation and publication time are required.')
-  if (series.status !== 'upcoming' || normalizeStatus(series.sourceState) !== 'upcoming'
+  if (series.status !== 'upcoming' || normalizeStatus(series.sourceState) !== 'upcoming' || !noCompletedGameEvidence(series)
     || Date.parse(publishedAt) >= Date.parse(series.startTime!) || Date.parse(observedAt) > Date.parse(publishedAt)
     || Date.parse(generatedAt) > Date.parse(publishedAt) || Date.parse(forecast.ratingPublishedAt) > Date.parse(publishedAt)
     || Date.parse(forecast.ratingDataAsOf) > Date.parse(publishedAt)) {
@@ -242,6 +243,14 @@ export function scoreConditionedSeriesOdds(receipt: ForecastReceipt, series: Tou
   if (series.status !== 'live' && series.status !== 'completed') return unavailable('not-upcoming', 'Score-conditioned odds require live or completed source state.')
   const [homeWins, awayWins] = series.teams.map((team) => team.gameWins)
   if (homeWins === null || awayWins === null || homeWins === undefined || awayWins === undefined) return unavailable('invalid-score', 'A validated completed-game score is required.')
+  const outcomes = series.teams.map((team) => team.outcome?.trim().toLowerCase() ?? '')
+  if (outcomes.some(Boolean)) {
+    const winsNeeded = Math.floor(receipt.bestOf / 2) + 1
+    const winner = homeWins >= winsNeeded ? 0 : awayWins >= winsNeeded ? 1 : null
+    if (winner === null || outcomes[winner] !== 'win' || outcomes[1 - winner] !== 'loss') {
+      return unavailable('invalid-score', 'Source outcome and completed-game score disagree.')
+    }
+  }
   try {
     if (receipt.bestOf === 1) {
       if (!Number.isInteger(homeWins) || !Number.isInteger(awayWins)
@@ -265,6 +274,16 @@ function sameSeriesBasis(receipt: ForecastReceipt, series: TournamentSeries) {
   return receipt.matchId === series.id && receipt.eventId === series.eventId && receipt.bestOf === series.bestOf
     && series.teams.length === 2 && series.teams[0]?.id === receipt.teams[0].sourceTeamId
     && series.teams[1]?.id === receipt.teams[1].sourceTeamId
+    && validTime(series.startTime) && Date.parse(receipt.publishedAt) < Date.parse(series.startTime)
+}
+function forecastMatchesSeries(forecast: ForecastReady, series: TournamentSeries) {
+  return forecast.matchId === series.id && forecast.eventId === series.eventId && forecast.bestOf === series.bestOf
+    && series.teams.length === 2 && forecast.teams[0].sourceTeamId === series.teams[0]?.id
+    && forecast.teams[1].sourceTeamId === series.teams[1]?.id
+}
+function noCompletedGameEvidence(series: TournamentSeries) {
+  return series.teams.every((team) => (team.gameWins === null || team.gameWins === 0)
+    && (team.outcome === null || team.outcome.trim() === ''))
 }
 function receiptSourceStateMatches(receipt: ForecastReceipt) {
   try {
@@ -276,7 +295,8 @@ function receiptSourceStateMatches(receipt: ForecastReceipt) {
       || state[1] !== receipt.eventId || state[2] !== receipt.scheduledStartAt
       || state[3] !== 'upcoming' || typeof state[4] !== 'string' || normalizeStatus(state[4]) !== 'upcoming'
       || state[5] !== receipt.bestOf || !Array.isArray(state[6]) || state[6].length !== 2) return false
-    return state[6].every((team: unknown, index: number) => Array.isArray(team) && team[0] === receipt.teams[index]?.sourceTeamId)
+    return state[6].every((team: unknown, index: number) => Array.isArray(team) && team[0] === receipt.teams[index]?.sourceTeamId
+      && (team[1] === null || team[1] === 0) && (team[2] === null || team[2] === ''))
   } catch { return false }
 }
 function unavailable(reason: ForecastUnavailableReason, detail: string): ForecastUnavailable { return { status: 'unavailable', reason, detail } }

@@ -81,6 +81,7 @@ test('unknown and tie-capable formats, absent source IDs and unmapped aliases fa
   const missingId = series()
   missingId.teams[0]!.id = null
   assert.equal(forecastTournamentSeries(missingId, basis()).status, 'unavailable')
+  assert.equal(forecastTournamentSeries({ ...series(), sourceState: 'inProgress' }, basis()).status, 'unavailable')
   const renamed = series()
   renamed.teams[0]!.name = 'Alpha'
   const noMapping = basis()
@@ -137,6 +138,10 @@ test('score-conditioned odds use frozen game probability and reject impossible o
   assert.deepEqual(scoreConditionedSeriesOdds(frozen, live).status, 'unavailable')
   assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, bestOf: 3 }).status, 'unavailable')
   assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, eventId: 'worlds:2027' }).status, 'unavailable')
+  const contradictory = { ...live, status: 'completed' as const, teams: [
+    { ...live.teams[0]!, gameWins: 3, outcome: 'loss' }, { ...live.teams[1]!, gameWins: 1, outcome: 'win' },
+  ] }
+  assert.deepEqual(scoreConditionedSeriesOdds(frozen, contradictory).status, 'unavailable')
 })
 
 test('participant and event corrections cannot relabel a pinned forecast', () => {
@@ -152,6 +157,34 @@ test('participant and event corrections cannot relabel a pinned forecast', () =>
   assert.deepEqual(pinnedForecast(pinned, corrected).status, 'unavailable')
   assert.deepEqual(pinnedForecast(pinned, { ...live, eventId: 'worlds:2027' }).status, 'unavailable')
   assert.deepEqual(pinnedForecast(pinned, { ...live, bestOf: 3 }).status, 'unavailable')
+  assert.deepEqual(createPreMatchReceipt({ series: { ...series(), teams: corrected.teams }, forecast: forecastTournamentSeries(series(), basis()),
+    forecastRevision: 'mismatched-team', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
+  assert.deepEqual(createPreMatchReceipt({ series: series(3), forecast: forecastTournamentSeries(series(), basis()),
+    forecastRevision: 'mismatched-format', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
+})
+
+test('played-game evidence and corrected earlier start prevent pre-match labeling', () => {
+  const played = series()
+  played.teams[0]!.gameWins = 1
+  assert.deepEqual(forecastTournamentSeries(played, basis()).status, 'unavailable')
+  const cleanForecast = forecastTournamentSeries(series(), basis())
+  assert.deepEqual(createPreMatchReceipt({ series: played, forecast: cleanForecast, forecastRevision: 'played',
+    generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
+  const outcome = series()
+  outcome.teams[0]!.outcome = 'win'
+  assert.deepEqual(forecastTournamentSeries(outcome, basis()).status, 'unavailable')
+
+  const originallyLater = { ...series(), startTime: '2026-09-27T14:00:00.000Z' }
+  const created = createPreMatchReceipt({ series: originallyLater, forecast: forecastTournamentSeries(originallyLater, basis()),
+    forecastRevision: 'before-original-start', generatedAt: '2026-09-27T13:30:00.000Z',
+    publishedAt: '2026-09-27T13:30:00.000Z', observedAt: before })
+  assert.equal(created.status, 'ready')
+  if (created.status !== 'ready') return
+  const ledger = appendForecastReceipt(emptyForecastLedger, created)
+  const correctedLive = { ...originallyLater, startTime: start, status: 'live' as const, sourceState: 'inProgress' }
+  assert.equal(pinnedForecast(pinPreMatchReceipt(ledger, correctedLive, '2026-09-27T13:40:00.000Z'), correctedLive).status, 'unavailable')
+  const pinnedBeforeCorrection = pinPreMatchReceipt(ledger, { ...correctedLive, startTime: originallyLater.startTime }, '2026-09-27T13:40:00.000Z')
+  assert.equal(pinnedForecast(pinnedBeforeCorrection, correctedLive).status, 'unavailable')
 })
 
 test('receipt parser rejects backdated, mismatched and non-upcoming persisted artifacts', () => {
@@ -167,6 +200,8 @@ test('receipt parser rejects backdated, mismatched and non-upcoming persisted ar
     [['source-a', 1, null], ['source-b', 0, null]]]) })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'upcoming', 'inProgress', 5,
     [['source-a', null, null], ['source-b', null, null]]]) })), false)
+  assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'upcoming', 'unstarted', 5,
+    [['source-a', 1, null], ['source-b', 0, null]]]) })), false)
 })
 
 test('Bo1 score conditioning requires one integer completed-game win', () => {

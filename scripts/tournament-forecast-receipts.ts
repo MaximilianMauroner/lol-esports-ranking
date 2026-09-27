@@ -13,6 +13,9 @@ export async function publishPreMatchReceiptOffline(root: string, input: {
 }, now = new Date()): Promise<ForecastReceipt | ForecastUnavailable> {
   const result = createPreMatchReceipt({ ...input, publishedAt: now.toISOString() })
   if (result.status === 'unavailable') return result
+  if (!isForecastLedger({ version: 1, receipts: { [result.receiptKey]: result }, pinned: {} })) {
+    throw new Error('Invalid offline pre-match forecast receipt')
+  }
   const directory = join(root, 'receipts')
   await mkdir(directory, { recursive: true })
   await writeOnce(join(directory, `${digest(result.receiptKey)}.json`), result)
