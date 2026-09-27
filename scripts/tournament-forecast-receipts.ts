@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import { link, mkdir, open, readFile, readdir, unlink } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import {
   appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, isForecastLedger, pinPreMatchReceipt,
   type ForecastLedger, type ForecastReceipt, type ForecastUnavailable, type TournamentForecast,
@@ -57,11 +57,25 @@ export async function readForecastLedgerOffline(root: string): Promise<ForecastL
 
 async function writeOnce(path: string, value: unknown) {
   const body = `${JSON.stringify(value)}\n`
+  const temporary = `${path}.${randomUUID()}.tmp`
   try {
-    await writeFile(path, body, { flag: 'wx' })
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-    if (await readFile(path, 'utf8') !== body) throw new Error(`Immutable forecast artifact already exists with different content: ${path}`, { cause: error })
+    const handle = await open(temporary, 'wx', 0o600)
+    try { await handle.writeFile(body); await handle.sync() }
+    finally { await handle.close() }
+    try {
+      // Same-directory hard-link install is atomic and cannot overwrite an earlier revision.
+      await link(temporary, path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      if (await readFile(path, 'utf8') !== body) throw new Error(`Immutable forecast artifact already exists with different content: ${path}`, { cause: error })
+    }
+    const directory = await open(dirname(path), 'r')
+    try { await directory.sync() }
+    finally { await directory.close() }
+  } finally {
+    await unlink(temporary).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    })
   }
 }
 async function files(path: string) {

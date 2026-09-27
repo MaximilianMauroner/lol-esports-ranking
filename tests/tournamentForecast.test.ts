@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { publishPreMatchReceiptOffline, pinPreMatchReceiptOffline, readForecastLedgerOffline } from '../scripts/tournament-forecast-receipts'
@@ -196,12 +196,16 @@ test('receipt parser rejects backdated, mismatched and non-upcoming persisted ar
   assert.equal(isForecastLedger(wrapped({ ...created, generatedAt: after })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, ratingPublishedAt: after })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, sourceObservedAt: after })), false)
+  assert.equal(isForecastLedger(wrapped({ ...created, warnings: undefined as unknown as string[] })), false)
+  assert.equal(isForecastLedger(wrapped({ ...created, generatedAt: '2026-09-27T11:59:00.000Z' })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'live', 'inProgress', 5,
     [['source-a', 1, null], ['source-b', 0, null]]]) })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'upcoming', 'inProgress', 5,
     [['source-a', null, null], ['source-b', null, null]]]) })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'upcoming', 'unstarted', 5,
     [['source-a', 1, null], ['source-b', 0, null]]]) })), false)
+  assert.equal(createPreMatchReceipt({ series: series(), forecast: forecastTournamentSeries(series(), basis()), forecastRevision: 'impossible-time',
+    generatedAt: '2026-09-27T11:59:00.000Z', publishedAt: before, observedAt: before }).status, 'unavailable')
 })
 
 test('Bo1 score conditioning requires one integer completed-game win', () => {
@@ -233,6 +237,7 @@ test('offline store writes each receipt and pin once without overwriting a revis
     const live = { ...current, status: 'live' as const, sourceState: 'inProgress' }
     const ledger = await pinPreMatchReceiptOffline(root, live, after)
     assert.equal(pinnedForecast(ledger, live).status, 'ready')
+    await writeFile(join(root, 'receipts', 'interrupted-write.tmp'), '{')
     assert.deepEqual(await readForecastLedgerOffline(root), ledger)
     assert.equal((await publishPreMatchReceiptOffline(root, input, new Date(after))).status, 'unavailable')
   } finally {

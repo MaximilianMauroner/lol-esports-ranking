@@ -11,7 +11,7 @@ const LEDGER_URL = '/data/tournaments/forecasts/ledger.json'
 export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fetch): Promise<{
   basis: ForecastBasis | null; ledger: ForecastLedger; reason?: string
 }> {
-  const ledger = await loadTournamentForecastLedger(fetcher)
+  const ledger = await loadTournamentForecastLedger(fetcher).catch(() => emptyForecastLedger)
   try {
     const identityResponse = await fetcher(IDENTITY_URL, { cache: 'no-store' })
     if (!identityResponse.ok) throw new Error('No reviewed source-to-ranking team ID map is published.')
@@ -33,8 +33,9 @@ export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fe
 }
 
 export async function loadTournamentForecastLedger(fetcher: typeof fetch = fetch): Promise<ForecastLedger> {
-  return fetcher(LEDGER_URL, { cache: 'no-store' })
-    .then(async (response) => response.ok ? response.json() as Promise<unknown> : null)
-    .then((value) => isForecastLedger(value) ? value : emptyForecastLedger)
-    .catch(() => emptyForecastLedger)
+  const response = await fetcher(LEDGER_URL, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Forecast ledger returned HTTP ${response.status}`)
+  const value: unknown = await response.json()
+  if (!isForecastLedger(value)) throw new Error('Forecast ledger schema is invalid')
+  return value
 }

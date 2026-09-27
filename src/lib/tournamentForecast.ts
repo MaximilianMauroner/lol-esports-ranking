@@ -155,7 +155,8 @@ export function isForecastLedger(value: unknown): value is ForecastLedger {
   for (const [key, candidate] of Object.entries(ledger.receipts)) {
     const receipt = candidate as ForecastReceipt
     if (!receipt || receipt.status !== 'ready' || receipt.receiptKey !== key
-      || !receipt.matchId || !receipt.eventStateVersion || !receipt.forecastRevision
+      || !nonemptyString(receipt.matchId) || !nonemptyString(receipt.eventId)
+      || !nonemptyString(receipt.eventStateVersion) || !nonemptyString(receipt.forecastRevision)
       || !validTime(receipt.generatedAt) || !validTime(receipt.publishedAt) || !validTime(receipt.sourceObservedAt)
       || !validTime(receipt.scheduledStartAt)
       || Date.parse(receipt.publishedAt) >= Date.parse(receipt.scheduledStartAt)
@@ -166,10 +167,19 @@ export function isForecastLedger(value: unknown): value is ForecastLedger {
         && typeof team.teamId === 'string' && team.teamId && typeof team.name === 'string'
         && Number.isFinite(team.rating) && Number.isFinite(team.uncertainty) && team.uncertainty >= 0
         && typeof team.rosterBasis === 'string')
-      || ![1, 3, 5].includes(receipt.bestOf) || !receipt.modelVersion || !receipt.modelConfigHash
-      || !receipt.snapshotId || !validTime(receipt.ratingDataAsOf) || !validTime(receipt.ratingPublishedAt)
+      || ![1, 3, 5].includes(receipt.bestOf) || !nonemptyString(receipt.modelVersion)
+      || !nonemptyString(receipt.modelConfigHash) || !nonemptyString(receipt.snapshotId)
+      || !validTime(receipt.ratingDataAsOf) || !validTime(receipt.ratingPublishedAt)
+      || typeof receipt.sideBasis !== 'string' || !['neutral', 'home-blue', 'home-red'].includes(receipt.sideAssumption)
+      || !Number.isFinite(receipt.blueSideRatingEdge) || receipt.blueSideRatingEdge < 0
+      || (receipt.sideAssumption !== 'neutral' && receipt.bestOf !== 1)
+      || !nonemptyString(receipt.identityRevision) || !['scheduled-public-data', 'seeded-sample', 'no-data'].includes(receipt.dataMode)
+      || !Array.isArray(receipt.warnings) || !receipt.warnings.every((warning) => typeof warning === 'string')
       || Date.parse(receipt.ratingDataAsOf) > Date.parse(receipt.publishedAt)
       || Date.parse(receipt.ratingPublishedAt) > Date.parse(receipt.publishedAt)
+      || Date.parse(receipt.ratingPublishedAt) > Date.parse(receipt.generatedAt)
+      || Date.parse(receipt.ratingDataAsOf) > Date.parse(receipt.generatedAt)
+      || Date.parse(receipt.sourceObservedAt) > Date.parse(receipt.generatedAt)
       || !probability(receipt.homeGameWinProbability) || !probability(receipt.awayGameWinProbability)
       || !probability(receipt.homeSeriesWinProbability) || !probability(receipt.awaySeriesWinProbability)
       || Math.abs(receipt.homeGameWinProbability + receipt.awayGameWinProbability - 1) > 0.0002
@@ -197,7 +207,10 @@ export function createPreMatchReceipt(input: {
   if (series.status !== 'upcoming' || normalizeStatus(series.sourceState) !== 'upcoming' || !noCompletedGameEvidence(series)
     || Date.parse(publishedAt) >= Date.parse(series.startTime!) || Date.parse(observedAt) > Date.parse(publishedAt)
     || Date.parse(generatedAt) > Date.parse(publishedAt) || Date.parse(forecast.ratingPublishedAt) > Date.parse(publishedAt)
-    || Date.parse(forecast.ratingDataAsOf) > Date.parse(publishedAt)) {
+    || Date.parse(forecast.ratingDataAsOf) > Date.parse(publishedAt)
+    || Date.parse(observedAt) > Date.parse(generatedAt)
+    || Date.parse(forecast.ratingPublishedAt) > Date.parse(generatedAt)
+    || Date.parse(forecast.ratingDataAsOf) > Date.parse(generatedAt)) {
     return unavailable('already-started', 'Only a genuinely published, source-upcoming forecast before the scheduled start is eligible as pre-match.')
   }
   const eventStateVersion = tournamentEventStateVersion(series)
@@ -267,9 +280,10 @@ export function scoreConditionedSeriesOdds(receipt: ForecastReceipt, series: Tou
   }
 }
 
-function validTime(value: string | null | undefined): value is string { return Boolean(value && Number.isFinite(Date.parse(value))) }
+function validTime(value: string | null | undefined): value is string { return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value)) }
 function positive(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && value > 0 }
 function probability(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 }
+function nonemptyString(value: unknown): value is string { return typeof value === 'string' && value.length > 0 }
 function sameSeriesBasis(receipt: ForecastReceipt, series: TournamentSeries) {
   return receipt.matchId === series.id && receipt.eventId === series.eventId && receipt.bestOf === series.bestOf
     && series.teams.length === 2 && series.teams[0]?.id === receipt.teams[0].sourceTeamId

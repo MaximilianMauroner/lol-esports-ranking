@@ -14,7 +14,7 @@ type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed
 const REFRESH_MS = 60_000
 const STALE_MS = 3 * REFRESH_MS
 const FORECASTS_ENABLED = import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED === '1'
-type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; reason?: string }
+type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; reason?: string; ledgerWarning?: string }
 
 export function TournamentsView() {
   const [state, setState] = useState<FeedState>({ status: 'loading' })
@@ -40,8 +40,12 @@ export function TournamentsView() {
       const health = isHealth(healthBody) ? healthBody : null
       setState({ status: 'ready', feed: body, health })
       if (FORECASTS_ENABLED) {
-        const ledger = await loadTournamentForecastLedger()
-        setForecastArtifacts((previous) => ({ ...previous, ledger }))
+        try {
+          const ledger = await loadTournamentForecastLedger()
+          setForecastArtifacts((previous) => ({ ...previous, ledger, ledgerWarning: undefined }))
+        } catch {
+          setForecastArtifacts((previous) => ({ ...previous, ledgerWarning: 'Forecast receipt check failed; showing the last valid ledger.' }))
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -83,6 +87,7 @@ export function TournamentsView() {
       </div>
       {stale ? <Alert variant="warning" role="status">Schedule may be stale. Last successful feed change: {formatTournamentTime(state.feed.fetchedAt, timezone)}.{state.error ? ` Latest browser check failed: ${state.error}` : ''}{state.health?.warnings.length ? ` Collector: ${state.health.warnings.join(' ')}` : ''}</Alert> : null}
       {state.feed.dataMode === 'synthetic-fixture' ? <Alert variant="warning" role="status">Local synthetic fixture. These are not official LoL Esports fixtures or results.</Alert> : null}
+      {FORECASTS_ENABLED && forecastArtifacts.ledgerWarning ? <Alert variant="warning" role="status">{forecastArtifacts.ledgerWarning}</Alert> : null}
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
         <Alert variant="warning" role="status">Coverage {state.feed.coverage.complete ? 'has warnings' : 'is incomplete'} for {state.feed.coverage.start.slice(0, 10)} to {state.feed.coverage.end.slice(0, 10)}. {state.feed.coverage.warnings.join(' ')}</Alert>
       ) : null}

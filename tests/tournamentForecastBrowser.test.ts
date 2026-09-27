@@ -21,8 +21,6 @@ function series(bestOf = 5): TournamentSeries {
 }
 
 test('synthetic tournament card keeps published pre-match odds through live and finished states', { timeout: 60_000 }, async () => {
-  process.env.VITE_TOURNAMENT_HUB_ENABLED = '1'
-  process.env.VITE_TOURNAMENT_FORECASTS_ENABLED = '1'
   const manifest = parsePublicRankingManifest(JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8')))
   const shard = parsePublicRankingShard(JSON.parse(await readFile('public/data/scopes/all.json', 'utf8')))
   const forecastBasis = { snapshotId: `${manifest.artifactMeta?.runId ?? manifest.generatedAt}/${manifest.defaultSnapshotKey}`,
@@ -32,6 +30,7 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   const estimate = forecastTournamentSeries(upcoming, forecastBasis)
   assert.equal(estimate.status, 'ready')
   let ledger = emptyForecastLedger
+  let ledgerStatus = 200
   let feed: TournamentFeed = { version: 1, source: 'lolesports-persisted-site-api', unsupportedApi: true, dataMode: 'synthetic-fixture',
     fetchedAt: at, sourceUpdatedAt: null, coverage: { start: at, end: '2026-11-01T00:00:00.000Z', complete: true, warnings: [] },
     events: [{ id: eventId, sourceTournamentId: 'fixture-worlds', competition: 'worlds', label: 'Worlds 2026', season: '2026',
@@ -45,11 +44,17 @@ test('synthetic tournament card keeps published pre-match odds through live and 
         : path === '/data/tournaments/feed.json.health.json' ? { checkedAt: feed.fetchedAt, complete: true, warnings: [] }
           : path === '/data/tournaments/forecasts/team-ids.json' ? identityMap
             : path === '/data/tournaments/forecasts/ledger.json' ? ledger : null
-      response.statusCode = body ? 200 : 404
+      response.statusCode = path === '/data/tournaments/forecasts/ledger.json' ? ledgerStatus : body ? 200 : 404
       response.end(JSON.stringify(body))
     })
   } }
-  const server = await createServer({ logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin] })
+  const server = await createServer({
+    logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin],
+    define: {
+      'import.meta.env.VITE_TOURNAMENT_HUB_ENABLED': JSON.stringify('1'),
+      'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1'),
+    },
+  })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
     await server.listen()
@@ -82,10 +87,17 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     await page.getByText('Published pre-match forecast').waitFor()
     assert.match(await page.locator('body').innerText(), /Score-conditioned series odds:/)
     assert.match(await page.locator('body').innerText(), /frozen pre-series model, not in-game telemetry/)
+    ledgerStatus = 503
+    feed = { ...feed, fetchedAt: '2026-09-27T12:02:00.000Z' }
+    await page.clock.fastForward(60_000)
+    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
+    assert.match(await page.locator('section[aria-label="live"]').innerText(), /Published pre-match forecast/)
+    ledgerStatus = 200
     const completed = { ...live, status: 'completed' as const, sourceState: 'completed', teams: [team('fixture-t1', 'T1', 3), team('fixture-gen', 'Gen.G', 1)] }
-    feed = { ...feed, fetchedAt: '2026-09-27T12:02:00.000Z', events: [{ ...feed.events[0]!, series: [completed, series(2)] }] }
+    feed = { ...feed, fetchedAt: '2026-09-27T12:03:00.000Z', events: [{ ...feed.events[0]!, series: [completed, series(2)] }] }
     await page.clock.fastForward(60_000)
     await page.getByText('T1 3–1 Gen.G').waitFor()
+    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor({ state: 'hidden' })
     assert.match(await page.locator('section[aria-label="results"]').innerText(), /Published pre-match forecast/)
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: 800 })
@@ -95,7 +107,5 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   } finally {
     await browser?.close()
     await server.close()
-    delete process.env.VITE_TOURNAMENT_HUB_ENABLED
-    delete process.env.VITE_TOURNAMENT_FORECASTS_ENABLED
   }
 })
