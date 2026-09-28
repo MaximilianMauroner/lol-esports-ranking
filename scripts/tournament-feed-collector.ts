@@ -163,16 +163,19 @@ function boundaryReached(page: Row, direction: 'older' | 'newer', start: string,
 
 async function main() {
   if (process.env.TOURNAMENT_COLLECTOR_ENABLED !== '1') throw new Error('Set TOURNAMENT_COLLECTOR_ENABLED=1 for an explicit local/staging collection.')
-  const output = resolve(process.argv[2] ?? 'public/data/tournaments/feed.json')
+  const output = resolve(process.argv[2] ?? 'public/tournament-data/feed.json')
   const lock = `${output}.lock`
   await mkdir(dirname(output), { recursive: true })
   const releaseLock = await acquireCollectorLock(lock)
   try {
-    const priorRaw = await readFile(output, 'utf8').catch(() => '')
-    const parsedPrior: unknown = priorRaw ? JSON.parse(priorRaw) : null
-    if (parsedPrior && !isTournamentFeed(parsedPrior)) throw new Error('Existing tournament feed failed schema validation; restore a known-good feed before collecting.')
-    const prior = isTournamentFeed(parsedPrior) ? parsedPrior : null
     try {
+      const priorRaw = await readFile(output, 'utf8').catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return null
+        throw error
+      })
+      const parsedPrior: unknown = priorRaw === null ? null : JSON.parse(priorRaw)
+      if (priorRaw !== null && !isTournamentFeed(parsedPrior)) throw new Error('Existing tournament feed failed schema validation; restore a known-good feed before collecting.')
+      const prior = isTournamentFeed(parsedPrior) ? parsedPrior : null
       const result = await collectTournamentFeed()
       await publishTournamentFeed(output, prior, result.feed)
       await writeHealth(output, { checkedAt: new Date().toISOString(), complete: result.feed.coverage.complete, requests: result.requests, retries: result.retries, warnings: result.feed.coverage.warnings })

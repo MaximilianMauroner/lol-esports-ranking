@@ -20,6 +20,7 @@ const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
 const distDir = resolve(process.env.RAILWAY_DIST_DIR ?? 'dist')
 const publicDataDir = resolve(process.env.RANKING_PUBLIC_DATA_DIR ?? 'public/data')
+const tournamentDataDir = resolve(process.env.TOURNAMENT_PUBLIC_DATA_DIR ?? 'public/tournament-data')
 const refreshEnabled = process.env.RANKING_REFRESH_ENABLED === 'true'
 const refreshMode = process.env.RANKING_REFRESH_MODE === 'shadow' ? 'shadow' : 'gated'
 const dataCacheControl = process.env.RANKING_DATA_CACHE_CONTROL ?? 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800, stale-if-error=604800'
@@ -60,6 +61,16 @@ const server = createServer(async (request, response) => {
 
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       sendJson(response, 405, { ok: false, error: 'Method not allowed' })
+      return
+    }
+
+    if (url.pathname.startsWith('/tournament-data/')) {
+      const served = await tryServeFile(response, tournamentDataDir, url.pathname.slice('/tournament-data/'.length), {
+        cacheControl: 'no-store',
+        headOnly: request.method === 'HEAD',
+        requestHeaders: request.headers,
+      })
+      if (!served) sendJson(response, 404, { ok: false, error: 'Not found' })
       return
     }
 
@@ -559,6 +570,7 @@ function isKnownAppRoute(pathname) {
     || normalizedPathname === '/rankings'
     || normalizedPathname === '/teams'
     || normalizedPathname === '/regions'
+    || normalizedPathname === '/tournaments'
     || normalizedPathname === '/legal'
     || normalizedPathname === '/privacy'
     || normalizedPathname === '/licenses'

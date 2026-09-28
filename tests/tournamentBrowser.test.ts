@@ -5,7 +5,7 @@ import { chromium } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
 
 const at = '2026-09-27T12:00:00.000Z'
-const tournamentPath = '/data/tournaments/feed.json'
+const tournamentPath = '/tournament-data/feed.json'
 const healthPath = `${tournamentPath}.health.json`
 
 function team(id: string, name: string, gameWins: number | null = null, outcome: string | null = null) {
@@ -37,16 +37,24 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
   let feedStatus = 200
   let holdHealth = true
   const pendingHealth: Array<() => void> = []
+  let holdNextFeed = false
+  const pendingFeed: Array<() => void> = []
   const dataRequests: string[] = []
   const fixturePlugin: Plugin = {
     name: 'tournament-browser-fixture',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const path = new URL(request.url ?? '/', 'http://localhost').pathname
-        if (!path.startsWith('/data/')) return next()
+        if (!path.startsWith('/data/') && !path.startsWith('/tournament-data/')) return next()
         dataRequests.push(path)
         response.setHeader('content-type', 'application/json')
         response.statusCode = path === tournamentPath ? feedStatus : path === healthPath ? 200 : 503
+        if (path === tournamentPath && holdNextFeed) {
+          holdNextFeed = false
+          const olderBody = JSON.stringify(feed)
+          pendingFeed.push(() => response.end(olderBody))
+          return
+        }
         if (path === healthPath && holdHealth) {
           pendingHealth.push(() => response.end(JSON.stringify(health)))
           return
@@ -137,6 +145,24 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), 'worlds:2026')
 
+    holdNextFeed = true
+    await page.getByRole('button', { name: 'Refresh' }).click()
+    await waitForPendingFeed(pendingFeed)
+    feed.events[1]!.series[0] = series('worlds-series', 'worlds:2026', [team('gamma', 'Gamma', 3, 'win'), team('delta', 'Delta', 1, 'loss')], 'completed', 'completed')
+    feed.fetchedAt = '2026-09-27T12:08:00.000Z'
+    health.checkedAt = feed.fetchedAt
+    await page.getByRole('button', { name: 'Refresh' }).click()
+    await page.getByText('Gamma 3–1 Delta').waitFor()
+    const oldResponse = page.waitForResponse((response) => response.url().endsWith(tournamentPath))
+    pendingFeed.splice(0).forEach((respond) => respond())
+    await oldResponse
+    await page.waitForTimeout(50)
+    assert.match(await page.locator('section[aria-label="results"]').innerText(), /Gamma 3–1 Delta/)
+
+    await page.goto(`${base}/tournaments`)
+    await page.getByRole('heading', { name: 'Tournaments', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
+
     await page.locator('a[href="#main-content"]').focus()
     await page.keyboard.press('Enter')
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content')
@@ -159,8 +185,16 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     }
     assert.deepEqual(externalRequests, [])
   } finally {
+    pendingHealth.splice(0).forEach((respond) => respond())
+    pendingFeed.splice(0).forEach((respond) => respond())
     await browser?.close()
     await server.close()
     delete process.env.VITE_TOURNAMENT_HUB_ENABLED
   }
 })
+
+async function waitForPendingFeed(pending: Array<() => void>) {
+  const deadline = Date.now() + 5_000
+  while (pending.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.ok(pending.length > 0, 'Expected a held tournament feed response')
+}

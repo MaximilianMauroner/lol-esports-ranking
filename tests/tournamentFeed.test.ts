@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { acquireCollectorLock, collectTournamentFeed, publishTournamentFeed } from '../scripts/tournament-feed-collector'
 import { competitionForLeague, formatTournamentTime, groupTournamentSeries, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/lib/tournamentFeed'
 
@@ -122,6 +123,27 @@ test('concurrent stale-lock recovery preserves the winning collector lock', asyn
     assert.ok(owner.token)
     await assert.rejects(acquireCollectorLock(lock), /lock is held/)
     await winners[0]!.value()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('invalid prior feed records failed health without replacing its bytes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-prior-health-test-'))
+  const output = join(directory, 'feed.json')
+  try {
+    for (const invalid of ['{"events":', '{}', '']) {
+      await writeFile(output, invalid)
+      await writeFile(`${output}.health.json`, JSON.stringify({ checkedAt: at, complete: true, warnings: [] }))
+      const run = spawnSync(process.execPath, ['--import', 'tsx', resolve('scripts/tournament-feed-collector.ts'), output], {
+        env: { ...process.env, TOURNAMENT_COLLECTOR_ENABLED: '1' }, encoding: 'utf8', timeout: 10_000,
+      })
+      assert.equal(run.status, 1, run.stderr)
+      assert.equal(await readFile(output, 'utf8'), invalid)
+      const health = JSON.parse(await readFile(`${output}.health.json`, 'utf8')) as { complete: boolean; warnings: string[] }
+      assert.equal(health.complete, false)
+      assert.ok(health.warnings.length > 0)
+    }
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

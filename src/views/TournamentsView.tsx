@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -16,28 +16,34 @@ export function TournamentsView() {
   const [state, setState] = useState<FeedState>({ status: 'loading' })
   const [selectedId, setSelectedId] = useState(() => hashParam('event') ?? '')
   const [now, setNow] = useState(() => Date.now())
+  const refreshSequence = useRef(0)
 
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current
     try {
-      const response = await fetch('/data/tournaments/feed.json', { cache: 'no-store' })
+      const response = await fetch('/tournament-data/feed.json', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
       if (!response.ok) throw new Error(`Tournament feed returned HTTP ${response.status}`)
       const body: unknown = await response.json()
       if (!isTournamentFeed(body)) throw new Error('Tournament feed schema is unsupported or incomplete')
+      if (sequence !== refreshSequence.current) return
       setState({ status: 'ready', feed: body, health: null })
-      const healthResponse = await fetch('/data/tournaments/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.timeout(5_000) }).catch(() => null)
+      const healthResponse = await fetch('/tournament-data/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.timeout(5_000) }).catch(() => null)
       const healthBody: unknown = healthResponse?.ok ? await healthResponse.json().catch(() => null) : null
       const health = isHealth(healthBody) ? healthBody : null
+      if (sequence !== refreshSequence.current) return
       setState((previous) => previous.status === 'ready' && previous.feed === body ? { ...previous, health } : previous)
     } catch (error) {
+      if (sequence !== refreshSequence.current) return
       const message = error instanceof Error ? error.message : String(error)
       setState((previous) => previous.status === 'ready' ? { ...previous, error: message } : { status: 'error', message })
     }
   }, [])
   useEffect(() => {
+    const sequenceRef = refreshSequence
     const initialTimer = window.setTimeout(() => { void refresh() }, 0)
     const refreshTimer = window.setInterval(() => { void refresh() }, REFRESH_MS)
     const clockTimer = window.setInterval(() => setNow(Date.now()), 10_000)
-    return () => { window.clearTimeout(initialTimer); window.clearInterval(refreshTimer); window.clearInterval(clockTimer) }
+    return () => { ++sequenceRef.current; window.clearTimeout(initialTimer); window.clearInterval(refreshTimer); window.clearInterval(clockTimer) }
   }, [refresh])
   useEffect(() => {
     const onHashChange = () => setSelectedId(hashParam('event') ?? '')
