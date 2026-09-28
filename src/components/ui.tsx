@@ -7,7 +7,7 @@ import { heatBin } from '../lib/display'
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
   return (
     <span
-      className="inline-flex items-baseline gap-1 rounded-full px-[9px] py-[3px] font-mono text-[var(--t-3)] font-semibold text-[var(--heat-ink)] tabular-nums"
+      className="inline-flex items-baseline gap-1 rounded-full px-[9px] py-[3px] font-mono text-[length:var(--t-3)] font-semibold text-[var(--heat-ink)] tabular-nums"
       style={{ background: `var(--heat-${heatBin(value, min, max)})` }}
     >
       {label}
@@ -67,7 +67,7 @@ export function FormDots({ form }: { form?: string[] }) {
           <i
             key={`${result}-${index}`}
             className={cn(
-              'grid size-[17px] place-items-center rounded-[var(--r-1)] text-[var(--t-1)] font-bold not-italic',
+              'grid size-[17px] place-items-center rounded-[var(--r-1)] text-[length:var(--t-1)] font-bold not-italic',
               tone === 'w' && 'bg-[var(--win-soft)] text-[var(--win)]',
               tone === 'l' && 'bg-[var(--loss-soft)] text-[var(--loss)]',
               tone === 't' && 'bg-[var(--surface-3)] text-[var(--muted)]',
@@ -82,52 +82,28 @@ export function FormDots({ form }: { form?: string[] }) {
   )
 }
 
-export function ConfBar({ value }: { value?: number }) {
-  const pct = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
-  return (
-    <span className="inline-grid min-w-[68px] gap-1">
-      <span className="text-[var(--t-2)] text-[var(--muted)] tabular-nums">{typeof value === 'number' ? `${Math.round(pct)}%` : '—'}</span>
-      <span className="relative h-[7px] overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden="true">
-        <span
-          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]"
-          style={{ width: `${pct}%`, background: `var(--heat-${heatBin(pct, 0, 100)})` }}
-        />
-      </span>
-    </span>
-  )
-}
-
-export function PickButton({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
-  const tooltip = picked ? `Remove ${label} from comparison` : `Add ${label} to comparison`
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="icon"
-      className={cn(
-        'pick-button',
-        picked && 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent)]',
-      )}
-      onClick={onToggle}
-      aria-label={tooltip}
-      aria-pressed={picked}
-      title={tooltip}
-    >
-      <span aria-hidden="true">{picked ? '✓' : '+'}</span>
-    </Button>
-  )
+export type SegmentedOption<T extends string> = {
+  value: T
+  label: string
+  title?: string
+  disabled?: boolean
+  /** Small trailing mark, such as the live dot on an ongoing split. */
+  marker?: ReactNode
 }
 
 export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  onIntent,
   ariaLabel = 'Filter options',
   className,
 }: {
   value: T
-  options: { value: T; label: string }[]
+  options: SegmentedOption<T>[]
   onChange: (value: T) => void
+  /** Hover or focus on an option, for prefetching what it would show. */
+  onIntent?: (value: T) => void
   ariaLabel?: string
   className?: string
 }) {
@@ -153,18 +129,24 @@ export function Segmented<T extends string>({
           variant="tab"
           size="sm"
           aria-pressed={value === option.value}
+          disabled={option.disabled}
+          title={option.title}
           onClick={() => onChange(option.value)}
+          onPointerEnter={onIntent ? () => onIntent(option.value) : undefined}
+          onFocus={onIntent ? () => onIntent(option.value) : undefined}
           className={cn(
             // Fill and text carry the selection, with no ring. An inset ring on
             // a square-cornered child inside a clipped rounded parent gets its
             // corners sliced off by the clip rather than following the curve,
             // which reads as a square ring inside a rounded box.
-            'h-auto min-h-0 flex-1 rounded-none border-y-0 border-r-0 border-l border-l-[var(--line)] px-3 max-sm:min-w-0',
+            'h-auto min-h-0 flex-1 gap-1.5 rounded-none border-y-0 border-r-0 border-l border-l-[var(--line)] px-3 whitespace-nowrap max-sm:min-w-0 max-sm:px-2',
             'aria-pressed:bg-[color-mix(in_oklch,var(--accent)_22%,var(--surface))] aria-pressed:font-semibold aria-pressed:text-[var(--text-strong)]',
+            'disabled:opacity-60',
             index === 0 && 'border-l-0',
           )}
         >
           {option.label}
+          {option.marker}
         </Button>
       ))}
     </div>
@@ -188,7 +170,7 @@ export function DataState({
   children?: ReactNode
 }) {
   return (
-    <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[var(--t-5)] [&>h3]:font-semibold [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[var(--t-3)] [&>svg]:text-[var(--faint)]">
+    <div className="grid place-items-center gap-3 px-6 py-16 text-center text-[var(--muted)] [&>h3]:text-[length:var(--t-5)] [&>h3]:font-semibold [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-[length:var(--t-3)] [&>svg]:text-[var(--faint)]">
       {icon}
       <h3>{title}</h3>
       {children ? <p>{children}</p> : null}
@@ -199,7 +181,7 @@ export function DataState({
 
 export function CountBadge({ children, variant = 'secondary' }: { children: ReactNode; variant?: 'default' | 'secondary' | 'warning' }) {
   return (
-    <Badge variant={variant} className="w-fit justify-self-start text-[var(--t-2)] text-[var(--muted)] tabular-nums">
+    <Badge variant={variant} className="w-fit justify-self-start text-[length:var(--t-2)] text-[var(--muted)] tabular-nums">
       {children}
     </Badge>
   )

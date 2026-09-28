@@ -21,7 +21,7 @@ export function LegalPage({ page }: { page: LegalPageName }) {
       <div className="mx-auto grid w-full max-w-[900px] gap-6">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] pb-5">
           <div>
-            <a className="text-[var(--t-2)] tracking-[0.16em] text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
+            <a className="text-[length:var(--t-2)] tracking-[0.16em] text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
             <h1 className="mt-2 text-3xl font-bold text-[var(--text-strong)]">{title}</h1>
             <p className="mt-1 text-sm text-[var(--muted)]">Last updated: {UPDATED_AT}</p>
           </div>

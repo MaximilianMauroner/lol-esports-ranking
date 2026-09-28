@@ -10,12 +10,12 @@ const noop = () => {}
 test('region comparison is ready for every supported selection count above one', () => {
   for (let count = 0; count <= 4; count++) {
     const html = renderToStaticMarkup(createElement(CompareDock, {
-      label: 'Regions', limit: 4,
+      subject: 'regions', limit: 4,
       entities: Array.from({ length: count }, (_, index) => ({ id: String(index), code: `R${index}`, name: `Region ${index}` })),
       onRemove: noop, onClear: noop, onOpen: noop,
     }))
-    assert.doesNotMatch(html, /Pick (?:0|-\d+) more/)
-    assert.match(html, count >= 2 ? new RegExp(`Ready to compare · ${count} selected`) : count === 1 ? /Pick 1 more/ : /Pick two to compare/)
+    assert.doesNotMatch(html, /Pick (?:0|-\d+|zero) more/)
+    assert.match(html, count >= 2 ? new RegExp(`${count} regions selected`) : count === 1 ? /Pick one more region/ : /Tick Compare on two regions/)
     assert.equal(/disabled=""/.test(html), count < 2)
     assert.equal(html.includes('Picking another replaces the oldest'), count === 4)
   }

@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
-import { ArrowDown, ArrowUp, Minus, Search, Users, X } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { ChevronRight, SlidersHorizontal, Users, X } from 'lucide-react'
 import type { CompactPlayer, DataSourceInfo, ModelInfo, RankingSummaryStanding, TeamHistorySeries } from '../lib/snapshot'
 import type {
   PublicRecentMatch,
@@ -13,29 +13,28 @@ import { displayRegionPowerScore, type RegionStrength } from '../lib/regionStren
 import type { EventTier } from '../types'
 import { extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
-import { formatCompetitionLeagueLabel, formatCompetitionRegionLabel } from '../data/regionTaxonomy'
+import { formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { eventTierConfig } from '../data/rankingConfig'
-import { CountBadge, DataState, FormDots, HeatChip, PickButton, RegionBadge, Segmented, SortHeader } from '../components/ui'
+import { CountBadge, DataState, FormDots, HeatChip, RegionBadge, Segmented, SortHeader } from '../components/ui'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { PlayerPerformancePanel } from '../components/PlayerPerformancePanel'
-import { Input } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { LoadingState } from '../components/ui/loading'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet'
 import { PageShell } from '../components/ui/page-shell'
 import { Pager } from '../components/ui/pager'
 import { Panel, PanelBody, PanelFooter, PanelHeader } from '../components/ui/panel'
-import { RankingSignals, TierPanel, type RankingShowcaseProps } from '../components/RankingShowcase'
+import { MovementChip, WhatChanged, type MovementSpotlight, type UpsetSpotlight } from '../components/WhatChanged'
+import { PowerLadder } from '../components/PowerLadder'
 import { TeamMark } from '../components/TeamMark'
 import { type ChartSeries } from '../components/LineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import {
   deriveRankingFlair,
-  firstPageForTier,
+  deriveTierLabels,
   type RankingFlair,
   type RankingMovementPick,
-  type RankingTierAssignment,
   type RankingTierLabel,
 } from '../lib/rankingFlair'
 import type { ChartPoint } from '../lib/chartPoints'
@@ -48,7 +47,11 @@ import type {
 } from '../hooks/usePublicArtifacts'
 import { useHistoryDetail } from '../hooks/useHistoryDetail'
 import { hashEnum, hashInt, hashParam, useHashSync } from '../lib/urlState'
-import { publicScoreGapExplanation } from '../lib/publicMatchup'
+import { estimatePublicMatchup, gameWinChanceForGap, type PublicMatchupModel } from '../lib/publicMatchup'
+import { NEAR_TIE_WIN_PROBABILITY, nearTieGroups, nearTiePositions, type NearTiePosition } from '../lib/nearTies'
+import { boardHeadline } from '../lib/boardHeadline'
+import { assignColorSlots, sameColorSlots } from '../lib/colorSlots'
+import { UPSET_CHANCE } from '../lib/upset'
 import { POWER_COMPONENT_LABELS } from '../lib/ratingComponentLabels'
 import {
   teamMatchesTournamentFilter,
@@ -70,6 +73,7 @@ export type PlayerLoadState =
 const SORT_KEYS = ['rank', 'rating', 'wins'] as const
 const SORT_DIRECTIONS = ['ascending', 'descending'] as const
 const ELIGIBILITY_FILTERS = ['ranked', 'all'] as const
+const TIER_FILTERS = ['All', 'S', 'A', 'B', 'C'] as const
 
 type SortKey = typeof SORT_KEYS[number]
 type SortDirection = typeof SORT_DIRECTIONS[number]
@@ -107,6 +111,9 @@ const TEAM_RANK_AXIS_LIMIT = 60
 const TEAM_PAGE_SIZES = [15, 25, 50, 80] as const
 const DEFAULT_TEAM_PAGE_SIZE = 25
 const RECENT_MATCH_PAGE_SIZE = 5
+/** The ladder stays readable in a 320px rail up to about this many rows. */
+const LADDER_TEAM_LIMIT = 16
+const DEFAULT_FOCUS_TEAMS = 5
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
 const LARGE_POWER_RESUME_RANK_GAP = 7
@@ -139,7 +146,7 @@ export function TeamsView({
 }: {
   standings: RankingSummaryStanding[]
   regions: RegionStrength[]
-  model?: Pick<ModelInfo, 'version' | 'configHash'>
+  model?: PublicMatchupModel
   players?: CompactPlayer[]
   currentLineups?: Record<string, PublicCurrentLineup>
   playerLoadState: PlayerLoadState
@@ -163,6 +170,7 @@ export function TeamsView({
 }) {
   // Seeded from the hash so a shared or reloaded board comes back as it was.
   const [region, setRegion] = useState(() => hashParam('region') ?? 'All')
+  const [tierFilter, setTierFilter] = useState<RankingTierLabel | 'All'>(() => hashEnum('tier', TIER_FILTERS, 'All'))
   const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>(() => hashEnum('eligibility', ELIGIBILITY_FILTERS, 'ranked'))
   const [sortKey, setSortKey] = useState<SortKey>(() => hashEnum('sort', SORT_KEYS, 'rank'))
   const [sortDirection, setSortDirection] = useState<SortDirection>(() => hashEnum('dir', SORT_DIRECTIONS, 'ascending'))
@@ -173,18 +181,20 @@ export function TeamsView({
   const [pageState, setPageState] = useState(() => ({ scopeKey: '', page: hashInt('page', 1) }))
   const { value: detailKey, open: openDetail, close: closeDetail } = useHistoryDetail('teamDetail')
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
-  const [selectedTier, setSelectedTier] = useState<string | null>(null)
-  const pendingTierScrollRef = useRef<string | null>(null)
-  const tableWrapRef = useRef<HTMLDivElement | null>(null)
+  // Phones fold the filters behind one button so the first screen shows teams.
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [colorSlots, setColorSlots] = useState<ReadonlyMap<string, number>>(() => new Map())
   const trajectoryPanelRef = useRef<HTMLDivElement | null>(null)
   const history = historyState.status === 'ready' ? historyState.data.series : undefined
 
   const pickedKeys = useMemo(() => new Set(pickedTeams.map(teamKey)), [pickedTeams])
 
-  const regionOptions = useMemo(
-    () => ['All', ...Array.from(new Set(standings.map((team) => team.region).filter(Boolean))).sort()],
-    [standings],
-  )
+  // Strongest region first, the order the Regions view uses.
+  const regionOptions = useMemo(() => {
+    const powerByRegion = new Map(regions.map((entry) => [entry.region, displayRegionPowerScore(entry)]))
+    const present = Array.from(new Set(standings.map((team) => team.region).filter(Boolean)))
+    return ['All', ...present.sort((left, right) => (powerByRegion.get(right) ?? -Infinity) - (powerByRegion.get(left) ?? -Infinity) || left.localeCompare(right))]
+  }, [regions, standings])
   const tournamentOptions = useMemo(
     () => tournamentFilterOptionsForStandings(standings, tournamentMovementEntries),
     [standings, tournamentMovementEntries],
@@ -230,6 +240,18 @@ export function TeamsView({
     }))
   }, [activeTournament, exactTournamentId, history])
 
+  // Tiers are canonical for the scope: filtering to one region must not
+  // promote its best team to S-tier.
+  const rankedTierUniverse = useMemo(
+    () => displayStandings.filter((team) => team.eligibility?.eligible),
+    [displayStandings],
+  )
+  const tierByTeam = useMemo(
+    () => new Map(deriveTierLabels(rankedTierUniverse).map((assignment) => [assignment.team.toLocaleLowerCase('en'), assignment.tier])),
+    [rankedTierUniverse],
+  )
+  const tierFor = useCallback((team: RankingSummaryStanding) => tierByTeam.get(team.team.toLocaleLowerCase('en')), [tierByTeam])
+
   const scopeFiltered = useMemo(() => {
     const query = search.trim().toLowerCase()
     return displayStandings.filter((team) => {
@@ -240,24 +262,22 @@ export function TeamsView({
     })
   }, [displayStandings, region, search, activeTournamentFilter, exactParticipantTeamIds])
 
-  const filtered = useMemo(
-    () => eligibilityFilter === 'ranked' ? scopeFiltered.filter((team) => team.eligibility?.eligible) : scopeFiltered,
-    [scopeFiltered, eligibilityFilter],
+  const eligibleInScope = useMemo(() => scopeFiltered.filter((team) => team.eligibility?.eligible), [scopeFiltered])
+  const hiddenFromRankedCount = scopeFiltered.length - eligibleInScope.length
+  const filtered = useMemo(() => {
+    const byEligibility = eligibilityFilter === 'ranked' ? eligibleInScope : scopeFiltered
+    return tierFilter === 'All' ? byEligibility : byEligibility.filter((team) => tierFor(team) === tierFilter)
+  }, [eligibilityFilter, eligibleInScope, scopeFiltered, tierFilter, tierFor])
+  const tierCounts = useMemo(
+    () => (['S', 'A', 'B', 'C'] as const).map((tier) => ({ tier, count: eligibleInScope.filter((team) => tierFor(team) === tier).length })),
+    [eligibleInScope, tierFor],
   )
-  const hiddenFromRankedCount = useMemo(
-    () => scopeFiltered.filter((team) => !team.eligibility?.eligible).length,
-    [scopeFiltered],
-  )
-  const movementBaseline = activeTournament
-    ? `${activeTournament.label} start`
+
+  const movementPeriod = activeTournament
+    ? `since ${activeTournament.label} start`
     : dataSummary?.rollingWindow
-      ? `${formatDate(dataSummary.rollingWindow.startDate)} to ${formatDate(dataSummary.rollingWindow.endDate)}`
-      : dataSummary?.movementBaseline ?? 'the previous rating update in this scope'
-  const eligibilityNote = hiddenFromRankedCount > 0
-    ? eligibilityFilter === 'ranked'
-      ? `${formatNumber(hiddenFromRankedCount)} ineligible teams hidden`
-      : `${formatNumber(hiddenFromRankedCount)} teams aren't eligible for ranking`
-    : undefined
+      ? formatDateRange(dataSummary.rollingWindow.startDate, dataSummary.rollingWindow.endDate)
+      : 'since the previous update'
   const panelData = useMemo<TeamDataSummary | undefined>(() => dataSummary
     ? {
         ...dataSummary,
@@ -270,43 +290,50 @@ export function TeamsView({
     : undefined,
   [dataSummary, filtered.length, hiddenFromRankedCount, region, displayStandings.length, activeTournamentFilter])
 
-  const rankedTierUniverse = useMemo(
-    () => displayStandings.filter((team) => team.eligibility?.eligible),
-    [displayStandings],
-  )
   const rankingFlair = useMemo<RankingFlair>(
     () => deriveRankingFlair(filtered, { tierUniverse: rankedTierUniverse, rollingWindow: activeTournament ? undefined : dataSummary?.rollingWindow }),
     [activeTournament, dataSummary?.rollingWindow, filtered, rankedTierUniverse],
   )
-  const tierAssignments: RankingTierAssignment[] = rankingFlair.tiers
-  const rankingSignals = useMemo(
+  const changes = useMemo(
     () => activeTournament
-      ? tournamentRankingSignalsProps(rankingFlair, { ...activeTournament, teams: activeTournament.teams.filter((entry) => filtered.some((team) => team.teamId === entry.teamId)) })
-      : rankingSignalsProps(rankingFlair, movementBaseline),
-    [activeTournament, rankingFlair, movementBaseline, filtered],
+      ? tournamentChanges({ ...activeTournament, teams: activeTournament.teams.filter((entry) => filtered.some((team) => team.teamId === entry.teamId)) })
+      : scopeChanges(rankingFlair),
+    [activeTournament, rankingFlair, filtered],
   )
-  const tierByTeam = useMemo(
-    () => new Map(tierAssignments.map((tier) => [tier.team.toLocaleLowerCase('en'), tier.tier])),
-    [tierAssignments],
-  )
-  const activeSelectedTier = selectedTier && tierAssignments.some((assignment) => assignment.tier === selectedTier)
-    ? selectedTier
-    : null
+
   const rawScoreRankByTeam = useMemo(() => rawScoreRanks(scopeFiltered), [scopeFiltered])
   const sorted = useMemo(() => sortStandings(filtered, sortKey, sortDirection), [filtered, sortDirection, sortKey])
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageScopeKey = `${region}\u0000${activeTournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${sortDirection}\u0000${pageSize}`
+  const pageScopeKey = `${region}\u0000${tierFilter}\u0000${activeTournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${sortDirection}\u0000${pageSize}`
   const requestedPage = pageState.scopeKey === pageScopeKey ? pageState.page : 1
   const currentPage = Math.min(requestedPage, totalPages)
   const pageStart = (currentPage - 1) * pageSize
   const visible = sorted.slice(pageStart, pageStart + pageSize)
   const pageEnd = sorted.length === 0 ? 0 : pageStart + visible.length
   const resultSummary = `${formatNumber(sorted.length === 0 ? 0 : pageStart + 1)}-${formatNumber(pageEnd)} of ${formatNumber(filtered.length)}`
-  const hasActiveFilters = search.trim() !== '' || region !== 'All' || activeTournamentFilter !== 'All' || eligibilityFilter !== 'ranked'
+  const activeFilterCount = [search.trim() !== '', region !== 'All', tierFilter !== 'All', activeTournamentFilter !== 'All', eligibilityFilter !== 'ranked'].filter(Boolean).length
+  const hasActiveFilters = activeFilterCount > 0
   const [ratingMin, ratingMax] = useMemo(
     () => extent(filtered.map((team) => teamScoreFor(team) ?? Number.NaN)),
     [filtered],
   )
+
+  // Near ties only mean something when neighbours on screen are neighbours in
+  // the ranking, so they follow the ranked order and not a Power or record sort.
+  const rankedOrder = sortKey === 'rank' && sortDirection === 'ascending'
+  const ladderGroups = useMemo(
+    () => nearTieGroups(filtered.filter((team) => team.eligibility?.eligible).toSorted(compareTeamRank).slice(0, LADDER_TEAM_LIMIT), model),
+    [filtered, model],
+  )
+  const tiePositions = useMemo(
+    () => rankedOrder ? nearTiePositions(nearTieGroups(visible.filter((team) => team.eligibility?.eligible), model), teamKey) : new Map<string, NearTiePosition>(),
+    [model, rankedOrder, visible],
+  )
+  const headline = useMemo(
+    () => activeTournament ? undefined : boardHeadline(rankedTierUniverse.toSorted(compareTeamRank), model),
+    [activeTournament, model, rankedTierUniverse],
+  )
+  const gapExample = useMemo(() => gameWinChanceForGap(model), [model])
 
   const detailTeam = useMemo(
     () => (detailKey ? displayStandings.find((team) => teamKey(team) === detailKey) : undefined),
@@ -318,17 +345,12 @@ export function TeamsView({
   )
   const detailLineup = detailTeam ? currentLineups?.[detailTeam.teamId] : undefined
 
+  // A team opened from a shared link needs its players and history too.
   useEffect(() => {
-    if (!activeSelectedTier || pendingTierScrollRef.current !== activeSelectedTier) return undefined
-    const frame = window.requestAnimationFrame(() => {
-      const row = tableWrapRef.current?.querySelector<HTMLElement>('tr.board-row.is-tier-highlight')
-      if (row && !isVerticallyInViewport(row)) {
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      }
-      pendingTierScrollRef.current = null
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [activeSelectedTier, visible])
+    if (!detailKey) return
+    onRequestPlayers?.()
+    onRequestTeamHistory?.()
+  }, [detailKey, onRequestPlayers, onRequestTeamHistory])
 
   useEffect(() => {
     if (!onRequestTeamHistory || exactTournamentId) return undefined
@@ -361,7 +383,16 @@ export function TeamsView({
     },
     [activeHistory, displayStandings, exactTournamentId, pickedTeams],
   )
-  const focusTeams = pickedFocusTeams.length > 0 ? pickedFocusTeams : sorted.slice(0, 5)
+  const focusTeams = useMemo(
+    () => pickedFocusTeams.length > 0 ? pickedFocusTeams : sorted.slice(0, DEFAULT_FOCUS_TEAMS),
+    [pickedFocusTeams, sorted],
+  )
+  // Colours follow teams, not positions. Derived during render and stored only
+  // when the assignment changes, so an unchanged assignment keeps its identity.
+  const assignedSlots = assignColorSlots(colorSlots, focusTeams.map(teamKey), SERIES_COLORS.length)
+  const slots = sameColorSlots(assignedSlots, colorSlots) ? colorSlots : assignedSlots
+  if (slots !== colorSlots) setColorSlots(slots)
+  const colorFor = useCallback((team: RankingSummaryStanding) => SERIES_COLORS[slots.get(teamKey(team)) ?? 0], [slots])
   const dailyRankSeries = useMemo(
     () => metric === 'rank' && activeHistory && !exactTournamentId ? deriveDailyRankSeries(activeHistory) : new Map<string, ChartPoint[]>(),
     [activeHistory, exactTournamentId, metric],
@@ -369,58 +400,36 @@ export function TeamsView({
   const chartSeries = useMemo<ChartSeries[]>(() => {
     if (!activeHistory) return []
     return focusTeams
-      .map((team, index): ChartSeries | null => {
+      .map((team): ChartSeries | null => {
         const series = activeHistory[teamKey(team)]
         const key = teamKey(team)
+        const base = { id: key, label: team.code ?? team.team, color: colorFor(team) }
         if (exactTournamentId) {
           if (!series || series.points.length < 2) return null
-          return {
-            id: key,
-            label: team.code ?? team.team,
-            color: SERIES_COLORS[index % SERIES_COLORS.length],
-            points: tournamentChartPoints(series.points, metric),
-          }
+          return { ...base, points: tournamentChartPoints(series.points, metric) }
         }
         if (metric === 'rank') {
           const points = dailyRankSeries.get(key) ?? []
-          if (points.length < 2) return null
-          return {
-            id: key,
-            label: team.code ?? team.team,
-            color: SERIES_COLORS[index % SERIES_COLORS.length],
-            points,
-          }
+          return points.length < 2 ? null : { ...base, points }
         }
         if (!series || series.points.length < 2) return null
         const daily = dailyChartPointsFromHistoryPoints(series.points)
-        if (daily.length < 2) return null
-        return {
-          id: key,
-          label: team.code ?? team.team,
-          color: SERIES_COLORS[index % SERIES_COLORS.length],
-          points: daily,
-        }
+        return daily.length < 2 ? null : { ...base, points: daily }
       })
       .filter((series): series is ChartSeries => series !== null)
-  }, [activeHistory, dailyRankSeries, exactTournamentId, focusTeams, metric])
+  }, [activeHistory, colorFor, dailyRankSeries, exactTournamentId, focusTeams, metric])
 
-  const rankAxis = useMemo(() => {
-    if (metric !== 'rank') return undefined
-    return rankAxisForSeries(chartSeries)
-  }, [chartSeries, metric])
+  const rankAxis = useMemo(() => metric === 'rank' ? rankAxisForSeries(chartSeries) : undefined, [chartSeries, metric])
 
   const insights = useMemo(
-    () =>
-      focusTeams
-        .map((team, index) => ({
-          team,
-          color: SERIES_COLORS[index % SERIES_COLORS.length],
-          insight: tournamentTrajectoryInsight(team, activeHistory?.[teamKey(team)], Boolean(activeTournament)),
-        }))
-        .filter((entry): entry is { team: RankingSummaryStanding; color: string; insight: TrajectoryInsight } =>
-          entry.insight !== null,
-        ),
-    [activeHistory, activeTournament, focusTeams],
+    () => focusTeams
+      .map((team) => ({
+        team,
+        color: colorFor(team),
+        insight: tournamentTrajectoryInsight(team, activeHistory?.[teamKey(team)], Boolean(activeTournament)),
+      }))
+      .filter((entry): entry is { team: RankingSummaryStanding; color: string; insight: TrajectoryInsight } => entry.insight !== null),
+    [activeHistory, activeTournament, colorFor, focusTeams],
   )
 
   function onSort(key: string) {
@@ -437,10 +446,6 @@ export function TeamsView({
     setPageState({ scopeKey: pageScopeKey, page: Math.min(Math.max(1, nextPage), totalPages) })
   }
 
-  function updatePageSize(value: number) {
-    setPageSize(value)
-  }
-
   function updateTournamentFilter(value: TournamentFilterValue) {
     const id = tournamentIdFromFilter(value)
     if (id) {
@@ -451,10 +456,17 @@ export function TeamsView({
     setPageState({ scopeKey: pageScopeKey, page: 1 })
   }
 
+  function openTeam(team: RankingSummaryStanding) {
+    onRequestPlayers?.()
+    onRequestTeamHistory?.()
+    openDetail(teamKey(team))
+  }
+
   // Same param names and same "omit the default" rule as the other views.
   useHashSync('rankings', {
     team: search.trim(),
     region: region === 'All' ? '' : region,
+    tier: tierFilter === 'All' ? '' : tierFilter,
     tournament: activeTournamentFilter === 'All' ? '' : activeTournamentFilter,
     eligibility: eligibilityFilter === 'ranked' ? '' : eligibilityFilter,
     sort: sortKey === 'rank' ? '' : sortKey,
@@ -463,20 +475,10 @@ export function TeamsView({
     page: currentPage > 1 ? String(currentPage) : '',
   })
 
-  const selectTier = useCallback((tier: string) => {
-    if (!isRankingTierLabel(tier)) return
-    const nextTier = activeSelectedTier === tier ? null : tier
-    if (nextTier) {
-      const page = firstPageForTier(sorted, tierAssignments, nextTier, pageSize)
-      if (page) setPageState({ scopeKey: pageScopeKey, page })
-    }
-    pendingTierScrollRef.current = nextTier
-    setSelectedTier(nextTier)
-  }, [activeSelectedTier, pageScopeKey, pageSize, sorted, tierAssignments])
-
   function resetFilters() {
     onSearchChange('')
     setRegion('All')
+    setTierFilter('All')
     onTournamentFilterChange('All')
     setEligibilityFilter('ranked')
     setPageState({ scopeKey: pageScopeKey, page: 1 })
@@ -484,74 +486,88 @@ export function TeamsView({
 
   return (
     <PageShell>
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_320px] items-start gap-6 max-[1180px]:grid-cols-1">
+      {headline ? (
+        <section className="grid gap-1" aria-label="Summary">
+          <p className="max-w-[72ch] text-[length:var(--t-6)] leading-[1.3] font-semibold text-[var(--text-strong)]">{headline.headline}</p>
+          {headline.details.length > 0 ? <p className="max-w-[90ch] text-sm text-[var(--muted)]">{headline.details.join(' ')}</p> : null}
+        </section>
+      ) : null}
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_320px] items-start gap-6 max-[1280px]:grid-cols-1">
         <div className="min-w-0">
           <Panel>
             <PanelHeader
-              title="Ranked board"
-              description={activeTournament ? `Event endpoint ${formatDate(activeTournament.boundaryDate)} · history movement ${movementBaseline}` : `Published standings · history movement ${movementBaseline}`}
+              title={activeTournament ? `${activeTournament.label} standings` : 'Power ranking'}
+              description={activeTournament ? `Ranks and scores at the event endpoint, ${formatDate(activeTournament.boundaryDate)}. Includes every participant.` : undefined}
               actions={<span className="whitespace-nowrap text-xs text-[var(--faint)] tabular-nums">{resultSummary}</span>}
             />
-            {/* The controls carry no per-control height, radius or background
-                overrides. Input, Select and Segmented already share
-                --control-h and --r-2, so they line up without help. */}
+            {/* One row of filters above the table they scope. The controls
+                carry no per-control height, radius or background overrides:
+                chips, selects and the switch share --control-h and --r-2. */}
             <PanelBody className="grid gap-2.5 border-b border-[var(--line)] py-3">
-              <div className="grid min-w-0 gap-2 max-sm:grid-cols-1" role="group" aria-label="Team ranking filters">
-                <div className="grid min-w-0 grid-cols-[minmax(220px,1fr)_auto] items-center gap-2 max-sm:w-full max-sm:grid-cols-1">
-                  <label className="relative min-w-0">
-                    <span className="sr-only">Search teams</span>
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
-                    <Input
-                      type="search"
-                      className="pl-9"
-                      value={search}
-                      placeholder="Filter teams..."
-                      onChange={(event) => onSearchChange(event.target.value)}
-                    />
-                  </label>
-                  <Segmented
-                    value={eligibilityFilter}
-                    options={[
-                      { value: 'ranked', label: 'Eligible only' },
-                      { value: 'all', label: 'All teams' },
-                    ]}
-                    onChange={setEligibilityFilter}
-                    ariaLabel="Team eligibility filter"
-                  />
-                </div>
-                <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-1">
-                  <label className="inline-flex min-w-0 items-center gap-2 max-sm:grid max-sm:w-full max-sm:gap-1.5 max-sm:[&_[data-slot=select]]:w-full max-sm:[&_select]:w-full">
-                    <span className="whitespace-nowrap text-sm font-medium text-[var(--muted)]">Region</span>
-                    <Select value={region} onChange={(event) => setRegion(event.target.value)}>
-                      {regionOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {formatCompetitionRegionLabel(option)}
+              <div className="flex items-center gap-2 sm:hidden">
+                <Button type="button" variant="secondary" size="tab" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen((open) => !open)}>
+                  <SlidersHorizontal size={15} aria-hidden="true" />
+                  Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                </Button>
+                {hasActiveFilters ? (
+                  <Button type="button" variant="ghost" size="tab" onClick={resetFilters}>
+                    Reset
+                    <X size={14} aria-hidden="true" />
+                  </Button>
+                ) : null}
+              </div>
+              <div id="board-filters" className={cn('grid gap-2.5', !filtersOpen && 'max-sm:hidden')}>
+              <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label="Board filters">
+                <ChipGroup
+                  label="Region"
+                  value={region}
+                  options={regionOptions.map((option) => ({ value: option, label: option === 'All' ? 'All regions' : formatCompetitionRegionLabel(option) }))}
+                  onChange={setRegion}
+                />
+                <ChipGroup
+                  label="Tier"
+                  value={tierFilter}
+                  options={[{ value: 'All', label: 'All tiers' }, ...tierCounts.map(({ tier, count }) => ({ value: tier, label: `${tier} · ${count}`, disabled: count === 0 }))]}
+                  onChange={setTierFilter}
+                />
+                {tournamentOptions.length > 1 || tournamentMovementIndexState.status === 'loading' ? (
+                  <label className="inline-flex min-w-0 items-center [&_[data-slot=select]]:w-[clamp(170px,22vw,240px)] max-sm:w-full max-sm:[&_[data-slot=select]]:w-full">
+                    <span className="sr-only">Tournament</span>
+                    <Select value={activeTournamentFilter} onChange={(event) => updateTournamentFilter(event.target.value as TournamentFilterValue)}>
+                      {tournamentOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.value === 'All' ? 'Any tournament' : `${option.label} (${formatNumber(option.count)})`}
                         </option>
                       ))}
                     </Select>
                   </label>
-                  {tournamentOptions.length > 1 || tournamentMovementIndexState.status === 'loading' ? (
-                    <label className="inline-flex min-w-0 items-center gap-2 max-sm:grid max-sm:w-full max-sm:gap-1.5 [&_[data-slot=select]]:w-[clamp(180px,24vw,260px)] max-sm:[&_[data-slot=select]]:w-full max-sm:[&_select]:w-full">
-                      <span className="whitespace-nowrap text-sm font-medium text-[var(--muted)]">Tournament</span>
-                      <Select value={activeTournamentFilter} onChange={(event) => updateTournamentFilter(event.target.value as TournamentFilterValue)}>
-                        {tournamentOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.value === 'All' ? option.label : `${option.label} (${formatNumber(option.count)})`}
-                          </option>
-                        ))}
-                      </Select>
-                    </label>
-                  ) : null}
-                  {tournamentMovementIndexState.status === 'loading' ? (
-                    <LoadingState presentation="inline" label="Loading tournaments" className="text-xs" />
-                  ) : null}
-                  {hasActiveFilters ? (
-                    <Button type="button" variant="ghost" size="tab" className="ml-auto max-sm:ml-0 max-sm:justify-self-start" onClick={resetFilters}>
-                      Reset
-                      <X size={14} aria-hidden="true" />
-                    </Button>
-                  ) : null}
-                </div>
+                ) : null}
+                {tournamentMovementIndexState.status === 'loading' ? (
+                  <LoadingState presentation="inline" label="Loading tournaments" className="text-xs" />
+                ) : null}
+                {hiddenFromRankedCount > 0 ? (
+                  <label className="inline-flex h-[var(--control-h)] cursor-pointer items-center gap-2 text-sm text-[var(--muted)]" title="Unranked teams miss an eligibility check, such as too few recent matches or an incomplete roster.">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[var(--accent)]"
+                      checked={eligibilityFilter === 'all'}
+                      onChange={(event) => setEligibilityFilter(event.target.checked ? 'all' : 'ranked')}
+                    />
+                    Include unranked ({formatNumber(hiddenFromRankedCount)})
+                  </label>
+                ) : null}
+                {search.trim() ? (
+                  <Button type="button" variant="secondary" size="tab" className="gap-1.5" onClick={() => onSearchChange('')} aria-label={`Clear search for ${search.trim()}`}>
+                    Search: {search.trim()}
+                    <X size={14} aria-hidden="true" />
+                  </Button>
+                ) : null}
+                {hasActiveFilters ? (
+                  <Button type="button" variant="ghost" size="tab" className="ml-auto max-sm:hidden" onClick={resetFilters}>
+                    Reset
+                    <X size={14} aria-hidden="true" />
+                  </Button>
+                ) : null}
               </div>
               <label className="board-sort flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
                 Sort by
@@ -568,10 +584,14 @@ export function TeamsView({
                   <option value="wins:ascending">Match wins · fewest first</option>
                 </Select>
               </label>
-              <details className="text-xs text-[var(--muted)]"><summary className="cursor-pointer">How Power maps to game odds</summary><p className="pt-2">{publicScoreGapExplanation(model)}</p></details>
-              <p className="text-xs text-[var(--faint)]">Use + on a row to compare up to four teams.</p>
-              {activeTournament ? <p className="text-xs text-[var(--faint)]">Tournament selection includes all participants, including teams outside current ranking eligibility. Movement follows the board filters.</p> : null}
-              {eligibilityNote ? <p className="text-xs leading-[1.35] text-[var(--faint)]">{eligibilityNote}</p> : null}
+              </div>
+              {/* The legend replaces two disclosures and three helper lines. */}
+              <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--faint)]" title={`Model ${formatModelVersion(model?.version)}${model?.configHash ? ` · config ${model.configHash}` : ''}`}>
+                <span><b className="font-semibold text-[var(--muted)]">100 points</b> ≈ {gapExample}% game win</span>
+                {rankedOrder ? <span><b className="font-semibold text-[var(--rank-gold)]">Bracket</b> near tie: under {Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game</span> : null}
+                <span className="max-sm:hidden"><b className="font-semibold text-[var(--muted)]">{activeTournament ? 'Event move' : '30 days'}</b> rank change {movementPeriod}</span>
+                <span className="max-sm:hidden"><b className="font-semibold text-[var(--muted)]">Form</b> last five, oldest first</span>
+              </p>
             </PanelBody>
 
             {tournamentMovementIndexState.status === 'missing' || tournamentMovementIndexState.status === 'error' ? (
@@ -599,18 +619,19 @@ export function TeamsView({
                 {tournamentMovementState.message}
               </DataState>
             ) : visible.length === 0 ? (
-              <DataState icon={<Users size={26} aria-hidden="true" />} title="No teams match">
-                Adjust the search, region, tournament, or eligibility filter to see teams.
-              </DataState>
+              <DataState
+                icon={<Users size={26} aria-hidden="true" />}
+                title="No teams match these filters"
+                action={hasActiveFilters ? <Button type="button" variant="outline" onClick={resetFilters}>Clear filters</Button> : undefined}
+              />
             ) : (
-                <Table containerRef={tableWrapRef} containerClassName="max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[660px] border-collapse text-sm max-sm:min-w-full">
-                  {/* Score movement shares a cell; the record remains visible
-                      and sortable in both the table and card layouts. */}
+                <Table containerClassName="max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[640px] border-collapse text-sm max-sm:min-w-full">
                   <colgroup>
                     <col className="board-col-rank" />
                     <col className="board-col-team" />
-                    <col className="board-col-form" />
                     <col className="board-col-score" />
+                    <col className="board-col-move" />
+                    <col className="board-col-form" />
                     <col className="board-col-record" />
                     <col className="board-col-action" />
                   </colgroup>
@@ -618,18 +639,11 @@ export function TeamsView({
                     <TableRow>
                       <SortHeader label="Rank" columnKey="rank" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} />
                       <TableHead>Team</TableHead>
-                      <TableHead className="board-col-form" title="Most recent five results, oldest first.">Form</TableHead>
-                      <SortHeader
-                        label="Power score"
-                        columnKey="rating"
-                        sortKey={sortKey}
-                        descending={sortDirection === 'descending'}
-                        onSort={onSort}
-                        align="right"
-                        className="board-col-score"
-                      />
-                      <SortHeader label="Match W/L" columnKey="wins" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" className="board-col-record" />
-                      <TableHead className="center" aria-label="Add to comparison" />
+                      <SortHeader label="Power" columnKey="rating" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} className="board-col-score" />
+                      <TableHead className="board-col-move" title={activeTournament ? 'Rank change from the tournament start to its endpoint.' : `Rank change on match history, ${movementPeriod}.`}>{activeTournament ? 'Event' : '30 days'}</TableHead>
+                      <TableHead className="board-col-form" title="Last five results, oldest first.">Form</TableHead>
+                      <SortHeader label="Record" columnKey="wins" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" className="board-col-record" />
+                      <TableHead className="board-col-action"><span className="sr-only">Compare and open</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -637,33 +651,27 @@ export function TeamsView({
                       const key = teamKey(team)
                       const total = team.wins + team.losses
                       const rank = teamRankFor(team)
-                      const tier = tierByTeam.get(team.team.toLocaleLowerCase('en'))
-                      const tierHighlighted = Boolean(activeSelectedTier && tier === activeSelectedTier)
+                      const tier = tierFor(team)
                       const excludedFromRankedBoard = team.eligibility?.eligible === false
-                      const rawScoreRank = rawScoreRankByTeam.get(key)
-                      const openTeamDetail = () => {
-                        onRequestPlayers?.()
-                        onRequestTeamHistory?.()
-                        openDetail(key)
-                      }
+                      const tie = tiePositions.get(key)
                       return (
                         <TableRow
                           key={key}
                           className={cn(
                             'board-row group/board cursor-pointer outline-offset-[-2px] hover:bg-[var(--surface-2)] focus-visible:outline-2 focus-visible:outline-[var(--focus)]',
                             pickedKeys.has(key) && 'is-picked',
-                            tierHighlighted && 'is-tier-highlight bg-[color-mix(in_oklch,var(--accent)_12%,var(--surface))] shadow-[inset_3px_0_0_var(--accent)] hover:bg-[color-mix(in_oklch,var(--accent)_16%,var(--surface-2))]',
                             excludedFromRankedBoard && 'is-excluded bg-[color-mix(in_oklch,var(--surface-2)_58%,transparent)] text-[color-mix(in_oklch,var(--text)_76%,var(--muted))] hover:bg-[color-mix(in_oklch,var(--surface-3)_70%,transparent)]',
                           )}
                           title={excludedFromRankedBoard ? eligibilityReasonsTitle(team) : undefined}
                           onClick={(event) => {
                             if (shouldIgnoreTeamRowClick(event)) return
-                            openTeamDetail()
+                            openTeam(team)
                           }}
                         >
-                          <TableCell className="board-col-rank" aria-label={excludedFromRankedBoard ? 'Excluded from ranking' : `Rank ${rank}`} >
+                          <TableCell className="board-col-rank relative" aria-label={excludedFromRankedBoard ? 'Unranked' : `Rank ${rank}`}>
+                            {tie ? <NearTieMark position={tie} /> : null}
                             <span className="board-rankcell flex items-center gap-[9px] whitespace-nowrap">
-                              <TeamBoardRank team={team} rank={rank} rawScoreRank={rawScoreRank} />
+                              <TeamBoardRank team={team} rank={rank} rawScoreRank={rawScoreRankByTeam.get(key)} />
                               {tier ? <TierBadge tier={tier} /> : null}
                             </span>
                           </TableCell>
@@ -672,43 +680,39 @@ export function TeamsView({
                               type="button"
                               variant="ghost"
                               className="team-cell team-cell__button h-auto min-h-9 w-full cursor-pointer justify-start gap-[11px] whitespace-normal rounded-[var(--r-1)] border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] hover:bg-transparent hover:text-[inherit] focus-visible:rounded-[var(--r-1)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]"
-                              onClick={openTeamDetail}
+                              onClick={() => openTeam(team)}
                               onFocus={onRequestPlayers}
-                              title={`View ${team.team} details`}
+                              title={`Open ${team.team}`}
                             >
                               <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
-                              <div className="ent flex min-w-0 flex-col gap-px overflow-hidden [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[var(--t-2)] [&_small]:text-[var(--faint)]">
+                              <div className="ent flex min-w-0 flex-col gap-px overflow-hidden [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[length:var(--t-2)] [&_small]:text-[var(--faint)]">
                                 <b>{team.team}</b>
-                                <small>{teamSubtitle(team)}</small>
+                                <small>{excludedFromRankedBoard ? `${team.league} · ${eligibilitySummary(team)}` : team.league}</small>
                               </div>
                             </Button>
                           </TableCell>
-                          {/* Form was in the data all along and the board never
-                              showed it. It also earns the width the table
-                              gained when the rail went away. */}
+                          <TableCell className="board-col-score" aria-label={`Power ${formatRating(teamScoreFor(team))}`}>
+                            <TeamScoreCell team={team} min={ratingMin} max={ratingMax} exactTournament={Boolean(activeTournament)} />
+                          </TableCell>
+                          <TableCell className="board-col-move">
+                            {activeTournament ? (
+                              <TournamentMoveChip movement={movementByTeamId.get(team.teamId)} endpointLabel={tournamentBoundaryLabel(activeTournament.status)} />
+                            ) : (
+                              <MovementChip places={activeMovement(team)?.rankMovement ?? undefined} title={rollingMovementTitle(team, movementPeriod)} />
+                            )}
+                          </TableCell>
                           <TableCell className="board-col-form">
                             <FormDots form={team.form} />
                           </TableCell>
-                          <TableCell className="right board-col-score" aria-label={`Power score ${formatRating(teamScoreFor(team))}`}>
-                            <span className="flex flex-col items-end gap-1">
-                              <small className="text-[var(--t-1)] text-[var(--faint)]">{activeTournament ? 'Event endpoint' : 'Published'}</small>
-                              <TeamScoreCell team={team} min={ratingMin} max={ratingMax} exactTournament={Boolean(activeTournament)} />
-                              {activeTournament ? (
-                                <TournamentRankTrendCell
-                                  movement={movementByTeamId.get(team.teamId)}
-                                  endpointLabel={tournamentBoundaryLabel(activeTournament.status)}
-                                />
-                              ) : (
-                                <TeamRankTrendCell team={team} movementBaseline={movementBaseline} />
-                              )}
-                            </span>
-                          </TableCell>
                           <TableCell className="right num board-col-record" aria-label={`Match wins ${formatNumber(team.wins)}, losses ${formatNumber(team.losses)}; win rate ${formatRatio(total > 0 ? team.wins / total : undefined)}`}>
                             <b className="font-semibold text-[var(--text-strong)]">{formatRecord(team.wins, team.losses)}</b>{' '}
-                            <span className="text-[var(--t-3)] text-[var(--faint)]">{formatRatio(total > 0 ? team.wins / total : undefined)}</span>
+                            <span className="text-[length:var(--t-3)] text-[var(--faint)]">{formatRatio(total > 0 ? team.wins / total : undefined)}</span>
                           </TableCell>
-                          <TableCell className="center">
-                            <PickButton picked={pickedKeys.has(key)} onToggle={() => onToggle(team)} label={team.team} />
+                          <TableCell className="board-col-action">
+                            <span className="flex items-center justify-end gap-2">
+                              <CompareToggle picked={pickedKeys.has(key)} onToggle={() => onToggle(team)} label={team.team} />
+                              <ChevronRight className="size-4 shrink-0 text-[var(--faint)] group-hover/board:text-[var(--text)] max-sm:hidden" aria-hidden="true" />
+                            </span>
                           </TableCell>
                         </TableRow>
                       )
@@ -717,7 +721,6 @@ export function TeamsView({
                 </Table>
             )}
 
-            <p className="px-4 py-2 text-xs text-[var(--muted)]">{activeTournament ? `Scores and ranks are the event endpoint on ${formatDate(activeTournament.boundaryDate)}. History movement: ${movementBaseline}.` : `Published scores and ranks are the selected snapshot. History movement: ${movementBaseline}; its endpoints can differ after standing adjustments.`}</p>
             {sorted.length > 0 ? (
               <PanelFooter>
                 <Pager
@@ -727,7 +730,7 @@ export function TeamsView({
                   onPage={updatePage}
                   pageSize={pageSize}
                   pageSizes={TEAM_PAGE_SIZES}
-                  onPageSize={updatePageSize}
+                  onPageSize={setPageSize}
                   rangeLabel={resultSummary}
                   className="w-full"
                 />
@@ -736,16 +739,18 @@ export function TeamsView({
           </Panel>
         </div>
 
-        {/* Sticky beside the board on wide screens, stacked underneath it in
-            two columns below 1180px. */}
-        <aside className="board-sidebar sticky top-[76px] grid min-w-0 content-start gap-4 max-[1180px]:static max-[1180px]:grid-cols-2 max-[900px]:grid-cols-1">
-          <TierPanel
-            tierCounts={rankingSignals.tierCounts}
-            tierStrips={rankingSignals.tierStrips}
-            selectedTier={activeSelectedTier}
-            onTierSelect={selectTier}
-          />
-          <RankingSignals {...rankingSignals} />
+        {/* Beside the board on wide screens, below it on narrow ones, so a
+            phone reaches the teams first. */}
+        <aside className="board-sidebar grid min-w-0 content-start gap-4 max-[1280px]:grid-cols-2 max-[900px]:grid-cols-1" aria-label="Ranking overview">
+          {ladderGroups.flat().length >= 2 ? (
+            <Panel aria-label="Power ladder">
+              <PanelHeader title="Power ladder" actions={<span className="text-xs text-[var(--faint)]">{ladderGroups.flat().length < filtered.length ? `top ${ladderGroups.flat().length}` : 'all ranked'}</span>} />
+              <PanelBody className="px-2 py-2">
+                <PowerLadder groups={ladderGroups} tierFor={tierFor} gapExample={gapExample} onOpen={openTeam} />
+              </PanelBody>
+            </Panel>
+          ) : null}
+          <WhatChanged period={activeTournament ? activeTournament.label : '30 days'} riser={changes.riser} faller={changes.faller} upset={changes.upset} />
           <RegionalStrengthTeaser regions={regions} href={regionsHref} />
         </aside>
       </div>
@@ -756,29 +761,22 @@ export function TeamsView({
         onPointerEnter={onRequestTeamHistory}
       >
         <PanelHeader
-          title={activeTournament ? `${activeTournament.label} movement` : 'Power and rank over time'}
+          title={activeTournament ? `${activeTournament.label} movement` : metric === 'rank' ? 'Rank over time' : 'Power over time'}
           description={
             activeTournament
               ? `${tournamentBoundaryLabel(activeTournament.status)} boundary ${formatDate(activeTournament.boundaryDate)}, rated through ${formatDate(activeTournament.ratedThroughDate)}.`
-              : metric === 'rank'
-              ? 'Daily closing global rank within the current scope. #1 is pinned to the top.'
-              : 'Match-history daily closing Power for the selected teams; excludes published standing adjustments.'
+              : `${pickedFocusTeams.length > 0 ? 'Your compared teams' : `Top ${DEFAULT_FOCUS_TEAMS} on the board. Tick Compare to choose teams`}. Daily close from match history; gaps mark weeks without matches.`
           }
           actions={
-            <>
-              <Segmented
-                value={metric}
-                options={[
-                  { value: 'rating', label: 'Power score' },
-                  { value: 'rank', label: 'Rank' },
-                ]}
-                onChange={setMetric}
-                ariaLabel="Team trajectory metric"
-              />
-              <CountBadge>
-                {pickedFocusTeams.length > 0 ? `${chartSeries.length} selected` : 'Top 5, pick teams to focus'}
-              </CountBadge>
-            </>
+            <Segmented
+              value={metric}
+              options={[
+                { value: 'rating', label: 'Power' },
+                { value: 'rank', label: 'Rank' },
+              ]}
+              onChange={setMetric}
+              ariaLabel="Chart metric"
+            />
           }
         />
         {exactTournamentId && tournamentMovementState.status === 'loading' ? (
@@ -798,7 +796,7 @@ export function TeamsView({
             <LazyTeamHistoryLineChart
               series={chartSeries}
               height={300}
-              yLabel={metric === 'rank' ? 'Rank' : 'Power score'}
+              yLabel={metric === 'rank' ? 'Rank' : 'Power'}
               yFormat={metric === 'rank' ? (value) => `#${Math.round(value)}` : undefined}
               yTickFormat={metric === 'rank' ? (value) => Math.round(value) === 1 ? '#1 best' : `#${Math.round(value)}` : undefined}
               yDomain={rankAxis?.domain}
@@ -839,6 +837,8 @@ export function TeamsView({
         <TeamDetailDrawer
           team={detailTeam}
           standings={displayStandings}
+          model={model}
+          tier={tierFor(detailTeam)}
           series={activeHistory?.[teamKey(detailTeam)]}
           historyState={historyState}
           tournament={activeTournament}
@@ -852,6 +852,70 @@ export function TeamsView({
         />
       ) : null}
     </PageShell>
+  )
+}
+
+/** Chips for a small, fixed set of mutually exclusive filter values. */
+function ChipGroup<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { value: T; label: string; disabled?: boolean }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1" role="group" aria-label={label}>
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          type="button"
+          variant="tab"
+          size="sm"
+          aria-pressed={value === option.value}
+          disabled={option.disabled}
+          onClick={() => onChange(option.value)}
+          className="h-8 rounded-full px-3 disabled:opacity-50 aria-pressed:bg-[color-mix(in_oklch,var(--accent)_22%,var(--surface))] aria-pressed:text-[var(--text-strong)]"
+        >
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
+/** Gold bracket in the rank cell joining rows the model calls a near tie. */
+function NearTieMark({ position }: { position: NearTiePosition }) {
+  return (
+    <span
+      className={cn(
+        'absolute left-1 w-0.5 bg-[color-mix(in_oklch,var(--rank-gold)_75%,transparent)]',
+        position === 'start' && 'top-1/2 bottom-0 rounded-t-full',
+        position === 'middle' && 'inset-y-0',
+        position === 'end' && 'top-0 bottom-1/2 rounded-b-full',
+      )}
+      title={`Near tie with the team next to it: under ${Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game`}
+      aria-hidden="true"
+    />
+  )
+}
+
+/** A labelled Compare checkbox. The old control was an unlabelled "+". */
+function CompareToggle({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
+  return (
+    <label
+      className={cn(
+        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[var(--r-2)] border px-2 text-xs font-semibold whitespace-nowrap select-none',
+        picked ? 'border-[var(--accent)] bg-[var(--selected-bg)] text-[var(--text-strong)]' : 'border-[var(--line-strong)] text-[var(--muted)] hover:text-[var(--text)]',
+      )}
+      data-row-click-exclude
+    >
+      <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={picked} onChange={onToggle} aria-label={`Compare ${label}`} />
+      <span className="max-sm:sr-only">Compare</span>
+    </label>
   )
 }
 
@@ -874,8 +938,15 @@ function shouldIgnoreTeamRowClick(event: MouseEvent<HTMLTableRowElement>) {
   return target instanceof Element && Boolean(target.closest(TEAM_ROW_CLICK_EXCLUDED_SELECTOR))
 }
 
+/**
+ * The score and its position on the visible Power range. One number per row:
+ * the uncertainty is the same for every team, so the legend and the near-tie
+ * brackets carry it instead of a "±65" on each line.
+ */
 function TeamScoreCell({
   team,
+  min,
+  max,
   exactTournament = false,
 }: {
   team: RankingSummaryStanding
@@ -884,16 +955,16 @@ function TeamScoreCell({
   exactTournament?: boolean
 }) {
   const score = teamScoreFor(team)
+  if (typeof score !== 'number') {
+    return <span className="score-unavailable font-mono text-[length:var(--t-3)] font-semibold text-[var(--faint)]" aria-hidden="true">—</span>
+  }
+  const share = max > min ? clampNumber(((score - min) / (max - min)) * 100, 4, 100) : 100
   return (
-    <span className="team-score-stack grid w-full min-w-0 justify-items-end gap-[3px] overflow-hidden" title={exactTournament ? `Tournament endpoint Power score ${formatRating(score)}` : teamScoreTitle(team)}>
-      {typeof score === 'number' ? (
-        // Direction A: the score is the only figure at --t-6 in the row, so
-        // the eye lands on the number the product exists to produce.
-        <span className="team-score-value inline-block min-w-[68px] max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-right font-mono text-[var(--t-6)] font-extrabold leading-[1.15] text-[var(--text-strong)] tabular-nums">{formatRating(score)}</span>
-      ) : (
-        <span className="score-unavailable inline-flex min-w-11 items-center justify-end font-mono text-[var(--t-3)] font-semibold text-[var(--faint)]">—</span>
-      )}
-      {exactTournament ? null : <TeamScoreMeta team={team} />}
+    <span className="team-score-stack flex min-w-0 items-center gap-2.5" title={exactTournament ? `Tournament endpoint Power ${formatRating(score)}` : teamScoreTitle(team)}>
+      <span className="team-score-value min-w-[3.4em] text-right font-mono text-[length:var(--t-5)] font-extrabold text-[var(--text-strong)] tabular-nums">{formatRating(score)}</span>
+      <span className="score-track relative h-1.5 min-w-10 flex-1 overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden="true">
+        <span className="absolute inset-y-0 left-0 rounded-full bg-[color-mix(in_oklch,var(--accent)_70%,var(--surface-3))]" style={{ width: `${share}%` }} />
+      </span>
     </span>
   )
 }
@@ -910,57 +981,34 @@ function TeamBoardRank({
   if (team.eligibility?.eligible === false) {
     return (
       <span className="board-rank-stack inline-flex min-w-0 flex-col items-start gap-[3px]">
-        <span className="board-rank board-rank--excluded min-w-0 text-[var(--t-2)] font-bold text-[var(--muted)] uppercase tabular-nums"><span aria-hidden="true" className="hidden max-[1100px]:inline">—</span><span className="max-[1100px]:sr-only">Excluded</span></span>
+        <span className="board-rank board-rank--excluded min-w-0 text-[length:var(--t-2)] font-bold text-[var(--muted)] tabular-nums">Unranked</span>
         {typeof rawScoreRank === 'number' ? (
-          <span className="rank-context-pill inline-flex min-w-0 max-w-[92px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-[var(--r-1)] border border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-3)_72%,transparent)] px-1.5 py-0.5 text-[var(--t-1)] font-bold leading-none text-[var(--faint)]" title="Raw score order if eligibility gates were ignored.">
-            Score #{formatNumber(rawScoreRank)}
-          </span>
+          <span className="text-[length:var(--t-1)] text-[var(--faint)]" title="Where the score would place if eligibility checks were ignored.">score #{formatNumber(rawScoreRank)}</span>
         ) : null}
       </span>
     )
   }
 
   return (
-    <span className={cn('board-rank min-w-[1.4em] text-[var(--t-5)] font-bold text-[var(--text-strong)] tabular-nums', typeof rank === 'number' && rank <= 3 && 'podium text-[var(--accent-strong)]')}>
+    <span className={cn('board-rank min-w-[1.4em] text-[length:var(--t-5)] font-bold text-[var(--text-strong)] tabular-nums', typeof rank === 'number' && rank <= 3 && 'podium text-[var(--rank-gold)]')}>
       {rank ?? '—'}
     </span>
   )
 }
 
-function TeamScoreMeta({ team }: { team: RankingSummaryStanding }) {
-  const dss = team.deservedStanding
-  const powerResumeGap = powerResumeGapSummary(team)
-  const items = [
-    ...(typeof team.uncertainty === 'number' && Number.isFinite(team.uncertainty)
-      ? [{ key: 'uncertainty', label: formatUncertaintyBand(team.uncertainty), title: 'Estimated score uncertainty. Smaller bands mean firmer placement.' }]
-      : []),
-    ...(team.eligibility?.eligible === false
-      ? [{ key: 'eligibility', label: eligibilitySummary(team), title: eligibilityReasonsTitle(team) }]
-      : []),
-    ...(dss && dss.eligibility !== 'Eligible'
-      ? [{ key: 'dss', label: dss.eligibility, title: teamScoreTitle(team) }]
-      : []),
-    ...(powerResumeGap?.isLarge
-      ? [{ key: 'power-resume-gap', label: powerResumeGap.shortLabel, title: powerResumeGap.title }]
-      : []),
-  ]
-  if (items.length === 0) return null
-  return (
-    <span className="score-meta mt-[5px] flex w-full min-w-0 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 overflow-hidden text-[var(--t-1)] leading-[1.25] text-[var(--faint)] tabular-nums">
-      {items.map((item) => <span className="min-w-0 max-w-full flex-[0_1_auto] overflow-hidden text-ellipsis whitespace-nowrap" key={item.key} title={item.title}>{item.label}</span>)}
-    </span>
-  )
+const TIER_BADGE_COLOR: Record<RankingTierLabel, string> = {
+  S: '[--tier-color:var(--tier-s)]',
+  A: '[--tier-color:var(--tier-a)]',
+  B: '[--tier-color:var(--tier-b)]',
+  C: '[--tier-color:var(--tier-c)]',
 }
 
 function TierBadge({ tier }: { tier: RankingTierLabel }) {
   return (
     <span
       className={cn(
-        'tier-badge inline-flex h-6 min-w-[26px] items-center justify-center rounded-[var(--r-1)] border border-[var(--tier-border)] bg-[var(--tier-bg)] px-[7px] font-mono text-[var(--t-3)] font-bold leading-none text-[var(--tier-color)] [--tier-bg:color-mix(in_oklch,var(--tier-color)_10%,transparent)] [--tier-border:color-mix(in_oklch,var(--tier-color)_34%,var(--line))] [--tier-color:var(--muted)]',
-        tier === 'S' && '[--tier-bg:color-mix(in_oklch,var(--rank-gold)_13%,transparent)] [--tier-border:color-mix(in_oklch,var(--rank-gold)_48%,var(--line))] [--tier-color:var(--rank-gold)]',
-        tier === 'A' && '[--tier-color:oklch(0.82_0.08_215)]',
-        tier === 'B' && '[--tier-color:oklch(0.77_0.12_138)]',
-        tier === 'C' && '[--tier-color:oklch(0.75_0.13_54)]',
+        'tier-badge inline-flex h-6 min-w-[26px] items-center justify-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--tier-color)_40%,var(--line))] bg-[color-mix(in_oklch,var(--tier-color)_11%,transparent)] px-[7px] font-mono text-[length:var(--t-3)] font-bold leading-none text-[var(--tier-color)]',
+        TIER_BADGE_COLOR[tier],
       )}
       role="img"
       title={`${tier}-tier`}
@@ -971,95 +1019,35 @@ function TierBadge({ tier }: { tier: RankingTierLabel }) {
   )
 }
 
-const RANK_SPARKLINE_WIDTH = 128
-const RANK_SPARKLINE_HEIGHT = 28
-
-function TeamRankTrendCell({
-  team,
-  movementBaseline,
-}: {
-  team: RankingSummaryStanding
-  movementBaseline: string
-}) {
-  const movement = team.rollingMovement
-  const sparkline = rankSparklineShape(movement?.rankPoints.map((point) => point[1]) ?? [], RANK_SPARKLINE_WIDTH, RANK_SPARKLINE_HEIGHT)
-
-  if (!movement || movement.status !== 'active') {
-    const emptyLabel = movement?.status === 'inactive' ? '— No series' : '— No baseline'
-    const emptyTitle = `${team.team} · ${emptyLabel.slice(2)} in ${movementBaseline}`
-    return (
-      <span className="rank-trend-cell rank-trend-cell--empty grid min-w-0 grid-cols-1 items-center gap-2 text-[var(--faint)]" title={emptyTitle} aria-label={emptyTitle}>
-        <span className="rank-trend-cell__move flat inline-block overflow-hidden text-ellipsis whitespace-nowrap text-[var(--t-2)] font-semibold leading-[1.2] text-current">{emptyLabel}</span>
-      </span>
-    )
-  }
-
-  const rankMovement = movement.rankMovement ?? 0
-  const ratingDelta = movement.ratingDelta ?? 0
-  const tone = rankMovementTone(rankMovement)
-  const title = `${team.team} · Match-history basis · #${movement.baselineRank} to #${movement.currentRank} · ${formatRating(movement.baselineRating!)} to ${formatRating(movement.currentRating)} Power (${formatRatingMovement(ratingDelta)}) · ${formatNumber(movement.scoredSeries)} scored series · ${movementBaseline}`
-  return (
-    <span className="rank-trend-cell inline-flex min-w-0 items-center justify-end gap-2 text-[var(--rank-movement-color,var(--faint))]" role="img" title={title} aria-label={title} style={rankMovementStyle(rankMovement)}>
-      <small className="text-[var(--t-1)] text-[var(--faint)]">History</small>
-      {/* One line, ordered the way it reads: rank move, then rating delta.
-          Movement now sits beneath the score it describes rather than in its
-          own column, so it stays compact. */}
-      <span className={`${tone} inline-flex min-w-0 items-center gap-1.5 text-current`} aria-hidden="true">
-        <RankMovementIcon tone={tone} />
-        <b className={`rank-trend-cell__move ${tone} tabular-nums`}>{formatRankMovementCompact(rankMovement)}</b>
-        <small className="whitespace-nowrap text-[var(--t-1)] text-[var(--faint)]">{formatRatingMovement(ratingDelta)}</small>
-      </span>
-      {sparkline ? (
-        <svg
-          className="rank-trend-cell__sparkline block h-5 w-14 shrink-0 overflow-visible text-current [&_circle]:fill-current [&_circle]:opacity-90 [&_circle]:stroke-[var(--surface)] [&_circle]:[stroke-width:1.5] [&_polyline]:fill-none [&_polyline]:stroke-current [&_polyline]:opacity-75 [&_polyline]:[stroke-linecap:square] [&_polyline]:[stroke-linejoin:miter] [&_polyline]:[stroke-width:1.8]"
-          viewBox={`0 0 ${RANK_SPARKLINE_WIDTH} ${RANK_SPARKLINE_HEIGHT}`}
-          aria-hidden="true"
-          focusable="false"
-        >
-          <polyline points={sparkline.points} />
-          <circle cx={sparkline.last.x} cy={sparkline.last.y} r="2.5" />
-        </svg>
-      ) : null}
-    </span>
-  )
+function activeMovement(team: RankingSummaryStanding) {
+  return team.rollingMovement?.status === 'active' ? team.rollingMovement : undefined
 }
 
-function TournamentRankTrendCell({
+/**
+ * The 30-day chip shows places moved. The exact ranks go in the tooltip with
+ * their basis, because they come from match history and can differ from the
+ * published rank in the first column.
+ */
+function rollingMovementTitle(team: RankingSummaryStanding, period: string) {
+  const movement = activeMovement(team)
+  if (!movement) return `${team.team}: no scored series ${period}.`
+  return `${team.team}, ${period}: match-history rank #${movement.baselineRank} to #${movement.currentRank}, ${formatRatingMovement(movement.ratingDelta ?? 0)} Power over ${formatNumber(movement.scoredSeries)} series.`
+}
+
+function TournamentMoveChip({
   movement,
   endpointLabel,
 }: {
   movement?: PublicTournamentMovementTeam
   endpointLabel: string
 }) {
-  if (!movement) {
-    return (
-      <span className="rank-trend-cell rank-trend-cell--empty grid min-w-0 grid-cols-1 items-center gap-2 text-[var(--rank-movement-color,var(--faint))]">
-        <span className="rank-trend-cell__move flat inline-block min-w-[1.4em] overflow-hidden text-ellipsis whitespace-nowrap text-[var(--t-3)] font-bold leading-[1.2] text-current tabular-nums">Unavailable</span>
-      </span>
-    )
-  }
-  const tone = rankMovementTone(movement.rankMovement)
-  const title = `${movement.team} · ${formatRankValue(movement.startRank)} to ${formatRankValue(movement.endRank)} at ${endpointLabel} · ${formatRankMovementLabel(movement.rankMovement)} · Power score ${formatRatingMovement(movement.ratingDelta)}`
+  if (!movement) return <MovementChip title="Tournament movement unavailable" />
   return (
-    <span className="tournament-move-cell grid min-w-0 gap-[3px] tabular-nums" role="img" title={title} aria-label={title}>
-      <span className="tournament-move-cell__ranks flex min-w-0 items-center gap-[5px]">
-        <b className="overflow-hidden text-ellipsis whitespace-nowrap text-[var(--t-3)] text-[var(--text-strong)]">{formatRankValue(movement.startRank)} → {formatRankValue(movement.endRank)}</b>
-        <small className="whitespace-nowrap text-[var(--t-1)] text-[var(--faint)]">{endpointLabel}</small>
-      </span>
-      <span className={cn('tournament-move-cell__delta flex min-w-0 items-center gap-[5px] text-[var(--t-2)] font-bold [&_svg]:shrink-0', tone === 'up' ? 'up text-[var(--up)]' : tone === 'down' ? 'down text-[var(--down)]' : 'flat text-[var(--faint)]')}>
-        <RankMovementIcon tone={tone} />
-        {formatSigned(movement.rankMovement)} rank
-      </span>
-      <small className={cn('whitespace-nowrap text-[var(--t-1)] text-[var(--faint)]', movementTone(movement.ratingDelta) === 'up' ? 'up text-[var(--up)]' : movementTone(movement.ratingDelta) === 'down' ? 'down text-[var(--down)]' : 'flat')}>Score {formatRatingMovement(movement.ratingDelta)}</small>
-    </span>
+    <MovementChip
+      places={movement.rankMovement}
+      title={`${movement.team}: ${formatRankValue(movement.startRank)} to ${formatRankValue(movement.endRank)} at ${endpointLabel.toLowerCase()}, ${formatRatingMovement(movement.ratingDelta)} Power.`}
+    />
   )
-}
-
-function RankMovementIcon({ tone }: { tone: RankMovementTone }) {
-  const iconProps = { size: 14, strokeWidth: 2.4, 'aria-hidden': true } as const
-  if (tone === 'up') return <ArrowUp {...iconProps} />
-  if (tone === 'down') return <ArrowDown {...iconProps} />
-  return <Minus {...iconProps} />
 }
 
 function teamRankFor(team: RankingSummaryStanding) {
@@ -1069,12 +1057,6 @@ function teamRankFor(team: RankingSummaryStanding) {
 function teamBoardRankLabel(team: RankingSummaryStanding, rank?: number) {
   if (team.eligibility?.eligible === false) return 'Excluded'
   return typeof rank === 'number' ? `#${formatNumber(rank)}` : '#—'
-}
-
-function isVerticallyInViewport(element: HTMLElement) {
-  const rect = element.getBoundingClientRect()
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
-  return rect.top >= 0 && rect.bottom <= viewportHeight
 }
 
 function teamScoreFor(team: RankingSummaryStanding) {
@@ -1162,121 +1144,15 @@ function movementTone(value?: number) {
   return value > 0 ? 'up' : 'down'
 }
 
-type RankTrendPoint = {
-  date: string
-  rank: number
-}
-
-type RankTrendSummary = {
-  currentRank?: number
-  previousRank?: number
-  recentMovement?: number
-  startDate?: string
-  endDate?: string
-  startRank?: number
-  windowMovement?: number
-  bestRank?: number
-  worstRank?: number
-  pointCount: number
-}
-
 type RankMovementTone = 'up' | 'down' | 'flat'
-
-function summarizeRankTrend(team: RankingSummaryStanding, series?: TeamHistorySeries): RankTrendSummary | null {
-  const currentRank = positiveRank(team.rank)
-  const previousRank = positiveRank(team.previousRank)
-  const recentMovement = finiteRounded(team.movement)
-    ?? (typeof previousRank === 'number' && typeof currentRank === 'number' ? previousRank - currentRank : undefined)
-  const rankPoints = rankTrendPoints(series)
-  const first = rankPoints[0]
-  const last = rankPoints.at(-1)
-  const effectiveCurrentRank = currentRank ?? last?.rank
-  const startRank = first?.rank ?? previousRank ?? effectiveCurrentRank
-  const windowMovement = typeof startRank === 'number' && typeof effectiveCurrentRank === 'number'
-    ? startRank - effectiveCurrentRank
-    : recentMovement
-  const rankValues = [
-    ...rankPoints.map((point) => point.rank),
-    currentRank,
-    previousRank,
-  ].filter((rank): rank is number => typeof rank === 'number' && Number.isFinite(rank))
-
-  if (typeof effectiveCurrentRank !== 'number' && typeof recentMovement !== 'number' && rankValues.length === 0) {
-    return null
-  }
-
-  return {
-    currentRank: effectiveCurrentRank,
-    previousRank,
-    recentMovement,
-    startDate: first?.date,
-    endDate: last?.date,
-    startRank,
-    windowMovement,
-    bestRank: rankValues.length > 0 ? Math.min(...rankValues) : undefined,
-    worstRank: rankValues.length > 0 ? Math.max(...rankValues) : undefined,
-    pointCount: rankPoints.length,
-  }
-}
-
-function rankTrendPoints(series?: TeamHistorySeries): RankTrendPoint[] {
-  if (!series) return []
-  return series.points.flatMap((point) => {
-    const rank = positiveRank(point[2])
-    return typeof rank === 'number' ? [{ date: point[0], rank }] : []
-  })
-}
-
-function positiveRank(value?: number) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) return undefined
-  return Math.round(value)
-}
-
-function finiteRounded(value?: number) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
-  return Math.round(value)
-}
 
 function rankMovementTone(value?: number): RankMovementTone {
   if (typeof value !== 'number' || !Number.isFinite(value) || Math.round(value) === 0) return 'flat'
   return value > 0 ? 'up' : 'down'
 }
 
-function rankMovementStyle(value?: number): CSSProperties {
-  return { '--rank-movement-color': rankMovementColor(value) } as CSSProperties
-}
-
-function rankMovementColor(value?: number) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || Math.round(value) === 0) return 'var(--faint)'
-  const intensity = clampNumber(Math.abs(Math.round(value)) / 18, 0.28, 1)
-  if (value > 0) {
-    const lightness = interpolate(0.69, 0.76, intensity)
-    const chroma = interpolate(0.07, 0.18, intensity)
-    const hue = interpolate(165, 146, intensity)
-    return `oklch(${formatColorNumber(lightness)} ${formatColorNumber(chroma)} ${formatColorNumber(hue)})`
-  }
-  const lightness = interpolate(0.72, 0.66, intensity)
-  const chroma = interpolate(0.1, 0.21, intensity)
-  const hue = interpolate(30, 18, intensity)
-  return `oklch(${formatColorNumber(lightness)} ${formatColorNumber(chroma)} ${formatColorNumber(hue)})`
-}
-
-function interpolate(start: number, end: number, amount: number) {
-  return start + (end - start) * amount
-}
-
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
-}
-
-function formatColorNumber(value: number) {
-  return String(Math.round(value * 1000) / 1000)
-}
-
-function formatRankMovementCompact(value?: number) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
-  const places = Math.abs(Math.round(value))
-  return places === 0 ? '0' : formatNumber(places)
 }
 
 function formatRankMovementLabel(value?: number) {
@@ -1288,57 +1164,6 @@ function formatRankMovementLabel(value?: number) {
 
 function formatRankValue(rank?: number) {
   return typeof rank === 'number' && Number.isFinite(rank) ? `#${formatNumber(Math.round(rank))}` : '—'
-}
-
-function formatRankTransition(previousRank?: number, currentRank?: number) {
-  if (typeof previousRank === 'number' && typeof currentRank === 'number') {
-    return `${formatRankValue(previousRank)} -> ${formatRankValue(currentRank)}`
-  }
-  if (typeof currentRank === 'number') return `Now ${formatRankValue(currentRank)}`
-  return 'Rank unavailable'
-}
-
-type RankSparklineShape = {
-  points: string
-  last: { x: number; y: number }
-}
-
-function rankSparklineShape(values: number[], width: number, height: number): RankSparklineShape | null {
-  const ranks = values.filter((value) => Number.isFinite(value) && value >= 1).map(Math.round)
-  if (ranks.length < 2) return null
-  const best = Math.min(...ranks)
-  const worst = Math.max(...ranks)
-  const range = worst - best
-  const inset = 3
-  const drawableWidth = width - inset * 2
-  const drawableHeight = height - inset * 2
-  const coords = ranks.map((rank, index) => {
-    const x = inset + (index / (ranks.length - 1)) * drawableWidth
-    const y = range === 0
-      ? height / 2
-      : inset + ((rank - best) / range) * drawableHeight
-    return { x: roundSparklineCoord(x), y: roundSparklineCoord(y) }
-  })
-  const stepped = coords.flatMap((point, index) => {
-    if (index === 0) return [point]
-    const previous = coords[index - 1]!
-    return [{ x: point.x, y: previous.y }, point]
-  })
-  const last = coords.at(-1)!
-  return {
-    points: stepped.map((point) => `${point.x},${point.y}`).join(' '),
-    last,
-  }
-}
-
-/**
- * The team meta line. `record` is folded in so the board still shows a team's
- * record once the W/L column is hidden on narrow screens, which is where the
- * old layout simply dropped it.
- */
-function teamSubtitle(team: RankingSummaryStanding, record?: string) {
-  const reasons = team.eligibility?.eligible === false ? eligibilitySummary(team) : undefined
-  return [formatCompetitionLeagueLabel(team.league ?? team.region), record, reasons].filter(Boolean).join(' · ')
 }
 
 function eligibilitySummary(team: RankingSummaryStanding) {
@@ -1440,7 +1265,7 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
         <span className="text-base font-semibold">Data and sources</span>
         <small className="text-xs text-[var(--faint)]">Coverage, config, providers</small>
       </summary>
-      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-[var(--line)] [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-[11px] [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[var(--t-3)] [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-[var(--t-1)] [&_small]:tracking-[0.04em] [&_small]:text-[var(--faint)] [&_small]:uppercase">
+      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-[var(--line)] [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-[11px] [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[length:var(--t-3)] [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-[length:var(--t-1)] [&_small]:tracking-[0.04em] [&_small]:text-[var(--faint)] [&_small]:uppercase">
         <span>
           <small>Model</small>
           <b>{formatModelVersion(model?.version)}</b>
@@ -1477,7 +1302,7 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
       {providers.length > 0 ? (
         <div className="mx-3 mt-3 grid gap-px bg-[var(--line)]">
           {providers.map((provider) => (
-            <div className="flex min-w-0 items-center justify-between gap-2 bg-[var(--bg)] px-[11px] py-[9px] text-[var(--t-2)] text-[var(--muted)]" key={provider.provider}>
+            <div className="flex min-w-0 items-center justify-between gap-2 bg-[var(--bg)] px-[11px] py-[9px] text-[length:var(--t-2)] text-[var(--muted)]" key={provider.provider}>
               <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{provider.provider}</span>
               <b className="shrink-0 text-[var(--text)] tabular-nums">{formatNumber(provider.matchCount)}</b>
             </div>
@@ -1487,7 +1312,7 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
       {sourceFreshness.length > 0 ? (
         <div className="mx-3 mt-3 grid gap-px bg-[var(--line)]" aria-label="Source freshness">
           {sourceFreshness.map((source) => (
-            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-[var(--bg)] px-[11px] py-[9px] text-[var(--t-2)] text-[var(--muted)]" key={source.name}>
+            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-[var(--bg)] px-[11px] py-[9px] text-[length:var(--t-2)] text-[var(--muted)]" key={source.name}>
               <span className="max-w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={source.description}>{compactSourceName(source.name)}</span>
               <b className="shrink-0 whitespace-normal text-[var(--text)] tabular-nums">{sourceFreshnessLabel(source)}</b>
             </div>
@@ -1495,21 +1320,21 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
         </div>
       ) : null}
       {data?.seeded ? (
-        <p className="mx-3 mt-3 text-[var(--t-2)] text-[var(--down)] last:mb-3 [overflow-wrap:anywhere]">Seeded sample data is active. Do not treat these rows as official rankings.</p>
+        <p className="mx-3 mt-3 text-[length:var(--t-2)] text-[var(--down)] last:mb-3 [overflow-wrap:anywhere]">Seeded sample data is active. Do not treat these rows as official rankings.</p>
       ) : warnings.length > 0 ? (
         <>
           {warnings.map((warning) => (
-            <p className={cn('mx-3 mt-3 text-[var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]', (warning.severity === 'error' || warning.severity === 'warning') && 'text-[var(--down)]')} key={`${warning.kind}-${warning.severity}-${warning.message}`}>
+            <p className={cn('mx-3 mt-3 text-[length:var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]', (warning.severity === 'error' || warning.severity === 'warning') && 'text-[var(--down)]')} key={`${warning.kind}-${warning.severity}-${warning.message}`}>
               {warning.message}
             </p>
           ))}
         </>
       ) : notes.length > 0 ? (
         <>
-          {notes.map((note) => <p className="mx-3 mt-3 text-[var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]" key={note}>{note}</p>)}
+          {notes.map((note) => <p className="mx-3 mt-3 text-[length:var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]" key={note}>{note}</p>)}
         </>
       ) : (
-        <p className="mx-3 mt-3 text-[var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]">Latest match: {formatDate(data?.latestMatchDate)}</p>
+        <p className="mx-3 mt-3 text-[length:var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]">Latest match: {formatDate(data?.latestMatchDate)}</p>
       )}
     </details>
   )
@@ -1603,12 +1428,13 @@ function summarizeTeamMatchWeights(series?: TeamHistorySeries): MatchWeightSumma
   }
 }
 
-const trendSummaryClassName = 'grid grid-cols-4 gap-px border-b border-[var(--line)] bg-[var(--line)] [&_b]:my-[3px] [&_b]:block [&_b]:text-[var(--t-6)] [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_b.down]:text-[var(--down)] [&_b.flat]:text-[var(--faint)] [&_b.up]:text-[var(--up)] [&_em]:normal-case [&_em]:tracking-normal [&_em]:not-italic [&_small]:uppercase [&_small]:tracking-[0.08em] [&_small]:not-italic [&_small]:text-[var(--faint)] [&_small]:text-[var(--t-1)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&>span]:min-w-0 [&>span]:bg-[var(--detail-surface,var(--surface))] [&>span]:px-[18px] [&>span]:py-3.5 max-[900px]:grid-cols-2 max-sm:grid-cols-1 max-sm:[&>span]:px-4 max-sm:[&>span]:py-3'
-const tournamentDataNoteClassName = 'mx-5 mb-5 border-t border-[var(--line)] pt-3 text-[var(--t-2)] leading-[1.5] text-[var(--muted)]'
+const tournamentDataNoteClassName = 'mx-5 mb-5 border-t border-[var(--line)] pt-3 text-[length:var(--t-2)] leading-[1.5] text-[var(--muted)]'
 
 function TeamDetailDrawer({
   team,
   standings,
+  model,
+  tier,
   series,
   historyState,
   tournament,
@@ -1622,6 +1448,8 @@ function TeamDetailDrawer({
 }: {
   team: RankingSummaryStanding
   standings: RankingSummaryStanding[]
+  model?: PublicMatchupModel
+  tier?: RankingTierLabel
   series?: TeamHistorySeries
   historyState: TeamHistoryArtifactState
   tournament?: PublicTournamentMovementShard
@@ -1646,13 +1474,13 @@ function TeamDetailDrawer({
   const totalGames = team.wins + team.losses
   const opponentFactor = Math.round((team.factors?.opponent ?? 0) * 100)
   const trendSummary = useMemo(() => summarizeTeamTrend(series), [series])
-  const rankTrend = useMemo(() => summarizeRankTrend(team, series), [team, series])
-  const uncertainty = tournament ? undefined : team.ratingComponents?.uncertainty ?? team.uncertainty
   const score = teamScoreFor(team)
   const rank = teamRankFor(team)
   const rankConfidence = useMemo(() => summarizeRankConfidence(team, standings), [team, standings])
   const weightSummary = useMemo(() => summarizeTeamMatchWeights(series), [series])
   const powerResumeGap = powerResumeGapSummary(team)
+  const movement = activeMovement(team)
+  const opponents = useMemo(() => wouldBeatOdds(team, standings, model), [team, standings, model])
   const drawerLoading = [
     historyState.status === 'loading' ? 'rating and match history' : '',
     playerLoadState.status === 'loading' ? 'player rankings' : '',
@@ -1665,210 +1493,77 @@ function TeamDetailDrawer({
       <SheetContent
         side="right"
         showCloseButton={false}
-        overlayClassName="bg-[oklch(0.04_0.003_250/0.72)] backdrop-blur-[3px]"
+        overlayClassName="bg-[oklch(0.04_0.003_250/0.72)]"
         aria-label={`${team.team} details`}
         className="team-detail-sheet h-dvh max-h-dvh gap-0 overflow-hidden border-l border-[var(--line-strong)] bg-[var(--detail-surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] [--detail-surface-2:var(--surface-2)] [--detail-surface-3:var(--surface-3)] [--detail-surface:var(--surface)] data-[side=right]:w-[min(820px,100vw)] data-[side=right]:max-w-none data-[side=right]:sm:w-[min(820px,94vw)] data-[side=right]:sm:max-w-none"
       >
         {drawerLoading ? <p className="sr-only" role="status" aria-live="polite">Loading {drawerLoading} for {team.team}.</p> : null}
-        <SheetHeader className="flex-row items-center gap-3.5 border-b border-[var(--line)] bg-[var(--detail-surface)] px-5 py-4 text-left max-sm:flex-wrap max-sm:p-3.5">
-          <div className="mr-auto flex min-w-0 items-center gap-3.5 [&_h2]:text-[var(--t-6)] [&_h2]:font-semibold [&_h2]:tracking-normal [&_h2]:text-[var(--text-strong)] [&_p]:mb-[3px] [&_p]:text-[var(--t-2)] [&_p]:tracking-[0.14em] [&_p]:text-[var(--faint)] [&_p]:uppercase max-[900px]:[&_h2]:text-[var(--t-6)]">
-            <TeamMark team={team.team} code={team.code} className="size-11 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
-            <div>
-              <p>Team inspector</p>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-                <SheetTitle>{team.team}</SheetTitle>
-                {seeded ? <span className="inline-flex min-h-[22px] items-center whitespace-nowrap rounded-full border border-[color-mix(in_oklch,var(--down)_46%,var(--line))] bg-[color-mix(in_oklch,var(--down)_12%,transparent)] px-2 py-[3px] text-[var(--t-1)] font-bold leading-none tracking-[0.08em] text-[color-mix(in_oklch,var(--down)_72%,var(--text-strong))] uppercase">Sample data</span> : null}
-                <span className="inline-flex items-center gap-[9px] whitespace-nowrap text-[var(--t-4)] text-[var(--text-strong)] max-sm:order-3">
-                  <LeagueSigil league={team.league} />
-                  <b>{team.league}</b>
-                </span>
-              </div>
+        {/* The title is the team. Rank and Power sit beside it at the size the
+            product exists to show. */}
+        <SheetHeader className="flex-row items-center gap-3.5 border-b border-[var(--line)] bg-[var(--detail-surface)] px-5 py-4 text-left max-sm:p-3.5">
+          <TeamMark team={team.team} code={team.code} className="size-11 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
+          <div className="mr-auto grid min-w-0 gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <SheetTitle className="text-[length:var(--t-6)] font-semibold text-[var(--text-strong)]">{team.team}</SheetTitle>
+              {seeded ? <Badge variant="warning">Sample data</Badge> : null}
             </div>
+            <span className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+              <LeagueSigil league={team.league} />
+              {team.league}
+              {tier ? <TierBadge tier={tier} /> : null}
+            </span>
+          </div>
+          <div className="grid shrink-0 justify-items-end leading-none">
+            <span className="text-[length:var(--t-8)] font-semibold text-[var(--text-strong)] tabular-nums">{teamBoardRankLabel(team, rank)}</span>
+            <span className="mt-1 text-sm text-[var(--muted)] tabular-nums">{formatRating(score)} Power</span>
           </div>
           <SheetClose asChild>
-            <Button type="button" variant="ghost" aria-label="Close">
-              <X size={16} aria-hidden="true" />
-              Close
+            <Button type="button" variant="ghost" size="icon" aria-label="Close">
+              <X size={18} aria-hidden="true" />
             </Button>
           </SheetClose>
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain bg-[var(--detail-surface)] p-[18px] [&>*]:shrink-0 max-sm:gap-3 max-sm:p-3">
-          <section className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3.5 rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-4 max-[900px]:grid-cols-1 max-sm:p-3" aria-label={`${team.team} summary`}>
-            <div className="flex min-w-0 items-baseline gap-3 [&_small]:mt-1 [&_small]:block [&_small]:text-[var(--t-2)] [&_small]:tracking-[0.08em] [&_small]:text-[var(--faint)] [&_small]:uppercase [&_strong]:block [&_strong]:text-[var(--t-6)] [&_strong]:font-bold [&_strong]:leading-none [&_strong]:text-[var(--text-strong)] [&_strong]:tabular-nums max-sm:justify-between max-sm:[&_strong]:text-[var(--t-6)]">
-              <span className="text-[var(--t-8)] font-semibold leading-[0.95] tracking-normal text-[var(--text-strong)] tabular-nums max-sm:text-[var(--t-8)]">{teamBoardRankLabel(team, rank)}</span>
-              <div>
-                <strong>{formatRating(score)}</strong>
-                <small>{tournament ? 'Event endpoint Power' : 'Published Power'}{typeof uncertainty === 'number' ? ` ${formatUncertaintyBand(uncertainty)}` : ''}</small>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--line)] [&_b]:mt-1 [&_b]:block [&_b]:text-[var(--t-4)] [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_b.down]:text-[var(--down)] [&_b.flat]:text-[var(--faint)] [&_b.up]:text-[var(--up)] [&_em]:mt-0.5 [&_em]:block [&_em]:text-[var(--t-1)] [&_em]:not-italic [&_em]:text-[var(--faint)] [&_small]:block [&_small]:text-[var(--t-1)] [&_small]:tracking-[0.08em] [&_small]:text-[var(--faint)] [&_small]:uppercase [&>span]:min-w-0 [&>span]:bg-[var(--detail-surface,var(--surface))] [&>span]:px-3 [&>span]:py-2.5 max-sm:grid-cols-1">
-              {!tournament && series?.currentStanding ? (
-                <span title="Current published state is separate from match history and may include league-anchor, roster, and form components.">
-                  <small>Published state</small>
-                  <b>{formatDate(series.currentStanding.asOf)} · {formatRatingMovement(series.currentStanding.adjustment)} from last match</b>
-                </span>
-              ) : null}
-              {tournament && tournamentMovement ? (
-                <>
-                  <span>
-                    <small>Opening</small>
-                    <b>{formatRankValue(tournamentMovement.startRank)} · {formatRating(tournamentMovement.startRating)}</b>
-                    <em>{formatDate(tournament.startDate)}</em>
-                  </span>
-                  <span>
-                    <small>{tournamentBoundaryLabel(tournament.status)} endpoint</small>
-                    <b>{formatRankValue(tournamentMovement.endRank)} · {formatRating(tournamentMovement.endRating)}</b>
-                    <em>{formatDate(tournament.boundaryDate)}</em>
-                  </span>
-                  <span>
-                    <small>Tournament record</small>
-                    <b>{formatRecord(team.wins, team.losses)} ({formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})</b>
-                    <em>scored series only</em>
-                  </span>
-                  <span>
-                    <small>Net movement</small>
-                    <b className={rankMovementTone(tournamentMovement.rankMovement)}>{formatRankMovementLabel(tournamentMovement.rankMovement)}</b>
-                    <em>Score {formatRatingMovement(tournamentMovement.ratingDelta)}</em>
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span>
-                    <small>Match record</small>
-                    <b>{formatRecord(team.wins, team.losses)} ({formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)})</b>
-                    <em>{recordBasisLabel(team.recordBasis)}</em>
-                  </span>
-
-                  <span>
-                    <small>Likely rank range</small>
-                    <b title={rankConfidence?.title}>{rankConfidence?.label ?? 'Unavailable'}</b>
-                    <em>{rankConfidence?.detail ?? 'uncertainty missing'}</em>
-                  </span>
-                  <span>
-                    <small>Published update delta</small>
-                    <b className={movementTone(team.delta)}>{formatRatingMovement(team.delta)}</b>
-                    <TeamRatingSparkline series={series} summary={trendSummary} teamName={team.team} />
-                  </span>
-
-                </>
-              )}
-            </div>
+          <section className="grid grid-cols-4 gap-px overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--line)] max-[700px]:grid-cols-2 [&>div]:grid [&>div]:content-start [&>div]:gap-0.5 [&>div]:bg-[var(--detail-surface-2)] [&>div]:px-3.5 [&>div]:py-3 [&_b]:text-[length:var(--t-5)] [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-xs [&_small]:text-[var(--faint)]" aria-label={`${team.team} key facts`}>
+            {tournament && tournamentMovement ? (
+              <>
+                <div><small>Opening</small><b>{formatRankValue(tournamentMovement.startRank)} · {formatRating(tournamentMovement.startRating)}</b><small>{formatDate(tournament.startDate)}</small></div>
+                <div><small>{tournamentBoundaryLabel(tournament.status)}</small><b>{formatRankValue(tournamentMovement.endRank)} · {formatRating(tournamentMovement.endRating)}</b><small>{formatDate(tournament.boundaryDate)}</small></div>
+                <div><small>Record in event</small><b>{formatRecord(team.wins, team.losses)}</b><small>{formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)} of scored series</small></div>
+                <div><small>Net movement</small><b className={cn(rankMovementTone(tournamentMovement.rankMovement) === 'up' && 'text-[var(--up)]!', rankMovementTone(tournamentMovement.rankMovement) === 'down' && 'text-[var(--down)]!')}>{formatRankMovementLabel(tournamentMovement.rankMovement)}</b><small>{formatRatingMovement(tournamentMovement.ratingDelta)} Power</small></div>
+              </>
+            ) : (
+              <>
+                <div title={rankConfidence?.title}><small>Likely rank</small><b>{rankConfidence?.label.replace(/^Likely /, '') ?? 'Unavailable'}</b><small>given the score's uncertainty</small></div>
+                <div title={rollingMovementTitle(team, 'last 30 days')}><small>Last 30 days</small><b className={cn(movement && (movement.rankMovement ?? 0) > 0 && 'text-[var(--up)]!', movement && (movement.rankMovement ?? 0) < 0 && 'text-[var(--down)]!')}>{movement ? formatRankMovementLabel(movement.rankMovement) : 'No series'}</b><small>{movement ? `${formatRatingMovement(movement.ratingDelta ?? 0)} Power` : 'no scored matches'}</small></div>
+                <div><small>Record</small><b>{formatRecord(team.wins, team.losses)}</b><small>{formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)} · {recordBasisLabel(team.recordBasis)}</small></div>
+                <div title={powerResumeGap?.title}><small>Rank on results alone</small><b>{team.deservedStanding?.rank ? `#${team.deservedStanding.rank}` : 'Unavailable'}</b><small>{powerResumeGap?.isLarge ? 'far from its Power rank' : 'close to its Power rank'}</small></div>
+              </>
+            )}
           </section>
 
-          <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--detail-surface-2)] p-3">
-            <summary className="cursor-pointer text-sm font-semibold">Score evidence and definitions</summary>
-            <p className="mt-3 text-sm text-[var(--muted)]">Resume is results-based standing. A flagship league is a region’s main league. Connectivity describes evidence from cross-region matches. Uncertainty describes how precisely the model estimates a team’s Power; it is not a guaranteed outcome range.</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-[var(--muted)] [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-[var(--muted)]">
-              {!tournament ? (<span title={powerResumeGap?.title}>
-                    <small>Power vs resume</small>
-                    <b>{powerResumeGap?.label ?? 'No resume check'}</b>
-                    <em>{powerResumeGap?.detail ?? 'deserved standing unavailable'}</em>
-                  </span>) : null}
-              <span>
-                    <small>Match weighting</small>
-                    <b title={weightSummary?.title}>{weightSummary?.label ?? 'Tier pending'}</b>
-                    <em>{weightSummary?.detail ?? 'history rows show weights'}</em>
-                  </span>
-              {!tournament ? (<span title="Normalized opponent-strength signal from this team's scored schedule.">
-                    <small>Schedule quality</small>
-                    <b>{opponentFactor}%</b>
-                    <em>opponent signal</em>
-                  </span>) : null}
-              {!tournament ? (<span>
-                    <small>Score evidence</small>
-                    <b>{team.deservedStanding?.eligibility ?? (team.eligibility?.eligible === false ? 'Limited' : 'Eligible')}</b>
-                    <em>
-                      {team.deservedStanding
-                        ? `Roster coverage ${formatRatio(team.deservedStanding.rosterValidity)}`
-                        : 'match-based rating'}
-                    </em>
-                  </span>) : null}
-              {tournamentMovement ? (<span>
-                    <small>Endpoint eligibility</small>
-                    <b>{tournamentMovement.eligible ? 'Eligible' : 'Excluded'}</b>
-                    <em>{tournamentMovement.eligibilityReasons.join(', ') || 'ranking checks passed'}</em>
-                  </span>) : null}
+          <section className="overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))]" aria-label="Power over time">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 pt-4 pb-3">
+              <h3 className="text-[length:var(--t-5)] font-bold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
+              {trendSummary ? (
+                <p className="text-xs text-[var(--muted)] tabular-nums">
+                  From {formatRating(trendSummary.opening)} on {formatDate(trendSummary.startDate)} · net <b className={cn('font-semibold', trendSummary.netChange >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]')}>{formatRatingMovement(trendSummary.netChange)}</b> · peak {formatRating(trendSummary.peak.value)}{typeof trendSummary.bestRank === 'number' ? ` · best #${trendSummary.bestRank}` : ''}
+                </p>
+              ) : null}
             </div>
-          </details>
-
-          <div className="grid gap-4">
-            <div className="overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-5 max-[900px]:p-[18px]">
-              <div className="flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 [&_h3]:text-[var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:max-w-[58ch] [&_p]:text-[var(--t-3)] [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] max-sm:flex-col">
-                <div>
-                  <h3>Match Results</h3>
-                  <p>{tournament ? `Scored matches in ${tournament.label}.` : 'Scored matches in this scope.'} Ratings show post-match power; tier pills show model weight.</p>
-                </div>
-                <FormDots form={team.form} />
-              </div>
-
-              <RecentMatches
-                matches={team.recentMatches}
-                series={series}
-                standings={standings}
-                historyState={historyState}
-                seriesOnly={Boolean(tournament)}
-              />
-            </div>
-
-            {tournament ? (
-              <p className={tournamentDataNoteClassName}>Component and uncertainty breakdowns are hidden here because the tournament shard publishes exact endpoint rank, score, eligibility, and match evidence only.</p>
-            ) : <details className="rounded-[var(--r-2)] border border-[var(--line)] p-3"><summary className="cursor-pointer text-sm font-semibold">Power components</summary><ComponentBreakdown team={team} /></details>}
-            <details className="rounded-[var(--r-2)] border border-[var(--line)] p-3"><summary className="cursor-pointer text-sm font-semibold">Player evidence and coverage</summary><PlayerRankingCard team={team} players={players} currentLineup={currentLineup} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} /></details>
-          </div>
-
-          <div className="flex flex-col overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] [&_h3]:text-[var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&>.trend-chart-skeleton]:mx-5 [&>.trend-chart-skeleton]:mt-[18px] [&>.trend-chart-skeleton]:mb-5">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--line-strong)] px-6 pt-[22px] pb-[18px] [&_.eyebrow]:mb-1 [&>span]:rounded-full [&>span]:border [&>span]:border-[var(--line)] [&>span]:px-3 [&>span]:py-[7px] [&>span]:text-[var(--t-3)] [&>span]:font-semibold [&>span]:text-[var(--muted)] max-sm:items-start max-sm:px-[18px] max-sm:pt-[18px] max-sm:pb-3.5">
-              <div>
-                <p className="eyebrow">Power trajectory</p>
-                <h3>{tournament ? `${tournament.label} movement` : 'Ranking Trends'}</h3>
-              </div>
-              <span>Power score</span>
-            </div>
-            {trendSummary ? (
-              <div className={trendSummaryClassName} aria-label={`${team.team} trend summary`}>
-                <TrendSummaryCell label="Opening" value={formatRating(trendSummary.opening)} detail={formatDate(trendSummary.startDate)} />
-                <TrendSummaryCell label="Updates" value={formatNumber(trendSummary.pointCount)} detail={`Through ${formatDate(trendSummary.endDate)}`} />
-                <TrendSummaryCell label="Net" value={formatRatingMovement(trendSummary.netChange)} detail="from opening" />
-                <TrendSummaryCell
-                  label="Peak"
-                  value={formatRating(trendSummary.peak.value)}
-                  detail={typeof trendSummary.bestRank === 'number' ? `Best #${trendSummary.bestRank}` : formatDate(trendSummary.peak.date)}
-                />
-              </div>
-            ) : null}
-            {rankTrend ? (
-              <div className={cn(trendSummaryClassName, 'border-t')} aria-label={`${team.team} rank movement summary`}>
-                <TrendSummaryCell label="Current rank" value={formatRankValue(rankTrend.currentRank)} detail={rankTrend.endDate ? formatDate(rankTrend.endDate) : 'Latest snapshot'} />
-                <TrendSummaryCell
-                  label="Last move"
-                  value={formatRankMovementLabel(rankTrend.recentMovement)}
-                  detail={formatRankTransition(rankTrend.previousRank, rankTrend.currentRank)}
-                  valueClassName={rankMovementTone(rankTrend.recentMovement)}
-                />
-                <TrendSummaryCell
-                  label="Window move"
-                  value={formatRankMovementLabel(rankTrend.windowMovement)}
-                  detail={rankTrend.startDate ? `Since ${formatDate(rankTrend.startDate)}` : `${formatNumber(rankTrend.pointCount)} rank points`}
-                  valueClassName={rankMovementTone(rankTrend.windowMovement)}
-                />
-                <TrendSummaryCell label="Best rank" value={formatRankValue(rankTrend.bestRank)} detail={`Worst ${formatRankValue(rankTrend.worstRank)}`} />
-              </div>
-            ) : null}
             {trendSeries.length > 0 ? (
-              <div className="px-5 pt-[18px] pb-5 [&_.chart]:rounded-[var(--r-2)] [&_.chart]:border [&_.chart]:border-[var(--line)] [&_.chart]:bg-[var(--detail-surface,var(--surface))] [&_.chart]:px-4 [&_.chart]:pt-[18px] [&_.chart]:pb-3 [&_.chart_svg]:min-h-[300px] max-[900px]:[&_.chart_svg]:min-h-[250px] max-sm:p-3.5 max-sm:[&_.chart]:px-2.5 max-sm:[&_.chart]:pt-3.5 max-sm:[&_.chart]:pb-2.5 max-sm:[&_.chart_svg]:min-h-[220px]">
+              <div className="px-2 pb-2 [&_.chart_svg]:min-h-[240px]">
                 <Suspense fallback={<TrendChartSkeleton />}>
-                  <LazyTeamHistoryLineChart series={trendSeries} height={340} yLabel="Power score" />
+                  <LazyTeamHistoryLineChart series={trendSeries} height={280} yLabel="Power" />
                 </Suspense>
               </div>
             ) : historyState.status === 'loading' ? (
               <TrendChartSkeleton />
-            ) : historyState.status === 'idle' ? (
-              <p className="text-[var(--muted)] pt-4">Rating history loads when this panel is viewed.</p>
             ) : historyState.status === 'missing' || historyState.status === 'error' ? (
-              <p className="text-[var(--muted)] pt-4">{historyState.message}</p>
+              <p className="p-5 text-[var(--muted)]">{historyState.message}</p>
             ) : (
-              <p className="text-[var(--muted)] pt-4">Not enough history to chart this team yet.</p>
+              <p className="p-5 text-[var(--muted)]">{historyState.status === 'idle' ? 'Rating history loads when this panel opens.' : 'Not enough history to chart this team yet.'}</p>
             )}
             {tournament ? (
               <p className={tournamentDataNoteClassName}>
@@ -1878,81 +1573,110 @@ function TeamDetailDrawer({
                 {` · model ${formatModelVersion(tournament.modelVersion)}`}
               </p>
             ) : null}
-          </div>
+          </section>
+
+          {opponents.length > 0 ? (
+            <section className="rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] px-5 py-4" aria-label={`${team.code ?? team.team} against the top teams`}>
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-[length:var(--t-5)] font-bold text-[var(--text-strong)]">Chance to beat the top teams</h3>
+                <span className="text-xs text-[var(--faint)]">best of three, neutral side · model {formatModelVersion(model?.version)}</span>
+              </div>
+              <ul className="grid gap-2">
+                {opponents.map(({ opponent, chance }) => (
+                  <li className="grid grid-cols-[56px_minmax(0,1fr)_44px] items-center gap-3 text-sm" key={teamKey(opponent)} title={`${team.team} vs ${opponent.team}: ${chance}% to win a best of three`}>
+                    <b className="truncate font-mono font-bold text-[var(--text-strong)]">{opponent.code ?? opponent.team}</b>
+                    <span className="relative h-2.5 overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden="true">
+                      <span className="absolute inset-y-0 left-0 rounded-full bg-[var(--series-1)]" style={{ width: `${chance}%` }} />
+                      <span className="absolute inset-y-[-2px] left-1/2 w-px bg-[var(--muted)]" />
+                    </span>
+                    <b className="text-right font-semibold text-[var(--text-strong)] tabular-nums">{chance}%</b>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-[var(--faint)]">The line marks 50%. Tick Compare on two teams for any matchup.</p>
+            </section>
+          ) : null}
+
+          <section className="overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-5 max-[900px]:p-[18px]" aria-label="Match results">
+            <div className="flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 max-sm:flex-col">
+              <div>
+                <h3 className="text-[length:var(--t-5)] font-bold text-[var(--text-strong)]">Match results</h3>
+                <p className="mt-1 max-w-[58ch] text-[length:var(--t-3)] leading-[1.4] text-[var(--faint)]">{tournament ? `Scored matches in ${tournament.label}.` : 'Scored matches in this period.'} Each row shows the rating after the match and how much the event counted.</p>
+              </div>
+              <FormDots form={team.form} />
+            </div>
+            <RecentMatches
+              matches={team.recentMatches}
+              series={series}
+              standings={standings}
+              historyState={historyState}
+              seriesOnly={Boolean(tournament)}
+            />
+          </section>
+
+          <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--detail-surface-2)] p-3">
+            <summary className="cursor-pointer text-sm font-semibold">How the score is built</summary>
+            <p className="mt-3 text-sm text-[var(--muted)]">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The score has an uncertainty of {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}, so ranks inside that band can swap. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-[var(--muted)] [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-[var(--muted)]">
+              {!tournament ? (
+                <span title={powerResumeGap?.title}>
+                  <small>Power rank vs results rank</small>
+                  <b>{powerResumeGap?.label ?? 'No results check'}</b>
+                  <em>{powerResumeGap?.detail ?? 'results rank unavailable'}</em>
+                </span>
+              ) : null}
+              <span>
+                <small>Most important events</small>
+                <b title={weightSummary?.title}>{weightSummary?.label ?? 'Pending'}</b>
+                <em>{weightSummary?.detail ?? 'match rows show each event weight'}</em>
+              </span>
+              {!tournament ? (
+                <span title="Normalized opponent strength across this team's scored schedule.">
+                  <small>Schedule strength</small>
+                  <b>{opponentFactor}%</b>
+                  <em>of the strongest possible schedule</em>
+                </span>
+              ) : null}
+              {!tournament ? (
+                <span>
+                  <small>Roster coverage</small>
+                  <b>{team.deservedStanding ? formatRatio(team.deservedStanding.rosterValidity) : 'Match-based'}</b>
+                  <em>{team.deservedStanding?.eligibility ?? (team.eligibility?.eligible === false ? 'Limited evidence' : 'Enough evidence to rank')}</em>
+                </span>
+              ) : null}
+              {tournamentMovement ? (
+                <span>
+                  <small>Endpoint eligibility</small>
+                  <b>{tournamentMovement.eligible ? 'Ranked' : 'Unranked'}</b>
+                  <em>{tournamentMovement.eligibilityReasons.join(', ') || 'ranking checks passed'}</em>
+                </span>
+              ) : null}
+            </div>
+            {tournament ? (
+              <p className={tournamentDataNoteClassName}>Component breakdowns are hidden here because the tournament data publishes endpoint rank, score, eligibility and match evidence only.</p>
+            ) : <div className="mt-3"><ComponentBreakdown team={team} /></div>}
+          </details>
+          <details className="rounded-[var(--r-2)] border border-[var(--line)] p-3">
+            <summary className="cursor-pointer text-sm font-semibold">Players</summary>
+            <PlayerRankingCard team={team} players={players} currentLineup={currentLineup} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} />
+          </details>
         </div>
       </SheetContent>
     </Sheet>
   )
 }
 
-const SPARKLINE_WIDTH = 150
-const SPARKLINE_HEIGHT = 42
-
-function TeamRatingSparkline({
-  series,
-  summary,
-  teamName,
-}: {
-  series?: TeamHistorySeries
-  summary: TeamTrendSummary | null
-  teamName: string
-}) {
-  const sparkline = useMemo(() => {
-    if (!series || series.points.length < 2) return null
-    const dailyValues = dailyChartPointsFromHistoryPoints(series.points)
-      .slice(-24)
-      .map((point) => point.y)
-      .filter(Number.isFinite)
-    return sparklineShape(dailyValues, SPARKLINE_WIDTH, SPARKLINE_HEIGHT)
-  }, [series])
-
-  if (!sparkline || !summary) {
-    return null
-  }
-
-  const movement = formatRatingMovement(summary.netChange)
-  return (
-    <div
-      className="team-sparkline"
-      aria-label={`${teamName} rating trajectory net ${movement} from ${formatDate(summary.startDate)} to ${formatDate(summary.endDate)}`}
-    >
-      <svg viewBox={`0 0 ${SPARKLINE_WIDTH} ${SPARKLINE_HEIGHT}`} aria-hidden="true" focusable="false">
-        <polyline points={sparkline.points} />
-        <circle cx={sparkline.last.x} cy={sparkline.last.y} r="2.8" />
-      </svg>
-    </div>
-  )
-}
-
-type SparklineShape = {
-  points: string
-  last: { x: number; y: number }
-}
-
-function sparklineShape(values: number[], width: number, height: number): SparklineShape | null {
-  const finiteValues = values.filter(Number.isFinite)
-  if (finiteValues.length < 2) return null
-  const [min, max] = extent(finiteValues)
-  const range = max - min
-  const inset = 4
-  const drawableWidth = width - inset * 2
-  const drawableHeight = height - inset * 2
-  const coords = finiteValues.map((value, index) => {
-    const x = inset + (index / (finiteValues.length - 1)) * drawableWidth
-    const y = range === 0
-      ? height / 2
-      : inset + (1 - (value - min) / range) * drawableHeight
-    return { x: roundSparklineCoord(x), y: roundSparklineCoord(y) }
-  })
-  const last = coords.at(-1)!
-  return {
-    points: coords.map((point) => `${point.x},${point.y}`).join(' '),
-    last,
-  }
-}
-
-function roundSparklineCoord(value: number) {
-  return Math.round(value * 10) / 10
+/** Best-of-three chances against the top five ranked teams other than this one. */
+function wouldBeatOdds(team: RankingSummaryStanding, standings: RankingSummaryStanding[], model?: PublicMatchupModel) {
+  if (team.eligibility?.eligible === false) return []
+  return standings
+    .filter((other) => other.eligibility?.eligible && teamKey(other) !== teamKey(team))
+    .toSorted(compareTeamRank)
+    .slice(0, 5)
+    .map((opponent) => ({
+      opponent,
+      chance: Math.round(estimatePublicMatchup(team, opponent, model, { bestOf: 3 }).homeSeriesWinProbability * 100),
+    }))
 }
 
 function TrendChartSkeleton() {
@@ -2025,7 +1749,7 @@ function RecentMatches({
 
   return (
     <section className="mt-3.5 overflow-hidden rounded-[var(--r-1)] border border-[var(--line-strong)] bg-[var(--detail-surface,var(--surface))]" aria-label="Recent form matches">
-      <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(86px,auto)] items-center gap-2.5 border-b border-[var(--line)] px-3.5 py-2 text-[var(--t-1)] font-bold tracking-[0.08em] text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
+      <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(86px,auto)] items-center gap-2.5 border-b border-[var(--line)] px-3.5 py-2 text-[length:var(--t-1)] font-bold tracking-[0.08em] text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
         <span>Result</span>
         <span>Opponent</span>
         <span>Rating after</span>
@@ -2038,17 +1762,17 @@ function RecentMatches({
             const tierChip = matchTierChip(match)
             return (
               <div
-                className={cn('grid min-h-16 grid-cols-[28px_minmax(0,1fr)_minmax(92px,auto)] items-start gap-2.5 border-t border-dotted border-[var(--line)] px-3.5 py-[11px] first:border-t-0 max-sm:grid-cols-[26px_minmax(0,1fr)]', outcomeSignal?.tone === 'upset' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--up)_72%,transparent)]', outcomeSignal?.tone === 'miss' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--down)_72%,transparent)]')}
+                className={cn('grid min-h-16 grid-cols-[28px_minmax(0,1fr)_minmax(92px,auto)] items-start gap-2.5 border-t border-dotted border-[var(--line)] px-3.5 py-[11px] first:border-t-0 max-sm:grid-cols-[26px_minmax(0,1fr)]', outcomeSignal?.tone === 'upset' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--warn)_72%,transparent)]', outcomeSignal?.tone === 'miss' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--down)_72%,transparent)]')}
                 key={`${match.date}-${match.event}-${match.opponent}-${index}`}
               >
-                <span className={cn('grid size-[22px] place-items-center rounded-full text-[var(--t-1)] font-extrabold', match.result === 'W' ? 'bg-[var(--win-soft)] text-[var(--win)]' : match.result === 'L' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--surface-3)] text-[var(--muted)]')}>{match.result}</span>
+                <span className={cn('grid size-[22px] place-items-center rounded-full text-[length:var(--t-1)] font-extrabold', match.result === 'W' ? 'bg-[var(--win-soft)] text-[var(--win)]' : match.result === 'L' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--surface-3)] text-[var(--muted)]')}>{match.result}</span>
                 <div className="min-w-0">
                   <span className="flex min-w-0 items-baseline gap-2 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
-                    <b className="inline-block min-w-0 whitespace-normal [overflow-wrap:anywhere] text-[var(--t-3)] font-bold text-[var(--text-strong)]">vs {match.opponent}</b>
-                    {opponent ? <span className="shrink-0 whitespace-nowrap text-[var(--t-1)] font-semibold text-[var(--muted)] tabular-nums" title="Current opponent rank and power score in this scope">{formatOpponentContext(opponent)}</span> : null}
+                    <b className="inline-block min-w-0 whitespace-normal [overflow-wrap:anywhere] text-[length:var(--t-3)] font-bold text-[var(--text-strong)]">vs {match.opponent}</b>
+                    {opponent ? <span className="shrink-0 whitespace-nowrap text-[length:var(--t-1)] font-semibold text-[var(--muted)] tabular-nums" title="Current opponent rank and power score in this scope">{formatOpponentContext(opponent)}</span> : null}
                   </span>
-                  <small className="mt-0.5 block whitespace-normal [overflow-wrap:anywhere] text-[var(--t-2)] text-[var(--faint)]" title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
-                  <span className="mt-1.5 flex flex-wrap items-center gap-[5px] [&>span]:inline-flex [&>span]:min-h-[18px] [&>span]:max-w-full [&>span]:items-center [&>span]:whitespace-nowrap [&>span]:rounded-full [&>span]:border [&>span]:border-[var(--line)] [&>span]:bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_72%,transparent)] [&>span]:px-1.5 [&>span]:py-0.5 [&>span]:text-[var(--t-1)] [&>span]:font-bold [&>span]:leading-none [&>span]:text-[var(--muted)] [&>span.miss]:border-[color-mix(in_oklch,var(--down)_44%,var(--line))] [&>span.miss]:text-[var(--down)] [&>span.upset]:border-[color-mix(in_oklch,var(--up)_44%,var(--line))] [&>span.upset]:text-[var(--up)]" aria-label="Match context">
+                  <small className="mt-0.5 block whitespace-normal [overflow-wrap:anywhere] text-[length:var(--t-2)] text-[var(--faint)]" title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
+                  <span className="mt-1.5 flex flex-wrap items-center gap-[5px] [&>span]:inline-flex [&>span]:min-h-[18px] [&>span]:max-w-full [&>span]:items-center [&>span]:whitespace-nowrap [&>span]:rounded-full [&>span]:border [&>span]:border-[var(--line)] [&>span]:bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_72%,transparent)] [&>span]:px-1.5 [&>span]:py-0.5 [&>span]:text-[length:var(--t-1)] [&>span]:font-bold [&>span]:leading-none [&>span]:text-[var(--muted)] [&>span.miss]:border-[color-mix(in_oklch,var(--down)_44%,var(--line))] [&>span.miss]:text-[var(--down)] [&>span.upset]:border-transparent [&>span.upset]:bg-[var(--warn-soft)] [&>span.upset]:text-[var(--warn)]" aria-label="Match context">
                     {tierChip ? <span title={tierChip.title}>{tierChip.label}</span> : null}
                     {typeof match.expectedWinProbability === 'number' ? (
                       <span title="Pregame expected series win probability for this team">
@@ -2061,7 +1785,7 @@ function RecentMatches({
                     ) : null}
                   </span>
                 </div>
-                <div className="pt-px text-right tabular-nums [&_small]:mt-0.5 [&_small]:block [&_small]:text-[var(--t-2)] [&_small]:font-bold [&_small]:text-[var(--muted)] [&_small.down]:text-[var(--down)] [&_small.flat]:text-[var(--faint)] [&_small.up]:text-[var(--up)] [&_strong]:block [&_strong]:text-[var(--t-4)] [&_strong]:font-bold [&_strong]:text-[var(--text-strong)] max-sm:col-start-2 max-sm:flex max-sm:flex-wrap max-sm:items-baseline max-sm:justify-self-start max-sm:gap-2 max-sm:text-left">
+                <div className="pt-px text-right tabular-nums [&_small]:mt-0.5 [&_small]:block [&_small]:text-[length:var(--t-2)] [&_small]:font-bold [&_small]:text-[var(--muted)] [&_small.down]:text-[var(--down)] [&_small.flat]:text-[var(--faint)] [&_small.up]:text-[var(--up)] [&_strong]:block [&_strong]:text-[length:var(--t-4)] [&_strong]:font-bold [&_strong]:text-[var(--text-strong)] max-sm:col-start-2 max-sm:flex max-sm:flex-wrap max-sm:items-baseline max-sm:justify-self-start max-sm:gap-2 max-sm:text-left">
                   <span className="hidden text-xs text-[var(--muted)] max-sm:block">Post-match Power</span>
                   <strong>{formatRating(match.rating)}</strong>
                   <small className={movementTone(match.ratingMovement)} title={formatRatingMovementTitle(match)}>
@@ -2076,14 +1800,14 @@ function RecentMatches({
       {historyPending ? (
         <MatchHistorySkeleton rowCount={Math.max(0, RECENT_MATCH_PAGE_SIZE - recentMatches.length)} compact={recentMatches.length > 0} />
       ) : recentMatches.length === 0 ? (
-        <p className="px-3.5 py-4 text-[var(--t-2)] text-[var(--muted)]">
+        <p className="px-3.5 py-4 text-[length:var(--t-2)] text-[var(--muted)]">
           {historyState.status === 'missing' || historyState.status === 'error'
             ? historyState.message
             : 'No match-level recent form is available in this snapshot.'}
         </p>
       ) : null}
       {(historyState.status === 'missing' || historyState.status === 'error') && recentMatches.length > 0 ? (
-        <p className="border-t border-[var(--line)] px-3.5 py-2.5 text-[var(--t-2)] leading-[1.4] text-[var(--faint)]">{historyState.message}</p>
+        <p className="border-t border-[var(--line)] px-3.5 py-2.5 text-[length:var(--t-2)] leading-[1.4] text-[var(--faint)]">{historyState.message}</p>
       ) : null}
       {totalMatches > RECENT_MATCH_PAGE_SIZE ? (
         <Pager
@@ -2233,14 +1957,14 @@ function matchTierChip(match: RecentMatchSource) {
 function matchOutcomeSignal(match: RecentMatchSource) {
   const expected = match.expectedWinProbability
   if (typeof expected !== 'number' || !Number.isFinite(expected)) return null
-  if (match.result === 'W' && expected < 0.4) {
+  if (match.result === 'W' && expected < UPSET_CHANCE) {
     return {
       label: 'Upset',
       tone: 'upset',
       title: `Won with ${formatRatio(expected)} expected win probability.`,
     }
   }
-  if (match.result === 'L' && expected > 0.6) {
+  if (match.result === 'L' && expected > 1 - UPSET_CHANCE) {
     return {
       label: 'Miss',
       tone: 'miss',
@@ -2252,10 +1976,6 @@ function matchOutcomeSignal(match: RecentMatchSource) {
 
 function isEventTier(value: string | undefined): value is EventTier {
   return typeof value === 'string' && value in eventTierConfig
-}
-
-function isRankingTierLabel(value: string): value is RankingTierLabel {
-  return value === 'S' || value === 'A' || value === 'B' || value === 'C'
 }
 
 function formatEventWeight(weight: number) {
@@ -2315,30 +2035,10 @@ function summarizeTeamTrend(series?: TeamHistorySeries): TeamTrendSummary | null
   }
 }
 
-function TrendSummaryCell({
-  label,
-  value,
-  detail,
-  valueClassName,
-}: {
-  label: string
-  value: string
-  detail: string
-  valueClassName?: string
-}) {
-  return (
-    <span>
-      <small>{label}</small>
-      <b className={valueClassName}>{value}</b>
-      <em>{detail}</em>
-    </span>
-  )
-}
-
-const detailCardClassName = 'min-w-0 overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-[18px] [&_h3]:text-[var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)]'
-const emptyPlayerRankCardClassName = cn(detailCardClassName, 'grid gap-3 px-5 py-[18px] [&_h3]:text-[var(--t-4)] [&>div:first-child]:border-0 [&>div:first-child]:pb-0')
-const playerRankCardHeadClassName = 'flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-[18px] [&_h3]:flex [&_h3]:flex-wrap [&_h3]:items-center [&_h3]:gap-2 [&_p]:mt-1 [&_p]:text-[var(--t-3)] [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] max-sm:flex-col'
-const componentLedgerRowClassName = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-[7px] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 [&>b]:whitespace-nowrap [&>b]:text-[var(--t-4)] [&>b]:font-bold [&>b]:text-[var(--text-strong)] [&>b]:tabular-nums [&>b.down]:text-[var(--down)] [&>b.up]:text-[var(--up)] [&>span:first-child]:text-[var(--t-3)] [&>span:first-child]:text-[var(--muted)]'
+const detailCardClassName = 'min-w-0 overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-[18px] [&_h3]:text-[length:var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)]'
+const emptyPlayerRankCardClassName = cn(detailCardClassName, 'grid gap-3 px-5 py-[18px] [&_h3]:text-[length:var(--t-4)] [&>div:first-child]:border-0 [&>div:first-child]:pb-0')
+const playerRankCardHeadClassName = 'flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-[18px] [&_h3]:flex [&_h3]:flex-wrap [&_h3]:items-center [&_h3]:gap-2 [&_p]:mt-1 [&_p]:text-[length:var(--t-3)] [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] max-sm:flex-col'
+const componentLedgerRowClassName = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-[7px] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 [&>b]:whitespace-nowrap [&>b]:text-[length:var(--t-4)] [&>b]:font-bold [&>b]:text-[var(--text-strong)] [&>b]:tabular-nums [&>b.down]:text-[var(--down)] [&>b.up]:text-[var(--up)] [&>span:first-child]:text-[length:var(--t-3)] [&>span:first-child]:text-[var(--muted)]'
 
 function PlayerRankingCard({
   team,
@@ -2396,7 +2096,7 @@ function PlayerRankingCard({
               <p>{loadState.message}</p>
             </div>
           </div>
-          <p className="rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-[var(--t-2)] leading-[1.45] text-[var(--muted)]">
+          <p className="rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-[length:var(--t-2)] leading-[1.45] text-[var(--muted)]">
             Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
           </p>
         </aside>
@@ -2414,7 +2114,7 @@ function PlayerRankingCard({
             <p>No player-level sources for {team.code ?? team.team} in {playerScopeLabel}.</p>
           </div>
         </div>
-        <p className="rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-[var(--t-2)] leading-[1.45] text-[var(--muted)]">
+        <p className="rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-[length:var(--t-2)] leading-[1.45] text-[var(--muted)]">
           Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
         </p>
       </aside>
@@ -2436,7 +2136,7 @@ function PlayerRankingCard({
         <CountBadge>{players.length} players</CountBadge>
       </div>
 
-        <Table containerClassName="player-rank-table mt-4 max-h-[360px] overflow-auto rounded-[var(--r-2)] border border-[var(--line)] max-sm:max-h-none max-sm:overflow-visible [&_.right]:text-right [&_.ent_b]:block [&_.ent_b]:overflow-hidden [&_.ent_b]:text-ellipsis [&_.ent_b]:whitespace-nowrap [&_.ent_small]:block [&_.ent_small]:overflow-hidden [&_.ent_small]:text-ellipsis [&_.ent_small]:whitespace-nowrap [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_table]:max-sm:block [&_tbody]:max-sm:block [&_td]:border-b [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-middle [&_td]:text-[var(--t-3)] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:bg-[var(--detail-surface-3,var(--surface-3))] [&_th]:px-2 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-[var(--t-1)] [&_th]:font-bold [&_th]:tracking-[0.08em] [&_th]:text-[var(--faint)] [&_th]:uppercase [&_tr:last-child_td]:border-b-0">
+        <Table containerClassName="player-rank-table mt-4 max-h-[360px] overflow-auto rounded-[var(--r-2)] border border-[var(--line)] max-sm:max-h-none max-sm:overflow-visible [&_.right]:text-right [&_.ent_b]:block [&_.ent_b]:overflow-hidden [&_.ent_b]:text-ellipsis [&_.ent_b]:whitespace-nowrap [&_.ent_small]:block [&_.ent_small]:overflow-hidden [&_.ent_small]:text-ellipsis [&_.ent_small]:whitespace-nowrap [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_table]:max-sm:block [&_tbody]:max-sm:block [&_td]:border-b [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-middle [&_td]:text-[length:var(--t-3)] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:bg-[var(--detail-surface-3,var(--surface-3))] [&_th]:px-2 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-[length:var(--t-1)] [&_th]:font-bold [&_th]:tracking-[0.08em] [&_th]:text-[var(--faint)] [&_th]:uppercase [&_tr:last-child_td]:border-b-0">
           <TableHeader>
             <TableRow>
               <TableHead>Rank</TableHead>
@@ -2451,7 +2151,7 @@ function PlayerRankingCard({
               <TableRow key={player.id}>
                 <TableCell className={cn('font-mono font-semibold text-[var(--muted)] tabular-nums', player.rank <= 3 && 'text-[var(--accent-strong)]')}>#{player.rank}</TableCell>
                 <TableCell>
-                  <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-[var(--t-2)] [&_small]:text-[var(--faint)]">
+                  <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-[length:var(--t-2)] [&_small]:text-[var(--faint)]">
                     <b>{player.name}</b>
                     <small>
                       {observedLineupIds.has(player.playerId ?? player.id)
@@ -2461,7 +2161,7 @@ function PlayerRankingCard({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="whitespace-nowrap text-[var(--t-2)]">{player.role}</Badge>
+                  <Badge variant="secondary" className="whitespace-nowrap text-[length:var(--t-2)]">{player.role}</Badge>
                 </TableCell>
                 <TableCell className="text-right">
                   <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />
@@ -2512,7 +2212,7 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
 
   return (
     <div className={cn(detailCardClassName, 'px-5 py-[18px]')} aria-label={`${team.team} rating components`}>
-      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-[var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-[var(--t-3)] [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-[var(--t-3)] [&>span]:font-bold [&>span]:text-[var(--muted)] [&>span]:tabular-nums">
+      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-[length:var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-[length:var(--t-3)] [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-[length:var(--t-3)] [&>span]:font-bold [&>span]:text-[var(--muted)] [&>span]:tabular-nums">
         <div>
           <h3>Power Score Breakdown</h3>
           <p>How the model builds this team's Power score from the league anchor and team adjustments.</p>
@@ -2550,88 +2250,38 @@ function ComponentBar({ value, max }: { value: number; max: number }) {
   )
 }
 
-function rankingSignalsProps(flair: RankingFlair, movementBaseline: string): RankingShowcaseProps {
-  const spicy = flair.spicyTakeConfidence[0]
+type BoardChanges = { riser?: MovementSpotlight; faller?: MovementSpotlight; upset?: UpsetSpotlight }
+
+function scopeChanges(flair: RankingFlair): BoardChanges {
+  const upset = flair.upsetHeadline
   return {
-    title: 'Movement',
-    tierCounts: tierCountsFor(flair.tiers),
-    confidenceBand: spicy ? {
-      label: `${spicy.code}: evidence coverage`,
-      value: spicy.score,
-      tone: spicy.band === 'high' ? 'spicy' : spicy.band === 'medium' ? 'warm' : 'cool',
-      description: `${formatNumber(spicy.recentMatchCount)} recent scored matches, rating uncertainty +/-${formatNumber(spicy.uncertainty)}.`,
-    } : undefined,
-    biggestRiser: movementSpotlight(flair.movement.biggestRiser, movementBaseline),
-    biggestFaller: movementSpotlight(flair.movement.biggestFaller, movementBaseline),
-    upset: flair.upsetHeadline ? {
-      headline: flair.upsetHeadline.headline,
-      winner: flair.upsetHeadline.winner,
-      loser: flair.upsetHeadline.opponent,
-      event: flair.upsetHeadline.event,
-      score: `${Math.round(flair.upsetHeadline.expectedWinProbability * 100)}% pre-match`,
-      date: flair.upsetHeadline.date,
-      description: `Pre-series model expectation for the winner; lower probability means a larger surprise.`,
-    } : undefined,
+    riser: movementSpotlight(flair.movement.biggestRiser),
+    faller: movementSpotlight(flair.movement.biggestFaller),
+    upset: upset ? { winner: upset.winnerCode || upset.winner, loser: upset.opponentCode ?? upset.opponent, event: upset.event, chance: upset.expectedWinProbability } : undefined,
   }
 }
 
-function tournamentRankingSignalsProps(
-  flair: RankingFlair,
-  tournament: PublicTournamentMovementShard,
-): RankingShowcaseProps {
-  const base = rankingSignalsProps(flair, `${tournament.label} start`)
-  const biggestRiser = [...tournament.teams]
-    .sort((left, right) => right.rankMovement - left.rankMovement || right.ratingDelta - left.ratingDelta || left.team.localeCompare(right.team))[0]
-  const biggestFaller = [...tournament.teams]
-    .sort((left, right) => left.rankMovement - right.rankMovement || left.ratingDelta - right.ratingDelta || left.team.localeCompare(right.team))[0]
-  return {
-    ...base,
-    title: tournament.label,
-    biggestRiser: tournamentMovementSpotlight(biggestRiser, tournament),
-    biggestFaller: tournamentMovementSpotlight(biggestFaller, tournament),
-    upset: undefined,
-  }
-}
-
-function tournamentMovementSpotlight(
-  team: PublicTournamentMovementTeam | undefined,
-  tournament: PublicTournamentMovementShard,
-) {
-  if (!team) return undefined
-  return {
-    team: team.team,
-    code: team.code,
-    movement: team.rankMovement,
-    fromRank: team.startRank,
-    toRank: team.endRank,
-    ratingDelta: team.ratingDelta,
-    description: `${formatRatingMovement(team.ratingDelta)} Power score through ${tournamentBoundaryLabel(tournament.status).toLowerCase()}.`,
-  }
-}
-
-function tierCountsFor(assignments: readonly RankingTierAssignment[]) {
-  return (['S', 'A', 'B', 'C'] as const).map((tier) => {
-    const teams = assignments.filter((entry) => entry.tier === tier)
-    return {
-      tier,
-      label: `${tier}-tier`,
-      count: teams.length,
-      teams: teams.slice(0, 4).map((entry) => entry.code),
-    }
-  })
-}
-
-function movementSpotlight(pick: RankingMovementPick | null, movementBaseline: string) {
+function movementSpotlight(pick: RankingMovementPick | null): MovementSpotlight | undefined {
   if (!pick) return undefined
   return {
     team: pick.team,
     code: pick.code,
-    movement: pick.movement,
-    fromRank: pick.previousRank,
-    toRank: pick.rank,
+    places: pick.movement,
     ratingDelta: pick.ratingDelta,
-    description: `${formatSigned(pick.ratingDelta)} rating vs ${movementBaseline}.`,
+    detail: `${pick.team}: match-history rank #${pick.previousRank} to #${pick.rank}, ${formatRatingMovement(pick.ratingDelta)} Power.`,
   }
+}
+
+function tournamentChanges(tournament: PublicTournamentMovementShard): BoardChanges {
+  const byRise = [...tournament.teams].sort((left, right) => right.rankMovement - left.rankMovement || right.ratingDelta - left.ratingDelta || left.team.localeCompare(right.team))
+  const spotlight = (team?: PublicTournamentMovementTeam): MovementSpotlight | undefined => team ? {
+    team: team.team,
+    code: team.code,
+    places: team.rankMovement,
+    ratingDelta: team.ratingDelta,
+    detail: `${team.team}: ${formatRankValue(team.startRank)} to ${formatRankValue(team.endRank)} through ${tournamentBoundaryLabel(tournament.status).toLowerCase()}, ${formatRatingMovement(team.ratingDelta)} Power.`,
+  } : undefined
+  return { riser: spotlight(byRise[0]), faller: spotlight(byRise.at(-1)) }
 }
 
 function rawScoreRanks(rows: RankingSummaryStanding[]) {
