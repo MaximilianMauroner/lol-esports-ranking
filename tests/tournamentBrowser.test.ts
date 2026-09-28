@@ -145,6 +145,8 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), 'worlds:2026')
 
+    await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
+    await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     holdNextFeed = true
     await page.getByRole('button', { name: 'Refresh' }).click()
     await waitForPendingFeed(pendingFeed)
@@ -161,7 +163,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
 
     await page.goto(`${base}/tournaments`)
     await page.getByRole('heading', { name: 'Tournaments', exact: true }).waitFor()
-    await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
+    await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
 
     await page.locator('a[href="#main-content"]').focus()
     await page.keyboard.press('Enter')
