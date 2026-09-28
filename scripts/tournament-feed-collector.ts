@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { dirname, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { createProviderFetchTelemetry, fetchWithRetry } from './provider-fetch-retry.mjs'
 import { competitionForLeague, conflictingLeagueIdentity, isTournamentFeed, normalizeTournamentFeed } from '../src/lib/tournamentFeed'
@@ -196,22 +197,51 @@ export async function publishTournamentFeed(output: string, prior: ReturnType<ty
 /** A dead local owner can be reclaimed; a live or remote owner cannot. */
 export async function acquireCollectorLock(lock: string) {
   const token = randomUUID()
+  const recovery = `${lock}.recovering`
   try {
     await mkdir(lock)
+    if (await stat(recovery).then(() => true, (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return false
+      throw error
+    })) {
+      const yielded = `${lock}.yield-${token}`
+      await rename(lock, yielded)
+      await rm(yielded, { recursive: true, force: true })
+      throw new Error(`Tournament collector lock recovery is in progress: ${lock}`)
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-    const lockInfo = await stat(lock)
-    const owner = await readFile(`${lock}/owner.json`, 'utf8').then((raw) => JSON.parse(raw) as { host?: string; pid?: number; token?: string; startedAt?: string }).catch(() => null)
-    const ageMs = Date.now() - (owner?.startedAt ? Date.parse(owner.startedAt) : lockInfo.mtimeMs)
-    if (!Number.isFinite(ageMs) || ageMs < 60_000 || owner && (owner.host !== hostname() || !Number.isInteger(owner.pid) || processAlive(owner.pid!))) {
-      throw new Error(`Tournament collector lock is held: ${lock}`, { cause: error })
+    try {
+      await mkdir(recovery)
+    } catch (claimError) {
+      if ((claimError as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(`Tournament collector lock recovery is in progress: ${lock}`, { cause: claimError })
+      throw claimError
     }
-    const moved = `${lock}.stale-${token}`
-    await rename(lock, moved)
-    const movedInfo = await stat(moved)
-    if (movedInfo.ino !== lockInfo.ino) throw new Error(`Tournament collector lock changed during stale recovery: ${lock}`, { cause: error })
-    await rm(moved, { recursive: true, force: true })
-    await mkdir(lock)
+    try {
+      const lockInfo = await stat(lock)
+      const owner = await readFile(`${lock}/owner.json`, 'utf8').then((raw) => JSON.parse(raw) as { host?: string; pid?: number; token?: string; startedAt?: string }).catch(() => null)
+      const ageMs = Date.now() - (owner?.startedAt ? Date.parse(owner.startedAt) : lockInfo.mtimeMs)
+      if (!Number.isFinite(ageMs) || ageMs < 60_000 || owner && (owner.host !== hostname() || !Number.isInteger(owner.pid) || processAlive(owner.pid!))) {
+        throw new Error(`Tournament collector lock is held: ${lock}`, { cause: error })
+      }
+      const moved = `${lock}.stale-${token}`
+      await rename(lock, moved)
+      const movedInfo = await stat(moved)
+      if (movedInfo.ino !== lockInfo.ino) {
+        await rename(moved, lock).catch(() => undefined)
+        throw new Error(`Tournament collector lock changed during stale recovery; preserved ${moved}`, { cause: error })
+      }
+      await rm(moved, { recursive: true, force: true })
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        try { await mkdir(lock); break }
+        catch (mkdirError) {
+          if ((mkdirError as NodeJS.ErrnoException).code !== 'EEXIST' || attempt === 9) throw mkdirError
+          await delay(10)
+        }
+      }
+    } finally {
+      await rm(recovery, { recursive: true, force: true })
+    }
   }
   await writeFile(`${lock}/owner.json`, JSON.stringify({ host: hostname(), pid: process.pid, token, startedAt: new Date().toISOString() }))
   return async () => {

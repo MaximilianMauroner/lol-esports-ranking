@@ -23,10 +23,11 @@ export function TournamentsView() {
       if (!response.ok) throw new Error(`Tournament feed returned HTTP ${response.status}`)
       const body: unknown = await response.json()
       if (!isTournamentFeed(body)) throw new Error('Tournament feed schema is unsupported or incomplete')
-      const healthResponse = await fetch('/data/tournaments/feed.json.health.json', { cache: 'no-store' }).catch(() => null)
+      setState({ status: 'ready', feed: body, health: null })
+      const healthResponse = await fetch('/data/tournaments/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.timeout(5_000) }).catch(() => null)
       const healthBody: unknown = healthResponse?.ok ? await healthResponse.json().catch(() => null) : null
       const health = isHealth(healthBody) ? healthBody : null
-      setState({ status: 'ready', feed: body, health })
+      setState((previous) => previous.status === 'ready' && previous.feed === body ? { ...previous, health } : previous)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setState((previous) => previous.status === 'ready' ? { ...previous, error: message } : { status: 'error', message })
@@ -97,9 +98,18 @@ function SeriesCard({ series, timezone }: { series: TournamentSeries; timezone: 
 }
 function score(value: number | null | undefined) { return value ?? '–' }
 function nextEvent(events: TournamentEvent[], now: number) {
-  return events.find((event) => event.series.some((series) => series.status === 'live'))
-    ?? events.find((event) => event.series.some((series) => series.status === 'upcoming' && Date.parse(series.startTime ?? '') >= now))
-    ?? events.at(-1)
+  const live = events.find((event) => event.series.some((series) => series.status === 'live'))
+  if (live) return live
+  let nearest: { event: TournamentEvent; startsAt: number } | null = null
+  for (const event of events) {
+    for (const series of event.series) {
+      if (series.status !== 'upcoming') continue
+      const startsAt = Date.parse(series.startTime ?? '')
+      if (!Number.isFinite(startsAt) || startsAt < now) continue
+      if (!nearest || startsAt < nearest.startsAt) nearest = { event, startsAt }
+    }
+  }
+  return nearest?.event ?? events.at(-1)
 }
 function selectEvent(id: string, update: (value: string) => void) {
   update(id)

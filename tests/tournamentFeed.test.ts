@@ -106,6 +106,27 @@ test('collector lock rejects a live owner and reclaims a dead local owner', asyn
   }
 })
 
+test('concurrent stale-lock recovery preserves the winning collector lock', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-lock-race-test-'))
+  const lock = join(directory, 'feed.lock')
+  try {
+    await mkdir(lock)
+    await writeFile(join(lock, 'owner.json'), JSON.stringify({ host: hostname(), pid: 999999999, startedAt: '2020-01-01T00:00:00Z' }))
+    const staleTime = new Date('2020-01-01T00:00:00Z')
+    await utimes(lock, staleTime, staleTime)
+    const attempts = await Promise.allSettled(Array.from({ length: 8 }, () => acquireCollectorLock(lock)))
+    const winners = attempts.filter((attempt): attempt is PromiseFulfilledResult<() => Promise<void>> => attempt.status === 'fulfilled')
+    assert.equal(winners.length, 1)
+    const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { pid: number; token: string }
+    assert.equal(owner.pid, process.pid)
+    assert.ok(owner.token)
+    await assert.rejects(acquireCollectorLock(lock), /lock is held/)
+    await winners[0]!.value()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('partial and contradictory observations cannot replace complete last-good state', () => {
   const prior = feed([{ event: event('series', 'lec', at), detail: detail('series') }])
   const partial = feed([{ event: event('series', 'lec', at, 'completed') }], false)

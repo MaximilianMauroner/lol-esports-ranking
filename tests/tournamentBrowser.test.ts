@@ -35,6 +35,8 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
   const feed = fixtureFeed()
   let health = { checkedAt: at, complete: true, warnings: [] as string[] }
   let feedStatus = 200
+  let holdHealth = true
+  const pendingHealth: Array<() => void> = []
   const dataRequests: string[] = []
   const fixturePlugin: Plugin = {
     name: 'tournament-browser-fixture',
@@ -45,6 +47,10 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
         dataRequests.push(path)
         response.setHeader('content-type', 'application/json')
         response.statusCode = path === tournamentPath ? feedStatus : path === healthPath ? 200 : 503
+        if (path === healthPath && holdHealth) {
+          pendingHealth.push(() => response.end(JSON.stringify(health)))
+          return
+        }
         response.end(JSON.stringify(path === tournamentPath ? feed : path === healthPath ? health : { error: 'ranking artifacts unavailable' }))
       })
     },
@@ -65,6 +71,10 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
 
     await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
+    holdHealth = false
+    pendingHealth.splice(0).forEach((respond) => respond())
+    await page.getByRole('button', { name: 'Refresh' }).click()
+    await page.getByText(/Schedule may be stale/).waitFor({ state: 'hidden' })
     assert.match(await page.locator('body').innerText(), /Gamma.*Delta/)
     assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
     assert.match(await page.locator('body').innerText(), /Forecast unavailable: rules not verified/)
@@ -122,6 +132,11 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
 
+    feed.events[0]!.series.push({ ...series('far-lcs', 'lcs:2026:fixture-lcs', [team('alpha', 'Alpha'), team('beta', 'Beta')], 'upcoming', 'unstarted'), startTime: '2026-10-15T13:00:00.000Z' })
+    await page.goto(`${base}/#tournaments`)
+    await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), 'worlds:2026')
+
     await page.locator('a[href="#main-content"]').focus()
     await page.keyboard.press('Enter')
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content')
@@ -129,6 +144,18 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
       await page.setViewportSize({ width, height: 800 })
       const layout = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }))
       assert.ok(layout.content <= layout.viewport, `Horizontal overflow at ${width}px: ${JSON.stringify(layout)}`)
+      if (width < 640) {
+        const clearance = await page.evaluate(() => {
+          window.scrollTo(0, document.documentElement.scrollHeight)
+          const finalContent = document.querySelector('section[aria-label="unresolved"] p')
+          const tabBar = [...document.querySelectorAll('nav[aria-label="Primary"]')]
+            .find((element) => getComputedStyle(element).position === 'fixed')
+          return { finalContentBottom: finalContent?.getBoundingClientRect().bottom, tabBarTop: tabBar?.getBoundingClientRect().top }
+        })
+        assert.ok(clearance.finalContentBottom !== undefined && clearance.tabBarTop !== undefined
+          && clearance.finalContentBottom < clearance.tabBarTop,
+        `Final tournament content overlaps mobile navigation at ${width}px: ${JSON.stringify(clearance)}`)
+      }
     }
     assert.deepEqual(externalRequests, [])
   } finally {

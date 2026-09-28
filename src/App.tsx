@@ -114,7 +114,7 @@ function TournamentRoute() {
   return <div className="flex min-h-full flex-col">
     <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
     <AppNavigation mode="tournaments" scope={scope} onGoHome={goHome} />
-    <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1">
+    <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1 pb-6 max-sm:pb-[calc(var(--tabbar-h)+24px+env(safe-area-inset-bottom))]">
       <ModeHeader mode="tournaments" />
       {TOURNAMENT_HUB_ENABLED ? (
         <Suspense fallback={<LoadingState presentation="page" label="Loading tournaments" />}><TournamentsView /></Suspense>
