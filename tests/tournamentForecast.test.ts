@@ -41,8 +41,7 @@ function basis(): ForecastBasis {
   }
 }
 function receipt(forecastBasis = basis(), currentSeries = series(), publishedAt = before) {
-  const forecast = forecastTournamentSeries(currentSeries, forecastBasis)
-  return createPreMatchReceipt({ series: currentSeries, forecast, forecastRevision: 'rev-1',
+  return createPreMatchReceipt({ series: currentSeries, basis: forecastBasis, forecastRevision: 'rev-1',
     generatedAt: before, publishedAt, observedAt: before })
 }
 
@@ -112,7 +111,7 @@ test('receipt is pinned before play, remains frozen across model revisions and r
   revised.snapshot.standings[0]!.rating = 1100
   revised.model.version = 'fixture-v2'
   assert.deepEqual(pinnedForecast(ledger, live), pinned)
-  assert.equal(createPreMatchReceipt({ series: live, forecast: forecastTournamentSeries(series(), basis()), forecastRevision: 'late',
+  assert.equal(createPreMatchReceipt({ series: live, basis: basis(), forecastRevision: 'late',
     generatedAt: after, publishedAt: after, observedAt: after }).status, 'unavailable')
   assert.equal(receipt(basis(), series(), after).status, 'unavailable')
   const afterPin = pinPreMatchReceipt(ledger, { ...live, status: 'completed' }, '2026-09-27T15:00:00.000Z')
@@ -122,7 +121,7 @@ test('receipt is pinned before play, remains frozen across model revisions and r
 test('pinning waits for source-reported play and chooses the latest actual publication instant', () => {
   const earlier = receipt()
   const current = series()
-  const later = createPreMatchReceipt({ series: current, forecast: forecastTournamentSeries(current, basis()),
+  const later = createPreMatchReceipt({ series: current, basis: basis(),
     forecastRevision: 'offset-newer', generatedAt: before, publishedAt: '2026-09-27T11:30:00-01:00', observedAt: before })
   assert.equal(earlier.status, 'ready')
   assert.equal(later.status, 'ready')
@@ -182,25 +181,24 @@ test('participant and event corrections cannot relabel a pinned forecast', () =>
   assert.deepEqual(pinnedForecast(pinned, corrected).status, 'unavailable')
   assert.deepEqual(pinnedForecast(pinned, { ...live, eventId: 'worlds:2027' }).status, 'unavailable')
   assert.deepEqual(pinnedForecast(pinned, { ...live, bestOf: 3 }).status, 'unavailable')
-  assert.deepEqual(createPreMatchReceipt({ series: { ...series(), teams: corrected.teams }, forecast: forecastTournamentSeries(series(), basis()),
-    forecastRevision: 'mismatched-team', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
-  assert.deepEqual(createPreMatchReceipt({ series: series(3), forecast: forecastTournamentSeries(series(), basis()),
-    forecastRevision: 'mismatched-format', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
+  assert.deepEqual(createPreMatchReceipt({ series: { ...series(), teams: corrected.teams }, basis: basis(),
+    forecastRevision: 'unmapped-team', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
+  assert.deepEqual(createPreMatchReceipt({ series: series(2), basis: basis(),
+    forecastRevision: 'unsupported-format', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
 })
 
 test('played-game evidence and corrected earlier start prevent pre-match labeling', () => {
   const played = series()
   played.teams[0]!.gameWins = 1
   assert.deepEqual(forecastTournamentSeries(played, basis()).status, 'unavailable')
-  const cleanForecast = forecastTournamentSeries(series(), basis())
-  assert.deepEqual(createPreMatchReceipt({ series: played, forecast: cleanForecast, forecastRevision: 'played',
+  assert.deepEqual(createPreMatchReceipt({ series: played, basis: basis(), forecastRevision: 'played',
     generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
   const outcome = series()
   outcome.teams[0]!.outcome = 'win'
   assert.deepEqual(forecastTournamentSeries(outcome, basis()).status, 'unavailable')
 
   const originallyLater = { ...series(), startTime: '2026-09-27T14:00:00.000Z' }
-  const created = createPreMatchReceipt({ series: originallyLater, forecast: forecastTournamentSeries(originallyLater, basis()),
+  const created = createPreMatchReceipt({ series: originallyLater, basis: basis(),
     forecastRevision: 'before-original-start', generatedAt: '2026-09-27T13:30:00.000Z',
     publishedAt: '2026-09-27T13:30:00.000Z', observedAt: before })
   assert.equal(created.status, 'ready')
@@ -229,7 +227,7 @@ test('receipt parser rejects backdated, mismatched and non-upcoming persisted ar
     [['source-a', null, null], ['source-b', null, null]]]) })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'upcoming', 'unstarted', 5,
     [['source-a', 1, null], ['source-b', 0, null]]]) })), false)
-  assert.equal(createPreMatchReceipt({ series: series(), forecast: forecastTournamentSeries(series(), basis()), forecastRevision: 'impossible-time',
+  assert.equal(createPreMatchReceipt({ series: series(), basis: basis(), forecastRevision: 'impossible-time',
     generatedAt: '2026-09-27T11:59:00.000Z', publishedAt: before, observedAt: before }).status, 'unavailable')
 })
 
@@ -252,13 +250,17 @@ test('offline store writes each receipt and pin once without overwriting a revis
   const root = await mkdtemp(join(tmpdir(), 'forecast-receipts-'))
   try {
     const current = series()
-    const forecast = forecastTournamentSeries(current, basis())
-    const input = { series: current, forecast, forecastRevision: 'rev-1', generatedAt: before, observedAt: before }
+    const input = { series: current, basis: basis(), forecastRevision: 'rev-1', generatedAt: before, observedAt: before }
     const saved = await publishPreMatchReceiptOffline(root, input, new Date(before))
     assert.equal(saved.status, 'ready')
     assert.deepEqual(await publishPreMatchReceiptOffline(root, input, new Date(before)), saved)
-    const changed = forecast.status === 'ready' ? { ...forecast, modelVersion: 'altered' } : forecast
-    await assert.rejects(publishPreMatchReceiptOffline(root, { ...input, forecast: changed }, new Date(before)), /Immutable forecast artifact/)
+    const callerInput = {
+      ...input, forecast: { ...saved, homeGameWinProbability: 0.99, awayGameWinProbability: 0.01 },
+    }
+    assert.deepEqual(await publishPreMatchReceiptOffline(root, callerInput, new Date(before)), saved)
+    const changedBasis = basis()
+    changedBasis.snapshot.standings[0]!.rating = 1100
+    await assert.rejects(publishPreMatchReceiptOffline(root, { ...input, basis: changedBasis }, new Date(before)), /Immutable forecast artifact/)
     const live = { ...current, status: 'live' as const, sourceState: 'inProgress' }
     const ledger = await pinPreMatchReceiptOffline(root, live, after)
     assert.equal(pinnedForecast(ledger, live).status, 'ready')

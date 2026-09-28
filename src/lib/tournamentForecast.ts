@@ -197,12 +197,13 @@ export function tournamentEventStateVersion(series: TournamentSeries): string {
 }
 
 export function createPreMatchReceipt(input: {
-  series: TournamentSeries; forecast: TournamentForecast; forecastRevision: string
+  series: TournamentSeries; basis: ForecastBasis; options?: Parameters<typeof forecastTournamentSeries>[2]; forecastRevision: string
   generatedAt: string; publishedAt: string; observedAt: string
 }): ForecastReceipt | ForecastUnavailable {
-  const { series, forecast, forecastRevision, generatedAt, publishedAt, observedAt } = input
+  const { series, basis, options, forecastRevision, generatedAt, publishedAt, observedAt } = input
+  const forecast = forecastTournamentSeries(series, basis, options)
   if (forecast.status !== 'ready') return forecast
-  if (!forecastMatchesSeries(forecast, series) || !forecastRevision) return unavailable('stale-model-basis', 'Forecast and source series identity, participants, format or revision disagree.')
+  if (!forecastRevision) return unavailable('stale-model-basis', 'A forecast revision is required.')
   if (!validTime(series.startTime) || !validTime(generatedAt) || !validTime(publishedAt) || !validTime(observedAt)) return unavailable('invalid-time', 'A valid scheduled start, observation, generation and publication time are required.')
   if (series.status !== 'upcoming' || normalizeStatus(series.sourceState) !== 'upcoming' || !noCompletedGameEvidence(series)
     || Date.parse(publishedAt) >= Date.parse(series.startTime!) || Date.parse(observedAt) > Date.parse(publishedAt)
@@ -292,11 +293,6 @@ function sameSeriesBasis(receipt: ForecastReceipt, series: TournamentSeries) {
     && series.teams.length === 2 && series.teams[0]?.id === receipt.teams[0].sourceTeamId
     && series.teams[1]?.id === receipt.teams[1].sourceTeamId
     && validTime(series.startTime) && Date.parse(receipt.publishedAt) < Date.parse(series.startTime)
-}
-function forecastMatchesSeries(forecast: ForecastReady, series: TournamentSeries) {
-  return forecast.matchId === series.id && forecast.eventId === series.eventId && forecast.bestOf === series.bestOf
-    && series.teams.length === 2 && forecast.teams[0].sourceTeamId === series.teams[0]?.id
-    && forecast.teams[1].sourceTeamId === series.teams[1]?.id
 }
 function noCompletedGameEvidence(series: TournamentSeries) {
   return series.teams.every((team) => (team.gameWins === null || team.gameWins === 0)

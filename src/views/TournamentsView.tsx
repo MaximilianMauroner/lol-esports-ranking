@@ -22,18 +22,33 @@ export function TournamentsView() {
   const [now, setNow] = useState(() => Date.now())
   const [forecastArtifacts, setForecastArtifacts] = useState<ForecastArtifacts>({ basis: null, ledger: emptyForecastLedger, reason: 'Forecast inputs are loading.' })
   const refreshSequence = useRef(0)
+  const basisLoading = useRef(false)
+  const basisNextRefreshAt = useRef(0)
+  const basisGeneration = useRef(0)
 
   useEffect(() => {
-    if (!FORECASTS_ENABLED) return
-    let active = true
+    const generationRef = basisGeneration
+    return () => { ++generationRef.current }
+  }, [])
+
+  const refreshBasisIfDue = useCallback(() => {
+    if (!FORECASTS_ENABLED || basisLoading.current || Date.now() < basisNextRefreshAt.current) return
+    basisLoading.current = true
+    const generation = basisGeneration.current
     void loadTournamentForecastArtifacts().then((loaded) => {
-      if (active) setForecastArtifacts((previous) => ({ ...previous, ...loaded }))
+      basisLoading.current = false
+      if (generation !== basisGeneration.current) {
+        basisNextRefreshAt.current = 0
+        return
+      }
+      basisNextRefreshAt.current = Date.now() + (loaded.basis ? 10 * REFRESH_MS : REFRESH_MS)
+      setForecastArtifacts((previous) => ({ ...previous, ...loaded }))
     })
-    return () => { active = false }
   }, [])
 
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current
+    refreshBasisIfDue()
     try {
       const response = await fetch('/tournament-data/feed.json', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
       if (!response.ok) throw new Error(`Tournament feed returned HTTP ${response.status}`)
@@ -61,7 +76,7 @@ export function TournamentsView() {
       const message = error instanceof Error ? error.message : String(error)
       setState((previous) => previous.status === 'ready' ? { ...previous, error: message } : { status: 'error', message })
     }
-  }, [])
+  }, [refreshBasisIfDue])
   useEffect(() => {
     const sequenceRef = refreshSequence
     const initialTimer = window.setTimeout(() => { void refresh() }, 0)

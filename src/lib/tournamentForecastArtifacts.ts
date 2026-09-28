@@ -12,15 +12,19 @@ export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fe
   basis: ForecastBasis | null; reason?: string
 }> {
   try {
-    const identityResponse = await fetcher(IDENTITY_URL, { cache: 'no-store' })
+    const boundedFetch: typeof fetch = (input, init) => fetcher(input, {
+      ...init,
+      signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
+    })
+    const identityResponse = await boundedFetch(IDENTITY_URL, { cache: 'no-store' })
     if (!identityResponse.ok) throw new Error('No reviewed source-to-ranking team ID map is published.')
     const identityValue: unknown = await identityResponse.json()
     if (!isTournamentTeamIdentityMap(identityValue)) throw new Error('The source-to-ranking team ID map is invalid.')
-    const manifest = await createPublicRankingManifestLoader(MANIFEST_URL, fetcher)()
+    const manifest = await createPublicRankingManifestLoader(MANIFEST_URL, boundedFetch)()
     const key = manifest.defaultSnapshotKey
     const entry = manifest.snapshotIndex[key]
     if (!entry) throw new Error('The current default rating snapshot is unavailable.')
-    const snapshot = await fetchPublicSnapshotShard(resolvePublicArtifactUrl(entry.url, MANIFEST_URL), key, entry, manifest, { fetcher })
+    const snapshot = await fetchPublicSnapshotShard(resolvePublicArtifactUrl(entry.url, MANIFEST_URL), key, entry, manifest, { fetcher: boundedFetch })
     return { basis: {
       snapshotId: `${manifest.artifactMeta?.runId ?? manifest.generatedAt}/${key}`,
       ratingDataAsOf: manifest.coverage.latestMatchDate ?? '', ratingPublishedAt: manifest.generatedAt,

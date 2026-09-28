@@ -3,13 +3,13 @@ import { link, mkdir, open, readFile, readdir, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, isForecastLedger, pinPreMatchReceipt,
-  type ForecastLedger, type ForecastReceipt, type ForecastUnavailable, type TournamentForecast,
+  type ForecastBasis, type ForecastLedger, type ForecastReceipt, type ForecastUnavailable,
 } from '../src/lib/tournamentForecast'
 import type { TournamentSeries } from '../src/lib/tournamentFeed'
 
 /** Offline-only receipt store. Nothing calls this from the collector or production worker. */
 export async function publishPreMatchReceiptOffline(root: string, input: {
-  series: TournamentSeries; forecast: TournamentForecast; forecastRevision: string; generatedAt: string; observedAt: string
+  series: TournamentSeries; basis: ForecastBasis; forecastRevision: string; generatedAt: string; observedAt: string
 }, now = new Date()): Promise<ForecastReceipt | ForecastUnavailable> {
   const result = createPreMatchReceipt({ ...input, publishedAt: now.toISOString() })
   if (result.status === 'unavailable') return result
