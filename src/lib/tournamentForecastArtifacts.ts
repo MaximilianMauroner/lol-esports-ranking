@@ -4,8 +4,8 @@ import { resolvePublicArtifactUrl } from './publicArtifacts/urlResolver'
 import { isForecastLedger, isTournamentTeamIdentityMap, type ForecastBasis, type ForecastLedger } from './tournamentForecast'
 
 const MANIFEST_URL = import.meta.env.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
-const IDENTITY_URL = '/data/tournaments/forecasts/team-ids.json'
-const LEDGER_URL = '/data/tournaments/forecasts/ledger.json'
+const IDENTITY_URL = '/tournament-data/forecasts/team-ids.json'
+const LEDGER_URL = '/tournament-data/forecasts/ledger.json'
 
 /** Optional read-only artifacts; absence leaves the schedule usable. No collector or publisher calls occur here. */
 export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fetch): Promise<{

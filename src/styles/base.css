@@ -33,6 +33,12 @@
   --on-accent: oklch(0.14 0.03 220);
   --league-red: oklch(0.64 0.23 27);
   --rank-gold: oklch(0.84 0.1 86);
+  /* Tier hues. S shares rank gold; the rest step away from the accent so a
+     tier never reads as a selection. */
+  --tier-s: var(--rank-gold);
+  --tier-a: oklch(0.82 0.08 215);
+  --tier-b: oklch(0.77 0.12 138);
+  --tier-c: oklch(0.75 0.13 54);
 
   /* Single selected treatment, shared by nav, tabs and rows. */
   --selected-bg: color-mix(in oklch, var(--accent) 14%, var(--surface));
@@ -59,13 +65,18 @@
   --warn: oklch(0.8 0.13 80);
   --warn-soft: oklch(0.8 0.13 80 / 0.14);
 
-  /* Categorical series palette for multi-line charts */
-  --series-1: oklch(0.76 0.16 56);
-  --series-2: oklch(0.7 0.13 235);
-  --series-3: oklch(0.75 0.14 152);
-  --series-4: oklch(0.72 0.15 312);
-  --series-5: oklch(0.83 0.14 90);
-  --series-6: oklch(0.72 0.12 195);
+  /* Categorical series palette for multi-line charts. Validated against the
+     chart surface (#0e1012): every slot sits in the dark lightness band
+     (L 0.48-0.67), clears 3:1 contrast, and adjacent slots keep a colour-blind
+     separation of at least 8.4 dE. The previous set was brighter than the band,
+     which made thin lines vibrate on near-black. Assign slots in fixed order,
+     by team, never by rank. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #9085e9;
 
   --focus: oklch(0.82 0.13 70);
   --shadow-1: 0 1px 2px oklch(0 0 0 / 0.38);
@@ -128,7 +139,10 @@
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
 
   --app-nav-h: 66px;
-  --tray-h: 56px;
+  /* Bottom tab bar on phones and the fixed compare tray. Main content pads
+     by these so the last rows are never hidden behind them. */
+  --tabbar-h: 56px;
+  --tray-h: 60px;
   --page-x: clamp(20px, 4vw, 56px);
   /* One height for every control that sits in a filter or scope bar, so tabs,
      selects, inputs and buttons share a baseline. */
@@ -261,11 +275,9 @@ input {
     min-height: 44px;
   }
 }
-/* Static two-tone fill. The previous implementation animated
-   `background-position` across a 220% gradient on a 1.6s infinite loop, which
-   repaints every frame for every skeleton on screen. The team drawer renders
-   many at once. A single opacity fade on the container is compositor-friendly
-   and reads the same. */
+/* Static two-tone fill. Placeholders never animate: an endless shimmer or
+   fade repaints for as long as data loads, which keeps a high-refresh display
+   busy for nothing. */
 .loading-skeleton,
 .detail-skeleton,
 .loading-dot {
@@ -277,25 +289,4 @@ input {
   width: 0.55rem;
   height: 0.55rem;
   border-radius: var(--r-pill);
-}
-
-@keyframes loading-breathe {
-  from { opacity: 0.62; }
-  to { opacity: 1; }
-}
-
-[aria-busy="true"],
-.recent-match-skeleton,
-.player-rank-skeleton,
-.trend-chart-skeleton {
-  animation: loading-breathe 1.5s ease-in-out infinite alternate;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [aria-busy="true"],
-  .recent-match-skeleton,
-  .player-rank-skeleton,
-  .trend-chart-skeleton {
-    animation: none;
-  }
 }

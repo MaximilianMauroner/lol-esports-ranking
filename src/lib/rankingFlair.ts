@@ -232,17 +232,6 @@ export function tierForPowerScore(powerScore: number, leaderScore: number): Rank
   return tierDropThresholds.find((tier) => dropFromLeader <= tier.dropFromLeader)?.label ?? 'C'
 }
 
-export function firstPageForTier(
-  standings: readonly Pick<PublicTeamStanding, 'team' | 'code'>[],
-  assignments: readonly RankingTierAssignment[],
-  tier: RankingTierLabel,
-  pageSize: number,
-) {
-  const tiers = new Map(assignments.map((assignment) => [standingKey(assignment), assignment.tier]))
-  const index = standings.findIndex((standing) => tiers.get(standingKey(standing)) === tier)
-  return index < 0 ? undefined : Math.floor(index / Math.max(1, pageSize)) + 1
-}
-
 function shouldKeepPreviousTier(
   previous: RankingTierCandidate | undefined,
   rawTier: RankingTierLabel,

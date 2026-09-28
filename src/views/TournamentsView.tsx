@@ -35,15 +35,17 @@ export function TournamentsView() {
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current
     try {
-      const response = await fetch('/data/tournaments/feed.json', { cache: 'no-store' })
+      const response = await fetch('/tournament-data/feed.json', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
       if (!response.ok) throw new Error(`Tournament feed returned HTTP ${response.status}`)
       const body: unknown = await response.json()
       if (!isTournamentFeed(body)) throw new Error('Tournament feed schema is unsupported or incomplete')
-      const healthResponse = await fetch('/data/tournaments/feed.json.health.json', { cache: 'no-store' }).catch(() => null)
+      if (sequence !== refreshSequence.current) return
+      setState({ status: 'ready', feed: body, health: null })
+      const healthResponse = await fetch('/tournament-data/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.timeout(5_000) }).catch(() => null)
       const healthBody: unknown = healthResponse?.ok ? await healthResponse.json().catch(() => null) : null
       const health = isHealth(healthBody) ? healthBody : null
       if (sequence !== refreshSequence.current) return
-      setState({ status: 'ready', feed: body, health })
+      setState((previous) => previous.status === 'ready' && previous.feed === body ? { ...previous, health } : previous)
       if (FORECASTS_ENABLED) {
         try {
           const ledger = await loadTournamentForecastLedger()
@@ -61,10 +63,11 @@ export function TournamentsView() {
     }
   }, [])
   useEffect(() => {
+    const sequenceRef = refreshSequence
     const initialTimer = window.setTimeout(() => { void refresh() }, 0)
     const refreshTimer = window.setInterval(() => { void refresh() }, REFRESH_MS)
     const clockTimer = window.setInterval(() => setNow(Date.now()), 10_000)
-    return () => { window.clearTimeout(initialTimer); window.clearInterval(refreshTimer); window.clearInterval(clockTimer) }
+    return () => { ++sequenceRef.current; window.clearTimeout(initialTimer); window.clearInterval(refreshTimer); window.clearInterval(clockTimer) }
   }, [refresh])
   useEffect(() => {
     const onHashChange = () => setSelectedId(hashParam('event') ?? '')
@@ -152,9 +155,18 @@ function SeriesCard({ series, timezone, now, forecasts }: { series: TournamentSe
 function score(value: number | null | undefined) { return value ?? '–' }
 function percent(value: number) { return `${(value * 100).toFixed(1)}%` }
 function nextEvent(events: TournamentEvent[], now: number) {
-  return events.find((event) => event.series.some((series) => series.status === 'live'))
-    ?? events.find((event) => event.series.some((series) => series.status === 'upcoming' && Date.parse(series.startTime ?? '') >= now))
-    ?? events.at(-1)
+  const live = events.find((event) => event.series.some((series) => series.status === 'live'))
+  if (live) return live
+  let nearest: { event: TournamentEvent; startsAt: number } | null = null
+  for (const event of events) {
+    for (const series of event.series) {
+      if (series.status !== 'upcoming') continue
+      const startsAt = Date.parse(series.startTime ?? '')
+      if (!Number.isFinite(startsAt) || startsAt < now) continue
+      if (!nearest || startsAt < nearest.startsAt) nearest = { event, startsAt }
+    }
+  }
+  return nearest?.event ?? events.at(-1)
 }
 function selectEvent(id: string, update: (value: string) => void) {
   update(id)

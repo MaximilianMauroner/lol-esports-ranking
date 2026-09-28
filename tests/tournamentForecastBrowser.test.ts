@@ -44,13 +44,13 @@ test('synthetic tournament card keeps published pre-match odds through live and 
         setTimeout(() => response.end(manifestJson), 500)
         return
       }
-      if (!path.startsWith('/data/tournaments/')) return next()
+      if (!path.startsWith('/tournament-data/')) return next()
       response.setHeader('content-type', 'application/json')
-      const body = path === '/data/tournaments/feed.json' ? feed
-        : path === '/data/tournaments/feed.json.health.json' ? { checkedAt: feed.fetchedAt, complete: true, warnings: [] }
-          : path === '/data/tournaments/forecasts/team-ids.json' ? identityMap
-            : path === '/data/tournaments/forecasts/ledger.json' ? ledger : null
-      response.statusCode = path === '/data/tournaments/forecasts/ledger.json' ? ledgerStatus : body ? 200 : 404
+      const body = path === '/tournament-data/feed.json' ? feed
+        : path === '/tournament-data/feed.json.health.json' ? { checkedAt: feed.fetchedAt, complete: true, warnings: [] }
+          : path === '/tournament-data/forecasts/team-ids.json' ? identityMap
+            : path === '/tournament-data/forecasts/ledger.json' ? ledger : null
+      response.statusCode = path === '/tournament-data/forecasts/ledger.json' ? ledgerStatus : body ? 200 : 404
       response.end(JSON.stringify(body))
     })
   } }
