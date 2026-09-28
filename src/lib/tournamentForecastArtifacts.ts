@@ -3,7 +3,7 @@ import { fetchPublicSnapshotShard } from './publicArtifacts/resolver'
 import { resolvePublicArtifactUrl } from './publicArtifacts/urlResolver'
 import { isForecastLedger, isTournamentTeamIdentityMap, type ForecastBasis, type ForecastLedger } from './tournamentForecast'
 
-const MANIFEST_URL = import.meta.env.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
+const MANIFEST_URL = import.meta.env?.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
 const IDENTITY_URL = '/tournament-data/forecasts/team-ids.json'
 const LEDGER_URL = '/tournament-data/forecasts/ledger.json'
 
@@ -31,8 +31,8 @@ export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fe
   }
 }
 
-export async function loadTournamentForecastLedger(fetcher: typeof fetch = fetch): Promise<ForecastLedger> {
-  const response = await fetcher(LEDGER_URL, { cache: 'no-store' })
+export async function loadTournamentForecastLedger(fetcher: typeof fetch = fetch, timeoutMs = 15_000): Promise<ForecastLedger> {
+  const response = await fetcher(LEDGER_URL, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
   if (!response.ok) throw new Error(`Forecast ledger returned HTTP ${response.status}`)
   const value: unknown = await response.json()
   if (!isForecastLedger(value)) throw new Error('Forecast ledger schema is invalid')

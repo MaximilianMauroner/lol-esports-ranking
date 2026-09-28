@@ -231,11 +231,14 @@ export function appendForecastReceipt(ledger: ForecastLedger, receipt: ForecastR
 
 /** Pin once when a source series leaves upcoming; later rating or source corrections cannot rewrite history. */
 export function pinPreMatchReceipt(ledger: ForecastLedger, series: TournamentSeries, firstStartedObservedAt: string): ForecastLedger {
-  if (ledger.pinned[series.id] || (series.status !== 'live' && series.status !== 'completed') || !validTime(firstStartedObservedAt)) return ledger
+  const sourceStatus = normalizeStatus(series.sourceState)
+  if (ledger.pinned[series.id] || (series.status !== 'live' && series.status !== 'completed')
+    || (sourceStatus !== 'live' && sourceStatus !== 'completed') || !validTime(firstStartedObservedAt)) return ledger
   const eligible = Object.values(ledger.receipts).filter((receipt) => receipt.matchId === series.id
     && sameSeriesBasis(receipt, series)
     && Date.parse(receipt.publishedAt) < Math.min(Date.parse(receipt.scheduledStartAt), Date.parse(firstStartedObservedAt)))
-    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.forecastRevision.localeCompare(a.forecastRevision))
+    .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)
+      || b.forecastRevision.localeCompare(a.forecastRevision) || b.receiptKey.localeCompare(a.receiptKey))
   return eligible[0] ? { ...ledger, pinned: { ...ledger.pinned, [series.id]: eligible[0].receiptKey } } : ledger
 }
 

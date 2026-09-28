@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { publishPreMatchReceiptOffline, pinPreMatchReceiptOffline, readForecastLedgerOffline } from '../scripts/tournament-forecast-receipts'
 import { publishedRatingScale } from '../src/lib/modelConfig'
 import { estimatePublicMatchup } from '../src/lib/publicMatchup'
+import { loadTournamentForecastLedger } from '../src/lib/tournamentForecastArtifacts'
 import type { PublicRankingShard, PublicTeamStanding } from '../src/lib/publicArtifacts/schema'
 import type { TournamentSeries } from '../src/lib/tournamentFeed'
 import {
@@ -116,6 +117,30 @@ test('receipt is pinned before play, remains frozen across model revisions and r
   assert.equal(receipt(basis(), series(), after).status, 'unavailable')
   const afterPin = pinPreMatchReceipt(ledger, { ...live, status: 'completed' }, '2026-09-27T15:00:00.000Z')
   assert.deepEqual(afterPin.pinned, ledger.pinned)
+})
+
+test('pinning waits for source-reported play and chooses the latest actual publication instant', () => {
+  const earlier = receipt()
+  const current = series()
+  const later = createPreMatchReceipt({ series: current, forecast: forecastTournamentSeries(current, basis()),
+    forecastRevision: 'offset-newer', generatedAt: before, publishedAt: '2026-09-27T11:30:00-01:00', observedAt: before })
+  assert.equal(earlier.status, 'ready')
+  assert.equal(later.status, 'ready')
+  if (earlier.status !== 'ready' || later.status !== 'ready') return
+  const ledger = appendForecastReceipt(appendForecastReceipt(emptyForecastLedger, earlier), later)
+  const live = { ...current, status: 'live' as const, sourceState: 'inProgress' }
+  assert.deepEqual(pinPreMatchReceipt(ledger, { ...live, sourceState: 'unstarted' }, after).pinned, {})
+  assert.deepEqual(pinPreMatchReceipt(ledger, { ...live, sourceState: 'unknown' }, after).pinned, {})
+  assert.equal(pinPreMatchReceipt(ledger, live, after).pinned[current.id], later.receiptKey)
+})
+
+test('a stalled optional forecast ledger read times out', async () => {
+  const stalledFetch: typeof fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {
+    const signal = init?.signal
+    assert.ok(signal)
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+  })
+  await assert.rejects(loadTournamentForecastLedger(stalledFetch, 10), { name: 'TimeoutError' })
 })
 
 test('score-conditioned odds use frozen game probability and reject impossible or changed series', () => {
