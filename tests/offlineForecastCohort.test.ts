@@ -13,10 +13,11 @@ const outcome: SyntheticSeriesOutcome = { matchId: 'fixture-match', eventId: 'fi
 function receipt(revision = '1', publishedAt = before, bestOf: 1 | 3 | 5 = 5): ForecastReceipt {
   const eventStateVersion = JSON.stringify(['fixture-match', 'fixture-event', start, 'upcoming', 'unstarted', bestOf,
     [['alpha', null, null], ['beta', null, null]]])
+  const team = (id: string): ForecastReceipt['teams'][number] => ({ sourceTeamId: id, teamId: id,
+    name: id, rating: 1500, uncertainty: 100, rosterBasis: 'current-roster' })
   return { status: 'ready', matchId: 'fixture-match', eventId: 'fixture-event', bestOf,
     sideAssumption: 'neutral', sideBasis: 'synthetic fixture', blueSideRatingEdge: 0,
-    teams: ['alpha', 'beta'].map((id) => ({ sourceTeamId: id, teamId: id, name: id,
-      rating: 1500, uncertainty: 100, rosterBasis: 'current-roster' })) as ForecastReceipt['teams'],
+    teams: [team('alpha'), team('beta')],
     homeGameWinProbability: 0.5, awayGameWinProbability: 0.5,
     homeSeriesWinProbability: 0.5, awaySeriesWinProbability: 0.5,
     modelVersion: 'fixture-model', modelConfigHash: 'fixture-config', snapshotId: 'fixture-snapshot',
