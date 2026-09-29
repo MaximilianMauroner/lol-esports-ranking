@@ -1,0 +1,443 @@
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import test from 'node:test'
+import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
+import { hostname, tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { acquireCollectorLock, collectTournamentFeed, publishTournamentFeed } from '../scripts/tournament-feed-collector'
+import { competitionForLeague, formatTournamentTime, groupTournamentSeries, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/lib/tournamentFeed'
+
+const at = '2026-09-26T12:00:00.000Z'
+
+function event(id: string, league: string, startTime: string, state = 'unstarted', teams: Array<Record<string, unknown>> = [{ name: 'LCK representative' }, { name: 'LCP representative' }]) {
+  return { startTime, state, blockName: 'Playoffs', league: { slug: league, name: league }, match: { id, teams, strategy: { type: 'bestOf', count: 5 } } }
+}
+function detail(id: string, tournamentId = 't-1') { return { id, tournament: { id: tournamentId }, match: { strategy: { count: 5 }, games: [] } } }
+function feed(observations: Array<{ event: ReturnType<typeof event>; detail?: Record<string, unknown> }>, complete = true) {
+  return normalizeTournamentFeed({ observations, fetchedAt: at, coverageStart: '2026-09-01T00:00:00Z', coverageEnd: '2026-10-31T00:00:00Z', coverageComplete: complete })
+}
+
+test('discovers an allowed upcoming event without rated games or a manually supplied event ID', () => {
+  const result = feed([
+    { event: event('worlds-1', 'worlds', at), detail: detail('worlds-1', 'new-source-id') },
+    { event: event('excluded', 'cblol-brazil', at), detail: detail('excluded') },
+  ])
+  assert.equal(result.events.length, 1)
+  assert.equal(result.events[0]?.id, 'worlds:2026')
+  assert.equal(result.events[0]?.series[0]?.status, 'upcoming')
+  assert.equal(result.events[0]?.series[0]?.teams[1]?.name, 'LCP representative')
+  assert.equal(result.coverage.complete, true)
+  assert.equal(isTournamentFeed(result), true)
+  assert.equal(isTournamentFeed({ ...result, events: [{ ...result.events[0], series: [{ ...result.events[0]?.series[0], vodUrls: ['javascript:alert(1)'] }] }] }), false)
+  assert.equal(isTournamentFeed({ ...result, dataMode: 'seeded-sample' }), false)
+})
+
+test('competition allowlist covers four domestic and three international families', () => {
+  for (const slug of ['lcs', 'lec', 'lpl', 'lck', 'worlds', 'msi', 'first_stand']) {
+    assert.ok(competitionForLeague({ slug, name: slug }), slug)
+  }
+  for (const slug of ['cblol-brazil', 'lcp', 'ewc', 'emea_masters']) assert.equal(competitionForLeague({ slug, name: slug }), null)
+  for (const name of ['LCS', 'LEC', 'LPL', 'LCK']) assert.equal(competitionForLeague({ name }), name.toLowerCase())
+  assert.equal(competitionForLeague({ slug: 'lcs', name: 'LCK' }), null)
+  assert.equal(competitionForLeague({ slug: 'lcs', name: 'CBLOL' }), null)
+})
+
+test('accepts only HTTPS VOD destinations and formats Vienna daylight changes', () => {
+  const result = feed([{ event: event('series', 'lck', at), detail: {
+    ...detail('series'),
+    match: { games: [{ vods: [
+      { provider: 'youtube', parameter: 'MyhFr03s0Xw' },
+      { provider: 'other', parameter: 'http://unsafe.example/watch' },
+    ] }] },
+  } }])
+  assert.deepEqual(result.events[0]?.series[0]?.vodUrls, ['https://www.youtube.com/watch?v=MyhFr03s0Xw'])
+  assert.match(formatTournamentTime('2026-03-29T00:30:00Z', 'Europe/Vienna'), /1:30.*GMT\+1/)
+  assert.match(formatTournamentTime('2026-03-29T01:30:00Z', 'Europe/Vienna'), /3:30.*GMT\+2/)
+})
+
+test('preserves source state, corrections, TBD slots and confirmed terminal status', () => {
+  const first = feed([{ event: event('series', 'lcs', at, 'unstarted', [{ name: 'Alpha' }, {}]), detail: detail('series') }])
+  const live = feed([{ event: event('series', 'lcs', at, 'inProgress'), detail: detail('series') }])
+  const postponed = feed([{ event: event('series', 'lcs', at, 'postponed'), detail: detail('series') }])
+  const completed = feed([{ event: event('series', 'lcs', at, 'completed', [{ name: 'Alpha', result: { gameWins: 3, outcome: 'win' } }, { name: 'Beta', result: { gameWins: 1, outcome: 'loss' } }]), detail: detail('series') }])
+  assert.equal(first.events[0]?.series[0]?.teams[1]?.name, null)
+  assert.equal(first.events[0]?.series[0]?.status, 'upcoming')
+  assert.equal(live.events[0]?.series[0]?.status, 'live')
+  assert.equal(postponed.events[0]?.series[0]?.status, 'postponed')
+  assert.equal(completed.events[0]?.series[0]?.status, 'completed')
+  assert.equal(feed([{ event: event('series', 'lcs', at, 'completed'), detail: detail('series') }]).events[0]?.series[0]?.status, 'unknown')
+  const unresolved = feed([{ event: event('series', 'lcs', at, 'completed'), detail: detail('series') }]).events[0]?.series[0]
+  assert.equal(groupTournamentSeries([unresolved!]).unresolved.length, 1)
+  assert.equal(groupTournamentSeries([unresolved!]).upcoming.length, 0)
+  assert.equal(feed([{ event: event('series', 'lcs', '2026-09-20T12:00:00Z'), detail: detail('series') }]).events[0]?.series[0]?.status, 'upcoming')
+})
+
+test('withholds identifier-less rows and recovers result evidence from event details', () => {
+  const withoutId = feed([{ event: { ...event('series', 'lcs', at), match: { ...event('series', 'lcs', at).match, id: '' } }, detail: detail('series') }])
+  assert.equal(withoutId.coverage.complete, false)
+  assert.match(withoutId.coverage.warnings.join(' '), /lack a match ID/)
+  const corrected = feed([{
+    event: event('series', 'lcs', at, 'completed'),
+    detail: { ...detail('series'), match: { teams: [
+      { name: 'LCK representative', result: { gameWins: 3, outcome: 'win' } },
+      { name: 'LCP representative', result: { gameWins: 1, outcome: 'loss' } },
+    ] } },
+  }])
+  assert.equal(corrected.events[0]?.series[0]?.status, 'completed')
+  assert.deepEqual(corrected.events[0]?.series[0]?.teams.map((team) => team.gameWins), [3, 1])
+})
+
+test('collector lock rejects a live owner and reclaims a dead local owner', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-lock-test-'))
+  const lock = join(directory, 'feed.lock')
+  try {
+    const release = await acquireCollectorLock(lock)
+    await assert.rejects(acquireCollectorLock(lock), /lock is held/)
+    await release()
+    await mkdir(lock)
+    await writeFile(join(lock, 'owner.json'), JSON.stringify({ host: hostname(), pid: 999999999, startedAt: '2020-01-01T00:00:00Z' }))
+    const staleTime = new Date('2020-01-01T00:00:00Z')
+    await utimes(lock, staleTime, staleTime)
+    const releaseRecovered = await acquireCollectorLock(lock)
+    const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { pid: number }
+    assert.equal(owner.pid, process.pid)
+    await releaseRecovered()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('concurrent stale-lock recovery preserves the winning collector lock', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-lock-race-test-'))
+  const lock = join(directory, 'feed.lock')
+  try {
+    await mkdir(lock)
+    await writeFile(join(lock, 'owner.json'), JSON.stringify({ host: hostname(), pid: 999999999, startedAt: '2020-01-01T00:00:00Z' }))
+    const staleTime = new Date('2020-01-01T00:00:00Z')
+    await utimes(lock, staleTime, staleTime)
+    const attempts = await Promise.allSettled(Array.from({ length: 8 }, () => acquireCollectorLock(lock)))
+    const winners = attempts.filter((attempt): attempt is PromiseFulfilledResult<() => Promise<void>> => attempt.status === 'fulfilled')
+    assert.equal(winners.length, 1)
+    const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { pid: number; token: string }
+    assert.equal(owner.pid, process.pid)
+    assert.ok(owner.token)
+    await assert.rejects(acquireCollectorLock(lock), /lock is held/)
+    await winners[0]!.value()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+for (const primary of ['stale', 'absent'] as const) {
+  test(`reclaims an orphan recovery claim with ${primary} primary lock`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tournament-orphan-claim-test-'))
+    const lock = join(directory, 'feed.lock')
+    const recovery = `${lock}.recovering`
+    try {
+      if (primary === 'stale') {
+        await mkdir(lock)
+        await writeFile(join(lock, 'owner.json'), JSON.stringify({ host: hostname(), pid: 999999999, startedAt: '2020-01-01T00:00:00Z' }))
+      }
+      await mkdir(recovery)
+      await writeFile(join(recovery, 'owner-interrupted.tmp'), '{"host":')
+      const staleTime = new Date('2020-01-01T00:00:00Z')
+      await utimes(recovery, staleTime, staleTime)
+      const release = await acquireCollectorLock(lock)
+      const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { pid: number; token: string }
+      assert.equal(owner.pid, process.pid)
+      assert.ok(owner.token)
+      await assert.rejects(acquireCollectorLock(lock), /lock is held/)
+      await release()
+      await assert.rejects(readFile(join(recovery, 'owner.json'), 'utf8'), { code: 'ENOENT' })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+}
+
+test('concurrent orphan-claim recovery grants only one collector ownership', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-orphan-race-test-'))
+  const lock = join(directory, 'feed.lock')
+  try {
+    await mkdir(`${lock}.recovering`)
+    const staleTime = new Date('2020-01-01T00:00:00Z')
+    await utimes(`${lock}.recovering`, staleTime, staleTime)
+    const attempts = await Promise.allSettled(Array.from({ length: 8 }, () => acquireCollectorLock(lock)))
+    const winners = attempts.filter((attempt): attempt is PromiseFulfilledResult<() => Promise<void>> => attempt.status === 'fulfilled')
+    assert.equal(winners.length, 1)
+    await assert.rejects(acquireCollectorLock(lock), /lock is held|recovery is in progress/)
+    await winners[0]!.value()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+for (const unreadable of ['primary', 'recovery'] as const) {
+  test(`unreadable ${unreadable} owner metadata cannot be reclaimed as an orphan`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tournament-unreadable-owner-test-'))
+    const lock = join(directory, 'feed.lock')
+    const target = unreadable === 'primary' ? lock : `${lock}.recovering`
+    try {
+      await mkdir(target)
+      await mkdir(join(target, 'owner.json'))
+      const staleTime = new Date('2020-01-01T00:00:00Z')
+      await utimes(target, staleTime, staleTime)
+      await assert.rejects(acquireCollectorLock(lock), { code: 'EISDIR' })
+      await assert.rejects(mkdir(target), { code: 'EEXIST' })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+}
+
+test('invalid prior feed records failed health without replacing its bytes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-prior-health-test-'))
+  const output = join(directory, 'feed.json')
+  try {
+    for (const invalid of ['{"events":', '{}', '']) {
+      await writeFile(output, invalid)
+      await writeFile(`${output}.health.json`, JSON.stringify({ checkedAt: at, complete: true, warnings: [] }))
+      const run = spawnSync(process.execPath, ['--import', 'tsx', resolve('scripts/tournament-feed-collector.ts'), output], {
+        env: { ...process.env, TOURNAMENT_COLLECTOR_ENABLED: '1' }, encoding: 'utf8', timeout: 10_000,
+      })
+      assert.equal(run.status, 1, run.stderr)
+      assert.equal(await readFile(output, 'utf8'), invalid)
+      const health = JSON.parse(await readFile(`${output}.health.json`, 'utf8')) as { complete: boolean; warnings: string[] }
+      assert.equal(health.complete, false)
+      assert.ok(health.warnings.length > 0)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('partial and contradictory observations cannot replace complete last-good state', () => {
+  const prior = feed([{ event: event('series', 'lec', at), detail: detail('series') }])
+  const partial = feed([{ event: event('series', 'lec', at, 'completed') }], false)
+  const retained = reconcileTournamentFeed(prior, partial)
+  assert.deepEqual(retained.events, prior.events)
+  assert.match(retained.coverage.warnings.at(-1)!, /last complete observation/)
+  const contradiction = feed([
+    { event: event('series', 'lec', at), detail: detail('series') },
+    { event: event('series', 'lec', at, 'completed'), detail: detail('series') },
+  ])
+  assert.equal(contradiction.coverage.complete, false)
+  assert.equal(contradiction.events.length, 0)
+  assert.deepEqual(reconcileTournamentFeed(prior, contradiction).events, prior.events)
+  const empty = feed([])
+  assert.deepEqual(reconcileTournamentFeed(prior, empty).events, [])
+})
+
+test('collector follows both cursors and withholds a capped incomplete read', async () => {
+  const calls: string[] = []
+  const fetcher = (async (urlValue: string | URL | Request) => {
+    const url = new URL(String(urlValue))
+    const key = `${url.pathname.split('/').at(-1)}:${url.searchParams.get('pageToken') ?? url.searchParams.get('id') ?? ''}`
+    calls.push(key)
+    const data = new Map<string, unknown>([
+      ['getSchedule:', { data: { schedule: { events: [event('middle', 'lcs', at)], pages: { older: 'old', newer: 'new' } } } }],
+      ['getSchedule:old', { data: { schedule: { events: [event('old', 'lck', '2026-08-01T00:00:00Z')], pages: {} } } }],
+      ['getSchedule:new', { data: { schedule: { events: [event('new', 'worlds', '2026-12-01T00:00:00Z')], pages: {} } } }],
+      ['getEventDetails:middle', { data: { event: detail('middle') } }],
+    ])
+    return { ok: true, status: 200, json: async () => data.get(key) } as Response
+  }) as typeof fetch
+  const result = await collectTournamentFeed({ fetcher, now: new Date(at), maxPagesPerDirection: 2 })
+  assert.equal(result.feed.coverage.complete, true)
+  assert.deepEqual(calls, ['getSchedule:', 'getSchedule:old', 'getSchedule:new', 'getEventDetails:middle'])
+  assert.equal(result.feed.events[0]?.id, 'lcs:2026:t-1')
+  const capped = await collectTournamentFeed({ fetcher, now: new Date(at), maxPagesPerDirection: 0 })
+  assert.equal(capped.feed.coverage.complete, false)
+})
+
+test('malformed present page cursors cannot publish a truncated feed over last-good', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-cursor-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  try {
+    for (const [label, firstPages, laterPages] of [
+      ['non-string older', { older: 42 }, null],
+      ['array newer', { newer: [] }, null],
+      ['non-string cursor on a fetched page', { older: 'old' }, { older: 42 }],
+      ['empty older', { older: '' }, null],
+      ['whitespace newer', { newer: '  ' }, null],
+      ['empty cursor on a fetched page', { older: 'old' }, { older: '' }],
+    ] as const) {
+      const fetcher = (async (urlValue: string | URL | Request) => {
+        const token = new URL(String(urlValue)).searchParams.get('pageToken')
+        return new Response(JSON.stringify({ data: { schedule: { events: [], pages: token ? laterPages : firstPages } } }))
+      }) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, label)
+      assert.match(collected.feed.coverage.warnings.join(' '), /malformed.*cursor/i, label)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false, label)
+      assert.equal(await readFile(output, 'utf8'), original, label)
+    }
+    const ended = (async () => new Response(JSON.stringify({ data: { schedule: { events: [], pages: { older: null, newer: null } } } }))) as typeof fetch
+    assert.equal((await collectTournamentFeed({ fetcher: ended, now: new Date(at) })).feed.coverage.complete, true)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('collector retries 429 with the shared provider helper and rejects malformed coverage', async () => {
+  let calls = 0
+  const fetcher = (async () => {
+    calls += 1
+    if (calls === 1) return new Response(null, { status: 429, headers: { 'retry-after': '0' } })
+    return new Response(JSON.stringify({ data: { schedule: { events: [], pages: {} } } }))
+  }) as typeof fetch
+  const result = await collectTournamentFeed({ fetcher, now: new Date(at) })
+  assert.equal(result.requests, 2)
+  assert.equal(result.retries, 1)
+  await assert.rejects(
+    collectTournamentFeed({ fetcher: (async () => new Response(JSON.stringify({ data: { schedule: { events: null } } }))) as typeof fetch }),
+    /Malformed getSchedule/,
+  )
+})
+
+test('invalid times in allowed cancelled or postponed source rows prevent a complete replacement', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-invalid-time-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('moved', 'lcs', at), detail: detail('moved') }])
+  await writeFile(output, JSON.stringify(prior))
+  try {
+    for (const [badTime, status] of [['', 'postponed'], ['not-a-date', 'cancelled'], ['2026-02-30T12:00:00Z', 'postponed']] as const) {
+      const sourceRow = event('moved', 'lcs', badTime, status)
+      const fetcher = (async () => new Response(JSON.stringify({ data: { schedule: { events: [sourceRow], pages: {} } } }))) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, `time=${badTime}`)
+      assert.match(collected.feed.coverage.warnings.join(' '), /start time/i)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false)
+      assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), prior)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('malformed schedule rows cannot replace a prior feed after collection', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-malformed-row-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  try {
+    for (const sourceRows of [[null], [event('series', 'lcs', at), null]]) {
+      const fetcher = (async (urlValue: string | URL | Request) => {
+        const path = new URL(String(urlValue)).pathname.split('/').at(-1)
+        return new Response(JSON.stringify(path === 'getSchedule'
+          ? { data: { schedule: { events: sourceRows, pages: {} } } }
+          : { data: { event: detail('series') } }))
+      }) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false)
+      assert.match(collected.feed.coverage.warnings.join(' '), /malformed schedule rows/i)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false)
+      assert.equal(await readFile(output, 'utf8'), original)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('missing league identity and accepted-row fields retain the prior feed', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-row-shape-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ['empty object', {}],
+    ['null league', { league: null }],
+    ['empty league', { league: {} }],
+    ['invalid league slug', { league: { slug: 42 } }],
+    ['conflicting known league names', { ...event('series', 'lcs', at), league: { slug: 'lcs', name: 'LCK' } }],
+    ['included slug with excluded name', { ...event('series', 'lcs', at), league: { slug: 'lcs', name: 'CBLOL' } }],
+    ['included slug with LCP name', { ...event('series', 'lcs', at), league: { slug: 'lcs', name: 'LCP' } }],
+    ['unknown slug with included name', { ...event('series', 'lcs', at), league: { slug: 'other', name: 'LCS' } }],
+    ['missing source state', { ...event('series', 'lcs', at), state: undefined }],
+    ['missing match identity', { ...event('series', 'lcs', at), match: { teams: [] } }],
+  ]
+  try {
+    for (const [label, sourceRow] of cases) {
+      const fetcher = (async (urlValue: string | URL | Request) => {
+        const path = new URL(String(urlValue)).pathname.split('/').at(-1)
+        return new Response(JSON.stringify(path === 'getSchedule'
+          ? { data: { schedule: { events: [sourceRow], pages: {} } } }
+          : { data: { event: detail('series') } }))
+      }) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, label)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false, label)
+      assert.equal(await readFile(output, 'utf8'), original, label)
+    }
+    const excluded = (async () => new Response(JSON.stringify({ data: { schedule: { events: [event('excluded', 'cblol-brazil', at)], pages: {} } } }))) as typeof fetch
+    const collectedExcluded = await collectTournamentFeed({ fetcher: excluded, now: new Date(at) })
+    assert.equal(collectedExcluded.feed.coverage.complete, true)
+    assert.equal(collectedExcluded.feed.events.length, 0)
+    const nameOnly = (async (urlValue: string | URL | Request) => new Response(JSON.stringify(new URL(String(urlValue)).pathname.endsWith('getSchedule')
+      ? { data: { schedule: { events: [{ ...event('series', 'lcs', at), league: { name: 'LCS' } }], pages: {} } } }
+      : { data: { event: detail('series') } }))) as typeof fetch
+    const collectedNameOnly = await collectTournamentFeed({ fetcher: nameOnly, now: new Date(at) })
+    assert.equal(collectedNameOnly.feed.coverage.complete, true)
+    assert.equal(collectedNameOnly.feed.events[0]?.competition, 'lcs')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('mismatched or absent detail event IDs retain the prior feed', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-detail-identity-test-'))
+  const output = join(directory, 'feed.json')
+  const prior = feed([{ event: event('series', 'lcs', at), detail: detail('series') }])
+  await writeFile(output, `${JSON.stringify(prior)}\n`)
+  const original = await readFile(output, 'utf8')
+  try {
+    for (const [label, detailRow] of [
+      ['different ID', detail('different', 'wrong-tournament')],
+      ['missing ID', { tournament: { id: 'wrong-tournament' } }],
+    ] as const) {
+      const fetcher = (async (urlValue: string | URL | Request) => new Response(JSON.stringify(new URL(String(urlValue)).pathname.endsWith('getSchedule')
+        ? { data: { schedule: { events: [event('series', 'lcs', at)], pages: {} } } }
+        : { data: { event: detailRow } }))) as typeof fetch
+      const collected = await collectTournamentFeed({ fetcher, now: new Date(at) })
+      assert.equal(collected.feed.coverage.complete, false, label)
+      assert.match(collected.feed.coverage.warnings.join(' '), /event detail.*ID/i, label)
+      assert.equal(await publishTournamentFeed(output, prior, collected.feed), false, label)
+      assert.equal(await readFile(output, 'utf8'), original, label)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('a rolling coverage window is published even when event rows are unchanged', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-coverage-test-'))
+  const output = join(directory, 'feed.json')
+  try {
+    const prior = feed([{ event: event('series', 'lec', at), detail: detail('series') }])
+    await writeFile(output, JSON.stringify(prior))
+    const next = { ...prior, fetchedAt: '2026-09-27T12:00:00.000Z', coverage: { ...prior.coverage, start: '2026-09-02T00:00:00Z', end: '2026-11-01T00:00:00Z' } }
+    assert.equal(await publishTournamentFeed(output, prior, next), true)
+    const published = JSON.parse(await readFile(output, 'utf8')) as typeof prior
+    assert.deepEqual(published.coverage, next.coverage)
+    assert.equal(published.fetchedAt, next.fetchedAt)
+    const checkedAgain = { ...next, fetchedAt: '2026-09-27T12:01:00.000Z' }
+    assert.equal(await publishTournamentFeed(output, next, checkedAgain), false)
+    assert.equal((JSON.parse(await readFile(output, 'utf8')) as typeof prior).fetchedAt, next.fetchedAt)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('coverage bounds roll by UTC day rather than every unchanged poll', async () => {
+  const fetcher = (async () => new Response(JSON.stringify({ data: { schedule: { events: [], pages: {} } } }))) as typeof fetch
+  const first = (await collectTournamentFeed({ fetcher, now: new Date('2026-09-26T12:00:00Z') })).feed
+  const sameDay = (await collectTournamentFeed({ fetcher, now: new Date('2026-09-26T12:01:00Z') })).feed
+  const nextDay = (await collectTournamentFeed({ fetcher, now: new Date('2026-09-27T00:01:00Z') })).feed
+  assert.deepEqual(sameDay.coverage, first.coverage)
+  assert.notDeepEqual(nextDay.coverage, first.coverage)
+})

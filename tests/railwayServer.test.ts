@@ -23,12 +23,15 @@ test('Railway server returns app shell only for known app routes', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
   const distDir = join(tempDir, 'dist')
   const dataDir = join(tempDir, 'data')
+  const tournamentDir = join(tempDir, 'tournament-data')
   await mkdir(distDir, { recursive: true })
   await mkdir(dataDir, { recursive: true })
+  await mkdir(tournamentDir, { recursive: true })
   await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
   await writeFile(join(distDir, 'llms.txt'), '# LoL Esports Power Index\n')
+  await writeFile(join(tournamentDir, 'feed.json'), '{"source":"synthetic-test"}\n')
 
-  const server = await startRailwayServer(distDir, dataDir)
+  const server = await startRailwayServer(distDir, dataDir, { TOURNAMENT_PUBLIC_DATA_DIR: tournamentDir })
   try {
     const live = await httpRequest(server.port, '/api/live')
     assert.equal(live.statusCode, 200)
@@ -58,6 +61,17 @@ test('Railway server returns app shell only for known app routes', async () => {
     const regions = await httpRequest(server.port, '/regions')
     assert.equal(regions.statusCode, 200)
     assert.match(regions.body, /app shell/)
+
+    const tournaments = await httpRequest(server.port, '/tournaments')
+    assert.equal(tournaments.statusCode, 200)
+    assert.match(tournaments.body, /app shell/)
+
+    await rm(dataDir, { recursive: true, force: true })
+    await mkdir(dataDir)
+    const tournamentFeed = await httpRequest(server.port, '/tournament-data/feed.json')
+    assert.equal(tournamentFeed.statusCode, 200)
+    assert.equal(tournamentFeed.headers['cache-control'], 'no-store')
+    assert.deepEqual(JSON.parse(tournamentFeed.body), { source: 'synthetic-test' })
 
     const llms = await httpRequest(server.port, '/llms.txt')
     assert.equal(llms.statusCode, 200)
