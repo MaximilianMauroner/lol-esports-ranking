@@ -4,10 +4,12 @@ import { replayWorlds2025Knockout } from '../src/lib/worldsObservedBracket.ts'
 import { WORLDS_2025_SWISS_RULES, type ObservedSwissMatch, type SwissReplayResult } from '../src/lib/worldsObservedRules.ts'
 
 // Entirely synthetic standings and draw; no entrant or result is asserted as official.
+const fixtureEvidence = { kind: 'synthetic-fixture' as const, reference: 'tests/worldsObservedBracket.test.ts' }
 const swiss: SwissReplayResult = {
   status: 'supported',
   rulesId: WORLDS_2025_SWISS_RULES.id,
   source: WORLDS_2025_SWISS_RULES.source,
+  observationEvidence: { entrants: fixtureEvidence, matches: fixtureEvidence },
   completedRounds: 5,
   standings: [
     ...['A', 'C'].map((id) => ({ id, wins: 3, losses: 0, status: 'advanced' as const, opponents: [] })),
@@ -23,7 +25,7 @@ const semifinals = observed('s', [['A', 'B', 'A'], ['C', 'D', 'D']])
 const final = observed('f', [['A', 'D', 'D']])
 
 const replay = (more: Partial<Parameters<typeof replayWorlds2025Knockout>[0]> = {}) => replayWorlds2025Knockout({
-  swiss, drawEvidence: 'synthetic fixture draw', slots, rounds: {}, ...more,
+  swiss, drawEvidence: fixtureEvidence, matchEvidence: fixtureEvidence, slots, rounds: {}, ...more,
 })
 
 test('observed bracket keeps quarterfinal slots and reports forecasts unsupported', () => {
@@ -33,6 +35,9 @@ test('observed bracket keeps quarterfinal slots and reports forecasts unsupporte
   assert.deepEqual(result.slots, slots)
   assert.equal(result.completedRounds, 0)
   assert.equal(result.championId, null)
+  assert.deepEqual(result.observationEvidence, {
+    swiss: { entrants: fixtureEvidence, matches: fixtureEvidence }, draw: fixtureEvidence, matches: fixtureEvidence,
+  })
   assert.ok(result.teams.every((team) => team.reached === 'quarterfinal' && team.eliminatedAt === null))
   assert.equal(result.forecast.status, 'unsupported')
 })
@@ -53,7 +58,11 @@ test('fixed links carry observed winners through semis and final without re-seed
 })
 
 test('draw evidence, Swiss completion, exact qualifiers and opposite halves are required', () => {
-  assert.match(JSON.stringify(replay({ drawEvidence: '' })), /draw-evidence-missing/)
+  assert.match(JSON.stringify(replay({ drawEvidence: undefined })), /draw-evidence-missing/)
+  assert.match(JSON.stringify(replay({ rounds: { quarterfinals }, matchEvidence: undefined })), /match-evidence-missing/)
+  const noResults = replay({ matchEvidence: undefined })
+  assert.equal(noResults.status, 'supported')
+  if (noResults.status === 'supported') assert.equal(noResults.observationEvidence.matches, null)
   assert.match(JSON.stringify(replay({ swiss: { status: 'unsupported', reason: 'rules-unavailable', detail: '2026' } })), /swiss-unavailable/)
   if (swiss.status === 'supported') {
     const corrupt = structuredClone(swiss)

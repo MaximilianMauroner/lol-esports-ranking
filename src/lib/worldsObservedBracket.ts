@@ -1,4 +1,4 @@
-import { WORLDS_2025_SWISS_RULES, type ObservedSwissMatch, type SwissReplayResult } from './worldsObservedRules'
+import { WORLDS_2025_SWISS_RULES, type ObservationEvidence, type ObservedSwissMatch, type SwissReplayResult } from './worldsObservedRules'
 
 export const WORLDS_2025_KNOCKOUT_RULES = {
   id: 'worlds-2025-knockout-observed-v1',
@@ -19,6 +19,11 @@ export type KnockoutReplayResult =
     status: 'supported'
     rulesId: typeof WORLDS_2025_KNOCKOUT_RULES.id
     source: typeof WORLDS_2025_KNOCKOUT_RULES.source
+    observationEvidence: {
+      swiss: { entrants: ObservationEvidence; matches: ObservationEvidence }
+      draw: ObservationEvidence
+      matches: ObservationEvidence | null
+    }
     /** Ordered quarterfinal slot IDs. Winners keep these bracket links. */
     slots: string[]
     completedRounds: number
@@ -28,7 +33,7 @@ export type KnockoutReplayResult =
   }
   | {
     status: 'unsupported'
-    reason: 'swiss-unavailable' | 'draw-evidence-missing' | 'invalid-draw' | 'incomplete-round' | 'invalid-observation'
+    reason: 'swiss-unavailable' | 'draw-evidence-missing' | 'match-evidence-missing' | 'invalid-draw' | 'incomplete-round' | 'invalid-observation'
     detail: string
   }
 
@@ -37,14 +42,22 @@ type BracketRound = 'quarterfinals' | 'semifinals' | 'final'
 /** Replays observed, complete knockout rounds on an observed immutable bracket. */
 export function replayWorlds2025Knockout(input: {
   swiss: SwissReplayResult
-  drawEvidence?: string
+  drawEvidence?: ObservationEvidence
+  matchEvidence?: ObservationEvidence
   slots: string[]
   rounds: Partial<Record<BracketRound, ObservedSwissMatch[]>>
 }): KnockoutReplayResult {
   if (input.swiss.status !== 'supported' || input.swiss.rulesId !== WORLDS_2025_SWISS_RULES.id || input.swiss.completedRounds !== 5) {
     return unsupported('swiss-unavailable', 'A complete supported Worlds 2025 Swiss replay is required')
   }
-  if (!input.drawEvidence?.trim()) return unsupported('draw-evidence-missing', 'Observed quarterfinal slots need a draw evidence reference')
+  if (!validEvidence(input.swiss.observationEvidence?.entrants) || !validEvidence(input.swiss.observationEvidence?.matches)) {
+    return unsupported('swiss-unavailable', 'Swiss entrant and match provenance is required')
+  }
+  if (!validEvidence(input.drawEvidence)) return unsupported('draw-evidence-missing', 'Observed quarterfinal slots need a draw evidence reference')
+  const hasResults = input.rounds.quarterfinals !== undefined || input.rounds.semifinals !== undefined || input.rounds.final !== undefined
+  if ((hasResults || input.matchEvidence !== undefined) && !validEvidence(input.matchEvidence)) {
+    return unsupported('match-evidence-missing', 'Observed knockout winners need an evidence reference')
+  }
   if (input.swiss.standings.length !== 16 || new Set(input.swiss.standings.map((team) => team.id)).size !== 16
     || input.swiss.standings.some((team) => !team.id?.trim() || team.status === 'active'
       || team.status === 'eliminated' && team.losses !== 3)) {
@@ -125,6 +138,14 @@ export function replayWorlds2025Knockout(input: {
     status: 'supported',
     rulesId: WORLDS_2025_KNOCKOUT_RULES.id,
     source: WORLDS_2025_KNOCKOUT_RULES.source,
+    observationEvidence: {
+      swiss: {
+        entrants: copyEvidence(input.swiss.observationEvidence.entrants),
+        matches: copyEvidence(input.swiss.observationEvidence.matches),
+      },
+      draw: copyEvidence(input.drawEvidence),
+      matches: input.matchEvidence ? copyEvidence(input.matchEvidence) : null,
+    },
     slots: [...input.slots],
     completedRounds,
     teams: [...stage.values()].sort((a, b) => a.id.localeCompare(b.id)),
@@ -135,6 +156,15 @@ export function replayWorlds2025Knockout(input: {
 
 function pairKey(a: string, b: string) {
   return [a, b].sort().join('\0')
+}
+
+function validEvidence(evidence: ObservationEvidence | null | undefined): evidence is ObservationEvidence {
+  return !!evidence && (evidence.kind === 'synthetic-fixture' || evidence.kind === 'source-observation')
+    && typeof evidence.reference === 'string' && evidence.reference.trim().length > 0
+}
+
+function copyEvidence(evidence: ObservationEvidence): ObservationEvidence {
+  return { kind: evidence.kind, reference: evidence.reference.trim() }
 }
 
 function unsupported(reason: Extract<KnockoutReplayResult, { status: 'unsupported' }>['reason'], detail: string): KnockoutReplayResult {
