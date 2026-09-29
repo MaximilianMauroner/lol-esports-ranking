@@ -14,7 +14,7 @@ function receipt(revision = '1', publishedAt = before, bestOf: 1 | 3 | 5 = 5): F
   const eventStateVersion = JSON.stringify(['fixture-match', 'fixture-event', start, 'upcoming', 'unstarted', bestOf,
     [['alpha', null, null], ['beta', null, null]]])
   const team = (id: string): ForecastReceipt['teams'][number] => ({ sourceTeamId: id, teamId: id,
-    name: id, rating: 1500, uncertainty: 100, rosterBasis: 'current-roster' })
+    name: id, rating: 1500, uncertainty: 100, rosterBasis: 'unknown' })
   return { status: 'ready', matchId: 'fixture-match', eventId: 'fixture-event', bestOf,
     sideAssumption: 'neutral', sideBasis: 'synthetic fixture', blueSideRatingEdge: 0,
     teams: [team('alpha'), team('beta')],
