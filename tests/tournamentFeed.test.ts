@@ -128,6 +128,49 @@ test('concurrent stale-lock recovery preserves the winning collector lock', asyn
   }
 })
 
+for (const primary of ['stale', 'absent'] as const) {
+  test(`reclaims an orphan recovery claim with ${primary} primary lock`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tournament-orphan-claim-test-'))
+    const lock = join(directory, 'feed.lock')
+    const recovery = `${lock}.recovering`
+    try {
+      if (primary === 'stale') {
+        await mkdir(lock)
+        await writeFile(join(lock, 'owner.json'), JSON.stringify({ host: hostname(), pid: 999999999, startedAt: '2020-01-01T00:00:00Z' }))
+      }
+      await mkdir(recovery)
+      const staleTime = new Date('2020-01-01T00:00:00Z')
+      await utimes(recovery, staleTime, staleTime)
+      const release = await acquireCollectorLock(lock)
+      const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { pid: number; token: string }
+      assert.equal(owner.pid, process.pid)
+      assert.ok(owner.token)
+      await assert.rejects(acquireCollectorLock(lock), /lock is held/)
+      await release()
+      await assert.rejects(readFile(join(recovery, 'owner.json'), 'utf8'), { code: 'ENOENT' })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+}
+
+test('concurrent orphan-claim recovery grants only one collector ownership', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-orphan-race-test-'))
+  const lock = join(directory, 'feed.lock')
+  try {
+    await mkdir(`${lock}.recovering`)
+    const staleTime = new Date('2020-01-01T00:00:00Z')
+    await utimes(`${lock}.recovering`, staleTime, staleTime)
+    const attempts = await Promise.allSettled(Array.from({ length: 8 }, () => acquireCollectorLock(lock)))
+    const winners = attempts.filter((attempt): attempt is PromiseFulfilledResult<() => Promise<void>> => attempt.status === 'fulfilled')
+    assert.equal(winners.length, 1)
+    await assert.rejects(acquireCollectorLock(lock), /lock is held|recovery is in progress/)
+    await winners[0]!.value()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('invalid prior feed records failed health without replacing its bytes', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tournament-prior-health-test-'))
   const output = join(directory, 'feed.json')
