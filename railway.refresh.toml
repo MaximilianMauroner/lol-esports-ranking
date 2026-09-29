@@ -3,6 +3,6 @@ builder = "RAILPACK"
 buildCommand = "pnpm run typecheck"
 
 [deploy]
-startCommand = "pnpm run railway:refresh-once"
+startCommand = "node scripts/refresh-once.mjs"
 cronSchedule = "0 */6 * * *"
 restartPolicyType = "NEVER"

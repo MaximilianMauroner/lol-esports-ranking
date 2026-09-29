@@ -3,7 +3,7 @@ builder = "RAILPACK"
 buildCommand = "pnpm run railway:build"
 
 [deploy]
-startCommand = "pnpm run railway:start"
+startCommand = "node scripts/railway-server.mjs"
 healthcheckPath = "/api/live"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
