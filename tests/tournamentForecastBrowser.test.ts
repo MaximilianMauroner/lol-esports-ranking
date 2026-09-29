@@ -1,0 +1,134 @@
+import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import test from 'node:test'
+import { chromium } from 'playwright-core'
+import { createServer, type Plugin } from 'vite'
+import { appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries, pinPreMatchReceipt } from '../src/lib/tournamentForecast'
+import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/lib/publicArtifacts/schema'
+import type { TournamentFeed, TournamentSeries } from '../src/lib/tournamentFeed'
+
+const eventId = 'worlds:2026'
+const identityMap = { version: 1 as const, source: 'lolesports-persisted-site-api' as const, revision: 'reviewed-synthetic-fixture', mappings: [
+  { sourceTeamId: 'fixture-t1', teamId: 'team:t1:t1' }, { sourceTeamId: 'fixture-gen', teamId: 'team:gen:gen-g' },
+] }
+function team(id: string, name: string, wins: number | null = null) { return { id, name, code: name, gameWins: wins, outcome: null } }
+function series(startTime: string, bestOf = 5): TournamentSeries {
+  return { id: `fixture-match-${bestOf}`, eventId, startTime, stage: 'Synthetic knockout', status: 'upcoming', sourceState: 'unstarted', bestOf,
+    teams: [team('fixture-t1', 'T1'), team('fixture-gen', 'Gen.G')], vodUrls: [] }
+}
+
+test('synthetic tournament card keeps published pre-match odds through live and finished states', { timeout: 60_000 }, async () => {
+  const manifestJson = await readFile('public/data/ranking-summary.json', 'utf8')
+  const manifest = parsePublicRankingManifest(JSON.parse(manifestJson))
+  const shardUrl = manifest.snapshotIndex[manifest.defaultSnapshotKey]?.url
+  assert.ok(shardUrl?.startsWith('/data/'))
+  const shard = parsePublicRankingShard(JSON.parse(await readFile(`public${new URL(shardUrl, 'http://fixture').pathname}`, 'utf8')))
+  const ratingDate = manifest.coverage.latestMatchDate!
+  const at = new Date(Math.max(Date.parse(manifest.generatedAt), Date.parse(ratingDate)) + 86_400_000).toISOString()
+  const afterMinutes = (minutes: number) => new Date(Date.parse(at) + minutes * 60_000).toISOString()
+  const start = afterMinutes(20)
+  const forecastBasis = { snapshotId: `${manifest.artifactMeta?.runId ?? manifest.generatedAt}/${manifest.defaultSnapshotKey}`,
+    ratingDataAsOf: manifest.coverage.latestMatchDate!, ratingPublishedAt: manifest.generatedAt,
+    dataMode: manifest.dataMode, model: manifest.model, snapshot: shard, identityMap }
+  const upcoming = series(start)
+  const estimate = forecastTournamentSeries(upcoming, forecastBasis)
+  assert.equal(estimate.status, 'ready')
+  let servedManifestJson = manifestJson
+  let ledger = emptyForecastLedger
+  let ledgerStatus = 503
+  let identityStatus = 503
+  let feed: TournamentFeed = { version: 1, source: 'lolesports-persisted-site-api', unsupportedApi: true, dataMode: 'synthetic-fixture',
+    fetchedAt: at, sourceUpdatedAt: null, coverage: { start: at, end: new Date(Date.parse(at) + 45 * 86_400_000).toISOString(), complete: true, warnings: [] },
+    events: [{ id: eventId, sourceTournamentId: 'fixture-worlds', competition: 'worlds', label: 'Worlds 2026', season: '2026',
+      series: [upcoming, series(start, 2)] }] }
+  const fixturePlugin: Plugin = { name: 'forecast-fixture', configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const path = new URL(request.url ?? '/', 'http://localhost').pathname
+      if (path === '/data/ranking-summary.json') {
+        response.setHeader('content-type', 'application/json')
+        setTimeout(() => response.end(servedManifestJson), 500)
+        return
+      }
+      if (!path.startsWith('/tournament-data/')) return next()
+      response.setHeader('content-type', 'application/json')
+      const body = path === '/tournament-data/feed.json' ? feed
+        : path === '/tournament-data/feed.json.health.json' ? { checkedAt: feed.fetchedAt, complete: true, warnings: [] }
+          : path === '/tournament-data/forecasts/team-ids.json' ? identityMap
+            : path === '/tournament-data/forecasts/ledger.json' ? ledger : null
+      response.statusCode = path === '/tournament-data/forecasts/ledger.json' ? ledgerStatus
+        : path === '/tournament-data/forecasts/team-ids.json' ? identityStatus : body ? 200 : 404
+      response.end(JSON.stringify(body))
+    })
+  } }
+  const server = await createServer({
+    logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin],
+    define: {
+      'import.meta.env.VITE_TOURNAMENT_HUB_ENABLED': JSON.stringify('1'),
+      'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1'),
+    },
+  })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    await server.listen()
+    const address = server.httpServer?.address()
+    assert.ok(address && typeof address !== 'string')
+    const base = `http://127.0.0.1:${address.port}`
+    const executablePath = chromium.executablePath()
+    browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    const external: string[] = []
+    page.on('request', (request) => { if (!request.url().startsWith(base)) external.push(request.url()) })
+    await page.clock.install({ time: new Date(at) })
+    await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
+    await page.getByText(/Forecast unavailable: No reviewed source-to-ranking team ID map is published/).first().waitFor()
+    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
+    identityStatus = 200
+    await page.clock.fastForward(65_000)
+    await page.getByText('Current model estimate · not archived').waitFor()
+    assert.match(await page.locator('body').innerText(), /Game win: T1 .* Gen\.G/)
+    assert.match(await page.locator('body').innerText(), /Series win \(Bo5\): T1 .* Gen\.G/)
+    assert.match(await page.locator('body').innerText(), /Only decisive Bo1, Bo3 and Bo5 are supported/)
+    assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
+    assert.match(await page.locator('body').innerText(), new RegExp(`Power data through ${ratingDate}`))
+    const firstProvenance = await page.getByText(/Power data through/).first().innerText()
+    servedManifestJson = JSON.stringify({ ...manifest, generatedAt: afterMinutes(10) })
+    await page.clock.fastForward(10 * 60_000 + 5_000)
+    await page.waitForFunction((previous) => [...document.querySelectorAll('span')].some((element) =>
+      element.textContent?.startsWith('Power data through') && element.textContent !== previous), firstProvenance)
+
+    ledgerStatus = 200
+    const created = createPreMatchReceipt({ series: upcoming, basis: forecastBasis, forecastRevision: 'fixture-rev-1',
+      generatedAt: at, publishedAt: new Date(Date.parse(at) + 1000).toISOString(), observedAt: at })
+    assert.equal(created.status, 'ready')
+    if (created.status !== 'ready') return
+    ledger = appendForecastReceipt(ledger, created)
+    const live = { ...upcoming, status: 'live' as const, sourceState: 'inProgress', teams: [team('fixture-t1', 'T1', 1), team('fixture-gen', 'Gen.G', 0)] }
+    ledger = pinPreMatchReceipt(ledger, live, afterMinutes(20))
+    feed = { ...feed, fetchedAt: afterMinutes(20), events: [{ ...feed.events[0]!, series: [live, series(start, 2)] }] }
+    await page.clock.fastForward(9 * 60_000)
+    await page.getByText('Published pre-match forecast').waitFor()
+    assert.match(await page.locator('body').innerText(), /Score-conditioned series odds:/)
+    assert.match(await page.locator('body').innerText(), /frozen pre-series model, not in-game telemetry/)
+    ledgerStatus = 503
+    feed = { ...feed, fetchedAt: afterMinutes(21) }
+    await page.clock.fastForward(60_000)
+    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
+    assert.match(await page.locator('section[aria-label="live"]').innerText(), /Published pre-match forecast/)
+    ledgerStatus = 200
+    const completed = { ...live, status: 'completed' as const, sourceState: 'completed', teams: [team('fixture-t1', 'T1', 3), team('fixture-gen', 'Gen.G', 1)] }
+    feed = { ...feed, fetchedAt: afterMinutes(22), events: [{ ...feed.events[0]!, series: [completed, series(start, 2)] }] }
+    await page.clock.fastForward(60_000)
+    await page.getByText('T1 3–1 Gen.G').waitFor()
+    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor({ state: 'hidden' })
+    assert.match(await page.locator('section[aria-label="results"]').innerText(), /Published pre-match forecast/)
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 800 })
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
+    }
+    assert.deepEqual(external, [])
+  } finally {
+    await browser?.close()
+    await server.close()
+  }
+})
