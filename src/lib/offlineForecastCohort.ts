@@ -31,6 +31,7 @@ export type OfflineCohortResult =
     }>
     exclusions: Array<{ matchId: string; reason: CohortExclusion }>
     duplicateOutcomeRows: number
+    afterCutoffOutcomeRows: number
     /** Offline receipt timestamps do not certify a forecast was published to viewers. */
     calibration: { status: 'unsupported'; reason: 'published-evaluation-receipts-unavailable' }
   }
@@ -56,13 +57,20 @@ export function replayOfflineSeriesCohort(input: {
     evidenceReference: input.evidence.reference.trim(),
     policy: { version: 'latest-compatible-prestart-series-v1', asOf: input.asOf,
       modelVersion: input.modelVersion, modelConfigHash: input.modelConfigHash },
-    rows: [], exclusions: [], duplicateOutcomeRows: 0,
+    rows: [], exclusions: [], duplicateOutcomeRows: 0, afterCutoffOutcomeRows: 0,
     calibration: { status: 'unsupported', reason: 'published-evaluation-receipts-unavailable' },
   }
   const outcomes = new Map<string, SyntheticSeriesOutcome>()
   const conflicts = new Set<string>()
   const seenOutcomes = new Set<string>()
+  const futureMatchIds = new Set<string>()
   for (const outcome of input.outcomes) {
+    // Later observations cannot rewrite a cohort evaluated at an earlier cutoff.
+    if (time(outcome.observedAt) && Date.parse(outcome.observedAt) > Date.parse(input.asOf)) {
+      result.afterCutoffOutcomeRows += 1
+      futureMatchIds.add(outcome.matchId)
+      continue
+    }
     const key = signature(outcome)
     if (seenOutcomes.has(key)) result.duplicateOutcomeRows += 1
     else seenOutcomes.add(key)
@@ -89,7 +97,6 @@ export function replayOfflineSeriesCohort(input: {
       || outcome.gameWins.some((wins) => !Number.isInteger(wins) || wins < 0)
       || !((outcome.gameWins[0] === needed && outcome.gameWins[1] < needed)
         || (outcome.gameWins[1] === needed && outcome.gameWins[0] < needed))) { exclude('invalid-outcome'); continue }
-    if (Date.parse(outcome.observedAt) > Date.parse(input.asOf)) { exclude('outcome-after-cutoff'); continue }
     const forMatch = receipts.filter((receipt) => receipt.matchId === matchId)
     if (!forMatch.length) { exclude('missing-receipt'); continue }
     const compatible = forMatch.filter((receipt) => receipt.modelVersion === input.modelVersion
@@ -109,6 +116,10 @@ export function replayOfflineSeriesCohort(input: {
       homeTeamId: outcome.teamIds[0], awayTeamId: outcome.teamIds[1],
       homeWinProbability: receipt.homeSeriesWinProbability, homeWon: outcome.gameWins[0] === needed })
   }
+  for (const matchId of futureMatchIds) {
+    if (!outcomes.has(matchId)) result.exclusions.push({ matchId, reason: 'outcome-after-cutoff' })
+  }
+  result.exclusions.sort((a, b) => a.matchId.localeCompare(b.matchId))
   return result
 }
 

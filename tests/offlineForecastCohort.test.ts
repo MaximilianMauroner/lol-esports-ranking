@@ -10,10 +10,10 @@ const outcome: SyntheticSeriesOutcome = { matchId: 'fixture-match', eventId: 'fi
   teamIds: ['alpha', 'beta'], bestOf: 5, status: 'completed', startedAt: start,
   completedAt: completed, observedAt: completed, gameWins: [3, 1] }
 
-function receipt(revision = '1', publishedAt = before): ForecastReceipt {
-  const eventStateVersion = JSON.stringify(['fixture-match', 'fixture-event', start, 'upcoming', 'unstarted', 5,
+function receipt(revision = '1', publishedAt = before, bestOf: 1 | 3 | 5 = 5): ForecastReceipt {
+  const eventStateVersion = JSON.stringify(['fixture-match', 'fixture-event', start, 'upcoming', 'unstarted', bestOf,
     [['alpha', null, null], ['beta', null, null]]])
-  return { status: 'ready', matchId: 'fixture-match', eventId: 'fixture-event', bestOf: 5,
+  return { status: 'ready', matchId: 'fixture-match', eventId: 'fixture-event', bestOf,
     sideAssumption: 'neutral', sideBasis: 'synthetic fixture', blueSideRatingEdge: 0,
     teams: ['alpha', 'beta'].map((id) => ({ sourceTeamId: id, teamId: id, name: id,
       rating: 1500, uncertainty: 100, rosterBasis: 'current-roster' })) as ForecastReceipt['teams'],
@@ -61,12 +61,39 @@ test('conflicting outcomes cannot be selected by input order', () => {
   }
 })
 
+test('Bo1 and Bo3 remain series targets and same-time revisions have deterministic ordering', () => {
+  for (const bestOf of [1, 3] as const) {
+    const a = receipt('1', before, bestOf)
+    const b = receipt('2', before, bestOf)
+    const observed = { ...outcome, bestOf, gameWins: [0, Math.floor(bestOf / 2) + 1] as [number, number] }
+    const result = replay([a, b], [observed])
+    assert.equal(result.status, 'replayed')
+    if (result.status !== 'replayed') continue
+    assert.equal(result.rows[0].bestOf, bestOf)
+    assert.equal(result.rows[0].receiptKey, b.receiptKey)
+    assert.equal(result.rows[0].homeWon, false)
+    assert.deepEqual(result, replay([b, a], [observed]))
+  }
+})
+
 test('actual early start excludes a receipt even when its scheduled-start contract is valid', () => {
   const candidate = receipt('2', '2026-09-01T11:30:00Z')
   assert.ok(isForecastLedger({ version: 1, receipts: { [candidate.receiptKey]: candidate }, pinned: {} }))
   const result = replay([candidate], [{ ...outcome, startedAt: candidate.publishedAt }])
   assert.equal(result.status, 'replayed')
   if (result.status === 'replayed') assert.equal(result.exclusions[0].reason, 'no-prestart-receipt')
+})
+
+test('a future correction cannot rewrite or conflict with an in-window cohort', () => {
+  const future = { ...outcome, observedAt: '2026-09-03T00:00:00Z', gameWins: [1, 3] as [number, number] }
+  const baseline = replay()
+  const result = replay(undefined, [future, outcome])
+  assert.equal(result.status, 'replayed')
+  if (result.status !== 'replayed' || baseline.status !== 'replayed') return
+  assert.deepEqual(result.rows, baseline.rows)
+  assert.deepEqual(result.exclusions, [])
+  assert.equal(result.afterCutoffOutcomeRows, 1)
+  assert.deepEqual(result, replay(undefined, [outcome, future]))
 })
 
 test('missing, incompatible and changed participant receipts are excluded separately', () => {
