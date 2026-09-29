@@ -6,7 +6,7 @@ This is an **offline replay contract**, not an official event feed or a Worlds f
 
 | Riot source clause | `worlds-2025-swiss-observed-v1` field/check | Regression |
 | --- | --- | --- |
-| [Worlds 2025 primer](https://lolesports.com/en-US/news/worlds-2025-primer), “Round 1”: five tier 1, six tier 2, five tier 3; tier 1 vs tier 3, tier 2 vs tier 2; no same-region match | 16 entrant IDs, tier counts, round 1 pair validation | `worldsObservedRules.test.ts`: first round, incorrect tier, same region |
+| [Worlds 2025 primer](https://lolesports.com/en-US/news/worlds-2025-primer), “Round 1”: five tier 1, six tier 2, five tier 3; tier 1 vs tier 3, tier 2 vs tier 2; no same-region match | 16 entrant IDs, tier counts, canonical LCK/LPL/LEC/LTA/LCP region IDs, round 1 pair validation | `worldsObservedRules.test.ts`: first round, incorrect tier, same region with mixed case/whitespace |
 | Same primer, “Swiss Rounds 2–5”: same-record opponents, no rematch; redraw on a clash or forced later clash | Completed observed later rounds require equal records and no prior opponent; **no redraw or draw probabilities implemented** | equal-record and rematch cases |
 | Same primer, “The Knockout Draw”: eight qualify, with records 2 at 3-0, 3 at 3-1, 3 at 3-2 | Wins reach 3 → advanced; losses reach 3 → eliminated; at most five rounds and eight advancers | replay, completeness and count checks |
 | [MSI and Worlds 2026 update](https://lolesports.com/en-US/news/msi-and-worlds-updates), “Worlds 2026”: 19 entrants, four-team double-elimination Bo5 Play-In, one Swiss qualifier; seeding announced later | `season: 2026` explicitly returns `rules-unavailable` | unsupported-season case |
@@ -15,7 +15,7 @@ The 2025 primer lists Swiss Bo1/Bo3 but does not, in the checked text, provide a
 
 ## Unsupported states and remaining gates
 
-`replayWorldsSwiss` returns `unsupported` for unverified entrant metadata, a missing season ruleset, invalid participant/round observations, and incomplete rounds. A valid replay still returns `forecast.status: unsupported`: conditional odds need certified draw sampling, a known full field and completed upstream Play-In path, observed draws, and pinned model inputs. A 2025 replay is only as authoritative as the caller's supplied evidence; this module contains no certified real-event entrant fixture.
+`replayWorldsSwiss` requires separate caller supplied provenance for entrants/tiers and, when any round is replayed, matches/winners. Each reference is tagged `synthetic-fixture` or `source-observation` and copied into the supported result alongside the Riot **rules** source. The tag and reference are not authenticated; an official claim still requires an independently checked source artifact. The function returns `unsupported` for missing evidence, a missing season ruleset, invalid participant/round observations, and incomplete rounds. A valid replay still returns `forecast.status: unsupported`: conditional odds need certified draw sampling, a known full field and completed upstream Play-In path, observed draws, and pinned model inputs. This module contains no certified real-event entrant fixture.
 
 Owner-only actions before live collection, publication, or an official 2026 forecast:
 

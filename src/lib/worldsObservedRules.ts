@@ -23,6 +23,12 @@ export type ObservedSwissMatch = {
   winnerId: string
 }
 
+/** Caller supplied provenance; `source-observation` does not imply official verification. */
+export type ObservationEvidence = {
+  kind: 'synthetic-fixture' | 'source-observation'
+  reference: string
+}
+
 export type SwissTeamStanding = {
   id: string
   wins: number
@@ -36,6 +42,7 @@ export type SwissReplayResult =
     status: 'supported'
     rulesId: typeof WORLDS_2025_SWISS_RULES.id
     source: typeof WORLDS_2025_SWISS_RULES.source
+    observationEvidence: { entrants: ObservationEvidence; matches: ObservationEvidence | null }
     completedRounds: number
     standings: SwissTeamStanding[]
     /** A forecast still requires certified draw probabilities and model inputs. */
@@ -43,7 +50,7 @@ export type SwissReplayResult =
   }
   | {
     status: 'unsupported'
-    reason: 'rules-unavailable' | 'entrant-evidence-missing' | 'invalid-entrants' | 'invalid-observation' | 'incomplete-round'
+    reason: 'rules-unavailable' | 'entrant-evidence-missing' | 'match-evidence-missing' | 'invalid-entrants' | 'invalid-observation' | 'incomplete-round'
     detail: string
   }
 
@@ -57,20 +64,24 @@ type MutableStanding = SwissTeamStanding & { opponentsSet: Set<string> }
 export function replayWorldsSwiss(input: {
   season: number
   entrants: SwissEntrant[]
-  entrantEvidence?: string
+  entrantEvidence?: ObservationEvidence
+  matchEvidence?: ObservationEvidence
   rounds: ObservedSwissMatch[][]
 }): SwissReplayResult {
   if (input.season !== 2025) {
     return unsupported('rules-unavailable', `No certified observed Swiss replay rules for Worlds ${input.season}`)
   }
-  if (!input.entrantEvidence?.trim()) {
+  if (!validEvidence(input.entrantEvidence)) {
     return unsupported('entrant-evidence-missing', 'Entrant identities and draw tiers need an evidence reference')
+  }
+  if ((input.rounds.length > 0 || input.matchEvidence !== undefined) && !validEvidence(input.matchEvidence)) {
+    return unsupported('match-evidence-missing', 'Observed matches and winners need an evidence reference')
   }
   const entrantError = validateEntrants(input.entrants)
   if (entrantError) return unsupported('invalid-entrants', entrantError)
   if (input.rounds.length > 5) return unsupported('invalid-observation', 'Swiss has at most five rounds')
 
-  const entrants = new Map(input.entrants.map((entrant) => [entrant.id, entrant]))
+  const entrants = new Map(input.entrants.map((entrant) => [entrant.id, { ...entrant, region: canonicalRegion(entrant.region) }]))
   const standings = new Map<string, MutableStanding>(input.entrants.map((entrant) => [entrant.id, {
     id: entrant.id,
     wins: 0,
@@ -140,6 +151,10 @@ export function replayWorldsSwiss(input: {
     status: 'supported',
     rulesId: WORLDS_2025_SWISS_RULES.id,
     source: WORLDS_2025_SWISS_RULES.source,
+    observationEvidence: {
+      entrants: copyEvidence(input.entrantEvidence),
+      matches: input.matchEvidence ? copyEvidence(input.matchEvidence) : null,
+    },
     completedRounds: input.rounds.length,
     standings: values.map(({ opponentsSet, ...team }) => ({
       ...team,
@@ -155,11 +170,25 @@ function validateEntrants(entrants: SwissEntrant[]): string | undefined {
   const tiers = [0, 0, 0, 0]
   for (const entrant of entrants) {
     if (!entrant.id?.trim() || !entrant.region?.trim() || ids.has(entrant.id)) return 'Blank or duplicate entrant identity/region'
+    if (!['LCK', 'LPL', 'LEC', 'LTA', 'LCP'].includes(canonicalRegion(entrant.region))) return 'Unknown 2025 region'
     if (entrant.tier !== 1 && entrant.tier !== 2 && entrant.tier !== 3) return 'Unknown draw tier'
     ids.add(entrant.id)
     tiers[entrant.tier] += 1
   }
   if (tiers[1] !== 5 || tiers[2] !== 6 || tiers[3] !== 5) return 'Worlds 2025 round 1 requires tier sizes 5/6/5'
+}
+
+function canonicalRegion(region: string) {
+  return region.trim().toUpperCase()
+}
+
+function validEvidence(evidence: ObservationEvidence | undefined): evidence is ObservationEvidence {
+  return !!evidence && (evidence.kind === 'synthetic-fixture' || evidence.kind === 'source-observation')
+    && typeof evidence.reference === 'string' && evidence.reference.trim().length > 0
+}
+
+function copyEvidence(evidence: ObservationEvidence): ObservationEvidence {
+  return { kind: evidence.kind, reference: evidence.reference.trim() }
 }
 
 function unsupported(reason: Extract<SwissReplayResult, { status: 'unsupported' }>['reason'], detail: string): SwissReplayResult {

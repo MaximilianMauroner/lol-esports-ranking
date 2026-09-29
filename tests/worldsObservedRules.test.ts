@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { replayWorldsSwiss, type ObservedSwissMatch, type SwissEntrant } from '../src/lib/worldsObservedRules.ts'
 
-const regions = ['LCK', 'LPL', 'LEC', 'LCS', 'LCP']
+const regions = ['LCK', 'LPL', 'LEC', 'LTA', 'LCP']
+const fixtureEvidence = { kind: 'synthetic-fixture' as const, reference: 'tests/worldsObservedRules.test.ts' }
 const entrants: SwissEntrant[] = [
   ...regions.map((region, index) => ({ id: `one${index}`, region, tier: 1 as const })),
   ...regions.map((region, index) => ({ id: `two${index}`, region, tier: 2 as const })),
@@ -27,7 +28,7 @@ const secondRound = [
 secondRound[0].winnerId = 'one1'
 
 const replay = (rounds: ObservedSwissMatch[][], more: Partial<Parameters<typeof replayWorldsSwiss>[0]> = {}) =>
-  replayWorldsSwiss({ season: 2025, entrantEvidence: 'synthetic fixture; tiers are illustrative', entrants, rounds, ...more })
+  replayWorldsSwiss({ season: 2025, entrantEvidence: fixtureEvidence, matchEvidence: fixtureEvidence, entrants, rounds, ...more })
 
 test('2025 observed Swiss round 1 replays without forecasting an unobserved draw', () => {
   const original = structuredClone(firstRound)
@@ -38,15 +39,22 @@ test('2025 observed Swiss round 1 replays without forecasting an unobserved draw
   assert.equal(result.standings.filter((team) => team.wins === 1).length, 8)
   assert.equal(result.standings.filter((team) => team.losses === 1).length, 8)
   assert.equal(result.standings.filter((team) => team.status === 'active').length, 16)
+  assert.deepEqual(result.observationEvidence, { entrants: fixtureEvidence, matches: fixtureEvidence })
   assert.deepEqual(result.forecast, { status: 'unsupported', reason: 'draw-procedure-or-model-unavailable' })
   assert.deepEqual(firstRound, original)
   assert.deepEqual(replay([[...firstRound].reverse()]), result)
 })
 
 test('missing entrant evidence and uncertified seasons return explicit unsupported states', () => {
-  assert.deepEqual(replay([], { entrantEvidence: '' }), {
+  assert.deepEqual(replay([], { entrantEvidence: undefined }), {
     status: 'unsupported', reason: 'entrant-evidence-missing', detail: 'Entrant identities and draw tiers need an evidence reference',
   })
+  assert.deepEqual(replay([firstRound], { matchEvidence: undefined }), {
+    status: 'unsupported', reason: 'match-evidence-missing', detail: 'Observed matches and winners need an evidence reference',
+  })
+  const noMatches = replay([], { matchEvidence: undefined })
+  assert.equal(noMatches.status, 'supported')
+  if (noMatches.status === 'supported') assert.equal(noMatches.observationEvidence.matches, null)
   assert.match(JSON.stringify(replay([], { season: 2026 })), /rules-unavailable/)
 })
 
@@ -61,10 +69,16 @@ test('Swiss rejects incomplete, duplicate, incorrect-tier, same-region and contr
   const sameRegion = structuredClone(firstRound)
   sameRegion[0].teamBId = 'playin'
   assert.match(JSON.stringify(replay([sameRegion])), /same-region/)
+  const mixedCaseEntrants = structuredClone(entrants)
+  mixedCaseEntrants.find((team) => team.id === 'playin')!.region = ' lck '
+  assert.match(JSON.stringify(replay([sameRegion], { entrants: mixedCaseEntrants })), /same-region/)
   const unknownWinner = structuredClone(firstRound)
   unknownWinner[0].winnerId = 'ghost'
   assert.match(JSON.stringify(replay([unknownWinner])), /Winner is not a participant/)
   assert.match(JSON.stringify(replay([], { entrants: entrants.slice(1) })), /16 identified entrants/)
+  const unknownRegion = structuredClone(entrants)
+  unknownRegion[0].region = 'unknown'
+  assert.match(JSON.stringify(replay([], { entrants: unknownRegion })), /Unknown 2025 region/)
 })
 
 test('later Swiss rounds require equal records and never replay an opponent', () => {
