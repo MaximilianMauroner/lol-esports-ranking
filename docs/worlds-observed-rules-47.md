@@ -26,3 +26,7 @@ Owner-only actions before live collection, publication, or an official 2026 fore
 5. Require exact-head hosted Verify, production-shaped benchmark, and bundle, plus independent exact-head review and product gates. A billed-out, cancelled, or failing CI job is unresolved; do not waive it or merge on local results alone.
 
 Local offline verification for this slice: `pnpm exec tsx --tsconfig tsconfig.app.json --test tests/worldsObservedRules.test.ts`, `pnpm run typecheck`, `pnpm run lint`, `pnpm test`, and `pnpm run bundle` (results recorded in the PR). No dev server or live source request is part of the test path.
+
+## Prototype migration
+
+The unused `simulateWorldsStyleTournament` prototype and its aggregate-only test were removed after #62 and #63 landed. It used heuristic Swiss pairings and could fill knockout slots with teams eliminated from Swiss. No app or script imported it at removal. Callers that need deterministic **observed** 2025 state should use `replayWorldsSwiss` and `replayWorlds2025Knockout` with separate, tagged input evidence. Neither replay computes odds. Future probabilistic simulations need a certified draw procedure, complete participant path, and pinned model input before an official forecast API can replace the prototype.
