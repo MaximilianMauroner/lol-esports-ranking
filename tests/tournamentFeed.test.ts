@@ -139,6 +139,7 @@ for (const primary of ['stale', 'absent'] as const) {
         await writeFile(join(lock, 'owner.json'), JSON.stringify({ host: hostname(), pid: 999999999, startedAt: '2020-01-01T00:00:00Z' }))
       }
       await mkdir(recovery)
+      await writeFile(join(recovery, 'owner-interrupted.tmp'), '{"host":')
       const staleTime = new Date('2020-01-01T00:00:00Z')
       await utimes(recovery, staleTime, staleTime)
       const release = await acquireCollectorLock(lock)
@@ -170,6 +171,24 @@ test('concurrent orphan-claim recovery grants only one collector ownership', asy
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+for (const unreadable of ['primary', 'recovery'] as const) {
+  test(`unreadable ${unreadable} owner metadata cannot be reclaimed as an orphan`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tournament-unreadable-owner-test-'))
+    const lock = join(directory, 'feed.lock')
+    const target = unreadable === 'primary' ? lock : `${lock}.recovering`
+    try {
+      await mkdir(target)
+      await mkdir(join(target, 'owner.json'))
+      const staleTime = new Date('2020-01-01T00:00:00Z')
+      await utimes(target, staleTime, staleTime)
+      await assert.rejects(acquireCollectorLock(lock), { code: 'EISDIR' })
+      await assert.rejects(mkdir(target), { code: 'EEXIST' })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+}
 
 test('invalid prior feed records failed health without replacing its bytes', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tournament-prior-health-test-'))

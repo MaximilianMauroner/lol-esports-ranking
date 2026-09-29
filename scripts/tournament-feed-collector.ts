@@ -227,7 +227,7 @@ export async function acquireCollectorLock(lock: string) {
         }
       }
     }
-    await writeFile(`${lock}/owner.json`, JSON.stringify({ host: hostname(), pid: process.pid, token, startedAt: new Date().toISOString() }))
+    await writeLockOwner(lock, token)
   } finally {
     await removeOwnedLock(recovery, token)
   }
@@ -255,11 +255,21 @@ async function claimRecovery(recovery: string, token: string) {
       throw claimError
     }
   }
-  await writeFile(`${recovery}/owner.json`, JSON.stringify({ host: hostname(), pid: process.pid, token, startedAt: new Date().toISOString() }))
+  await writeLockOwner(recovery, token)
+}
+
+async function writeLockOwner(path: string, token: string) {
+  const pending = `${path}/owner-${token}.tmp`
+  await writeFile(pending, JSON.stringify({ host: hostname(), pid: process.pid, token, startedAt: new Date().toISOString() }))
+  await rename(pending, `${path}/owner.json`)
 }
 
 async function isDeadLocalOwner(path: string, info: Awaited<ReturnType<typeof stat>>) {
-  const owner = await readFile(`${path}/owner.json`, 'utf8').then((raw) => JSON.parse(raw) as { host?: string; pid?: number; startedAt?: string }).catch(() => null)
+  const raw = await readFile(`${path}/owner.json`, 'utf8').catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return null
+    throw error
+  })
+  const owner = raw === null ? null : JSON.parse(raw) as { host?: string; pid?: number; startedAt?: string }
   const ageMs = Date.now() - (owner?.startedAt ? Date.parse(owner.startedAt) : Number(info.mtimeMs))
   return Number.isFinite(ageMs) && ageMs >= 60_000
     && (!owner || owner.host === hostname() && Number.isInteger(owner.pid) && !processAlive(owner.pid!))
