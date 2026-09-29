@@ -201,30 +201,14 @@ export async function publishTournamentFeed(output: string, prior: ReturnType<ty
 export async function acquireCollectorLock(lock: string) {
   const token = randomUUID()
   const recovery = `${lock}.recovering`
+  await claimRecovery(recovery, token)
   try {
-    await mkdir(lock)
-    if (await stat(recovery).then(() => true, (error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return false
-      throw error
-    })) {
-      const yielded = `${lock}.yield-${token}`
-      await rename(lock, yielded)
-      await rm(yielded, { recursive: true, force: true })
-      throw new Error(`Tournament collector lock recovery is in progress: ${lock}`)
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     try {
-      await mkdir(recovery)
-    } catch (claimError) {
-      if ((claimError as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(`Tournament collector lock recovery is in progress: ${lock}`, { cause: claimError })
-      throw claimError
-    }
-    try {
+      await mkdir(lock)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
       const lockInfo = await stat(lock)
-      const owner = await readFile(`${lock}/owner.json`, 'utf8').then((raw) => JSON.parse(raw) as { host?: string; pid?: number; token?: string; startedAt?: string }).catch(() => null)
-      const ageMs = Date.now() - (owner?.startedAt ? Date.parse(owner.startedAt) : lockInfo.mtimeMs)
-      if (!Number.isFinite(ageMs) || ageMs < 60_000 || owner && (owner.host !== hostname() || !Number.isInteger(owner.pid) || processAlive(owner.pid!))) {
+      if (!await isDeadLocalOwner(lock, lockInfo)) {
         throw new Error(`Tournament collector lock is held: ${lock}`, { cause: error })
       }
       const moved = `${lock}.stale-${token}`
@@ -242,15 +226,58 @@ export async function acquireCollectorLock(lock: string) {
           await delay(10)
         }
       }
-    } finally {
-      await rm(recovery, { recursive: true, force: true })
+    }
+    await writeLockOwner(lock, token)
+  } finally {
+    await removeOwnedLock(recovery, token)
+  }
+  return () => removeOwnedLock(lock, token)
+}
+
+async function claimRecovery(recovery: string, token: string) {
+  try {
+    await mkdir(recovery)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    const oldInfo = await stat(recovery)
+    if (!await isDeadLocalOwner(recovery, oldInfo)) throw new Error(`Tournament collector lock recovery is in progress: ${recovery}`, { cause: error })
+    const moved = `${recovery}.stale-${token}`
+    await rename(recovery, moved)
+    const movedInfo = await stat(moved)
+    if (movedInfo.ino !== oldInfo.ino) {
+      await rename(moved, recovery).catch(() => undefined)
+      throw new Error(`Tournament collector recovery claim changed; preserved ${moved}`, { cause: error })
+    }
+    await rm(moved, { recursive: true, force: true })
+    try { await mkdir(recovery) }
+    catch (claimError) {
+      if ((claimError as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(`Tournament collector lock recovery is in progress: ${recovery}`, { cause: claimError })
+      throw claimError
     }
   }
-  await writeFile(`${lock}/owner.json`, JSON.stringify({ host: hostname(), pid: process.pid, token, startedAt: new Date().toISOString() }))
-  return async () => {
-    const owner = await readFile(`${lock}/owner.json`, 'utf8').then((raw) => JSON.parse(raw) as { token?: string }).catch(() => null)
-    if (owner?.token === token) await rm(lock, { recursive: true, force: true })
-  }
+  await writeLockOwner(recovery, token)
+}
+
+async function writeLockOwner(path: string, token: string) {
+  const pending = `${path}/owner-${token}.tmp`
+  await writeFile(pending, JSON.stringify({ host: hostname(), pid: process.pid, token, startedAt: new Date().toISOString() }))
+  await rename(pending, `${path}/owner.json`)
+}
+
+async function isDeadLocalOwner(path: string, info: Awaited<ReturnType<typeof stat>>) {
+  const raw = await readFile(`${path}/owner.json`, 'utf8').catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return null
+    throw error
+  })
+  const owner = raw === null ? null : JSON.parse(raw) as { host?: string; pid?: number; startedAt?: string }
+  const ageMs = Date.now() - (owner?.startedAt ? Date.parse(owner.startedAt) : Number(info.mtimeMs))
+  return Number.isFinite(ageMs) && ageMs >= 60_000
+    && (!owner || owner.host === hostname() && Number.isInteger(owner.pid) && !processAlive(owner.pid!))
+}
+
+async function removeOwnedLock(path: string, token: string) {
+  const owner = await readFile(`${path}/owner.json`, 'utf8').then((raw) => JSON.parse(raw) as { token?: string }).catch(() => null)
+  if (owner?.token === token) await rm(path, { recursive: true, force: true })
 }
 
 function processAlive(pid: number) {
