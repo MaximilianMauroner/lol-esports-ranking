@@ -190,11 +190,10 @@ export function createPublicArtifactWritePlan(
   // migration, or for a new checkpoint. Select their actual generated IDs.
   const requiredNewPages = new Set<string>()
   if (affectedLogicalPaths && matchHistory) {
-    const oldIndexValue = previous(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex)
-    const oldIndex = oldIndexValue ? parsePublicMatchHistoryIndex(oldIndexValue) : undefined
+    const previousPagesByScope = previousMatchPages(previous(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex))
     for (const [key, catalog] of Object.entries(matchHistory.catalogs)) {
       if (!selected(publicMatchHistoryShardPath(key))) continue
-      const previousPages = new Set(oldIndex?.scopeIndex[key]?.pages?.map((page) => page.page) ?? [])
+      const previousPages = previousPagesByScope.get(key) ?? new Set<number>()
       for (const page of catalog.pages) {
         if (!previousPages.has(page.page)) requiredNewPages.add(publicMatchHistoryPagePath(key, page.page))
       }
@@ -210,6 +209,22 @@ export function createPublicArtifactWritePlan(
     writes,
     budgets: PUBLIC_ARTIFACT_BUDGETS,
   }
+}
+
+// Storage restore supplies digest-verified semantic bodies without volatile
+// schema/model/run metadata. Read only the inventory needed for page reuse.
+function previousMatchPages(value: unknown) {
+  const inventory = new Map<string, Set<number>>()
+  if (!value || typeof value !== 'object' || !('scopeIndex' in value)) return inventory
+  const scopes = value.scopeIndex
+  if (!scopes || typeof scopes !== 'object' || Array.isArray(scopes)) return inventory
+  for (const [key, scope] of Object.entries(scopes)) {
+    if (!scope || typeof scope !== 'object' || !('pages' in scope) || !Array.isArray(scope.pages)) continue
+    const pageIds = scope.pages.flatMap((page: unknown) => page && typeof page === 'object' && 'page' in page
+      && typeof page.page === 'number' && Number.isSafeInteger(page.page) && page.page > 0 ? [page.page] : [])
+    inventory.set(key, new Set(pageIds))
+  }
+  return inventory
 }
 
 function mergeRecordIndex<T extends Record<string, unknown>>(current: T, previous: unknown, key: string): T {

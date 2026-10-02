@@ -392,8 +392,13 @@ test('year rollover, legacy page migration, and storage-year corrections publish
       ? { ...entry, event: 'First Stand 2025', league: 'FST', region: 'International' as const } : entry)
     const checkpointBaseline = await run(root, 'checkpoint-base', fixtureSource(checkpointMatches), { mode: 'gated', cause: 'daily-audit', enabled: true })
     const checkpointRestored = restoreFrom(checkpointBaseline)
+    const semanticRestored = structuredClone(restored)
+    semanticRestored.artifacts = Object.fromEntries(Object.entries(semanticRestored.artifacts ?? {}).map(([path, value]) => [
+      path, prepareSemanticArtifact(value).semantic.content,
+    ]))
     const scenarios = [
       { name: 'rollover', restored, matches: [...matches, match('jan-1', '2026-01-01', 'Winter')] },
+      { name: 'semantic-restore', restored: semanticRestored, matches: [...matches, match('semantic-append', '2025-12-31', 'Winter')] },
       { name: 'new-checkpoint', restored: checkpointRestored, matches: [...checkpointMatches, match('post-fst', '2025-12-31', 'Winter')] },
       { name: 'migration', restored: legacy, matches: [...matches, match('dec-31', '2025-12-31', 'Winter')] },
       { name: 'moved-year', restored, matches: matches.map((entry) => entry.id === 'dec-30'
