@@ -1,4 +1,5 @@
 import { buildRankingModel, transparentGprModelMetadata } from './model'
+import { binaryPredictionLoss } from './binaryPredictionMetrics'
 import { walkForwardSegmentKeys } from './predictionContext'
 import { hasPredictionVariant, predictionVariantProbability } from './predictionVariants'
 import { neutralWinProbability, type NeutralWinProbability } from './winProbability'
@@ -272,13 +273,10 @@ function metricSummaryFor(
       return predictedWinner === prediction.actualWinner
     }).length / count
   const brierScore = mean(predictions.map((prediction) => {
-    const outcome = prediction.actualWinner === prediction.teamA ? 1 : 0
-    return (teamAProbabilityFor(prediction) - outcome) ** 2
+    return binaryPredictionLoss(teamAProbabilityFor(prediction), prediction.actualWinner === prediction.teamA).brierScore
   }))
   const logLoss = mean(predictions.map((prediction) => {
-    const teamAProbability = teamAProbabilityFor(prediction)
-    const probability = clamp(prediction.actualWinner === prediction.teamA ? teamAProbability : 1 - teamAProbability, 0.001, 0.999)
-    return -Math.log(probability)
+    return binaryPredictionLoss(teamAProbabilityFor(prediction), prediction.actualWinner === prediction.teamA).logLoss
   }))
 
   return {
@@ -438,8 +436,4 @@ function mean(values: number[]) {
 
 function roundMetric(value: number) {
   return Number(value.toFixed(4))
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
 }
