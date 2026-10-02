@@ -1756,7 +1756,10 @@ test('large generation directories remain bounded and browser lookup reads only 
     await writeContentAddressedFixture(publicDir, 'directory-generation')
     await mkdir(join(publicDir, 'synthetic'))
     for (let index = 0; index < 4000; index++) await writeFile(join(publicDir, 'synthetic', `${String(index).padStart(4, '0')}.json`), '{"artifactKind":"synthetic","sample":true}')
-    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'directory-generation', fencingToken: 1, config, client })
+    const publication = await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'directory-generation', fencingToken: 1, config, client })
+    const storage = publication.storage
+    assert.ok(storage && typeof storage === 'object' && 'objectCount' in storage)
+    assert.equal(storage.objectCount, [...client.objects.keys()].filter((key) => key.startsWith('rankings/objects/sha256/')).length)
     const stored = client.objects.get('rankings/generations/directory-generation/manifest.json')!
     assert.ok(stored.bytes!.byteLength <= 250_000)
     assert.ok(JSON.parse(stored.body).artifactDirectory)

@@ -1679,6 +1679,11 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
   const manifest = createGenerationManifest({ generationId, rootManifest, entries })
   const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
   for (const result of manifestSync.directoryResults ?? []) {
+    if (!seen.has(result.digest)) {
+      seen.add(result.digest)
+      semanticLogicalBytes += result.semanticBytes
+      compressedLogicalBytes += result.bytes
+    }
     if (result.status === 'unchanged') unchanged.push(result)
     else uploaded.push(result)
   }

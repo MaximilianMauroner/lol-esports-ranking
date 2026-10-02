@@ -65,8 +65,8 @@ The checked-in corpus on 2 October 2026 has 261 logical artifacts and 26,774,720
 JSON bytes. Families: matches 13,292,007; history 7,968,139; scopes 3,731,609;
 entities 1,703,930; summary 79,035. Paths assign 6,411,815 bytes to 2025,
 5,159,988 to 2026, and 15,202,917 to shared scopes. Shared is not an inferred year.
-Prepared storage is 2,273,032 compressed bytes and 321 nodes before deduplication.
-The audit's peak RSS was 213,831,680 bytes. The largest inline ranking scope is
+Prepared storage is 2,273,072 compressed bytes and 321 nodes before deduplication.
+The audit's peak RSS was 204,849,152 bytes. The largest inline ranking scope is
 770,934 semantic bytes. History nodes stay below the 512,000-byte cap.
 These are local measurements, not official production evidence.
 
