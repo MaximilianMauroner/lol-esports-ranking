@@ -50,7 +50,10 @@ export const PUBLIC_ARTIFACT_BUDGETS = {
   defaultScopeBytes: 1_000_000,
   // Lazy-loaded directory includes nine coverage-aware stats across player scopes.
   playersBytes: 1_800_000,
-  totalPublicDataBytes: 30_000_000,
+  // Whole generation, including lazy-loaded history, rather than one page load.
+  // October 2026 production reached 30,236,720 bytes; leave growth headroom
+  // so a full ledger recovery can publish without removing ranking evidence.
+  totalPublicDataBytes: 40_000_000,
 } as const
 
 export const PUBLIC_ARTIFACT_PATHS = {
