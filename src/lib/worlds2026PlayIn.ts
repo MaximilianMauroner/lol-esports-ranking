@@ -76,7 +76,7 @@ export function replayWorlds2026PlayIn(input: Worlds2026PlayInInput): PlayInRepl
   if (input.rulesId !== WORLDS_2026_PLAY_IN_RULES.id) return unsupported('rules-unavailable', 'Only the sourced 2026 v1.0 Play-In descriptor is supported.')
   if (!input.eventId.trim() || !input.stateVersion.trim() || !validTime(input.asOf)) return unsupported('invalid-state', 'Event, state revision and as-of timestamp are required.')
   if (!validEvidence(input.evidence?.entrants) || !validEvidence(input.evidence?.draw)
-    || (input.results.length > 0 && !validEvidence(input.evidence.results))) {
+    || ((input.results.length > 0 || input.evidence.results !== undefined) && !validEvidence(input.evidence.results))) {
     return unsupported('evidence-missing', 'Entrants, opening draw and any completed results require separate tagged evidence.')
   }
   const seeds = new Set(input.entrants.map((team) => team.seed))
@@ -143,8 +143,9 @@ export function forecastWorlds2026PlayIn(input: Worlds2026PlayInInput, basis: Fo
   const state = replayWorlds2026PlayIn(input)
   if (state.status === 'unsupported') return state
   if (!state.resolvedMatches.r4 && (!validTime(basis.ratingDataAsOf) || !validTime(basis.ratingPublishedAt)
-    || Date.parse(basis.ratingDataAsOf) > Date.parse(input.asOf) || Date.parse(basis.ratingPublishedAt) > Date.parse(input.asOf))) {
-    return unsupported('model-unavailable', 'The frozen rating snapshot must be available by the event-state information cutoff.')
+    || Date.parse(basis.ratingDataAsOf) > Date.parse(basis.ratingPublishedAt)
+    || Date.parse(basis.ratingPublishedAt) > Date.parse(input.asOf))) {
+    return unsupported('model-unavailable', 'The frozen snapshot must satisfy data cutoff ≤ publication ≤ event-state information cutoff.')
   }
   const odds = new Map(state.teams.map((team) => [team.id, {
     id: team.id, advanceToSwissProbability: 0, finish17Probability: 0,

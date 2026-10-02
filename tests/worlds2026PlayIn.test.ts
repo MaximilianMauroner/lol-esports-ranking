@@ -167,3 +167,25 @@ test('missing/future/incompatible frozen inputs never yield partial or substitut
     if (value.status === 'unsupported') assert.equal(value.reason, 'model-unavailable')
   }
 })
+
+
+test('an empty bracket may omit result evidence but cannot echo explicitly invalid result provenance', () => {
+  const empty = input()
+  empty.evidence = { entrants: evidence, draw: evidence }
+  assert.equal(replayWorlds2026PlayIn(empty).status, 'supported')
+  empty.evidence.results = { ...evidence, reference: ' ' }
+  const value = replayWorlds2026PlayIn(empty)
+  assert.equal(value.status, 'unsupported')
+  if (value.status === 'unsupported') assert.equal(value.reason, 'evidence-missing')
+  assert.equal(forecastWorlds2026PlayIn(empty, basis()).status, 'unsupported')
+})
+
+test('snapshot data cannot postdate publication, including when both dates precede the state cutoff', () => {
+  const model = basis()
+  model.ratingDataAsOf = '2026-10-01T02:00:00Z'
+  const invalid = forecastWorlds2026PlayIn(input(), model)
+  assert.equal(invalid.status, 'unsupported')
+  if (invalid.status === 'unsupported') assert.equal(invalid.reason, 'model-unavailable')
+  model.ratingPublishedAt = model.ratingDataAsOf
+  assert.equal(forecastWorlds2026PlayIn(input(), model).status, 'supported')
+})
