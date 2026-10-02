@@ -1,3 +1,4 @@
+import { teamKey } from '../lib/display'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   PublicPlayerDirectory,
@@ -144,7 +145,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     [data, filter, snapshotCache],
   )
   const selectedTeamsKey = (teamHistoryTeams?.length ? [...teamHistoryTeams] : snapshotState.status === 'ready'
-    ? snapshotState.snapshot.standings.slice(0, 5).map((team) => team.team) : []).sort().join('\u0000')
+    ? snapshotState.snapshot.standings.slice(0, 5).map(teamKey) : []).sort().join('\u0000')
   const teamHistoryState = useMemo(
     () => requestedState(loadTeamHistory, resolveTeamHistoryState(teamHistoryRootState, teamHistoryCache, filter, effectiveScope, selectedTeamsKey)),
     [effectiveScope, filter, loadTeamHistory, teamHistoryCache, teamHistoryRootState, selectedTeamsKey],
@@ -165,7 +166,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     [tournamentId, tournamentMovementCache, tournamentMovementIndexState],
   )
   const matchHistoryYears = matchHistoryIndexState.status === 'ready' ? matchHistoryIndexState.data.scopeIndex[snapshotKey(filter)]?.years ?? [] : []
-  const selectedMatchYear = matchHistoryYear && matchHistoryYear !== 'All' && matchHistoryYears.includes(matchHistoryYear) ? matchHistoryYear : undefined
+  const selectedMatchYear = matchHistoryYear && matchHistoryYear !== 'All' && (matchHistoryIndexState.status !== 'ready' || matchHistoryYears.includes(matchHistoryYear)) ? matchHistoryYear : undefined
   const matchHistoryState = useMemo<MatchHistoryState>(() => (
     matchHistoryCatalogState.status === 'ready'
       ? { status: 'ready', data: { catalog: matchHistoryCatalogState.data, pages: matchHistoryPages } }

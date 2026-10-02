@@ -186,8 +186,22 @@ export function createPublicArtifactWritePlan(
   ]
 
   assertPublicArtifactBudgets(allWrites, data.defaultSnapshotKey)
+  // A changed catalog can introduce pages at a year boundary, during legacy
+  // migration, or for a new checkpoint. Select their actual generated IDs.
+  const requiredNewPages = new Set<string>()
+  if (affectedLogicalPaths && matchHistory) {
+    const oldIndexValue = previous(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex)
+    const oldIndex = oldIndexValue ? parsePublicMatchHistoryIndex(oldIndexValue) : undefined
+    for (const [key, catalog] of Object.entries(matchHistory.catalogs)) {
+      if (!selected(publicMatchHistoryShardPath(key))) continue
+      const previousPages = new Set(oldIndex?.scopeIndex[key]?.pages?.map((page) => page.page) ?? [])
+      for (const page of catalog.pages) {
+        if (!previousPages.has(page.page)) requiredNewPages.add(publicMatchHistoryPagePath(key, page.page))
+      }
+    }
+  }
   const writes = affectedLogicalPaths
-    ? allWrites.filter((entry) => affectedLogicalPaths.has(entry.relativePath))
+    ? allWrites.filter((entry) => affectedLogicalPaths.has(entry.relativePath) || requiredNewPages.has(entry.relativePath))
     : allWrites
 
   return {

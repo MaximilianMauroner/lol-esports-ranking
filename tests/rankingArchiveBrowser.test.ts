@@ -39,6 +39,9 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
   const manifest = createGenerationManifest({ generationId: meta.runId, rootManifest: root, entries })
   const requests: string[] = []
   let failObjects = false
+  let holdIndex = false
+  const pendingIndex: Array<() => void> = []
+  const indexPath = `/data/objects/sha256/${entries.find((entry) => entry.logicalPath === '/data/matches/index.json')!.digest}`
   const fixture: Plugin = { name: 'ranking-archive-browser-fixture', configureServer(server) {
     server.middlewares.use((request, response, next) => {
       const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
@@ -47,6 +50,7 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
       response.setHeader('content-type', 'application/json')
       const body = path === '/data/ranking-summary.json' ? JSON.stringify(manifest) : objects.get(path)
       response.statusCode = body && !(failObjects && path.startsWith('/data/objects/')) ? 200 : 404
+      if (holdIndex && path === indexPath) { pendingIndex.push(() => response.end(body)); return }
       response.end(response.statusCode === 200 ? body : '{}')
     })
   } }
@@ -75,7 +79,13 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     assert.ok((nodesByYear.get('2025')?.size ?? 0) > 0)
     // Catalog loading for the selected year must not hydrate old-year nodes.
     assert.ok(requests.every((path) => !nodesByYear.get('2025')?.has(path)))
+    holdIndex = true
+    const pendingRequest = page.waitForRequest((request) => new URL(request.url()).pathname === indexPath)
     await page.getByLabel('Match history year').selectOption('2025')
+    await pendingRequest
+    await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('matchesYear') === '2025')
+    holdIndex = false
+    pendingIndex.splice(0).forEach((respond) => respond())
     await page.locator('table').getByText('Sample 2025', { exact: true }).first().waitFor()
     await page.getByLabel('Match history year').selectOption('All')
     await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
@@ -87,5 +97,15 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     failObjects = false
     await page.getByRole('button', { name: 'Retry', exact: true }).first().click()
     await page.getByLabel('Match history year').waitFor()
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.goto(base)
+    await page.getByRole('heading', { name: 'Power over time', exact: true }).hover()
+    await page.locator('.recharts-line-curve').first().waitFor()
+    await page.getByTitle('Open Alpha', { exact: true }).click()
+    const detail = page.locator('.team-detail-sheet')
+    await detail.waitFor()
+    assert.equal(await detail.getAttribute('aria-label'), 'Alpha details')
+    await detail.locator('.recharts-line-curve').first().waitFor()
+    await detail.getByRole('button', { name: 'Close', exact: true }).click()
   } finally { await browser?.close(); await server.close() }
 })

@@ -389,7 +389,7 @@ export function TeamsView({
   )
   // Colours follow teams, not positions. Derived during render and stored only
   // when the assignment changes, so an unchanged assignment keeps its identity.
-  const requestedHistoryTeams = [...new Set([...focusTeams.map((team) => team.team), ...(detailTeam ? [detailTeam.team] : [])])].sort().join('\u0000')
+  const requestedHistoryTeams = [...new Set([...focusTeams.map(teamKey), ...(detailTeam ? [teamKey(detailTeam)] : [])])].sort().join('\u0000')
   useEffect(() => {
     if (historyState.status !== 'idle' && !exactTournamentId) onRequestTeamHistory?.(requestedHistoryTeams.split('\u0000').filter(Boolean))
   }, [historyState.status, exactTournamentId, onRequestTeamHistory, requestedHistoryTeams])
@@ -463,7 +463,7 @@ export function TeamsView({
 
   function openTeam(team: RankingSummaryStanding) {
     onRequestPlayers?.()
-    onRequestTeamHistory?.([team.team])
+    onRequestTeamHistory?.([teamKey(team)])
     openDetail(teamKey(team))
   }
 
@@ -762,8 +762,8 @@ export function TeamsView({
 
       <Panel
         ref={trajectoryPanelRef}
-        onFocusCapture={() => onRequestTeamHistory?.(focusTeams.map((team) => team.team))}
-        onPointerEnter={() => onRequestTeamHistory?.(focusTeams.map((team) => team.team))}
+        onFocusCapture={() => onRequestTeamHistory?.(focusTeams.map(teamKey))}
+        onPointerEnter={() => onRequestTeamHistory?.(focusTeams.map(teamKey))}
       >
         <PanelHeader
           title={activeTournament ? `${activeTournament.label} movement` : metric === 'rank' ? 'Rank over time' : 'Power over time'}

@@ -9,7 +9,9 @@ immutable pages under the existing fenced generation authority.
 - UTC calendar year is separate from ranking season and checkpoint scope.
 - Match storage page IDs encode the opening year and the local page number.
   A page contains at most 25 complete series. An append in a new year does not
-  renumber prior-year pages. A correction can replace old pages and later outputs.
+  renumber prior-year pages. Incremental publication selects new page IDs from
+  the generated catalog. This covers year rollover, legacy page migration, and
+  new season or checkpoint scopes. A correction can replace old pages and later outputs.
 - A complete series belongs to its earliest game's UTC year. Catalog references
   carry its full date range. Both year views can find a series that crosses New Year.
 - Archive format 1 splits large lists and records into immutable nodes. Each
@@ -75,7 +77,10 @@ reuse, and check year-range queries. A separate synthetic archive above 40 MB
 publishes to test storage, restores with a fresh client, publishes the next
 generation, and validates reuse, rollback, corrupt/missing nodes, and failed
 publication. Existing incremental tests cover duplicate-ledger recovery,
-correction replay, scope semantics, and full/incremental parity.
+correction replay, scope semantics, and full/incremental parity. Regression
+tests also verify catalog closure and full parity for a year rollover, legacy
+page migration, a new checkpoint, and a correction that moves a series to a new
+storage year. The browser journey verifies non-empty team charts and detail history.
 
 The shared-host performance gate measured a 20,945 ms maximum across three
 repetitions against the unchanged 15,000 ms limit. Memory (731,299,840 bytes),
