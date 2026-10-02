@@ -199,10 +199,6 @@ p {
   margin: 0;
 }
 
-a {
-  color: var(--accent-strong);
-}
-
 button,
 select,
 input {
@@ -212,10 +208,16 @@ input {
   -webkit-tap-highlight-color: transparent;
 }
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-  border-radius: var(--r-1);
+@layer base {
+  a {
+    color: var(--accent-strong);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: var(--r-1);
+  }
 }
 
 .mono {

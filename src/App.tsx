@@ -343,7 +343,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   return (
     <div className="flex min-h-full flex-col">
       <a className="fixed top-[-56px] left-3 z-80 rounded-[var(--r-2)] border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-[length:var(--t-3)] font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
-      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} search={teamSearch} onSearch={searchTeams} searchRef={searchRef} />
+      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} search={teamSearch} onSearch={mode === 'matches' ? undefined : searchTeams} searchRef={searchRef} />
 
       {/* Space is reserved for the fixed compare tray on the two views that have
           one, and for the bottom tab bar on phones. */}
@@ -486,7 +486,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
             ) : null}
             {mode === 'matches' ? (
               <Suspense fallback={<LoadingState presentation="page" label="Loading match history" />}>
-                <MatchesView state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
+                <MatchesView searchRef={searchRef} state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
               </Suspense>
             ) : null}
           </>

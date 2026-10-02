@@ -2629,7 +2629,6 @@ function rollingMovementForScope({
   const baselineByTeam = baselineRanking.teams
   const endpointByTeam = endpointRanking.teams
   const baselineRanks = rollingRankMap(baselineRanking, currentTeamNames)
-  const endpointRanks = rollingRankMap(endpointRanking, currentTeamNames)
   const activeSeriesByTeam = new Map<string, number>()
   for (const series of completedSeries) {
     if (series.finalMatch.date <= startDate || series.finalMatch.date > endDate) continue
@@ -2642,7 +2641,9 @@ function rollingMovementForScope({
     const endpoint = endpointByTeam.get(standing.team)
     const scoredSeries = activeSeriesByTeam.get(standing.team) ?? 0
     const baselineRank = baselineRanks.get(standing.team)
-    const currentRank = endpointRanks.get(standing.team) ?? standing.rank
+    // The endpoint must match the board, which includes published model
+    // adjustments beyond the last match-history rating.
+    const currentRank = standing.rank
     const historicalRanks = new Map<string, number>()
     for (const point of standing.history) {
       if (point.date <= startDate || point.date > endDate) continue
