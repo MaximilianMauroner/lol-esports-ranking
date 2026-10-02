@@ -1025,13 +1025,12 @@ function activeMovement(team: RankingSummaryStanding) {
 
 /**
  * The 30-day chip shows places moved. The exact ranks go in the tooltip with
- * their basis, because they come from match history and can differ from the
- * published rank in the first column.
+ * their basis: the history baseline and the published board endpoint.
  */
 function rollingMovementTitle(team: RankingSummaryStanding, period: string) {
   const movement = activeMovement(team)
   if (!movement) return `${team.team}: no scored series ${period}.`
-  return `${team.team}, ${period}: match-history rank #${movement.baselineRank} to #${movement.currentRank}, ${formatRatingMovement(movement.ratingDelta ?? 0)} Power over ${formatNumber(movement.scoredSeries)} series.`
+  return `${team.team}, ${period}: baseline rank #${movement.baselineRank} to published rank #${movement.currentRank}, ${formatRatingMovement(movement.ratingDelta ?? 0)} Power over ${formatNumber(movement.scoredSeries)} series.`
 }
 
 function TournamentMoveChip({

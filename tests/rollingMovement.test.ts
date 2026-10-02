@@ -30,6 +30,51 @@ test('filtered rolling endpoint is truncated at its latest rated match', () => {
   )
 })
 
+test('rolling ranks end at the published board for every scope, including filtered history', () => {
+  const data = createStaticRankingData({
+    matches: [
+      match('baseline', '2026-01-01', 'Target Cup', 'Alpha'),
+      match('endpoint', '2026-02-01', 'Target Cup', 'Alpha'),
+      ...Array.from({ length: 15 }, (_, index) => match(`later-${index}`, `2026-03-${String(index + 1).padStart(2, '0')}`, 'Other Cup', 'Beta')),
+    ],
+    teams,
+    rosters: {},
+  })
+  const event = data.snapshots[snapshotKey({ season: 'All', event: 'Target Cup', region: 'All' })]
+  const alpha = event.standings.find((standing) => standing.team === 'Alpha')!
+  const historicalEndpoint = alpha.history.at(-1)!
+  assert.notEqual(historicalEndpoint.rank, alpha.rank, 'fixture must expose the history/board disagreement')
+
+  for (const snapshot of Object.values(createStaticRankingSummaryData(data).snapshots)) {
+    for (const standing of snapshot.standings) {
+      const movement = standing.rollingMovement
+      if (!movement) continue
+      assert.equal(movement.currentRank, standing.rank)
+      assert.deepEqual(movement.rankPoints.at(-1), [snapshot.rollingWindow?.endDate, standing.rank])
+      if (movement.baselineRank !== undefined) {
+        assert.equal(movement.rankMovement, movement.baselineRank - standing.rank)
+      }
+    }
+  }
+})
+
+test('teams without a rolling baseline still end at their published rank', () => {
+  const data = createStaticRankingData({
+    matches: [
+      match('baseline', '2026-01-01', 'Target Cup', 'Alpha'),
+      { ...match('new-team', '2026-02-01', 'Target Cup', 'Alpha'), teamB: 'Gamma' },
+    ],
+    teams: { ...teams, Gamma: { name: 'Gamma', code: 'GAM', region: 'LCK', league: 'LCK' } },
+    rosters: {},
+  })
+  const snapshot = createStaticRankingSummaryData(data).snapshots[data.defaultSnapshotKey]
+  const gamma = snapshot.standings.find((standing) => standing.team === 'Gamma')!
+  assert.equal(gamma.rollingMovement?.status, 'missing-baseline')
+  assert.equal(gamma.rollingMovement?.currentRank, gamma.rank)
+  assert.deepEqual(gamma.rollingMovement?.rankPoints.at(-1), [snapshot.rollingWindow?.endDate, gamma.rank])
+  assert.equal(gamma.rollingMovement?.rankMovement, undefined)
+})
+
 test('rolling summaries cover upset and evidence beyond the 25 recent-match display cap', () => {
   const baseline = Array.from({ length: 10 }, (_, index) => (
     match(`baseline-${index}`, `2026-01-${String(index + 1).padStart(2, '0')}`, 'Long Split', 'Beta')
