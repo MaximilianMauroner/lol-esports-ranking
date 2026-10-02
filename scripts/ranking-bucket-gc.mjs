@@ -1,3 +1,4 @@
+import { hydrateArchive } from '../src/lib/publicArtifacts/archive.mjs'
 import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 import { pathToFileURL } from 'node:url'
@@ -164,6 +165,19 @@ export async function buildRankingBucketInventory({
       return undefined
     }
   }
+  const verifyPublicArchive = async (fromKey, identity) => {
+    const read = async (reference) => {
+      const key = `objects/sha256/${reference.sha256}`
+      const bytes = await verifyReference(fromKey, { key, sha256: reference.sha256, bytes: reference.bytes,
+        compressedBytes: objectByKey.get(bucketKey(config, key))?.bytes, storageEncoding: 'gzip' }, 'public', 'retained-public-artifact')
+      if (!bytes) throw new Error('Public archive reference could not be verified')
+      const envelope = JSON.parse(bytes.toString('utf8'))
+      if (envelope.artifactKind !== 'public-semantic-artifact' || envelope.schemaVersion !== 1) throw new Error('Invalid public archive envelope')
+      return envelope.content
+    }
+    const content = await read(identity)
+    return hydrateArchive(content, read)
+  }
   const traverseRawReceipt = async (fromKey, receiptKey, digest, reason) => {
     if (!requireObject(fromKey, receiptKey, reason)) return
     protect(receiptKey, reason)
@@ -267,17 +281,18 @@ export async function buildRankingBucketInventory({
       try {
         const stored = await getStored(client, config, manifestRoot.key)
         assertStoredPublicManifest(stored, sha256(stored.bytes))
-        const manifest = parsePublicGenerationManifest(JSON.parse(stored.bytes.toString('utf8')), generationId)
+        let manifest = parsePublicGenerationManifest(JSON.parse(stored.bytes.toString('utf8')), generationId)
+        if (manifest.artifactDirectory) {
+          const directory = await verifyPublicArchive(manifestRoot.key, manifest.artifactDirectory)
+          if (directory?.artifactKind !== 'public-artifact-directory' || directory.formatVersion !== 1 || !directory.artifacts) throw new Error('Invalid public artifact directory')
+          const artifacts = Object.fromEntries(Object.entries(directory.artifacts).map(([path, entry]) => [path, { ...entry, generationId }]))
+          for (const [path, entry] of Object.entries(manifest.artifacts)) if (canonicalJsonFor(entry) !== canonicalJsonFor(artifacts[path])) throw new Error('Public archive root mapping mismatch')
+          manifest = parsePublicGenerationManifest({ ...manifest, artifacts }, generationId)
+        }
         for (const [logicalPath, identity] of Object.entries(manifest.artifacts)) {
           if (identity?.logicalPath !== logicalPath || identity?.generationId !== generationId
             || identity?.objectUrl !== `/data/objects/sha256/${identity?.sha256}`) throw new Error(`Invalid artifact mapping ${logicalPath}`)
-          await verifyReference(manifestRoot.key, {
-            key: `objects/sha256/${identity.sha256}`,
-            sha256: identity.sha256,
-            bytes: identity.bytes,
-            compressedBytes: objectByKey.get(bucketKey(config, `objects/sha256/${identity.sha256}`))?.bytes,
-            storageEncoding: 'gzip',
-          }, 'public', 'retained-public-artifact')
+          await verifyPublicArchive(manifestRoot.key, identity)
         }
       } catch (error) {
         addError(manifestRoot.key, 'retained-public-manifest-invalid', error)

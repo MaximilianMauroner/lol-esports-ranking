@@ -2,6 +2,7 @@ import { globSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 
 const browserJourneys = [
+  'tests/rankingArchiveBrowser.test.ts',
   'tests/tournamentBrowser.test.ts',
   'tests/tournamentForecastBrowser.test.ts',
 ]

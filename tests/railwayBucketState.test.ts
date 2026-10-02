@@ -12,10 +12,12 @@ import {
   getBucketObject,
   readActiveContentAddressedGeneration,
   readActiveRawSourceAuthority,
+  readPreviousGenerationAuthorities,
   readBucketJson,
   releaseBucketLease,
   renewBucketLease,
   uploadContentAddressedPublicArtifacts,
+  uploadContentAddressedPublicArtifactPatch,
   uploadRankingArtifacts as uploadRankingArtifactsImplementation,
   writeBucketJson,
   type BucketClient,
@@ -1679,3 +1681,104 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value)
     && Object.values(value).every((entry) => typeof entry === 'string'))
 }
+
+
+test('synthetic archive over 40 MB publishes, restores fresh, and reuses its complete closure on the next generation', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-year-recovery-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, 'year-rebuild')
+    const history = { artifactKind: 'synthetic-history', sample: true, rows: Array.from({ length: 42_000 }, (_, index) => ({
+      id: index, date: `${2020 + Math.floor(index / 4200)}-06-01`, detail: 'x'.repeat(1000),
+    })) }
+    const serialized = JSON.stringify(history)
+    assert.ok(Buffer.byteLength(serialized) > 40_000_000)
+    await writeFile(join(publicDir, 'history', 'archive.json'), serialized)
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'year-rebuild', fencingToken: 1, config, client })
+    const first = await readActiveContentAddressedGeneration({ config, client: cloneMemoryS3(client) })
+    assert.ok(first.found)
+    assert.equal(canonicalJsonFor(first.artifacts['/data/history/archive.json']), canonicalJsonFor(history))
+    const archiveObjects = [...client.objects.entries()].filter(([key]) => key.startsWith('rankings/objects/sha256/'))
+    assert.ok(archiveObjects.length > 80)
+    for (const [, object] of archiveObjects) assert.ok(Number(object.metadata?.['semantic-bytes']) <= 1_000_000)
+    await writeContentAddressedFixture(publicDir, 'year-next')
+    const nextRoot: unknown = JSON.parse(await readFile(join(publicDir, 'ranking-summary.json'), 'utf8'))
+    const patch = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId: 'year-next', previousManifest: first.manifest!,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: nextRoot }] })
+    assert.ok(patch.reused.length > 80)
+    assert.ok(!patch.uploaded.some((entry) => entry.key.startsWith('rankings/objects/sha256/')))
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'year-next', fencingToken: 2, config, client })
+    const next = await readActiveContentAddressedGeneration({ config, client: cloneMemoryS3(client) })
+    assert.ok(next.found)
+    assert.equal(canonicalJsonFor(next.artifacts['/data/history/archive.json']), canonicalJsonFor(history))
+    const previous = await readPreviousGenerationAuthorities({ config, client })
+    assert.ok(previous.found)
+    assert.equal(previous.previous?.generationId, 'year-rebuild')
+    const childKey = archiveObjects.find(([, object]) => gunzipSync(object.bytes!).toString().includes('public-archive-node'))![0]
+    const crossed = cloneMemoryS3(client)
+    const active = JSON.parse(crossed.objects.get('rankings/active-generation.json')!.body)
+    const receiptObject = crossed.objects.get(active.publicationReceiptKey)!
+    const receipt = JSON.parse(receiptObject.body)
+    receipt.objects = receipt.objects.filter((entry: { key: string }) => entry.key !== childKey)
+    receiptObject.bytes = Buffer.from(canonicalJsonFor(receipt))
+    receiptObject.body = receiptObject.bytes.toString()
+    receiptObject.metadata = { ...receiptObject.metadata, 'semantic-bytes': String(receiptObject.bytes.byteLength), sha256: createHash('sha256').update(receiptObject.bytes).digest('hex') }
+    active.publicationReceiptDigest = receiptObject.metadata.sha256
+    active.publicationReceiptBytes = receiptObject.bytes.byteLength
+    const pointerObject = crossed.objects.get('rankings/active-generation.json')!
+    pointerObject.body = JSON.stringify(active)
+    pointerObject.bytes = Buffer.from(pointerObject.body)
+    await assert.rejects(readActiveContentAddressedGeneration({ config, client: crossed }), /outside publication receipt closure/)
+    const missing = cloneMemoryS3(client)
+    missing.objects.delete(childKey)
+    await assert.rejects(readActiveContentAddressedGeneration({ config, client: missing }), /missing/)
+    await assert.rejects(readPreviousGenerationAuthorities({ config, client: missing }), /missing/)
+    const corrupt = cloneMemoryS3(client)
+    corrupt.objects.get(childKey)!.bytes = Buffer.from('corrupt')
+    await assert.rejects(readActiveContentAddressedGeneration({ config, client: corrupt }), /mismatch|corrupt/)
+    await writeContentAddressedFixture(publicDir, 'year-partial')
+    const failing = { objects: client.objects, send: async (command: unknown) => {
+      const details = commandDetails(command)
+      if (details.name === 'GetObjectCommand' && details.input.Key === childKey) throw new Error('archive unavailable')
+      return client.send(command)
+    } }
+    await assert.rejects(uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'year-partial', fencingToken: 3, config, client: failing }), /archive unavailable/)
+    assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, 'year-next')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('large generation directories remain bounded and browser lookup reads only needed directory pages', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-year-directory-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, 'directory-generation')
+    await mkdir(join(publicDir, 'synthetic'))
+    for (let index = 0; index < 4000; index++) await writeFile(join(publicDir, 'synthetic', `${String(index).padStart(4, '0')}.json`), '{"artifactKind":"synthetic","sample":true}')
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'directory-generation', fencingToken: 1, config, client })
+    const stored = client.objects.get('rankings/generations/directory-generation/manifest.json')!
+    assert.ok(stored.bytes!.byteLength <= 250_000)
+    assert.ok(JSON.parse(stored.body).artifactDirectory)
+    const reads: string[] = []
+    const serving = { send: async (command: unknown) => { const details = commandDetails(command); if (details.name === 'GetObjectCommand') reads.push(String(details.input.Key)); return client.send(command) } }
+    assert.ok((await getBucketObject('ranking-summary.json', { config, client: serving })).found)
+    assert.ok(reads.filter((key) => key.startsWith('rankings/objects/')).length === 1, `bootstrap read ${reads.length} objects`)
+    const restored = await readActiveContentAddressedGeneration({ config, client })
+    assert.ok(restored.found)
+    assert.equal(Object.keys(restored.manifest!.artifacts as object).length, 4003)
+    let requests = 0
+    const fetcher: typeof fetch = async (input) => {
+      requests++
+      const path = new URL(String(input), 'https://reader.invalid').pathname
+      const object = path === '/data/ranking-summary.json' ? stored : client.objects.get(`rankings${path.replace(/^\/data/, '')}`)
+      if (!object) return new Response(null, { status: 404 })
+      return new Response(new Uint8Array(object.contentEncoding === 'gzip' ? gunzipSync(object.bytes!) : object.bytes!), { headers: { 'Content-Type': 'application/json' } })
+    }
+    const manifest = await createPublicRankingManifestLoader('/data/ranking-summary.json', fetcher)()
+    const expected = manifest.snapshotIndex[manifest.defaultSnapshotKey]
+    const snapshot = await fetchPublicSnapshotShard(expected.url, manifest.defaultSnapshotKey, expected, manifest, { fetcher })
+    assert.equal(snapshot.matchCount, expected.matchCount)
+    assert.ok(requests < 10, `lookup needed ${requests} requests`)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})

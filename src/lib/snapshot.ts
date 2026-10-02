@@ -1661,26 +1661,33 @@ export function createMatchHistoryArtifacts(
     // Page identities are chronological and therefore stable for latest
     // appends. The catalog remains newest-first for display and points each
     // series at its stable storage page.
-    const stablePageBySeriesId = new Map(series.map((entry, index) => [entry.id, Math.floor(index / 25) + 1]))
-    const pageGroups = chunk(series, 25)
+    // Storage page IDs are local to a UTC year. Keep each complete series in
+    // the year of its earliest game, including series spanning New Year.
+    const groupsByYear = new Map<string, typeof series>()
+    for (const entry of series) {
+      const year = entry.games.map((game) => game.date.slice(0, 4)).sort()[0]!
+      if (!groupsByYear.has(year)) groupsByYear.set(year, [])
+      groupsByYear.get(year)!.push(entry)
+    }
+    const stablePageBySeriesId = new Map<string, number>()
     const artifactMeta = artifactMetaFor({ generatedAt: data.generatedAt, modelVersion: data.model.version, modelConfigHash: data.model.configHash })
-    const pages: Record<number, PublicMatchHistoryPage> = Object.fromEntries(pageGroups.map((group, index) => {
-      const page = index + 1
-      const pageMatches = group.flatMap((entry) => entry.games)
-      return [page, {
-        artifactKind: 'match-history-page' as const,
-        schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
-        artifactMeta,
-        generatedAt: data.generatedAt,
-        modelVersion: data.model.version,
-        modelConfigHash: data.model.configHash,
-        filter: snapshot.filter,
-        page,
-        seriesCount: group.length,
-        gameCount: pageMatches.length,
-        matches: pageMatches,
-      }]
-    }))
+    const pages: Record<number, PublicMatchHistoryPage> = {}
+    for (const [year, yearSeries] of groupsByYear) {
+      if (!/^\d{4}$/.test(year)) throw new Error(`Invalid match history storage year ${year}`)
+      const pageGroups = chunk(yearSeries, 25)
+      if (pageGroups.length >= 1_000_000) throw new Error(`Match history year ${year} exceeds page address space`)
+      for (const [index, group] of pageGroups.entries()) {
+        const page = Number(year) * 1_000_000 + index + 1
+        group.forEach((entry) => stablePageBySeriesId.set(entry.id, page))
+        const pageMatches = group.flatMap((entry) => entry.games)
+        pages[page] = {
+          artifactKind: 'match-history-page', schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
+          artifactMeta, generatedAt: data.generatedAt, modelVersion: data.model.version,
+          modelConfigHash: data.model.configHash, filter: snapshot.filter, page,
+          storageYear: year, seriesCount: group.length, gameCount: pageMatches.length, matches: pageMatches,
+        }
+      }
+    }
     const catalogSeries: PublicMatchHistorySeriesRef[] = series.toReversed().map((entry) => ({
       id: entry.id,
       date: entry.summary.date,
@@ -1690,6 +1697,9 @@ export function createMatchHistoryArtifacts(
       teamA: entry.summary.teamA,
       teamB: entry.summary.teamB,
       page: stablePageBySeriesId.get(entry.id)!,
+      storageYear: String(Math.floor(stablePageBySeriesId.get(entry.id)! / 1_000_000)),
+      startUtcDate: entry.games.map((game) => game.date).sort()[0]!,
+      endUtcDate: entry.games.map((game) => game.date).sort().at(-1)!,
       gameCount: entry.games.length,
     }))
     const catalog: PublicMatchHistoryCatalog = {
@@ -1704,6 +1714,9 @@ export function createMatchHistoryArtifacts(
       seriesCount: series.length,
       pages: Object.values(pages).map((page) => ({
         page: page.page,
+        storageYear: page.storageYear,
+        startUtcDate: page.matches.map((match) => match.date).sort()[0]!,
+        endUtcDate: page.matches.map((match) => match.date).sort().at(-1)!,
         url: matchHistoryPageUrlForKey(key, page.page),
         seriesCount: page.seriesCount,
         gameCount: page.gameCount,
@@ -1712,6 +1725,7 @@ export function createMatchHistoryArtifacts(
     }
     const dependencyPages: PublicMatchHistoryPageRef[] = Object.values(pages).map((page) => ({
       page: page.page,
+      storageYear: page.storageYear,
       url: matchHistoryPageUrlForKey(key, page.page),
       seriesCount: page.seriesCount,
       gameCount: page.gameCount,
@@ -1729,6 +1743,7 @@ export function createMatchHistoryArtifacts(
     gameCount: catalog.gameCount,
     seriesCount: catalog.seriesCount,
     pageCount: catalog.pages.length,
+    years: [...new Set(dependencyPages.flatMap((page) => [page.storageYear, page.startUtcDate?.slice(0, 4), page.endUtcDate?.slice(0, 4)].filter((year): year is string => Boolean(year))))].sort().reverse(),
     // Dependency metadata belongs only in the index consumed by the refresh
     // planner. Repeating it in browser catalogs adds no runtime capability and
     // made every series identifier count twice against the public byte budget.

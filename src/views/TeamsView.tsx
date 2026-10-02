@@ -163,7 +163,7 @@ export function TeamsView({
   dataSummary?: TeamDataSummary
   onToggle: (team: RankingSummaryStanding) => void
   onRequestPlayers?: () => void
-  onRequestTeamHistory?: () => void
+  onRequestTeamHistory?: (teams?: readonly string[]) => void
   onTournamentFilterChange: (value: TournamentFilterValue) => void
   onPrefetchTournament?: (id: TournamentInstanceId) => void
   onRetryTournamentMovements?: () => void
@@ -389,6 +389,11 @@ export function TeamsView({
   )
   // Colours follow teams, not positions. Derived during render and stored only
   // when the assignment changes, so an unchanged assignment keeps its identity.
+  const requestedHistoryTeams = [...new Set([...focusTeams.map((team) => team.team), ...(detailTeam ? [detailTeam.team] : [])])].sort().join('\u0000')
+  useEffect(() => {
+    if (historyState.status !== 'idle' && !exactTournamentId) onRequestTeamHistory?.(requestedHistoryTeams.split('\u0000').filter(Boolean))
+  }, [historyState.status, exactTournamentId, onRequestTeamHistory, requestedHistoryTeams])
+
   const assignedSlots = assignColorSlots(colorSlots, focusTeams.map(teamKey), SERIES_COLORS.length)
   const slots = sameColorSlots(assignedSlots, colorSlots) ? colorSlots : assignedSlots
   if (slots !== colorSlots) setColorSlots(slots)
@@ -458,7 +463,7 @@ export function TeamsView({
 
   function openTeam(team: RankingSummaryStanding) {
     onRequestPlayers?.()
-    onRequestTeamHistory?.()
+    onRequestTeamHistory?.([team.team])
     openDetail(teamKey(team))
   }
 
@@ -757,8 +762,8 @@ export function TeamsView({
 
       <Panel
         ref={trajectoryPanelRef}
-        onFocusCapture={onRequestTeamHistory}
-        onPointerEnter={onRequestTeamHistory}
+        onFocusCapture={() => onRequestTeamHistory?.(focusTeams.map((team) => team.team))}
+        onPointerEnter={() => onRequestTeamHistory?.(focusTeams.map((team) => team.team))}
       >
         <PanelHeader
           title={activeTournament ? `${activeTournament.label} movement` : metric === 'rank' ? 'Rank over time' : 'Power over time'}

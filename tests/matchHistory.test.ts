@@ -23,15 +23,17 @@ test('match history publishes scoped game rows and series-atomic impact', () => 
   const key = snapshotKey({ season: '2026', event: 'All', region: 'All' })
   const index = parsePublicMatchHistoryIndex(artifacts.index)
   const catalog = parsePublicMatchHistoryCatalog(artifacts.catalogs[key])
-  const shard = parsePublicMatchHistoryPage(artifacts.pages[key][1])
+  const shard = parsePublicMatchHistoryPage(Object.values(artifacts.pages[key])[0])
 
   assert.equal(index.scopeIndex[key].gameCount, 2)
   assert.equal(index.scopeIndex[key].seriesCount, 1)
   assert.equal(catalog.series.length, 1)
-  assert.equal(catalog.series[0].page, 1)
+  assert.equal(catalog.series[0].page, shard.page)
+  assert.equal(shard.storageYear, '2026')
+  assert.deepEqual(index.scopeIndex[key].years, ['2026'])
   assert.equal(catalog.pages[0].seriesIds, undefined)
-  assert.equal(catalog.pages[0].startUtcDate, undefined)
-  assert.equal(catalog.pages[0].endUtcDate, undefined)
+  assert.equal(catalog.pages[0].startUtcDate, '2026-07-16')
+  assert.equal(catalog.pages[0].endUtcDate, '2026-07-16')
   assert.deepEqual(index.scopeIndex[key].pages?.[0].seriesIds, [shard.matches[0].seriesId])
   assert.equal(index.scopeIndex[key].pages?.[0].startUtcDate, '2026-07-16')
   assert.equal(index.scopeIndex[key].pages?.[0].endUtcDate, '2026-07-16')
@@ -49,7 +51,7 @@ test('match history publishes scoped game rows and series-atomic impact', () => 
 test('match history parser rejects a winner outside the two teams', () => {
   const data = createStaticRankingData({ matches: [game(1, 'Gen.G')], teams, rosters: {} })
   const artifacts = createMatchHistoryArtifacts(data)
-  const shard = artifacts.pages[data.defaultSnapshotKey][1]
+  const shard = Object.values(artifacts.pages[data.defaultSnapshotKey])[0]
   assert.throws(() => parsePublicMatchHistoryPage({
     ...shard,
     matches: shard.matches.map((match) => ({ ...match, winnerId: 'team:unknown' })),
@@ -61,7 +63,7 @@ test('match history preserves an unknown patch as an empty string', () => {
   match.patch = ''
   const data = createStaticRankingData({ matches: [match], teams, rosters: {} })
   const artifacts = createMatchHistoryArtifacts(data)
-  const shard = parsePublicMatchHistoryPage(artifacts.pages[data.defaultSnapshotKey][1])
+  const shard = parsePublicMatchHistoryPage(Object.values(artifacts.pages[data.defaultSnapshotKey])[0])
 
   assert.equal(shard.matches[0].patch, '')
 })
@@ -83,7 +85,7 @@ test('match history impact stays tied to the series when published ratings also 
     dataMode: 'scheduled-public-data',
   })
   const key = snapshotKey({ season: '2026', event: 'All', region: 'All' })
-  const baselineEntry = createMatchHistoryArtifacts(data).pages[key][1].matches
+  const baselineEntry = Object.values(createMatchHistoryArtifacts(data).pages[key])[0].matches
     .find((entry) => entry.id === 'lck-series_2')
   assert.ok(baselineEntry)
   assert.equal(baselineEntry.impact.unit, 'series-applied')
@@ -101,7 +103,7 @@ test('match history impact stays tied to the series when published ratings also 
     previousPoint.rating = finalPoint.rating + (standing.team === 'Gen.G' ? 100 : -100)
   }
 
-  const contaminatedEntry = createMatchHistoryArtifacts(data).pages[key][1].matches
+  const contaminatedEntry = Object.values(createMatchHistoryArtifacts(data).pages[key])[0].matches
     .find((entry) => entry.id === 'lck-series_2')
   assert.ok(contaminatedEntry)
   assert.deepEqual(contaminatedEntry.impact, baselineEntry.impact)

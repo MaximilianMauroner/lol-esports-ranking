@@ -28,7 +28,7 @@ type ViewState = {
   page: number
 }
 
-export function MatchesView({ state, scopeLabel, onRequestPages, searchRef }: { searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; scopeLabel: string; onRequestPages: (pages: number[]) => void }) {
+export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, archiveYears = [], archiveYear, onYearChange }: { archiveYears?: string[]; archiveYear?: string; onYearChange?: (year: string) => void; searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; scopeLabel: string; onRequestPages: (pages: number[]) => void }) {
   const [view, setView] = useState<ViewState>(readViewState)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const catalog = state.status === 'ready' ? state.data.catalog : undefined
@@ -41,7 +41,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef }: { 
     [filtered],
   )
   const pageCount = Math.max(1, Math.ceil(filtered.length / view.pageSize))
-  const scopeKey = catalog ? scopeForFilter(catalog.filter) : ''
+  const scopeKey = catalog ? `${scopeForFilter(catalog.filter)}:${archiveYear ?? 'All'}` : ''
   const page = view.scopeKey === scopeKey ? Math.min(view.page, pageCount) : 1
   const pageStart = (page - 1) * view.pageSize
   const visibleRefs = filtered.slice(pageStart, pageStart + view.pageSize)
@@ -66,6 +66,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef }: { 
   // Same helper, same param names and same "omit the default" rule as the
   // other two views.
   useHashSync('matches', {
+    matchesYear: archiveYear ?? '',
     team: view.search.trim(),
     league: view.league === 'All' ? '' : view.league,
     event: view.event === 'All' ? '' : view.event,
@@ -137,6 +138,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef }: { 
           description="Filter by team, league or event. Expand a series to see its games."
         />
         <PanelBody className="grid gap-2 items-end sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_180px_220px_auto]">
+          {archiveYears.length > 1 && onYearChange ? <label className="grid min-w-0 gap-1"><span className="text-xs text-[var(--muted)]">Year</span><Select aria-label="Match history year" value={archiveYear ?? 'All'} onChange={(event) => onYearChange(event.target.value)}><option value="All">All years</option>{archiveYears.map((year) => <option key={year} value={year}>{year}</option>)}</Select></label> : null}
           <label className="relative min-w-0">
             <span className="sr-only">Search teams</span><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
             <Input ref={searchRef} type="search" aria-keyshortcuts="/" className="w-full pl-9" value={view.search} onChange={(event) => update({ search: event.target.value })} placeholder="Search team" />

@@ -130,6 +130,8 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
   const [loadPlayers, setLoadPlayers] = useState(false)
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
+  const [historyTeams, setHistoryTeams] = useState<readonly string[]>([])
+  const [matchYear, setMatchYear] = useState(() => hashParam('matchesYear'))
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
   // Board filters that App owns are seeded from the hash for the same reason
   // the ones TeamsView owns are: a shared or reloaded board must come back.
@@ -150,6 +152,8 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     tournamentMovementState,
     matchHistoryState,
     requestMatchHistoryPages,
+    matchHistoryYears,
+    selectedMatchYear,
     retryTournamentMovements,
     prefetchScope,
     prefetchTournament,
@@ -158,6 +162,8 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     initialManifestError,
     loadPlayers,
     loadTeamHistory,
+    teamHistoryTeams: historyTeams,
+    matchHistoryYear: mode === 'matches' ? matchYear : 'All',
     loadRegionHistory,
     loadTournamentMovements: mode === 'rankings',
     loadMatchHistory: mode === 'matches' || mode === 'regions',
@@ -198,6 +204,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     function onHashChange() {
       const nextMode = readModeFromHash()
       setMode(nextMode)
+      setMatchYear(hashParam('matchesYear'))
       if (nextMode === 'regions') setLoadRegionHistory(true)
       const nextScope = readScopeFromHash()
       if (nextScope) selectScope(nextScope)
@@ -244,7 +251,13 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   )
   const preloadScopesKey = preloadScopes.join('\u0000')
   const requestPlayers = useCallback(() => setLoadPlayers(true), [])
-  const requestTeamHistory = useCallback(() => setLoadTeamHistory(true), [])
+  const requestTeamHistory = useCallback((teams?: readonly string[]) => {
+    setLoadTeamHistory(true)
+    if (teams) {
+      const selection = [...new Set(teams)].sort()
+      setHistoryTeams((current) => current.join('\u0000') === selection.join('\u0000') ? current : selection)
+    }
+  }, [])
   const requestRegionHistory = useCallback(() => setLoadRegionHistory(true), [])
   const goHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
@@ -486,7 +499,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
             ) : null}
             {mode === 'matches' ? (
               <Suspense fallback={<LoadingState presentation="page" label="Loading match history" />}>
-                <MatchesView searchRef={searchRef} state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
+                <MatchesView archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
               </Suspense>
             ) : null}
           </>

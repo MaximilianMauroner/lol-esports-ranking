@@ -1108,7 +1108,7 @@ function rawPrefixMatchesLedger(prefix: { matchCount: number; digest: string }, 
 
 function semanticMapFromWrites(writes: SnapshotBuild['publicPlan']['writes'], includeProvenance = false): SemanticArtifactMap {
   return Object.fromEntries(writes.map((write) => {
-    const prepared = prepareSemanticArtifact(write.value)
+    const prepared = prepareSemanticArtifact(write.value, { compress: false })
     return [`/data/${write.relativePath}`, {
       digest: prepared.digest,
       ...(includeProvenance ? { provenanceDigest: stableDigest(provenanceFor(write.value)) } : {}),
@@ -1467,12 +1467,15 @@ function baseMetrics(classification: RankingChangeClassification['kind'], ledger
 }
 
 function withArtifactBytes(metrics: IncrementalBuildMetrics, writes: SnapshotBuild['publicPlan']['writes']) {
-  const prepared = writes.map((write) => prepareSemanticArtifact(write.value))
-  return {
-    ...metrics,
-    semanticBytes: prepared.reduce((sum, artifact) => sum + artifact.bytes, 0),
-    compressedBytes: prepared.reduce((sum, artifact) => sum + artifact.compressedBytes, 0),
+  let semanticBytes = 0, compressedBytes = 0
+  for (const write of writes) {
+    const prepared = prepareSemanticArtifact(write.value)
+    for (const node of [...(prepared.children ?? []), prepared]) {
+      semanticBytes += node.bytes
+      compressedBytes += node.compressedBytes
+    }
   }
+  return { ...metrics, semanticBytes, compressedBytes }
 }
 
 function withPlayerLifecycle(metrics: IncrementalBuildMetrics, build: SnapshotBuild): IncrementalBuildMetrics {

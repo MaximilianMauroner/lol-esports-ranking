@@ -12,6 +12,7 @@
     "build": "pnpm run typecheck && pnpm run bundle",
     "bundle": "vite build && node scripts/check-bundle-size.mjs",
     "start": "node scripts/railway-server.mjs",
+    "data:artifact-audit": "tsx scripts/audit-public-artifacts.ts",
     "data:build": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data",
     "data:download": "node scripts/download-local-data.mjs",
     "data:team-branding": "node scripts/sync-team-branding.mjs",

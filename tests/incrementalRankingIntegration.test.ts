@@ -627,7 +627,7 @@ test('match-page contraction removes obsolete trailing page objects', async () =
       mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreFrom(baseline),
     })
     assert.equal(contracted.action, 'publish-incremental', contracted.metrics.fallbackReason)
-    assert.ok(contracted.metrics.removedPaths.filter((path) => path.includes('/matches/pages/')).some((path) => /-2\.json$/.test(path)))
+    assert.ok(contracted.metrics.removedPaths.filter((path) => path.includes('/matches/pages/')).some((path) => /-2026000002\.json$/.test(path)))
     const full = await run(root, 'pages-full', contractedSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(semanticMap(contracted), semanticMap(full))
   } finally {

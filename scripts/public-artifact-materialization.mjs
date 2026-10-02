@@ -44,7 +44,7 @@ export async function materializePublicArtifactPatch(publicDataDir, patch, {
       const value = changed.has(logicalPath)
         ? changed.get(logicalPath)
         : await readVerifiedLocalArtifact(root, logicalPath, previous[logicalPath])
-      const prepared = prepareSemanticArtifact(value)
+      const prepared = prepareSemanticArtifact(value, { compress: false })
       mapping[logicalPath] = { sha256: prepared.digest, bytes: prepared.bytes }
       if (logicalPath === '/data/ranking-summary.json') continue
       const output = join(staging, relativePath)
@@ -112,7 +112,7 @@ async function readVerifiedLocalArtifact(root, logicalPath, identity) {
   } catch (error) {
     throw new Error(`Local reused public artifact is missing or unreadable: ${logicalPath}`, { cause: error })
   }
-  const prepared = prepareSemanticArtifact(value)
+  const prepared = prepareSemanticArtifact(value, { compress: false })
   if (prepared.digest !== identity.sha256 || prepared.bytes !== identity.bytes) {
     throw new Error(`Local reused public artifact authority mismatch: ${logicalPath}`)
   }

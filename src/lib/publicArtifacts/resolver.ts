@@ -115,6 +115,7 @@ export function validatePublicTeamHistoryShard(
   expected: PublicTeamHistoryIndex['scopeIndex'][string],
   shard: PublicTeamHistoryShard,
   index: PublicTeamHistoryIndex,
+  selectedTeams?: readonly string[],
 ) {
   const actualKey = snapshotKey(shard.filter)
   if (actualKey !== key) {
@@ -129,10 +130,12 @@ export function validatePublicTeamHistoryShard(
   if (shard.generatedAt !== index.generatedAt) {
     throw new Error(`Team history shard generatedAt mismatch for ${key}`)
   }
-  if (shard.teamCount !== expected.teamCount) {
+  if (selectedTeams && Object.keys(shard.series).some((team) => !selectedTeams.includes(team))) throw new Error(`Team history shard selection mismatch for ${key}`)
+  if (shard.artifactMeta?.runId !== index.artifactMeta?.runId) throw new Error(`Team history shard run mismatch for ${key}`)
+  if (selectedTeams ? shard.teamCount > expected.teamCount : shard.teamCount !== expected.teamCount) {
     throw new Error(`Team history shard teamCount mismatch for ${key}`)
   }
-  if (shard.pointCount !== expected.pointCount) {
+  if (selectedTeams ? shard.pointCount > expected.pointCount : shard.pointCount !== expected.pointCount) {
     throw new Error(`Team history shard pointCount mismatch for ${key}`)
   }
   if (JSON.stringify(shard.filter) !== JSON.stringify(expected.filter)) {

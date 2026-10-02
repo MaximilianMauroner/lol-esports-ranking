@@ -531,8 +531,9 @@ function crossReceiptBoundManifestToSchema1(
   activeStored.bytes = Buffer.from(JSON.stringify(active))
 }
 
-function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: string, lastModified: string) {
-  const root = prepareSemanticArtifact({ artifactKind: 'test-ranking-root', rows: [] })
+function seedGeneration(client: ReturnType<typeof gcMemoryS3>, generationId: string, lastModified: string, archive?: ReturnType<typeof prepareSemanticArtifact>) {
+  const root = archive ?? prepareSemanticArtifact({ artifactKind: 'test-ranking-root', rows: [] })
+  for (const child of root.children ?? []) seedPrepared(client, `rankings/objects/sha256/${child.digest}`, child, lastModified)
   const objectKey = `rankings/objects/sha256/${root.digest}`
   if (!client.objects.has(objectKey)) seedPrepared(client, objectKey, root, lastModified)
   const manifest = {
@@ -850,3 +851,21 @@ async function bodyBytes(value: unknown) {
   for await (const chunk of value as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks)
 }
+
+
+test('retained year archive closure protects child objects and a missing child suppresses all GC candidates', async () => {
+  const client = gcMemoryS3(7)
+  seedValidBucket(client)
+  const archive = prepareSemanticArtifact({ artifactKind: 'synthetic-history', sample: true, rows: Array.from({ length: 1800 }, (_, index) => ({ date: `${2020 + Math.floor(index / 600)}-06-01`, detail: 'x'.repeat(1000) })) })
+  seedGeneration(client, 'retained-year-archive', '2026-07-20T00:00:00.000Z', archive)
+  const inventory = await buildRankingBucketInventory({ config, client, now })
+  assert.equal(inventory.valid, true, JSON.stringify(inventory.errors))
+  const childKeys = archive.children!.map((child) => `rankings/objects/sha256/${child.digest}`)
+  for (const key of childKeys) {
+    assert.ok(!inventory.deletionCandidates.some((candidate) => candidate.key === key))
+  }
+  client.objects.delete(childKeys[0])
+  const missing = await buildRankingBucketInventory({ config, client, now })
+  assert.equal(missing.valid, false)
+  assert.equal(missing.deletionCandidates.length, 0)
+})

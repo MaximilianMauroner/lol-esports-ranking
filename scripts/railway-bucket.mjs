@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { hydrateArchive, ARCHIVE_PAGE_BYTES } from '../src/lib/publicArtifacts/archive.mjs'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -579,7 +580,8 @@ export async function readPreviousGenerationAuthorities({
     || (previous.manifestKey === expectedManifestKey && publicObject.Metadata?.sha256 !== publicDigest)) {
     throw new Error('Previous public generation manifest metadata mismatch')
   }
-  const manifest = JSON.parse(publicBytes.toString('utf8'))
+  const assertMember = publicClosureMembership(config, publicationReceipt)
+  const manifest = await expandPublicArtifactDirectory(client, config, JSON.parse(publicBytes.toString('utf8')), { onReference: assertMember })
   if (manifest.schemaVersion !== 2 || manifest.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || manifest.generationId !== previous.generationId
     || manifest.runId !== previous.generationId || manifest.rootArtifact !== '/data/ranking-summary.json'
     || !manifest.model || typeof manifest.model !== 'object' || Array.isArray(manifest.model)
@@ -592,7 +594,8 @@ export async function readPreviousGenerationAuthorities({
       const canonical = canonicalPublicLogicalPath(logicalPath)
       if (identity?.logicalPath !== canonical || identity?.generationId !== previous.generationId
         || identity?.objectUrl !== `/data/objects/sha256/${identity?.sha256}`) throw new Error('Previous public artifact mapping is invalid')
-      publicArtifacts[canonical] = await readVerifiedContentAddressedArtifact(client, config, identity, canonical)
+      assertMember(identity)
+      publicArtifacts[canonical] = await readVerifiedPublicArtifact(client, config, identity, canonical, { onReference: assertMember })
     }
   }
   let state
@@ -693,6 +696,7 @@ export async function getBucketObject(relativePath, {
       client,
       verifyArtifacts: false,
       verifyPublicationClosure: false,
+      resolveDirectory: false,
       activeAuthority,
     })
     if (verified.found) {
@@ -946,6 +950,7 @@ export async function readActiveContentAddressedGeneration({
   client = createBucketClient(config),
   verifyArtifacts = true,
   verifyPublicationClosure = true,
+  resolveDirectory = true,
   activeAuthority,
 } = {}) {
   const active = activeAuthority ?? await readBucketJson('active-generation.json', { config, client })
@@ -985,7 +990,9 @@ export async function readActiveContentAddressedGeneration({
     || object.Metadata?.sha256 !== manifestDigest) {
     throw new Error('Active public generation manifest authority mismatch')
   }
-  const storedManifest = JSON.parse(manifestBytes.toString('utf8'))
+  const assertMember = publicClosureMembership(config, publication?.found ? publication.receipt : undefined)
+  const parsedManifest = JSON.parse(manifestBytes.toString('utf8'))
+  const storedManifest = resolveDirectory ? await expandPublicArtifactDirectory(client, config, parsedManifest, { onReference: assertMember }) : parsedManifest
   if (pointerKind === 'legacy') assertLegacyGenerationCutoverPointer(active.value, storedManifest)
   if (legacyNativePublication) {
     assertLegacyNativeGenerationCutoverPointer(active.value, storedManifest, legacyNativePublication)
@@ -1013,7 +1020,8 @@ export async function readActiveContentAddressedGeneration({
       .filter((canonical) => identities[canonical])
       .map(async (canonical) => {
       const identity = identities[canonical]
-      return [canonical, await readVerifiedContentAddressedArtifact(client, config, identity, canonical)]
+      assertMember(identity)
+      return [canonical, await readVerifiedPublicArtifact(client, config, identity, canonical, { onReference: assertMember })]
       }),
   ))
   const artifacts = verifyArtifacts
@@ -1137,6 +1145,10 @@ function compatibleGenerationManifest(value, generationId, { publicManifestSchem
     || !value.artifacts || typeof value.artifacts !== 'object' || Array.isArray(value.artifacts)
     || Object.keys(value.artifacts).length === 0 || !Object.hasOwn(value.artifacts, value.rootArtifact)) {
     throw new Error('Active public generation manifest is invalid')
+  }
+  if (value.artifactDirectory !== undefined) {
+    const ref = value.artifactDirectory
+    if (value.schemaVersion !== 2 || !/^[a-f0-9]{64}$/.test(ref?.sha256 ?? '') || !Number.isSafeInteger(ref.bytes) || ref.bytes <= 0 || ref.bytes > ARCHIVE_PAGE_BYTES || ref.encoding !== 'gzip') throw new Error('Invalid public artifact directory authority')
   }
   for (const [logicalPath, identity] of Object.entries(value.artifacts)) {
     const canonical = canonicalPublicLogicalPath(logicalPath)
@@ -1630,64 +1642,51 @@ export async function uploadDirectory(client, config, dir, destinationPrefix, pu
 
 export async function uploadContentAddressedPublicArtifacts(client, config, dir, generationId) {
   const root = resolve(dir)
-  const files = await listFiles(root)
-  files.sort((left, right) => relative(root, left).localeCompare(relative(root, right)))
-  const prepared = []
-  const logicalPathSources = new Map()
-  let rootManifest
-
+  const files = (await listFiles(root)).sort((left, right) => relative(root, left).localeCompare(relative(root, right)))
+  const entries = [], uploaded = [], unchanged = []
+  const seen = new Set(), paths = new Set()
+  let semanticLogicalBytes = 0, compressedLogicalBytes = 0
+  // Validate path aliases and root provenance before the first storage write.
   for (const file of files) {
     const relativePath = relative(root, file).split(sep).join('/')
-    if (extname(relativePath).toLowerCase() !== '.json') {
-      throw new Error(`Content-addressed public artifact must be JSON: ${relativePath}`)
-    }
-    const value = JSON.parse(await readFile(file, 'utf8'))
-    if (relativePath === 'ranking-summary.json') rootManifest = value
+    if (extname(relativePath).toLowerCase() !== '.json') throw new Error(`Content-addressed public artifact must be JSON: ${relativePath}`)
     const logicalPath = canonicalPublicLogicalPath(`/data/${relativePath}`)
-    const existingSource = logicalPathSources.get(logicalPath)
-    if (existingSource) {
-      throw new Error(`Duplicate public artifact logical path alias: ${existingSource} and ${relativePath}`)
+    if (paths.has(logicalPath)) throw new Error(`Duplicate public artifact logical path alias: ${relativePath}`)
+    paths.add(logicalPath)
+  }
+  const rootManifest = JSON.parse(await readFile(join(root, 'ranking-summary.json'), 'utf8'))
+  createGenerationManifest({ generationId, rootManifest, entries: [] })
+  // Process one logical artifact at a time. Do not retain the complete archive's
+  // canonical and compressed buffers until publication.
+  for (const file of files) {
+    const relativePath = relative(root, file).split(sep).join('/')
+    if (extname(relativePath).toLowerCase() !== '.json') throw new Error(`Content-addressed public artifact must be JSON: ${relativePath}`)
+    const value = JSON.parse(await readFile(file, 'utf8'))
+    const logicalPath = canonicalPublicLogicalPath(`/data/${relativePath}`)
+    const artifact = prepareSemanticArtifact(value)
+    entries.push({ logicalPath, digest: artifact.digest, bytes: artifact.bytes })
+    for (const member of [...(artifact.children ?? []), artifact]) {
+      if (seen.has(member.digest)) continue
+      seen.add(member.digest)
+      const result = await syncContentAddressedObject(client, config, member)
+      if (result.status === 'unchanged') unchanged.push(result)
+      else uploaded.push(result)
+      semanticLogicalBytes += member.bytes; compressedLogicalBytes += member.compressedBytes
     }
-    logicalPathSources.set(logicalPath, relativePath)
-    prepared.push({
-      logicalPath,
-      ...prepareSemanticArtifact(value),
-    })
   }
   if (!rootManifest) throw new Error('Content-addressed publication requires ranking-summary.json')
-
-  const uploaded = []
-  const unchanged = []
-  const uniqueArtifacts = new Map()
-  for (const artifact of prepared) {
-    const existing = uniqueArtifacts.get(artifact.digest)
-    if (existing && existing.canonicalJson !== artifact.canonicalJson) {
-      throw new Error(`Local semantic SHA-256 collision: ${artifact.digest}`)
-    }
-    uniqueArtifacts.set(artifact.digest, existing ?? artifact)
-  }
-  const manifest = createGenerationManifest({ generationId, rootManifest, entries: prepared })
-  for (const artifact of uniqueArtifacts.values()) {
-    const result = await syncContentAddressedObject(client, config, artifact)
+  if (process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION === '0' && semanticLogicalBytes > 30_000_000) throw new Error('Legacy public writer exceeds 30 MB; enable archive writer after reader deployment')
+  const manifest = createGenerationManifest({ generationId, rootManifest, entries })
+  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
+  for (const result of manifestSync.directoryResults ?? []) {
     if (result.status === 'unchanged') unchanged.push(result)
     else uploaded.push(result)
   }
-
-  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
   if (manifestSync.result.status === 'unchanged') unchanged.push(manifestSync.result)
   else uploaded.push(manifestSync.result)
-  return {
-    uploaded,
-    unchanged,
-    reused: [],
-    manifest,
-    manifestAuthority: manifestSync.authority,
-    objectCount: uniqueArtifacts.size,
-    logicalArtifactCount: prepared.length,
-    compressedLogicalBytes: prepared.reduce((total, artifact) => total + artifact.compressedBytes, 0),
-    semanticLogicalBytes: prepared.reduce((total, artifact) => total + artifact.bytes, 0),
-    uniqueCompressedBytes: [...uniqueArtifacts.values()].reduce((total, artifact) => total + artifact.compressedBytes, 0),
-  }
+  return { uploaded, unchanged, reused: [], manifest, manifestAuthority: manifestSync.authority,
+    objectCount: seen.size, logicalArtifactCount: entries.length, compressedLogicalBytes,
+    semanticLogicalBytes, uniqueCompressedBytes: compressedLogicalBytes }
 }
 
 /**
@@ -1747,6 +1746,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       sha256: entry.digest,
       bytes: entry.bytes,
     }, entry.logicalPath)
+    entry.verified = verified
     if (!hasImmutablePublicMetadata(verified)) {
       uploaded.push(await putContentAddressedObject(client, config, bucketKey(config, `objects/sha256/${entry.digest}`), {
         digest: entry.digest,
@@ -1769,6 +1769,18 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       })
     }
   }
+  for (const entry of uniqueReused.values()) {
+    const content = JSON.parse(gunzipSync(entry.verified.compressed).toString('utf8')).content
+    await hydrateArchive(content, async (reference) => {
+      const child = await assertReferencedContentAddressedIntegrity(client, config, reference, entry.logicalPath)
+      if (!hasImmutablePublicMetadata(child)) uploaded.push(await putContentAddressedObject(client, config,
+        bucketKey(config, `objects/sha256/${reference.sha256}`), { digest: reference.sha256, bytes: reference.bytes,
+          compressed: child.compressed, compressedBytes: child.compressed.byteLength }, publicContentAddressedMetadata(reference.sha256, reference.bytes)))
+      else reused.push({ status: 'reused', reason: 'inherited-archive-node-verified', key: bucketKey(config, `objects/sha256/${reference.sha256}`),
+        bytes: child.compressed.byteLength, semanticBytes: reference.bytes, contentType: PUBLIC_JSON_CONTENT_TYPE, contentEncoding: 'gzip', digest: reference.sha256 })
+      return JSON.parse(gunzipSync(child.compressed).toString('utf8')).content
+    })
+  }
   const uniqueChanged = new Map()
   let compressedLogicalBytes = 0
   for (const artifact of changedByPath.values()) {
@@ -1780,6 +1792,11 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
         throw new Error(`Local semantic SHA-256 collision: ${prepared.digest}`)
       }
     } else {
+      for (const child of prepared.children ?? []) {
+        const childResult = await syncContentAddressedObject(client, config, child)
+        if (childResult.status === 'unchanged') unchanged.push(childResult)
+        else uploaded.push(childResult)
+      }
       const result = await syncContentAddressedObject(client, config, prepared)
       if (result.status === 'unchanged') unchanged.push(result)
       else uploaded.push(result)
@@ -1798,20 +1815,28 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
     entries: [...entriesByPath.values()],
   })
   const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
+  for (const result of manifestSync.directoryResults ?? []) {
+    if (result.status === 'unchanged') unchanged.push(result)
+    else uploaded.push(result)
+  }
   if (manifestSync.result.status === 'unchanged') unchanged.push(manifestSync.result)
   else uploaded.push(manifestSync.result)
-  const semanticLogicalBytes = [...entriesByPath.values()].reduce((sum, entry) => sum + entry.bytes, 0)
+  const physicalObjects = new Map([...uploaded, ...unchanged, ...reused]
+    .filter((entry) => entry.key.startsWith(bucketKey(config, 'objects/sha256/')))
+    .map((entry) => [entry.key, entry]))
+  const semanticLogicalBytes = [...physicalObjects.values()].reduce((sum, entry) => sum + entry.semanticBytes, 0)
+  compressedLogicalBytes = [...physicalObjects.values()].reduce((sum, entry) => sum + entry.bytes, 0)
   return {
     uploaded,
     unchanged,
     reused,
     manifest,
     manifestAuthority: manifestSync.authority,
-    objectCount: new Set([...entriesByPath.values()].map((entry) => entry.digest)).size,
+    objectCount: physicalObjects.size,
     logicalArtifactCount: entriesByPath.size,
     compressedLogicalBytes,
     semanticLogicalBytes,
-    uniqueCompressedBytes: [...uniqueChanged.values()].reduce((sum, entry) => sum + entry.compressedBytes, 0),
+    uniqueCompressedBytes: [...physicalObjects.values()].filter((entry) => entry.status !== 'reused').reduce((sum, entry) => sum + entry.bytes, 0),
     changedLogicalPaths: [...changedByPath.keys()].sort(),
     reusedLogicalPaths: actualPaths.filter((path) => !changedByPath.has(path)),
     removedLogicalPaths: [...removed].sort(),
@@ -1821,7 +1846,19 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
 async function syncGenerationManifest(client, config, generationId, manifest) {
   const relativeKey = `generations/${safeObjectPath(generationId)}/manifest.json`
   const key = bucketKey(config, relativeKey)
-  const body = jsonBody(manifest)
+  const directoryResults = []
+  let storedManifest = manifest
+  if (Buffer.byteLength(jsonBody(manifest)) > 250_000) {
+    if (process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION === '0') throw new Error('Legacy generation directory exceeds bootstrap budget; enable archive writer after reader deployment')
+    const artifacts = Object.fromEntries(Object.entries(manifest.artifacts).map(([path, entry]) => {
+      return [path, Object.fromEntries(Object.entries(entry).filter(([key]) => key !== 'generationId'))]
+    }))
+    const directory = prepareSemanticArtifact({ artifactKind: 'public-artifact-directory', formatVersion: 1, artifacts })
+    for (const child of [...(directory.children ?? []), directory]) directoryResults.push(await syncContentAddressedObject(client, config, child))
+    storedManifest = { ...manifest, artifacts: { [manifest.rootArtifact]: manifest.artifacts[manifest.rootArtifact] },
+      artifactDirectory: { sha256: directory.digest, bytes: directory.bytes, encoding: 'gzip' } }
+  }
+  const body = `${canonicalJsonFor(storedManifest)}\n`
   const bytes = Buffer.byteLength(body)
   const digest = createHash('sha256').update(body).digest('hex')
   try {
@@ -1837,6 +1874,7 @@ async function syncGenerationManifest(client, config, generationId, manifest) {
     return {
       result: { status: 'uploaded', key, bytes, contentType: 'application/json; charset=utf-8', digest },
       authority: { key, etag: put.ETag, bytes, digest },
+      directoryResults,
     }
   } catch (error) {
     if (!isPreconditionError(error)) throw error
@@ -1862,6 +1900,7 @@ async function syncGenerationManifest(client, config, generationId, manifest) {
         return {
           result: { status: 'uploaded', reason: 'generation-manifest-metadata-upgraded', key, bytes, contentType: PUBLIC_JSON_CONTENT_TYPE, digest },
           authority: { key, etag: repaired.ETag, bytes, digest },
+          directoryResults,
         }
       } catch (repairError) {
         if (!isPreconditionError(repairError)) throw repairError
@@ -1878,6 +1917,7 @@ async function syncGenerationManifest(client, config, generationId, manifest) {
         digest,
       },
       authority: { key, etag: existing.ETag, bytes, digest },
+      directoryResults,
     }
   }
 }
@@ -2040,7 +2080,50 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
   }
 }
 
-async function readVerifiedContentAddressedArtifact(client, config, identity, logicalPath) {
+
+function publicClosureMembership(config, receipt) {
+  const members = receipt ? new Map(receipt.objects.map((entry) => [entry.key, entry])) : undefined
+  return (reference, compressedBytes) => {
+    if (!members) return
+    const member = members.get(bucketKey(config, `objects/sha256/${reference.sha256}`))
+    if (!member || member.digest !== reference.sha256 || (compressedBytes !== undefined && member.bytes !== compressedBytes)) {
+      throw new Error('Public archive object is outside publication receipt closure')
+    }
+  }
+}
+
+export async function expandPublicArtifactDirectory(client, config, manifest, { onReference } = {}) {
+  if (!manifest.artifactDirectory) return manifest
+  const reference = manifest.artifactDirectory
+  if (!/^[a-f0-9]{64}$/.test(reference.sha256 ?? '') || !Number.isSafeInteger(reference.bytes) || reference.bytes <= 0 || reference.encoding !== 'gzip' || reference.bytes > ARCHIVE_PAGE_BYTES) throw new Error('Invalid public artifact directory authority')
+  if (onReference) {
+    const metadata = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: bucketKey(config, `objects/sha256/${reference.sha256}`) }))
+    onReference(reference, Number(metadata.ContentLength))
+  }
+  const directory = await readVerifiedPublicArtifact(client, config, reference, 'generation artifact directory', { onReference })
+  if (directory?.artifactKind !== 'public-artifact-directory' || directory.formatVersion !== 1
+    || !directory.artifacts || typeof directory.artifacts !== 'object' || Array.isArray(directory.artifacts)) throw new Error('Invalid public artifact directory')
+  const artifacts = Object.fromEntries(Object.entries(directory.artifacts).map(([path, entry]) => [path, { ...entry, generationId: manifest.generationId }]))
+  for (const [path, identity] of Object.entries(manifest.artifacts)) {
+    if (canonicalJsonFor(artifacts[path]) !== canonicalJsonFor(identity)) throw new Error('Public artifact directory root mapping mismatch')
+  }
+  return { ...manifest, artifacts }
+}
+
+export async function readVerifiedPublicArtifact(client, config, identity, logicalPath, { onReference } = {}) {
+  const content = await readVerifiedContentAddressedContent(client, config, identity, logicalPath)
+  return hydrateArchive(content, async (reference) => {
+    if (reference.bytes > ARCHIVE_PAGE_BYTES) throw new Error('Public archive node exceeds page budget')
+    const child = await readVerifiedContentAddressedContent(client, config, reference, logicalPath)
+    if (onReference) {
+      const metadata = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: bucketKey(config, `objects/sha256/${reference.sha256}`) }))
+      onReference(reference, Number(metadata.ContentLength))
+    }
+    return child
+  })
+}
+
+async function readVerifiedContentAddressedContent(client, config, identity, logicalPath) {
   if (!/^[a-f0-9]{64}$/.test(identity?.sha256 ?? '') || !Number.isSafeInteger(identity?.bytes) || identity.bytes <= 0) {
     throw new Error(`Invalid content-addressed object identity for ${logicalPath}`)
   }

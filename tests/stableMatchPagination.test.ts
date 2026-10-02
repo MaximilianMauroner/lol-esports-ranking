@@ -12,15 +12,15 @@ test('chronological 25-series partitions keep latest appends on the tail while c
   const originalMatches = Array.from({ length: 26 }, (_, index) => match(index + 1))
   const original = artifacts(originalMatches)
   assert.equal(original.catalog.series[0]?.id.includes('series-26'), true)
-  assert.equal(original.catalog.series[0]?.page, 2)
+  assert.equal(original.catalog.series[0]?.page, 2026000002)
   assert.equal(original.catalog.series.at(-1)?.date, '2026-01-01')
-  assert.equal(original.catalog.series.at(-1)?.page, 1)
+  assert.equal(original.catalog.series.at(-1)?.page, 2026000001)
 
   const appended = artifacts([...originalMatches, match(27)])
-  assert.deepEqual(appended.pages[1], original.pages[1])
-  assert.notDeepEqual(appended.pages[2], original.pages[2])
+  assert.deepEqual(appended.pages[2026000001], original.pages[2026000001])
+  assert.notDeepEqual(appended.pages[2026000002], original.pages[2026000002])
   assert.equal(appended.catalog.series[0]?.id.includes('series-27'), true)
-  assert.equal(appended.catalog.series[0]?.page, 2)
+  assert.equal(appended.catalog.series[0]?.page, 2026000002)
 
   const inserted = match(100, '2026-01-15T12:30:00.000Z')
   const historical = artifacts([...originalMatches, inserted])
@@ -79,3 +79,20 @@ function match(index: number, datetimeUtc?: string): MatchRecord {
     teamBGold: index % 2 ? 55_000 : 60_000,
   }
 }
+
+
+test('New Year preserves prior pages, keeps a cross-year series atomic, and a corrected opening date moves its partition', () => {
+  const opening = { ...match(1), date: '2025-12-31', datetimeUtc: '2025-12-31T23:50:00.000Z', officialMatchId: 'cross-year' }
+  const closing = { ...match(2), date: '2026-01-01', datetimeUtc: '2026-01-01T00:20:00.000Z', officialMatchId: 'cross-year' }
+  const before = artifacts([opening, closing])
+  assert.equal(before.catalog.series.length, 1)
+  assert.equal(before.catalog.series[0].storageYear, '2025')
+  assert.equal(before.pages[2025000001].gameCount, 2)
+  const after = artifacts([opening, closing, { ...match(3), date: '2026-01-02' }])
+  assert.deepEqual(after.pages[2025000001], before.pages[2025000001])
+  assert.equal(after.catalog.series[0].storageYear, '2026')
+  const corrected = artifacts([{ ...opening, date: '2026-01-01', datetimeUtc: '2026-01-01T00:10:00.000Z' }, closing])
+  assert.equal(corrected.pages[2025000001], undefined)
+  assert.equal(corrected.pages[2026000001].gameCount, 2)
+  assertCatalogPageLookup(corrected.catalog.series, corrected.pages)
+})

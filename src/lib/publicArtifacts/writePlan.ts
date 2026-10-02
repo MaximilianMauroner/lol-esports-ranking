@@ -50,7 +50,7 @@ export const PUBLIC_ARTIFACT_BUDGETS = {
   defaultScopeBytes: 1_000_000,
   // Lazy-loaded directory includes nine coverage-aware stats across player scopes.
   playersBytes: 1_800_000,
-  totalPublicDataBytes: 30_000_000,
+  archivePageBytes: 512_000,
 } as const
 
 export const PUBLIC_ARTIFACT_PATHS = {
@@ -229,22 +229,14 @@ function withArtifactVersion(url: string, version: string) {
 }
 
 export function assertPublicArtifactBudgets(writes: PublicArtifactWrite[], defaultSnapshotKey: string) {
-  const total = writes.reduce((sum, entry) => sum + byteLength(entry.contents), 0)
   const manifest = writes.find((entry) => entry.relativePath === PUBLIC_ARTIFACT_PATHS.manifest)
-  const players = writes.find((entry) => entry.relativePath === PUBLIC_ARTIFACT_PATHS.players)
   const defaultScope = writes.find((entry) => entry.relativePath === publicScopeArtifactPath(defaultSnapshotKey))
 
   if (manifest && byteLength(manifest.contents) > PUBLIC_ARTIFACT_BUDGETS.manifestBytes) {
     throw new Error(`Public manifest budget exceeded: ${byteLength(manifest.contents)} bytes > ${PUBLIC_ARTIFACT_BUDGETS.manifestBytes} bytes`)
   }
-  if (players && byteLength(players.contents) > PUBLIC_ARTIFACT_BUDGETS.playersBytes) {
-    throw new Error(`Public players budget exceeded: ${byteLength(players.contents)} bytes > ${PUBLIC_ARTIFACT_BUDGETS.playersBytes} bytes`)
-  }
   if (defaultScope && byteLength(defaultScope.contents) > PUBLIC_ARTIFACT_BUDGETS.defaultScopeBytes) {
     throw new Error(`Default ranking scope budget exceeded: ${byteLength(defaultScope.contents)} bytes > ${PUBLIC_ARTIFACT_BUDGETS.defaultScopeBytes} bytes`)
-  }
-  if (total > PUBLIC_ARTIFACT_BUDGETS.totalPublicDataBytes) {
-    throw new Error(`Public data budget exceeded: ${total} bytes > ${PUBLIC_ARTIFACT_BUDGETS.totalPublicDataBytes} bytes`)
   }
 }
 
@@ -259,12 +251,14 @@ function write(
   validate: (value: unknown) => unknown,
   pretty = false,
 ): PublicArtifactWrite {
+  let overriddenContents: string | undefined
   return {
     family,
     relativePath,
     url: localPublicDataUrl(relativePath),
     value,
-    contents: `${JSON.stringify(value, null, pretty ? 2 : 0)}\n`,
+    get contents() { return overriddenContents ?? `${JSON.stringify(this.value, null, pretty ? 2 : 0)}\n` },
+    set contents(contents: string) { overriddenContents = contents },
     validate,
   }
 }

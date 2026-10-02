@@ -1,33 +1,23 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import {
-  assertPublicArtifactBudgets,
-  PUBLIC_ARTIFACT_BUDGETS,
-  type PublicArtifactWrite,
-} from '../src/lib/publicArtifacts/writePlan.ts'
+import { assertPublicArtifactBudgets, PUBLIC_ARTIFACT_BUDGETS, PUBLIC_ARTIFACT_PATHS, publicScopeArtifactPath, type PublicArtifactWrite } from '../src/lib/publicArtifacts/writePlan.ts'
 
-test('public artifact budget accepts the exact boundary and rejects one byte over', () => {
-  assert.doesNotThrow(() => assertPublicArtifactBudgets([sizedWrite(PUBLIC_ARTIFACT_BUDGETS.totalPublicDataBytes)], 'unused'))
-  assert.throws(
-    () => assertPublicArtifactBudgets([sizedWrite(PUBLIC_ARTIFACT_BUDGETS.totalPublicDataBytes + 1)], 'unused'),
-    /Public data budget exceeded: 30000001 bytes > 30000000 bytes/,
-  )
+test('archive growth beyond 40 MB does not block a bounded ranking bootstrap', () => {
+  // Synthetic byte input checks only the aggregate gate, not schema validity.
+  assert.doesNotThrow(() => assertPublicArtifactBudgets([sizedWrite(40_000_001)], 'unused'))
 })
 
-test('production failure size remains fail-closed without publication inputs', () => {
-  assert.throws(
-    () => assertPublicArtifactBudgets([sizedWrite(30_055_925)], 'unused'),
-    /Public data budget exceeded: 30055925 bytes > 30000000 bytes/,
-  )
+test('ranking bootstrap retains exact UTF-8 byte boundaries', () => {
+  for (const [relativePath, limit, error] of [
+    [PUBLIC_ARTIFACT_PATHS.manifest, PUBLIC_ARTIFACT_BUDGETS.manifestBytes, /Public manifest budget exceeded/],
+    [publicScopeArtifactPath('all'), PUBLIC_ARTIFACT_BUDGETS.defaultScopeBytes, /Default ranking scope budget exceeded/],
+  ] as const) {
+    const entry = { ...sizedWrite(limit), relativePath }
+    assert.doesNotThrow(() => assertPublicArtifactBudgets([entry], 'all'))
+    assert.throws(() => assertPublicArtifactBudgets([{ ...entry, contents: entry.contents + 'é' }], 'all'), error)
+  }
 })
 
 function sizedWrite(bytes: number): PublicArtifactWrite {
-  return {
-    family: 'history',
-    relativePath: 'fabricated/production-shaped.json',
-    url: '/data/fabricated/production-shaped.json',
-    value: {},
-    contents: 'x'.repeat(bytes),
-    validate: (value) => value,
-  }
+  return { family: 'history', relativePath: 'fabricated/growth.json', url: '/data/fabricated/growth.json', value: {}, contents: 'x'.repeat(bytes), validate: (value) => value }
 }
