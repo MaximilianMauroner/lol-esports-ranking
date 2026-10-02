@@ -7,13 +7,12 @@ import { before, outcome, receipt, replay } from './fixtures/offlineForecastFixt
 function cohort(probabilities: number[], wins = probabilities.map(() => true)) {
   const receipts = probabilities.map((probability, index) => {
     const row = receipt(String(index))
-    row.matchId = `fixture-${index}`
-    row.eventStateVersion = JSON.stringify([row.matchId, row.eventId, row.scheduledStartAt, 'upcoming', 'unstarted', row.bestOf,
+    const matchId = `fixture-${index}`
+    const eventStateVersion = JSON.stringify([matchId, row.eventId, row.scheduledStartAt, 'upcoming', 'unstarted', row.bestOf,
       [['alpha', null, null], ['beta', null, null]]])
-    row.receiptKey = JSON.stringify([row.matchId, row.eventStateVersion, row.forecastRevision])
-    row.homeSeriesWinProbability = probability
-    row.awaySeriesWinProbability = 1 - probability
-    return row
+    return { ...row, matchId, eventStateVersion,
+      receiptKey: JSON.stringify([matchId, eventStateVersion, row.forecastRevision]),
+      homeSeriesWinProbability: probability, awaySeriesWinProbability: 1 - probability }
   })
   const result = replay(receipts, receipts.map((row, index) => ({ ...outcome, matchId: row.matchId,
     gameWins: (wins[index] ? [3, 1] : [1, 3]) as [number, number] })))

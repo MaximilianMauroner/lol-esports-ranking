@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { replayOfflineSeriesCohort, type SyntheticSeriesOutcome } from '../src/lib/offlineForecastCohort.ts'
+import type { SyntheticSeriesOutcome } from '../src/lib/offlineForecastCohort.ts'
 import { isForecastLedger, type ForecastReceipt } from '../src/lib/tournamentForecast.ts'
 import { before, outcome, receipt, replay } from './fixtures/offlineForecastFixtures.ts'
 
