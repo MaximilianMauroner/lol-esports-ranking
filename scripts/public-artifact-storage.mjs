@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
+import { createArchive, ARCHIVE_PAGE_BYTES } from '../src/lib/publicArtifacts/archive.mjs'
 import { assertCanonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
 
 export { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
@@ -8,27 +9,33 @@ export const CONTENT_ADDRESSED_STORAGE_MODE = 'content-addressed-gzip-v1'
 
 const volatileArtifactKeys = new Set(['artifactMeta', 'generatedAt', 'modelVersion', 'modelConfigHash', 'schemaVersion'])
 
-export function prepareSemanticArtifact(value) {
+export function prepareSemanticArtifact(value, { compress = true } = {}) {
+  const writeVersion = process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION ?? '1'
+  if (!['0', '1'].includes(writeVersion)) throw new Error('Unsupported public archive writer version')
   assertRecord(value, 'public artifact')
   const withoutVolatileMetadata = Object.fromEntries(Object.entries(value).filter(([key]) => !volatileArtifactKeys.has(key)))
-  const semantic = {
-    artifactKind: 'public-semantic-artifact',
-    schemaVersion: 1,
-    content: normalizeKnownLogicalUrls(withoutVolatileMetadata),
+  const children = []
+  const store = (content) => {
+    const prepared = prepareEnvelope(content, compress)
+    if (prepared.bytes > ARCHIVE_PAGE_BYTES || prepared.compressedBytes > ARCHIVE_PAGE_BYTES) throw new Error('Public archive node exceeds page budget')
+    children.push(prepared)
+    return { sha256: prepared.digest, bytes: prepared.bytes, encoding: 'gzip' }
   }
+  const content = normalizeKnownLogicalUrls(withoutVolatileMetadata)
+  // The ranking bootstrap keeps its existing size contract; history and entity
+  // payloads use bounded immutable archive nodes when their logical view grows.
+  const archived = writeVersion === '0' || content.artifactKind === 'public-ranking-manifest' || (content.artifactKind === 'public-snapshot-shard' && Buffer.byteLength(canonicalJsonFor(content)) <= 1_000_000)
+    ? content : createArchive(content, store)
+  return { ...prepareEnvelope(archived, compress), children }
+}
+
+function prepareEnvelope(content, compress) {
+  const semantic = { artifactKind: 'public-semantic-artifact', schemaVersion: 1, content }
   const canonicalJson = canonicalJsonFor(semantic)
   const canonicalBytes = Buffer.from(canonicalJson, 'utf8')
   const digest = createHash('sha256').update(canonicalBytes).digest('hex')
-  const compressed = gzipSync(canonicalBytes, { level: 9, mtime: 0 })
-  return {
-    semantic,
-    canonicalJson,
-    canonicalBytes,
-    digest,
-    bytes: canonicalBytes.byteLength,
-    compressed,
-    compressedBytes: compressed.byteLength,
-  }
+  const compressed = compress ? gzipSync(canonicalBytes, { level: 9, mtime: 0 }) : Buffer.alloc(0)
+  return { semantic, canonicalJson, canonicalBytes, digest, bytes: canonicalBytes.byteLength, compressed, compressedBytes: compressed.byteLength }
 }
 
 export function createGenerationManifest({ generationId, rootManifest, entries }) {

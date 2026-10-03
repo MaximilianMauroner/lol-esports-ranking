@@ -1,6 +1,7 @@
 export const CONTENT_ADDRESSED_STORAGE_MODE: 'content-addressed-gzip-v1'
 
 export type PreparedSemanticArtifact = {
+  children?: PreparedSemanticArtifact[]
   semantic: Record<string, unknown>
   canonicalJson: string
   canonicalBytes: Buffer
@@ -10,7 +11,7 @@ export type PreparedSemanticArtifact = {
   compressedBytes: number
 }
 
-export function prepareSemanticArtifact(value: unknown): PreparedSemanticArtifact
+export function prepareSemanticArtifact(value: unknown, options?: { compress?: boolean }): PreparedSemanticArtifact
 export function canonicalPublicLogicalPath(value: string): string
 export function assertCanonicalPublicLogicalPath(value: unknown, label?: string): asserts value is string
 export function createGenerationManifest(options: {

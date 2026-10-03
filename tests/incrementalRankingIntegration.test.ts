@@ -367,6 +367,65 @@ test('append, same-day insertion, and historical correction use whole-date repla
   }
 })
 
+test('year rollover, legacy page migration, and storage-year corrections publish a closed catalog with full parity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-year-pages-'))
+  try {
+    const matches = Array.from({ length: 30 }, (_, index) => match(`dec-${index + 1}`, `2025-12-${String(index + 1).padStart(2, '0')}`, index < 20 ? 'Autumn' : 'Winter'))
+    const baseline = await run(root, 'year-base', fixtureSource(matches), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(baseline)
+    const legacy = structuredClone(restored)
+    // Reproduce the previous writer's sequential page identities in both
+    // catalogs and the dependency index, while retaining valid stored digests.
+    legacy.artifacts = Object.fromEntries(Object.entries(legacy.artifacts ?? {}).map(([path, value]) => [
+      path.replace(/202500000(\d)/g, '$1'),
+      JSON.parse(JSON.stringify(value).replace(/202500000(\d)/g, '$1')) as unknown,
+    ]))
+    legacy.rootArtifact = legacy.artifacts['/data/ranking-summary.json'] as Record<string, unknown>
+    const meta = legacy.rootArtifact.artifactMeta as { runId: string }
+    legacy.publicManifest = createGenerationManifest({ generationId: meta.runId, rootManifest: legacy.rootArtifact,
+      entries: Object.entries(legacy.artifacts).map(([logicalPath, value]) => {
+        const prepared = prepareSemanticArtifact(value)
+        return { logicalPath, digest: prepared.digest, bytes: prepared.bytes }
+      }),
+    })
+    const checkpointMatches = matches.map((entry) => entry.id === 'dec-30'
+      ? { ...entry, event: 'First Stand 2025', league: 'FST', region: 'International' as const } : entry)
+    const checkpointBaseline = await run(root, 'checkpoint-base', fixtureSource(checkpointMatches), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const checkpointRestored = restoreFrom(checkpointBaseline)
+    const semanticRestored = structuredClone(restored)
+    semanticRestored.artifacts = Object.fromEntries(Object.entries(semanticRestored.artifacts ?? {}).map(([path, value]) => [
+      path, prepareSemanticArtifact(value).semantic.content,
+    ]))
+    const scenarios = [
+      { name: 'rollover', restored, matches: [...matches, match('jan-1', '2026-01-01', 'Winter')] },
+      { name: 'semantic-restore', restored: semanticRestored, matches: [...matches, match('semantic-append', '2025-12-31', 'Winter')] },
+      { name: 'new-checkpoint', restored: checkpointRestored, matches: [...checkpointMatches, match('post-fst', '2025-12-31', 'Winter')] },
+      { name: 'migration', restored: legacy, matches: [...matches, match('dec-31', '2025-12-31', 'Winter')] },
+      { name: 'moved-year', restored, matches: matches.map((entry) => entry.id === 'dec-30'
+        ? { ...entry, date: '2026-01-01', datetimeUtc: '2026-01-01T12:00:00.000Z' } : entry) },
+    ]
+    for (const scenario of scenarios) {
+      const source = fixtureSource(scenario.matches)
+      const result = await run(root, `${scenario.name}-patch`, source, { mode: 'gated', cause: 'pending-match', enabled: true, restored: scenario.restored })
+      assert.equal(result.action, 'publish-incremental', `${scenario.name}: ${result.metrics.fallbackReason}`)
+      if (result.action === 'publish-incremental' && scenario.name === 'rollover') {
+        assert.ok(!result.patch.changedArtifacts.some((entry) => entry.logicalPath === '/data/matches/pages/all-2025000001.json'))
+      }
+      const full = await run(root, `${scenario.name}-full`, source, { mode: 'gated', cause: 'daily-audit', enabled: false })
+      assert.deepEqual(semanticMap(result), semanticMap(full), scenario.name)
+      const promoted = restoreIncremental(scenario.restored, result)
+      for (const value of Object.values(promoted.artifacts ?? {})) {
+        const catalog = value as { artifactKind?: string; pages?: Array<{ url: string }> }
+        if (catalog.artifactKind !== 'match-history-catalog') continue
+        for (const page of catalog.pages ?? []) {
+          const path = new URL(page.url, 'https://ranking.invalid').pathname
+          assert.ok(promoted.artifacts?.[path], `${scenario.name}: unpublished ${path}`)
+        }
+      }
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test('shadow publishes full authority and missing/context-invalid checkpoints or parity mismatch diagnose and fall back fully', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-fallbacks-'))
   try {
@@ -627,7 +686,7 @@ test('match-page contraction removes obsolete trailing page objects', async () =
       mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreFrom(baseline),
     })
     assert.equal(contracted.action, 'publish-incremental', contracted.metrics.fallbackReason)
-    assert.ok(contracted.metrics.removedPaths.filter((path) => path.includes('/matches/pages/')).some((path) => /-2\.json$/.test(path)))
+    assert.ok(contracted.metrics.removedPaths.filter((path) => path.includes('/matches/pages/')).some((path) => /-2026000002\.json$/.test(path)))
     const full = await run(root, 'pages-full', contractedSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(semanticMap(contracted), semanticMap(full))
   } finally {

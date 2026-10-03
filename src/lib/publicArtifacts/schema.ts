@@ -691,6 +691,7 @@ export type PublicMatchHistoryScopeIndexEntry = {
   gameCount: number
   seriesCount: number
   pageCount: number
+  years?: string[]
   pages?: PublicMatchHistoryPageRef[]
 }
 
@@ -706,6 +707,7 @@ export type PublicMatchHistoryIndex = {
 }
 
 export type PublicMatchHistorySeriesRef = {
+  storageYear?: string
   id: string
   date: string
   datetimeUtc?: string
@@ -715,9 +717,12 @@ export type PublicMatchHistorySeriesRef = {
   teamB: PublicMatchHistoryTeam
   page: number
   gameCount: number
+  startUtcDate?: string
+  endUtcDate?: string
 }
 
 export type PublicMatchHistoryPageRef = {
+  storageYear?: string
   page: number
   url: string
   seriesCount: number
@@ -743,6 +748,7 @@ export type PublicMatchHistoryCatalog = {
 
 export type PublicMatchHistoryPage = {
   artifactKind: 'match-history-page'
+  storageYear?: string
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   artifactMeta: ArtifactMeta
   generatedAt: string
@@ -1429,6 +1435,10 @@ export function parsePublicMatchHistoryIndex(value: unknown): PublicMatchHistory
     assertArtifactUrl(entry.url, `match history index scopeIndex ${key} url`, '/data/matches')
     assertNonNegativeInteger(entry.gameCount, `match history index scopeIndex ${key} gameCount`)
     assertNonNegativeInteger(entry.seriesCount, `match history index scopeIndex ${key} seriesCount`)
+    if (entry.years !== undefined) {
+      assertStringArray(entry.years, 'match history storage years')
+      if (entry.years.some((year: string) => !/^\d{4}$/.test(year))) throw new Error('Invalid match history storage year')
+    }
     assertNonNegativeInteger(entry.pageCount, `match history index scopeIndex ${key} pageCount`)
     if (entry.pages !== undefined) {
       assertArray(entry.pages, `match history index scopeIndex ${key} pages`)
@@ -1456,6 +1466,7 @@ export function parsePublicMatchHistoryCatalog(value: unknown): PublicMatchHisto
 
 function assertPublicMatchHistoryPageRef(value: unknown, label: string) {
   assertObject(value, label)
+  if (value.storageYear !== undefined && (typeof value.storageYear !== 'string' || !/^\d{4}$/.test(value.storageYear))) throw new Error('Invalid match history storage year')
   assertNonNegativeInteger(value.page, `${label} page`)
   assertArtifactUrl(value.url, `${label} url`, '/data/matches')
   assertNonNegativeInteger(value.seriesCount, `${label} seriesCount`)
@@ -1470,6 +1481,7 @@ export function parsePublicMatchHistoryPage(value: unknown): PublicMatchHistoryP
   assertEqual(value.artifactKind, 'match-history-page', 'match history page artifactKind')
   assertMatchHistoryArtifactHeader(value, 'match history page')
   assertNonNegativeInteger(value.page, 'match history page page')
+  if (value.storageYear !== undefined && (typeof value.storageYear !== 'string' || !/^\d{4}$/.test(value.storageYear) || Math.floor(value.page / 1_000_000) !== Number(value.storageYear))) throw new Error('Invalid match history page storage year')
   assertNonNegativeInteger(value.seriesCount, 'match history page seriesCount')
   assertNonNegativeInteger(value.gameCount, 'match history page gameCount')
   assertArray(value.matches, 'match history page matches')
@@ -1492,6 +1504,9 @@ function assertPublicMatchHistorySeriesRef(value: unknown, label: string) {
   assertObject(value, label)
   for (const key of ['id', 'date', 'event', 'league'] as const) assertString(value[key], `${label} ${key}`)
   assertOptionalString(value.datetimeUtc, `${label} datetimeUtc`)
+  if (value.startUtcDate !== undefined) assertDateString(value.startUtcDate, `${label} startUtcDate`)
+  if (value.endUtcDate !== undefined) assertDateString(value.endUtcDate, `${label} endUtcDate`)
+  if (value.storageYear !== undefined && (typeof value.storageYear !== 'string' || !/^\d{4}$/.test(value.storageYear))) throw new Error('Invalid match history storage year')
   assertNonNegativeInteger(value.page, `${label} page`)
   assertNonNegativeInteger(value.gameCount, `${label} gameCount`)
   for (const teamKey of ['teamA', 'teamB'] as const) {

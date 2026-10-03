@@ -8,6 +8,7 @@ import {
   publicArtifactResponseFollowedRedirect,
   resolvePublicArtifactUrl,
 } from './urlResolver'
+import { hydrateArchive, projectArchiveView, type ArchiveSelection } from './archive.mjs'
 import { withAuditedTeamCodes } from '../../data/teamBranding'
 
 export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 2 as const
@@ -46,6 +47,7 @@ export type PublicArtifactGenerationManifest = {
     sourceProviders: string[]
   }
   rootArtifact: string
+  artifactDirectory?: { sha256: string; bytes: number; encoding: 'gzip' }
   artifacts: Record<string, PublicGenerationArtifactEntry>
 }
 
@@ -61,6 +63,7 @@ type GenerationContext = {
 }
 
 const generationContexts = new WeakMap<object, GenerationContext>()
+const directoryEntries = new WeakMap<object, Map<string, PublicGenerationArtifactEntry>>()
 const volatileArtifactKeys = new Set(['artifactMeta', 'generatedAt', 'modelVersion', 'modelConfigHash', 'schemaVersion'])
 
 export class PublicArtifactRequestError extends Error {
@@ -89,6 +92,13 @@ export function parsePublicArtifactGenerationManifest(value: unknown): PublicArt
   assertCanonicalPublicLogicalPath(value.rootArtifact, 'generation manifest rootArtifact')
   assertRecord(value.artifacts, 'generation manifest artifacts')
 
+  if (value.artifactDirectory !== undefined) {
+    assertRecord(value.artifactDirectory, 'generation artifact directory')
+    assertSha256(value.artifactDirectory.sha256, 'generation artifact directory digest')
+    assertNonNegativeInteger(value.artifactDirectory.bytes, 'generation artifact directory bytes')
+    if (value.artifactDirectory.bytes <= 0 || value.artifactDirectory.bytes > 512_000) throw new Error('Invalid public artifact directory byte budget')
+    assertEqual(value.artifactDirectory.encoding, 'gzip', 'generation artifact directory encoding')
+  }
   const entries = Object.entries(value.artifacts)
   if (entries.length === 0) throw new Error('Invalid public artifact: generation manifest artifacts must not be empty')
   for (const [logicalPath, candidate] of entries) {
@@ -171,7 +181,9 @@ export async function fetchPublicArtifact<T extends object>(
     fetcher = fetch,
     signal,
     cache,
+    archiveSelection,
   }: {
+    archiveSelection?: ArchiveSelection
     fetcher?: typeof fetch
     signal?: AbortSignal
     cache?: PublicArtifactCacheMode
@@ -185,11 +197,11 @@ export async function fetchPublicArtifact<T extends object>(
       headers: { Accept: 'application/json' },
     })
     if (!response.ok) throw new PublicArtifactRequestError(response.status)
-    return withAuditedTeamCodes(parse(await response.json()))
+    return withAuditedTeamCodes(parse(projectArchiveView(await response.json(), archiveSelection)))
   }
 
   const logicalPath = canonicalPublicLogicalPath(logicalUrl)
-  const entry = context.manifest.artifacts[logicalPath]
+  const entry = await resolveGenerationEntry(context, logicalPath, fetcher, { signal, cache })
   if (!entry) throw new Error(`Invalid public artifact: generation mapping is incomplete for ${logicalPath}`)
   if (entry.generationId !== context.manifest.generationId) {
     throw new Error(`Invalid public artifact: mixed generation mapping for ${logicalPath}`)
@@ -209,11 +221,54 @@ export async function fetchPublicArtifact<T extends object>(
     throw new Error(`Invalid public artifact: semantic digest mismatch for ${logicalPath}`)
   }
 
-  const hydrated = hydrateSemanticArtifact(semanticArtifact, context.manifest)
+  const content = await hydrateArchive(semanticArtifact.content,
+    (reference) => fetchArchiveNode(reference, context.manifestUrl, fetcher, requestInit), archiveSelection)
+  const projected = projectArchiveView(content, archiveSelection)
+  assertRecord(projected, 'public archive content')
+  const hydrated = hydrateSemanticArtifact({ ...semanticArtifact, content: projected }, context.manifest)
   const parsed = withAuditedTeamCodes(parse(hydrated))
   assertArtifactModelIdentity(parsed, context.manifest, logicalPath)
   registerGenerationContext(parsed, context.manifest, context.manifestUrl)
   return parsed
+}
+
+async function fetchArchiveNode(reference: { sha256: string; bytes: number }, manifestUrl: string, fetcher: typeof fetch, requestInit: RequestInit) {
+  const objectUrl = resolvePublicArtifactUrl(`/data/objects/sha256/${reference.sha256}`, manifestUrl)
+  const response = await fetchArtifactResponse(fetcher, objectUrl, manifestUrl, requestInit)
+  if (!response.ok) throw new PublicArtifactRequestError(response.status)
+  assertTransportEncoding(response, { transportEncodings: ['identity', 'gzip'] }, objectUrl)
+  const child = parsePublicSemanticArtifact(await parseSemanticResponse(response, objectUrl))
+  const identity = await semanticArtifactIdentity(child)
+  if (identity.sha256 !== reference.sha256 || identity.bytes !== reference.bytes || identity.bytes > 512_000) throw new Error('Public archive node digest or byte budget mismatch')
+  return child.content
+}
+
+async function resolveGenerationEntry(context: GenerationContext, logicalPath: string, fetcher: typeof fetch, requestInit: RequestInit) {
+  const direct = context.manifest.artifacts[logicalPath]
+  if (direct) return direct
+  const reference = context.manifest.artifactDirectory
+  if (!reference) return undefined
+  let cache = directoryEntries.get(context.manifest)
+  if (!cache) { cache = new Map(); directoryEntries.set(context.manifest, cache) }
+  const cached = cache.get(logicalPath)
+  if (cached) return cached
+  const content = await fetchArchiveNode(reference, context.manifestUrl, fetcher, requestInit)
+  const directory = await hydrateArchive(content,
+    (ref) => fetchArchiveNode(ref, context.manifestUrl, fetcher, requestInit), { records: { '/artifacts': [logicalPath] } })
+  assertRecord(directory, 'public artifact directory')
+  assertEqual(directory.artifactKind, 'public-artifact-directory', 'public artifact directory kind')
+  assertEqual(directory.formatVersion, 1, 'public artifact directory version')
+  assertRecord(directory.artifacts, 'public artifact directory mappings')
+  const candidate = directory.artifacts[logicalPath]
+  if (!candidate) return undefined
+  assertRecord(candidate, 'public artifact directory entry')
+  const entry = { ...candidate, generationId: context.manifest.generationId }
+  // Reuse the complete mapping validator rather than adding a weaker directory
+  // lookup validator. Keep the browser entry cache bounded across navigation.
+  const validated = parsePublicArtifactGenerationManifest({ ...context.manifest, artifacts: { ...context.manifest.artifacts, [logicalPath]: entry } })
+  if (cache.size >= 128) cache.delete(cache.keys().next().value!)
+  cache.set(logicalPath, validated.artifacts[logicalPath])
+  return validated.artifacts[logicalPath]
 }
 
 async function fetchArtifactResponse(
@@ -329,7 +384,7 @@ function withGenerationVersion(value: string, runId: string) {
 
 function assertTransportEncoding(
   response: Response,
-  entry: PublicGenerationArtifactEntry,
+  entry: Pick<PublicGenerationArtifactEntry, 'transportEncodings'>,
   logicalPath: string,
 ) {
   const header = response.headers.get('content-encoding')?.trim().toLowerCase()
@@ -393,7 +448,7 @@ export function validateGenerationRankingManifest(
   }
 
   for (const logicalPath of rankingManifestLogicalPaths(rankingManifest)) {
-    if (!generationManifest.artifacts[logicalPath]) {
+    if (!generationManifest.artifacts[logicalPath] && !generationManifest.artifactDirectory) {
       throw new Error(`Invalid public artifact: generation mapping is incomplete for ${logicalPath}`)
     }
   }
@@ -403,7 +458,7 @@ export function assertGenerationMapping(owner: object, logicalUrl: string) {
   const context = generationContexts.get(owner)
   if (!context) return
   const logicalPath = canonicalPublicLogicalPath(logicalUrl)
-  if (!context.manifest.artifacts[logicalPath]) {
+  if (!context.manifest.artifacts[logicalPath] && !context.manifest.artifactDirectory) {
     throw new Error(`Invalid public artifact: generation mapping is incomplete for ${logicalPath}`)
   }
 }

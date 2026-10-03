@@ -160,15 +160,21 @@ const summarySnapshots = Object.entries(publicPlan.snapshots)
 for (const write of publicPlan.writes) {
   write.validate(write.value)
 }
-const publicWrites = publicPlan.writes.map((entry) => ({
-  path: resolve(publicDataDir, entry.relativePath),
-  contents: entry.contents,
-}))
+const publicWrites = publicPlan.writes
 
 await rm(publicDataDir, { recursive: true, force: true })
 try {
+  const bytesByFamily: Record<string, number> = {}
+  const bytesByYear: Record<string, number> = {}
+  let largestArtifactBytes = 0
   for (const write of publicWrites) {
-    await atomicWriteFile(write.path, write.contents)
+    const contents = write.contents
+    const bytes = Buffer.byteLength(contents)
+    const year = /(?:^|[-/])(\d{4})(?:[-/.]|$)/.exec(write.relativePath)?.[1] ?? 'shared'
+    bytesByFamily[write.family] = (bytesByFamily[write.family] ?? 0) + bytes
+    bytesByYear[year] = (bytesByYear[year] ?? 0) + bytes
+    largestArtifactBytes = Math.max(largestArtifactBytes, bytes)
+    await atomicWriteFile(resolve(publicDataDir, write.relativePath), contents)
   }
 
   if (options.replacePublicDirectory !== false) {
@@ -183,6 +189,8 @@ try {
     ratedGameCount: matches.length,
     artifactCount: publicWrites.length,
     outputBytes: publicDataBytes,
+    bytesByFamily, bytesByYear, largestLogicalArtifactBytes: largestArtifactBytes,
+    processPeakRssBytes: process.resourceUsage().maxRSS * 1024,
   })
   await appendRefreshStages(env.RANKING_REFRESH_METRICS_PATH, metrics.snapshot({ result: 'running' }))
 

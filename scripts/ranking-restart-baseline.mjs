@@ -12,6 +12,7 @@ import { parseGenerationPublicationReceipt } from './generation-publication.mjs'
 import { parseIncrementalStateManifest } from './incremental-state-storage.mjs'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import {
+  expandPublicArtifactDirectory,
   bucketConfigFromEnv,
   bucketKey,
   createBucketClient,
@@ -19,6 +20,7 @@ import {
   readActiveContentAddressedGeneration,
   readActiveRawSourceAuthority,
   readBucketJson,
+  readVerifiedPublicArtifact,
 } from './railway-bucket.mjs'
 import { decodeRawObject, parseRawSourceReceipt } from './raw-source-storage.mjs'
 
@@ -471,6 +473,7 @@ async function verifyRawChildrenFromBucket(client, config, receipt) {
 
 async function verifyPublicArtifactBodies(client, config, manifest) {
   await mapConcurrent(Object.values(manifest.artifacts), 8, async (identity) => {
+    await readVerifiedPublicArtifact(client, config, identity, identity.logicalPath)
     const relativeKey = `objects/sha256/${requiredDigest(identity.sha256, 'public artifact digest')}`
     const key = bucketKey(config, relativeKey)
     await verifyCompressedReference(client, config, {
@@ -508,7 +511,7 @@ async function readPreviousAuthorities(pointer, { config, client }) {
   const publicRelativeKey = `generations/${generationId}/manifest.json`
   if (previous.manifestKey !== bucketKey(config, publicRelativeKey)) throw new Error('Previous public manifest key is not canonical')
   const publicStored = await readStoredJson(client, config, publicRelativeKey)
-  const manifest = publicStored.value
+  const manifest = await expandPublicArtifactDirectory(client, config, publicStored.value)
   if (manifest.generationId !== generationId || manifest.runId !== generationId
     || manifest.storageMode !== 'content-addressed-gzip-v1' || !manifest.artifacts || typeof manifest.artifacts !== 'object') {
     throw new Error('Previous public manifest is invalid')

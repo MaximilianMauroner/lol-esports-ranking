@@ -1,3 +1,4 @@
+import { teamKey } from '../lib/display'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   PublicPlayerDirectory,
@@ -71,6 +72,8 @@ type PublicArtifactLoadOptions = {
   loadTeamHistory?: boolean
   loadRegionHistory?: boolean
   loadTournamentMovements?: boolean
+  matchHistoryYear?: string
+  teamHistoryTeams?: readonly string[]
   loadMatchHistory?: boolean
   tournamentId?: TournamentInstanceId
 }
@@ -105,6 +108,8 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     loadRegionHistory = false,
     loadTournamentMovements = false,
     loadMatchHistory = false,
+    matchHistoryYear,
+    teamHistoryTeams,
     tournamentId,
   } = options
   const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>(
@@ -124,6 +129,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   const [tournamentMovementCache, setTournamentMovementCache] = useState<Record<string, TournamentMovementCacheEntry>>({})
   const tournamentMovementCacheRef = useRef(tournamentMovementCache)
   const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
+  const [matchHistoryAttempt, setMatchHistoryAttempt] = useState(0)
   const [matchHistoryIndexState, setMatchHistoryIndexState] = useState<PublicArtifactState<PublicMatchHistoryIndex>>({ status: 'idle' })
   const [matchHistoryCatalogState, setMatchHistoryCatalogState] = useState<PublicArtifactState<PublicMatchHistoryCatalog>>({ status: 'idle' })
   const [matchHistoryPages, setMatchHistoryPages] = useState<Record<number, MatchHistoryPageState>>({})
@@ -138,9 +144,11 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     () => resolvePublicSnapshotState(data, filter, snapshotCache),
     [data, filter, snapshotCache],
   )
+  const selectedTeamsKey = (teamHistoryTeams?.length ? [...teamHistoryTeams] : snapshotState.status === 'ready'
+    ? snapshotState.snapshot.standings.slice(0, 5).map(teamKey) : []).sort().join('\u0000')
   const teamHistoryState = useMemo(
-    () => requestedState(loadTeamHistory, resolveTeamHistoryState(teamHistoryRootState, teamHistoryCache, filter, effectiveScope)),
-    [effectiveScope, filter, loadTeamHistory, teamHistoryCache, teamHistoryRootState],
+    () => requestedState(loadTeamHistory, resolveTeamHistoryState(teamHistoryRootState, teamHistoryCache, filter, effectiveScope, selectedTeamsKey)),
+    [effectiveScope, filter, loadTeamHistory, teamHistoryCache, teamHistoryRootState, selectedTeamsKey],
   )
   const scopedRegionHistoryState = useMemo(
     () => requestedState(loadRegionHistory, resolveRegionHistoryState(regionHistoryState, filter, effectiveScope)),
@@ -157,6 +165,8 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     () => resolveTournamentMovementState(tournamentMovementIndexState, tournamentMovementCache, tournamentId),
     [tournamentId, tournamentMovementCache, tournamentMovementIndexState],
   )
+  const matchHistoryYears = matchHistoryIndexState.status === 'ready' ? matchHistoryIndexState.data.scopeIndex[snapshotKey(filter)]?.years ?? [] : []
+  const selectedMatchYear = matchHistoryYear && matchHistoryYear !== 'All' && (matchHistoryIndexState.status !== 'ready' || matchHistoryYears.includes(matchHistoryYear)) ? matchHistoryYear : undefined
   const matchHistoryState = useMemo<MatchHistoryState>(() => (
     matchHistoryCatalogState.status === 'ready'
       ? { status: 'ready', data: { catalog: matchHistoryCatalogState.data, pages: matchHistoryPages } }
@@ -236,7 +246,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     setRegionHistoryState({ status: 'loading' })
     async function load() {
       try {
-        const regionHistory = await fetchPublicArtifact(manifest, url, DATA_URL, parsePublicRegionHistory, { signal: controller.signal })
+        const regionHistory = await fetchPublicArtifact(manifest, url, DATA_URL, parsePublicRegionHistory, { signal: controller.signal, archiveSelection: { records: { '/scopes': [snapshotKey(filter)] } } })
         setRegionHistoryState({ status: 'ready', data: regionHistory })
       } catch (error) {
         if (isAbortError(error)) return
@@ -248,7 +258,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     }
     void load()
     return () => controller.abort()
-  }, [data, loadRegionHistory])
+  }, [data, loadRegionHistory, filter])
 
   useEffect(() => {
     if (!data || !loadTournamentMovements) return
@@ -290,6 +300,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
         const index = await fetchPublicArtifact(manifest, logicalUrl, DATA_URL, parsePublicMatchHistoryIndex, {
           signal: controller.signal,
           cache: 'no-cache',
+          archiveSelection: { records: { '/scopeIndex': [snapshotKey(filter)] }, ...(matchHistoryYear && matchHistoryYear !== 'All' ? { years: [matchHistoryYear] } : {}) },
         })
         validateMatchHistoryRun(index, manifest)
         Object.values(index.scopeIndex).forEach((entry) => assertGenerationMapping(index, entry.url))
@@ -304,10 +315,11 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     }
     void load()
     return () => controller.abort()
-  }, [data, loadMatchHistory])
+  }, [data, loadMatchHistory, matchHistoryAttempt, filter, matchHistoryYear])
 
   useEffect(() => {
     if (!loadMatchHistory) return
+    matchHistoryCatalogRef.current = undefined
     if (matchHistoryIndexState.status !== 'ready') {
       setMatchHistoryCatalogState(matchHistoryIndexState.status === 'idle' ? { status: 'idle' } : matchHistoryIndexState.status === 'loading' ? { status: 'loading' } : { status: matchHistoryIndexState.status, message: matchHistoryIndexState.message })
       return
@@ -326,8 +338,8 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     matchHistoryCatalogRef.current = undefined
     async function load() {
       try {
-        const catalog = await fetchPublicArtifact(index, expected.url, DATA_URL, parsePublicMatchHistoryCatalog, { signal: controller.signal })
-        validateMatchHistoryCatalog(key, expected, catalog, index)
+        const catalog = await fetchPublicArtifact(index, expected.url, DATA_URL, parsePublicMatchHistoryCatalog, { signal: controller.signal, ...(selectedMatchYear ? { archiveSelection: { years: [selectedMatchYear] } } : {}) })
+        validateMatchHistoryCatalog(key, expected, catalog, index, Boolean(selectedMatchYear))
         catalog.pages.forEach((entry) => assertGenerationMapping(catalog, entry.url))
         matchHistoryCatalogRef.current = catalog
         setMatchHistoryCatalogState({ status: 'ready', data: catalog })
@@ -338,7 +350,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     }
     void load()
     return () => controller.abort()
-  }, [effectiveScope, filter, loadMatchHistory, matchHistoryIndexState])
+  }, [effectiveScope, filter, loadMatchHistory, matchHistoryIndexState, selectedMatchYear, matchHistoryAttempt])
 
   useEffect(() => {
     matchHistoryPagesRef.current = matchHistoryPages
@@ -346,7 +358,10 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
 
   const requestMatchHistoryPages = useCallback((pageNumbers: number[]) => {
     const catalog = matchHistoryCatalogRef.current
-    if (!catalog) return
+    if (!catalog) { setMatchHistoryAttempt((attempt) => attempt + 1); return }
+    const retained = new Set([...pageNumbers, ...Object.keys(matchHistoryPagesRef.current).map(Number).slice(-16)])
+    matchHistoryPagesRef.current = Object.fromEntries(Object.entries(matchHistoryPagesRef.current).filter(([key]) => retained.has(Number(key))))
+    setMatchHistoryPages(matchHistoryPagesRef.current)
     for (const pageNumber of [...new Set(pageNumbers)]) {
       const expected = catalog.pages.find((page) => page.page === pageNumber)
       if (!expected || matchHistoryPagesRef.current[pageNumber]?.status === 'ready' || matchHistoryPagesRef.current[pageNumber]?.status === 'loading') continue
@@ -355,7 +370,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
       setMatchHistoryPages((current) => ({ ...current, [pageNumber]: loading }))
       void loadMatchHistoryPage(catalog, expected, pageNumber).then((state) => {
         const activeCatalog = matchHistoryCatalogRef.current
-        if (!activeCatalog || snapshotKey(activeCatalog.filter) !== snapshotKey(catalog.filter) || activeCatalog.artifactMeta.runId !== catalog.artifactMeta.runId) return
+        if (activeCatalog !== catalog) return
         matchHistoryPagesRef.current = { ...matchHistoryPagesRef.current, [pageNumber]: state }
         setMatchHistoryPages((current) => ({ ...current, [pageNumber]: state }))
       })
@@ -485,7 +500,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     const manifest = data
     const key = snapshotKey(filter)
     const cacheEntry = snapshotCacheRef.current[key]
-    if (cacheEntry?.status === 'ready' || cacheEntry?.status === 'loading') return
+    if (cacheEntry?.status === 'ready') return
     const expected = manifest.snapshotIndex?.[key]
     if (!expected) {
       setSnapshotCache((current) => ({
@@ -517,35 +532,36 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     if (!loadTeamHistory || teamHistoryRootState.status !== 'ready' || teamHistoryRootState.data.artifactKind !== 'team-history-index') return
     const index = teamHistoryRootState.data
     const key = snapshotKey(filter)
-    const cacheEntry = teamHistoryCacheRef.current[key]
-    if (cacheEntry?.status === 'ready' || cacheEntry?.status === 'loading') return
+    const cacheKey = `${key}\u0001${selectedTeamsKey}`
+    const cacheEntry = teamHistoryCacheRef.current[cacheKey]
+    if (cacheEntry?.status === 'ready') return
     const expected = index.scopeIndex[key]
     if (!expected) {
       setTeamHistoryCache((current) => ({
         ...current,
-        [key]: { status: 'missing', message: `No generated team history exists for ${scopeLabel(effectiveScope)}.` },
+        [cacheKey]: { status: 'missing', message: `No generated team history exists for ${scopeLabel(effectiveScope)}.` },
       }))
       return
     }
     const url = resolvePublicArtifactUrl(expected.url, DATA_URL)
     const controller = new AbortController()
-    setTeamHistoryCache((current) => ({ ...current, [key]: { status: 'loading' } }))
+    setTeamHistoryCache((current) => ({ ...current, [cacheKey]: { status: 'loading' } }))
     async function load() {
       try {
-        const next = await fetchPublicArtifact(index, url, DATA_URL, parsePublicTeamHistoryShard, { signal: controller.signal })
-        validatePublicTeamHistoryShard(key, expected, next, index)
-        setTeamHistoryCache((current) => ({ ...current, [key]: { status: 'ready', shard: next } }))
+        const next = await fetchPublicArtifact(index, url, DATA_URL, parsePublicTeamHistoryShard, { signal: controller.signal, archiveSelection: { records: { '/series': selectedTeamsKey ? selectedTeamsKey.split('\u0000') : [] } } })
+        validatePublicTeamHistoryShard(key, expected, next, index, selectedTeamsKey ? selectedTeamsKey.split('\u0000') : [])
+        if (!controller.signal.aborted) setTeamHistoryCache({ [cacheKey]: { status: 'ready', shard: next } })
       } catch (error) {
         if (isAbortError(error)) return
         setTeamHistoryCache((current) => ({
           ...current,
-          [key]: { status: 'error', message: error instanceof Error ? error.message : 'Unable to load team history' },
+          [cacheKey]: { status: 'error', message: error instanceof Error ? error.message : 'Unable to load team history' },
         }))
       }
     }
     void load()
     return () => controller.abort()
-  }, [effectiveScope, filter, loadTeamHistory, teamHistoryRootState])
+  }, [effectiveScope, filter, loadTeamHistory, teamHistoryRootState, selectedTeamsKey])
 
   return {
     data,
@@ -562,6 +578,8 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     tournamentMovementEntries,
     tournamentMovementState,
     matchHistoryState,
+    matchHistoryYears,
+    selectedMatchYear,
     requestMatchHistoryPages,
     retryTournamentMovements,
     prefetchScope,
@@ -580,9 +598,9 @@ function validateMatchHistoryRun(index: PublicMatchHistoryIndex, manifest: Publi
   if (manifest.artifactMeta && index.artifactMeta.runId !== manifest.artifactMeta.runId) throw new Error('Match history index runId mismatch')
 }
 
-function validateMatchHistoryCatalog(key: string, expected: PublicMatchHistoryIndex['scopeIndex'][string], catalog: PublicMatchHistoryCatalog, index: PublicMatchHistoryIndex) {
+function validateMatchHistoryCatalog(key: string, expected: PublicMatchHistoryIndex['scopeIndex'][string], catalog: PublicMatchHistoryCatalog, index: PublicMatchHistoryIndex, projected = false) {
   if (snapshotKey(catalog.filter) !== key) throw new Error(`Match history catalog key mismatch for ${key}`)
-  if (catalog.gameCount !== expected.gameCount || catalog.seriesCount !== expected.seriesCount || catalog.pages.length !== expected.pageCount) throw new Error(`Match history catalog counts mismatch for ${key}`)
+  if (!projected && (catalog.gameCount !== expected.gameCount || catalog.seriesCount !== expected.seriesCount || catalog.pages.length !== expected.pageCount)) throw new Error(`Match history catalog counts mismatch for ${key}`)
   if (catalog.modelVersion !== index.modelVersion || catalog.modelConfigHash !== index.modelConfigHash || catalog.generatedAt !== index.generatedAt || catalog.artifactMeta.runId !== index.artifactMeta.runId) {
     throw new Error(`Match history catalog run mismatch for ${key}`)
   }
@@ -691,6 +709,7 @@ function resolveTeamHistoryState(
   cache: Record<string, TeamHistoryCacheEntry>,
   filter: SnapshotFilter,
   effectiveScope: string,
+  selectedTeamsKey: string,
 ): TeamHistoryArtifactState {
   if (rootState.status === 'idle') return { status: 'idle' }
   if (rootState.status === 'loading') return { status: 'loading' }
@@ -699,7 +718,7 @@ function resolveTeamHistoryState(
 
   const key = snapshotKey(filter)
   const root = rootState.data
-  const cached = cache[key]
+  const cached = cache[`${key}\u0001${selectedTeamsKey}`]
   if (cached?.status === 'ready') return { status: 'ready', data: cached.shard }
   if (cached) return cached.status === 'loading' ? { status: 'loading' } : { status: cached.status, message: cached.message }
   if (!root.scopeIndex[key]) {

@@ -370,7 +370,11 @@ export async function buildRankingIncrementally({
       : restored.artifacts
     const preliminaryPlan = scopedDependencyPlan(changes, classification, restored.rootArtifact, restored.publicManifest, dependencyArtifacts)
     const dynamicCheckpointKeys = dynamicCheckpointKeysForPlan(restored.rootArtifact, changes)
-    addNewCheckpointArtifactsToPlan(preliminaryPlan.logicalPaths, restored.rootArtifact, dynamicCheckpointKeys)
+    addNewScopeArtifactsToPlan(preliminaryPlan.logicalPaths, restored.rootArtifact, new Set([
+      ...dynamicCheckpointKeys,
+      ...changes.flatMap((change) => [change.before, change.after].flatMap((match) => match
+        ? [snapshotKey({ season: String(match.season), event: 'All', region: 'All' })] : [])),
+    ]))
     const affectedSnapshotKeys = snapshotKeysForPlan(restored.rootArtifact, preliminaryPlan.logicalPaths, changes)
     for (const key of dynamicCheckpointKeys) affectedSnapshotKeys.add(key)
     const affectedLogicalPaths = new Set(preliminaryPlan.logicalPaths.map(stripDataPrefix))
@@ -1108,7 +1112,7 @@ function rawPrefixMatchesLedger(prefix: { matchCount: number; digest: string }, 
 
 function semanticMapFromWrites(writes: SnapshotBuild['publicPlan']['writes'], includeProvenance = false): SemanticArtifactMap {
   return Object.fromEntries(writes.map((write) => {
-    const prepared = prepareSemanticArtifact(write.value)
+    const prepared = prepareSemanticArtifact(write.value, { compress: false })
     return [`/data/${write.relativePath}`, {
       digest: prepared.digest,
       ...(includeProvenance ? { provenanceDigest: stableDigest(provenanceFor(write.value)) } : {}),
@@ -1152,26 +1156,12 @@ function scopedDependencyPlan(
 ) {
   const inventory = dependencyInventory(rootArtifact, publicManifest, changes, artifacts)
   const plan = affectedPublicArtifacts({ changes, inventory })
-  if (classification.kind === 'latest-append') {
-    for (const scope of inventory.scopes) {
-      const lastPage = scope.matchPages.at(-1)?.path
-      if (!lastPage || !plan.logicalPaths.includes(lastPage)) continue
-      const nextPage = nextMatchPagePath(lastPage)
-      if (nextPage) plan.logicalPaths.push(nextPage)
-    }
-    plan.logicalPaths = [...new Set(plan.logicalPaths)].sort()
-  }
   if (classification.reasons.some((reason) => reason.startsWith('schedule-context'))) {
     const additions = [inventory.manifestPath, inventory.regionHistoryPath, inventory.tournamentMovementIndexPath,
       ...inventory.scopes.map((scope) => scope.rankingPath), ...Object.values(inventory.tournamentMovementPaths)]
     plan.logicalPaths = [...new Set([...plan.logicalPaths, ...additions])].sort()
   }
   return plan
-}
-
-function nextMatchPagePath(path: string) {
-  const match = /^(.*-)(\d+)(\.json)$/.exec(path)
-  return match ? `${match[1]}${Number(match[2]) + 1}${match[3]}` : undefined
 }
 
 function dependencyInventory(
@@ -1320,19 +1310,18 @@ function dynamicCheckpointKeysForPlan(
   return selected
 }
 
-function addNewCheckpointArtifactsToPlan(
+function addNewScopeArtifactsToPlan(
   logicalPaths: string[],
   rootArtifact: Record<string, unknown>,
-  checkpointKeys: ReadonlySet<string>,
+  scopeKeys: ReadonlySet<string>,
 ) {
   const snapshotIndex = requiredRecord(rootArtifact.snapshotIndex, 'ranking root snapshot index')
-  for (const key of checkpointKeys) {
+  for (const key of scopeKeys) {
     if (snapshotIndex[key]) continue
     logicalPaths.push(
       `/data/${publicScopeArtifactPath(key)}`,
       `/data/${publicTeamHistoryShardPath(key)}`,
       `/data/${publicMatchHistoryShardPath(key)}`,
-      `/data/${publicMatchHistoryPagePath(key, 1)}`,
     )
   }
   logicalPaths.splice(0, logicalPaths.length, ...new Set(logicalPaths))
@@ -1467,12 +1456,15 @@ function baseMetrics(classification: RankingChangeClassification['kind'], ledger
 }
 
 function withArtifactBytes(metrics: IncrementalBuildMetrics, writes: SnapshotBuild['publicPlan']['writes']) {
-  const prepared = writes.map((write) => prepareSemanticArtifact(write.value))
-  return {
-    ...metrics,
-    semanticBytes: prepared.reduce((sum, artifact) => sum + artifact.bytes, 0),
-    compressedBytes: prepared.reduce((sum, artifact) => sum + artifact.compressedBytes, 0),
+  let semanticBytes = 0, compressedBytes = 0
+  for (const write of writes) {
+    const prepared = prepareSemanticArtifact(write.value)
+    for (const node of [...(prepared.children ?? []), prepared]) {
+      semanticBytes += node.bytes
+      compressedBytes += node.compressedBytes
+    }
   }
+  return { ...metrics, semanticBytes, compressedBytes }
 }
 
 function withPlayerLifecycle(metrics: IncrementalBuildMetrics, build: SnapshotBuild): IncrementalBuildMetrics {

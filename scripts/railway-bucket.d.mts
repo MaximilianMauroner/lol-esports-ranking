@@ -39,6 +39,7 @@ export function readActiveContentAddressedGeneration(options?: {
   client?: BucketClient
   verifyArtifacts?: boolean
   verifyPublicationClosure?: boolean
+  resolveDirectory?: boolean
   activeAuthority?: { found: boolean; key?: string; etag?: string; value?: Record<string, unknown> }
 }): Promise<
   | { found: false; reason: string; active?: Record<string, unknown>; etag?: string }
@@ -240,3 +241,7 @@ export function bucketKey(config: { prefix?: string }, relativeKey: string): str
 export function safeObjectPath(path: string): string
 export function safeRequestedObjectPath(path: string): string
 export function contentTypeForPath(path: string): string
+
+export function readVerifiedPublicArtifact(client: BucketClient, config: BucketStorageConfig, identity: { sha256: string; bytes: number }, logicalPath: string, options?: { onReference?: (reference: { sha256: string; bytes: number }, compressedBytes: number) => void }): Promise<unknown>
+
+export function expandPublicArtifactDirectory(client: BucketClient, config: BucketStorageConfig, manifest: Record<string, unknown>, options?: { onReference?: (reference: { sha256: string; bytes: number }, compressedBytes: number) => void }): Promise<Record<string, unknown>>

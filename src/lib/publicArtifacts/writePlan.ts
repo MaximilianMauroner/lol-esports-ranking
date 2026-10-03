@@ -50,7 +50,7 @@ export const PUBLIC_ARTIFACT_BUDGETS = {
   defaultScopeBytes: 1_000_000,
   // Lazy-loaded directory includes nine coverage-aware stats across player scopes.
   playersBytes: 1_800_000,
-  totalPublicDataBytes: 30_000_000,
+  archivePageBytes: 512_000,
 } as const
 
 export const PUBLIC_ARTIFACT_PATHS = {
@@ -186,8 +186,21 @@ export function createPublicArtifactWritePlan(
   ]
 
   assertPublicArtifactBudgets(allWrites, data.defaultSnapshotKey)
+  // A changed catalog can introduce pages at a year boundary, during legacy
+  // migration, or for a new checkpoint. Select their actual generated IDs.
+  const requiredNewPages = new Set<string>()
+  if (affectedLogicalPaths && matchHistory) {
+    const previousPagesByScope = previousMatchPages(previous(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex))
+    for (const [key, catalog] of Object.entries(matchHistory.catalogs)) {
+      if (!selected(publicMatchHistoryShardPath(key))) continue
+      const previousPages = previousPagesByScope.get(key) ?? new Set<number>()
+      for (const page of catalog.pages) {
+        if (!previousPages.has(page.page)) requiredNewPages.add(publicMatchHistoryPagePath(key, page.page))
+      }
+    }
+  }
   const writes = affectedLogicalPaths
-    ? allWrites.filter((entry) => affectedLogicalPaths.has(entry.relativePath))
+    ? allWrites.filter((entry) => affectedLogicalPaths.has(entry.relativePath) || requiredNewPages.has(entry.relativePath))
     : allWrites
 
   return {
@@ -196,6 +209,22 @@ export function createPublicArtifactWritePlan(
     writes,
     budgets: PUBLIC_ARTIFACT_BUDGETS,
   }
+}
+
+// Storage restore supplies digest-verified semantic bodies without volatile
+// schema/model/run metadata. Read only the inventory needed for page reuse.
+function previousMatchPages(value: unknown) {
+  const inventory = new Map<string, Set<number>>()
+  if (!value || typeof value !== 'object' || !('scopeIndex' in value)) return inventory
+  const scopes = value.scopeIndex
+  if (!scopes || typeof scopes !== 'object' || Array.isArray(scopes)) return inventory
+  for (const [key, scope] of Object.entries(scopes)) {
+    if (!scope || typeof scope !== 'object' || !('pages' in scope) || !Array.isArray(scope.pages)) continue
+    const pageIds = scope.pages.flatMap((page: unknown) => page && typeof page === 'object' && 'page' in page
+      && typeof page.page === 'number' && Number.isSafeInteger(page.page) && page.page > 0 ? [page.page] : [])
+    inventory.set(key, new Set(pageIds))
+  }
+  return inventory
 }
 
 function mergeRecordIndex<T extends Record<string, unknown>>(current: T, previous: unknown, key: string): T {
@@ -229,22 +258,14 @@ function withArtifactVersion(url: string, version: string) {
 }
 
 export function assertPublicArtifactBudgets(writes: PublicArtifactWrite[], defaultSnapshotKey: string) {
-  const total = writes.reduce((sum, entry) => sum + byteLength(entry.contents), 0)
   const manifest = writes.find((entry) => entry.relativePath === PUBLIC_ARTIFACT_PATHS.manifest)
-  const players = writes.find((entry) => entry.relativePath === PUBLIC_ARTIFACT_PATHS.players)
   const defaultScope = writes.find((entry) => entry.relativePath === publicScopeArtifactPath(defaultSnapshotKey))
 
   if (manifest && byteLength(manifest.contents) > PUBLIC_ARTIFACT_BUDGETS.manifestBytes) {
     throw new Error(`Public manifest budget exceeded: ${byteLength(manifest.contents)} bytes > ${PUBLIC_ARTIFACT_BUDGETS.manifestBytes} bytes`)
   }
-  if (players && byteLength(players.contents) > PUBLIC_ARTIFACT_BUDGETS.playersBytes) {
-    throw new Error(`Public players budget exceeded: ${byteLength(players.contents)} bytes > ${PUBLIC_ARTIFACT_BUDGETS.playersBytes} bytes`)
-  }
   if (defaultScope && byteLength(defaultScope.contents) > PUBLIC_ARTIFACT_BUDGETS.defaultScopeBytes) {
     throw new Error(`Default ranking scope budget exceeded: ${byteLength(defaultScope.contents)} bytes > ${PUBLIC_ARTIFACT_BUDGETS.defaultScopeBytes} bytes`)
-  }
-  if (total > PUBLIC_ARTIFACT_BUDGETS.totalPublicDataBytes) {
-    throw new Error(`Public data budget exceeded: ${total} bytes > ${PUBLIC_ARTIFACT_BUDGETS.totalPublicDataBytes} bytes`)
   }
 }
 
@@ -259,12 +280,14 @@ function write(
   validate: (value: unknown) => unknown,
   pretty = false,
 ): PublicArtifactWrite {
+  let overriddenContents: string | undefined
   return {
     family,
     relativePath,
     url: localPublicDataUrl(relativePath),
     value,
-    contents: `${JSON.stringify(value, null, pretty ? 2 : 0)}\n`,
+    get contents() { return overriddenContents ?? `${JSON.stringify(this.value, null, pretty ? 2 : 0)}\n` },
+    set contents(contents: string) { overriddenContents = contents },
     validate,
   }
 }
