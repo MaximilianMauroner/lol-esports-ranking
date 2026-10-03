@@ -10,8 +10,6 @@ export const CONTENT_ADDRESSED_STORAGE_MODE = 'content-addressed-gzip-v1'
 const volatileArtifactKeys = new Set(['artifactMeta', 'generatedAt', 'modelVersion', 'modelConfigHash', 'schemaVersion'])
 
 export function prepareSemanticArtifact(value, { compress = true } = {}) {
-  const writeVersion = process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION ?? '1'
-  if (!['0', '1'].includes(writeVersion)) throw new Error('Unsupported public archive writer version')
   assertRecord(value, 'public artifact')
   const withoutVolatileMetadata = Object.fromEntries(Object.entries(value).filter(([key]) => !volatileArtifactKeys.has(key)))
   const children = []
@@ -24,7 +22,7 @@ export function prepareSemanticArtifact(value, { compress = true } = {}) {
   const content = normalizeKnownLogicalUrls(withoutVolatileMetadata)
   // The ranking bootstrap keeps its existing size contract; history and entity
   // payloads use bounded immutable archive nodes when their logical view grows.
-  const archived = writeVersion === '0' || content.artifactKind === 'public-ranking-manifest' || (content.artifactKind === 'public-snapshot-shard' && Buffer.byteLength(canonicalJsonFor(content)) <= 1_000_000)
+  const archived = content.artifactKind === 'public-ranking-manifest' || (content.artifactKind === 'public-snapshot-shard' && Buffer.byteLength(canonicalJsonFor(content)) <= 1_000_000)
     ? content : createArchive(content, store)
   return { ...prepareEnvelope(archived, compress), children }
 }
