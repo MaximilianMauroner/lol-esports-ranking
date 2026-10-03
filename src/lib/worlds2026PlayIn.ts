@@ -179,6 +179,13 @@ export function forecastWorlds2026PlayIn(input: Worlds2026PlayInInput, basis: Fo
         sideAssumption: 'neutral', sideBasis: 'Hypothetical neutral-side Bo5; RoFS/RoDS and pick choices are not modeled.',
       })
       if (result.status === 'unavailable') return unsupported('model-unavailable', `${pair.join(' vs ')}: ${result.reason}: ${result.detail}`)
+      const probabilities = [result.homeGameWinProbability, result.awayGameWinProbability,
+        result.homeSeriesWinProbability, result.awaySeriesWinProbability]
+      if (probabilities.some((value) => !Number.isFinite(value) || value < 0 || value > 1)
+        || Math.abs(result.homeGameWinProbability + result.awayGameWinProbability - 1) > 0.0002
+        || Math.abs(result.homeSeriesWinProbability + result.awaySeriesWinProbability - 1) > 0.0002) {
+        return unsupported('model-unavailable', `${pair.join(' vs ')}: The model must return finite, complementary game and series probabilities.`)
+      }
       forecast = result
       matchups.set(key, forecast)
     }

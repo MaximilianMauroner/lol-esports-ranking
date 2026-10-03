@@ -168,6 +168,17 @@ test('missing/future/incompatible frozen inputs never yield partial or substitut
   }
 })
 
+test('an accepted finite rating scale that overflows provider calculations cannot yield supported NaN odds', () => {
+  const model = basis()
+  const scale = { ...publishedRatingScale, spreadMultiplier: Number.MIN_VALUE }
+  model.model.ratingScale = scale
+  model.snapshot.ratingScale = scale
+  for (const team of model.snapshot.standings) team.rating = 2000
+  const value = forecastWorlds2026PlayIn(input(), model)
+  assert.equal(value.status, 'unsupported')
+  if (value.status === 'unsupported') assert.equal(value.reason, 'model-unavailable')
+})
+
 
 test('an empty bracket may omit result evidence but cannot echo explicitly invalid result provenance', () => {
   const empty = input()
