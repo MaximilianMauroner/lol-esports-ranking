@@ -1675,7 +1675,6 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
     }
   }
   if (!rootManifest) throw new Error('Content-addressed publication requires ranking-summary.json')
-  if (process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION === '0' && semanticLogicalBytes > 30_000_000) throw new Error('Legacy public writer exceeds 30 MB; enable archive writer after reader deployment')
   const manifest = createGenerationManifest({ generationId, rootManifest, entries })
   const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
   for (const result of manifestSync.directoryResults ?? []) {
@@ -1854,7 +1853,6 @@ async function syncGenerationManifest(client, config, generationId, manifest) {
   const directoryResults = []
   let storedManifest = manifest
   if (Buffer.byteLength(jsonBody(manifest)) > 250_000) {
-    if (process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION === '0') throw new Error('Legacy generation directory exceeds bootstrap budget; enable archive writer after reader deployment')
     const artifacts = Object.fromEntries(Object.entries(manifest.artifacts).map(([path, entry]) => {
       return [path, Object.fromEntries(Object.entries(entry).filter(([key]) => key !== 'generationId'))]
     }))
