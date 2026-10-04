@@ -46,15 +46,17 @@ export function buildCanonicalMatchLedger(
       teamARoster: undefined,
       teamBRoster: undefined,
     }
+    const scoringDigest = stableDigest({ match, teamContext })
+    const providerAvailableAt = context.providerAvailableAtForMatch?.(match, scoringDigest)
     return {
       key,
       utcDate: match.date,
-      scoringDigest: stableDigest({ match, teamContext }),
-      artifactDigest: stableDigest({ match, teamContext }),
+      scoringDigest,
+      artifactDigest: scoringDigest,
       scheduleReceiptIdentity: context.scheduleReceiptIdentity,
       contextReceiptIdentity: context.contextReceiptIdentity,
       provenanceReceiptIdentity: context.provenanceReceiptIdentity,
-      ...(context.providerAvailableAtForMatch?.(match) ? { providerAvailableAt: context.providerAvailableAtForMatch(match) } : {}),
+      ...(providerAvailableAt ? { providerAvailableAt } : {}),
       // Digests above bind the full scored input, including player/roster rows.
       // The persisted dependency projection needs match scope fields, not the
       // large raw roster payloads, and must not alias the live source object.
