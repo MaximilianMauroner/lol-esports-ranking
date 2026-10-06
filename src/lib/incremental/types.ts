@@ -21,7 +21,7 @@ export type CanonicalMatchLedgerContext = RankingCompatibility & {
   provenanceReceiptIdentity: string
   teams?: Readonly<Record<string, TeamProfile>>
   scheduleCausalRows?: readonly CanonicalScheduleCausalRow[]
-  providerAvailableAtForMatch?: (match: MatchRecord) => string | undefined
+  providerAvailableAtForMatch?: (match: MatchRecord, scoringDigest: string) => string | undefined
 }
 
 export type CanonicalMatchLedgerRow = {

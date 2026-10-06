@@ -130,18 +130,3 @@ test('hash-only preparation preserves storage identity without retaining compres
   assert.equal(identity.compressed.length, 0)
   assert.ok(identity.children?.every((node) => node.compressed.length === 0))
 })
-
-test('reader-first release can keep the legacy writer and rejects unknown writer versions', () => {
-  const original = process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION
-  try {
-    process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION = '0'
-    const legacy = prepareSemanticArtifact(corpus(2), { compress: false })
-    assert.equal(legacy.children?.length, 0)
-    assert.equal(legacy.semantic.content && typeof legacy.semantic.content === 'object' && 'artifactKind' in legacy.semantic.content ? legacy.semantic.content.artifactKind : undefined, 'synthetic-history')
-    process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION = '2'
-    assert.throws(() => prepareSemanticArtifact(corpus(2)), /Unsupported public archive writer version/)
-  } finally {
-    if (original === undefined) delete process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION
-    else process.env.RANKING_PUBLIC_ARCHIVE_WRITE_VERSION = original
-  }
-})

@@ -114,6 +114,24 @@ test('checkpoint validation fails closed for corruption and every invalidation i
   assertInvalid('{not-json', checkpointIdentity, 'malformed')
 })
 
+test('checkpoint transport accepts reordered JSON keys and still rejects payload corruption', () => {
+  const serialized = encodeAtBoundary(completeRun(replayMatches()), '2026-01-03', replayMatches())
+  const parsed: unknown = JSON.parse(serialized)
+  const reordered = JSON.stringify(parsed, (_key, value: unknown) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+    return Object.fromEntries(Object.entries(value).reverse())
+  })
+  const decoded = decodeRatingCheckpoint(serialized, checkpointIdentity)
+
+  assert.notEqual(reordered, serialized)
+  assert.deepEqual(decodeRatingCheckpoint(reordered, checkpointIdentity), decoded)
+
+  const corrupted = reordered.replace('"processedMatchCount":3', '"processedMatchCount":4')
+  assert.notEqual(corrupted, reordered)
+  assert.ok(corrupted.includes(`"payloadDigest":${JSON.stringify(decoded.metadata.payloadDigest)}`))
+  assertInvalid(corrupted, checkpointIdentity, 'payload-digest')
+})
+
 test('terminal match identity and exact UTC boundary are mandatory', () => {
   const matches = replayMatches()
   const serialized = encodeAtBoundary(completeRun(matches), '2026-01-03', matches)
