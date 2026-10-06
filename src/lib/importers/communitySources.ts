@@ -4,6 +4,8 @@ import { canonicalTeamNameFor } from '../../data/teamIdentity'
 import { tournamentFamilyForEvent } from '../internationalTournaments'
 import type { LolEsportsReferenceEvent } from './lolEsports'
 
+type SeenMatch = { source: MatchRecord; retained: MatchRecord }
+
 export function mergeCommunityMatchSources({
   oracleMatches,
   leaguepediaMatches,
@@ -14,50 +16,63 @@ export function mergeCommunityMatchSources({
   lolEsportsReferences?: LolEsportsReferenceEvent[]
 }) {
   const merged: MatchRecord[] = []
-  const seen = new Map<string, MatchRecord>()
+  const seen = new Map<string, SeenMatch>()
+  const seenByRetained = new Map<MatchRecord, SeenMatch>()
   const oracleOutcomeMatches = new Map<string, MatchRecord[]>()
   const oracleStatOutcomeMatches = new Map<string, MatchRecord[]>()
-  const seenOracleGames = new Set<string>()
+  const seenOracleGames = new Map<string, MatchRecord>()
 
   for (const match of oracleMatches) {
     const retainedMatch = { ...match }
     const duplicateKeys = oracleGameDuplicateKeys(retainedMatch)
-    if (duplicateKeys.some((key) => seenOracleGames.has(key))) continue
-    duplicateKeys.forEach((key) => seenOracleGames.add(key))
+    if (duplicateKeys.some((key) => {
+      const candidate = seenOracleGames.get(key)
+      return candidate !== undefined && compatibleGameIdentities(candidate, retainedMatch)
+    })) continue
+    duplicateKeys.forEach((key) => seenOracleGames.set(key, retainedMatch))
     merged.push(retainedMatch)
-    for (const key of matchKeys(retainedMatch)) seen.set(key, retainedMatch)
+    registerMatchKeys(seen, seenByRetained, retainedMatch, retainedMatch)
     appendMatch(oracleOutcomeMatches, matchOutcomeKey(retainedMatch), retainedMatch)
     appendMatch(oracleStatOutcomeMatches, matchStatOutcomeKey(retainedMatch), retainedMatch)
   }
 
   const verifiedLeaguepediaLinks = uniqueLeaguepediaGameLinks(merged, leaguepediaMatches)
+  const verifiedOracleByLeaguepediaGame = new Map([...verifiedLeaguepediaLinks].map(([oracle, leaguepedia]) => [leaguepedia.sourceGameId ?? leaguepedia.id, oracle]))
   for (const match of leaguepediaMatches) {
-    const oracleStatDuplicate = consumeOracleDuplicate(oracleStatOutcomeMatches, matchStatOutcomeKey(match))
+    const canConsumeOracle = (candidate: MatchRecord) => !verifiedLeaguepediaLinks.has(candidate)
+      && compatibleGameIdentities(seenByRetained.get(candidate)?.source ?? candidate, match)
+    const oracleStatDuplicate = consumeOracleDuplicate(oracleStatOutcomeMatches, matchStatOutcomeKey(match),
+      verifiedOracleByLeaguepediaGame.get(match.sourceGameId ?? match.id), canConsumeOracle)
     if (oracleStatDuplicate) {
       enrichRetainedOracleMatch(oracleStatDuplicate, match, verifiedLeaguepediaLinks.get(oracleStatDuplicate))
-      registerMatchKeys(seen, match, oracleStatDuplicate)
+      registerMatchKeys(seen, seenByRetained, match, oracleStatDuplicate)
       continue
     }
 
     const seenDuplicate = matchKeys(match).map((key) => seen.get(key))
-      .find((candidate): candidate is MatchRecord => Boolean(candidate))
+      .find((candidate): candidate is SeenMatch => {
+        if (!candidate || !compatibleGameIdentities(candidate.source, match)) return false
+        const reservedSource = verifiedLeaguepediaLinks.get(candidate.retained)
+        return !reservedSource || !match.sourceGameId
+          || (reservedSource.sourceGameId ?? reservedSource.id) === match.sourceGameId
+      })
     if (seenDuplicate) {
-      enrichRetainedOracleMatch(seenDuplicate, match, verifiedLeaguepediaLinks.get(seenDuplicate))
-      registerMatchKeys(seen, match, seenDuplicate)
+      enrichRetainedOracleMatch(seenDuplicate.retained, match, verifiedLeaguepediaLinks.get(seenDuplicate.retained))
+      registerMatchKeys(seen, seenByRetained, match, seenDuplicate.retained)
       continue
     }
 
     if (isResultOnlyGapFill(match)) {
-      const oracleOutcomeDuplicate = consumeOracleDuplicate(oracleOutcomeMatches, matchOutcomeKey(match))
+      const oracleOutcomeDuplicate = consumeOracleDuplicate(oracleOutcomeMatches, matchOutcomeKey(match), undefined, canConsumeOracle)
       if (oracleOutcomeDuplicate) {
         enrichRetainedOracleMatch(oracleOutcomeDuplicate, match, verifiedLeaguepediaLinks.get(oracleOutcomeDuplicate))
-        registerMatchKeys(seen, match, oracleOutcomeDuplicate)
+        registerMatchKeys(seen, seenByRetained, match, oracleOutcomeDuplicate)
         continue
       }
     }
 
     merged.push(match)
-    for (const key of matchKeys(match)) seen.set(key, match)
+    registerMatchKeys(seen, seenByRetained, match, match)
   }
 
   const reconciled = reconcileSharedSeriesGames(merged)
@@ -65,8 +80,12 @@ export function mergeCommunityMatchSources({
   return reconciled.sort((a, b) => a.date.localeCompare(b.date))
 }
 
-function registerMatchKeys(seen: Map<string, MatchRecord>, match: MatchRecord, retained: MatchRecord) {
-  for (const key of matchKeys(match)) seen.set(key, retained)
+function registerMatchKeys(seen: Map<string, SeenMatch>, seenByRetained: Map<MatchRecord, SeenMatch>, match: MatchRecord, retained: MatchRecord) {
+  const entry = seenByRetained.get(retained) ?? { source: match, retained }
+  // Share an established game ID across every alias, including older Oracle keys.
+  if (!entry.source.sourceGameId || match.sourceGameId) entry.source = match
+  seenByRetained.set(retained, entry)
+  for (const key of matchKeys(match)) seen.set(key, entry)
 }
 
 function reconcileSharedSeriesGames(matches: MatchRecord[]) {
@@ -245,9 +264,21 @@ function strategyCount(reference: LolEsportsReferenceEvent) {
   return reference.strategy?.count ?? reference.gameIds.length
 }
 
-function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string) {
+function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string, preferred: MatchRecord | undefined,
+  canConsume: (candidate: MatchRecord) => boolean) {
   const candidates = matches.get(key) ?? []
-  return candidates.shift()
+  if (preferred) {
+    const index = candidates.indexOf(preferred)
+    if (index >= 0) candidates.splice(index, 1)
+    return preferred
+  }
+  const index = candidates.findIndex(canConsume)
+  return index < 0 ? undefined : candidates.splice(index, 1)[0]
+}
+
+function compatibleGameIdentities(left: MatchRecord, right: MatchRecord) {
+  return left.sourceProvider !== right.sourceProvider || !left.sourceGameId || !right.sourceGameId
+    || left.sourceGameId === right.sourceGameId
 }
 
 /** Missing clocks require an exact scoreboard link that is unique in both source directions. */
@@ -264,6 +295,14 @@ function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMat
     const duplicate = candidates[0]
     const reverseCandidates = (oracleByStats.get(matchStatOutcomeKey(duplicate)) ?? []).filter((candidate) => gameTimesCompatible(candidate, duplicate))
     if (reverseCandidates.length === 1 && reverseCandidates[0] === match) links.set(match, duplicate)
+  }
+  const linksPerIdentity = new Map<string, number>()
+  for (const duplicate of links.values()) {
+    const identity = duplicate.sourceGameId ?? duplicate.id
+    linksPerIdentity.set(identity, (linksPerIdentity.get(identity) ?? 0) + 1)
+  }
+  for (const [oracle, duplicate] of links) {
+    if (linksPerIdentity.get(duplicate.sourceGameId ?? duplicate.id) !== 1) links.delete(oracle)
   }
   return links
 }
@@ -339,7 +378,7 @@ function matchKeys(match: MatchRecord) {
   const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
   const sourceProvider = match.sourceProvider ?? 'unknown'
   const keys = [
-    match.sourceGameId ? `game:${normalizeText(match.sourceGameId)}` : '',
+    match.sourceGameId ? `game:${match.sourceGameId}` : '',
     match.sourceMatchId ? `${sourceProvider}:match:${normalizeText(match.sourceMatchId)}` : '',
     `${match.date}::${canonicalEventKey(match)}::${normalizeTeamName(match.winner)}::${normalizeText(match.patch)}::${teamStats}::${match.gameLengthSeconds ?? 'unknown-length'}`,
   ].filter(Boolean)
@@ -356,7 +395,7 @@ function oracleGameDuplicateKeys(match: MatchRecord) {
     teamStatKey(match.teamB, match.teamBKills, match.teamBGold),
   ].sort().join('::')
   return [
-    match.sourceGameId ? `source-game:${normalizeText(match.sourceGameId)}` : '',
+    match.sourceGameId ? `source-game:${match.sourceGameId}` : '',
     `fingerprint:${match.date}::${canonicalEventKey(match)}::${teams}::${normalizeTeamName(match.winner)}::${stats}::${match.gameLengthSeconds ?? 'unknown-length'}::${normalizeText(match.patch)}::${match.datetimeUtc ?? 'unknown-time'}`,
   ].filter(Boolean)
 }
