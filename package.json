@@ -19,7 +19,7 @@
     "data:crunch": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --manifest data/raw/manifest.json",
     "data:freshness": "tsx scripts/raw-manifest-freshness.ts data/raw/manifest.json",
     "calibration:export": "tsx scripts/export-ranking-predictions.ts",
-    "calibration:paired": "node scripts/paired-prediction-calibration.mjs",
+    "calibration:paired": "tsx scripts/paired-prediction-calibration.ts",
     "performance:audit": "tsx scripts/audit-player-performance.ts",
     "data:refresh": "tsx scripts/refresh-data-if-changed.mjs",
     "data:build:oracle": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --oracle-csv",

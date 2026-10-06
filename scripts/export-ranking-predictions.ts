@@ -1,28 +1,30 @@
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { NormalizedTournamentInstance } from '../src/lib/internationalTournaments'
-import type { MatchRecord, PregamePrediction } from '../src/types'
+import { buildEvaluationData } from '../src/lib/rankingEvaluationData'
 
 void (async () => {
-  const [rootArg, manifestArg, outputArg] = process.argv.slice(2)
+  const [rootArg, manifestArg, outputArg, scoreStart = '2025-01-01'] = process.argv.slice(2)
   if (!rootArg || !manifestArg || !outputArg) {
     throw new Error('Usage: export-ranking-predictions <root> <manifest> <output>')
   }
 
   const root = resolve(rootArg)
-  const sourceModule = await import(pathToFileURL(`${root}/scripts/ranking-source-import.ts`).href)
-  const modelModule = await import(pathToFileURL(`${root}/src/lib/model.ts`).href)
-  const tournamentModule = await import(pathToFileURL(`${root}/src/lib/internationalTournaments.ts`).href)
-  const matchContextModule = await import(pathToFileURL(`${root}/src/lib/matchContext.ts`).href)
+  const sourceModule: typeof import('./ranking-source-import') = await import(pathToFileURL(`${root}/scripts/ranking-source-import.ts`).href)
+  const modelModule: typeof import('../src/lib/model') = await import(pathToFileURL(`${root}/src/lib/model.ts`).href)
+  const tournamentModule: typeof import('../src/lib/internationalTournaments') = await import(pathToFileURL(`${root}/src/lib/internationalTournaments.ts`).href)
   const source = await sourceModule.importRankingSourceData({ manifestPath: resolve(manifestArg) })
-  const matches = source.matches as MatchRecord[]
+  const matches = source.matches
+  if (!matches.length || source.dataMode === 'no-data' || matches.some((match) => match.sourceProvider === 'seed')) {
+    throw new Error('Accuracy export requires real nonempty source data')
+  }
   const generatedAt = source.manifest?.generatedAt ?? new Date().toISOString()
   const instances = tournamentModule.deriveTournamentInstances({
     matches,
     scheduleReferences: source.tournamentScheduleReferences,
     generatedAt,
-  }) as NormalizedTournamentInstance[]
+  })
   const lifecycles = new Map(instances.map((instance) => [instance.id, {
     status: instance.status,
     boundaryDate: instance.boundaryDate,
@@ -31,24 +33,14 @@ void (async () => {
     resultCoverageComplete: instance.resultCoverageComplete,
   }]))
   const model = modelModule.buildRankingModel(matches, source.teams, { tournamentLifecycles: lifecycles })
-  const predictions = model.predictions as PregamePrediction[]
-  const matchById = new Map(matches.map((match) => [match.id, match]))
-  const rows = predictions.map((prediction) => {
-    const match = matchById.get(prediction.id)
-    return {
-      id: prediction.id,
-      seriesId: prediction.seriesId ?? prediction.source.seriesId ?? prediction.id,
-      date: prediction.date,
-      actual: prediction.actualWinner === prediction.teamA ? 1 : 0,
-      probability: prediction.teamAGameWinProbability,
-      segments: prediction.segments,
-      leagueA: match ? matchContextModule.homeLeagueForMatch(match, 'A', source.teams) : 'Unknown',
-      leagueB: match ? matchContextModule.homeLeagueForMatch(match, 'B', source.teams) : 'Unknown',
-    }
-  })
-  await writeFile(resolve(outputArg), `${JSON.stringify({
-    modelVersion: predictions[0]?.modelVersion,
-    modelConfigHash: predictions[0]?.modelConfigHash,
-    rows,
-  })}\n`)
+  const scoredMatches = matches.filter((match) => match.date >= scoreStart).toSorted((a, b) => a.id.localeCompare(b.id))
+  const sourceIdentity = createHash('sha256').update(JSON.stringify(scoredMatches)).digest('hex')
+  const data = buildEvaluationData(matches, model.predictions, { sourceIdentity, scoreStart })
+  await writeFile(resolve(outputArg), `${JSON.stringify({ ...data,
+    provenance: { trainingSourceIdentity: createHash('sha256').update(JSON.stringify(matches)).digest('hex'),
+      manifestIdentity: createHash('sha256').update(await readFile(resolve(manifestArg))).digest('hex'),
+      coverage: { start: source.manifest?.start, end: source.manifest?.end },
+      importedGames: source.importedMatches.length, ratedGames: matches.length,
+      warnings: source.manifest?.warnings ?? [],
+      tournamentLifecycles: instances.map((item) => ({ id: item.id, status: item.status, resultCoverageComplete: item.resultCoverageComplete })) } })}\n`)
 })()
