@@ -1345,6 +1345,7 @@ type StoredObject = {
   etag: string
   contentType?: string
   contentEncoding?: string
+  cacheControl?: string
   metadata?: Record<string, string>
 }
 type PutLog = { key: string; bytes: number }
@@ -1381,6 +1382,7 @@ async function fileBackedS3() {
           ...(name === 'GetObjectCommand' ? { Body: Readable.from([await readFile(stored.filePath)]) } : {}),
           ETag: stored.etag, ContentLength: stored.bytes,
           ContentType: stored.contentType, ContentEncoding: stored.contentEncoding, Metadata: stored.metadata,
+          CacheControl: stored.cacheControl,
         }
       }
       if (name === 'PutObjectCommand') {
@@ -1396,6 +1398,7 @@ async function fileBackedS3() {
           filePath, bytes: bytes.byteLength, etag,
           contentType: typeof input.ContentType === 'string' ? input.ContentType : undefined,
           contentEncoding: typeof input.ContentEncoding === 'string' ? input.ContentEncoding : undefined,
+          cacheControl: typeof input.CacheControl === 'string' ? input.CacheControl : undefined,
           metadata: isStringRecord(input.Metadata) ? input.Metadata : undefined,
         })
         puts.push({ key, bytes: bytes.byteLength })

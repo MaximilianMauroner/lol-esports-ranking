@@ -5,13 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
-import { gunzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import {
   assertStateManifestAuthority,
   prepareContentAddressedState,
   prepareStateObject,
   stateObjectReferenceFor,
   readActiveIncrementalState,
+  readStoredJsonStateObject,
   syncContentAddressedStateObject,
   writeIncrementalStateManifest,
   type PreparedStateObject,
@@ -84,6 +85,57 @@ test('state preparation hashes canonical JSON and creates deterministic gzip byt
   assert.equal(gunzipSync(left.compressed).toString('utf8'), left.canonicalJson)
   assert.equal(createHash('sha256').update(left.canonicalBytes).digest('hex'), left.digest)
 })
+
+for (const { name, text, canonical } of [
+  { name: 'nested objects and arrays', text: '{"array":[null,true,false,{"a":[],"z":{}},[1,"value"]],"object":{"a":1,"z":2}}', canonical: true },
+  { name: 'numeric keys in lexical order', text: '{"10":"ten","2":"two","nested":{"10":10,"2":2}}', canonical: true },
+  { name: 'Unicode and escaped strings', text: '{"escaped":"quote: \\" slash: \\\\ line: \\n","unicode":"é😀中"}', canonical: true },
+  { name: 'escaped and Unicode keys', text: '{"\\n":1,"\\"":2,"a":3,"é":4,"😀":5}', canonical: true },
+  { name: 'number formats and exponent strings', text: '{"numbers":[0,0.000001,1e-7,1e+21,1.25,-2],"strings":["1e+21","1E-7","-0"]}', canonical: true },
+  { name: 'null root', text: 'null', canonical: true },
+  { name: 'array root', text: '[null,true,false,1,"text",{},[]]', canonical: true },
+  { name: 'reordered object keys', text: '{"z":2,"a":1}', canonical: false },
+  { name: 'numeric keys in numeric order', text: '{"2":"two","10":"ten"}', canonical: false },
+  { name: 'nested reordered keys', text: '{"array":[{"z":2,"a":1}]}', canonical: false },
+  { name: 'interior whitespace', text: '{"value": 1}', canonical: false },
+  { name: 'trailing whitespace', text: '{"value":1}\n', canonical: false },
+  { name: 'escaped Unicode value', text: '{"value":"\\u00e9"}', canonical: false },
+  { name: 'escaped Unicode key', text: '{"\\u0061":1}', canonical: false },
+  { name: 'decimal integer', text: '{"value":1.0}', canonical: false },
+  { name: 'negative zero', text: '{"value":-0}', canonical: false },
+  { name: 'uppercase exponent', text: '{"value":1E+21}', canonical: false },
+]) {
+  test('state object admission ' + (canonical ? 'accepts ' : 'rejects ') + name, async () => {
+    const client = memoryS3()
+    const semanticBytes = Buffer.from(text, 'utf8')
+    const digest = createHash('sha256').update(semanticBytes).digest('hex')
+    const compressed = gzipSync(semanticBytes)
+    const reference = {
+      ...objectReference(digest, 'state/objects/sha256'),
+      bytes: semanticBytes.byteLength,
+      compressedBytes: compressed.byteLength,
+    }
+    client.objects.set(config.prefix + '/' + reference.key, {
+      body: compressed.toString('utf8'),
+      bytes: compressed,
+      etag: '"json-admission"',
+      contentType: 'application/json; charset=utf-8',
+      contentEncoding: 'gzip',
+      metadata: { sha256: digest, 'semantic-bytes': String(semanticBytes.byteLength), encoding: 'gzip' },
+    })
+    if (canonical) {
+      assert.deepEqual(await readStoredJsonStateObject(client, config, reference), JSON.parse(text))
+      return
+    }
+    await assert.rejects(readStoredJsonStateObject(client, config, reference), (error: unknown) => {
+      assert.ok(error instanceof Error)
+      assert.match(error.message, /Incremental state object JSON is corrupt/)
+      assert.ok(error.cause instanceof Error)
+      assert.match(error.cause.message, /Incremental state object is not canonical JSON/)
+      return true
+    })
+  })
+}
 
 test('persisted state reports stored checkpoint objects as reused publication members', async () => {
   const client = memoryS3()

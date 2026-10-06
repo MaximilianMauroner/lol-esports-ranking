@@ -415,14 +415,44 @@ export async function readStoredJsonStateObject(client, config, reference) {
     throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
   }
   try {
-    const value = JSON.parse(canonicalBytes.toString('utf8'))
-    if (canonicalJsonFor(value) !== canonicalBytes.toString('utf8')) {
+    const canonicalText = canonicalBytes.toString('utf8')
+    const value = JSON.parse(canonicalText)
+    if (!matchesCanonicalJsonText(value, canonicalText)) {
       throw new Error(`Incremental state object is not canonical JSON: ${expectedKey}`)
     }
     return value
   } catch (error) {
     throw new Error(`Incremental state object JSON is corrupt: ${expectedKey}`, { cause: error })
   }
+}
+
+function matchesCanonicalJsonText(value, text) {
+  let offset = 0
+  function matchToken(token) {
+    if (!text.startsWith(token, offset)) return false
+    offset += token.length
+    return true
+  }
+  function matchValue(entry) {
+    if (entry === null || typeof entry !== 'object') return matchToken(JSON.stringify(entry) ?? 'null')
+    if (Array.isArray(entry)) {
+      if (!matchToken('[')) return false
+      for (let index = 0; index < entry.length; index += 1) {
+        if (index > 0 && !matchToken(',')) return false
+        if (!matchValue(entry[index])) return false
+      }
+      return matchToken(']')
+    }
+    if (!matchToken('{')) return false
+    const keys = Object.keys(entry).filter((key) => entry[key] !== undefined).sort()
+    for (let index = 0; index < keys.length; index += 1) {
+      if (index > 0 && !matchToken(',')) return false
+      const key = keys[index]
+      if (!matchToken(JSON.stringify(key)) || !matchToken(':') || !matchValue(entry[key])) return false
+    }
+    return matchToken('}')
+  }
+  return matchValue(value) && offset === text.length
 }
 
 async function assertStoredStateObjectIntegrity(client, config, reference) {
