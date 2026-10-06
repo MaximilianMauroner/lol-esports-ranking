@@ -1,5 +1,5 @@
 import type { MatchRecord } from '../../types'
-import { eventTierRank } from '../../data/competitionTaxonomy'
+import { eventTierRank, inferEventTier } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor } from '../../data/teamIdentity'
 import { tournamentFamilyForEvent } from '../internationalTournaments'
 import type { LolEsportsReferenceEvent } from './lolEsports'
@@ -169,6 +169,7 @@ function enrichWithLolEsportsReference(
   match.officialScheduleState = reference.state
   if (reference.blockName && phaseSpecificity(reference.blockName) > phaseSpecificity(match.phase)) {
     match.phase = reference.blockName
+    match.tier = inferEventTier({ league: match.league, event: match.event, phase: match.phase })
   }
   match.datetimeUtc = reference.startTime ?? match.datetimeUtc
   const officialBestOf = reference.strategy?.count
@@ -260,6 +261,8 @@ function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: M
     || isRegionalFinalMislabel(retainedMatch, duplicateMatch)
   ) {
     retainedMatch.event = duplicateMatch.event
+    retainedMatch.league = duplicateMatch.league
+    retainedMatch.region = duplicateMatch.region
     retainedMatch.phase = duplicateMatch.phase
     retainedMatch.tier = duplicateMatch.tier
     retainedMatch.sourceMatchId = duplicateMatch.sourceGameId

@@ -1,5 +1,6 @@
 import {
   eventTierConfig,
+  firstStandPowerEvidencePolicy,
   preseasonEventWeightMultiplier,
   preseasonEventWeightPolicy,
   preseasonEventWeightWindow,
@@ -75,7 +76,7 @@ export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'entity-local-composable-half-life-regression-v1'
 export const ratingUpdateRecencyWeight = 1
 export const leagueExpectedScoreSource = 'pregame-neutral-series-team-power'
-export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-player-performance-v15'
+export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-player-performance-v16'
 export const lineupEvidencePolicy = 'prior-observed-series-evidence-with-90-day-half-life-v1'
 export const partialLineupPolicy = 'role-weighted-known-player-evidence-v1'
 export const substituteEraPolicy = 'three-series-or-twenty-percent-split-share-v1'
@@ -137,6 +138,14 @@ export const minorPlacementResidualK = 1.25
 export const worldsPlacementResidualCap = 35
 export const msiPlacementResidualCap = 25
 export const minorPlacementResidualCap = 18
+export const tournamentPlacementStagePoints = {
+  champion: 11,
+  finalist: 8,
+  semifinal: 5,
+  knockout: 3,
+  participation: 1,
+} as const
+export const tournamentPlacementPolicy = 'highest-attainment-centered-league-residual-aligned-scale-v2'
 export const playerRatingPredictionPolicy = {
   key: 'player-rating',
   mode: 'live',
@@ -229,9 +238,12 @@ export const transparentGprModelParameters = {
   worldsPlacementResidualCap,
   msiPlacementResidualCap,
   minorPlacementResidualCap,
+  tournamentPlacementStagePoints,
+  tournamentPlacementPolicy,
   playerRatingPredictionPolicy,
   playerRatingPredictionPublishedWeight: playerRatingPredictionWeight,
   playerRatingPredictionShadowWeight: playerRatingShadowWeight,
+  firstStandPowerEvidencePolicy,
   preseasonEventWeightPolicy,
   preseasonEventWeightMultiplier,
   preseasonEventWeightWindow,

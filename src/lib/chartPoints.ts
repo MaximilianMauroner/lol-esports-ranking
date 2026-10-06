@@ -1,3 +1,5 @@
+import { formatEventName } from './display'
+
 export type ChartAttributionEntry = {
   key: 'stable' | 'league' | 'placement' | 'form' | 'roster' | 'uncertainty' | 'context'
   label: string
@@ -63,7 +65,7 @@ export function formatChartInfluence(detail?: ChartPointDetail) {
   const result = formatResult(detail)
   const parts = [
     detail.opponent ? [result, `vs ${detail.opponent}`].filter(Boolean).join(' ') : result,
-    detail.event,
+    detail.event ? formatEventName(detail.event) : undefined,
     typeof detail.delta === 'number' && Number.isFinite(detail.delta) ? `${formatSignedDelta(detail.delta)} Power points` : undefined,
   ].filter((part): part is string => Boolean(part))
 

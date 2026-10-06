@@ -1,5 +1,9 @@
 /** Shared formatting + strength-heat helpers for the UI layer. */
 
+export function formatEventName(event: string) {
+  return event.replace(/\bdcup\b/gi, 'Demacia Cup')
+}
+
 const numberFormatter = new Intl.NumberFormat('en')
 const ratingFormatter = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
 const oneDecimal = new Intl.NumberFormat('en', { maximumFractionDigits: 1 })

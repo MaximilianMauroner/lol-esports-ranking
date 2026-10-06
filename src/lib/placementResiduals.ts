@@ -4,6 +4,7 @@ import { eventWeightMultiplierForMatch, type EventWeightContext } from './eventW
 import { homeLeagueForMatch } from './matchContext'
 import { tournamentInstanceForEvent, type TournamentLifecycleStatus } from './internationalTournaments'
 import { resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
+import { isDemaciaCupEvent } from '../data/competitionTaxonomy'
 import {
   initialTeamRating,
   maximumUncertainty,
@@ -13,6 +14,7 @@ import {
   msiPlacementResidualK,
   worldsPlacementResidualCap,
   worldsPlacementResidualK,
+  tournamentPlacementStagePoints,
 } from './modelConfig'
 import {
   clamp,
@@ -336,14 +338,15 @@ function representativesByLeague(tracker: PlacementEventTracker, teams: Record<s
 function stagePointsForSeries(series: CanonicalSeries) {
   const match = series.finalMatch
   const phase = normalizeTournamentPhase(match.phase)
-  const participantPoints = phase === 'final' ? 8
-    : phase === 'upper-final' || phase === 'lower-final' || phase === 'semifinal' ? 5
-      : phase === 'quarterfinal' || phase === 'knockout' ? 3
-        : 1
+  const points = tournamentPlacementStagePoints
+  const participantPoints = phase === 'final' ? points.finalist
+    : phase === 'upper-final' || phase === 'lower-final' || phase === 'semifinal' ? points.semifinal
+      : phase === 'quarterfinal' || phase === 'knockout' ? points.knockout
+        : points.participation
   if (phase !== 'final') return { teamA: participantPoints, teamB: participantPoints }
   return {
-    teamA: series.outcomeA === 1 ? 11 : 8,
-    teamB: series.outcomeA === 0 ? 11 : 8,
+    teamA: series.outcomeA === 1 ? points.champion : points.finalist,
+    teamB: series.outcomeA === 0 ? points.champion : points.finalist,
   }
 }
 
@@ -373,7 +376,7 @@ function tournamentPhaseAudit(series: CanonicalSeries[]) {
 }
 
 function hasResolvedTerminalFinal(series: CanonicalSeries[]) {
-  return series.some((entry) => normalizeTournamentPhase(entry.finalMatch.phase) === 'final' && entry.state === 'completed')
+  return series.some((entry) => normalizeTournamentPhase(entry.finalMatch.phase) === 'final' && entry.state === 'completed' && entry.outcomeA !== 0.5)
 }
 
 function centeredCappedDeltas(rawDeltas: Map<string, number>, cap: number) {
@@ -408,15 +411,16 @@ function sumMapValues(values: ReadonlyMap<string, number>) {
 function placementResidualConfigFor(event: MatchRecord | PlacementEventTracker) {
   if (!isPlacementResidualEvent(event)) return undefined
   if (event.tier === 'worlds-playoffs' || event.tier === 'worlds-main' || /\bworlds?\b/i.test(event.event)) {
-    return { k: worldsPlacementResidualK, cap: worldsPlacementResidualCap, baseStagePoints: 1, maxStagePoints: 11 }
+    return { k: worldsPlacementResidualK, cap: worldsPlacementResidualCap, baseStagePoints: tournamentPlacementStagePoints.participation, maxStagePoints: tournamentPlacementStagePoints.champion }
   }
   if (event.tier === 'msi-bracket' || event.tier === 'msi-play-in' || /\bmsi\b/i.test(event.event)) {
-    return { k: msiPlacementResidualK, cap: msiPlacementResidualCap, baseStagePoints: 1, maxStagePoints: 11 }
+    return { k: msiPlacementResidualK, cap: msiPlacementResidualCap, baseStagePoints: tournamentPlacementStagePoints.participation, maxStagePoints: tournamentPlacementStagePoints.champion }
   }
-  return { k: minorPlacementResidualK, cap: minorPlacementResidualCap, baseStagePoints: 1, maxStagePoints: 8 }
+  return { k: minorPlacementResidualK, cap: minorPlacementResidualCap, baseStagePoints: tournamentPlacementStagePoints.participation, maxStagePoints: tournamentPlacementStagePoints.champion }
 }
 
 function isPlacementResidualEvent(event: MatchRecord | PlacementEventTracker) {
+  if (isDemaciaCupEvent(event.event) || /\b(?:regional finals?|qualifiers?|road to)\b/i.test(event.event)) return false
   return event.tier === 'worlds-playoffs'
     || event.tier === 'worlds-main'
     || event.tier === 'msi-bracket'

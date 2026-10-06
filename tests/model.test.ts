@@ -657,7 +657,7 @@ test('published team stable offset compresses only the elite positive tail', () 
   assert.equal(publishedTeamStableOffset(-40), -40)
 })
 
-test('post-Worlds preseason games use discounted event weight until the next calendar year', () => {
+test('post-Worlds preseason games are discounted except Demacia Cup, which keeps EWC weight', () => {
   const worldsFinal = matchFixture({
     id: 'worlds-final',
     date: '2025-11-09',
@@ -666,6 +666,8 @@ test('post-Worlds preseason games use discounted event weight until the next cal
     league: 'WLDs',
     region: 'International',
     tier: 'worlds-main',
+    phase: 'Final',
+    bestOf: 5,
   })
   const demaciaCup = matchFixture({
     id: 'demacia-cup',
@@ -673,7 +675,7 @@ test('post-Worlds preseason games use discounted event weight until the next cal
     season: 2025,
     event: 'DCup 2025',
     league: 'DCup',
-    tier: 'regional-regular',
+    tier: 'minor-international',
   })
   const kespaCup = matchFixture({
     id: 'kespa-cup',
@@ -693,17 +695,21 @@ test('post-Worlds preseason games use discounted event weight until the next cal
     season: 2026,
     event: 'LCK 2026 Spring',
   })
-  const context = eventWeightContextForMatches([worldsFinal, demaciaCup, kespaCup, nextYearMatch])
+  const worldsFinalMatches = [1, 2, 3].map((gameNumber) => ({ ...worldsFinal, id: `worlds-final-${gameNumber}`, sourceMatchId: 'worlds-final-series', gameNumber }))
+  const context = eventWeightContextForMatches([...worldsFinalMatches, demaciaCup, kespaCup, nextYearMatch])
 
   assert.equal(isPostWorldsPreseasonMatch(worldsFinal, context), false)
   assert.equal(isPostWorldsPreseasonMatch(demaciaCup, context), true)
   assert.equal(isPostWorldsPreseasonMatch(kespaCup, context), true)
   assert.equal(isPostWorldsPreseasonMatch(nextYearMatch, context), false)
-  assert.equal(eventKFactorForMatch(demaciaCup, context), 14 * preseasonEventWeightMultiplier)
-  assert.equal(eventWeightForMatch(demaciaCup, context), preseasonEventWeightMultiplier)
+  assert.equal(eventKFactorForMatch(demaciaCup, context), 23)
+  assert.equal(eventWeightForMatch(demaciaCup, context), 23 / 14)
+  assert.equal(eventWeightForMatch(kespaCup, context), (23 / 14) * preseasonEventWeightMultiplier)
+  const ewc = { ...demaciaCup, date: '2025-07-20', event: 'Esports World Cup 2025', league: 'EWC' }
+  assert.equal(eventWeightForMatch(demaciaCup, context), eventWeightForMatch(ewc, context))
   const ranking = buildRankingModel([worldsFinal, demaciaCup], { ...teams })
   const demaciaHistory = standingFor(ranking, 'Alpha').history.find((point) => point.event === demaciaCup.event)
-  assert.equal(demaciaHistory?.ratingUpdate.eventWeight, preseasonEventWeightMultiplier)
+  assert.equal(demaciaHistory?.ratingUpdate.eventWeight, Number((23 / 14).toFixed(3)))
 })
 
 test('Esports World Cup does not start the post-Worlds preseason window', () => {

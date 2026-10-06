@@ -69,7 +69,7 @@ test('DSS event weights and format multipliers produce PDF series weights', () =
   near(dssSeriesWeight('regional-regular', 3), 13.44)
 })
 
-test('DSS discounts post-Worlds preseason series weight', () => {
+test('DSS discounts post-Worlds preseason series but keeps Demacia Cup at EWC weight', () => {
   const ledger = dssSeriesLedgerEntriesForMatches([
     ...seriesFixture({
       id: 'worlds-final',
@@ -80,6 +80,7 @@ test('DSS discounts post-Worlds preseason series weight', () => {
       league: 'WLDs',
       region: 'International',
       tier: 'worlds-main',
+      phase: 'Final',
       bestOf: 5,
     }),
     ...seriesFixture({
@@ -89,14 +90,21 @@ test('DSS discounts post-Worlds preseason series weight', () => {
       season: 2025,
       event: 'DCup 2025',
       league: 'DCup',
-      tier: 'regional-regular',
+      tier: 'minor-international',
       bestOf: 3,
+    }),
+    ...seriesFixture({
+      id: 'kespa-cup', winners: ['Alpha', 'Alpha'], date: '2025-12-21', season: 2025,
+      event: 'KeSPA 2025', league: 'KeSPA', tier: 'minor-international', bestOf: 3,
     }),
   ])
   const demaciaCup = ledger.find((entry) => entry.finalMatchId === 'demacia-cup-game-2')
 
   assert.ok(demaciaCup)
-  near(demaciaCup.seriesWeight, dssSeriesWeight('regional-regular', 3) * preseasonEventWeightMultiplier)
+  near(demaciaCup.seriesWeight, dssSeriesWeight('minor-international', 3))
+  const kespaCup = ledger.find((entry) => entry.finalMatchId === 'kespa-cup-game-2')
+  assert.ok(kespaCup)
+  near(kespaCup.seriesWeight, dssSeriesWeight('minor-international', 3) * preseasonEventWeightMultiplier)
 })
 
 test('DSS probability helpers implement the PDF logistic and series formulas', () => {

@@ -253,15 +253,22 @@ export function inferLeagueFromEvent(event: string) {
   return leagueInferenceRules.find((rule) => rule.patterns.some((pattern) => pattern.test(event)))?.league ?? 'Unknown'
 }
 
+export function isDemaciaCupEvent(event: string) {
+  return /\b(?:dcup|demacia cup)\b/i.test(event)
+}
+
 export function inferEventTier(input: CompetitionTierInput): EventTier {
   const textValue = `${input.league} ${input.event ?? ''}`.toLowerCase()
-  const playoffs = input.playoffs ?? /^(?:playoffs|bracket|knockout|quarterfinal|semifinal|(?:grand |upper |lower )?finals?)$/i.test(input.phase ?? '')
+  const phase = `${input.event ?? ''} ${input.phase ?? ''}`
+  const playoffs = input.playoffs === true || /\b(?:playoffs|bracket|knockout|quarterfinals?|semifinals?|(?:grand |upper |lower )?finals?)\b/i.test(phase)
+  const playIn = /\bplay[ -]?in\b/i.test(phase)
   if (textValue.includes('road to msi') && !isInternationalCompetitionLeague(input.league)) return 'major-playoffs'
   if (textValue.includes('academic esports world tournament') || textValue.includes('university esports')) return 'qualifier'
   if (textValue.includes('online qualifier') || textValue.includes('online qualifiers')) return 'qualifier'
-  if (/\bdcup\b/.test(textValue) || textValue.includes('demacia cup')) return playoffs ? 'major-playoffs' : 'regional-regular'
-  if (textValue.includes('first stand') || /\bfst\b/.test(textValue)) return 'msi-bracket'
+  if (/\bregional finals?\b/i.test(phase)) return 'major-playoffs'
+  if (textValue.includes('first stand') || /\bfst\b/.test(textValue)) return playoffs && !playIn ? 'msi-bracket' : 'msi-play-in'
   if (textValue.includes('emea masters')
+    || isDemaciaCupEvent(textValue)
     || /\bem\b/.test(textValue)
     || textValue.includes('minor')
     || /\bewc\b/.test(textValue)
@@ -270,10 +277,11 @@ export function inferEventTier(input: CompetitionTierInput): EventTier {
     || /\basi\b/.test(textValue)
     || /\bac\b/.test(textValue)
     || textValue.includes('kespa')) return 'minor-international'
-  if (/\bwlds?\b/.test(textValue)) return playoffs ? 'worlds-playoffs' : 'worlds-main'
+  if (/\bwlds?\b/.test(textValue)) return playoffs && !playIn ? 'worlds-playoffs' : 'worlds-main'
+  if (textValue.includes('world') && playIn) return 'worlds-main'
   if (textValue.includes('world') && playoffs) return 'worlds-playoffs'
   if (textValue.includes('world')) return 'worlds-main'
-  if (textValue.includes('msi') && playoffs) return 'msi-bracket'
+  if (textValue.includes('msi') && playoffs && !playIn) return 'msi-bracket'
   if (textValue.includes('msi')) return 'msi-play-in'
   if (playoffs) return 'major-playoffs'
   return 'regional-regular'

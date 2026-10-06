@@ -3,6 +3,8 @@ import {
   preseasonEventWeightMultiplier,
 } from '../data/rankingConfig'
 import type { MatchRecord } from '../types'
+import { isDemaciaCupEvent } from '../data/competitionTaxonomy'
+import { resolveCanonicalSeries } from './seriesResolver'
 
 export type EventWeightContext = {
   worldsEndDateByCalendarYear: ReadonlyMap<number, string>
@@ -14,8 +16,12 @@ export const emptyEventWeightContext: EventWeightContext = {
 
 export function eventWeightContextForMatches(matches: readonly MatchRecord[]): EventWeightContext {
   const worldsEndDateByCalendarYear = new Map<number, string>()
-  for (const match of matches) {
-    if (!isWorldsMatch(match)) continue
+  const finals = matches.filter((match) => isWorldsMatch(match)
+    && !/\bplay[ -]?in\b/i.test(match.event)
+    && /^(?:grand\s+)?finals?$/i.test(match.phase.trim()))
+  for (const series of resolveCanonicalSeries(finals)) {
+    if (series.state !== 'completed' || series.format !== 5 || series.outcomeA === 0.5) continue
+    const match = series.finalMatch
     const year = calendarYearForDate(match.date)
     if (year === undefined) continue
     const currentEndDate = worldsEndDateByCalendarYear.get(year)
@@ -30,6 +36,7 @@ export function eventWeightMultiplierForMatch(
   match: MatchRecord,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
+  if (isDemaciaCupEvent(`${match.league} ${match.event}`)) return 1
   return isPostWorldsPreseasonMatch(match, context) ? preseasonEventWeightMultiplier : 1
 }
 
@@ -37,14 +44,20 @@ export function eventKFactorForMatch(
   match: MatchRecord,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
-  return eventTierConfig[match.tier].kFactor * eventWeightMultiplierForMatch(match, context)
+  return eventTierConfig[powerEvidenceTierForMatch(match)].kFactor * eventWeightMultiplierForMatch(match, context)
 }
 
 export function eventWeightForMatch(
   match: MatchRecord,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
-  return eventTierConfig[match.tier].weight * eventWeightMultiplierForMatch(match, context)
+  return eventTierConfig[powerEvidenceTierForMatch(match)].weight * eventWeightMultiplierForMatch(match, context)
+}
+
+function powerEvidenceTierForMatch(match: MatchRecord) {
+  return match.tier === 'msi-play-in' && /\b(?:fst|first stand)\b/i.test(`${match.league} ${match.event}`)
+    ? 'msi-bracket'
+    : match.tier
 }
 
 export function isPostWorldsPreseasonMatch(
@@ -52,6 +65,7 @@ export function isPostWorldsPreseasonMatch(
   context: EventWeightContext = emptyEventWeightContext,
 ) {
   if (isWorldsMatch(match)) return false
+  if (match.tier === 'regional-regular' || match.tier === 'major-playoffs') return false
   const year = calendarYearForDate(match.date)
   if (year === undefined) return false
   const worldsEndDate = context.worldsEndDateByCalendarYear.get(year)
@@ -60,6 +74,7 @@ export function isPostWorldsPreseasonMatch(
 }
 
 function isWorldsMatch(match: MatchRecord) {
+  if (match.tier === 'qualifier' || /\b(?:regional finals?|qualifiers?|road to)\b/i.test(`${match.event} ${match.phase}`)) return false
   if (match.tier === 'worlds-playoffs' || match.tier === 'worlds-main') return true
   return /\b(?:wlds?|worlds|world championship)\b/i.test(`${match.league} ${match.event}`)
 }

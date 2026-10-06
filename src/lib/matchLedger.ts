@@ -1,8 +1,9 @@
 import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from './publicArtifacts/schema'
 import { PROJECT_REPOSITORY_URL } from './legal'
+import { formatEventName } from './display'
 
 export function matchEventLabel(event: string) {
-  return event.replace(/\//g, ' · ').replace(/\b(\d{4}) Season\b/g, '$1')
+  return formatEventName(event).replace(/\//g, ' · ').replace(/\b(\d{4}) Season\b/g, '$1')
 }
 
 export function compatibleMatchEvents(refs: readonly PublicMatchHistorySeriesRef[], league: string) {

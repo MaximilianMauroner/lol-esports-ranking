@@ -1,4 +1,5 @@
 import type { DeservedStandingPlayerResumeLedger, EventTier, Role } from '../types'
+import { isDemaciaCupEvent } from '../data/competitionTaxonomy'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -171,7 +172,7 @@ export function recomputeDssPlayerResumeCausalState(
 
 export function playerResumeCreditEntries(series: DssPlayerResumeSeriesInput[]): DssPlayerResumeCreditEntry[] {
   return series.flatMap((entry) => {
-    const international = entry.international ?? isInternationalTier(entry.tier)
+    const international = entry.international ?? (!isDemaciaCupEvent(entry.event) && isInternationalTier(entry.tier))
     return entry.players.map((player) => {
       const resumeCredit = entry.weightedSeriesValue * player.share
       return {

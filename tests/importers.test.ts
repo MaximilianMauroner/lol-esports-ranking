@@ -576,6 +576,8 @@ test('community merge corrects Oracle Worlds labels on regional finals', () => {
     sourceProvider: 'oracles-elixir',
     sourceGameId: 'oe-worlds-regional-final-id',
     event: 'WLDs 2025',
+    league: 'WLDs',
+    region: 'International',
     tier: 'worlds-main',
     teamAKills: 20,
     teamBKills: 12,
@@ -587,6 +589,8 @@ test('community merge corrects Oracle Worlds labels on regional finals', () => {
     sourceProvider: 'leaguepedia-cargo',
     sourceGameId: 'lp-worlds-regional-final-id',
     event: 'LPL/2025 Season/Regional Finals',
+    league: 'LPL',
+    region: 'LPL',
     phase: 'Regional Finals',
     tier: 'major-playoffs',
     teamAKills: 20,
@@ -603,6 +607,8 @@ test('community merge corrects Oracle Worlds labels on regional finals', () => {
 
   assert.equal(merged?.event, 'LPL/2025 Season/Regional Finals')
   assert.equal(merged?.tier, 'major-playoffs')
+  assert.equal(merged?.league, 'LPL')
+  assert.equal(merged?.region, 'LPL')
   assert.equal(merged?.sourceProvider, 'oracles-elixir')
 })
 
@@ -1149,7 +1155,7 @@ test('Oracle import preserves blue and red side metadata', () => {
   assert.equal(result.matches[0]?.teamBSide, 'red')
 })
 
-test('Oracle import treats First Stand as an MSI-level international bracket signal', () => {
+test('Oracle import treats First Stand preliminary games as early international signal', () => {
   const result = importOraclesElixirCsv([
     'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
     'oe-fst-1,2026-03-21,2026,FST,,0,26.5,team,Blue,G2 Esports,1,20,65000',
@@ -1158,7 +1164,7 @@ test('Oracle import treats First Stand as an MSI-level international bracket sig
   const match = result.matches[0]
 
   assert.equal(match?.region, 'International')
-  assert.equal(match?.tier, 'msi-bracket')
+  assert.equal(match?.tier, 'msi-play-in')
   assert.equal(match?.teamAHomeLeague, 'LEC')
   assert.equal(match?.teamBHomeLeague, 'LCK')
   assert.equal(result.teams['G2 Esports'].league, 'LEC')
@@ -1357,7 +1363,7 @@ test('importers do not classify academic world tournaments as Worlds tier', () =
   assert.equal(oracle.matches[0]?.tier, 'qualifier')
 })
 
-test('Demacia Cup is an LPL regional cup, not an international event', () => {
+test('Demacia Cup stays in LPL and receives EWC event weight', () => {
   const leaguepedia = importLeaguepediaSnapshot({
     source: 'fixture',
     fetchedAt: '2026-06-26T00:00:00.000Z',
@@ -1380,9 +1386,16 @@ test('Demacia Cup is an LPL regional cup, not an international event', () => {
 
   assert.equal(leaguepedia.matches[0]?.league, 'DCup')
   assert.equal(leaguepedia.matches[0]?.region, 'LPL')
-  assert.equal(leaguepedia.matches[0]?.tier, 'regional-regular')
+  assert.equal(leaguepedia.matches[0]?.tier, 'minor-international')
   assert.equal(oracle.matches[0]?.region, 'LPL')
-  assert.equal(oracle.matches[0]?.tier, 'regional-regular')
+  assert.equal(oracle.matches[0]?.tier, 'minor-international')
+  const playoff = importOraclesElixirCsv([
+    'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
+    'oe-dcup-final,2025-12-31,2025,DCup,,1,25.24,team,Blue,Bilibili Gaming,1,20,65000',
+    'oe-dcup-final,2025-12-31,2025,DCup,,1,25.24,team,Red,JD Gaming,0,12,59000',
+  ].join('\n'))
+  assert.equal(playoff.matches[0]?.tier, 'minor-international')
+  assert.equal(playoff.matches[0]?.region, 'LPL')
 })
 
 test('Leaguepedia import treats EMEA Masters as competition-only without explicit home leagues', () => {

@@ -39,6 +39,7 @@ import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibi
 import { playerModelParameters } from './playerModel'
 import { summarizePredictions, type WalkForwardMetrics } from './predictionModel'
 import { filterPublishedRatingUniverseInput } from './ratingUniverse'
+import { isSeasonHistoryLeadIn } from './seasonHistory'
 import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   artifactMetaFor,
@@ -1607,9 +1608,13 @@ export function createMatchHistoryArtifacts(
       ? data.filterOptions.checkpoints?.[snapshot.filter.season]?.find((entry) => entry.id === snapshot.filter.checkpoint)
       : undefined
     const matches = filterMatches(data.matches, data.teams, snapshot.filter, checkpoint)
+    const leadInMatches = data.matches.filter((match) => (
+      isSeasonHistoryLeadIn(match.date, match.event, snapshot.filter)
+      && (snapshot.filter.region === 'All' || matchBelongsToRegion(match, data.teams, snapshot.filter.region))
+    ))
     const standings = publishedTeamStandings(snapshot.standings, ratingScale)
     const impact = matchImpactLookup(standings)
-    const entries = resolveCanonicalSeries(matches)
+    const entries = resolveCanonicalSeries([...leadInMatches, ...matches])
       .flatMap((series) => series.games.map((match, index): PublicMatchHistoryEntry => {
         const teamA = series.teamA
         const teamB = series.teamB
@@ -3035,7 +3040,10 @@ function filteredStandings(
         wins: scopedWins,
         losses: scopedLosses,
         form: history.slice(-5).map((point) => point.result),
-        history,
+        history: [
+          ...standing.history.filter((point) => isSeasonHistoryLeadIn(point.date, point.event, filter)),
+          ...history,
+        ],
         recentEvents: Array.from(new Set(history.slice(-4).map((point) => point.event))).reverse(),
         eligibility: filter.checkpoint ? standing.eligibility : scopedEligibility,
       }

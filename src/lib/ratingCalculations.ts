@@ -1,6 +1,7 @@
 import type { MatchRecord, PublishedRatingScale, RatingComponents, RatingUpdateLedger, RosterBasis } from '../types'
 import { eventKFactorForMatch, type EventWeightContext } from './eventWeighting'
 import { normalizedBestOf } from './matchFormat'
+import { isDemaciaCupEvent } from '../data/competitionTaxonomy'
 import {
   initialLeagueRating,
   initialTeamRating,
@@ -348,5 +349,6 @@ export function rosterVolatilityMultiplier(continuity?: number) {
 }
 
 export function isInternationalMatch(match: MatchRecord) {
+  if (isDemaciaCupEvent(`${match.league} ${match.event}`)) return false
   return match.region === 'International' || ['worlds-playoffs', 'worlds-main', 'msi-bracket', 'msi-play-in', 'minor-international'].includes(match.tier)
 }

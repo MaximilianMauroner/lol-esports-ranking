@@ -1952,9 +1952,7 @@ function matchTierChip(match: RecentMatchSource) {
   const weight = typeof match.eventWeight === 'number' ? match.eventWeight : config.weight
   return {
     label: `${config.label} ${formatEventWeight(weight)}`,
-    title: weight === config.weight
-      ? config.description
-      : `${config.description} Applied event weight ${formatEventWeight(weight)} after the preseason discount.`,
+    title: `${config.description} Applied event weight ${formatEventWeight(weight)}.`,
   }
 }
 

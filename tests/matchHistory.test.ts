@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createRatingReplayContext, replayRatingDates } from '../src/lib/model.ts'
 import { createRatingRunState } from '../src/lib/ratingRunState.ts'
-import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/lib/snapshot.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData, createTeamHistoryArtifacts, teamStandingKey } from '../src/lib/snapshot.ts'
 import { parsePublicMatchHistoryCatalog, parsePublicMatchHistoryIndex, parsePublicMatchHistoryPage, snapshotKey } from '../src/lib/publicArtifacts/schema.ts'
 import type { MatchRecord, TeamProfile } from '../src/types.ts'
 
@@ -10,6 +10,54 @@ const teams: Record<string, TeamProfile> = {
   'Gen.G': { name: 'Gen.G', code: 'GEN', region: 'LCK', league: 'LCK' },
   T1: { name: 'T1', code: 'T1', region: 'LCK', league: 'LCK' },
 }
+
+test('Demacia Cup leads into next season histories without changing season records or replaying its impact', () => {
+  const cupTeams: Record<string, TeamProfile> = {
+    'Bilibili Gaming': { name: 'Bilibili Gaming', code: 'BLG', league: 'LPL', region: 'LPL' },
+    'JD Gaming': { name: 'JD Gaming', code: 'JDG', league: 'LPL', region: 'LPL' },
+  }
+  const match = (id: string, date: string, event: string): MatchRecord => ({
+    ...game(1, 'Gen.G'), id, sourceGameId: id, sourceMatchId: id,
+    date, datetimeUtc: `${date}T12:00:00.000Z`, season: Number(date.slice(0, 4)),
+    event, league: event.startsWith('DCup') ? 'DCup' : 'LPL', region: 'LPL',
+    teamA: 'Bilibili Gaming', teamB: 'JD Gaming', winner: 'Bilibili Gaming',
+    bestOf: 1,
+  })
+  const data = createStaticRankingData({
+    matches: [
+      match('prior-regular', '2025-12-01', 'LPL 2025'),
+      match('cup-a', '2025-12-16', 'DCup 2025'),
+      match('cup-b', '2025-12-20', 'Demacia Cup 2025'),
+      match('current-a', '2026-01-16', 'LPL 2026'),
+      { ...match('current-b', '2026-01-20', 'MSI 2026'), league: 'MSI', tier: 'msi-bracket' },
+    ],
+    teams: cupTeams, rosters: {}, generatedAt: '2026-01-21T00:00:00.000Z',
+  })
+  const key = snapshotKey({ season: '2026', event: 'All', region: 'All' })
+  const snapshot = data.snapshots[key]
+  const standing = snapshot.standings.find((row) => row.team === 'Bilibili Gaming')!
+  assert.equal(snapshot.matchCount, 2)
+  assert.equal(standing.wins, 2)
+  assert.equal(standing.losses, 0)
+  const histories = createTeamHistoryArtifacts(data)
+  const points = histories.shards[key].series[teamStandingKey(standing)].points
+  assert.deepEqual(points.map((point) => point[0]), ['2025-12-16', '2025-12-20', '2026-01-16', '2026-01-20'])
+  const globalPoints = histories.shards[data.defaultSnapshotKey].series[teamStandingKey(standing)].points
+  assert.deepEqual(points.slice(0, 2), globalPoints.slice(1, 3))
+  const ledger = createMatchHistoryArtifacts(data)
+  const pages = Object.values(ledger.pages[key]).map(parsePublicMatchHistoryPage)
+  assert.deepEqual(ledger.index.scopeIndex[key].years, ['2026', '2025'])
+  assert.equal(ledger.catalogs[key].gameCount, 4)
+  const leadIn = pages.flatMap((page) => page.matches).find((row) => row.id === 'cup-a')!
+  const original = Object.values(ledger.pages[data.defaultSnapshotKey]).flatMap((page) => page.matches).find((row) => row.id === 'cup-a')!
+  assert.equal(leadIn.impact.unit, 'series-applied')
+  assert.deepEqual(leadIn.impact, original.impact)
+  const priorKey = snapshotKey({ season: '2025', event: 'All', region: 'All' })
+  assert.equal(ledger.catalogs[priorKey].gameCount, 3)
+  const checkpoint = Object.values(ledger.catalogs).find((catalog) => catalog.filter.season === '2026' && catalog.filter.checkpoint)
+  assert.ok(checkpoint)
+  assert.equal(checkpoint.series.some((row) => row.date.startsWith('2025-')), false)
+})
 
 test('match history publishes scoped game rows and series-atomic impact', () => {
   const data = createStaticRankingData({

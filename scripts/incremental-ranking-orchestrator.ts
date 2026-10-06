@@ -15,6 +15,7 @@ import { PUBLIC_ARTIFACT_SCHEMA_VERSION, artifactMetaFor, snapshotKey } from '..
 import { PUBLIC_ARTIFACT_PATHS, publicMatchHistoryPagePath, publicMatchHistoryShardPath, publicScopeArtifactPath, publicTeamHistoryShardPath, publicTournamentMovementShardPath } from '../src/lib/publicArtifacts/writePlan'
 import { canonicalScheduleReferences, deriveTournamentInstances, tournamentInstanceForEvent, type TournamentInstanceId } from '../src/lib/internationalTournaments'
 import type { MatchRecord } from '../src/types'
+import { isSeasonHistoryLeadIn } from '../src/lib/seasonHistory'
 import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { buildStaticSnapshot, writeReconciliationOutput } from './build-static-snapshot.ts'
 import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
@@ -1246,7 +1247,8 @@ function changeTouchesSnapshotScope(
     if (scopeSeason > match.season) return true
     if (scopeSeason === match.season && filter.checkpoint && scope.checkpointEndUtcDate && match.date <= scope.checkpointEndUtcDate) return true
   }
-  if (filter.season !== 'All' && Number(filter.season) !== match.season) return false
+  if (filter.season !== 'All' && Number(filter.season) !== match.season
+    && !isSeasonHistoryLeadIn(match.date, match.event, filter)) return false
   if (filter.event !== 'All' && filter.event !== match.event) return false
   if (filter.region !== 'All'
     && filter.region !== match.region

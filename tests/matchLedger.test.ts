@@ -12,6 +12,7 @@ test('league options exclude incompatible events without changing event identifi
   assert.deepEqual(compatibleMatchEvents(refs, 'LCK'), ['LCK/2026 Season/Rounds 3-4'])
   assert.equal(compatibleMatchEvents(refs, 'All').length, 3)
   assert.equal(matchEventLabel(refs[0].event), 'LCK · 2026 · Rounds 3-4')
+  assert.equal(matchEventLabel('DCup 2025'), 'Demacia Cup 2025')
 })
 
 test('old MSI impact remains rejected and reports the exact affected record and publication', () => {

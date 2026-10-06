@@ -3,6 +3,7 @@ import test from 'node:test'
 import { formatChartInfluence, formatProbability, nonMatchDeltaFor, isValidChartPoint } from '../src/lib/chartPoints.ts'
 
 test('chart influence formatter describes the match behind a rating point', () => {
+  assert.equal(formatChartInfluence({ event: 'DCup 2025' }), 'Demacia Cup 2025')
   assert.equal(
     formatChartInfluence({
       result: 'W',

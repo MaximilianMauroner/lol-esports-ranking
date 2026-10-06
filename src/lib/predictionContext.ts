@@ -1,6 +1,7 @@
 import type { MatchRecord, MatchRosterSnapshot, TeamProfile, WalkForwardSegmentKey } from '../types'
 import { normalizedBestOf } from './matchFormat'
 import { rosterFingerprint } from './rosters'
+import { isDemaciaCupEvent } from '../data/competitionTaxonomy'
 
 export const walkForwardSegmentKeys = [
   'bo1',
@@ -44,6 +45,7 @@ export function recordTeamContext(
 }
 
 function isInternationalMatch(match: MatchRecord) {
+  if (isDemaciaCupEvent(`${match.league} ${match.event}`)) return false
   return match.region === 'International' || ['worlds-playoffs', 'worlds-main', 'msi-bracket', 'msi-play-in', 'minor-international'].includes(match.tier)
 }
 
