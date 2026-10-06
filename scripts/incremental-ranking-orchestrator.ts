@@ -740,10 +740,9 @@ function ledgerContext(sourceData: RankingSourceImport, previous?: CanonicalMatc
     provenanceReceiptIdentity: stableDigest(sourceData.externalSources),
     teams: sourceData.teams,
     scheduleCausalRows,
-    providerAvailableAtForMatch: (match: RankingSourceImport['matches'][number]) => {
+    providerAvailableAtForMatch: (match: RankingSourceImport['matches'][number], scoringDigest: string) => {
       const prior = previousByKey.get(canonicalMatchLedgerKey(match))
-      const teamContext = { teamA: sourceData.teams[match.teamA], teamB: sourceData.teams[match.teamB] }
-      if (prior?.scoringDigest === stableDigest({ match, teamContext }) && prior.providerAvailableAt) return prior.providerAvailableAt
+      if (prior?.scoringDigest === scoringDigest && prior.providerAvailableAt) return prior.providerAvailableAt
       return providerReceiptForMatch(sourceData, match)
     },
   }
@@ -783,7 +782,7 @@ async function selectReplay(
     candidates: checkpoints.map(({ candidate, bundle }) => ({
       id: `${candidate.boundary.date}/${candidate.boundary.matchId}`,
       processedThroughUtcDate: candidate.boundary.date,
-      serialized: stableJson(bundle.ratingCheckpoint),
+      serialized: JSON.stringify(bundle.ratingCheckpoint),
       expectedIdentity: {
         importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
         identityTaxonomyHash: stableDigest(sourceData.teams),

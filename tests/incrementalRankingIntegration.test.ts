@@ -584,6 +584,14 @@ test('provider availability is attributed to the receipt covering the newly obse
     })
     assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
     assert.equal(incremental.metrics.providerAvailableAt, '2026-01-05T08:30:00.000Z')
+    if (incremental.action !== 'publish-incremental') throw new Error('Expected incremental provider append')
+    if (baseline.action === 'no-change') throw new Error('Expected provider baseline state')
+    const priorRows = new Map(baseline.state.ledger.rows.map((row) => [row.key, row]))
+    for (const row of incremental.state.ledger.rows) {
+      const prior = priorRows.get(row.key)
+      if (prior) assert.equal(row.providerAvailableAt, prior.providerAvailableAt)
+      else assert.equal(row.providerAvailableAt, '2026-01-05T08:30:00.000Z')
+    }
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }

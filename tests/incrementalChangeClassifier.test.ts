@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { MatchRecord, MatchRosterSnapshot } from '../src/types.ts'
 import { buildCanonicalMatchLedger, classifyRankingChange, parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier.ts'
-import type { CanonicalMatchLedgerContext } from '../src/lib/incremental/types.ts'
+import { stableDigest, type CanonicalMatchLedgerContext } from '../src/lib/incremental/types.ts'
 
 const context: CanonicalMatchLedgerContext = {
   modelVersion: 'model-v1',
@@ -26,6 +26,29 @@ test('canonical ledger uses provider priority, deterministic ordering, and rejec
   ])
   assert.equal(ledger.rows.every((row) => row.scoringDigest === row.artifactDigest), true)
   assert.throws(() => buildCanonicalMatchLedger([matches[0]!, { ...matches[0]!, id: 'duplicate' }], context), /Duplicate/)
+})
+
+test('provider availability receives the complete scored input digest once per match', () => {
+  const source = match({ teamARoster: {
+    sourceProvider: 'oracles-elixir', observedAt: '2026-01-01', completeness: 'partial',
+    players: [{ id: 'alpha-mid', name: 'Alpha Mid', role: 'Mid' }],
+  } })
+  const expectedDigest = stableDigest({ match: source, teamContext: undefined })
+  let calls = 0
+  const ledger = buildCanonicalMatchLedger([source], {
+    ...context,
+    providerAvailableAtForMatch: (received, digest) => {
+      calls++
+      assert.equal(received, source)
+      assert.equal(digest, expectedDigest)
+      return '2026-01-02T08:00:00.000Z'
+    },
+  })
+  assert.equal(calls, 1)
+  assert.equal(ledger.rows[0]?.scoringDigest, expectedDigest)
+  assert.equal(ledger.rows[0]?.artifactDigest, expectedDigest)
+  assert.equal(ledger.rows[0]?.providerAvailableAt, '2026-01-02T08:00:00.000Z')
+  assert.deepEqual(parseCanonicalMatchLedger(ledger), ledger)
 })
 
 test('canonical schedule keys must be unique across dates before persistence and after restore', () => {
