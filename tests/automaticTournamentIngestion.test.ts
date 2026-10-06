@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,6 +51,13 @@ test('scheduled date-window downloads retain a new tournament across refreshes w
       assert.equal(cup.length, expectedGames)
       assert.equal(new Set(cup.map((game) => game.sourceGameId)).size, expectedGames)
       assert.equal(cup.every((game) => game.sourceUrl === baseUrl), true)
+      const leaguepediaSources = source.externalSources.filter((entry) => entry.kind === 'match-data')
+      assert.equal(leaguepediaSources.length, expectedGames === 6 ? 1 : 2)
+      // Overlapping downloads count their own rows, while the model retains unique games.
+      assert.deepEqual(leaguepediaSources.map((entry) => entry.rowCount).sort((left, right) => (left ?? 0) - (right ?? 0)),
+        expectedGames === 6 ? [fixture.domesticEvidence.length + 6] : [fixture.domesticEvidence.length + 6, 27])
+      assert.deepEqual(leaguepediaSources.map((entry) => entry.coverageEnd).sort(),
+        expectedGames === 6 ? [end] : ['2026-10-03', end])
       const data = createStaticRankingData({ ...source, rosters: {}, generatedAt: `${end}T18:00:00.000Z` })
       const history = createMatchHistoryArtifacts(data)
       const expectedSeries = expectedGames === 6 ? 6 : 15
@@ -66,6 +73,31 @@ test('scheduled date-window downloads retain a new tournament across refreshes w
     assert.equal(requests.every((url) => !url.searchParams.get('where')?.includes('Demacia')), true)
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('source coverage uses canonical evidence while preserving explicit duplicate metadata and team identity', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tournament-source-coverage-'))
+  try {
+    const retainedPath = join(directory, 'retained.json')
+    const duplicatesPath = join(directory, 'duplicates.json')
+    const first = fixture.matches[0]
+    await writeFile(retainedPath, JSON.stringify({ ...fixture, matches: [...fixture.domesticEvidence, ...fixture.matches] }))
+    await writeFile(duplicatesPath, JSON.stringify({ ...fixture, matches: [
+      // Discarded domestic metadata must not become evidence for the canonical cup games.
+      { ...fixture.domesticEvidence[0], teamAHomeLeague: 'LCK CL', teamBHomeLeague: 'LCK CL' },
+      { ...first, teamA: first.teamB, teamB: first.teamA },
+      { ...fixture.matches[1], teamAHomeLeague: 'LCK CL' },
+      { ...fixture.matches[2], teamA: 'Unrelated Coverage Team A', teamB: 'Unrelated Coverage Team B' },
+    ] }))
+    const source = await importRankingSourceData({ leaguepediaJsonPaths: [retainedPath, duplicatesPath] })
+    assert.equal(source.matches.length, fixture.domesticEvidence.length + fixture.matches.length)
+    assert.equal(source.matches.filter((game) => game.event === event).length, 27)
+    const sources = source.externalSources.filter((entry) => entry.kind === 'match-data')
+    assert.deepEqual(sources.map((entry) => entry.rowCount), [39, 1])
+    assert.deepEqual(sources.map((entry) => entry.coverageEnd), ['2026-10-06', first.date])
+  } finally {
     await rm(directory, { recursive: true, force: true })
   }
 })

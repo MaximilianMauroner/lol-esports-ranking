@@ -42,10 +42,12 @@ agent or run `release:check` merely for a procedure edit. Tests do not replace
 live browser actions.
 
 For automatic tournament ingestion, run
-`pnpm exec tsx --tsconfig tsconfig.app.json --test tests/automaticTournamentIngestion.test.ts`.
+`pnpm exec tsx --tsconfig tsconfig.app.json --test tests/automaticTournamentIngestion.test.ts tests/refreshOnce.test.ts`.
 It runs the Railway refresh wrapper against a local Cargo fixture, checks baseline
 preservation across two date windows, and checks both year and global ledgers.
-It uses no provider or bucket credentials and makes no production writes.
+The refresh tests also check discovery when the official probe has no new match,
+explicit audit opt-out, shadow defaults, and success receipt requirements.
+These tests use no provider or bucket credentials and make no production writes.
 For L6, generate an isolated offline fixture from its captured games and domestic
 evidence. Compare the ledger before and after home-league resolution, select the
 event in both All seasons and its year, expand a series, and reload its deep link.
