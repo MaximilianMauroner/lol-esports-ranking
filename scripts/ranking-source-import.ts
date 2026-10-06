@@ -6,7 +6,7 @@ import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
 import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
-import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
+import { deriveTeamProfilesFromMatches, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/lib/teamProfiles'
 import type { DataSourceInfo, DataSourceWarning } from '../src/lib/snapshot'
 import type { MatchRecord, TeamProfile } from '../src/types'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -68,11 +68,11 @@ export async function importRankingSourceData({
   for (const jsonPath of lolEsportsPaths) {
     lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(await readFile(jsonPath, 'utf8')), { sourceFileName: basename(jsonPath) }))
   }
-  const importedMatches = mergeCommunityMatchSources({
+  const importedMatches = resolveCompetitionHomeLeagues(mergeCommunityMatchSources({
     oracleMatches: oracleImports.flatMap((result) => result.matches),
     leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
     lolEsportsReferences: lolEsportsImports.flatMap((result) => result.events),
-  })
+  }))
   const importedTeams = mergeTeamProfiles([...leaguepediaImports.map((result) => result.teams), ...oracleImports.map((result) => result.teams)])
   const mergedTeams = importedMatches.length > 0
     ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities }
