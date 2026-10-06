@@ -32,7 +32,7 @@ export function mergeCommunityMatchSources({
 
   const verifiedLeaguepediaLinks = uniqueLeaguepediaGameLinks(merged, leaguepediaMatches)
   for (const match of leaguepediaMatches) {
-    const oracleStatDuplicate = consumeOracleDuplicate(oracleStatOutcomeMatches, matchStatOutcomeKey(match), match)
+    const oracleStatDuplicate = consumeOracleDuplicate(oracleStatOutcomeMatches, matchStatOutcomeKey(match))
     if (oracleStatDuplicate) {
       enrichRetainedOracleMatch(oracleStatDuplicate, match, verifiedLeaguepediaLinks.get(oracleStatDuplicate))
       registerMatchKeys(seen, match, oracleStatDuplicate)
@@ -40,7 +40,7 @@ export function mergeCommunityMatchSources({
     }
 
     const seenDuplicate = matchKeys(match).map((key) => seen.get(key))
-      .find((candidate): candidate is MatchRecord => Boolean(candidate && gameTimesCompatible(candidate, match)))
+      .find((candidate): candidate is MatchRecord => Boolean(candidate))
     if (seenDuplicate) {
       enrichRetainedOracleMatch(seenDuplicate, match, verifiedLeaguepediaLinks.get(seenDuplicate))
       registerMatchKeys(seen, match, seenDuplicate)
@@ -245,10 +245,9 @@ function strategyCount(reference: LolEsportsReferenceEvent) {
   return reference.strategy?.count ?? reference.gameIds.length
 }
 
-function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string, match?: MatchRecord) {
+function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string) {
   const candidates = matches.get(key) ?? []
-  const index = match ? candidates.findIndex((candidate) => gameTimesCompatible(candidate, match)) : 0
-  return index < 0 ? undefined : candidates.splice(index, 1)[0]
+  return candidates.shift()
 }
 
 /** Missing clocks require an exact scoreboard link that is unique in both source directions. */

@@ -144,3 +144,9 @@ Finder full-diff dead-code and redundant-test checks passed. It found no obsolet
 The first floating residual repair closed the original CI case but failed an independent five-entrant conservation counterexample. Parent diagnosed summation roundoff before the same implementer repaired it. Expected allocation now uses a binary precision grid of 2^32 units per stage point. Scaled pool/bounds must be safe integers; deterministic remainder allocation conserves both entrant and regrouped league totals. This quantization is below 2.33e-10 stage points per entrant and does not change the retained rounded rating/residual semantics. The placement policy identity is `highest-attainment-bounded-grid-pool-centered-league-residual-v4`; source pipeline is v18. No compatibility engine was added.
 
 After the foreign job released Fleet's slot, the implementer's final 86 affected tests passed under the 3 GiB group limit and zero build swap (peak 366 MB, 2.259 seconds). Full `pnpm verify` is running. Existing public artifacts and production state remain unchanged.
+
+## Source repair closure
+
+The v18 replay is rejected. It added eight duplicate Leaguepedia rows because primary deduplication incorrectly required compatible clocks. Pipeline v19 restores clock-independent exact-stat and stable-ID deduplication. Clock, duration and bidirectional uniqueness checks still protect provider series anchors. The independent verifier restored all 4,519 frozen scored games, removed all eight duplicates and retained the Fnatic/Karmine Corp completed 3–1 Bo5. `git diff --check` passed. Two model sweep fixtures now explicitly declare Bo5; all 50 model tests passed. Final full verification is pending.
+
+The intended base advanced to ingestion commit `95cc30e5`. Its home-league source policy must be retained during branch integration, with a new combined source identity before the final replay. No input corpus, public artifact or production resource changes are included.

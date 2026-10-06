@@ -782,16 +782,38 @@ test('ambiguous scoreboard anchors cannot assign provider series identities', ()
 
 test('result-only and conflicting-time duplicates cannot provide scored series anchors', () => {
   const oracle = matchFixture({ id: 'oe-unverified-link', sourceProvider: 'oracles-elixir', sourceGameId: 'oracle-unverified-opaque',
-    datetimeUtc: '2026-01-01T10:00:00Z' })
+    datetimeUtc: '2026-01-01T10:00:00Z', gameLengthSeconds: 1800 })
   const resultOnly = matchFixture({ id: 'lp-result-only-link', sourceProvider: 'leaguepedia-cargo', sourceGameId: 'LCK/2026 Spring_Result_1',
     dataCompleteness: 'match-result-only', teamAKills: 0, teamBKills: 0, teamAGold: 0, teamBGold: 0 })
   const missingStats = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: [resultOnly] })
   assert.equal(missingStats[0].sourceMatchId, undefined)
   const conflictingTime = { ...oracle, id: 'lp-conflicting-time', sourceProvider: 'leaguepedia-cargo' as const,
     sourceGameId: 'LCK/2026 Spring_Conflicting_1', datetimeUtc: '2026-01-01T18:00:00Z' }
-  const conflict = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: [conflictingTime] })
-  assert.equal(conflict.length, 2)
+  const correctedSnapshot = { ...conflictingTime, id: 'lp-conflicting-update', datetimeUtc: '2026-01-01T20:00:00Z', gameLengthSeconds: 1900 }
+  const conflict = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: [conflictingTime, correctedSnapshot] })
+  assert.equal(conflict.length, 1)
+  assert.equal(conflict[0].id, oracle.id)
   assert.equal(conflict.find((match) => match.id === oracle.id)?.sourceMatchId, undefined)
+  const conflictingDuration = { ...conflictingTime, datetimeUtc: oracle.datetimeUtc, gameLengthSeconds: 1900 }
+  const durationConflict = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: [conflictingDuration] })
+  assert.equal(durationConflict.length, 1)
+  assert.equal(durationConflict[0].sourceMatchId, undefined)
+})
+
+test('eight exact scoreboard duplicates with clock corrections and source patch aliases add no game rows or series anchors', () => {
+  const offsets = [82, 121, 159, 409, 714, 1236, 2151, 2821]
+  const oracle = offsets.map((_, index) => matchFixture({ id: `oe-clock-${index}`,
+    sourceProvider: 'oracles-elixir', sourceGameId: `oracle-clock-${index}-opaque`,
+    patch: index < 4 ? '25.17' : '26.1', teamAKills: 20 + index, teamAGold: 65000 + index,
+    datetimeUtc: new Date(Date.UTC(2026, 0, 1, 12, index)).toISOString(), gameLengthSeconds: 1800 + index }))
+  const leaguepedia = oracle.map((match, index) => ({ ...match, id: `lp-clock-${index}`,
+    sourceProvider: 'leaguepedia-cargo' as const, sourceGameId: `LCK/2026 Spring_Clock${index}_1`,
+    patch: index < 4 ? '15.17' : '16.1', gameLengthSeconds: undefined,
+    datetimeUtc: new Date(Date.parse(match.datetimeUtc!) + offsets[index] * 1000).toISOString() }))
+  const merged = mergeCommunityMatchSources({ oracleMatches: oracle, leaguepediaMatches: leaguepedia })
+  assert.equal(merged.length, 8)
+  assert.deepEqual(merged.map((match) => match.id), oracle.map((match) => match.id))
+  assert.ok(merged.every((match) => match.sourceMatchId === undefined && match.gameNumber === undefined))
 })
 
 test('community merge keeps distinct scored same-winner series games', () => {

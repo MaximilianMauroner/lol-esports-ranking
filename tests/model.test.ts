@@ -64,6 +64,7 @@ test('series rows publish one atomic team and league strength update', () => {
   }
   const model = buildRankingModel(seriesFixture({
     id: 'msi-alpha-delta',
+    bestOf: 5,
     date: '2026-02-01',
     event: 'MSI Fixture',
     region: 'International',
@@ -586,6 +587,7 @@ test('series expectation can value an elite win above an expected sweep', () => 
     ...setup,
     ...seriesFixture({
       id: 'alpha-delta-series',
+      bestOf: 5,
       date: '2026-03-01',
       sourceProvider: 'oracles-elixir',
       event: 'MSI 2026',
