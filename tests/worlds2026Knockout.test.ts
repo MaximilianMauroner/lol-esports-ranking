@@ -188,3 +188,15 @@ test('missing or incompatible ratings and future snapshot provenance yield no pa
     if (forecast.status === 'unsupported') assert.equal(forecast.reason, 'model-unavailable')
   }
 })
+
+test('overflowing provider calculations yield no partial knockout forecast', () => {
+  const model = basis()
+  const scale = { ...publishedRatingScale, spreadMultiplier: Number.MIN_VALUE }
+  model.model.ratingScale = scale
+  model.snapshot.ratingScale = scale
+  for (const team of model.snapshot.standings) team.rating = 2000
+
+  const forecast = forecastWorlds2026Knockout(input(), model)
+  assert.equal(forecast.status, 'unsupported')
+  if (forecast.status === 'unsupported') assert.equal(forecast.reason, 'model-unavailable')
+})
