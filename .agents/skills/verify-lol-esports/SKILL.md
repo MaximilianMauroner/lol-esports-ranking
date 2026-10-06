@@ -39,7 +39,10 @@ tests and tournament tests. Do not repeat memory benchmarks owned by another
 agent or run `release:check` merely for a procedure edit. Tests do not replace
 live browser actions.
 
+Before captures, exclude the owned `.agents/artifacts/<run-id>/` directory
+through Git's local exclude file and confirm it with `git check-ignore`. Do not
+assume the repository's singular `.agent/artifacts/` rule covers this path.
 Stop the exact server session, confirm its port closes, and retain redacted
-evidence under ignored `.agents/artifacts/<run-id>/`. Static journeys should
+evidence in that excluded run directory. Static journeys should
 not change provider or bucket state. Remove only owned downloads or captures
 not needed as evidence. Report CI, review, merge and acceptance separately.
