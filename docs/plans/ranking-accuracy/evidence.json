@@ -1,0 +1,1782 @@
+{
+  "status": "Exploratory inspected corpus; original experiments precede final review repairs; no adopted tuning candidate",
+  "exports": {
+    "baseline": {
+      "schemaVersion": 1,
+      "modelVersion": "transparent-power-index-v0.2.0",
+      "modelConfigHash": "fnv1a-f8451423",
+      "sourceIdentity": "5f68f0028401b5f93ebee0d5c27de5f3fde922981834fb9972593299fbe8167f",
+      "temporalPolicy": "latest-corrected-prior-replay",
+      "metricContract": {
+        "version": "binary-brier-clipped-log-loss-v1",
+        "logLossProbabilityFloor": 0.001,
+        "logLossProbabilityCeiling": 0.999
+      },
+      "scoreStart": "2025-01-01",
+      "provenance": {
+        "trainingSourceIdentity": "803f6ee7704e7f6ba444cb7ccbc5f1e792769ac00f08f58dd8e0a68b3f5352d6",
+        "manifestIdentity": "223cccee7894900e04a2ad57327f2d3b9fb6c818f15b8fe53ad3aa21a4ad029d",
+        "coverage": {
+          "start": "2025-01-01",
+          "end": "2026-07-26"
+        },
+        "importedGames": 22765,
+        "ratedGames": 4519,
+        "warnings": [
+          "Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-19 through 2026-07-26 scored window successfully.",
+          "Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines.",
+          "LoL Esports schedule APIs are unsupported reference endpoints; the refreshed cache is reference-only."
+        ],
+        "tournamentLifecycles": [
+          {
+            "id": "ewc:2026",
+            "status": "completed",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "msi:2026",
+            "status": "completed",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "first-stand:2026",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "worlds:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "ewc:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "msi:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "first-stand:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          }
+        ]
+      },
+      "summaries": {
+        "current": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.22774875768754074,
+          "logLoss": 0.6471341467257573,
+          "accuracy": 0.6315556539057313,
+          "impossibleOutcomes": 0
+        },
+        "elo": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.22855860271997214,
+          "logLoss": 0.6489947601535015,
+          "accuracy": 0.6284576233680018,
+          "impossibleOutcomes": 0
+        },
+        "glicko": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.23141248927231028,
+          "logLoss": 0.6609596158961683,
+          "accuracy": 0.6222615622925426,
+          "impossibleOutcomes": 0
+        },
+        "winRate": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.2325712910260241,
+          "logLoss": 0.657390420509707,
+          "accuracy": 0.6198273954414694,
+          "impossibleOutcomes": 0
+        },
+        "coinFlip": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.25,
+          "logLoss": 0.6931471805599784,
+          "accuracy": 0.5339676919672494,
+          "impossibleOutcomes": 0
+        },
+        "teamOnly": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.233499751925205,
+          "logLoss": 0.659483861507142,
+          "accuracy": 0.6273511838902412,
+          "impossibleOutcomes": 0
+        },
+        "playerAdjusted": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.22742409523567042,
+          "logLoss": 0.6464381322310528,
+          "accuracy": 0.6408497455189202,
+          "impossibleOutcomes": 0
+        }
+      },
+      "binarySeriesCount": 1803
+    },
+    "precision": {
+      "schemaVersion": 1,
+      "modelVersion": "transparent-power-index-v0.2.1",
+      "modelConfigHash": "fnv1a-22bac297",
+      "sourceIdentity": "5f68f0028401b5f93ebee0d5c27de5f3fde922981834fb9972593299fbe8167f",
+      "temporalPolicy": "latest-corrected-prior-replay",
+      "metricContract": {
+        "version": "binary-brier-clipped-log-loss-v1",
+        "logLossProbabilityFloor": 0.001,
+        "logLossProbabilityCeiling": 0.999
+      },
+      "scoreStart": "2025-01-01",
+      "provenance": {
+        "trainingSourceIdentity": "803f6ee7704e7f6ba444cb7ccbc5f1e792769ac00f08f58dd8e0a68b3f5352d6",
+        "manifestIdentity": "223cccee7894900e04a2ad57327f2d3b9fb6c818f15b8fe53ad3aa21a4ad029d",
+        "coverage": {
+          "start": "2025-01-01",
+          "end": "2026-07-26"
+        },
+        "importedGames": 22765,
+        "ratedGames": 4519,
+        "warnings": [
+          "Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-19 through 2026-07-26 scored window successfully.",
+          "Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines.",
+          "LoL Esports schedule APIs are unsupported reference endpoints; the refreshed cache is reference-only."
+        ],
+        "tournamentLifecycles": [
+          {
+            "id": "ewc:2026",
+            "status": "completed",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "msi:2026",
+            "status": "completed",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "first-stand:2026",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "worlds:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "ewc:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "msi:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "first-stand:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          }
+        ]
+      },
+      "summaries": {
+        "current": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.2278058618004536,
+          "logLoss": 0.647266715264944,
+          "accuracy": 0.6315556539057313,
+          "impossibleOutcomes": 0
+        },
+        "elo": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.22855860271997214,
+          "logLoss": 0.6489947601535015,
+          "accuracy": 0.6284576233680018,
+          "impossibleOutcomes": 0
+        },
+        "glicko": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.23141248927231028,
+          "logLoss": 0.6609596158961683,
+          "accuracy": 0.6222615622925426,
+          "impossibleOutcomes": 0
+        },
+        "winRate": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.2325712910260241,
+          "logLoss": 0.657390420509707,
+          "accuracy": 0.6198273954414694,
+          "impossibleOutcomes": 0
+        },
+        "coinFlip": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.25,
+          "logLoss": 0.6931471805599784,
+          "accuracy": 0.5339676919672494,
+          "impossibleOutcomes": 0
+        },
+        "teamOnly": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.2335781110052635,
+          "logLoss": 0.6596488643137827,
+          "accuracy": 0.630670502323523,
+          "impossibleOutcomes": 0
+        },
+        "playerAdjusted": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.22747898066909275,
+          "logLoss": 0.6465615650168232,
+          "accuracy": 0.638636866563399,
+          "impossibleOutcomes": 0
+        }
+      },
+      "binarySeriesCount": 1803
+    },
+    "corrected-baseline": {
+      "schemaVersion": 1,
+      "modelVersion": "transparent-power-index-v0.2.0",
+      "modelConfigHash": "fnv1a-34aa5dd6",
+      "sourceIdentity": "5f68f0028401b5f93ebee0d5c27de5f3fde922981834fb9972593299fbe8167f",
+      "temporalPolicy": "latest-corrected-prior-replay",
+      "metricContract": {
+        "version": "binary-brier-clipped-log-loss-v1",
+        "logLossProbabilityFloor": 0.001,
+        "logLossProbabilityCeiling": 0.999
+      },
+      "scoreStart": "2025-01-01",
+      "provenance": {
+        "trainingSourceIdentity": "803f6ee7704e7f6ba444cb7ccbc5f1e792769ac00f08f58dd8e0a68b3f5352d6",
+        "manifestIdentity": "223cccee7894900e04a2ad57327f2d3b9fb6c818f15b8fe53ad3aa21a4ad029d",
+        "coverage": {
+          "start": "2025-01-01",
+          "end": "2026-07-26"
+        },
+        "importedGames": 22765,
+        "ratedGames": 4519,
+        "warnings": [
+          "Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-19 through 2026-07-26 scored window successfully.",
+          "Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines.",
+          "LoL Esports schedule APIs are unsupported reference endpoints; the refreshed cache is reference-only."
+        ],
+        "tournamentLifecycles": [
+          {
+            "id": "ewc:2026",
+            "status": "completed",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "msi:2026",
+            "status": "completed",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "first-stand:2026",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "worlds:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "ewc:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "msi:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          },
+          {
+            "id": "first-stand:2025",
+            "status": "unknown",
+            "resultCoverageComplete": false
+          }
+        ]
+      },
+      "summaries": {
+        "current": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.22774092716751432,
+          "logLoss": 0.6471153665272263,
+          "accuracy": 0.6313343660101792,
+          "impossibleOutcomes": 0
+        },
+        "elo": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.2285868565831968,
+          "logLoss": 0.6490513391489184,
+          "accuracy": 0.6275724717857933,
+          "impossibleOutcomes": 0
+        },
+        "glicko": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.23161285562905304,
+          "logLoss": 0.6613980085033146,
+          "accuracy": 0.621155122814782,
+          "impossibleOutcomes": 0
+        },
+        "winRate": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.232561504487345,
+          "logLoss": 0.6573679108353004,
+          "accuracy": 0.6193848196503651,
+          "impossibleOutcomes": 0
+        },
+        "coinFlip": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.25,
+          "logLoss": 0.6931471805599784,
+          "accuracy": 0.5339676919672494,
+          "impossibleOutcomes": 0
+        },
+        "teamOnly": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.23348504163753048,
+          "logLoss": 0.6594519891240281,
+          "accuracy": 0.6282363354724496,
+          "impossibleOutcomes": 0
+        },
+        "playerAdjusted": {
+          "count": 4519,
+          "series": 1833,
+          "events": 61,
+          "brier": 0.2274172480128342,
+          "logLoss": 0.6464207029471706,
+          "accuracy": 0.6408497455189202,
+          "impossibleOutcomes": 0
+        }
+      },
+      "binarySeriesCount": 1799
+    }
+  },
+  "search": {
+    "identity": "e80a7601006325e7dee69de318a20affc6bd94e6a65fecdcb9b2397e44a58827",
+    "status": "exploratory; no fresh holdout; no automatic adoption",
+    "seed": 334462,
+    "parameters": [
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "recencyHalfLifeDays",
+        "group": "temporal",
+        "low": 240,
+        "high": 720
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "normalPatchTeamRetention",
+        "group": "temporal",
+        "low": 0.95,
+        "high": 1
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "splitBreakTeamRetention",
+        "group": "temporal",
+        "low": 0.8,
+        "high": 1
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "seasonStartTeamRetention",
+        "group": "temporal",
+        "low": 0.6,
+        "high": 1
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "winProbabilityUncertaintyScale",
+        "group": "probability",
+        "low": 400,
+        "high": 1200
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "winProbabilityUncertaintyFloor",
+        "group": "probability",
+        "low": 0.35,
+        "high": 0.65
+      },
+      {
+        "file": "src/lib/playerModel.ts",
+        "key": "playerPregameEdgeCoefficient",
+        "group": "player",
+        "low": 1,
+        "high": 4
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "momentumGameDecay",
+        "group": "momentum",
+        "low": 0.75,
+        "high": 0.97
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "momentumCap",
+        "group": "momentum",
+        "low": 30,
+        "high": 100
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "tier-two",
+        "group": "transfer",
+        "low": 0.45,
+        "high": 1
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "tier-three",
+        "group": "transfer",
+        "low": 0.25,
+        "high": 0.45
+      },
+      {
+        "file": "src/lib/modelConfig.ts",
+        "key": "emerging",
+        "group": "transfer",
+        "low": 0.1,
+        "high": 0.25
+      }
+    ],
+    "selection": [
+      {
+        "fitThrough": "2025-03-31",
+        "validateThrough": "2025-06-30",
+        "selectedTrial": 12,
+        "selectionUses": "fit-log-loss-only",
+        "validation": {
+          "count": 697,
+          "events": 5,
+          "brier": 0.21565998353306334,
+          "logLoss": 0.6209538396323704
+        },
+        "baselineValidation": {
+          "count": 697,
+          "events": 5,
+          "brier": 0.21761842706965182,
+          "logLoss": 0.6255188681853464
+        }
+      },
+      {
+        "fitThrough": "2025-06-30",
+        "validateThrough": "2025-09-30",
+        "selectedTrial": 12,
+        "selectionUses": "fit-log-loss-only",
+        "validation": {
+          "count": 834,
+          "events": 11,
+          "brier": 0.22575401735174405,
+          "logLoss": 0.642583972918619
+        },
+        "baselineValidation": {
+          "count": 834,
+          "events": 11,
+          "brier": 0.22767387334204478,
+          "logLoss": 0.6467243207158356
+        }
+      },
+      {
+        "fitThrough": "2025-09-30",
+        "validateThrough": "2025-12-31",
+        "selectedTrial": 12,
+        "selectionUses": "fit-log-loss-only",
+        "validation": {
+          "count": 264,
+          "events": 6,
+          "brier": 0.2481225634430848,
+          "logLoss": 0.690523855094194
+        },
+        "baselineValidation": {
+          "count": 264,
+          "events": 6,
+          "brier": 0.24529857889809742,
+          "logLoss": 0.683727518136839
+        }
+      }
+    ],
+    "trials": [
+      {
+        "index": 0,
+        "label": "baseline",
+        "parameters": {
+          "recencyHalfLifeDays": 454.1791071114875,
+          "normalPatchTeamRetention": 0.985,
+          "splitBreakTeamRetention": 0.92,
+          "seasonStartTeamRetention": 0.8,
+          "winProbabilityUncertaintyScale": 620,
+          "winProbabilityUncertaintyFloor": 0.45,
+          "playerPregameEdgeCoefficient": 2.5,
+          "momentumGameDecay": 0.88,
+          "momentumCap": 70,
+          "tier-two": 0.65,
+          "tier-three": 0.38,
+          "emerging": 0.25
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-ce2826db",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6639579649024321,
+            "validation": 0.6255188681853464
+          },
+          {
+            "fit": 0.6414764469975568,
+            "validation": 0.6467243207158356
+          },
+          {
+            "fit": 0.643354580645129,
+            "validation": 0.683727518136839
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "label": "group:temporal",
+        "parameters": {
+          "recencyHalfLifeDays": 480,
+          "normalPatchTeamRetention": 0.975,
+          "splitBreakTeamRetention": 0.9,
+          "seasonStartTeamRetention": 0.8,
+          "winProbabilityUncertaintyScale": 620,
+          "winProbabilityUncertaintyFloor": 0.45,
+          "playerPregameEdgeCoefficient": 2.5,
+          "momentumGameDecay": 0.88,
+          "momentumCap": 70,
+          "tier-two": 0.65,
+          "tier-three": 0.38,
+          "emerging": 0.25
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-39606c93",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6640888266867889,
+            "validation": 0.6258857718849654
+          },
+          {
+            "fit": 0.6417764173604258,
+            "validation": 0.6475655488505683
+          },
+          {
+            "fit": 0.6438461133303345,
+            "validation": 0.6833755546915965
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "label": "group:probability",
+        "parameters": {
+          "recencyHalfLifeDays": 454.1791071114875,
+          "normalPatchTeamRetention": 0.985,
+          "splitBreakTeamRetention": 0.92,
+          "seasonStartTeamRetention": 0.8,
+          "winProbabilityUncertaintyScale": 800,
+          "winProbabilityUncertaintyFloor": 0.5,
+          "playerPregameEdgeCoefficient": 2.5,
+          "momentumGameDecay": 0.88,
+          "momentumCap": 70,
+          "tier-two": 0.65,
+          "tier-three": 0.38,
+          "emerging": 0.25
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-b0274b19",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6631139743427379,
+            "validation": 0.6248223419766163
+          },
+          {
+            "fit": 0.6407840564176284,
+            "validation": 0.6467358058819137
+          },
+          {
+            "fit": 0.6429574738207088,
+            "validation": 0.6846948177088564
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "label": "group:player",
+        "parameters": {
+          "recencyHalfLifeDays": 454.1791071114875,
+          "normalPatchTeamRetention": 0.985,
+          "splitBreakTeamRetention": 0.92,
+          "seasonStartTeamRetention": 0.8,
+          "winProbabilityUncertaintyScale": 620,
+          "winProbabilityUncertaintyFloor": 0.45,
+          "playerPregameEdgeCoefficient": 2.5,
+          "momentumGameDecay": 0.88,
+          "momentumCap": 70,
+          "tier-two": 0.65,
+          "tier-three": 0.38,
+          "emerging": 0.25
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-ce2826db",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6639579649024321,
+            "validation": 0.6255188681853464
+          },
+          {
+            "fit": 0.6414764469975568,
+            "validation": 0.6467243207158356
+          },
+          {
+            "fit": 0.643354580645129,
+            "validation": 0.683727518136839
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "label": "group:momentum",
+        "parameters": {
+          "recencyHalfLifeDays": 454.1791071114875,
+          "normalPatchTeamRetention": 0.985,
+          "splitBreakTeamRetention": 0.92,
+          "seasonStartTeamRetention": 0.8,
+          "winProbabilityUncertaintyScale": 620,
+          "winProbabilityUncertaintyFloor": 0.45,
+          "playerPregameEdgeCoefficient": 2.5,
+          "momentumGameDecay": 0.86,
+          "momentumCap": 65,
+          "tier-two": 0.65,
+          "tier-three": 0.38,
+          "emerging": 0.25
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-b2bc31fb",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6639730702896965,
+            "validation": 0.6255239402165592
+          },
+          {
+            "fit": 0.6414852879719226,
+            "validation": 0.6467290995694222
+          },
+          {
+            "fit": 0.6433614710851701,
+            "validation": 0.6837097138774524
+          }
+        ]
+      },
+      {
+        "index": 5,
+        "label": "group:transfer",
+        "parameters": {
+          "recencyHalfLifeDays": 454.1791071114875,
+          "normalPatchTeamRetention": 0.985,
+          "splitBreakTeamRetention": 0.92,
+          "seasonStartTeamRetention": 0.8,
+          "winProbabilityUncertaintyScale": 620,
+          "winProbabilityUncertaintyFloor": 0.45,
+          "playerPregameEdgeCoefficient": 2.5,
+          "momentumGameDecay": 0.88,
+          "momentumCap": 70,
+          "tier-two": 0.725,
+          "tier-three": 0.35,
+          "emerging": 0.175
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-ef0c60a5",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6632671505141072,
+            "validation": 0.625037231420897
+          },
+          {
+            "fit": 0.6408898419596397,
+            "validation": 0.6462342407349445
+          },
+          {
+            "fit": 0.6428626543124232,
+            "validation": 0.6840759882496951
+          }
+        ]
+      },
+      {
+        "index": 6,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 251.493277028203,
+          "normalPatchTeamRetention": 0.9920766789582558,
+          "splitBreakTeamRetention": 0.9202794324606657,
+          "seasonStartTeamRetention": 0.8256990715861321,
+          "winProbabilityUncertaintyScale": 596.8104602769017,
+          "winProbabilityUncertaintyFloor": 0.5522861942881718,
+          "playerPregameEdgeCoefficient": 3.3974193958565593,
+          "momentumGameDecay": 0.7881071407906711,
+          "momentumCap": 46.36501991422847,
+          "tier-two": 0.7709285313962028,
+          "tier-three": 0.425139335077256,
+          "emerging": 0.13878078445559366
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-8c3cb76c",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6611149307054908,
+            "validation": 0.6233171242904573
+          },
+          {
+            "fit": 0.6391769415470854,
+            "validation": 0.6458262979071039
+          },
+          {
+            "fit": 0.6417221808194685,
+            "validation": 0.6862923968367078
+          }
+        ]
+      },
+      {
+        "index": 7,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 332.9539715498686,
+          "normalPatchTeamRetention": 0.9940993233351036,
+          "splitBreakTeamRetention": 0.8847361888270825,
+          "seasonStartTeamRetention": 0.7873485057614744,
+          "winProbabilityUncertaintyScale": 1089.3634248524904,
+          "winProbabilityUncertaintyFloor": 0.5837790425634012,
+          "playerPregameEdgeCoefficient": 1.4941420550458133,
+          "momentumGameDecay": 0.7903044909378514,
+          "momentumCap": 85.34048954956234,
+          "tier-two": 0.5060740646207705,
+          "tier-three": 0.3471009744796902,
+          "emerging": 0.24401309472741559
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-c70c9bd0",
+        "gatePassed": false,
+        "gateFailures": [
+          "LCK Brier worsened by more than 0.001",
+          "LCP Brier worsened by more than 0.001",
+          "LCS Brier worsened by more than 0.001",
+          "LEC Brier worsened by more than 0.001",
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "roster-change Brier worsened"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6677728068763527,
+            "validation": 0.629499198685391
+          },
+          {
+            "fit": 0.6455004739774455,
+            "validation": 0.6520374287229636
+          },
+          {
+            "fit": 0.647642569716514,
+            "validation": 0.6803016693799648
+          }
+        ]
+      },
+      {
+        "index": 8,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 281.4309300854802,
+          "normalPatchTeamRetention": 0.9944291036925279,
+          "splitBreakTeamRetention": 0.813099012663588,
+          "seasonStartTeamRetention": 0.7778996833600104,
+          "winProbabilityUncertaintyScale": 1158.4020432084799,
+          "winProbabilityUncertaintyFloor": 0.5173338892636821,
+          "playerPregameEdgeCoefficient": 2.004496973240748,
+          "momentumGameDecay": 0.9408923547901213,
+          "momentumCap": 46.59951558802277,
+          "tier-two": 0.9360787150915713,
+          "tier-three": 0.2844815570861101,
+          "emerging": 0.11769167555030435
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-36079f04",
+        "gatePassed": false,
+        "gateFailures": [
+          "CBLOL Brier worsened by more than 0.001",
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6616748309315461,
+            "validation": 0.6250691547684781
+          },
+          {
+            "fit": 0.6404533860748446,
+            "validation": 0.6487671303229303
+          },
+          {
+            "fit": 0.6436400485419203,
+            "validation": 0.6841742752250912
+          }
+        ]
+      },
+      {
+        "index": 9,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 544.8295632004738,
+          "normalPatchTeamRetention": 0.9997922512004151,
+          "splitBreakTeamRetention": 0.9882321634329856,
+          "seasonStartTeamRetention": 0.7250840876251459,
+          "winProbabilityUncertaintyScale": 695.8108088001609,
+          "winProbabilityUncertaintyFloor": 0.5607009770115837,
+          "playerPregameEdgeCoefficient": 2.2523079705424607,
+          "momentumGameDecay": 0.9343172974931075,
+          "momentumCap": 80.40159845491871,
+          "tier-two": 0.9639697412028909,
+          "tier-three": 0.3346102851908654,
+          "emerging": 0.11807504679309205
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-2d3272bb",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6610558457016777,
+            "validation": 0.6230281885172722
+          },
+          {
+            "fit": 0.6387260989917632,
+            "validation": 0.6429243429569209
+          },
+          {
+            "fit": 0.6404981365088793,
+            "validation": 0.6862845102707653
+          }
+        ]
+      },
+      {
+        "index": 10,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 702.8572126105428,
+          "normalPatchTeamRetention": 0.9976542380522005,
+          "splitBreakTeamRetention": 0.9138650156091899,
+          "seasonStartTeamRetention": 0.9852873926050961,
+          "winProbabilityUncertaintyScale": 661.5652473643422,
+          "winProbabilityUncertaintyFloor": 0.5796727104810998,
+          "playerPregameEdgeCoefficient": 2.8672955508809537,
+          "momentumGameDecay": 0.7890148712368682,
+          "momentumCap": 67.70650737220421,
+          "tier-two": 0.7386630232213065,
+          "tier-three": 0.34044835111126304,
+          "emerging": 0.19369923028862104
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-833ce989",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6616604548090632,
+            "validation": 0.622947540410896
+          },
+          {
+            "fit": 0.6390525885691167,
+            "validation": 0.6432624949771619
+          },
+          {
+            "fit": 0.6406815294930707,
+            "validation": 0.6874392773577102
+          }
+        ]
+      },
+      {
+        "index": 11,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 653.7093968689442,
+          "normalPatchTeamRetention": 0.9654407045221888,
+          "splitBreakTeamRetention": 0.938757955096662,
+          "seasonStartTeamRetention": 0.7524116742424667,
+          "winProbabilityUncertaintyScale": 1185.088324546814,
+          "winProbabilityUncertaintyFloor": 0.6080762983998285,
+          "playerPregameEdgeCoefficient": 2.340578805655241,
+          "momentumGameDecay": 0.910869174990803,
+          "momentumCap": 65.9318075561896,
+          "tier-two": 0.5791820658952929,
+          "tier-three": 0.27817283947952093,
+          "emerging": 0.22537917752051725
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-d5f2ed85",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6635992214835176,
+            "validation": 0.6253343238637897
+          },
+          {
+            "fit": 0.6413482688720344,
+            "validation": 0.6482319593512876
+          },
+          {
+            "fit": 0.6438319252774029,
+            "validation": 0.684597656845914
+          }
+        ]
+      },
+      {
+        "index": 12,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 568.4359139576554,
+          "normalPatchTeamRetention": 0.9971797042991966,
+          "splitBreakTeamRetention": 0.9478138968814165,
+          "seasonStartTeamRetention": 0.6543602172285318,
+          "winProbabilityUncertaintyScale": 994.8491517454386,
+          "winProbabilityUncertaintyFloor": 0.471022419212386,
+          "playerPregameEdgeCoefficient": 3.5282430634833872,
+          "momentumGameDecay": 0.7516488740872592,
+          "momentumCap": 74.62632902897894,
+          "tier-two": 0.6948691838304513,
+          "tier-three": 0.31312321438454094,
+          "emerging": 0.21004521870054305
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-128d20ed",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6594099667549378,
+            "validation": 0.6209538396323704
+          },
+          {
+            "fit": 0.6371469240671453,
+            "validation": 0.642583972918619
+          },
+          {
+            "fit": 0.6393058734324503,
+            "validation": 0.690523855094194
+          }
+        ]
+      },
+      {
+        "index": 13,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 494.215251468122,
+          "normalPatchTeamRetention": 0.9907854225253686,
+          "splitBreakTeamRetention": 0.9848369356244803,
+          "seasonStartTeamRetention": 0.9943817811086774,
+          "winProbabilityUncertaintyScale": 629.9708129838109,
+          "winProbabilityUncertaintyFloor": 0.5707222001627088,
+          "playerPregameEdgeCoefficient": 2.405010037124157,
+          "momentumGameDecay": 0.8653755973046645,
+          "momentumCap": 86.5896841022186,
+          "tier-two": 0.6088057198096066,
+          "tier-three": 0.296939400723204,
+          "emerging": 0.2469133867532946
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-f8b7b51e",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6643373377188982,
+            "validation": 0.6254619605046279
+          },
+          {
+            "fit": 0.6415364965159948,
+            "validation": 0.6459264433295011
+          },
+          {
+            "fit": 0.643077499985291,
+            "validation": 0.6841165796412593
+          }
+        ]
+      },
+      {
+        "index": 14,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 508.9060076326132,
+          "normalPatchTeamRetention": 0.9763543689390645,
+          "splitBreakTeamRetention": 0.822122017107904,
+          "seasonStartTeamRetention": 0.684026142861694,
+          "winProbabilityUncertaintyScale": 1132.9975513741374,
+          "winProbabilityUncertaintyFloor": 0.4276309791719541,
+          "playerPregameEdgeCoefficient": 2.997416790574789,
+          "momentumGameDecay": 0.9113215425889939,
+          "momentumCap": 47.169293703045696,
+          "tier-two": 0.813268076220993,
+          "tier-three": 0.4035731446463615,
+          "emerging": 0.14236896670190619
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-352a04ec",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6598214919283738,
+            "validation": 0.6224796050743812
+          },
+          {
+            "fit": 0.6383222253099317,
+            "validation": 0.6459678603626122
+          },
+          {
+            "fit": 0.6413175537862296,
+            "validation": 0.6879658737037961
+          }
+        ]
+      },
+      {
+        "index": 15,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 713.6674175038934,
+          "normalPatchTeamRetention": 0.9757967526791617,
+          "splitBreakTeamRetention": 0.9038076942320913,
+          "seasonStartTeamRetention": 0.9250940704718232,
+          "winProbabilityUncertaintyScale": 691.8144315481186,
+          "winProbabilityUncertaintyFloor": 0.39458648471627383,
+          "playerPregameEdgeCoefficient": 2.8886215335223824,
+          "momentumGameDecay": 0.7552822131244465,
+          "momentumCap": 78.83388817775995,
+          "tier-two": 0.789981805800926,
+          "tier-three": 0.2952775999903679,
+          "emerging": 0.19669799472903832
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-f65056ea",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6613007572311542,
+            "validation": 0.6231305373517463
+          },
+          {
+            "fit": 0.6390752673074254,
+            "validation": 0.6448064609387627
+          },
+          {
+            "fit": 0.641302741922519,
+            "validation": 0.6865898646439483
+          }
+        ]
+      },
+      {
+        "index": 16,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 523.4645922482014,
+          "normalPatchTeamRetention": 0.9516308122663758,
+          "splitBreakTeamRetention": 0.9139155784621835,
+          "seasonStartTeamRetention": 0.78784942869097,
+          "winProbabilityUncertaintyScale": 975.1028461381793,
+          "winProbabilityUncertaintyFloor": 0.41813163161277767,
+          "playerPregameEdgeCoefficient": 1.468485003337264,
+          "momentumGameDecay": 0.761689540068619,
+          "momentumCap": 51.612386766355485,
+          "tier-two": 0.8995632742298767,
+          "tier-three": 0.26428548861294987,
+          "emerging": 0.13054214169969783
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-95b895e6",
+        "gatePassed": false,
+        "gateFailures": [
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001",
+          "LCS Brier worsened by more than 0.001",
+          "LEC Brier worsened by more than 0.001",
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "roster-change Brier worsened"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6642525401992895,
+            "validation": 0.6279099987293241
+          },
+          {
+            "fit": 0.6428351107385551,
+            "validation": 0.6512262956973043
+          },
+          {
+            "fit": 0.6459737673679675,
+            "validation": 0.6814317879534476
+          }
+        ]
+      },
+      {
+        "index": 17,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 639.289070405066,
+          "normalPatchTeamRetention": 0.9738680229871534,
+          "splitBreakTeamRetention": 0.8278493736870587,
+          "seasonStartTeamRetention": 0.8434749313630163,
+          "winProbabilityUncertaintyScale": 684.916334785521,
+          "winProbabilityUncertaintyFloor": 0.6477100029354915,
+          "playerPregameEdgeCoefficient": 2.259974346263334,
+          "momentumGameDecay": 0.9533533199504017,
+          "momentumCap": 32.69837870495394,
+          "tier-two": 0.8594587777741254,
+          "tier-three": 0.42096724919974804,
+          "emerging": 0.18891998026520013
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-e3c8e4e3",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6625437829028432,
+            "validation": 0.6250849541622705
+          },
+          {
+            "fit": 0.6407006968571622,
+            "validation": 0.6471197215774434
+          },
+          {
+            "fit": 0.6431209919590453,
+            "validation": 0.6838954777257563
+          }
+        ]
+      },
+      {
+        "index": 18,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 618.5063404217362,
+          "normalPatchTeamRetention": 0.9765778628760017,
+          "splitBreakTeamRetention": 0.8768901923671365,
+          "seasonStartTeamRetention": 0.7540184617973864,
+          "winProbabilityUncertaintyScale": 514.0873450785875,
+          "winProbabilityUncertaintyFloor": 0.6084258667891845,
+          "playerPregameEdgeCoefficient": 3.3763079249765724,
+          "momentumGameDecay": 0.8235029393434524,
+          "momentumCap": 86.34864395717159,
+          "tier-two": 0.7300553736742585,
+          "tier-three": 0.3261996732559055,
+          "emerging": 0.23304632378276438
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-1b91b8ae",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6621154380865862,
+            "validation": 0.6234985460135515
+          },
+          {
+            "fit": 0.6396124240405953,
+            "validation": 0.6446767818976625
+          },
+          {
+            "fit": 0.6415184283250793,
+            "validation": 0.6861593649357676
+          }
+        ]
+      },
+      {
+        "index": 19,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 499.92655400186777,
+          "normalPatchTeamRetention": 0.9516898636589758,
+          "splitBreakTeamRetention": 0.828475554753095,
+          "seasonStartTeamRetention": 0.7155399265699088,
+          "winProbabilityUncertaintyScale": 1106.104064360261,
+          "winProbabilityUncertaintyFloor": 0.570726827182807,
+          "playerPregameEdgeCoefficient": 1.4024547366425395,
+          "momentumGameDecay": 0.7805301041761413,
+          "momentumCap": 48.11376778641716,
+          "tier-two": 0.5766193652409128,
+          "tier-three": 0.32635102458298204,
+          "emerging": 0.23251458063023164
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-b6daac8c",
+        "gatePassed": false,
+        "gateFailures": [
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001",
+          "LCP Brier worsened by more than 0.001",
+          "LCS Brier worsened by more than 0.001",
+          "LEC Brier worsened by more than 0.001",
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "roster-change Brier worsened"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6677514643523651,
+            "validation": 0.6309474160167302
+          },
+          {
+            "fit": 0.6463375861872914,
+            "validation": 0.6545918660892892
+          },
+          {
+            "fit": 0.6491352783255676,
+            "validation": 0.6795973890068236
+          }
+        ]
+      },
+      {
+        "index": 20,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 642.3087460175157,
+          "normalPatchTeamRetention": 0.9965346246375703,
+          "splitBreakTeamRetention": 0.8147320467978716,
+          "seasonStartTeamRetention": 0.814563637971878,
+          "winProbabilityUncertaintyScale": 1041.7914070189,
+          "winProbabilityUncertaintyFloor": 0.3522370518650859,
+          "playerPregameEdgeCoefficient": 2.0624251100234687,
+          "momentumGameDecay": 0.9065018740482629,
+          "momentumCap": 87.88007722003385,
+          "tier-two": 0.7249960390734487,
+          "tier-three": 0.32113552703522147,
+          "emerging": 0.1398820193600841
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-28777ad4",
+        "gatePassed": false,
+        "gateFailures": [
+          "cross-region Brier non-regression"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6631009637708953,
+            "validation": 0.6248774810014488
+          },
+          {
+            "fit": 0.6408326259869839,
+            "validation": 0.6467770431545927
+          },
+          {
+            "fit": 0.6429993453455973,
+            "validation": 0.6845817053167327
+          }
+        ]
+      },
+      {
+        "index": 21,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 593.9620301127434,
+          "normalPatchTeamRetention": 0.9783750777016393,
+          "splitBreakTeamRetention": 0.9685528294648975,
+          "seasonStartTeamRetention": 0.9626157531514764,
+          "winProbabilityUncertaintyScale": 596.1310215294361,
+          "winProbabilityUncertaintyFloor": 0.546647929912433,
+          "playerPregameEdgeCoefficient": 1.279389270581305,
+          "momentumGameDecay": 0.8525887311901897,
+          "momentumCap": 62.24938259460032,
+          "tier-two": 0.868321068759542,
+          "tier-three": 0.32239018180407586,
+          "emerging": 0.1703418598161079
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-c54cc407",
+        "gatePassed": false,
+        "gateFailures": [
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001",
+          "LCS Brier worsened by more than 0.001",
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6659154646916126,
+            "validation": 0.6284514847769518
+          },
+          {
+            "fit": 0.6435268834590608,
+            "validation": 0.6484400405530766
+          },
+          {
+            "fit": 0.6453473007137899,
+            "validation": 0.6803413900148128
+          }
+        ]
+      },
+      {
+        "index": 22,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 266.68442845344543,
+          "normalPatchTeamRetention": 0.9549569590366445,
+          "splitBreakTeamRetention": 0.9448765138164162,
+          "seasonStartTeamRetention": 0.9186728306114673,
+          "winProbabilityUncertaintyScale": 941.9036770239472,
+          "winProbabilityUncertaintyFloor": 0.4766033063177019,
+          "playerPregameEdgeCoefficient": 1.1460167632903904,
+          "momentumGameDecay": 0.7566360368439927,
+          "momentumCap": 91.09321435447782,
+          "tier-two": 0.9280901366844774,
+          "tier-three": 0.270189408166334,
+          "emerging": 0.13512508346466348
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-355a225b",
+        "gatePassed": false,
+        "gateFailures": [
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001",
+          "LCP Brier worsened by more than 0.001",
+          "LCS Brier worsened by more than 0.001",
+          "LEC Brier worsened by more than 0.001",
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "roster-change Brier worsened"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6655107807777068,
+            "validation": 0.6308574211968466
+          },
+          {
+            "fit": 0.6449742540727861,
+            "validation": 0.654475029003453
+          },
+          {
+            "fit": 0.6484961807401275,
+            "validation": 0.6796305176850317
+          }
+        ]
+      },
+      {
+        "index": 23,
+        "label": "joint",
+        "parameters": {
+          "recencyHalfLifeDays": 495.82149501889944,
+          "normalPatchTeamRetention": 0.9630896618124097,
+          "splitBreakTeamRetention": 0.893228598497808,
+          "seasonStartTeamRetention": 0.6885809350758791,
+          "winProbabilityUncertaintyScale": 724.2220304906368,
+          "winProbabilityUncertaintyFloor": 0.39092153199017043,
+          "playerPregameEdgeCoefficient": 2.0742316010873765,
+          "momentumGameDecay": 0.8606614197464659,
+          "momentumCap": 80.44497383292764,
+          "tier-two": 0.7240761313936673,
+          "tier-three": 0.2615116324275732,
+          "emerging": 0.13929996407823636
+        },
+        "modelVersion": "transparent-power-index-v0.2.1",
+        "modelConfigHash": "fnv1a-d75b36ab",
+        "gatePassed": false,
+        "gateFailures": [
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001",
+          "LEC Brier worsened by more than 0.001",
+          "cross-region Brier non-regression",
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001"
+        ],
+        "foldLogLoss": [
+          {
+            "fit": 0.6642791188047066,
+            "validation": 0.6268087916628478
+          },
+          {
+            "fit": 0.6423634331227005,
+            "validation": 0.6494595380997876
+          },
+          {
+            "fit": 0.6449163441638835,
+            "validation": 0.6821104415764031
+          }
+        ]
+      }
+    ]
+  },
+  "preReviewHypotheses": {
+    "sourceIdentity": "5f68f0028401b5f93ebee0d5c27de5f3fde922981834fb9972593299fbe8167f",
+    "baseModelVersion": "transparent-power-index-v0.2.0",
+    "baseModelConfigHash": "fnv1a-34aa5dd6",
+    "revision": "986b347a3b9ab05fb4fd9137815e97fb352ba1ff",
+    "status": "Historical receipt; domestic-member centering repair requires rerun",
+    "board": {
+      "current": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.23006641523877364,
+          "logLoss": 0.6565100069442759,
+          "accuracy": 0.6329294369208838,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "current",
+          "configHash": "3162bdf75758c5bd6acbad84ad569720e9bb8ac95ca865ea22406df7dbdd048d"
+        },
+        "gatePassed": true,
+        "gateFailures": []
+      },
+      "noCompression": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.22992960365645018,
+          "logLoss": 0.6562106374663936,
+          "accuracy": 0.632216678545973,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "noCompression",
+          "configHash": "32ae63e5bd7244568fc3021c7cc7ebc1de679185f3d2d432bc818745b2b6b47e"
+        },
+        "gatePassed": true,
+        "gateFailures": []
+      },
+      "noAnchorRelief": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.22968666536706966,
+          "logLoss": 0.6559081492010166,
+          "accuracy": 0.6329294369208838,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "noAnchorRelief",
+          "configHash": "37fd5abe994e46c467ec36bd4b663c1fc390181f0898dae31a0d856d5d422282"
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global log-loss upper bound exceeds 0.001"
+        ]
+      },
+      "noSparseBlend": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.22989664245188896,
+          "logLoss": 0.6559215809271528,
+          "accuracy": 0.6329294369208838,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "noSparseBlend",
+          "configHash": "40f4293a91ce31e69cb179ac26609a45d8f24cd3066d059e88b21653ce261f5d"
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "cross-region Brier upper bound exceeds 0.0005",
+          "CBLOL Brier worsened by more than 0.001",
+          "roster-change Brier worsened"
+        ]
+      },
+      "noRosterCap": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.23030292970776903,
+          "logLoss": 0.6566861472140594,
+          "accuracy": 0.6350677120456165,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "noRosterCap",
+          "configHash": "0a1f8c82464a1492df0db81ee6d09c531e8f2ef340a85f2c3ec1ecdf89053b74"
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001"
+        ]
+      },
+      "noHeadToHead": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.23003872236635764,
+          "logLoss": 0.6564410407895418,
+          "accuracy": 0.6343549536707056,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "noHeadToHead",
+          "configHash": "678a033768c2fb2d0e232b0652b633934372c02ec457bed95a5f62099615fea5"
+        },
+        "gatePassed": true,
+        "gateFailures": []
+      },
+      "noAnchorShrinkage": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.22999801749109036,
+          "logLoss": 0.6567294091571827,
+          "accuracy": 0.6336421952957947,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "noAnchorShrinkage",
+          "configHash": "90c49c337ae55d1c2a04080b89c13c173f3a391801628174e364c901e910e979"
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "cross-region Brier upper bound exceeds 0.0005",
+          "cross-region Brier point estimate worsened"
+        ]
+      },
+      "spine": {
+        "summary": {
+          "count": 1403,
+          "series": 608,
+          "events": 35,
+          "brier": 0.22969682855310045,
+          "logLoss": 0.6559447627291509,
+          "accuracy": 0.6364932287954383,
+          "impossibleOutcomes": 0
+        },
+        "model": {
+          "version": "spine",
+          "configHash": "94a848155f64f03c7f688add723836f04ee29b3917f2b5abc960d17538565282"
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "cross-region Brier upper bound exceeds 0.0005"
+        ]
+      }
+    },
+    "hierarchy": {
+      "tierPriors": {
+        "baselineModel": {
+          "version": "prior-public-board",
+          "configHash": "0a705375a26acbfdd248ea983068ef024adaf54b6e57ae0aa1fc6640f40fafd5"
+        },
+        "model": {
+          "version": "tierPriors",
+          "configHash": "ec6aacbd171c4901a8afd261a1ba0b0977b27f9ba3c9fcd043df8add8b76fb2e"
+        },
+        "baseline": {
+          "count": 1341,
+          "series": 579,
+          "events": 35,
+          "brier": 0.23125179566741202,
+          "logLoss": 0.6591624153315098,
+          "accuracy": 0.6293810589112603,
+          "impossibleOutcomes": 0
+        },
+        "candidate": {
+          "count": 1341,
+          "series": 579,
+          "events": 35,
+          "brier": 0.22840808474050206,
+          "logLoss": 0.6479733543658894,
+          "accuracy": 0.6249067859806114,
+          "impossibleOutcomes": 0
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "cross-region Brier upper bound exceeds 0.0005",
+          "cross-region Brier point estimate worsened",
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001"
+        ]
+      },
+      "flatPriors": {
+        "baselineModel": {
+          "version": "prior-public-board",
+          "configHash": "0a705375a26acbfdd248ea983068ef024adaf54b6e57ae0aa1fc6640f40fafd5"
+        },
+        "model": {
+          "version": "flatPriors",
+          "configHash": "eb696ad3d36812d974c12cdaf0e452af0c8e0b051a525f6c5b726fd85de065e5"
+        },
+        "baseline": {
+          "count": 1341,
+          "series": 579,
+          "events": 35,
+          "brier": 0.23125179566741202,
+          "logLoss": 0.6591624153315098,
+          "accuracy": 0.6293810589112603,
+          "impossibleOutcomes": 0
+        },
+        "candidate": {
+          "count": 1341,
+          "series": 579,
+          "events": 35,
+          "brier": 0.22971846975283486,
+          "logLoss": 0.6508584677775097,
+          "accuracy": 0.6181953765846383,
+          "impossibleOutcomes": 0
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "cross-region Brier upper bound exceeds 0.0005",
+          "cross-region Brier point estimate worsened",
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001"
+        ]
+      },
+      "weakPriors": {
+        "baselineModel": {
+          "version": "prior-public-board",
+          "configHash": "0a705375a26acbfdd248ea983068ef024adaf54b6e57ae0aa1fc6640f40fafd5"
+        },
+        "model": {
+          "version": "weakPriors",
+          "configHash": "04eae6e95db8a89212cc1b980475806fbfcbb264541dfb5f3586114f1e829998"
+        },
+        "baseline": {
+          "count": 1341,
+          "series": 579,
+          "events": 35,
+          "brier": 0.23125179566741202,
+          "logLoss": 0.6591624153315098,
+          "accuracy": 0.6293810589112603,
+          "impossibleOutcomes": 0
+        },
+        "candidate": {
+          "count": 1341,
+          "series": 579,
+          "events": 35,
+          "brier": 0.22837262792397728,
+          "logLoss": 0.6486718970731825,
+          "accuracy": 0.6271439224459359,
+          "impossibleOutcomes": 0
+        },
+        "gatePassed": false,
+        "gateFailures": [
+          "global Brier upper bound exceeds 0.0005",
+          "global log-loss upper bound exceeds 0.001",
+          "cross-region Brier upper bound exceeds 0.0005",
+          "cross-region Brier point estimate worsened",
+          "CBLOL Brier worsened by more than 0.001",
+          "LCK Brier worsened by more than 0.001"
+        ]
+      }
+    }
+  }
+}

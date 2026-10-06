@@ -2,6 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { binaryMetricContract } from '../src/lib/binaryPredictionMetrics.ts'
 import { chronologicalCohorts, compareEvaluationExports, readEvaluationExport, summarizeEvaluation, type EvaluationExport } from '../src/lib/rankingEvaluation.ts'
+import { buildEvaluationData } from '../src/lib/rankingEvaluationData.ts'
+import { createRatingReplayContext, replayRatingDates } from '../src/lib/model.ts'
+import { seriesWinProbability } from '../src/lib/winProbability.ts'
+import type { MatchRecord, PregamePrediction } from '../src/types.ts'
+import { sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 function fixture(): EvaluationExport {
   return { schemaVersion: 1, target: 'game', modelVersion: 'fixture', modelConfigHash: 'fixture',
@@ -71,4 +76,49 @@ test('chronological folds withhold whole events that cross a boundary', () => {
   assert.equal(split.fit.length, 0)
   assert.equal(split.validation.length, 1)
   assert.equal(split.excluded.length, 2)
+})
+
+test('export builder rejects stale source joins, duplicate identities and mixed model identities', () => {
+  const matches = sampleMatches.slice(0, 2)
+  const context = createRatingReplayContext(matches, { ...teams })
+  const { predictions } = replayRatingDates({ context, replayMatches: matches })
+  const exportPredictions = (rows: PregamePrediction[], source = matches) =>
+    buildEvaluationData(source, rows, { sourceIdentity: 'synthetic-fixture' })
+  const first = predictions[0]
+  const mutations: Array<Partial<PregamePrediction>> = [
+    { teamA: first.teamB, teamB: first.teamA },
+    { teamA: 'Different team' }, { date: '2025-01-01' }, { event: 'Different event' },
+    { actualWinner: first.teamB }, { seriesId: 'different-series' },
+  ]
+  for (const mutation of mutations) assert.throws(() => exportPredictions([{ ...first, ...mutation }, predictions[1]]), /source or orientation differs/)
+  assert.throws(() => exportPredictions([first, first]), /Duplicate prediction identities/)
+  assert.throws(() => exportPredictions(predictions, [matches[0], matches[0]]), /Duplicate source match identities/)
+  assert.throws(() => exportPredictions([first, { ...predictions[1], modelVersion: 'different-model' }]), /Mixed prediction model identities/)
+  assert.throws(() => exportPredictions([first, { ...predictions[1], modelConfigHash: 'different-config' }]), /Mixed prediction model identities/)
+})
+
+test('exported aliases and swapped raw sides keep game and series probabilities aligned with canonical outcomes', () => {
+  const alias = 'LYON (2024 American Team)'
+  const matches: MatchRecord[] = [
+    { ...sampleMatches[0], id: 'alias-1', officialMatchId: 'alias-series', gameNumber: 1,
+      teamA: alias, teamB: 'Beta', winner: 'LYON', bestOf: 3 },
+    { ...sampleMatches[0], id: 'alias-2', officialMatchId: 'alias-series', gameNumber: 2,
+      teamA: 'Beta', teamB: 'LYON', winner: 'Beta', bestOf: 3 },
+    { ...sampleMatches[0], id: 'alias-3', officialMatchId: 'alias-series', gameNumber: 3,
+      teamA: 'LYON', teamB: 'Beta', winner: alias, bestOf: 3 },
+  ]
+  const templateContext = createRatingReplayContext(sampleMatches, { ...teams })
+  const template = replayRatingDates({ context: templateContext, replayMatches: sampleMatches }).predictions[0]
+  const predictions = matches.map((match): PregamePrediction => ({ ...template,
+    id: match.id, seriesId: undefined, date: match.date, event: match.event,
+    teamA: match.teamA === alias ? 'LYON' : match.teamA, teamB: match.teamB,
+    actualWinner: match.winner, teamAGameWinProbability: match.teamA === 'Beta' ? .2 : .8 }))
+  const exported = buildEvaluationData(matches, predictions, { sourceIdentity: 'synthetic-alias-fixture' })
+  assert.deepEqual(exported.rows.map((row) => [row.teamA, row.teamB, row.actual, row.probability]), [
+    ['LYON', 'Beta', 1, .8], ['Beta', 'LYON', 1, .2], ['LYON', 'Beta', 1, .8],
+  ])
+  assert.equal(exported.seriesExport.rows.length, 1)
+  assert.equal(exported.seriesExport.rows[0].teamA, 'LYON')
+  assert.equal(exported.seriesExport.rows[0].actual, 1)
+  assert.equal(exported.seriesExport.rows[0].probability, seriesWinProbability(.8, 3))
 })

@@ -1,7 +1,8 @@
+import { canonicalTeamNameFor } from '../data/teamIdentity'
 import type { MatchRecord, PregamePrediction } from '../types'
 import { binaryMetricContract } from './binaryPredictionMetrics'
 import { evaluationBaselineProbabilities } from './evaluationBaselines'
-import { canonicalSeriesForMatches, resolveCanonicalSeries } from './seriesResolver'
+import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from './seriesResolver'
 import { seriesWinProbability } from './winProbability'
 import { groupEvaluationBy, summarizeEvaluation, type EvaluationExport, type EvaluationRow } from './rankingEvaluation'
 
@@ -17,15 +18,28 @@ export function evaluationHomeLeague(match: MatchRecord, side: 'A' | 'B') {
 export function buildEvaluationData(matches: MatchRecord[], predictions: PregamePrediction[], {
   sourceIdentity, scoreStart = '0000-01-01',
 }: { sourceIdentity: string; scoreStart?: string }) {
-  const matchById = new Map(matches.map((match) => [match.id, match]))
-  const series = canonicalSeriesForMatches(matches)
-  const controls = evaluationBaselineProbabilities(matches)
+  if (new Set(matches.map((match) => match.id)).size !== matches.length) throw new Error('Duplicate source match identities')
+  if (new Set(predictions.map((prediction) => prediction.id)).size !== predictions.length) throw new Error('Duplicate prediction identities')
+  const canonicalMatches = matches.map((match) => ({ ...match,
+    teamA: canonicalTeamNameFor(match.teamA), teamB: canonicalTeamNameFor(match.teamB), winner: canonicalTeamNameFor(match.winner) }))
+  const matchById = new Map(canonicalMatches.map((match) => [match.id, match]))
+  const series = canonicalSeriesForMatches(canonicalMatches)
+  const controls = evaluationBaselineProbabilities(canonicalMatches)
   const rows: EvaluationRow[] = []
   const variants = new Map<string, EvaluationRow[]>()
   const missing: string[] = []
   for (const prediction of predictions) {
     const match = matchById.get(prediction.id)
     if (!match) throw new Error('Prediction has no source match')
+    if (canonicalTeamNameFor(prediction.teamA) !== match.teamA || canonicalTeamNameFor(prediction.teamB) !== match.teamB
+      || prediction.date !== match.date || prediction.event !== match.event
+      || canonicalTeamNameFor(prediction.actualWinner) !== match.winner
+      || (prediction.seriesId !== undefined && prediction.seriesId !== series.get(match.id)?.id)) {
+      throw new Error(`Prediction source or orientation differs for ${match.id}`)
+    }
+    if (prediction.modelVersion !== predictions[0].modelVersion || prediction.modelConfigHash !== predictions[0].modelConfigHash) {
+      throw new Error('Mixed prediction model identities')
+    }
     if (match.date < scoreStart) continue
     if (match.winner !== match.teamA && match.winner !== match.teamB) { missing.push(match.id); continue }
     const actual = match.winner === match.teamA ? 1 : 0
@@ -49,7 +63,7 @@ export function buildEvaluationData(matches: MatchRecord[], predictions: Pregame
   const seriesRows: EvaluationRow[] = []
   const seriesExclusions: Array<{ id: string; reason: string }> = []
   const predictionById = new Map(predictions.map((prediction) => [prediction.id, prediction]))
-  for (const item of resolveCanonicalSeries(matches)) {
+  for (const item of resolveCanonicalSeries(canonicalMatches)) {
     if (item.date < scoreStart) continue
     const first = item.games[0]
     const prediction = predictionById.get(first.id)
@@ -58,8 +72,10 @@ export function buildEvaluationData(matches: MatchRecord[], predictions: Pregame
     }
     const row = rows.find((candidate) => candidate.id === first.id)
     if (!row) continue
+    const actual = canonicalSeriesOutcomeForTeam(item, row.teamA)
+    if (actual !== 0 && actual !== 1) throw new Error(`Non-binary series outcome for ${item.id}`)
     seriesRows.push({ ...row, id: item.id, seriesId: item.id,
-      actual: (item.outcomeA === 1) === (first.teamA === item.teamA) ? 1 : 0,
+      actual,
       probability: seriesWinProbability(prediction.teamAGameWinProbability, item.format) })
   }
   return { ...exportData, scoreStart, seriesExport: { ...identity, target: 'series' as const, rows: seriesRows },

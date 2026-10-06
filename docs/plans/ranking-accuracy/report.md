@@ -1,5 +1,20 @@
 # Ranking accuracy evidence
 
+This report records exploratory comparisons, retained policies and rejected candidates. Source repairs from PR review are still being verified. Earlier numerical results below are historical receipts, not scores of the final repaired source policy.
+
+## Result provenance
+
+The compact committed receipts are in [evidence.json](evidence.json). The original and first corrected exports use normalized scored source identity `5f68f0028401b5f93ebee0d5c27de5f3fde922981834fb9972593299fbe8167f`, training identity `803f6ee7704e7f6ba444cb7ccbc5f1e792769ac00f08f58dd8e0a68b3f5352d6`, and frozen manifest identity `223cccee7894900e04a2ad57327f2d3b9fb6c818f15b8fe53ad3aa21a4ad029d`. The metric contract is `binary-brier-clipped-log-loss-v1`; all log losses clip probabilities to 0.001–0.999.
+
+| Result group | Model version / config | Source policy |
+| --- | --- | --- |
+| Original baseline and controls | `transparent-power-index-v0.2.0` / `fnv1a-f8451423` | Original source series policy |
+| Precision-only comparison | Rejected `transparent-power-index-v0.2.1` / `fnv1a-22bac297` | Before 2–2/source repairs |
+| Seeded search | Rejected v0.2.1 variants; every config in receipt | Search identity `e80a7601006325e7dee69de318a20affc6bd94e6a65fecdcb9b2397e44a58827`; before source repairs |
+| First corrected baseline, score likelihood, board and hierarchy | `transparent-power-index-v0.2.0` / `fnv1a-34aa5dd6` | Commit `986b347a`; 2–2 correction only |
+
+Search trial 12 uses `fnv1a-128d20ed`; trial zero uses `fnv1a-ce2826db`. Board/hierarchy composition identifiers and cohort denominators are retained in the receipt. Their runner revision is `986b347a`. Large raw files, predictions, ranks and event-bootstrap receipts remain in the excluded local artifact directory. They are not part of the PR or a public data release. The repaired domestic-member hierarchy and provider reconciliation require new outputs with their own identities.
+
 ## Frozen baseline
 
 The baseline replays the real local Oracle and Leaguepedia corpus through 2026-07-26. It has 4,519 games, 1,833 canonical series and 61 event groups. Historical source availability and total missing-game coverage are unknown. These are latest-corrected historical comparisons, not an untouched holdout or published forecast calibration.
@@ -54,6 +69,8 @@ The real-data audit found four 2–2 groups inferred as completed Bo3s: one MSI 
 Three additional complete series had valid final scores but uncertain observed game order. The score likelihood sums legal stopping paths for a final score. It does not invent the observed order. The strict ordered-path utility remains available for certified-order evidence. Pre-series and conditional likelihoods stay separate. On 1,799 complete binary-format series, independent, 0.5-logit and 1-logit dependence controls scored pre-series score log loss 1.259877, 1.257767 and 1.255054. These scores use a different target from binary game log loss.
 
 Placement pool scaling could put a favorite above the 11-point champion attainment. The bounded replacement preserves the realized pool and each entrant's feasible range. It does not constrain every champion to a positive residual. Existing completion/result-coverage and one-award gates remain. Real placement calibration is blocked because the frozen corpus has no complete result lifecycle. No zero-effect comparison is counted as a pass.
+
+Final reviewed code uses source pipeline v18 and placement policy `highest-attainment-bounded-grid-pool-centered-league-residual-v4`, with model `transparent-power-index-v0.2.0` and config `fnv1a-82e02e79`. Unique scored duplicate anchors now connect domestic Oracle and Leaguepedia games. The real Fnatic/Karmine Corp 2025-09-26 example resolves to one completed 3–1 Bo5. Full provider per-game IDs preserve same-day rematches. Trusted Bo2/Bo3/Bo5 conflicts remain unknown. Expected placement allocation uses a 2^32 binary grid per point, below 2.33e-10 point precision, so entrant and league pool sums stay exact. Eighty-six affected checks passed; independent repair verification, dead-code and redundant-test review passed. Final replays and project/product checks remain pending.
 
 ## Public board decision
 

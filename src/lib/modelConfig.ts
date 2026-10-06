@@ -76,7 +76,7 @@ export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'entity-local-composable-half-life-regression-v1'
 export const ratingUpdateRecencyWeight = 1
 export const leagueExpectedScoreSource = 'pregame-neutral-series-team-power'
-export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-feasible-series-player-performance-v17'
+export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-feasible-series-player-performance-v18'
 export const lineupEvidencePolicy = 'prior-observed-series-evidence-with-90-day-half-life-v1'
 export const partialLineupPolicy = 'role-weighted-known-player-evidence-v1'
 export const substituteEraPolicy = 'three-series-or-twenty-percent-split-share-v1'
@@ -145,7 +145,7 @@ export const tournamentPlacementStagePoints = {
   knockout: 3,
   participation: 1,
 } as const
-export const tournamentPlacementPolicy = 'highest-attainment-bounded-pool-centered-league-residual-v3'
+export const tournamentPlacementPolicy = 'highest-attainment-bounded-grid-pool-centered-league-residual-v4'
 export const playerRatingPredictionPolicy = {
   key: 'player-rating',
   mode: 'live',

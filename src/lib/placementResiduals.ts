@@ -326,9 +326,16 @@ function expectedStagePointsByLeague(
 
 /** Preserve the event pool without assigning an impossible attainment to an entrant. */
 export function boundedStageExpectations(weights: readonly number[], pool: number, minimum: number, maximum: number) {
+  const unitsPerPoint = 2 ** 32
+  const minimumUnits = minimum * unitsPerPoint
+  const maximumUnits = maximum * unitsPerPoint
+  const poolUnits = pool * unitsPerPoint
   if (!weights.length || weights.some((weight) => !Number.isFinite(weight) || weight <= 0)
     || !Number.isFinite(pool) || !Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum < 0 || minimum > maximum
+    || ![minimumUnits, maximumUnits, poolUnits, weights.length * maximumUnits].every(Number.isSafeInteger)
     || pool < weights.length * minimum || pool > weights.length * maximum) throw new Error('Infeasible stage expectation pool')
+  if (pool === weights.length * minimum) return weights.map(() => minimum)
+  if (pool === weights.length * maximum) return weights.map(() => maximum)
   let low = 0
   let high = maximum / Math.min(...weights)
   for (let iteration = 0; iteration < 100; iteration += 1) {
@@ -337,7 +344,22 @@ export function boundedStageExpectations(weights: readonly number[], pool: numbe
     if (total < pool) low = scale
     else high = scale
   }
-  return weights.map((weight) => clamp(weight * (low + high) / 2, minimum, maximum))
+  // Binary fractions conserve the pool under both team and league summation.
+  const rawUnits = weights.map((weight) => clamp(weight * (low + high) / 2, minimum, maximum) * unitsPerPoint)
+  const expectedUnits = rawUnits.map(Math.floor)
+  let remaining = poolUnits - expectedUnits.reduce((total, units) => total + units, 0)
+  const priority = rawUnits.map((value, index) => ({ index, fraction: value - expectedUnits[index] }))
+    .sort((left, right) => right.fraction - left.fraction || left.index - right.index)
+  for (const { index } of priority) {
+    if (remaining === 0) break
+    const adjustment = Math.sign(remaining)
+    const adjusted = expectedUnits[index] + adjustment
+    if (adjusted < minimumUnits || adjusted > maximumUnits) continue
+    expectedUnits[index] = adjusted
+    remaining -= adjustment
+  }
+  if (remaining !== 0) throw new Error('Cannot conserve stage expectation pool on the binary precision grid')
+  return expectedUnits.map((units) => units / unitsPerPoint)
 }
 
 function representativesByLeague(tracker: PlacementEventTracker, teams: Record<string, TeamProfile>) {

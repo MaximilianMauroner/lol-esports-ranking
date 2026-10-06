@@ -718,7 +718,80 @@ test('community merge does not promote domestic Oracle playoff rows to internati
   assert.equal(merged[0].region, 'LCK')
   assert.equal(merged[0].league, 'LCK')
   assert.equal(merged[0].tier, 'major-playoffs')
-  assert.equal(merged[0].sourceMatchId, undefined)
+  assert.equal(merged[0].sourceMatchId, 'LCK/2026 Season/Road to MSI_Round 3_2_3')
+  assert.equal(merged[0].gameNumber, 3)
+})
+
+test('unique domestic scoreboard duplicates link retained Oracle games to a Leaguepedia series gap fill', () => {
+  const games = [
+    matchFixture({ id: 'domestic-1', teamA: 'Fnatic', teamB: 'Karmine Corp', winner: 'Fnatic' }),
+    matchFixture({ id: 'domestic-2', teamA: 'Fnatic', teamB: 'Karmine Corp', winner: 'Karmine Corp',
+      teamAKills: 12, teamBKills: 20, teamAGold: 59000, teamBGold: 65000 }),
+    matchFixture({ id: 'domestic-3', teamA: 'Fnatic', teamB: 'Karmine Corp', winner: 'Fnatic',
+      teamAKills: 24, teamBKills: 10, teamAGold: 68000, teamBGold: 57000 }),
+  ].map((match) => ({ ...match, event: 'LEC 2026 Winter', league: 'LEC', region: 'LEC' as const, bestOfBasis: 'provider' as const }))
+  const leaguepedia = games.map((match, index) => ({ ...match, id: `lp-domestic-${index + 1}`,
+    sourceProvider: 'leaguepedia-cargo' as const, sourceGameId: `LEC/2026 Winter_Playoffs_Round2_1_${index + 1}`,
+    datetimeUtc: ['2026-01-01T15:31:00Z', '2026-01-01T16:37:00Z', '2026-01-01T17:23:00Z'][index] }))
+  const oracle = games.slice(0, 2).map((match, index) => ({ ...match, id: `oe-domestic-${index + 1}`,
+    sourceProvider: 'oracles-elixir' as const, sourceGameId: `opaque-oracle-${index}`,
+    datetimeUtc: ['2026-01-01T15:31:49Z', '2026-01-01T16:37:04Z'][index] }))
+  const merged = mergeCommunityMatchSources({ oracleMatches: oracle, leaguepediaMatches: leaguepedia })
+  assert.deepEqual(merged.map((match) => match.id), ['oe-domestic-1', 'oe-domestic-2', 'lp-domestic-3'])
+  assert.deepEqual(merged.map((match) => match.sourceMatchId), leaguepedia.map((match) => match.sourceGameId))
+  assert.deepEqual(merged.map((match) => match.gameNumber), [1, 2, 3])
+  const series = resolveCanonicalSeries(merged)
+  assert.equal(series.length, 1)
+  assert.equal(series[0].format, 3)
+  assert.equal(series[0].state, 'completed')
+  assert.deepEqual([series[0].winsA, series[0].winsB].sort(), [1, 2])
+})
+
+test('exact timestamped anchors keep same-day rematches and ordinal-bearing series identifiers separate', () => {
+  const oracle = [10, 18].map((hour, index) => matchFixture({ id: `oe-rematch-${index}`,
+    sourceProvider: 'oracles-elixir', sourceGameId: `oracle-rematch-${index}-opaque`,
+    datetimeUtc: `2026-01-01T${hour}:00:00Z` }))
+  const leaguepedia = oracle.flatMap((match, index) => [
+    { ...match, id: `lp-rematch-${index}-1`, sourceProvider: 'leaguepedia-cargo' as const,
+      sourceGameId: `LCK/2026 Spring_Round2_${index + 1}_1` },
+    { ...match, id: `lp-rematch-${index}-2`, sourceProvider: 'leaguepedia-cargo' as const,
+      sourceGameId: `LCK/2026 Spring_Round2_${index + 1}_2`, datetimeUtc: `2026-01-01T${index === 0 ? 12 : 20}:00:00Z`,
+      teamAKills: 22, teamBKills: 11, teamAGold: 67000, teamBGold: 58000 },
+  ])
+  const merged = mergeCommunityMatchSources({ oracleMatches: oracle, leaguepediaMatches: leaguepedia })
+  assert.equal(merged.length, 4)
+  const series = resolveCanonicalSeries(merged)
+  assert.equal(series.length, 2)
+  assert.ok(series.every((item) => item.state === 'completed' && item.games.length === 2))
+  assert.notEqual(series[0].id, series[1].id)
+  assert.ok(merged.every((match) => /Round2_[12]_[12]$/.test(match.sourceMatchId ?? '')))
+})
+
+test('ambiguous scoreboard anchors cannot assign provider series identities', () => {
+  const oracle = matchFixture({ id: 'oe-ambiguous-link', sourceProvider: 'oracles-elixir', sourceGameId: 'oracle-opaque' })
+  const leaguepedia = [1, 2].map((index) => ({ ...oracle, id: `lp-ambiguous-${index}`,
+    sourceProvider: 'leaguepedia-cargo' as const, sourceGameId: `LCK/2026 Spring_Rematch${index}_1` }))
+  const merged = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: leaguepedia })
+  assert.equal(merged.find((match) => match.id === oracle.id)?.sourceMatchId, undefined)
+  const sameStatsOracles = [10, 18].map((hour, index) => ({ ...oracle, id: `oe-ambiguous-${index}`,
+    sourceGameId: `opaque-ambiguous-${index}`, datetimeUtc: `2026-01-01T${hour}:00:00Z` }))
+  const reverseAmbiguous = mergeCommunityMatchSources({ oracleMatches: sameStatsOracles, leaguepediaMatches: [leaguepedia[0]] })
+  assert.equal(reverseAmbiguous.filter((match) => match.sourceProvider === 'oracles-elixir').length, 2)
+  assert.ok(reverseAmbiguous.filter((match) => match.sourceProvider === 'oracles-elixir').every((match) => match.sourceMatchId === undefined))
+})
+
+test('result-only and conflicting-time duplicates cannot provide scored series anchors', () => {
+  const oracle = matchFixture({ id: 'oe-unverified-link', sourceProvider: 'oracles-elixir', sourceGameId: 'oracle-unverified-opaque',
+    datetimeUtc: '2026-01-01T10:00:00Z' })
+  const resultOnly = matchFixture({ id: 'lp-result-only-link', sourceProvider: 'leaguepedia-cargo', sourceGameId: 'LCK/2026 Spring_Result_1',
+    dataCompleteness: 'match-result-only', teamAKills: 0, teamBKills: 0, teamAGold: 0, teamBGold: 0 })
+  const missingStats = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: [resultOnly] })
+  assert.equal(missingStats[0].sourceMatchId, undefined)
+  const conflictingTime = { ...oracle, id: 'lp-conflicting-time', sourceProvider: 'leaguepedia-cargo' as const,
+    sourceGameId: 'LCK/2026 Spring_Conflicting_1', datetimeUtc: '2026-01-01T18:00:00Z' }
+  const conflict = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: [conflictingTime] })
+  assert.equal(conflict.length, 2)
+  assert.equal(conflict.find((match) => match.id === oracle.id)?.sourceMatchId, undefined)
 })
 
 test('community merge keeps distinct scored same-winner series games', () => {

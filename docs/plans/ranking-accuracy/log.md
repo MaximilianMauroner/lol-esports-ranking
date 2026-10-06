@@ -109,11 +109,11 @@ Plan: https://tools.mauroner.net/artifacts/iIlzM7t9T6NOf6XFE5S6-ZuSaZMWaYIE
 
 - M1 closed: frozen exports reproduce exactly; typecheck and seven regression checks passed; baseline and data-quality evidence are in report.md. A1 closes. A2 retains unknown as-published source availability instead of claiming it.
 
-- M2: full-precision state, probabilities, components and ledgers now survive series updates. The model/config identity changes to v0.2.1. Checkpoints from the old identity require a full replay. Public scale formatting stays in the public converters. No old engine or compatibility fallback was added.
+- M2 research candidate, later rejected: full-precision state, probabilities, components and ledgers survived series updates in the archived v0.2.1 prototype. The final branch retains the original numerical engine. No alternate engine or compatibility fallback was added.
 - M2 verification: 84 focused precision, checkpoint, full/incremental replay and model tests passed. The first precision tests failed against the original rounded code. An exact float-share assertion now uses a tight tolerance. Two obsolete golden hashes were removed from the import-compaction test; full/lean semantic artifact equality and source-reference checks remain. The changed model identity and fractional player state made the old byte pins invalid.
 - M3: the scored-start boundary is regression-tested across game, series, control and audit rows. Earlier games train state while scored denominators remain unchanged. Both 2023/2024 provider downloads failed with quota-exceeded HTML. No warm-up benefit or cost is claimed. Later experiments use the explicit cold-start corpus.
 - M4-M7: offline tools use isolated source copies, a 24-trial serial search and fixed whole-event folds. Public boards use explicit prior match membership, quarterly cutoffs and the following 30 days. League fits retain team effects for selected entrants. These tools have no production callers.
-- M5: the old placement pool scaling was reproduced above champion attainment. The replacement conserves the pool while bounding each entrant between participation and champion attainment. Placement residual state is now full precision. No real complete event exists to calibrate the change.
+- M5: the old placement pool scaling was reproduced above champion attainment. The replacement bounds each entrant between participation and champion attainment. Rounded production residual and ledger semantics remain. Review found a floating-point pool closure failure; its repair and verification are pending. No real complete event exists to calibrate the change.
 - Typecheck and lint passed before the simulation helper was added. The simulation's season type was then corrected to numeric; final required checks remain pending.
 
 - Decision after M4: all 24 historical precision/fit candidates failed the declared gate. Preserve the complete precision prototype in `e254c62`, restore the current numerical engine, and retain only verified correctness fixes. No accuracy claim or parameter adoption is made. The restored golden player checks are retained.
@@ -121,3 +121,26 @@ Plan: https://tools.mauroner.net/artifacts/iIlzM7t9T6NOf6XFE5S6-ZuSaZMWaYIE
 - M6: 1,403 games across 35 events at six exact prior boards. Compression/head-to-head removal passed non-regression but superiority was inconclusive. Other ablations failed. Keep existing versioned ranking policies, with no predictive claim. Board composition now uses exact raw prior state and production's head-to-head helper.
 - M7: all three league priors failed fairness guardrails. Synthetic recovery covers selected qualified leaders, zero-centered team effects and disconnected leagues. Diagonal 95% band coverage was 61.7%; current team heuristic coverage was 90%. Statistical labels are not supported. Evidence-band copy replaces the public likely-range claim.
 - Delivery owner: this agent completes local checks, product journeys, PR and required reviews. Max owns fresh primary history, complete event coverage, unexamined outcomes and any named production action. No production access, publication or deployment is included.
+
+## PR review record
+
+PR: https://github.com/MaximilianMauroner/lol-esports-ranking/pull/79
+
+Reviewed base `9d7af625`, head `986b347a`. Native issue finder and verifier both use gpt-5.6-sol. Parent uses gpt-6.1-sol. Reviews are read-only; one implementer owns the confirmed source and test repairs.
+
+| Finding | Source and disposition | Current evidence |
+| --- | --- | --- |
+| Bounded pool float closure | Verifier and hosted CI; act on | Existing strict pool test gets 18.999999999999996 instead of 19. Published review 5434908823; repair pending. |
+| Inactivity assertion precision | Verifier and hosted CI; act on | Public prediction rounds 25.4545 to 25; assertion compares different precision. Published review 5434908823; repair pending. |
+| Export source/prediction orientation | Verifier; act on | Same-id swapped prediction accepted; alias-oriented series winner inverted. Published review 5434933428; repair pending. |
+| Remaining likely-rank claim | Both reviewers; act on | Pre-existing team-drawer wording contradicts retained heuristic uncertainty. Published review 5434933428; repair pending. |
+| Domestic-member hierarchy center | Verifier; act on | International-only entrants are included in the centering population. Published review 5434933428; repair pending. |
+| Missing result provenance | Verifier; act on | Report omits model/source identity for its numerical claims. Published review 5434933428; compact receipts pending. |
+| Mixed-provider split series | Both reviewers; act on | Published review 5434963355. Unique scored duplicate anchors transfer full provider per-game IDs and ordinals, with clock tolerance and rematch/ambiguity regressions. Final verification pending. |
+| Trusted impossible format promotion | Both reviewers; act on | Published review 5434963355. Trusted formats stay fixed and impossible scores resolve unknown. Final verification pending. |
+
+Finder full-diff dead-code and redundant-test checks passed. It found no obsolete caller or removable duplicate test. Regression review remains failed until the source-series findings close. Seventeen focused checks and read-only corpus audits passed in discovery. Final local checks and product journeys are still pending; another owner holds Fleet's build slot. Hosted Checks on `986b347a` failed (842 passed, 2 failed); hosted typecheck and lint passed. The configured Codex review bot returned a quota notice, which does not establish a clean bot review. No approval, merge, production publication or deployment occurred.
+
+The first floating residual repair closed the original CI case but failed an independent five-entrant conservation counterexample. Parent diagnosed summation roundoff before the same implementer repaired it. Expected allocation now uses a binary precision grid of 2^32 units per stage point. Scaled pool/bounds must be safe integers; deterministic remainder allocation conserves both entrant and regrouped league totals. This quantization is below 2.33e-10 stage points per entrant and does not change the retained rounded rating/residual semantics. The placement policy identity is `highest-attainment-bounded-grid-pool-centered-league-residual-v4`; source pipeline is v18. No compatibility engine was added.
+
+After the foreign job released Fleet's slot, the implementer's final 86 affected tests passed under the 3 GiB group limit and zero build swap (peak 366 MB, 2.259 seconds). Full `pnpm verify` is running. Existing public artifacts and production state remain unchanged.

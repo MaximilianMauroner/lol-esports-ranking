@@ -51,8 +51,19 @@ test('placement pool expectations cannot exceed champion attainment and preserve
   const bounded = boundedStageExpectations(weights, 24, 1, 11)
   assert.equal(bounded[0], 11)
   assert.ok(bounded.every((value) => value >= 1 && value <= 11))
-  assert.ok(Math.abs(bounded.reduce((a, b) => a + b, 0) - 24) < 1e-10)
+  assert.equal(bounded.reduce((a, b) => a + b, 0), 24)
+  assert.deepEqual(boundedStageExpectations(weights, 4, 1, 11), [1, 1, 1, 1])
+  assert.deepEqual(boundedStageExpectations(weights, 44, 1, 11), [11, 11, 11, 11])
   assert.throws(() => boundedStageExpectations(weights, 45, 1, 11))
+  assert.throws(() => boundedStageExpectations(weights, 24.1, 1, 11))
+  assert.throws(() => boundedStageExpectations(weights, 24, 1, Number.MAX_SAFE_INTEGER))
+})
+
+test('binary-grid placement expectations conserve a fractional allocation when league grouping changes sum order', () => {
+  const expected = boundedStageExpectations([4.764705882352941, 1, 3.176470588235294, 5.352941176470588, 1.5882352941176472], 16, 1, 11)
+  assert.ok(expected.every((value) => value >= 1 && value <= 11))
+  assert.equal(expected.reduce((total, value) => total + value, 0), 16)
+  assert.equal((expected[0] + expected[3]) + (expected[1] + expected[2] + expected[4]), 16)
 })
 
 test('hierarchy recovers league order from selected entrants and keeps disconnected leagues provisional', () => {
@@ -114,7 +125,7 @@ test('evidence reduces heuristic uncertainty; time alone does not create a calib
   const later = { ...matches[0], id: 'after-inactivity', officialMatchId: 'after-inactivity', date: '2025-12-01' }
   const extended = createRatingReplayContext([...matches, later], { ...teams })
   const resumed = replayRatingDates({ context: extended, state, replayMatches: [later] })
-  assert.equal(resumed.predictions.at(-1)!.teamAUncertainty, uncertainty)
+  assert.equal(resumed.predictions.at(-1)!.teamAUncertainty, Math.round(uncertainty))
 })
 
 test('score likelihood sums legal paths without treating missing game order as a stop violation', () => {

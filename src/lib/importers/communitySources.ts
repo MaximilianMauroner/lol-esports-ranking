@@ -30,17 +30,19 @@ export function mergeCommunityMatchSources({
     appendMatch(oracleStatOutcomeMatches, matchStatOutcomeKey(retainedMatch), retainedMatch)
   }
 
+  const verifiedLeaguepediaLinks = uniqueLeaguepediaGameLinks(merged, leaguepediaMatches)
   for (const match of leaguepediaMatches) {
-    const oracleStatDuplicate = consumeOracleDuplicate(oracleStatOutcomeMatches, matchStatOutcomeKey(match))
+    const oracleStatDuplicate = consumeOracleDuplicate(oracleStatOutcomeMatches, matchStatOutcomeKey(match), match)
     if (oracleStatDuplicate) {
-      enrichRetainedOracleMatch(oracleStatDuplicate, match)
+      enrichRetainedOracleMatch(oracleStatDuplicate, match, verifiedLeaguepediaLinks.get(oracleStatDuplicate))
       registerMatchKeys(seen, match, oracleStatDuplicate)
       continue
     }
 
-    const seenDuplicate = matchKeys(match).map((key) => seen.get(key)).find((candidate): candidate is MatchRecord => Boolean(candidate))
+    const seenDuplicate = matchKeys(match).map((key) => seen.get(key))
+      .find((candidate): candidate is MatchRecord => Boolean(candidate && gameTimesCompatible(candidate, match)))
     if (seenDuplicate) {
-      enrichRetainedOracleMatch(seenDuplicate, match)
+      enrichRetainedOracleMatch(seenDuplicate, match, verifiedLeaguepediaLinks.get(seenDuplicate))
       registerMatchKeys(seen, match, seenDuplicate)
       continue
     }
@@ -48,7 +50,7 @@ export function mergeCommunityMatchSources({
     if (isResultOnlyGapFill(match)) {
       const oracleOutcomeDuplicate = consumeOracleDuplicate(oracleOutcomeMatches, matchOutcomeKey(match))
       if (oracleOutcomeDuplicate) {
-        enrichRetainedOracleMatch(oracleOutcomeDuplicate, match)
+        enrichRetainedOracleMatch(oracleOutcomeDuplicate, match, verifiedLeaguepediaLinks.get(oracleOutcomeDuplicate))
         registerMatchKeys(seen, match, oracleOutcomeDuplicate)
         continue
       }
@@ -106,7 +108,8 @@ function reconcileSharedSeriesGames(matches: MatchRecord[]) {
       if (!identity) continue
       reconciled.push({
         ...match,
-        sourceMatchId: identity.seriesId,
+        sourceMatchId: identity.gameId,
+        gameNumber: identity.gameNumber,
         event: seriesReference.event,
         phase,
         region: seriesReference.region,
@@ -128,7 +131,7 @@ function sharedSeriesIdentity(match: MatchRecord) {
     const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
     return {
       key: `${match.date}::${teams}::${normalizeText(parsed[1])}`,
-      seriesId: parsed[1],
+      gameId: value,
       gameNumber: Number(parsed[2]),
     }
   }
@@ -242,19 +245,48 @@ function strategyCount(reference: LolEsportsReferenceEvent) {
   return reference.strategy?.count ?? reference.gameIds.length
 }
 
-function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string) {
+function consumeOracleDuplicate(matches: Map<string, MatchRecord[]>, key: string, match?: MatchRecord) {
   const candidates = matches.get(key) ?? []
-  return candidates.shift()
+  const index = match ? candidates.findIndex((candidate) => gameTimesCompatible(candidate, match)) : 0
+  return index < 0 ? undefined : candidates.splice(index, 1)[0]
 }
 
-function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
+/** Missing clocks require an exact scoreboard link that is unique in both source directions. */
+function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMatches: MatchRecord[]) {
+  const oracleByStats = new Map<string, MatchRecord[]>()
+  const leaguepediaByStats = new Map<string, MatchRecord[]>()
+  for (const match of oracleMatches) if (!isResultOnlyGapFill(match)) appendMatch(oracleByStats, matchStatOutcomeKey(match), match)
+  for (const match of leaguepediaMatches) if (!isResultOnlyGapFill(match)) appendMatch(leaguepediaByStats, matchStatOutcomeKey(match), match)
+  const links = new Map<MatchRecord, MatchRecord>()
+  for (const match of oracleMatches) {
+    const candidates = (leaguepediaByStats.get(matchStatOutcomeKey(match)) ?? []).filter((candidate) => gameTimesCompatible(match, candidate))
+    const identities = new Set(candidates.map((candidate) => candidate.sourceGameId ?? candidate.id))
+    if (identities.size !== 1) continue
+    const duplicate = candidates[0]
+    const reverseCandidates = (oracleByStats.get(matchStatOutcomeKey(duplicate)) ?? []).filter((candidate) => gameTimesCompatible(candidate, duplicate))
+    if (reverseCandidates.length === 1 && reverseCandidates[0] === match) links.set(match, duplicate)
+  }
+  return links
+}
+
+function gameTimesCompatible(left: MatchRecord, right: MatchRecord) {
+  if (left.datetimeUtc && right.datetimeUtc) {
+    // Leaguepedia clocks can omit seconds, while Oracle clocks retain them.
+    const difference = Math.abs(Date.parse(left.datetimeUtc) - Date.parse(right.datetimeUtc))
+    if (!Number.isFinite(difference) || difference > 60_000) return false
+  }
+  return left.gameLengthSeconds === undefined || right.gameLengthSeconds === undefined || left.gameLengthSeconds === right.gameLengthSeconds
+}
+
+function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: MatchRecord, verifiedDuplicate?: MatchRecord) {
   if (retainedMatch.sourceProvider !== 'oracles-elixir' || duplicateMatch.sourceProvider !== 'leaguepedia-cargo') return
   mergeFormatProvenance(retainedMatch, duplicateMatch)
-  if (!retainedMatch.sourceMatchId
-    && retainedMatch.region === 'International'
-    && duplicateMatch.region === 'International'
-    && sharedSeriesIdentity(duplicateMatch)) {
-    retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
+  const verifiedLink = verifiedDuplicate !== undefined
+    && (verifiedDuplicate.sourceGameId ?? verifiedDuplicate.id) === (duplicateMatch.sourceGameId ?? duplicateMatch.id)
+  const identity = sharedSeriesIdentity(duplicateMatch)
+  if (!retainedMatch.sourceMatchId && verifiedLink && identity) {
+    retainedMatch.sourceMatchId = identity.gameId
+    retainedMatch.gameNumber = identity.gameNumber
   }
   if (
     (isQualifierMetadata(duplicateMatch) && retainedMatch.tier !== 'qualifier')
@@ -265,14 +297,14 @@ function enrichRetainedOracleMatch(retainedMatch: MatchRecord, duplicateMatch: M
     retainedMatch.region = duplicateMatch.region
     retainedMatch.phase = duplicateMatch.phase
     retainedMatch.tier = duplicateMatch.tier
-    retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
+    if (verifiedLink) retainedMatch.sourceMatchId = identity?.gameId ?? duplicateMatch.sourceGameId
     return
   }
 
   if (!hasStrongerCompetitionMetadata(retainedMatch, duplicateMatch)) return
   retainedMatch.phase = duplicateMatch.phase
   retainedMatch.tier = duplicateMatch.tier
-  retainedMatch.sourceMatchId = duplicateMatch.sourceGameId
+  if (verifiedLink) retainedMatch.sourceMatchId = identity?.gameId ?? duplicateMatch.sourceGameId
 }
 
 function mergeFormatProvenance(retainedMatch: MatchRecord, duplicateMatch: MatchRecord) {
@@ -326,7 +358,7 @@ function oracleGameDuplicateKeys(match: MatchRecord) {
   ].sort().join('::')
   return [
     match.sourceGameId ? `source-game:${normalizeText(match.sourceGameId)}` : '',
-    `fingerprint:${match.date}::${canonicalEventKey(match)}::${teams}::${normalizeTeamName(match.winner)}::${stats}::${match.gameLengthSeconds ?? 'unknown-length'}::${normalizeText(match.patch)}`,
+    `fingerprint:${match.date}::${canonicalEventKey(match)}::${teams}::${normalizeTeamName(match.winner)}::${stats}::${match.gameLengthSeconds ?? 'unknown-length'}::${normalizeText(match.patch)}::${match.datetimeUtc ?? 'unknown-time'}`,
   ].filter(Boolean)
 }
 

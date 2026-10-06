@@ -19,6 +19,11 @@ const [manifestArg, predictionsArg, outputArg] = process.argv.slice(2)
 if (!manifestArg || !predictionsArg || !outputArg) throw new Error('Usage: evaluate-ranking-hypotheses <manifest> <predictions> <output>')
 const source = await importRankingSourceData({ manifestPath: resolve(manifestArg) })
 const data = readEvaluationExport(JSON.parse(await readFile(predictionsArg, 'utf8')))
+const policyHash = createHash('sha256')
+for (const file of ['scripts/evaluate-ranking-hypotheses.ts', 'scripts/lib/public-board-ablation.ts', 'scripts/lib/hierarchical-leagues.ts', 'scripts/lib/ranking-simulations.ts']) {
+  policyHash.update(file).update(await readFile(file))
+}
+const policyIdentity = policyHash.digest('hex')
 const sourceIdentity = createHash('sha256').update(JSON.stringify(source.matches.filter((match) => match.date >= '2025-01-01').toSorted((a, b) => a.id.localeCompare(b.id)))).digest('hex')
 if (data.modelConfigHash !== transparentGprModelMetadata.configHash) throw new Error('Hypothesis model differs from prediction export')
 if (sourceIdentity !== data.sourceIdentity) throw new Error('Hypothesis source differs from prediction export')
@@ -96,10 +101,11 @@ for (const cutoff of cutoffs) {
   console.log(`Completed prior board/league cutoff ${cutoff}: ${forward.length} forward games`)
 }
 const exportRows = (rows: EvaluationRow[], name: string) => ({ ...data, modelVersion: name,
-  modelConfigHash: createHash('sha256').update(JSON.stringify({ base: data.modelConfigHash, name, cutoffs, policy: 'prior-board-hierarchy-v1' })).digest('hex'), rows })
+  modelConfigHash: createHash('sha256').update(JSON.stringify({ base: data.modelConfigHash, name, cutoffs, policyIdentity })).digest('hex'), rows })
 const current = exportRows(boardRows.get('current')!, 'prior-public-board')
 await writeFile(outputArg, `${JSON.stringify({ status: 'exploratory; fixed prior boards; neutral forecasts; no automatic adoption',
-  sourceIdentity, seriesScores, cutReports,
+  sourceIdentity, provenance: { baseModelVersion: data.modelVersion, baseModelConfigHash: data.modelConfigHash,
+    policyIdentity, cutoffs, forwardDays: 30, temporalPolicy: data.temporalPolicy }, seriesScores, cutReports,
   simulations: { hierarchy: leagueRecoverySimulation(), teamBands: latentTeamBandSimulation(source.matches[0], Object.values(source.teams)[0]) },
   board: Object.fromEntries([...boardRows].map(([name, rows]) => [name, { summary: summarizeEvaluation(rows), comparison: compareEvaluationExports(current, exportRows(rows, name)) }])),
   hierarchy: Object.fromEntries([...hierarchyRows].map(([name, rows]) => [name, compareEvaluationExports(exportRows(priorBoardRows, 'prior-public-board'), exportRows(rows, name))])) }, null, 2)}\n`)
