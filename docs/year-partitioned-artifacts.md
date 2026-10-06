@@ -29,7 +29,7 @@ immutable pages under the existing fenced generation authority.
   directory. The stored root keeps the ranking entry and one directory reference.
   Browser lookups fetch only directory pages that can contain the requested path.
   Root serving does not hydrate the complete directory.
-- There is no aggregate archive size failure in writer version 1. Size is telemetry.
+- There is no aggregate archive size failure. Size is telemetry.
   Player directories use bounded nodes instead of a growing monolithic size gate.
 
 The semantic root binds its entire nested closure. Publication receipts include
@@ -94,36 +94,29 @@ not gzip payloads. This bounds output buffering across logical artifacts, not th
 ranking model, raw baseline, publication receipt, or an entire reconstructed
 logical history view. Those remain measured memory costs.
 
-## Owner-authorized release
+## Release acceptance
 
-No production change is part of this implementation PR. Max owns these actions:
+[PR #72](https://github.com/MaximilianMauroner/lol-esports-ranking/pull/72)
+merged as `e0f385969eb95c4847b2e66b93989870d2dd9cbd`. Release acceptance
+[completed on 3 October 2026](https://github.com/MaximilianMauroner/lol-esports-ranking/pull/72#issuecomment-5969594058): deployed-reader acceptance, two successful refreshes,
+format-1 active and rollback closure, and stable retained inventory. This meets
+the removal condition for the temporary version-0 writer.
 
-1. Before a reader-first deployment, set `RANKING_PUBLIC_ARCHIVE_WRITE_VERSION=0`.
-   Deploy these readers with the legacy writer. Version 0 cannot create nested
-   archives. Its legacy aggregate and directory gates still prevent promotion of
-   an unsupported growing generation. Validate the retained active generation.
-2. After readers are available, explicitly enable writer version 1 by setting
-   `RANKING_PUBLIC_ARCHIVE_WRITE_VERSION=1`. Version 1 is the code default; setting
-   version 0 before the first deployment is required for the staged release.
-   Unsupported values fail. Keep a readable rollback generation.
-3. Authorize a recovery refresh. Capture its rebuild, state persistence, readiness
-   receipt, and successful fenced promotion log with source/model/run identities.
-4. Capture the following refresh's restore and completion log. Confirm that it
-   restored the new ledger and did not use the duplicate-key fallback.
-5. Verify the previous-generation rollback target and inventory-only GC against
-   the retained closure. Never delete objects as part of this check.
-
-Only these two successful production refresh logs establish live recovery. Local
-checks and CI do not establish deployment or production acceptance.
+Publication now always uses format 1 when an artifact needs archive nodes.
+`RANKING_PUBLIC_ARCHIVE_WRITE_VERSION` is obsolete and has no effect. Small inline
+artifacts keep the storage contract above. This cleanup does not change Railway
+variables or perform production writes. Max owns later deployment and variable
+cleanup. Local checks and CI do not establish deployment or production acceptance.
 
 ## Compatibility removal
 
 Legacy readers remain in the browser resolver/schema and storage authorities
 because active, rollback, and retained audit generations can have inline payloads
-and flat mappings. The temporary version-0 writer is in public-artifact storage
-and the publisher. Remove it after active and rollback generations use format 1
-and the release is accepted. Remove browser legacy fallback after the supported
-stale-client/cache interval ends. Max must define that interval.
+and flat mappings. Keep these readers and storage authorities while supported
+active, rollback, or retained audit generations need them. The temporary
+version-0 writer and its aggregate and directory gates have been removed.
+Remove browser legacy fallback only after supported data no longer needs it and
+the supported stale-client/cache interval ends. Max must define that interval.
 
 Keep a narrowly scoped old-format verifier for retained immutable receipts for
 as long as those receipts are supported. This is an archival obligation. It does
