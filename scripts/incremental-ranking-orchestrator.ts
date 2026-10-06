@@ -782,7 +782,7 @@ async function selectReplay(
     candidates: checkpoints.map(({ candidate, bundle }) => ({
       id: `${candidate.boundary.date}/${candidate.boundary.matchId}`,
       processedThroughUtcDate: candidate.boundary.date,
-      serialized: stableJson(bundle.ratingCheckpoint),
+      serialized: JSON.stringify(bundle.ratingCheckpoint),
       expectedIdentity: {
         importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
         identityTaxonomyHash: stableDigest(sourceData.teams),
