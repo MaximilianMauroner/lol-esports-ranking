@@ -1778,5 +1778,62 @@
         ]
       }
     }
+  },
+  "prVerification": {
+    "sourcePipelineVersion": "canonical-identity-stat-dedupe-feasible-series-player-performance-home-league-v21",
+    "finalReplay": "blocked: foreign Fleet build owner; final config, source identity, corpus counts and scores not captured",
+    "ci": {
+      "commit": "c4cf3aa076fd9f6567f8fc9623322aed77d917d0",
+      "run": "https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/37542415883",
+      "install": "passed",
+      "typecheck": "passed",
+      "lint": "passed",
+      "tests": {
+        "passed": 862,
+        "failed": 1,
+        "total": 863,
+        "failure": "community merge removes duplicate Oracle games across canonical tournament event labels"
+      },
+      "incrementalGate": "skipped",
+      "bundle": "skipped"
+    },
+    "finding": {
+      "review": 5435392958,
+      "classification": "Act on",
+      "verdict": "fixture-only correction; absent sourceGameId values preserve canonical-event fingerprint coverage; production stable-ID authority remains",
+      "fixtureExecution": "pending new-head CI"
+    },
+    "verifiedSourceThreads": [
+      {
+        "thread": "PRRT_kwDOTHF5QM6prPrP",
+        "reply": 4201176445,
+        "resolved": true
+      },
+      {
+        "thread": "PRRT_kwDOTHF5QM6prjZz",
+        "reply": 4201176671,
+        "resolved": true
+      },
+      {
+        "thread": "PRRT_kwDOTHF5QM6prjZ1",
+        "reply": 4201176878,
+        "resolved": true
+      }
+    ],
+    "nativeReview": {
+      "models": [
+        "gpt-5.6-sol",
+        "gpt-6.1-sol"
+      ],
+      "affectedSource": "passed",
+      "deadCode": "passed",
+      "redundantTests": "passed"
+    },
+    "configuredBotReview": "incomplete: quota notice",
+    "localVerification": "blocked by foreign Fleet build owner PID744036",
+    "browserVerification": "blocked by shared Fleet build slot; prepared probe not executed",
+    "merge": "open",
+    "deployment": "not performed",
+    "freshAccuracyAcceptance": "not established"
   }
 }

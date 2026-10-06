@@ -1,6 +1,6 @@
 # Ranking accuracy evidence
 
-This report records exploratory comparisons, retained policies and rejected candidates. Source repairs from PR review are still being verified. Earlier numerical results below are historical receipts, not scores of the final repaired source policy.
+This report records exploratory comparisons, retained policies and rejected candidates. Repair c4cf3aa passed independent affected source review and all new source regressions in hosted CI. CI failed one older fixture that expected distinct stable Oracle game IDs to collapse. The fixture correction preserves canonical-label fingerprint coverage; its execution is pending. Earlier numerical results below are historical receipts, not scores of the final repaired source policy.
 
 ## Result provenance
 
@@ -47,12 +47,21 @@ Elo uses tournament K values and a frozen UTC-date period. Glicko uses Glicko-1 
 | 2025-06-30 | 2025-09-30 | 1375 | 834 | 11 |
 | 2025-09-30 | 2025-12-31 | 2308 | 264 | 6 |
 
-## Verification
+## Historical verification
 
 - Two new frozen exports were byte-identical.
 - Seven benchmark/control regression checks passed, including duplicate/outcome/orientation/source rejection, empty/event-poor gates, shared metrics, whole-event folds, prior-only controls, and the Glicko update.
 - Typecheck passed. All commands used Fleet coding-vm admission with 3 GiB group memory and zero build swap.
-- Required full project checks, CI, PR review, merge and product journeys are pending implementation. Production data is unchanged.
+- These checks belong to the original benchmark stage. They do not verify the later repaired source policy.
+
+## Current PR verification
+
+- Hosted [Checks on c4cf3aa](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/37542415883): install, typecheck and lint passed; tests passed 862 of 863. The only failure was the canonical-event fixture. Incremental gate and bundle were skipped after Verify failed.
+- All new source regressions passed, including same-day rematches and reversed input, exact/distinct/missing provider IDs, aliases, both duplicate queues, multiply-associated anchors and eight clock-correction duplicates. The three source review threads are verified and resolved.
+- Two independent native gpt-5.6-sol reviewers confirmed that the failing fixture must omit both sourceGameId values to test canonical-label fingerprints. The helper otherwise defaults to an ID. A shared ID would bypass this behavior. The production identity contract stays in place. Finding: [review 5435392958](https://github.com/MaximilianMauroner/lol-esports-ranking/pull/79#pullrequestreview-5435392958).
+- Independent affected regression source review, dead-code and redundant-test review passed. Fixture execution and new-head CI remain pending. The configured Codex review bot returned a quota notice, so its review is incomplete.
+- Final local verify, frozen export/repeat, series/hypothesis comparisons, isolated public candidate, incremental gate, build and browser journeys are blocked by another owner of Fleet's shared build slot. No execution waiver applies. Final v21 config/source identities, counts and scores remain unknown until replay.
+- Approval and product acceptance are incomplete. The PR remains open; no merge, production publication or deployment occurred.
 
 ## Precision and joint fit decision
 
@@ -70,7 +79,7 @@ Three additional complete series had valid final scores but uncertain observed g
 
 Placement pool scaling could put a favorite above the 11-point champion attainment. The bounded replacement preserves the realized pool and each entrant's feasible range. It does not constrain every champion to a positive residual. Existing completion/result-coverage and one-award gates remain. Real placement calibration is blocked because the frozen corpus has no complete result lifecycle. No zero-effect comparison is counted as a pass.
 
-Final reviewed code uses source pipeline v18 and placement policy `highest-attainment-bounded-grid-pool-centered-league-residual-v4`, with model `transparent-power-index-v0.2.0` and config `fnv1a-82e02e79`. Unique scored duplicate anchors now connect domestic Oracle and Leaguepedia games. The real Fnatic/Karmine Corp 2025-09-26 example resolves to one completed 3–1 Bo5. Full provider per-game IDs preserve same-day rematches. Trusted Bo2/Bo3/Bo5 conflicts remain unknown. Expected placement allocation uses a 2^32 binary grid per point, below 2.33e-10 point precision, so entrant and league pool sums stay exact. Eighty-six affected checks passed; independent repair verification, dead-code and redundant-test review passed. Final replays and project/product checks remain pending.
+The first reviewed repair used source pipeline v18 and placement policy `highest-attainment-bounded-grid-pool-centered-league-residual-v4`, with model `transparent-power-index-v0.2.0` and config `fnv1a-82e02e79`. Unique scored duplicate anchors now connect domestic Oracle and Leaguepedia games. The real Fnatic/Karmine Corp 2025-09-26 example resolves to one completed 3–1 Bo5. Full provider per-game IDs preserve same-day rematches. Trusted Bo2/Bo3/Bo5 conflicts remain unknown. Expected placement allocation uses a 2^32 binary grid per point, below 2.33e-10 point precision, so entrant and league pool sums stay exact. Eighty-six affected checks passed; independent repair verification, dead-code and redundant-test review passed. Its v18 replay later proved invalid because clock guards retained eight exact duplicates. The v19 repair restores 4,519 games, then the current-base merge retains home-league rules under combined source v20. Final replays and project/product checks remain pending.
 
 ## Public board decision
 

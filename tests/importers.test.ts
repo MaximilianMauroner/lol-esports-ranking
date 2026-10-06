@@ -978,11 +978,11 @@ test('team identity cleanup maps exact source display aliases only', () => {
   assert.equal(canonicalTeamNameFor('The Secret Club'), 'The Secret Club')
 })
 
-test('community merge removes duplicate Oracle games across canonical tournament event labels', () => {
+test('community merge removes unidentified duplicate Oracle games across canonical tournament event labels', () => {
   const first = matchFixture({
     id: 'oe-msi-short-label',
     sourceProvider: 'oracles-elixir',
-    sourceGameId: 'oe-msi-short-label-id',
+    sourceGameId: undefined,
     event: 'MSI 2026',
     league: 'MSI',
     region: 'International',
@@ -990,7 +990,7 @@ test('community merge removes duplicate Oracle games across canonical tournament
   const duplicate = matchFixture({
     ...first,
     id: 'oe-msi-long-label',
-    sourceGameId: 'oe-msi-long-label-id',
+    sourceGameId: undefined,
     event: '2026 Mid-Season Invitational',
   })
 
