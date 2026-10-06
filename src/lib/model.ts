@@ -388,7 +388,7 @@ export function materializeRankingModel({
         wins.get(team) ?? 0,
         losses.get(team) ?? 0,
       )
-      const uncertainty = uncertainties.get(team) ?? maximumUncertainty
+      const uncertainty = Math.round(uncertainties.get(team) ?? maximumUncertainty)
       const baseContextAdjustment = publishedLeagueAnchorContextAdjustment({
         leagueScore: publishedLeagueScore,
         teamRating: baseRating,
@@ -441,15 +441,15 @@ export function materializeRankingModel({
         league: profile.league,
         rosterBasis: teamRosterBasis.get(team) ?? 'unknown',
         rosterContinuity: roundedContinuity(currentRosterContinuity.get(team)),
-        baseRating: baseRating,
-        leagueScore: leagueScore,
+        baseRating: Math.round(baseRating),
+        leagueScore: Math.round(leagueScore),
         leagueAdjustment: currentLeagueAdjustment,
-        leagueDelta: leagueScore - previousLeagueScore,
+        leagueDelta: Math.round(leagueScore - previousLeagueScore),
         ratingComponents: components,
         ratingUpdate: latestRatingUpdates.get(team) ?? emptyRatingUpdateLedger(),
-        rating: publishedDisplayRating,
-        previousRating: priorDisplayRating,
-        delta: publishedDisplayRating - priorDisplayRating,
+        rating: Math.round(publishedDisplayRating),
+        previousRating: Math.round(priorDisplayRating),
+        delta: Math.round(publishedDisplayRating - priorDisplayRating),
         rank: 0,
         previousRank: 0,
         movement: 0,
@@ -625,11 +625,11 @@ function canUseDirectHeadToHeadContext(
 
 function addCappedDirectHeadToHeadAdjustment(adjustments: Map<string, number>, team: string, adjustment: number) {
   const next = (adjustments.get(team) ?? 0) + adjustment
-  adjustments.set(team, clamp(
+  adjustments.set(team, Number(clamp(
     next,
     -directHeadToHeadContextConfig.maxAdjustment,
     directHeadToHeadContextConfig.maxAdjustment,
-  ))
+  ).toFixed(1)))
 }
 
 function daysBetween(date: string, lastDate: string) {

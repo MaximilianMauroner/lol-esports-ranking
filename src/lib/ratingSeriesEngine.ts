@@ -36,6 +36,7 @@ import {
   ratingComponents,
   ratingFromComponents,
   recencyWeight,
+  roundedRatingUpdateLedger,
   rosterVolatilityMultiplier,
   uncertaintyKMultiplier,
 } from './ratingCalculations'
@@ -246,10 +247,10 @@ function pregamePredictionForMatch({
     teamASeriesWinProbabilityExecutionBaseline: executionBaselinePrediction.teamASeriesWinProbability,
     teamBSeriesWinProbabilityExecutionBaseline: executionBaselinePrediction.teamBSeriesWinProbability,
     uncertaintyPenalty: publishedPrediction.uncertaintyPenalty,
-    teamARating: predictionRatingA,
-    teamBRating: predictionRatingB,
-    teamAUncertainty: batch.uncertainties.get(match.teamA) ?? maximumUncertainty,
-    teamBUncertainty: batch.uncertainties.get(match.teamB) ?? maximumUncertainty,
+    teamARating: Math.round(predictionRatingA),
+    teamBRating: Math.round(predictionRatingB),
+    teamAUncertainty: Math.round(batch.uncertainties.get(match.teamA) ?? maximumUncertainty),
+    teamBUncertainty: Math.round(batch.uncertainties.get(match.teamB) ?? maximumUncertainty),
     teamAPregameWins: state.wins.get(match.teamA) ?? 0,
     teamAPregameLosses: state.losses.get(match.teamA) ?? 0,
     teamBPregameWins: state.wins.get(match.teamB) ?? 0,
@@ -258,8 +259,8 @@ function pregamePredictionForMatch({
     teamBRosterContinuity: roundedContinuity(state.currentRosterContinuity.get(match.teamB)),
     teamAPlayerRatingAdjustment: playerRatingAdjustmentA,
     teamBPlayerRatingAdjustment: playerRatingAdjustmentB,
-    teamASideAdjustment: sideAdjustmentA,
-    teamBSideAdjustment: sideAdjustmentB,
+    teamASideAdjustment: Number(sideAdjustmentA.toFixed(1)),
+    teamBSideAdjustment: Number(sideAdjustmentB.toFixed(1)),
     teamAPlayerRatingCoverage: playerRatingEdge?.teamACoverage ?? 0,
     teamBPlayerRatingCoverage: playerRatingEdge?.teamBCoverage ?? 0,
     teamALineupEvidenceBasis: playerRatingEdge?.teamAEvidenceBasis ?? 'unavailable',
@@ -273,8 +274,8 @@ function pregamePredictionForMatch({
     teamASeriesWinProbabilityPlayerAdjusted: playerAdjustedPrediction.teamASeriesWinProbability,
     teamBSeriesWinProbabilityPlayerAdjusted: playerAdjustedPrediction.teamBSeriesWinProbability,
     playerRatingPredictionWeight,
-    teamAExecutionResidualAdjustment: executionResidualAdjustmentA,
-    teamBExecutionResidualAdjustment: executionResidualAdjustmentB,
+    teamAExecutionResidualAdjustment: Number(executionResidualAdjustmentA.toFixed(1)),
+    teamBExecutionResidualAdjustment: Number(executionResidualAdjustmentB.toFixed(1)),
     teamAGameWinProbabilityExecutionAdjusted: executionAdjustedPrediction.teamAGameWinProbability,
     teamBGameWinProbabilityExecutionAdjusted: executionAdjustedPrediction.teamBGameWinProbability,
     teamASeriesWinProbabilityExecutionAdjusted: executionAdjustedPrediction.teamASeriesWinProbability,
@@ -390,8 +391,8 @@ function processRatingSeries({
   const baseFormDeltaB = seriesResultEvidenceB * teamFormShare
   const baseLeagueDeltaA = seriesResultEvidenceA * leagueSignalShare
   const baseLeagueDeltaB = seriesResultEvidenceB * leagueSignalShare
-  const seriesDeltaA = baseStableDeltaA * uncertaintyMultiplierA * rosterMultiplierA * stableTransferWeightA
-  const seriesDeltaB = baseStableDeltaB * uncertaintyMultiplierB * rosterMultiplierB * stableTransferWeightB
+  const seriesDeltaA = Math.round(baseStableDeltaA * uncertaintyMultiplierA * rosterMultiplierA * stableTransferWeightA)
+  const seriesDeltaB = Math.round(baseStableDeltaB * uncertaintyMultiplierB * rosterMultiplierB * stableTransferWeightB)
   const seriesDeltaByTeam = new Map([[series.teamA, seriesDeltaA], [series.teamB, seriesDeltaB]])
   const seriesResidualByTeam = new Map([[series.teamA, seriesResidualA], [series.teamB, seriesResidualB]])
   const seriesEvidenceByTeam = new Map([[series.teamA, seriesResultEvidenceA], [series.teamB, seriesResultEvidenceB]])
@@ -575,8 +576,8 @@ function processSeriesMember({
   const executionExpectedB = 1 - executionExpectedA
   const executionOutcomeA = executionSoftOutcome(aWon ? 1 : 0, teamExecutionIndex(match, 'A'))
   const executionOutcomeB = executionSoftOutcome(aWon ? 0 : 1, teamExecutionIndex(match, 'B'))
-  const executionDeltaA = gameK * ratingUpdateRecencyWeight * (executionOutcomeA - executionExpectedA)
-  const executionDeltaB = gameK * ratingUpdateRecencyWeight * (executionOutcomeB - executionExpectedB)
+  const executionDeltaA = Math.round(gameK * ratingUpdateRecencyWeight * (executionOutcomeA - executionExpectedA))
+  const executionDeltaB = Math.round(gameK * ratingUpdateRecencyWeight * (executionOutcomeB - executionExpectedB))
 
   state.previousDisplayRatings.set(match.teamA, previousPublishedPowerRatingA)
   state.previousDisplayRatings.set(match.teamB, previousPublishedPowerRatingB)
@@ -678,7 +679,7 @@ function processSeriesMember({
   const unavailableChannelsB = stableTransferWeightB < 1
     ? [...baseUnavailableChannels, 'domestic-relative-strength:global-transfer-shrunk']
     : baseUnavailableChannels
-  const updateLedgerA = {
+  const updateLedgerA = roundedRatingUpdateLedger({
     teamStableDelta: deltaA,
     leagueGameDelta: leagueDelta.deltaA,
     leaguePlacementDelta: 0,
@@ -709,8 +710,8 @@ function processSeriesMember({
     lineupSignalDelta: resultEvidenceA * latentStrengthResultBudgetShares.lineupSignalShadow,
     directRegionSignalDelta: resultEvidenceA * latentStrengthResultBudgetShares.directRegionShadow,
     unavailableChannels: unavailableChannelsA,
-  }
-  const updateLedgerB = {
+  })
+  const updateLedgerB = roundedRatingUpdateLedger({
     teamStableDelta: deltaB,
     leagueGameDelta: leagueDelta.deltaB,
     leaguePlacementDelta: 0,
@@ -741,7 +742,7 @@ function processSeriesMember({
     lineupSignalDelta: resultEvidenceB * latentStrengthResultBudgetShares.lineupSignalShadow,
     directRegionSignalDelta: resultEvidenceB * latentStrengthResultBudgetShares.directRegionShadow,
     unavailableChannels: unavailableChannelsB,
-  }
+  })
   state.latestRatingUpdates.set(match.teamA, updateLedgerA)
   state.latestRatingUpdates.set(match.teamB, updateLedgerB)
 
@@ -1001,14 +1002,14 @@ function appendHistory(
       date: match.date,
       event: match.event,
       opponent,
-      rating: rating,
-      baseRating: baseRating,
+      rating: Math.round(rating),
+      baseRating: Math.round(baseRating),
       leagueAdjustment: teamLeagueAdjustment,
       sideAdjustment,
       ratingComponents: components,
       ratingUpdate: update,
       rank,
-      delta: delta,
+      delta: Math.round(delta),
       tier: match.tier,
       result: won ? 'W' : 'L',
       source: {

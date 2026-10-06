@@ -14,6 +14,8 @@ The optional last argument sets the first scored date. Earlier rows still train 
 
 ## Fit the current engine
 
+The recorded precision search was rejected. It used the source policy before the 2–2 correction. Commit `e254c62` preserves the precise proposal and tests, with that correction included. The current branch retains the original numerical engine. A new search uses the current source/config and must use a new output directory. Old trial receipts must not be relabeled as corrected-source trials.
+
 ```sh
 pnpm calibration:search <frozen-manifest> docs/plans/ranking-accuracy/protocol.json <search-directory>
 ```
@@ -30,9 +32,9 @@ Receipts bind protocol, source code, raw file contents and parameters. A resume 
 pnpm calibration:series <frozen-manifest> <precision-export.json> <series-directory>
 ```
 
-Compare binary series outcome plus decisiveness bonus with two offline alternatives. The first uses game residual evidence scaled by the square root of the observed game count. The second uses the gradient of an ordered-path likelihood with a common three-point latent logit mixture, then applies the same scaling. Both keep one atomic team/league award at completed series boundaries and retain event importance separately. Dependence is fixed at 1 logit unit for this comparison. It is not fitted or asserted to be the true correlation.
+Compare binary series outcome plus decisiveness bonus with two offline alternatives. The first uses game residual evidence scaled by the square root of the observed game count. The second uses the gradient of a score likelihood that sums legal stopping paths with a common three-point latent logit mixture, then applies the same scaling. Both keep one atomic team/league award at completed series boundaries and retain event importance separately. Dependence is fixed at 1 logit unit for this comparison. It is not fitted or asserted to be the true correlation.
 
-The likelihood utility handles Bo1/Bo2/Bo3/Bo5, legal stopping, incomplete prefixes, ties, and a separate probability for each game. The hypothesis report scores pre-series paths and conditional paths separately. Ordered-path log loss is a different target from binary game or series-winner log loss. Do not compare their absolute scores as if they were the same metric. No complete placement event is available in the frozen corpus. Placement calibration therefore remains blocked even if game predictions match when placement is disabled.
+The likelihood utility handles Bo1/Bo2/Bo3/Bo5, legal stopping, incomplete prefixes, ties, and a separate probability for each game. The hypothesis report scores pre-series paths and conditional paths separately. Series-score log loss is a different target from binary game or series-winner log loss. Do not compare their absolute scores as if they were the same metric. No complete placement event is available in the frozen corpus. Placement calibration therefore remains blocked even if game predictions match when placement is disabled.
 
 ## Compare public boards and league effects
 
@@ -50,6 +52,7 @@ Synthetic recovery uses qualified domestic leaders as international entrants. A 
 
 ```sh
 pnpm calibration:paired <baseline.json> <candidate.json>
+pnpm calibration:select <baseline.json> <search-directory> <selection.json>
 ```
 
-The event-cluster non-regression gate is separate from superiority. Empty or event-poor cohorts cannot pass. Keep fresh accuracy claims pending until the candidate, input policy, protocol and evaluation cutoff are locked before the new outcomes are examined. Max owns access to a fresh real corpus and any named production activation. No experiment command publishes artifacts, changes a service, or accesses production storage.
+The event-cluster non-regression gate is separate from superiority. The selection command checks every completed trial and ranks gate passers by the final chronological fit loss. Its intervals are conditional on each candidate and are not adjusted for selection. It never changes production configuration. Empty or event-poor cohorts cannot pass. Keep fresh accuracy claims pending until the candidate, input policy, protocol and evaluation cutoff are locked before the new outcomes are examined. Max owns access to a fresh real corpus and any named production activation. No experiment command publishes artifacts, changes a service, or accesses production storage.

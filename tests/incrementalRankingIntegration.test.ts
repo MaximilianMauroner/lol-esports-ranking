@@ -11,6 +11,7 @@ import type { RankingSourceImport } from '../scripts/ranking-source-import.ts'
 import { normalizeRankingRefreshOutcome } from '../scripts/ranking-refresh-outcome-contract.mjs'
 import { buildStaticSnapshot } from '../scripts/build-static-snapshot.ts'
 import { createStaticRankingData } from '../src/lib/snapshot.ts'
+import { buildPlayerModel } from '../src/lib/model.ts'
 import { runRefreshOnce } from '../scripts/refresh-once.mjs'
 import { parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier.ts'
 
@@ -78,6 +79,13 @@ test('releasing import audit rows before snapshot preserves roster/player public
     )
     const normalIdentities = identities(normal.publicPlan.writes)
     assert.deepEqual(identities(lean.publicPlan.writes), normalIdentities)
+    assert.equal(
+      prepareSemanticArtifact({
+        artifactKind: 'player-model-regression',
+        players: buildPlayerModel(normalSource.matches, {}, { teams: normalSource.teams }),
+      }).digest,
+      'e1fdb414891df185ba36528bb01aaedd389fdd98afdf1c2edb0b6348ec6190aa',
+    )
     const compactSnapshot = createStaticRankingData({
       matches: structuredClone(normalSource.matches),
       teams: structuredClone(normalSource.teams),

@@ -21,6 +21,7 @@
     "calibration:export": "tsx scripts/export-ranking-predictions.ts",
     "calibration:paired": "tsx scripts/paired-prediction-calibration.ts",
     "calibration:search": "tsx scripts/search-ranking-model.ts",
+    "calibration:select": "tsx scripts/select-ranking-model.ts",
     "calibration:series": "tsx scripts/compare-series-evidence.ts",
     "calibration:hypotheses": "tsx scripts/evaluate-ranking-hypotheses.ts",
     "performance:audit": "tsx scripts/audit-player-performance.ts",

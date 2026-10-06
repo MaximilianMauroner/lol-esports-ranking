@@ -5,7 +5,8 @@ import { createRatingReplayContext, replayRatingDates, materializeRankingModel, 
 import { buildEvaluationData, evaluationHomeLeague } from '../src/lib/rankingEvaluationData'
 import { compareEvaluationExports, readEvaluationExport, summarizeEvaluation, type EvaluationRow } from '../src/lib/rankingEvaluation'
 import { neutralWinProbability } from '../src/lib/winProbability'
-import { leaguePriorFor } from '../src/data/leagueTiers'
+import { effectiveLeagueRating, leaguePriorFor } from '../src/data/leagueTiers'
+import { transparentGprModelMetadata } from '../src/lib/modelConfig'
 import type { MatchRecord, TeamProfile } from '../src/types'
 import { importRankingSourceData } from './ranking-source-import'
 import { seriesScoreLikelihood } from './lib/ranking-experiments'
@@ -19,6 +20,7 @@ if (!manifestArg || !predictionsArg || !outputArg) throw new Error('Usage: evalu
 const source = await importRankingSourceData({ manifestPath: resolve(manifestArg) })
 const data = readEvaluationExport(JSON.parse(await readFile(predictionsArg, 'utf8')))
 const sourceIdentity = createHash('sha256').update(JSON.stringify(source.matches.filter((match) => match.date >= '2025-01-01').toSorted((a, b) => a.id.localeCompare(b.id)))).digest('hex')
+if (data.modelConfigHash !== transparentGprModelMetadata.configHash) throw new Error('Hypothesis model differs from prediction export')
 if (sourceIdentity !== data.sourceIdentity) throw new Error('Hypothesis source differs from prediction export')
 const rowById = new Map(data.rows.map((row) => [row.id, row]))
 const seriesScores = [0, .5, 1].map((dependence) => {
@@ -56,7 +58,10 @@ for (const cutoff of cutoffs) {
     state.momentums, state.uncertainties, state.wins, state.losses, context.teamRosterBasis)
   const headToHead = makeDirectHeadToHeadContextAdjustments({ displayRatings: preHeadToHead, teams, histories: state.histories,
     uncertainties: state.uncertainties, wins: state.wins, losses: state.losses, teamRosterBasis: context.teamRosterBasis, lastDate: context.lastDate })
-  const boardRating = (standing: typeof model.standings[number], layer: typeof layerNames[number]) => ablatedBoardRating(standing, state.rosterPriorOffsets.get(standing.team) ?? 0, headToHead.get(standing.team) ?? 0, layer)
+  const boardRating = (standing: typeof model.standings[number], layer: typeof layerNames[number]) => ablatedBoardRating(standing, { teamRating: state.ratings.get(standing.team)!,
+    leagueScore: effectiveLeagueRating(standing.league, state.leagueScores.get(standing.league) ?? leaguePriorFor(standing.league), state.leagueMatchCounts.get(standing.league) ?? 0),
+    rosterOffset: state.rosterPriorOffsets.get(standing.team) ?? 0, momentum: state.momentums.get(standing.team) ?? 0,
+    uncertainty: state.uncertainties.get(standing.team)!, headToHead: headToHead.get(standing.team) ?? 0 }, layer)
   const standings = new Map(model.standings.map((standing) => [standing.team, standing]))
   const laterDate = new Date(`${cutoff}T00:00:00Z`)
   laterDate.setUTCDate(laterDate.getUTCDate() + 30)

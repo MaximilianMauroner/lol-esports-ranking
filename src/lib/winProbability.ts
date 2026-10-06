@@ -46,13 +46,13 @@ export function neutralWinProbability(teamA: ProbabilityTeam, teamB: Probability
     teamA: teamA.team,
     teamB: teamB.team,
     bestOf: normalizedFormat,
-    teamAGameWinProbability: clampProbability(gameProbability),
-    teamBGameWinProbability: clampProbability(1 - gameProbability),
-    teamASeriesWinProbability: clampProbability(teamASeriesWinProbability),
-    teamBSeriesWinProbability: clampProbability(teamBSeriesWinProbability),
-    teamAExpectedSeriesPoints: clampProbability(teamAExpectedSeriesPoints),
-    teamBExpectedSeriesPoints: clampProbability(1 - teamAExpectedSeriesPoints),
-    uncertaintyPenalty: clampProbability(uncertaintyPenalty),
+    teamAGameWinProbability: roundProbability(gameProbability),
+    teamBGameWinProbability: roundProbability(1 - gameProbability),
+    teamASeriesWinProbability: roundProbability(teamASeriesWinProbability),
+    teamBSeriesWinProbability: roundProbability(teamBSeriesWinProbability),
+    teamAExpectedSeriesPoints: roundProbability(teamAExpectedSeriesPoints),
+    teamBExpectedSeriesPoints: roundProbability(1 - teamAExpectedSeriesPoints),
+    uncertaintyPenalty: roundProbability(uncertaintyPenalty),
   }
 }
 
@@ -91,8 +91,8 @@ function binomial(n: number, k: number) {
   return coefficient
 }
 
-function clampProbability(value: number) {
-  return clamp(value, 0, 1)
+function roundProbability(value: number) {
+  return Number(clamp(value, 0, 1).toFixed(4))
 }
 
 function clamp(value: number, min: number, max: number) {

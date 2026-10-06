@@ -21,6 +21,7 @@ import {
   emptyRatingUpdateLedger,
   ratingComponents,
   ratingFromComponents,
+  roundedRatingUpdateLedger,
 } from './ratingCalculations'
 
 type PlacementEventTracker = {
@@ -237,10 +238,10 @@ export function applyCompletedPlacementResiduals({
 
       for (const team of teamsForLeague(league, teams, ratings, tracker)) {
         const current = latestRatingUpdates.get(team) ?? emptyRatingUpdateLedger()
-        latestRatingUpdates.set(team, {
+        latestRatingUpdates.set(team, roundedRatingUpdateLedger({
           ...current,
           leaguePlacementDelta: current.leaguePlacementDelta + delta,
-        })
+        }))
       }
     }
 
@@ -406,7 +407,17 @@ function centeredCappedDeltas(rawDeltas: Map<string, number>, cap: number) {
     else high = offset
   }
   const offset = (low + high) / 2
-  return new Map(entries.map(([league, value]) => [league, clamp(value - offset, -cap, cap)]))
+  const rounded = new Map(entries.map(([league, value]) => [league, Number(clamp(value - offset, -cap, cap).toFixed(1))]))
+  let remainingTenths = Math.round(-sumMapValues(rounded) * 10)
+  const direction = Math.sign(remainingTenths)
+  for (const [league, value] of [...rounded.entries()].sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]))) {
+    if (remainingTenths === 0) break
+    const adjusted = Number((value + direction * 0.1).toFixed(1))
+    if (Math.abs(adjusted) > cap + 1e-9) continue
+    rounded.set(league, adjusted)
+    remainingTenths -= direction
+  }
+  return rounded
 }
 
 function sumMapValues(values: ReadonlyMap<string, number>) {

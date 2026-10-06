@@ -7,10 +7,10 @@ Plan: https://tools.mauroner.net/artifacts/iIlzM7t9T6NOf6XFE5S6-ZuSaZMWaYIE
 - [x] M1
 - [x] M2
 - [x] M3 (warm-up support verified; real history blocked by provider quota)
-- [ ] M4
+- [x] M4 (24 trials rejected; no calibrated interval claim)
 - [ ] M5
-- [ ] M6
-- [ ] M7
+- [x] M6 (six prior boards; policies retained)
+- [x] M7 (hierarchical prototype evaluated and deferred)
 - [ ] M8
 
 ## Decisions
@@ -115,3 +115,9 @@ Plan: https://tools.mauroner.net/artifacts/iIlzM7t9T6NOf6XFE5S6-ZuSaZMWaYIE
 - M4-M7: offline tools use isolated source copies, a 24-trial serial search and fixed whole-event folds. Public boards use explicit prior match membership, quarterly cutoffs and the following 30 days. League fits retain team effects for selected entrants. These tools have no production callers.
 - M5: the old placement pool scaling was reproduced above champion attainment. The replacement conserves the pool while bounding each entrant between participation and champion attainment. Placement residual state is now full precision. No real complete event exists to calibrate the change.
 - Typecheck and lint passed before the simulation helper was added. The simulation's season type was then corrected to numeric; final required checks remain pending.
+
+- Decision after M4: all 24 historical precision/fit candidates failed the declared gate. Preserve the complete precision prototype in `e254c62`, restore the current numerical engine, and retain only verified correctness fixes. No accuracy claim or parameter adoption is made. The restored golden player checks are retained.
+- Parent diagnosis after two likelihood failures: four real 2–2 groups were inferred as completed Bo3s, and three other series had valid scores with uncertified ordering. Repair minimum-format inference, keep impossible scores unknown, and sum legal paths for observed-score likelihood. These are source correctness fixes. The initial search predates this correction and is not relabeled.
+- M6: 1,403 games across 35 events at six exact prior boards. Compression/head-to-head removal passed non-regression but superiority was inconclusive. Other ablations failed. Keep existing versioned ranking policies, with no predictive claim. Board composition now uses exact raw prior state and production's head-to-head helper.
+- M7: all three league priors failed fairness guardrails. Synthetic recovery covers selected qualified leaders, zero-centered team effects and disconnected leagues. Diagonal 95% band coverage was 61.7%; current team heuristic coverage was 90%. Statistical labels are not supported. Evidence-band copy replaces the public likely-range claim.
+- Delivery owner: this agent completes local checks, product journeys, PR and required reviews. Max owns fresh primary history, complete event coverage, unexamined outcomes and any named production action. No production access, publication or deployment is included.

@@ -6,6 +6,7 @@ import { boundedStageExpectations } from '../src/lib/placementResiduals.ts'
 import { simulatedLeagueRows } from '../scripts/lib/ranking-simulations.ts'
 import { fitHierarchicalLeagues } from '../scripts/lib/hierarchical-leagues.ts'
 import { ablatedBoardRating } from '../scripts/lib/public-board-ablation.ts'
+import { effectiveLeagueRating, leaguePriorFor } from '../src/data/leagueTiers.ts'
 import { buildEvaluationData } from '../src/lib/rankingEvaluationData.ts'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model.ts'
 import { sampleMatches, teams } from './fixtures/rankingFixtures.ts'
@@ -56,6 +57,8 @@ test('placement pool expectations cannot exceed champion attainment and preserve
 
 test('hierarchy recovers league order from selected entrants and keeps disconnected leagues provisional', () => {
   const { rows } = simulatedLeagueRows()
+  for (let index = 0; index < 60; index += 1) rows.push({ ...rows[0], id: `disconnected-${index}`, seriesId: `disconnected-${index}`,
+    teamA: 'D0', teamB: 'D1', leagueA: 'D', leagueB: 'D', actual: 1 })
   const fit = fitHierarchicalLeagues(rows, new Map([['A', 0], ['B', 0], ['C', 0], ['D', .7]]), 'A')
   const a = fit.leagues.find((league) => league.league === 'A')!
   const b = fit.leagues.find((league) => league.league === 'B')!
@@ -69,6 +72,9 @@ test('hierarchy recovers league order from selected entrants and keeps disconnec
   // The strongest B entrant can beat a weak A team without making B the stronger league.
   assert.ok(fit.probability('B0', 'B', 'A4', 'A') > .5)
   for (const league of ['A', 'B', 'C']) assert.ok(Math.abs(fit.teams.filter((team) => team.league === league).reduce((sum, team) => sum + team.value, 0)) < 1e-12)
+  const sparse = fitHierarchicalLeagues([...rows, { ...rows[0], id: 'one-link', seriesId: 'one-link', teamA: 'D0', teamB: 'A4', leagueA: 'D', leagueB: 'A', actual: 1 }],
+    new Map([['A', 0], ['B', 0], ['C', 0], ['D', .7]]), 'A').leagues.find((league) => league.league === 'D')!
+  assert.ok(sparse.connected && sparse.provisional && sparse.crossGames === 1)
 })
 
 test('warm-up rows train prior state but cannot enter game, control, series or audit denominators', () => {
@@ -88,9 +94,12 @@ test('public composition matches its prior board and rejects a mismatched score'
   const state = replayRatingDates({ context, replayMatches: sampleMatches })
   const model = materializeRankingModel({ context, state })
   for (const standing of model.standings) {
-    const raw = state.rosterPriorOffsets.get(standing.team) ?? 0
-    assert.ok(Math.abs(ablatedBoardRating(standing, raw, 0, 'current') - standing.rating) < 1e-10)
-    assert.throws(() => ablatedBoardRating({ ...standing, rating: standing.rating + 1 }, raw, 0, 'current'))
+    const raw = { teamRating: state.ratings.get(standing.team)!,
+      leagueScore: effectiveLeagueRating(standing.league, state.leagueScores.get(standing.league) ?? leaguePriorFor(standing.league), state.leagueMatchCounts.get(standing.league) ?? 0),
+      rosterOffset: state.rosterPriorOffsets.get(standing.team) ?? 0, momentum: state.momentums.get(standing.team) ?? 0,
+      uncertainty: state.uncertainties.get(standing.team)!, headToHead: 0 }
+    assert.ok(Math.abs(ablatedBoardRating(standing, raw, 'current') - standing.rating) < 1e-10)
+    assert.throws(() => ablatedBoardRating({ ...standing, rating: standing.rating + 1 }, raw, 'current'))
   }
 })
 
