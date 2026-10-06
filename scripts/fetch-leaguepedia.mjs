@@ -48,7 +48,7 @@ while (true) {
 await mkdir(dirname(output), { recursive: true })
 await writeFile(
   output,
-  `${JSON.stringify({ source: 'Leaguepedia Cargo ScoreboardGames', fetchedAt: new Date().toISOString(), start, end, matches, fetchTelemetry: snapshotProviderFetchTelemetry(fetchTelemetry) }, null, 2)}\n`,
+  `${JSON.stringify({ source: 'Leaguepedia Cargo ScoreboardGames', sourceUrl: cargoExportUrl, fetchedAt: new Date().toISOString(), start, end, matches, fetchTelemetry: snapshotProviderFetchTelemetry(fetchTelemetry) }, null, 2)}\n`,
 )
 
 console.log(`Wrote ${matches.length} matches to ${output}`)

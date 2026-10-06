@@ -73,7 +73,7 @@ test('unchanged gated probe performs no broad provider fetch, crunch, or artifac
   let writes = 0
   const logs: string[] = []
   const result = await runRefreshOnce({
-    env: { RANKING_REFRESH_MODE: 'gated' },
+    env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'false' },
     runId: 'no-change',
     owner: 'worker-1',
     now: () => new Date('2026-07-22T00:00:00Z'),
@@ -111,7 +111,7 @@ test('lease loss during child work prevents trigger-state mutation after the chi
   let assertions = 0
   let writes = 0
   await assert.rejects(() => runRefreshOnce({
-    env: { RANKING_REFRESH_MODE: 'gated' },
+    env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'false' },
     owner: 'old-worker',
     now: () => new Date('2026-07-22T00:00:00Z'),
     monotonicNow: increasingClock(),
@@ -251,14 +251,16 @@ test('startup enforces five-minute gate receipts and lease timing', async () => 
   }), /lease TTL/)
 })
 
-test('daily audit defaults off, is due from last success, and bypasses unchanged probe work without advancing on failure', async () => {
-  assert.equal(isDailyAuditDue({}, {}, '2026-07-23T00:00:00Z'), false)
+test('daily audit defaults on in gated mode, is due from last success, and bypasses unchanged probe work without advancing on failure', async () => {
+  assert.equal(isDailyAuditDue({}, {}, '2026-07-23T00:00:00Z'), true)
   assert.equal(isDailyAuditDue({ RANKING_DAILY_AUDIT_ENABLED: 'true' }, {}, '2026-07-23T00:00:00Z'), true)
   assert.equal(isDailyAuditDue({ RANKING_DAILY_AUDIT_ENABLED: 'true' }, { lastSuccessfulDailyAuditAt: '2026-07-22T12:00:00Z' }, '2026-07-23T00:00:00Z'), false)
+  assert.equal(isDailyAuditDue({ RANKING_DAILY_AUDIT_ENABLED: 'false' }, {}, '2026-07-23T00:00:00Z'), false)
+  assert.equal(isDailyAuditDue({ RANKING_REFRESH_MODE: 'shadow' }, {}, '2026-07-23T00:00:00Z'), false)
   let childRuns = 0
   const result = await runRefreshOnce({
     ...baseOptions([]),
-    env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'true' },
+    env: { RANKING_REFRESH_MODE: 'gated' },
     runChild: async () => { childRuns += 1 },
     readJson: async () => ({ matches: [] }),
   })
@@ -431,7 +433,7 @@ test('published child telemetry remains canonical in result, trigger state, and 
   try {
     const result = await runRefreshOnce({
       ...baseOptions(logs),
-      env: { RANKING_REFRESH_MODE: 'gated', RANKING_REFRESH_METRICS_PATH: metricsPath },
+      env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'false', RANKING_REFRESH_METRICS_PATH: metricsPath },
       runId: canonical.runId,
       fetchProbe: async () => ({
         checkedAt: '2026-07-22T00:00:00Z',
@@ -668,6 +670,7 @@ function realParentOptions(paths: RefreshTestPaths, client: ReturnType<typeof me
   return {
     env: {
       RANKING_REFRESH_MODE: 'gated',
+      RANKING_DAILY_AUDIT_ENABLED: 'false',
       RANKING_REFRESH_METRICS_PATH: paths.metrics,
       RANKING_REFRESH_STATE: paths.refreshState,
       RANKING_RECONCILIATION_OUTPUT: paths.reconciliation,
@@ -798,7 +801,7 @@ function argValue(args: string[], flag: string) {
 function baseOptions(logs: string[]) {
   let writes = 0
   return {
-    env: { RANKING_REFRESH_MODE: 'gated' },
+    env: { RANKING_REFRESH_MODE: 'gated', RANKING_DAILY_AUDIT_ENABLED: 'false' },
     owner: 'worker',
     now: () => new Date('2026-07-22T00:00:00Z'),
     monotonicNow: increasingClock(),

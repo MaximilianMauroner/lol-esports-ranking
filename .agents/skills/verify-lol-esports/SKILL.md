@@ -29,6 +29,8 @@ Establish where the browser runs. Prefer the environment-port preview target.
 If it needs a network address, bind the owned instance with `--host 0.0.0.0`
 and use its actual reachable address. HTTP readiness alone is not browser proof.
 Use T3 preview status/open/navigate/snapshot and current role/name locators.
+If preview open explicitly reports unsupported or unavailable, use an available
+headless Chromium browser against the same owned instance and report that fallback.
 Run journeys serially. Record browser reachability separately from HTTP.
 If navigation fails, recheck readiness and retry once. Keep absent shards,
 unavailable model evidence, harness failures and confirmed UI regressions
@@ -38,6 +40,19 @@ Supporting checks are `pnpm verify`, public artifact tests, archive browser
 tests and tournament tests. Do not repeat memory benchmarks owned by another
 agent or run `release:check` merely for a procedure edit. Tests do not replace
 live browser actions.
+
+For automatic tournament ingestion, run
+`pnpm exec tsx --tsconfig tsconfig.app.json --test tests/automaticTournamentIngestion.test.ts tests/refreshOnce.test.ts`.
+It runs the Railway refresh wrapper against a local Cargo fixture, checks baseline
+preservation across two date windows, and checks both year and global ledgers.
+The refresh tests also check discovery when the official probe has no new match,
+explicit audit opt-out, shadow defaults, and success receipt requirements.
+These tests use no provider or bucket credentials and make no production writes.
+For L6, generate an isolated offline fixture from its captured games and domestic
+evidence. Compare the ledger before and after home-league resolution, select the
+event in both All seasons and its year, expand a series, and reload its deep link.
+Label the fixture as offline verification, preserve source/model provenance, and
+restore the worktree's committed public artifacts after captures.
 
 Before captures, exclude the owned `.agents/artifacts/<run-id>/` directory
 through Git's local exclude file and confirm it with `git check-ignore`. Do not

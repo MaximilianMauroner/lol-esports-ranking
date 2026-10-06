@@ -15,8 +15,9 @@ Ranking claims must retain source manifest and model/config identity.
 | L7 | With the documented tournament flag enabled in an owned instance, inspect schedule, Play-In, knockout and ledger paths. Schedule reference stays separate from scored rankings; predictions identify model and observed rules. | TournamentsView; tournamentBrowser, worldsObservedRules, canonical series and prediction tests | Stop flagged instance. |
 | L8 | Open mobile-width and desktop pages, use keyboard controls, change views and reload deep links. No inaccessible controls, misleading error state or uncaught browser error. | app shell, URL state and UI controls; bootstrap and SEO tests | Restore viewport and default hash. |
 | L9 | Run `pnpm ranking:baseline` on the committed receipt. It verifies identity without network or bucket mutation. | ranking restart baseline script and receipt tests | No remote state created. |
+| L10 | Run the local automatic tournament ingestion regression. A second date-window refresh preserves domestic history, deduplicates overlapping games, and retains the new event in global and year ledgers with series-atomic rating updates. Check gated audit discovery with an unchanged official probe, explicit opt-out and shadow defaults. Then exercise L6 with the offline fixture. | automaticTournamentIngestion and refreshOnce tests; captured Demacia Cup 2026 fixture; ranking-source-import and teamProfiles | Remove owned temporary data and restore committed public artifacts. |
 
-Browser groups L1-L8 stay blocked until T3 reaches the owned server. Missing
+Browser groups L1-L8 stay blocked until an allowed browser reaches the owned server. Missing
 static data stays explicit. A disabled tournament hub is an intentional flag,
 not a product failure. Production cadence, activation, artifact publication,
 presigned delivery and deletion are outside this procedure's authority.

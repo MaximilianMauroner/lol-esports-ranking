@@ -671,7 +671,8 @@ function pendingDetectedAt(state, matchIds) {
 }
 
 export function isDailyAuditDue(env, value, now) {
-  if (env.RANKING_DAILY_AUDIT_ENABLED !== 'true') return false
+  const enabled = env.RANKING_DAILY_AUDIT_ENABLED ?? (refreshMode(env.RANKING_REFRESH_MODE) === 'gated' ? 'true' : 'false')
+  if (enabled !== 'true') return false
   const intervalMs = numberEnv(env, 'RANKING_DAILY_AUDIT_INTERVAL_MS', 24 * 60 * 60_000)
   return new Date(now).getTime() - new Date(value.lastSuccessfulDailyAuditAt ?? 0).getTime() >= intervalMs
 }
