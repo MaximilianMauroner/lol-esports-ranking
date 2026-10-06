@@ -11,8 +11,8 @@ export function predictionVariantFromWinProbability(
     teamBGameWinProbability: prediction.teamBGameWinProbability,
     teamASeriesWinProbability: prediction.teamASeriesWinProbability,
     teamBSeriesWinProbability: prediction.teamBSeriesWinProbability,
-    teamARating: Math.round(teamARating),
-    teamBRating: Math.round(teamBRating),
+    teamARating: teamARating,
+    teamBRating: teamBRating,
   }
 }
 

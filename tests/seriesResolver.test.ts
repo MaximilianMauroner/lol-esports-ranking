@@ -55,6 +55,21 @@ test('an ambiguous fallback 1-1 group is not treated as a completed Bo2', () => 
   assert.equal(series?.state, 'unknown')
 })
 
+test('a fallback 2-2 prefix cannot become a completed Bo3', () => {
+  const series = resolveCanonicalSeries(['Alpha', 'Beta', 'Alpha', 'Beta'].map((winner, index) => fixture({
+    id: `prefix-${index}`, sourceGameId: `prefix_game_${index + 1}`, winner, bestOf: 1, bestOfBasis: 'fallback',
+  })))[0]
+  assert.equal(series.format, 5)
+  assert.equal(series.state, 'ongoing')
+})
+
+test('a trusted format with an impossible winning score stays unknown', () => {
+  const series = resolveCanonicalSeries(['Alpha', 'Alpha', 'Alpha', 'Alpha'].map((winner, index) => fixture({
+    id: `invalid-${index}`, sourceGameId: `invalid_game_${index + 1}`, winner, bestOf: 5, bestOfBasis: 'provider',
+  })))[0]
+  assert.equal(series.state, 'unknown')
+})
+
 test('canonical resolver distinguishes completed Bo3 and Bo5 scores from incomplete series', () => {
   const cases = [
     { id: 'bo3-2-1', bestOf: 3, winners: ['Alpha', 'Beta', 'Alpha'], state: 'completed' },

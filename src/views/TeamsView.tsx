@@ -1620,7 +1620,7 @@ function TeamDetailDrawer({
 
           <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--detail-surface-2)] p-3">
             <summary className="cursor-pointer text-sm font-semibold">How the score is built</summary>
-            <p className="mt-3 text-sm text-[var(--muted)]">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The score has an uncertainty of {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}, so ranks inside that band can swap. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The model evidence band is {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}. Close ranks can swap as new evidence arrives. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-[var(--muted)] [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-[var(--muted)]">
               {!tournament ? (
                 <span title={powerResumeGap?.title}>

@@ -10,7 +10,7 @@ type Format = typeof FORMATS[number]
 /**
  * Who would win, answered first. The comparison table used to open with model
  * internals and never showed the win chance, which is why most people compare.
- * The band under the bar is the model's likely range from team uncertainty.
+ * The band under the bar shows sensitivity to the model's team evidence bands.
  */
 export function HeadToHead({ home, away, model }: { home: RankingSummaryStanding; away: RankingSummaryStanding; model?: PublicMatchupModel }) {
   const [format, setFormat] = useState<Format>('3')
@@ -58,7 +58,7 @@ export function HeadToHead({ home, away, model }: { home: RankingSummaryStanding
       </div>
       <p className="text-sm text-[var(--muted)]">
         {low !== undefined && high !== undefined
-          ? <>Likely range for {homeName}: {low}% to {high}%. {low < 50 && high > 50 ? 'Either team can win this.' : `${homeChance >= 50 ? homeName : awayName} are favoured.`} </>
+          ? <>Model evidence range for {homeName}: {low}% to {high}%. {low < 50 && high > 50 ? 'Either team can win this.' : `${homeChance >= 50 ? homeName : awayName} are favoured.`} </>
           : null}
         <span className="text-xs text-[var(--faint)]">Neutral side, best of {bestOf}. Model {formatModelVersion(model?.version)}.</span>
       </p>

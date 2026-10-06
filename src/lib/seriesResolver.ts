@@ -175,16 +175,17 @@ function formatResult(
 
 function scoreProvenFormat(winsA: number, winsB: number): SeriesFormat {
   const maximumWins = Math.max(winsA, winsB)
-  if (maximumWins >= 3) return 5
+  if (maximumWins >= 3 || winsA + winsB > 3) return 5
   if (maximumWins >= 2) return 3
   return 1
 }
 
 function seriesState(format: SeriesFormat, winsA: number, winsB: number, games: number): SeriesState {
   if (games === 0) return 'scheduled'
-  if (format === 2 && winsA === 1 && winsB === 1) return 'completed'
-  if (format === 1 && games > 1) return 'unknown'
+  if (games > format) return 'unknown'
+  if (format === 2) return games === 2 ? 'completed' : 'ongoing'
   const winsNeeded = Math.floor(format / 2) + 1
+  if (winsA > winsNeeded || winsB > winsNeeded) return 'unknown'
   if (Math.max(winsA, winsB) >= winsNeeded) return 'completed'
   return 'ongoing'
 }

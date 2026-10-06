@@ -21,7 +21,6 @@ import {
   emptyRatingUpdateLedger,
   ratingComponents,
   ratingFromComponents,
-  roundedRatingUpdateLedger,
 } from './ratingCalculations'
 
 type PlacementEventTracker = {
@@ -238,10 +237,10 @@ export function applyCompletedPlacementResiduals({
 
       for (const team of teamsForLeague(league, teams, ratings, tracker)) {
         const current = latestRatingUpdates.get(team) ?? emptyRatingUpdateLedger()
-        latestRatingUpdates.set(team, roundedRatingUpdateLedger({
+        latestRatingUpdates.set(team, {
           ...current,
           leaguePlacementDelta: current.leaguePlacementDelta + delta,
-        }))
+        })
       }
     }
 
@@ -312,16 +311,32 @@ function expectedStagePointsByLeague(
       points: config.baseStagePoints + contenderShare * (config.maxStagePoints - config.baseStagePoints),
     }
   })
-  const rawExpectedPool = rawTeamPoints.reduce((total, entry) => total + entry.points, 0) || 1
-  const poolScale = actualPointPool / rawExpectedPool
+  const expected = boundedStageExpectations(rawTeamPoints.map((entry) => entry.points), actualPointPool,
+    config.baseStagePoints, config.maxStagePoints)
 
-  rawTeamPoints.forEach((entry) => {
+  rawTeamPoints.forEach((entry, index) => {
     const league = tracker.teamLeagues.get(entry.team) ?? teams[entry.team]?.league ?? 'Unknown'
-    const expectedPoints = entry.points * poolScale
+    const expectedPoints = expected[index]
     byLeague.set(league, (byLeague.get(league) ?? 0) + expectedPoints)
   })
 
   return byLeague
+}
+
+/** Preserve the event pool without assigning an impossible attainment to an entrant. */
+export function boundedStageExpectations(weights: readonly number[], pool: number, minimum: number, maximum: number) {
+  if (!weights.length || weights.some((weight) => !Number.isFinite(weight) || weight <= 0)
+    || !Number.isFinite(pool) || !Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum < 0 || minimum > maximum
+    || pool < weights.length * minimum || pool > weights.length * maximum) throw new Error('Infeasible stage expectation pool')
+  let low = 0
+  let high = maximum / Math.min(...weights)
+  for (let iteration = 0; iteration < 100; iteration += 1) {
+    const scale = (low + high) / 2
+    const total = weights.reduce((sum, weight) => sum + clamp(weight * scale, minimum, maximum), 0)
+    if (total < pool) low = scale
+    else high = scale
+  }
+  return weights.map((weight) => clamp(weight * (low + high) / 2, minimum, maximum))
 }
 
 function representativesByLeague(tracker: PlacementEventTracker, teams: Record<string, TeamProfile>) {
@@ -391,17 +406,7 @@ function centeredCappedDeltas(rawDeltas: Map<string, number>, cap: number) {
     else high = offset
   }
   const offset = (low + high) / 2
-  const rounded = new Map(entries.map(([league, value]) => [league, Number(clamp(value - offset, -cap, cap).toFixed(1))]))
-  let remainingTenths = Math.round(-sumMapValues(rounded) * 10)
-  const direction = Math.sign(remainingTenths)
-  for (const [league, value] of [...rounded.entries()].sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]))) {
-    if (remainingTenths === 0) break
-    const adjusted = Number((value + direction * 0.1).toFixed(1))
-    if (Math.abs(adjusted) > cap + 1e-9) continue
-    rounded.set(league, adjusted)
-    remainingTenths -= direction
-  }
-  return rounded
+  return new Map(entries.map(([league, value]) => [league, clamp(value - offset, -cap, cap)]))
 }
 
 function sumMapValues(values: ReadonlyMap<string, number>) {

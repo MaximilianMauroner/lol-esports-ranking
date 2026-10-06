@@ -5,8 +5,8 @@ Plan: https://tools.mauroner.net/artifacts/iIlzM7t9T6NOf6XFE5S6-ZuSaZMWaYIE
 ## Progress
 
 - [x] M1
-- [ ] M2
-- [ ] M3
+- [x] M2
+- [x] M3 (warm-up support verified; real history blocked by provider quota)
 - [ ] M4
 - [ ] M5
 - [ ] M6
@@ -108,3 +108,10 @@ Plan: https://tools.mauroner.net/artifacts/iIlzM7t9T6NOf6XFE5S6-ZuSaZMWaYIE
 - Benchmark boundaries: exporter owns source I/O; evaluation data owns target/cohort conversion and audit; numerical evaluator owns validation/metrics; controls are read-only offline comparisons. No new production service or dependency.
 
 - M1 closed: frozen exports reproduce exactly; typecheck and seven regression checks passed; baseline and data-quality evidence are in report.md. A1 closes. A2 retains unknown as-published source availability instead of claiming it.
+
+- M2: full-precision state, probabilities, components and ledgers now survive series updates. The model/config identity changes to v0.2.1. Checkpoints from the old identity require a full replay. Public scale formatting stays in the public converters. No old engine or compatibility fallback was added.
+- M2 verification: 84 focused precision, checkpoint, full/incremental replay and model tests passed. The first precision tests failed against the original rounded code. An exact float-share assertion now uses a tight tolerance. Two obsolete golden hashes were removed from the import-compaction test; full/lean semantic artifact equality and source-reference checks remain. The changed model identity and fractional player state made the old byte pins invalid.
+- M3: the scored-start boundary is regression-tested across game, series, control and audit rows. Earlier games train state while scored denominators remain unchanged. Both 2023/2024 provider downloads failed with quota-exceeded HTML. No warm-up benefit or cost is claimed. Later experiments use the explicit cold-start corpus.
+- M4-M7: offline tools use isolated source copies, a 24-trial serial search and fixed whole-event folds. Public boards use explicit prior match membership, quarterly cutoffs and the following 30 days. League fits retain team effects for selected entrants. These tools have no production callers.
+- M5: the old placement pool scaling was reproduced above champion attainment. The replacement conserves the pool while bounding each entrant between participation and champion attainment. Placement residual state is now full precision. No real complete event exists to calibrate the change.
+- Typecheck and lint passed before the simulation helper was added. The simulation's season type was then corrected to numeric; final required checks remain pending.

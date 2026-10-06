@@ -207,8 +207,8 @@ function buildStaticRosterPlayerModel(
         const rating = ratings.get(player.id) ?? initialPlayerRating
         const playerShare = shares.get(player.id) ?? fallbackPlayerShare(player)
         const shareMultiplier = playerShare.playerShare / 0.2
-        const delta = Number((((won ? 1.6 : -1.1) * eventWeight + dominance * 5) * shareMultiplier).toFixed(1))
-        const nextRating = Number((rating + delta).toFixed(1))
+        const delta = ((won ? 1.6 : -1.1) * eventWeight + dominance * 5) * shareMultiplier
+        const nextRating = rating + delta
         finalShares.set(player.id, playerShare)
         ratings.set(player.id, nextRating)
         appendPlayerForm(forms, player.id, won ? 'W' : 'L')
@@ -692,9 +692,9 @@ function applySourcedPlayerUpdates(
         const opponentRating = preUpdateRatings.get(opponentPlayer.id) ?? opponentLeagueBaseline
         const expected = expectedPlayerScore(rating, opponentRating)
         const performance = playerPerformance(player, opponentPlayer)
-        const delta = Number((sourcedPlayerKFactor * eventWeight * (performance - expected)).toFixed(1))
+        const delta = sourcedPlayerKFactor * eventWeight * (performance - expected)
         const currentRating = state.ratings.get(player.id) ?? rating
-        const nextRating = Number((currentRating + delta).toFixed(1))
+        const nextRating = currentRating + delta
         const currentPublishedRating = publishedPlayerRating(currentRating, league, leagueRatings)
         const nextPublishedRating = publishedPlayerRating(nextRating, league, leagueRatings)
         state.ratings.set(player.id, nextRating)
@@ -1213,7 +1213,7 @@ function playerEdgeForRoster(
   const adjustment = cappedPlayerPregameEdge(playerPregameEdgeCoefficient * weightedMeanEdge * coverage * freshnessWeight)
 
   return {
-    adjustment: Number(adjustment.toFixed(1)),
+    adjustment,
     coverage: roundShare(coverage),
     freshnessWeight,
   }
@@ -1292,11 +1292,11 @@ function leagueForProfile(profile: PlayerProfile, context: PlayerRatingContext) 
 
 function playerBaselineForLeague(league: string, leagueRatings: Map<string, number>) {
   const leagueRating = cappedLeagueRatingForTier(league, leagueRatings.get(league) ?? leaguePriorFor(league))
-  return Number(clamp(
+  return clamp(
     initialPlayerRating + (leagueRating - playerLeagueAnchorRating) * playerLeagueBaselineCoefficient,
     playerLeagueBaselineBounds.min,
     playerLeagueBaselineBounds.max,
-  ).toFixed(1))
+  )
 }
 
 function publishedPlayerRating(rawRating: number, league: string, leagueRatings: Map<string, number>) {

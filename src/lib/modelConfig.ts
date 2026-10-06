@@ -76,7 +76,7 @@ export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'entity-local-composable-half-life-regression-v1'
 export const ratingUpdateRecencyWeight = 1
 export const leagueExpectedScoreSource = 'pregame-neutral-series-team-power'
-export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-player-performance-v16'
+export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-feasible-series-player-performance-v17'
 export const lineupEvidencePolicy = 'prior-observed-series-evidence-with-90-day-half-life-v1'
 export const partialLineupPolicy = 'role-weighted-known-player-evidence-v1'
 export const substituteEraPolicy = 'three-series-or-twenty-percent-split-share-v1'
@@ -86,7 +86,7 @@ export const rankingTarget = 'context-neutral-latent-team-strength'
 export const matchOutcomeTargetPolicy = 'match-outcomes-are-evidence-not-ranking-target'
 export const canonicalUpdateUnitPolicy = 'series-atomic-team-and-league-strength'
 export const residualBudgetPolicy = 'base-evidence-and-realized-delta-budget-v2'
-export const latentStrengthBudgetShareSemantics = 'configured shares apply to base evidence; uncertainty, roster volatility, transfer shrinkage, momentum decay, caps, and rounding determine realized movement'
+export const latentStrengthBudgetShareSemantics = 'configured shares apply to base evidence; uncertainty, roster volatility, transfer shrinkage, momentum decay, and caps determine realized movement'
 export const latentStrengthResultBudgetShares = {
   teamStable: 0.9,
   teamForm: 0.1,
@@ -145,7 +145,7 @@ export const tournamentPlacementStagePoints = {
   knockout: 3,
   participation: 1,
 } as const
-export const tournamentPlacementPolicy = 'highest-attainment-centered-league-residual-aligned-scale-v2'
+export const tournamentPlacementPolicy = 'highest-attainment-bounded-pool-full-precision-league-residual-v3'
 export const playerRatingPredictionPolicy = {
   key: 'player-rating',
   mode: 'live',
@@ -162,8 +162,10 @@ export const playerRatingPredictionPolicy = {
 } as const satisfies PredictionFeaturePolicy
 export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingPredictionPolicy)
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)
-export const transparentGprModelVersion = 'transparent-power-index-v0.2.0'
+export const ratingPrecisionPolicy = 'full-precision-state-probabilities-and-internal-components-v1'
+export const transparentGprModelVersion = 'transparent-power-index-v0.2.1'
 export const transparentGprModelParameters = {
+  ratingPrecisionPolicy,
   matchHistoryDeltaPolicy: 'public-components-before-and-after-v2',
   initialTeamRating,
   initialLeagueRating,

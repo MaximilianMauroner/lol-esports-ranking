@@ -108,8 +108,8 @@ test('international ledger separates configured evidence shares from realized mo
   const baseForm = update.baseTeamFormDelta ?? 0
   const baseLeague = update.baseLeagueDelta ?? 0
 
-  assert.equal(update.teamStableShare, 0.79)
-  assert.equal(update.teamFormShare, 0.09)
+  assert.equal(update.teamStableShare, 0.792)
+  assert.ok(Math.abs((update.teamFormShare ?? 0) - 0.088) < 1e-12)
   assert.equal(update.leagueSignalShare, 0.12)
   assert.ok(Math.abs(baseStable + baseForm + baseLeague - baseEvidence) <= 0.2)
   assert.ok(Math.abs(baseStable / baseEvidence - 0.792) <= 0.01)
@@ -646,7 +646,7 @@ test('published roster prior caps positive player signal for sustained losing re
   assert.equal(publishedRosterPriorOffset(24, 3, 8), 24)
   assert.equal(publishedRosterPriorOffset(24, 12, 12), 24)
   assert.equal(publishedRosterPriorOffset(24, 9, 21), 6)
-  assert.equal(publishedRosterPriorOffset(24, 5, 7), 14)
+  assert.ok(Math.abs(publishedRosterPriorOffset(24, 5, 7) - 14) < 1e-10)
   assert.equal(publishedRosterPriorOffset(-24, 9, 21), -24)
 })
 
@@ -709,7 +709,7 @@ test('post-Worlds preseason games are discounted except Demacia Cup, which keeps
   assert.equal(eventWeightForMatch(demaciaCup, context), eventWeightForMatch(ewc, context))
   const ranking = buildRankingModel([worldsFinal, demaciaCup], { ...teams })
   const demaciaHistory = standingFor(ranking, 'Alpha').history.find((point) => point.event === demaciaCup.event)
-  assert.equal(demaciaHistory?.ratingUpdate.eventWeight, Number((23 / 14).toFixed(3)))
+  assert.equal(demaciaHistory?.ratingUpdate.eventWeight, 23 / 14)
 })
 
 test('Esports World Cup does not start the post-Worlds preseason window', () => {
@@ -1684,12 +1684,12 @@ function standingFor(model: ReturnType<typeof buildRankingModel>, team: string) 
 
 function componentRating(standing: { ratingComponents: ReturnType<typeof standingFor>['ratingComponents'] }) {
   const components = standing.ratingComponents
-  return Math.round(
+  return (
     components.leagueAnchor
     + components.teamStableOffset
     + components.rosterPriorOffset
     + components.momentum
-    + components.contextAdjustment,
+    + components.contextAdjustment
   )
 }
 

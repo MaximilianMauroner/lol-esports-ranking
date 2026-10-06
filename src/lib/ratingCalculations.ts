@@ -28,7 +28,7 @@ export function expectedScore(ratingA: number, ratingB: number) {
 
 export function recencyWeight(date: string, lastDate: string) {
   const days = Math.max(0, (Date.parse(lastDate) - Date.parse(date)) / 86_400_000)
-  return Number((2 ** (-days / recencyHalfLifeDays)).toFixed(3))
+  return 2 ** (-days / recencyHalfLifeDays)
 }
 
 export function nextUncertainty(
@@ -150,12 +150,12 @@ export function ratingComponents({
   uncertainty: number
 }): RatingComponents {
   return {
-    leagueAnchor: Math.round(leagueScore),
-    teamStableOffset: Math.round(publishedTeamStableOffset(teamRating - initialTeamRating)),
-    rosterPriorOffset: Number(rosterPriorOffset.toFixed(1)),
-    momentum: Number(momentum.toFixed(1)),
-    contextAdjustment: Number(contextAdjustment.toFixed(1)),
-    uncertainty: Math.round(uncertainty),
+    leagueAnchor: leagueScore,
+    teamStableOffset: publishedTeamStableOffset(teamRating - initialTeamRating),
+    rosterPriorOffset: rosterPriorOffset,
+    momentum: momentum,
+    contextAdjustment: contextAdjustment,
+    uncertainty: uncertainty,
   }
 }
 
@@ -197,7 +197,7 @@ export function publishedLeagueAnchorContextAdjustment(
   if (leagueGap === 0 || Math.sign(leagueGap) === Math.sign(stableOffset)) return 0
 
   const adjustment = Math.min(config.maxAdjustment, Math.abs(leagueGap) * config.leagueGapShare)
-  return Number((Math.sign(stableOffset) * adjustment).toFixed(1))
+  return Math.sign(stableOffset) * adjustment
 }
 
 export function evidenceWeightedPublishedLeagueAnchor(
@@ -242,12 +242,12 @@ export function publishedRosterPriorOffset(
 
   const winRate = games > 0 ? wins / games : config.fullScaleWinRate
   if (winRate >= config.fullScaleWinRate) return rawOffset
-  if (winRate <= config.floorScaleWinRate) return Number((rawOffset * config.floorScale).toFixed(1))
+  if (winRate <= config.floorScaleWinRate) return rawOffset * config.floorScale
 
   const capRange = config.fullScaleWinRate - config.floorScaleWinRate
   const progress = capRange > 0 ? (winRate - config.floorScaleWinRate) / capRange : 1
   const scale = config.floorScale + (1 - config.floorScale) * progress
-  return Number((rawOffset * scale).toFixed(1))
+  return rawOffset * scale
 }
 
 export function emptyRatingUpdateLedger(): RatingUpdateLedger {
@@ -284,51 +284,12 @@ export function emptyRatingUpdateLedger(): RatingUpdateLedger {
   }
 }
 
-export function roundedRatingUpdateLedger(update: RatingUpdateLedger): RatingUpdateLedger {
-  return {
-    teamStableDelta: Number(update.teamStableDelta.toFixed(1)),
-    leagueGameDelta: Number(update.leagueGameDelta.toFixed(1)),
-    leaguePlacementDelta: Number(update.leaguePlacementDelta.toFixed(1)),
-    momentumDelta: Number(update.momentumDelta.toFixed(1)),
-    rosterPriorDelta: Number(update.rosterPriorDelta.toFixed(1)),
-    uncertaintyDelta: Number(update.uncertaintyDelta.toFixed(1)),
-    sideAdjustment: Number(update.sideAdjustment.toFixed(1)),
-    patchAdjustment: Number(update.patchAdjustment.toFixed(1)),
-    ratingTarget: update.ratingTarget,
-    updateUnit: update.updateUnit,
-    ...(update.eventWeight !== undefined ? { eventWeight: roundOptional(update.eventWeight, 3) } : {}),
-    resultEvidence: roundOptional(update.resultEvidence, 1),
-    baseTeamStableDelta: roundOptional(update.baseTeamStableDelta, 1),
-    baseTeamFormDelta: roundOptional(update.baseTeamFormDelta, 1),
-    baseLeagueDelta: roundOptional(update.baseLeagueDelta, 1),
-    uncertaintyMultiplier: roundOptional(update.uncertaintyMultiplier, 3),
-    rosterVolatilityMultiplier: roundOptional(update.rosterVolatilityMultiplier, 3),
-    stableTransferWeight: roundOptional(update.stableTransferWeight, 3),
-    neutralResultResidual: roundOptional(update.neutralResultResidual, 3),
-    seriesStrengthSignal: roundOptional(update.seriesStrengthSignal, 3),
-    teamStableShare: roundOptional(update.teamStableShare, 2),
-    teamFormShare: roundOptional(update.teamFormShare, 2),
-    playerSignalShare: roundOptional(update.playerSignalShare, 2),
-    lineupSignalShare: roundOptional(update.lineupSignalShare, 2),
-    leagueSignalShare: roundOptional(update.leagueSignalShare, 2),
-    directRegionSignalShare: roundOptional(update.directRegionSignalShare, 2),
-    playerSignalDelta: roundOptional(update.playerSignalDelta, 1),
-    lineupSignalDelta: roundOptional(update.lineupSignalDelta, 1),
-    directRegionSignalDelta: roundOptional(update.directRegionSignalDelta, 1),
-    unavailableChannels: update.unavailableChannels ?? [],
-  }
-}
-
-function roundOptional(value: number | undefined, digits: number) {
-  return Number((value ?? 0).toFixed(digits))
-}
-
 function roundScaledDelta(value: number, scale: PublishedRatingScale) {
   return Number(toPublishedRatingDelta(value, scale).toFixed(1))
 }
 
 export function leagueAdjustment(teamRating: number, leagueRating: number) {
-  return Math.round(powerRating(teamRating, leagueRating) - teamRating)
+  return powerRating(teamRating, leagueRating) - teamRating
 }
 
 export function gameKFor(match: MatchRecord, eventWeightContext?: EventWeightContext, resolvedBestOf = match.bestOf) {
