@@ -786,6 +786,64 @@ test('exact timestamped anchors keep same-day rematches and ordinal-bearing seri
   }
 })
 
+test('small provider clock differences preserve the corroborated GiantX EWC qualifier sweep as one series', () => {
+  const oracle = importOraclesElixirCsv([
+    'gameid,date,year,league,playoffs,patch,position,side,teamname,result,kills,totalgold,gamelength',
+    'LOLTMNT05_185795,2026-04-29 15:01:23,2026,EWC,0,16.08,team,Blue,Natus Vincere,1,22,69790,1952',
+    'LOLTMNT05_185795,2026-04-29 15:01:23,2026,EWC,0,16.08,team,Red,GIANTX,0,13,61121,1952',
+    'LOLTMNT05_185805,2026-04-29 16:02:27,2026,EWC,0,16.08,team,Blue,Natus Vincere,1,24,62522,1591',
+    'LOLTMNT05_185805,2026-04-29 16:02:27,2026,EWC,0,16.08,team,Red,GIANTX,0,9,47979,1591',
+  ].join('\n')).matches
+  const leaguepedia = importLeaguepediaSnapshot({ matches: [
+    { id: 'Esports World Cup 2026/Online Qualifiers/EMEA_Round 2_2_1', date: '2026-04-29',
+      datetimeUtc: '2026-04-29 15:04:00', event: 'Esports World Cup 2026/Online Qualifiers/EMEA', patch: '26.08',
+      teamA: 'Natus Vincere', teamB: 'GIANTX', winner: 'Natus Vincere',
+      teamAKills: 22, teamBKills: 13, teamAGold: 69790, teamBGold: 61121 },
+    { id: 'Esports World Cup 2026/Online Qualifiers/EMEA_Round 2_2_2', date: '2026-04-29',
+      datetimeUtc: '2026-04-29 16:02:00', event: 'Esports World Cup 2026/Online Qualifiers/EMEA', patch: '26.08',
+      teamA: 'Natus Vincere', teamB: 'GIANTX', winner: 'Natus Vincere',
+      teamAKills: 24, teamBKills: 9, teamAGold: 62522, teamBGold: 47979 },
+  ] }).matches
+  assert.ok([...oracle, ...leaguepedia].every((match) => match.bestOfBasis === 'fallback'))
+  const merged = mergeCommunityMatchSources({ oracleMatches: oracle, leaguepediaMatches: leaguepedia })
+  assert.deepEqual(merged.map((match) => match.id), oracle.map((match) => match.id))
+  assert.deepEqual(merged.map((match) => match.sourceMatchId), leaguepedia.map((match) => match.sourceGameId))
+  assert.deepEqual(merged.map((match) => match.gameNumber), [1, 2])
+  const series = resolveCanonicalSeries(merged)
+  assert.equal(series.length, 1)
+  assert.equal(series[0].format, 3)
+  assert.equal(series[0].state, 'completed')
+  assert.deepEqual([series[0].winsA, series[0].winsB].sort(), [0, 2])
+})
+
+test('bounded provider clock differences still require unique scoreboard identities in both directions', () => {
+  const oracle = matchFixture({ id: 'oe-bounded-clock', sourceProvider: 'oracles-elixir', sourceGameId: 'opaque-bounded-clock',
+    datetimeUtc: '2026-01-01T10:00:00Z' })
+  const leaguepedia = { ...oracle, id: 'lp-bounded-clock', sourceProvider: 'leaguepedia-cargo' as const,
+    sourceGameId: 'LCK/2026 Spring_ClockBound_1' }
+  for (const seconds of [300, 301]) {
+    const timedDuplicate = { ...leaguepedia, datetimeUtc: new Date(Date.parse(oracle.datetimeUtc!) + seconds * 1000).toISOString() }
+    const merged = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: [timedDuplicate] })
+    assert.equal(merged.length, 1)
+    assert.equal(merged[0].sourceMatchId, seconds === 300 ? leaguepedia.sourceGameId : undefined)
+  }
+  const sameStatsLeaguepedia = [60, 180].map((seconds, index) => ({ ...leaguepedia,
+    id: `lp-close-clock-${index}`, sourceGameId: `LCK/2026 Spring_CloseClock${index}_1`,
+    datetimeUtc: new Date(Date.parse(oracle.datetimeUtc!) + seconds * 1000).toISOString() }))
+  for (const order of [sameStatsLeaguepedia, [...sameStatsLeaguepedia].reverse()]) {
+    const merged = mergeCommunityMatchSources({ oracleMatches: [oracle], leaguepediaMatches: order })
+    assert.ok(merged.every((match) => match.sourceMatchId === undefined))
+  }
+  const sameStatsOracles = [oracle, { ...oracle, id: 'oe-close-clock', sourceGameId: 'opaque-close-clock',
+    datetimeUtc: '2026-01-01T10:04:00Z' }]
+  for (const order of [sameStatsOracles, [...sameStatsOracles].reverse()]) {
+    const merged = mergeCommunityMatchSources({ oracleMatches: order,
+      leaguepediaMatches: [{ ...leaguepedia, datetimeUtc: '2026-01-01T10:02:00Z' }] })
+    assert.equal(merged.length, 2)
+    assert.ok(merged.every((match) => match.sourceMatchId === undefined))
+  }
+})
+
 test('same-provider stable game IDs retain equal-score games and remove repeated IDs despite clock corrections', () => {
   for (const provider of ['oracles-elixir', 'leaguepedia-cargo'] as const) {
     const first = matchFixture({ id: 'identified-first', sourceProvider: provider,
@@ -891,7 +949,7 @@ test('result-only and conflicting-time duplicates cannot provide scored series a
   assert.equal(durationConflict[0].sourceMatchId, undefined)
 })
 
-test('eight exact scoreboard duplicates with clock corrections and source patch aliases add no game rows or series anchors', () => {
+test('eight exact scoreboard duplicates with source patch aliases add no game rows and link only bounded clocks', () => {
   const offsets = [82, 121, 159, 409, 714, 1236, 2151, 2821]
   const oracle = offsets.map((_, index) => matchFixture({ id: `oe-clock-${index}`,
     sourceProvider: 'oracles-elixir', sourceGameId: `oracle-clock-${index}-opaque`,
@@ -903,8 +961,10 @@ test('eight exact scoreboard duplicates with clock corrections and source patch 
     datetimeUtc: new Date(Date.parse(match.datetimeUtc!) + offsets[index] * 1000).toISOString() }))
   const merged = mergeCommunityMatchSources({ oracleMatches: oracle, leaguepediaMatches: leaguepedia })
   assert.equal(merged.length, 8)
-  assert.deepEqual(merged.map((match) => match.id), oracle.map((match) => match.id))
-  assert.ok(merged.every((match) => match.sourceMatchId === undefined && match.gameNumber === undefined))
+  const ordered = merged.toSorted((left, right) => left.id.localeCompare(right.id))
+  assert.deepEqual(ordered.map((match) => match.id), oracle.map((match) => match.id))
+  assert.deepEqual(ordered.map((match) => match.sourceMatchId), leaguepedia.map((match, index) => offsets[index] <= 300 ? match.sourceGameId : undefined))
+  assert.deepEqual(ordered.map((match) => match.gameNumber), offsets.map((seconds) => seconds <= 300 ? 1 : undefined))
 })
 
 test('community merge keeps distinct scored same-winner series games', () => {
