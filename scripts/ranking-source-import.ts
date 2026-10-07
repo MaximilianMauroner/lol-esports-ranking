@@ -173,7 +173,8 @@ function warningMatchesProvider(provider: string, warning: string) {
   return provider === 'oracle' ? lower.includes('oracle') : provider === 'leaguepedia' ? lower.includes('leaguepedia') || lower.includes('cargo') : lower.includes('lol esports')
 }
 function sourceWarningKind(message: string): DataSourceWarning['kind'] {
-  const lower = message.toLowerCase()
+  // Classify the provider text only; the dated provenance prefix contains "refresh".
+  const lower = message.replace(/^Historical refresh on \d{4}-\d{2}-\d{2}: /, '').toLowerCase()
   return lower.includes('rate') ? 'rate-limit' : lower.includes('coverage') ? 'coverage' : lower.includes('fresh') ? 'freshness' : 'download'
 }
 function sourceWarningSeverity(message: string): DataSourceWarning['severity'] { return message.toLowerCase().includes('failed') ? 'error' : 'warning' }

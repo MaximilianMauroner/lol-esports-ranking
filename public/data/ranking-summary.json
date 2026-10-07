@@ -128,7 +128,7 @@
       "status": "active",
       "warnings": [
         {
-          "kind": "freshness",
+          "kind": "download",
           "severity": "warning",
           "message": "Historical refresh on 2026-07-26: Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines."
         }
@@ -144,7 +144,7 @@
       "status": "active",
       "warnings": [
         {
-          "kind": "freshness",
+          "kind": "download",
           "severity": "warning",
           "message": "Historical refresh on 2026-07-26: Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines."
         }

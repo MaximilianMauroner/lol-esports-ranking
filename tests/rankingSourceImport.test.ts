@@ -127,6 +127,26 @@ test('curated inventory preserves input provenance without an inherited provider
   }
 })
 
+test('historical refresh prefixes do not change the provider warning kind', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-source-historical-warning-'))
+  try {
+    const manifest = join(root, 'manifest.json')
+    await writeFile(join(root, 'cached.csv'), oracleCsv([{ id: 'cached', date: '2026-07-26' }]))
+    await writeFile(manifest, JSON.stringify({
+      schemaVersion: 1, start: '2025-01-01', end: '2026-10-06', generatedAt: '2026-10-07T08:00:00.000Z',
+      files: { oracleCsv: ['cached.csv'] },
+      warnings: ['Historical refresh on 2026-07-26: Oracle Google Drive downloads were quota-limited; preserved the existing CSV baselines.'],
+    }))
+
+    const data = await importRankingSourceData({ manifestPath: manifest })
+    assert.deepEqual(data.externalSources[0].warnings?.map(({ kind, severity }) => ({ kind, severity })), [
+      { kind: 'download', severity: 'warning' },
+    ])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('cached Oracle source coverage serializes without an invented retrieval date', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-source-oracle-provenance-'))
   try {
