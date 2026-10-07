@@ -449,10 +449,12 @@ function stringifyCanonical(value: CanonicalJson): string {
 function digestCanonical(value: CanonicalJson) {
   let hash = 0xcbf29ce484222325n
   function hashToken(text: string) {
+    let currentHash = hash
     for (let index = 0; index < text.length; index += 1) {
-      hash ^= BigInt(text.charCodeAt(index))
-      hash = BigInt.asUintN(64, hash * 0x100000001b3n)
+      currentHash ^= BigInt(text.charCodeAt(index))
+      currentHash = BigInt.asUintN(64, currentHash * 0x100000001b3n)
     }
+    hash = currentHash
   }
   function hashValue(entry: CanonicalJson) {
     if (entry === null || typeof entry !== 'object') {
