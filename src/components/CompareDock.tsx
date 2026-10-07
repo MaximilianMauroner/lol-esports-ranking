@@ -56,7 +56,7 @@ export function CompareDock({
         {entities.map((entity) => (
           <span
             key={entity.id}
-            className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-2)] border border-[var(--selected-line)] bg-[var(--selected-bg)] py-0.5 pr-0.5 pl-2 text-sm"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-[var(--selected-line)] bg-[var(--selected-bg)] py-0.5 pr-0.5 pl-2 text-sm"
             title={entity.meta ? `${entity.name} · ${entity.meta}` : entity.name}
           >
             {entity.badge}
@@ -65,7 +65,7 @@ export function CompareDock({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className="shrink-0 hover:text-[var(--loss)]"
+              className="shrink-0 hover:text-destructive"
               onClick={() => onRemove(entity.id)}
               aria-label={`Remove ${entity.name}`}
             >
@@ -77,7 +77,7 @@ export function CompareDock({
         {Array.from({ length: Math.max(0, 2 - entities.length) }, (_, index) => (
           <span
             key={`slot-${index}`}
-            className="grid h-8 w-11 place-items-center rounded-[var(--r-2)] border border-dashed border-[var(--line-strong)] text-xs text-[var(--faint)] tabular-nums"
+            className="grid h-8 w-11 place-items-center rounded-md border border-dashed border-[var(--line-strong)] text-xs text-[var(--faint)] tabular-nums"
             aria-hidden="true"
           >
             {entities.length + index + 1}
@@ -87,9 +87,9 @@ export function CompareDock({
 
       {odds ? (
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <p className="shrink-0 text-sm whitespace-nowrap text-[var(--muted)]">
+          <p className="shrink-0 text-sm whitespace-nowrap text-muted-foreground">
             <b className="font-semibold text-[var(--text-strong)]">{odds.homeCode} {odds.game}%</b> per game
-            <span className="max-md:hidden"> · <b className="font-semibold text-[var(--text)]">{odds.bo5}%</b> in a Bo5</span>
+            <span className="max-md:hidden"> · <b className="font-semibold text-foreground">{odds.bo5}%</b> in a Bo5</span>
           </p>
           <span className="flex h-2 min-w-[80px] max-w-[240px] flex-1 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
             <span className="rounded-l-full bg-[var(--series-1)]" style={{ width: `${odds.game}%` }} />
@@ -98,7 +98,7 @@ export function CompareDock({
           <span className="sr-only">{odds.awayCode} {100 - odds.game}% per game.</span>
         </div>
       ) : (
-        <p className="min-w-0 flex-1 text-sm text-[var(--muted)]">
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
           {ready
             ? `${entities.length} ${subject} selected.`
             : entities.length === 0

@@ -46,9 +46,9 @@ export function WhatChanged({
         {riser ? <MovementRow movement={riser} /> : null}
         {faller ? <MovementRow movement={faller} /> : null}
         {upset ? (
-          <li className="flex min-w-0 items-center gap-2.5 bg-[var(--surface)] px-4 py-2.5 text-sm">
+          <li className="flex min-w-0 items-center gap-2.5 bg-card px-4 py-2.5 text-sm">
             <Badge variant="warning" className="shrink-0">Upset</Badge>
-            <span className="min-w-0 text-[var(--muted)]">
+            <span className="min-w-0 text-muted-foreground">
               <b className="font-semibold text-[var(--text-strong)]">{upset.winner}</b> beat {upset.loser} with a {Math.round(upset.chance * 100)}% chance
               {upset.event ? <span className="block truncate text-xs text-[var(--faint)]">{upset.event}</span> : null}
             </span>
@@ -62,9 +62,9 @@ export function WhatChanged({
 function MovementRow({ movement }: { movement: MovementSpotlight }) {
   const up = movement.places > 0 || (movement.places === 0 && movement.ratingDelta > 0)
   return (
-    <li className="flex min-w-0 items-center gap-2.5 bg-[var(--surface)] px-4 py-2.5 text-sm" title={movement.detail}>
+    <li className="flex min-w-0 items-center gap-2.5 bg-card px-4 py-2.5 text-sm" title={movement.detail}>
       <MovementChip places={movement.places} />
-      <span className="min-w-0 truncate text-[var(--muted)]">
+      <span className="min-w-0 truncate text-muted-foreground">
         <b className="font-semibold text-[var(--text-strong)]">{movement.code ?? movement.team}</b>{' '}
         {movement.places === 0 ? 'held rank' : `${up ? 'up' : 'down'} ${Math.abs(movement.places)} ${Math.abs(movement.places) === 1 ? 'place' : 'places'}`}
       </span>
@@ -78,13 +78,13 @@ function MovementRow({ movement }: { movement: MovementSpotlight }) {
 /** Rank change as a small signed chip, shared by the board and this panel. */
 export function MovementChip({ places, title }: { places?: number; title?: string }) {
   if (places === undefined) {
-    return <span className="inline-flex min-w-9 justify-center rounded-[var(--r-1)] bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-2xs font-bold text-[var(--faint)]" title={title}>idle</span>
+    return <span className="inline-flex min-w-9 justify-center rounded-sm bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-2xs font-bold text-[var(--faint)]" title={title}>idle</span>
   }
   const tone = places > 0 ? 'up' : places < 0 ? 'down' : 'flat'
   return (
     <span
       className={cn(
-        'inline-flex min-w-9 justify-center rounded-[var(--r-1)] px-1.5 py-0.5 font-mono text-2xs font-bold tabular-nums',
+        'inline-flex min-w-9 justify-center rounded-sm px-1.5 py-0.5 font-mono text-2xs font-bold tabular-nums',
         tone === 'up' && 'bg-[color-mix(in_oklch,var(--up)_12%,transparent)] text-[var(--up)]',
         tone === 'down' && 'bg-[color-mix(in_oklch,var(--down)_12%,transparent)] text-[var(--down)]',
         tone === 'flat' && 'bg-[var(--surface-2)] text-[var(--faint)]',

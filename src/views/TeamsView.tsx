@@ -16,6 +16,7 @@ import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajecto
 import { formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { eventTierConfig } from '../data/rankingConfig'
 import { CountBadge, DataState, FormDots, HeatChip, RegionBadge, Segmented, SortHeader } from '../components/ui'
+import { CompareToggle } from '../components/CompareToggle'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { PlayerPerformancePanel } from '../components/PlayerPerformancePanel'
@@ -493,8 +494,8 @@ export function TeamsView({
     <PageShell>
       {headline ? (
         <section className="grid gap-1" aria-label="Summary">
-          <p className="max-w-[72ch] text-[length:var(--t-6)] leading-[1.3] font-semibold text-[var(--text-strong)]">{headline.headline}</p>
-          {headline.details.length > 0 ? <p className="max-w-[90ch] text-sm text-[var(--muted)]">{headline.details.join(' ')}</p> : null}
+          <p className="max-w-[72ch] text-lg leading-[1.3] font-semibold text-[var(--text-strong)]">{headline.headline}</p>
+          {headline.details.length > 0 ? <p className="max-w-[90ch] text-sm text-muted-foreground">{headline.details.join(' ')}</p> : null}
         </section>
       ) : null}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_320px] items-start gap-6 max-[1280px]:grid-cols-1">
@@ -508,7 +509,7 @@ export function TeamsView({
             {/* One row of filters above the table they scope. The controls
                 carry no per-control height, radius or background overrides:
                 chips, selects and the switch share --control-h and --r-2. */}
-            <PanelBody className="grid gap-2.5 border-b border-[var(--line)] py-3">
+            <PanelBody className="grid gap-2.5 border-b border-border py-3">
               <div className="flex items-center gap-2 sm:hidden">
                 <Button type="button" variant="secondary" size="tab" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen((open) => !open)}>
                   <SlidersHorizontal size={15} aria-hidden="true" />
@@ -551,7 +552,7 @@ export function TeamsView({
                   <LoadingState presentation="inline" label="Loading tournaments" className="text-xs" />
                 ) : null}
                 {hiddenFromRankedCount > 0 ? (
-                  <label className="inline-flex h-[var(--control-h)] cursor-pointer items-center gap-2 text-sm text-[var(--muted)]" title="Unranked teams miss an eligibility check, such as too few recent matches or an incomplete roster.">
+                  <label className="inline-flex h-[var(--control-h)] cursor-pointer items-center gap-2 text-sm text-muted-foreground" title="Unranked teams miss an eligibility check, such as too few recent matches or an incomplete roster.">
                     <input
                       type="checkbox"
                       className="size-4 accent-[var(--accent)]"
@@ -574,7 +575,7 @@ export function TeamsView({
                   </Button>
                 ) : null}
               </div>
-              <label className="board-sort flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+              <label className="board-sort flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 Sort by
                 <Select value={`${sortKey}:${sortDirection}`} onChange={(event) => {
                   const [key, direction] = event.target.value.split(':') as [SortKey, SortDirection]
@@ -592,10 +593,10 @@ export function TeamsView({
               </div>
               {/* The legend replaces two disclosures and three helper lines. */}
               <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--faint)]" title={`Model ${formatModelVersion(model?.version)}${model?.configHash ? ` · config ${model.configHash}` : ''}`}>
-                <span><b className="font-semibold text-[var(--muted)]">100 points</b> ≈ {gapExample}% game win</span>
-                {rankedOrder ? <span><b className="font-semibold text-[var(--rank-gold)]">Bracket</b> near tie: under {Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game</span> : null}
-                <span className="max-sm:hidden"><b className="font-semibold text-[var(--muted)]">{activeTournament ? 'Event move' : '30 days'}</b> rank change {movementPeriod}</span>
-                <span className="max-sm:hidden"><b className="font-semibold text-[var(--muted)]">Form</b> last five, oldest first</span>
+                <span><b className="font-semibold text-muted-foreground">100 points</b> ≈ {gapExample}% game win</span>
+                {rankedOrder ? <span><b className="font-semibold text-muted-foreground">Bracket</b> near tie: under {Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game</span> : null}
+                <span className="max-sm:hidden"><b className="font-semibold text-muted-foreground">{activeTournament ? 'Event move' : '30 days'}</b> rank change {movementPeriod}</span>
+                <span className="max-sm:hidden"><b className="font-semibold text-muted-foreground">Form</b> last five, oldest first</span>
               </p>
             </PanelBody>
 
@@ -675,7 +676,7 @@ export function TeamsView({
                         >
                           <TableCell className="board-col-rank relative" aria-label={excludedFromRankedBoard ? 'Unranked' : `Rank ${rank}`}>
                             {tie ? <NearTieMark position={tie} /> : null}
-                            <span className="board-rankcell flex items-center gap-[9px] whitespace-nowrap">
+                            <span className="board-rankcell flex items-center gap-2 whitespace-nowrap">
                               <TeamBoardRank team={team} rank={rank} rawScoreRank={rawScoreRankByTeam.get(key)} />
                               {tier ? <TierBadge tier={tier} /> : null}
                             </span>
@@ -684,13 +685,13 @@ export function TeamsView({
                             <Button
                               type="button"
                               variant="ghost"
-                              className="team-cell team-cell__button h-auto min-h-9 w-full cursor-pointer justify-start gap-[11px] whitespace-normal rounded-[var(--r-1)] border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] hover:bg-transparent hover:text-[inherit] focus-visible:rounded-[var(--r-1)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]"
+                              className="team-cell team-cell__button h-auto min-h-9 w-full cursor-pointer justify-start gap-3 whitespace-normal rounded-sm border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] hover:bg-transparent hover:text-[inherit] focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]"
                               onClick={() => openTeam(team)}
                               onFocus={onRequestPlayers}
                               title={`Open ${team.team}`}
                             >
-                              <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
-                              <div className="ent flex min-w-0 flex-col gap-px overflow-hidden [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-[length:var(--t-2)] [&_small]:text-[var(--faint)]">
+                              <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10" />
+                              <div className="ent flex min-w-0 flex-col gap-px overflow-hidden [&_b]:block [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_small]:text-xs [&_small]:text-[var(--faint)]">
                                 <b>{team.team}</b>
                                 <small>{excludedFromRankedBoard ? `${team.league} · ${eligibilitySummary(team)}` : team.league}</small>
                               </div>
@@ -711,12 +712,12 @@ export function TeamsView({
                           </TableCell>
                           <TableCell className="right num board-col-record" aria-label={`Match wins ${formatNumber(team.wins)}, losses ${formatNumber(team.losses)}; win rate ${formatRatio(total > 0 ? team.wins / total : undefined)}`}>
                             <b className="font-semibold text-[var(--text-strong)]">{formatRecord(team.wins, team.losses)}</b>{' '}
-                            <span className="text-[length:var(--t-3)] text-[var(--faint)]">{formatRatio(total > 0 ? team.wins / total : undefined)}</span>
+                            <span className="text-sm text-[var(--faint)]">{formatRatio(total > 0 ? team.wins / total : undefined)}</span>
                           </TableCell>
                           <TableCell className="board-col-action">
                             <span className="flex items-center justify-end gap-2">
                               <CompareToggle picked={pickedKeys.has(key)} onToggle={() => onToggle(team)} label={team.team} />
-                              <ChevronRight className="size-4 shrink-0 text-[var(--faint)] group-hover/board:text-[var(--text)] max-sm:hidden" aria-hidden="true" />
+                              <ChevronRight className="size-4 shrink-0 text-[var(--faint)] group-hover/board:text-foreground max-sm:hidden" aria-hidden="true" />
                             </span>
                           </TableCell>
                         </TableRow>
@@ -787,15 +788,15 @@ export function TeamsView({
         {exactTournamentId && tournamentMovementState.status === 'loading' ? (
           <LoadingState presentation="chart" className="m-5" label="Loading tournament movement" />
         ) : exactTournamentId && tournamentMovementState.status === 'idle' ? (
-          <p className="text-[var(--muted)] p-5">Tournament movement has not been requested.</p>
+          <p className="text-muted-foreground p-5">Tournament movement has not been requested.</p>
         ) : exactTournamentId && (tournamentMovementState.status === 'missing' || tournamentMovementState.status === 'error') ? (
-          <p className="text-[var(--muted)] p-5">{tournamentMovementState.message}</p>
+          <p className="text-muted-foreground p-5">{tournamentMovementState.message}</p>
         ) : !exactTournamentId && historyState.status === 'idle' ? (
-          <p className="text-[var(--muted)] p-5">Rating history loads when this panel is viewed.</p>
+          <p className="text-muted-foreground p-5">Rating history loads when this panel is viewed.</p>
         ) : !exactTournamentId && historyState.status === 'loading' ? (
           <LoadingState presentation="chart" className="m-5" label="Loading rating history" />
         ) : !exactTournamentId && (historyState.status === 'missing' || historyState.status === 'error') ? (
-          <p className="text-[var(--muted)] p-5">{historyState.message}</p>
+          <p className="text-muted-foreground p-5">{historyState.message}</p>
         ) : (
           <Suspense fallback={<LoadingState presentation="chart" className="m-5" label="Loading trajectory chart" />}>
             <LazyTeamHistoryLineChart
@@ -814,16 +815,16 @@ export function TeamsView({
         {insights.length > 0 ? (
           <PanelBody className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2.5 pt-1 pb-4">
             {insights.map(({ team, color, insight }) => (
-              <article className="grid gap-2 rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3" key={teamKey(team)}>
+              <article className="grid gap-2 rounded-md border border-border bg-[var(--surface-2)] px-3.5 py-3" key={teamKey(team)}>
                 <div className="flex items-center gap-2">
-                  <span className="size-2.5 shrink-0 rounded-[var(--r-1)]" style={{ background: color }} aria-hidden="true" />
+                  <span className="size-2.5 shrink-0 rounded-sm" style={{ background: color }} aria-hidden="true" />
                   <b className="mr-auto text-md font-semibold text-[var(--text-strong)]">{team.code ?? team.team}</b>
                   <span className={cn('font-mono text-xs tabular-nums', insight.netChange > 0 ? 'text-[var(--up)]' : insight.netChange < 0 ? 'text-[var(--down)]' : 'text-[var(--faint)]')}>
                     {formatSigned(insight.netChange)}
                   </span>
                 </div>
-                <p className="text-sm leading-[1.5] text-[var(--muted)]">{insight.summary}</p>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--faint)] [&_b]:font-semibold [&_b]:text-[var(--text)] [&_b]:tabular-nums">
+                <p className="text-sm leading-[1.5] text-muted-foreground">{insight.summary}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--faint)] [&_b]:font-semibold [&_b]:text-foreground [&_b]:tabular-nums">
                   <span>
                     Peak <b>{formatRating(insight.peak.value)}</b>
                     {typeof insight.bestRank === 'number' ? ` · best #${insight.bestRank}` : ''}
@@ -883,7 +884,7 @@ function ChipGroup<T extends string>({
           aria-pressed={value === option.value}
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
-          className="h-8 rounded-full px-3 disabled:opacity-50 aria-pressed:bg-[color-mix(in_oklch,var(--accent)_22%,var(--surface))] aria-pressed:text-[var(--text-strong)]"
+          className="h-8 px-3 disabled:opacity-50"
         >
           {option.label}
         </Button>
@@ -892,12 +893,13 @@ function ChipGroup<T extends string>({
   )
 }
 
-/** Gold bracket in the rank cell joining rows the model calls a near tie. */
+/** Neutral bracket in the rank cell joining rows the model calls a near tie.
+ *  Gold is reserved for rank quality, and a near tie is model uncertainty. */
 function NearTieMark({ position }: { position: NearTiePosition }) {
   return (
     <span
       className={cn(
-        'absolute left-1 w-0.5 bg-[color-mix(in_oklch,var(--rank-gold)_75%,transparent)]',
+        'absolute left-1 w-0.5 bg-[var(--muted)]',
         position === 'start' && 'top-1/2 bottom-0 rounded-t-full',
         position === 'middle' && 'inset-y-0',
         position === 'end' && 'top-0 bottom-1/2 rounded-b-full',
@@ -905,22 +907,6 @@ function NearTieMark({ position }: { position: NearTiePosition }) {
       title={`Near tie with the team next to it: under ${Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game`}
       aria-hidden="true"
     />
-  )
-}
-
-/** A labelled Compare checkbox. The old control was an unlabelled "+". */
-function CompareToggle({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
-  return (
-    <label
-      className={cn(
-        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[var(--r-2)] border px-2 text-xs font-semibold whitespace-nowrap select-none',
-        picked ? 'border-[var(--accent)] bg-[var(--selected-bg)] text-[var(--text-strong)]' : 'border-[var(--line-strong)] text-[var(--muted)] hover:text-[var(--text)]',
-      )}
-      data-row-click-exclude
-    >
-      <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={picked} onChange={onToggle} aria-label={`Compare ${label}`} />
-      <span className="max-sm:sr-only">Compare</span>
-    </label>
   )
 }
 
@@ -961,14 +947,14 @@ function TeamScoreCell({
 }) {
   const score = teamScoreFor(team)
   if (typeof score !== 'number') {
-    return <span className="score-unavailable font-mono text-[length:var(--t-3)] font-semibold text-[var(--faint)]" aria-hidden="true">—</span>
+    return <span className="score-unavailable font-mono text-sm font-semibold text-[var(--faint)]" aria-hidden="true">—</span>
   }
   const share = max > min ? clampNumber(((score - min) / (max - min)) * 100, 4, 100) : 100
   return (
     <span className="team-score-stack flex min-w-0 items-center gap-2.5" title={exactTournament ? `Tournament endpoint Power ${formatRating(score)}` : teamScoreTitle(team)}>
-      <span className="team-score-value min-w-[3.4em] text-right font-mono text-[length:var(--t-5)] font-extrabold text-[var(--text-strong)] tabular-nums">{formatRating(score)}</span>
+      <span className="team-score-value min-w-[3.4em] text-right font-mono text-base font-extrabold text-[var(--text-strong)] tabular-nums">{formatRating(score)}</span>
       <span className="score-track relative h-1.5 min-w-10 flex-1 overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden="true">
-        <span className="absolute inset-y-0 left-0 rounded-full bg-[color-mix(in_oklch,var(--accent)_70%,var(--surface-3))]" style={{ width: `${share}%` }} />
+        <span className="absolute inset-y-0 left-0 rounded-full bg-[var(--faint)]" style={{ width: `${share}%` }} />
       </span>
     </span>
   )
@@ -985,17 +971,17 @@ function TeamBoardRank({
 }) {
   if (team.eligibility?.eligible === false) {
     return (
-      <span className="board-rank-stack inline-flex min-w-0 flex-col items-start gap-[3px]">
-        <span className="board-rank board-rank--excluded min-w-0 text-[length:var(--t-2)] font-bold text-[var(--muted)] tabular-nums">Unranked</span>
+      <span className="board-rank-stack inline-flex min-w-0 flex-col items-start gap-1">
+        <span className="board-rank board-rank--excluded min-w-0 text-xs font-bold text-muted-foreground tabular-nums">Unranked</span>
         {typeof rawScoreRank === 'number' ? (
-          <span className="text-[length:var(--t-1)] text-[var(--faint)]" title="Where the score would place if eligibility checks were ignored.">score #{formatNumber(rawScoreRank)}</span>
+          <span className="text-2xs text-[var(--faint)]" title="Where the score would place if eligibility checks were ignored.">score #{formatNumber(rawScoreRank)}</span>
         ) : null}
       </span>
     )
   }
 
   return (
-    <span className={cn('board-rank min-w-[1.4em] text-[length:var(--t-5)] font-bold text-[var(--text-strong)] tabular-nums', typeof rank === 'number' && rank <= 3 && 'podium text-[var(--rank-gold)]')}>
+    <span className={cn('board-rank min-w-[1.4em] text-base font-bold text-[var(--text-strong)] tabular-nums', typeof rank === 'number' && rank <= 3 && 'podium text-[var(--rank-gold)]')}>
       {rank ?? '—'}
     </span>
   )
@@ -1012,7 +998,7 @@ function TierBadge({ tier }: { tier: RankingTierLabel }) {
   return (
     <span
       className={cn(
-        'tier-badge inline-flex h-6 min-w-[26px] items-center justify-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--tier-color)_40%,var(--line))] bg-[color-mix(in_oklch,var(--tier-color)_11%,transparent)] px-[7px] font-mono text-[length:var(--t-3)] font-bold leading-none text-[var(--tier-color)]',
+        'tier-badge inline-flex h-6 min-w-[26px] items-center justify-center rounded-sm border border-[color-mix(in_oklch,var(--tier-color)_40%,var(--line))] bg-[color-mix(in_oklch,var(--tier-color)_11%,transparent)] px-2 font-mono text-sm font-bold leading-none text-[var(--tier-color)]',
         TIER_BADGE_COLOR[tier],
       )}
       role="img"
@@ -1242,9 +1228,9 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
       />
       <div className="grid grid-cols-1 gap-px bg-[var(--line)]">
         {ranked.map((region) => (
-          <div className="flex min-w-0 items-center gap-2.5 bg-[var(--surface)] px-4 py-2 [&_.region-badge]:h-5 [&_.region-badge]:w-[22px]" key={region.region}>
+          <div className="flex min-w-0 items-center gap-2.5 bg-card px-4 py-2 [&_.region-badge]:h-5 [&_.region-badge]:w-[22px]" key={region.region}>
             <RegionBadge region={region.region} size="sm" />
-            <span className="mr-auto min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold text-[var(--text)]">{region.region}</span>
+            <span className="mr-auto min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold text-foreground">{region.region}</span>
             <strong className="shrink-0 text-sm font-bold text-[var(--text-strong)] tabular-nums">{formatRating(displayRegionPowerScore(region))}</strong>
           </div>
         ))}
@@ -1264,12 +1250,12 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
   const notes = (data?.notes ?? []).filter(Boolean).slice(0, 2)
 
   return (
-    <details className="group w-full overflow-hidden rounded-[var(--r-3)] border border-[var(--line)] bg-[var(--surface)]">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[var(--text-strong)] after:ml-auto after:text-base after:leading-none after:text-[var(--muted)] after:content-['+'] group-open:border-b group-open:border-[var(--line)] group-open:after:content-['-'] [&::-webkit-details-marker]:hidden">
+    <details className="group w-full overflow-hidden rounded-lg border border-border bg-card">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[var(--text-strong)] after:ml-auto after:text-base after:leading-none after:text-muted-foreground after:content-['+'] group-open:border-b group-open:border-border group-open:after:content-['-'] [&::-webkit-details-marker]:hidden">
         <span className="text-base font-semibold">Data and sources</span>
         <small className="text-xs text-[var(--faint)]">Coverage, config, providers</small>
       </summary>
-      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-[var(--line)] [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-[11px] [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-[length:var(--t-3)] [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-[length:var(--t-1)] [&_small]:tracking-[0.04em] [&_small]:text-[var(--faint)] [&_small]:uppercase">
+      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-[var(--line)] [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
         <span>
           <small>Model</small>
           <b>{formatModelVersion(model?.version)}</b>
@@ -1306,9 +1292,9 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
       {providers.length > 0 ? (
         <div className="mx-3 mt-3 grid gap-px bg-[var(--line)]">
           {providers.map((provider) => (
-            <div className="flex min-w-0 items-center justify-between gap-2 bg-[var(--bg)] px-[11px] py-[9px] text-[length:var(--t-2)] text-[var(--muted)]" key={provider.provider}>
+            <div className="flex min-w-0 items-center justify-between gap-2 bg-[var(--bg)] px-3 py-2 text-xs text-muted-foreground" key={provider.provider}>
               <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{provider.provider}</span>
-              <b className="shrink-0 text-[var(--text)] tabular-nums">{formatNumber(provider.matchCount)}</b>
+              <b className="shrink-0 text-foreground tabular-nums">{formatNumber(provider.matchCount)}</b>
             </div>
           ))}
         </div>
@@ -1316,29 +1302,29 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
       {sourceFreshness.length > 0 ? (
         <div className="mx-3 mt-3 grid gap-px bg-[var(--line)]" aria-label="Source freshness">
           {sourceFreshness.map((source) => (
-            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-[var(--bg)] px-[11px] py-[9px] text-[length:var(--t-2)] text-[var(--muted)]" key={source.name}>
+            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-[var(--bg)] px-3 py-2 text-xs text-muted-foreground" key={source.name}>
               <span className="max-w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={source.description}>{compactSourceName(source.name)}</span>
-              <b className="shrink-0 whitespace-normal text-[var(--text)] tabular-nums">{sourceFreshnessLabel(source)}</b>
+              <b className="shrink-0 whitespace-normal text-foreground tabular-nums">{sourceFreshnessLabel(source)}</b>
             </div>
           ))}
         </div>
       ) : null}
       {data?.seeded ? (
-        <p className="mx-3 mt-3 text-[length:var(--t-2)] text-[var(--down)] last:mb-3 [overflow-wrap:anywhere]">Seeded sample data is active. Do not treat these rows as official rankings.</p>
+        <p className="mx-3 mt-3 text-xs text-[var(--down)] last:mb-3 [overflow-wrap:anywhere]">Seeded sample data is active. Do not treat these rows as official rankings.</p>
       ) : warnings.length > 0 ? (
         <>
           {warnings.map((warning) => (
-            <p className={cn('mx-3 mt-3 text-[length:var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]', (warning.severity === 'error' || warning.severity === 'warning') && 'text-[var(--down)]')} key={`${warning.kind}-${warning.severity}-${warning.message}`}>
+            <p className={cn('mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]', (warning.severity === 'error' || warning.severity === 'warning') && 'text-[var(--down)]')} key={`${warning.kind}-${warning.severity}-${warning.message}`}>
               {warning.message}
             </p>
           ))}
         </>
       ) : notes.length > 0 ? (
         <>
-          {notes.map((note) => <p className="mx-3 mt-3 text-[length:var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]" key={note}>{note}</p>)}
+          {notes.map((note) => <p className="mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]" key={note}>{note}</p>)}
         </>
       ) : (
-        <p className="mx-3 mt-3 text-[length:var(--t-2)] text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]">Latest match: {formatDate(data?.latestMatchDate)}</p>
+        <p className="mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]">Latest match: {formatDate(data?.latestMatchDate)}</p>
       )}
     </details>
   )
@@ -1432,7 +1418,7 @@ function summarizeTeamMatchWeights(series?: TeamHistorySeries): MatchWeightSumma
   }
 }
 
-const tournamentDataNoteClassName = 'mx-5 mb-5 border-t border-[var(--line)] pt-3 text-[length:var(--t-2)] leading-[1.5] text-[var(--muted)]'
+const tournamentDataNoteClassName = 'mx-5 mb-5 border-t border-border pt-3 text-xs leading-[1.5] text-muted-foreground'
 
 function TeamDetailDrawer({
   team,
@@ -1470,7 +1456,7 @@ function TeamDetailDrawer({
     return [{
       id: teamKey(team),
       label: team.code ?? team.team,
-      color: 'var(--accent)',
+      color: 'var(--series-1)',
       points: tournament ? tournamentChartPoints(series.points, 'rating') : dailyChartPointsFromHistoryPoints(series.points),
     }]
   }, [series, team, tournament])
@@ -1497,29 +1483,28 @@ function TeamDetailDrawer({
       <SheetContent
         side="right"
         showCloseButton={false}
-        overlayClassName="bg-[oklch(0.04_0.003_250/0.72)]"
         aria-label={`${team.team} details`}
-        className="team-detail-sheet h-dvh max-h-dvh gap-0 overflow-hidden border-l border-[var(--line-strong)] bg-[var(--detail-surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] [--detail-surface-2:var(--surface-2)] [--detail-surface-3:var(--surface-3)] [--detail-surface:var(--surface)] data-[side=right]:w-[min(820px,100vw)] data-[side=right]:max-w-none data-[side=right]:sm:w-[min(820px,94vw)] data-[side=right]:sm:max-w-none"
+        className="team-detail-sheet h-dvh max-h-dvh gap-0 overflow-hidden border-l border-[var(--line-strong)] bg-[var(--detail-surface)] p-0 text-foreground shadow-[var(--shadow-pop)] [--detail-surface-2:var(--surface-2)] [--detail-surface-3:var(--surface-3)] [--detail-surface:var(--surface)] data-[side=right]:w-[min(820px,100vw)] data-[side=right]:max-w-none data-[side=right]:sm:w-[min(820px,94vw)] data-[side=right]:sm:max-w-none"
       >
         {drawerLoading ? <p className="sr-only" role="status" aria-live="polite">Loading {drawerLoading} for {team.team}.</p> : null}
         {/* The title is the team. Rank and Power sit beside it at the size the
             product exists to show. */}
-        <SheetHeader className="flex-row items-center gap-3.5 border-b border-[var(--line)] bg-[var(--detail-surface)] px-5 py-4 text-left max-sm:p-3.5">
-          <TeamMark team={team.team} code={team.code} className="size-11 border-[color-mix(in_oklch,var(--accent)_32%,transparent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]" />
+        <SheetHeader className="flex-row items-center gap-3.5 border-b border-border bg-[var(--detail-surface)] px-5 py-4 text-left max-sm:p-3.5">
+          <TeamMark team={team.team} code={team.code} className="size-11" />
           <div className="mr-auto grid min-w-0 gap-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <SheetTitle className="text-[length:var(--t-6)] font-semibold text-[var(--text-strong)]">{team.team}</SheetTitle>
+              <SheetTitle className="text-lg font-semibold text-[var(--text-strong)]">{team.team}</SheetTitle>
               {seeded ? <Badge variant="warning">Sample data</Badge> : null}
             </div>
-            <span className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+            <span className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <LeagueSigil league={team.league} />
               {team.league}
               {tier ? <TierBadge tier={tier} /> : null}
             </span>
           </div>
           <div className="grid shrink-0 justify-items-end leading-none">
-            <span className="text-[length:var(--t-8)] font-semibold text-[var(--text-strong)] tabular-nums">{teamBoardRankLabel(team, rank)}</span>
-            <span className="mt-1 text-sm text-[var(--muted)] tabular-nums">{formatRating(score)} Power</span>
+            <span className="text-2xl font-semibold text-[var(--text-strong)] tabular-nums">{teamBoardRankLabel(team, rank)}</span>
+            <span className="mt-1 text-sm text-muted-foreground tabular-nums">{formatRating(score)} Power</span>
           </div>
           <SheetClose asChild>
             <Button type="button" variant="ghost" size="icon" aria-label="Close">
@@ -1528,8 +1513,8 @@ function TeamDetailDrawer({
           </SheetClose>
         </SheetHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain bg-[var(--detail-surface)] p-[18px] [&>*]:shrink-0 max-sm:gap-3 max-sm:p-3">
-          <section className="grid grid-cols-4 gap-px overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--line)] max-[700px]:grid-cols-2 [&>div]:grid [&>div]:content-start [&>div]:gap-0.5 [&>div]:bg-[var(--detail-surface-2)] [&>div]:px-3.5 [&>div]:py-3 [&_b]:text-[length:var(--t-5)] [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-xs [&_small]:text-[var(--faint)]" aria-label={`${team.team} key facts`}>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain bg-[var(--detail-surface)] p-4 [&>*]:shrink-0 max-sm:gap-3 max-sm:p-3">
+          <section className="grid grid-cols-4 gap-px overflow-hidden rounded-md border border-border bg-[var(--line)] max-[700px]:grid-cols-2 [&>div]:grid [&>div]:content-start [&>div]:gap-0.5 [&>div]:bg-[var(--detail-surface-2)] [&>div]:px-3.5 [&>div]:py-3 [&_b]:text-base [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-xs [&_small]:text-[var(--faint)]" aria-label={`${team.team} key facts`}>
             {tournament && tournamentMovement ? (
               <>
                 <div><small>Opening</small><b>{formatRankValue(tournamentMovement.startRank)} · {formatRating(tournamentMovement.startRating)}</b><small>{formatDate(tournament.startDate)}</small></div>
@@ -1547,11 +1532,11 @@ function TeamDetailDrawer({
             )}
           </section>
 
-          <section className="overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))]" aria-label="Power over time">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 pt-4 pb-3">
-              <h3 className="text-[length:var(--t-5)] font-bold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
+          <section className="overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))]" aria-label="Power over time">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-5 pt-4 pb-3">
+              <h3 className="text-base font-bold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
               {trendSummary ? (
-                <p className="text-xs text-[var(--muted)] tabular-nums">
+                <p className="text-xs text-muted-foreground tabular-nums">
                   From {formatRating(trendSummary.opening)} on {formatDate(trendSummary.startDate)} · net <b className={cn('font-semibold', trendSummary.netChange >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]')}>{formatRatingMovement(trendSummary.netChange)}</b> · peak {formatRating(trendSummary.peak.value)}{typeof trendSummary.bestRank === 'number' ? ` · best #${trendSummary.bestRank}` : ''}
                 </p>
               ) : null}
@@ -1565,9 +1550,9 @@ function TeamDetailDrawer({
             ) : historyState.status === 'loading' ? (
               <TrendChartSkeleton />
             ) : historyState.status === 'missing' || historyState.status === 'error' ? (
-              <p className="p-5 text-[var(--muted)]">{historyState.message}</p>
+              <p className="p-5 text-muted-foreground">{historyState.message}</p>
             ) : (
-              <p className="p-5 text-[var(--muted)]">{historyState.status === 'idle' ? 'Rating history loads when this panel opens.' : 'Not enough history to chart this team yet.'}</p>
+              <p className="p-5 text-muted-foreground">{historyState.status === 'idle' ? 'Rating history loads when this panel opens.' : 'Not enough history to chart this team yet.'}</p>
             )}
             {tournament ? (
               <p className={tournamentDataNoteClassName}>
@@ -1580,9 +1565,9 @@ function TeamDetailDrawer({
           </section>
 
           {opponents.length > 0 ? (
-            <section className="rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] px-5 py-4" aria-label={`${team.code ?? team.team} against the top teams`}>
+            <section className="rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] px-5 py-4" aria-label={`${team.code ?? team.team} against the top teams`}>
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-[length:var(--t-5)] font-bold text-[var(--text-strong)]">Chance to beat the top teams</h3>
+                <h3 className="text-base font-bold text-[var(--text-strong)]">Chance to beat the top teams</h3>
                 <span className="text-xs text-[var(--faint)]">best of three, neutral side · model {formatModelVersion(model?.version)}</span>
               </div>
               <ul className="grid gap-2">
@@ -1601,11 +1586,11 @@ function TeamDetailDrawer({
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-5 max-[900px]:p-[18px]" aria-label="Match results">
+          <section className="overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-5 max-[900px]:p-4" aria-label="Match results">
             <div className="flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 max-sm:flex-col">
               <div>
-                <h3 className="text-[length:var(--t-5)] font-bold text-[var(--text-strong)]">Match results</h3>
-                <p className="mt-1 max-w-[58ch] text-[length:var(--t-3)] leading-[1.4] text-[var(--faint)]">{tournament ? `Scored matches in ${tournament.label}.` : 'Scored matches in this period.'} Each row shows the rating after the match and how much the event counted.</p>
+                <h3 className="text-base font-bold text-[var(--text-strong)]">Match results</h3>
+                <p className="mt-1 max-w-[58ch] text-sm leading-[1.4] text-[var(--faint)]">{tournament ? `Scored matches in ${tournament.label}.` : 'Scored matches in this period.'} Each row shows the rating after the match and how much the event counted.</p>
               </div>
               <FormDots form={team.form} />
             </div>
@@ -1618,10 +1603,10 @@ function TeamDetailDrawer({
             />
           </section>
 
-          <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--detail-surface-2)] p-3">
+          <details className="rounded-md border border-border bg-[var(--detail-surface-2)] p-3">
             <summary className="cursor-pointer text-sm font-semibold">How the score is built</summary>
-            <p className="mt-3 text-sm text-[var(--muted)]">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The model evidence band is {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}. Close ranks can swap as new evidence arrives. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-[var(--muted)] [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-[var(--muted)]">
+            <p className="mt-3 text-sm text-muted-foreground">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The model evidence band is {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}. Close ranks can swap as new evidence arrives. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-muted-foreground">
               {!tournament ? (
                 <span title={powerResumeGap?.title}>
                   <small>Power rank vs results rank</small>
@@ -1660,7 +1645,7 @@ function TeamDetailDrawer({
               <p className={tournamentDataNoteClassName}>Component breakdowns are hidden here because the tournament data publishes endpoint rank, score, eligibility and match evidence only.</p>
             ) : <div className="mt-3"><ComponentBreakdown team={team} /></div>}
           </details>
-          <details className="rounded-[var(--r-2)] border border-[var(--line)] p-3">
+          <details className="rounded-md border border-border p-3">
             <summary className="cursor-pointer text-sm font-semibold">Players</summary>
             <PlayerRankingCard team={team} players={players} currentLineup={currentLineup} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} />
           </details>
@@ -1752,8 +1737,8 @@ function RecentMatches({
   }
 
   return (
-    <section className="mt-3.5 overflow-hidden rounded-[var(--r-1)] border border-[var(--line-strong)] bg-[var(--detail-surface,var(--surface))]" aria-label="Recent form matches">
-      <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(86px,auto)] items-center gap-2.5 border-b border-[var(--line)] px-3.5 py-2 text-[length:var(--t-1)] font-bold tracking-[0.08em] text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
+    <section className="mt-3.5 overflow-hidden rounded-sm border border-[var(--line-strong)] bg-[var(--detail-surface,var(--surface))]" aria-label="Recent form matches">
+      <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(86px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-2xs font-bold tracking-label text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
         <span>Result</span>
         <span>Opponent</span>
         <span>Rating after</span>
@@ -1766,17 +1751,17 @@ function RecentMatches({
             const tierChip = matchTierChip(match)
             return (
               <div
-                className={cn('grid min-h-16 grid-cols-[28px_minmax(0,1fr)_minmax(92px,auto)] items-start gap-2.5 border-t border-dotted border-[var(--line)] px-3.5 py-[11px] first:border-t-0 max-sm:grid-cols-[26px_minmax(0,1fr)]', outcomeSignal?.tone === 'upset' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--warn)_72%,transparent)]', outcomeSignal?.tone === 'miss' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--down)_72%,transparent)]')}
+                className={cn('grid min-h-16 grid-cols-[28px_minmax(0,1fr)_minmax(92px,auto)] items-start gap-2.5 border-t border-dotted border-border px-3.5 py-3 first:border-t-0 max-sm:grid-cols-[26px_minmax(0,1fr)]', outcomeSignal?.tone === 'upset' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--warn)_72%,transparent)]', outcomeSignal?.tone === 'miss' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--down)_72%,transparent)]')}
                 key={`${match.date}-${match.event}-${match.opponent}-${index}`}
               >
-                <span className={cn('grid size-[22px] place-items-center rounded-full text-[length:var(--t-1)] font-extrabold', match.result === 'W' ? 'bg-[var(--win-soft)] text-[var(--win)]' : match.result === 'L' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--surface-3)] text-[var(--muted)]')}>{match.result}</span>
+                <span className={cn('grid size-[22px] place-items-center rounded-full text-2xs font-extrabold', match.result === 'W' ? 'bg-[var(--win-soft)] text-[var(--win)]' : match.result === 'L' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--surface-3)] text-muted-foreground')}>{match.result}</span>
                 <div className="min-w-0">
                   <span className="flex min-w-0 items-baseline gap-2 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
-                    <b className="inline-block min-w-0 whitespace-normal [overflow-wrap:anywhere] text-[length:var(--t-3)] font-bold text-[var(--text-strong)]">vs {match.opponent}</b>
-                    {opponent ? <span className="shrink-0 whitespace-nowrap text-[length:var(--t-1)] font-semibold text-[var(--muted)] tabular-nums" title="Current opponent rank and power score in this scope">{formatOpponentContext(opponent)}</span> : null}
+                    <b className="inline-block min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-bold text-[var(--text-strong)]">vs {match.opponent}</b>
+                    {opponent ? <span className="shrink-0 whitespace-nowrap text-2xs font-semibold text-muted-foreground tabular-nums" title="Current opponent rank and power score in this scope">{formatOpponentContext(opponent)}</span> : null}
                   </span>
-                  <small className="mt-0.5 block whitespace-normal [overflow-wrap:anywhere] text-[length:var(--t-2)] text-[var(--faint)]" title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
-                  <span className="mt-1.5 flex flex-wrap items-center gap-[5px] [&>span]:inline-flex [&>span]:min-h-[18px] [&>span]:max-w-full [&>span]:items-center [&>span]:whitespace-nowrap [&>span]:rounded-full [&>span]:border [&>span]:border-[var(--line)] [&>span]:bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_72%,transparent)] [&>span]:px-1.5 [&>span]:py-0.5 [&>span]:text-[length:var(--t-1)] [&>span]:font-bold [&>span]:leading-none [&>span]:text-[var(--muted)] [&>span.miss]:border-[color-mix(in_oklch,var(--down)_44%,var(--line))] [&>span.miss]:text-[var(--down)] [&>span.upset]:border-transparent [&>span.upset]:bg-[var(--warn-soft)] [&>span.upset]:text-[var(--warn)]" aria-label="Match context">
+                  <small className="mt-0.5 block whitespace-normal [overflow-wrap:anywhere] text-xs text-[var(--faint)]" title={formatTeamMatchDetail(match)}>{formatTeamMatchMeta(match)}</small>
+                  <span className="mt-1.5 flex flex-wrap items-center gap-1 [&>span]:inline-flex [&>span]:min-h-[18px] [&>span]:max-w-full [&>span]:items-center [&>span]:whitespace-nowrap [&>span]:rounded-full [&>span]:border [&>span]:border-border [&>span]:bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_72%,transparent)] [&>span]:px-1.5 [&>span]:py-0.5 [&>span]:text-2xs [&>span]:font-bold [&>span]:leading-none [&>span]:text-muted-foreground [&>span.miss]:border-[color-mix(in_oklch,var(--down)_44%,var(--line))] [&>span.miss]:text-[var(--down)] [&>span.upset]:border-transparent [&>span.upset]:bg-[var(--warn-soft)] [&>span.upset]:text-[var(--warn)]" aria-label="Match context">
                     {tierChip ? <span title={tierChip.title}>{tierChip.label}</span> : null}
                     {typeof match.expectedWinProbability === 'number' ? (
                       <span title="Pregame expected series win probability for this team">
@@ -1789,8 +1774,8 @@ function RecentMatches({
                     ) : null}
                   </span>
                 </div>
-                <div className="pt-px text-right tabular-nums [&_small]:mt-0.5 [&_small]:block [&_small]:text-[length:var(--t-2)] [&_small]:font-bold [&_small]:text-[var(--muted)] [&_small.down]:text-[var(--down)] [&_small.flat]:text-[var(--faint)] [&_small.up]:text-[var(--up)] [&_strong]:block [&_strong]:text-[length:var(--t-4)] [&_strong]:font-bold [&_strong]:text-[var(--text-strong)] max-sm:col-start-2 max-sm:flex max-sm:flex-wrap max-sm:items-baseline max-sm:justify-self-start max-sm:gap-2 max-sm:text-left">
-                  <span className="hidden text-xs text-[var(--muted)] max-sm:block">Post-match Power</span>
+                <div className="pt-px text-right tabular-nums [&_small]:mt-0.5 [&_small]:block [&_small]:text-xs [&_small]:font-bold [&_small]:text-muted-foreground [&_small.down]:text-[var(--down)] [&_small.flat]:text-[var(--faint)] [&_small.up]:text-[var(--up)] [&_strong]:block [&_strong]:text-md [&_strong]:font-bold [&_strong]:text-[var(--text-strong)] max-sm:col-start-2 max-sm:flex max-sm:flex-wrap max-sm:items-baseline max-sm:justify-self-start max-sm:gap-2 max-sm:text-left">
+                  <span className="hidden text-xs text-muted-foreground max-sm:block">Post-match Power</span>
                   <strong>{formatRating(match.rating)}</strong>
                   <small className={movementTone(match.ratingMovement)} title={formatRatingMovementTitle(match)}>
                     {formatRatingMovement(match.ratingMovement)}
@@ -1804,14 +1789,14 @@ function RecentMatches({
       {historyPending ? (
         <MatchHistorySkeleton rowCount={Math.max(0, RECENT_MATCH_PAGE_SIZE - recentMatches.length)} compact={recentMatches.length > 0} />
       ) : recentMatches.length === 0 ? (
-        <p className="px-3.5 py-4 text-[length:var(--t-2)] text-[var(--muted)]">
+        <p className="px-3.5 py-4 text-xs text-muted-foreground">
           {historyState.status === 'missing' || historyState.status === 'error'
             ? historyState.message
             : 'No match-level recent form is available in this snapshot.'}
         </p>
       ) : null}
       {(historyState.status === 'missing' || historyState.status === 'error') && recentMatches.length > 0 ? (
-        <p className="border-t border-[var(--line)] px-3.5 py-2.5 text-[length:var(--t-2)] leading-[1.4] text-[var(--faint)]">{historyState.message}</p>
+        <p className="border-t border-border px-3.5 py-2.5 text-xs leading-[1.4] text-[var(--faint)]">{historyState.message}</p>
       ) : null}
       {totalMatches > RECENT_MATCH_PAGE_SIZE ? (
         <Pager
@@ -1821,7 +1806,7 @@ function RecentMatches({
           pageCount={totalPages}
           onPage={updatePage}
           rangeLabel={resultSummary}
-          className="border-t border-[var(--line)] bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_64%,transparent)] px-3.5 py-2.5"
+          className="border-t border-border bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_64%,transparent)] px-3.5 py-2.5"
         />
       ) : null}
     </section>
@@ -2037,10 +2022,10 @@ function summarizeTeamTrend(series?: TeamHistorySeries): TeamTrendSummary | null
   }
 }
 
-const detailCardClassName = 'min-w-0 overflow-hidden rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-[18px] [&_h3]:text-[length:var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)]'
-const emptyPlayerRankCardClassName = cn(detailCardClassName, 'grid gap-3 px-5 py-[18px] [&_h3]:text-[length:var(--t-4)] [&>div:first-child]:border-0 [&>div:first-child]:pb-0')
-const playerRankCardHeadClassName = 'flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-[18px] [&_h3]:flex [&_h3]:flex-wrap [&_h3]:items-center [&_h3]:gap-2 [&_p]:mt-1 [&_p]:text-[length:var(--t-3)] [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] max-sm:flex-col'
-const componentLedgerRowClassName = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-[7px] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 [&>b]:whitespace-nowrap [&>b]:text-[length:var(--t-4)] [&>b]:font-bold [&>b]:text-[var(--text-strong)] [&>b]:tabular-nums [&>b.down]:text-[var(--down)] [&>b.up]:text-[var(--up)] [&>span:first-child]:text-[length:var(--t-3)] [&>span:first-child]:text-[var(--muted)]'
+const detailCardClassName = 'min-w-0 overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-4 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[var(--text-strong)]'
+const emptyPlayerRankCardClassName = cn(detailCardClassName, 'grid gap-3 px-5 py-4 [&_h3]:text-md [&>div:first-child]:border-0 [&>div:first-child]:pb-0')
+const playerRankCardHeadClassName = 'flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 [&_h3]:flex [&_h3]:flex-wrap [&_h3]:items-center [&_h3]:gap-2 [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] max-sm:flex-col'
+const componentLedgerRowClassName = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-2 bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 [&>b]:whitespace-nowrap [&>b]:text-md [&>b]:font-bold [&>b]:text-[var(--text-strong)] [&>b]:tabular-nums [&>b.down]:text-[var(--down)] [&>b.up]:text-[var(--up)] [&>span:first-child]:text-sm [&>span:first-child]:text-muted-foreground'
 
 function PlayerRankingCard({
   team,
@@ -2098,7 +2083,7 @@ function PlayerRankingCard({
               <p>{loadState.message}</p>
             </div>
           </div>
-          <p className="rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-[length:var(--t-2)] leading-[1.45] text-[var(--muted)]">
+          <p className="rounded-sm border border-border bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-xs leading-[1.45] text-muted-foreground">
             Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
           </p>
         </aside>
@@ -2116,7 +2101,7 @@ function PlayerRankingCard({
             <p>No player-level sources for {team.code ?? team.team} in {playerScopeLabel}.</p>
           </div>
         </div>
-        <p className="rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-[length:var(--t-2)] leading-[1.45] text-[var(--muted)]">
+        <p className="rounded-sm border border-border bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-xs leading-[1.45] text-muted-foreground">
           Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
         </p>
       </aside>
@@ -2138,7 +2123,7 @@ function PlayerRankingCard({
         <CountBadge>{players.length} players</CountBadge>
       </div>
 
-        <Table containerClassName="player-rank-table mt-4 max-h-[360px] overflow-auto rounded-[var(--r-2)] border border-[var(--line)] max-sm:max-h-none max-sm:overflow-visible [&_.right]:text-right [&_.ent_b]:block [&_.ent_b]:overflow-hidden [&_.ent_b]:text-ellipsis [&_.ent_b]:whitespace-nowrap [&_.ent_small]:block [&_.ent_small]:overflow-hidden [&_.ent_small]:text-ellipsis [&_.ent_small]:whitespace-nowrap [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_table]:max-sm:block [&_tbody]:max-sm:block [&_td]:border-b [&_td]:border-[var(--line)] [&_td]:px-2 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-middle [&_td]:text-[length:var(--t-3)] [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:bg-[var(--detail-surface-3,var(--surface-3))] [&_th]:px-2 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-[length:var(--t-1)] [&_th]:font-bold [&_th]:tracking-[0.08em] [&_th]:text-[var(--faint)] [&_th]:uppercase [&_tr:last-child_td]:border-b-0">
+        <Table containerClassName="player-rank-table mt-4 max-h-[360px] overflow-auto rounded-md border border-border max-sm:max-h-none max-sm:overflow-visible [&_.right]:text-right [&_.ent_b]:block [&_.ent_b]:overflow-hidden [&_.ent_b]:text-ellipsis [&_.ent_b]:whitespace-nowrap [&_.ent_small]:block [&_.ent_small]:overflow-hidden [&_.ent_small]:text-ellipsis [&_.ent_small]:whitespace-nowrap [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_table]:max-sm:block [&_tbody]:max-sm:block [&_td]:border-b [&_td]:border-border [&_td]:px-2 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-middle [&_td]:text-sm [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:border-b [&_th]:border-border [&_th]:bg-[var(--detail-surface-3,var(--surface-3))] [&_th]:px-2 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-2xs [&_th]:font-bold [&_th]:tracking-label [&_th]:text-[var(--faint)] [&_th]:uppercase [&_tr:last-child_td]:border-b-0">
           <TableHeader>
             <TableRow>
               <TableHead>Rank</TableHead>
@@ -2151,9 +2136,9 @@ function PlayerRankingCard({
           <TableBody>
             {players.map((player) => (
               <TableRow key={player.id}>
-                <TableCell className={cn('font-mono font-semibold text-[var(--muted)] tabular-nums', player.rank <= 3 && 'text-[var(--accent-strong)]')}>#{player.rank}</TableCell>
+                <TableCell className={cn('font-mono font-semibold text-muted-foreground tabular-nums', player.rank <= 3 && 'text-[var(--accent-strong)]')}>#{player.rank}</TableCell>
                 <TableCell>
-                  <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-[length:var(--t-2)] [&_small]:text-[var(--faint)]">
+                  <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-xs [&_small]:text-[var(--faint)]">
                     <b>{player.name}</b>
                     <small>
                       {observedLineupIds.has(player.playerId ?? player.id)
@@ -2163,7 +2148,7 @@ function PlayerRankingCard({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="whitespace-nowrap text-[length:var(--t-2)]">{player.role}</Badge>
+                  <Badge variant="secondary" className="whitespace-nowrap text-xs">{player.role}</Badge>
                 </TableCell>
                 <TableCell className="text-right">
                   <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />
@@ -2213,15 +2198,15 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
   )
 
   return (
-    <div className={cn(detailCardClassName, 'px-5 py-[18px]')} aria-label={`${team.team} rating components`}>
-      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-[length:var(--t-5)] [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-[length:var(--t-3)] [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-[length:var(--t-3)] [&>span]:font-bold [&>span]:text-[var(--muted)] [&>span]:tabular-nums">
+    <div className={cn(detailCardClassName, 'px-5 py-4')} aria-label={`${team.team} rating components`}>
+      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-sm [&>span]:font-bold [&>span]:text-muted-foreground [&>span]:tabular-nums">
         <div>
           <h3>Power Score Breakdown</h3>
           <p>How the model builds this team's Power score from the league anchor and team adjustments.</p>
         </div>
         <span>{formatRating(team.rating)} {formatUncertaintyBand(components.uncertainty)}</span>
       </div>
-      <div className="grid gap-px overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--line)]">
+      <div className="grid gap-px overflow-hidden rounded-md border border-border bg-[var(--line)]">
         <div className={cn(componentLedgerRowClassName, 'bg-[var(--detail-surface-3,var(--surface-3))]')} title="League anchor baseline before team-specific adjustments.">
           <span>{POWER_COMPONENT_LABELS.league}</span>
           <b>{formatRating(components.leagueAnchor)}</b>

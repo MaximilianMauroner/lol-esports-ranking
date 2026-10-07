@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Globe2, Plus, Swords, Trophy, X } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, Globe2, Swords, Trophy, X } from 'lucide-react'
 import {
   displayRegionPowerScore,
   displayRegionTotalTeamRating,
@@ -30,6 +30,7 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../com
 import { cn } from '../lib/utils'
 import { TeamMark } from '../components/TeamMark'
 import { RegionDepthChart } from '../components/RegionDepthChart'
+import { CompareToggle } from '../components/CompareToggle'
 
 export function RegionsView({
   regions,
@@ -114,7 +115,7 @@ export function RegionsView({
               <div
                 key={region.region}
                 className={cn(
-                  'group/row relative grid grid-cols-[minmax(0,1fr)_auto] items-center border-t border-[var(--line)] transition-[background] duration-150 first:border-t-0 hover:bg-[var(--surface-2)] has-[[data-row-open]:focus-visible]:bg-[var(--surface-2)]',
+                  'group/row relative grid grid-cols-[minmax(0,1fr)_auto] items-center border-t border-border transition-[background] duration-150 first:border-t-0 hover:bg-[var(--surface-2)] has-[[data-row-open]:focus-visible]:bg-[var(--surface-2)]',
                   picked && 'bg-[var(--selected-bg)] shadow-[var(--selected-bar)] hover:bg-[var(--selected-bg-hover)]',
                 )}
               >
@@ -131,8 +132,8 @@ export function RegionsView({
                   onFocus={onRequestRegionHistory}
                   onPointerEnter={onRequestRegionHistory}
                 >
-                  <span className="text-center text-[length:var(--t-6)] font-bold text-[var(--text-strong)] max-sm:row-span-2 max-sm:text-left">{region.rank}</span>
-                  <span className="flex min-w-0 items-center gap-3 [&>span]:min-w-0 [&_b]:text-[length:var(--t-5)] [&_b]:font-semibold [&_b]:tracking-normal [&_b]:text-[var(--text-strong)] [&_small]:mt-px [&_small]:block [&_small]:text-[length:var(--t-2)] [&_small]:text-[var(--muted)] max-sm:gap-[9px] max-sm:[&_b]:overflow-hidden max-sm:[&_b]:text-ellipsis max-sm:[&_b]:whitespace-nowrap max-sm:[&_small]:overflow-hidden max-sm:[&_small]:text-ellipsis max-sm:[&_small]:whitespace-nowrap">
+                  <span className="text-center text-lg font-bold text-[var(--text-strong)] max-sm:row-span-2 max-sm:text-left">{region.rank}</span>
+                  <span className="flex min-w-0 items-center gap-3 [&>span]:min-w-0 [&_b]:text-base [&_b]:font-semibold [&_b]:tracking-normal [&_b]:text-[var(--text-strong)] [&_small]:mt-px [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground max-sm:gap-2 max-sm:[&_b]:overflow-hidden max-sm:[&_b]:text-ellipsis max-sm:[&_b]:whitespace-nowrap max-sm:[&_small]:overflow-hidden max-sm:[&_small]:text-ellipsis max-sm:[&_small]:whitespace-nowrap">
                     <RegionBadge region={region.region} />
                     <span>
                       <b>{region.region}</b>
@@ -141,15 +142,15 @@ export function RegionsView({
                       </small>
                     </span>
                   </span>
-                  <span className="grid min-w-0 gap-0.5 text-[length:var(--t-2)] leading-[1.3] text-[var(--muted)] tabular-nums max-sm:col-start-2">
-                    <strong className="text-[length:var(--t-3)] font-semibold text-[var(--text-strong)]">Region power {formatRating(displayRegionPowerScore(region))}</strong>
-                    <small className="text-[length:var(--t-2)] text-[var(--faint)]" title={`Average of the three strongest teams. The depth gap is how far that is above the average of all ${formatNumber(region.topTeams.length)} ranked teams (${formatRating(displayRegionTotalTeamRating(region))}).`}>
+                  <span className="grid min-w-0 gap-0.5 text-xs leading-[1.3] text-muted-foreground tabular-nums max-sm:col-start-2">
+                    <strong className="text-sm font-semibold text-[var(--text-strong)]">Region power {formatRating(displayRegionPowerScore(region))}</strong>
+                    <small className="text-xs text-[var(--faint)]" title={`Average of the three strongest teams. The depth gap is how far that is above the average of all ${formatNumber(region.topTeams.length)} ranked teams (${formatRating(displayRegionTotalTeamRating(region))}).`}>
                       <span className="whitespace-nowrap">Top-three average</span>{' '}
                       <span className="whitespace-nowrap">· depth gap {formatRating(displayRegionPowerScore(region) - displayRegionTotalTeamRating(region))}</span>
                     </small>
                     <span className="hidden max-[1180px]:block">{formatSignedDecimal(region.winsOverExpected)} wins vs expected</span>
                   </span>
-                  <span className="grid min-w-0 gap-0.5 text-[length:var(--t-3)] text-[var(--muted)] tabular-nums [&_b]:font-semibold [&_b]:text-[var(--text)] [&_small]:block [&_small]:leading-[1.25] [&_small]:text-[var(--faint)] max-[1180px]:hidden">
+                  <span className="grid min-w-0 gap-0.5 text-sm text-muted-foreground tabular-nums [&_b]:font-semibold [&_b]:text-foreground [&_small]:block [&_small]:leading-[1.25] [&_small]:text-[var(--faint)] max-[1180px]:hidden">
                     <span className="block" title={`Bo2 ties count as half a win. Exact record ${formatRecord(region.internationalWins, region.internationalLosses)}.`}>
                       International record <span className="whitespace-nowrap"><b>{formatInternationalRecord(region)}</b> · {formatRatio(region.internationalWinRate)}</span>
                     </span>
@@ -161,14 +162,14 @@ export function RegionsView({
                     {region.topTeams.slice(0, 3).map((team) => (
                       <Badge className="gap-1.5" variant="secondary" key={team.team}>
                         <TeamMark team={team.team} code={team.code} className="size-5 border-0 bg-transparent" imageClassName="p-0" />
-                        <b className="font-bold text-[var(--text)]">{team.code ?? team.team.slice(0, 3).toUpperCase()}</b>
+                        <b className="font-bold text-foreground">{team.code ?? team.team.slice(0, 3).toUpperCase()}</b>
                         {formatRating(team.rating)}
                       </Badge>
                     ))}
                   </span>
                 </Button>
                 <div className="flex items-center gap-2 py-4 pr-3 pl-0 max-sm:gap-1 max-sm:pr-2">
-                  <RegionCompareButton picked={picked} onToggle={() => onToggle(region)} label={region.region} />
+                  <CompareToggle picked={picked} onToggle={() => onToggle(region)} label={region.region} className="relative z-10" />
                   <ChevronRight className="size-4 text-[var(--faint)] transition-colors group-hover/row:text-[var(--text-strong)]" aria-hidden="true" />
                 </div>
               </div>
@@ -198,27 +199,6 @@ type RegionDrawerTeam = {
   rank?: number
 }
 
-function RegionCompareButton({ picked, onToggle, label }: { picked: boolean; onToggle: () => void; label: string }) {
-  const tooltip = picked ? `Remove ${label} from comparison` : `Compare ${label}`
-  const accessibleLabel = picked ? `Comparing ${label}, remove from comparison` : tooltip
-
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      className={cn('relative z-10 min-w-[106px] border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--text)] hover:border-[var(--accent-line)] hover:bg-[var(--surface-3)] hover:text-[var(--text-strong)] focus-visible:border-[var(--accent-line)] focus-visible:text-[var(--text-strong)] max-sm:min-w-0', picked && 'border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent-strong)]')}
-      onClick={onToggle}
-      aria-label={accessibleLabel}
-      aria-pressed={picked}
-      title={tooltip}
-    >
-      {picked ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
-      <span>{picked ? 'Comparing' : 'Compare'}</span>
-    </Button>
-  )
-}
-
 const REGION_SPARKLINE_WIDTH = 150
 const REGION_SPARKLINE_HEIGHT = 42
 
@@ -238,22 +218,22 @@ function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistory
 
   if (!shape || !first || !last) {
     return (
-      <div className="grid min-w-[180px] grid-cols-1 items-center gap-3 rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 text-[var(--muted)] max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px]" aria-label={`${region} region trajectory unavailable`}>
-        <small className="block text-[length:var(--t-1)] tracking-[0.08em] text-[var(--faint)] uppercase">Power trajectory</small>
-        <b className="mt-[3px] block text-[var(--text-strong)] tabular-nums">History pending</b>
+      <div className="grid min-w-[180px] grid-cols-1 items-center gap-3 rounded-sm border border-border bg-[var(--surface-2)] px-3 py-2.5 text-muted-foreground max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px]" aria-label={`${region} region trajectory unavailable`}>
+        <small className="block text-2xs tracking-label text-[var(--faint)] uppercase">Power trajectory</small>
+        <b className="mt-1 block text-[var(--text-strong)] tabular-nums">History pending</b>
       </div>
     )
   }
 
   return (
     <div
-      className="grid min-w-[260px] grid-cols-[minmax(92px,auto)_150px] items-center gap-3 rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px] max-[560px]:w-full max-[560px]:grid-cols-1 [&_circle]:fill-[var(--accent)] [&_polyline]:fill-none [&_polyline]:stroke-[var(--accent)] [&_polyline]:stroke-[2.2] [&_polyline]:[stroke-linecap:round] [&_polyline]:[stroke-linejoin:round] [&_svg]:h-[42px] [&_svg]:w-[150px] [&_svg]:overflow-visible max-[560px]:[&_svg]:w-full"
+      className="grid min-w-[260px] grid-cols-[minmax(92px,auto)_150px] items-center gap-3 rounded-sm border border-border bg-[var(--surface-2)] px-3 py-2.5 max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px] max-[560px]:w-full max-[560px]:grid-cols-1 [&_circle]:fill-[var(--accent)] [&_polyline]:fill-none [&_polyline]:stroke-[var(--accent)] [&_polyline]:stroke-[2.2] [&_polyline]:[stroke-linecap:round] [&_polyline]:[stroke-linejoin:round] [&_svg]:h-[42px] [&_svg]:w-[150px] [&_svg]:overflow-visible max-[560px]:[&_svg]:w-full"
       aria-label={`${region} region power trajectory ${formatSignedDecimal(delta)} from ${formatDate(first[0])} to ${formatDate(last[0])}`}
     >
       <div>
-        <small className="block text-[length:var(--t-1)] tracking-[0.08em] text-[var(--faint)] uppercase">Power trajectory</small>
-        <b className={`mt-[3px] block tabular-nums ${deltaTone === 'up' ? 'text-[var(--up)]' : deltaTone === 'down' ? 'text-[var(--down)]' : 'text-[var(--text-strong)]'}`}>{formatSignedDecimal(delta)}</b>
-        <span className="mt-1 block text-xs text-[var(--muted)]">{formatDate(first[0])} to {formatDate(last[0])}</span>
+        <small className="block text-2xs tracking-label text-[var(--faint)] uppercase">Power trajectory</small>
+        <b className={`mt-1 block tabular-nums ${deltaTone === 'up' ? 'text-[var(--up)]' : deltaTone === 'down' ? 'text-[var(--down)]' : 'text-[var(--text-strong)]'}`}>{formatSignedDecimal(delta)}</b>
+        <span className="mt-1 block text-xs text-muted-foreground">{formatDate(first[0])} to {formatDate(last[0])}</span>
       </div>
       <svg viewBox={`0 0 ${REGION_SPARKLINE_WIDTH} ${REGION_SPARKLINE_HEIGHT}`} role="img" focusable="false">
         <polyline points={shape.points} />
@@ -319,10 +299,10 @@ function RegionDetailDrawer({
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
+          className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-card p-0 text-foreground shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
         >
-          <SheetHeader className="flex-row items-center gap-3 border-b border-[var(--line)] p-[18px_22px] text-left">
-            <SheetTitle className="mr-auto text-[length:var(--t-5)] font-semibold text-[var(--text-strong)]">{region.region} region detail</SheetTitle>
+          <SheetHeader className="flex-row items-center gap-3 border-b border-border p-[18px_22px] text-left">
+            <SheetTitle className="mr-auto text-base font-semibold text-[var(--text-strong)]">{region.region} region detail</SheetTitle>
             <SheetClose asChild>
               <Button type="button" variant="ghost">
                 <X size={16} aria-hidden="true" />
@@ -330,12 +310,12 @@ function RegionDetailDrawer({
               </Button>
             </SheetClose>
           </SheetHeader>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto overscroll-contain bg-[var(--surface-2)] px-[22px] pt-[18px] pb-6 [&>*]:shrink-0 max-[560px]:p-3">
-            <section className="flex items-end justify-between gap-[18px] rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--surface)] p-[18px] max-[820px]:flex-wrap max-[820px]:items-start max-[820px]:[&>div:first-child]:basis-full max-[560px]:p-3" aria-label={`${region.region} summary`}>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto overscroll-contain bg-[var(--surface-2)] px-5 pt-4 pb-6 [&>*]:shrink-0 max-[560px]:p-3">
+            <section className="flex items-end justify-between gap-4 rounded-md border border-[var(--line-strong)] bg-card p-4 max-[820px]:flex-wrap max-[820px]:items-start max-[820px]:[&>div:first-child]:basis-full max-[560px]:p-3" aria-label={`${region.region} summary`}>
               <div>
                 <p className="eyebrow">Region #{region.rank}</p>
-                <h3 className="mt-[3px] text-[length:var(--t-8)] leading-none font-bold text-[var(--text-strong)]">{region.region}</h3>
-                <p className="mt-[7px] flex max-w-[72ch] flex-wrap gap-x-2.5 gap-y-[5px] text-[length:var(--t-3)] text-[var(--muted)] [&>span]:inline-flex [&>span]:min-w-0 [&>span]:items-center [&>span:not(:last-child)::after]:ml-2.5 [&>span:not(:last-child)::after]:text-[var(--faint)] [&>span:not(:last-child)::after]:content-['·']">
+                <h3 className="mt-1 text-2xl leading-none font-bold text-[var(--text-strong)]">{region.region}</h3>
+                <p className="mt-2 flex max-w-[72ch] flex-wrap gap-x-2.5 gap-y-1 text-sm text-muted-foreground [&>span]:inline-flex [&>span]:min-w-0 [&>span]:items-center [&>span:not(:last-child)::after]:ml-2.5 [&>span:not(:last-child)::after]:text-[var(--faint)] [&>span:not(:last-child)::after]:content-['·']">
                   <span>{region.flagshipLeague ?? 'Multiple flagship leagues'}</span>
                   <span>{formatTier(region.tier)}</span>
                   <span>{formatCountWithUnit(region.teamCount, 'flagship team')}</span>
@@ -343,24 +323,24 @@ function RegionDetailDrawer({
                   <span>{formatCountWithUnit(region.ecosystemLeagueCount, 'ecosystem league')}</span>
                 </p>
               </div>
-              <strong className="grid justify-items-end gap-[3px] text-[length:var(--t-8)] leading-none text-[var(--rank-gold)] tabular-nums max-[560px]:justify-items-start">
+              <strong className="grid justify-items-end gap-1 text-2xl leading-none text-[var(--text-strong)] tabular-nums max-[560px]:justify-items-start">
                 {formatRating(displayRegionPowerScore(region))}
-                <span className="text-[length:var(--t-1)] font-semibold tracking-[0.1em] text-[var(--faint)] uppercase">Region power</span>
+                <span className="text-2xs font-semibold tracking-label text-[var(--faint)] uppercase">Region power</span>
               </strong>
               <RegionPowerSparkline series={series} region={region.region} />
             </section>
 
-            <div className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)]">
+            <div className="rounded-md border border-border bg-card">
               <DetailStat
                 label="International record"
                 value={formatRecord(region.internationalWins, region.internationalLosses)}
                 description={`Series between regions' main leagues. A tied Bo2 counts as half a win and half a loss. Event weight changes Power, not this record. Win rate ${formatRatio(region.internationalWinRate)}.`}
               />
             </div>
-            <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] p-3">
+            <details className="rounded-md border border-border bg-card p-3">
               <summary className="cursor-pointer text-sm font-semibold">Regional evidence and definitions</summary>
-              <p className="my-3 text-sm text-[var(--muted)]">Flagship means a region’s main league. Connectivity measures how much cross-region match evidence connects its teams to the wider ranking.</p>
-            <section className="grid grid-cols-3 overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] [&>*:nth-child(3n)]:border-r-0 [&>*:nth-last-child(-n+3)]:border-b-0 max-[820px]:grid-cols-2 max-[820px]:[&>*:nth-child(3n)]:border-r max-[820px]:[&>*:nth-child(2n)]:border-r-0 max-[820px]:[&>*:nth-last-child(-n+3)]:border-b max-[820px]:[&>*:nth-last-child(-n+2)]:border-b-0 max-[560px]:grid-cols-1 max-[560px]:[&>*]:border-r-0 max-[560px]:[&>*]:border-b max-[560px]:[&>*:last-child]:border-b-0" aria-label={`${region.region} metrics`}>
+              <p className="my-3 text-sm text-muted-foreground">Flagship means a region’s main league. Connectivity measures how much cross-region match evidence connects its teams to the wider ranking.</p>
+            <section className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-card [&>*:nth-child(3n)]:border-r-0 [&>*:nth-last-child(-n+3)]:border-b-0 max-[820px]:grid-cols-2 max-[820px]:[&>*:nth-child(3n)]:border-r max-[820px]:[&>*:nth-child(2n)]:border-r-0 max-[820px]:[&>*:nth-last-child(-n+3)]:border-b max-[820px]:[&>*:nth-last-child(-n+2)]:border-b-0 max-[560px]:grid-cols-1 max-[560px]:[&>*]:border-r-0 max-[560px]:[&>*]:border-b max-[560px]:[&>*:last-child]:border-b-0" aria-label={`${region.region} metrics`}>
 
               <DetailStat
                 label="Adjusted international rate"
@@ -403,7 +383,7 @@ function RegionDetailDrawer({
 
             <RegionMatchHistory key={region.region} region={region} teams={displayedTeams} series={series} state={matchHistoryState} onRequestPages={onRequestMatchHistoryPages} />
 
-            <section className="grid gap-3 rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] px-[18px] py-4 max-[560px]:p-3" aria-label={`${region.region} teams`}>
+            <section className="grid gap-3 rounded-md border border-border bg-card px-4 py-4 max-[560px]:p-3" aria-label={`${region.region} teams`}>
               <div>
                 <p className="eyebrow">League teams</p>
                 <h3 className="mt-0.5 text-base font-semibold text-[var(--text-strong)]">All flagship representatives</h3>
@@ -411,18 +391,18 @@ function RegionDetailDrawer({
               <div className="grid max-h-[min(420px,42vh)] overflow-y-auto pr-1.5 [scrollbar-gutter:stable]">
                 {displayedTeams.length > 0 ? (
                   displayedTeams.map((team, index) => (
-                    <div className="grid grid-cols-[52px_36px_minmax(0,1fr)_auto] items-center gap-3 border-t border-[var(--line)] py-[11px] first:border-t-0 max-[560px]:grid-cols-[38px_32px_minmax(0,1fr)_auto] max-[560px]:gap-2" key={team.team}>
-                      <span className="font-mono text-[length:var(--t-2)] text-[var(--faint)]">{team.rank ? `#${team.rank}` : `#${index + 1}`}</span>
+                    <div className="grid grid-cols-[52px_36px_minmax(0,1fr)_auto] items-center gap-3 border-t border-border py-3 first:border-t-0 max-[560px]:grid-cols-[38px_32px_minmax(0,1fr)_auto] max-[560px]:gap-2" key={team.team}>
+                      <span className="font-mono text-xs text-[var(--faint)]">{team.rank ? `#${team.rank}` : `#${index + 1}`}</span>
                       <TeamMark team={team.team} code={team.code} className="size-9 max-[560px]:size-8" />
                       <div>
-                        <b className="block text-[length:var(--t-4)] text-[var(--text-strong)] [overflow-wrap:anywhere]">{team.team}</b>
-                        {team.code ? <small className="mt-0.5 block text-[length:var(--t-2)] text-[var(--muted)]">{team.code}</small> : null}
+                        <b className="block text-md text-[var(--text-strong)] [overflow-wrap:anywhere]">{team.team}</b>
+                        {team.code ? <small className="mt-0.5 block text-xs text-muted-foreground">{team.code}</small> : null}
                       </div>
-                      <strong className="text-[var(--rank-gold)] tabular-nums">{formatRating(team.rating)}</strong>
+                      <strong className="text-[var(--text-strong)] tabular-nums">{formatRating(team.rating)}</strong>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[var(--muted)]">No team rows are available for this region in the current scope.</p>
+                  <p className="text-muted-foreground">No team rows are available for this region in the current scope.</p>
                 )}
               </div>
             </section>
@@ -485,25 +465,25 @@ function RegionMatchHistory({
   }, [neededPagesKey, onRequestPages])
 
   return (
-    <section className="overflow-hidden rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)]" aria-label={`${region.region} match and score history`}>
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] px-[18px] py-4 max-[560px]:p-3">
+    <section className="overflow-hidden rounded-md border border-border bg-card" aria-label={`${region.region} match and score history`}>
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-4 py-4 max-[560px]:p-3">
         <div>
           <p className="eyebrow">Match history</p>
           <h3 className="mt-0.5 text-base font-semibold text-[var(--text-strong)]">Results and region score movement</h3>
         </div>
-        <p className="max-w-[420px] text-right text-[length:var(--t-2)] leading-[1.4] text-[var(--faint)] max-[560px]:text-left">
+        <p className="max-w-[420px] text-right text-xs leading-[1.4] text-[var(--faint)] max-[560px]:text-left">
           Team power is applied per completed series. Region movement is the top-three average change at that day's checkpoint.
         </p>
       </div>
 
       {state.status === 'idle' ? (
-        <p className="px-[18px] py-5 text-[length:var(--t-3)] text-[var(--muted)]">Match history loads when this region is opened.</p>
+        <p className="px-4 py-5 text-sm text-muted-foreground">Match history loads when this region is opened.</p>
       ) : state.status === 'loading' ? (
         <LoadingState presentation="rows" className="m-3" label={`Loading ${region.region} match history`} description="Fetching the scoped match ledger." />
       ) : state.status === 'missing' || state.status === 'error' ? (
-        <p className="px-[18px] py-5 text-[length:var(--t-3)] text-[var(--muted)]">{state.message}</p>
+        <p className="px-4 py-5 text-sm text-muted-foreground">{state.message}</p>
       ) : refs.length === 0 ? (
-        <p className="px-[18px] py-5 text-[length:var(--t-3)] text-[var(--muted)]">No matches are available for this region in the current scope.</p>
+        <p className="px-4 py-5 text-sm text-muted-foreground">No matches are available for this region in the current scope.</p>
       ) : (
         <>
           {visibleMatches.length > 0 ? (
@@ -520,14 +500,14 @@ function RegionMatchHistory({
           ) : null}
           {pageLoading ? <LoadingState presentation="rows" className="m-3" rowCount={6} label={`Loading ${region.region} matches`} description="Fetching the missing rows for this page." /> : null}
           {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
-            <p className="px-[18px] py-5 text-[length:var(--t-3)] text-[var(--loss)]">{pageFailure.message}</p>
+            <p className="px-4 py-5 text-sm text-destructive" role="alert">{pageFailure.message}</p>
           ) : null}
           {pageCount > 1 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] px-[18px] py-3 text-[length:var(--t-3)] text-[var(--muted)] max-[560px]:px-3" aria-label={`${region.region} match history pagination`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground max-[560px]:px-3" aria-label={`${region.region} match history pagination`}>
               <span>{formatNumber(pageStart + 1)}–{formatNumber(pageStart + visibleRefs.length)} of {formatNumber(refs.length)}</span>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="icon" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} aria-label={`Previous ${region.region} match history page`}><ChevronLeft /></Button>
-                <span className="min-w-20 text-center font-semibold text-[var(--text)]">Page {currentPage} of {pageCount}</span>
+                <span className="min-w-20 text-center font-semibold text-foreground">Page {currentPage} of {pageCount}</span>
                 <Button type="button" variant="outline" size="icon" onClick={() => setPage(Math.min(pageCount, currentPage + 1))} disabled={currentPage === pageCount} aria-label={`Next ${region.region} match history page`}><ChevronRight /></Button>
               </div>
             </div>
@@ -570,14 +550,14 @@ function RegionMatchRow({
     : undefined
 
   return (
-    <article className="grid grid-cols-[108px_minmax(0,1.45fr)_minmax(150px,0.8fr)_minmax(170px,0.9fr)] items-center gap-4 border-t border-[var(--line)] px-[18px] py-3.5 first:border-t-0 max-[820px]:grid-cols-[90px_minmax(0,1fr)_minmax(140px,auto)] max-[820px]:[&>div:last-child]:col-start-2 max-[820px]:[&>div:last-child]:col-end-4 max-[560px]:grid-cols-1 max-[560px]:gap-2.5 max-[560px]:px-3 max-[560px]:[&>div:last-child]:col-start-1 max-[560px]:[&>div:last-child]:col-end-2">
-      <div className="text-[length:var(--t-2)] text-[var(--faint)]">
+    <article className="grid grid-cols-[108px_minmax(0,1.45fr)_minmax(150px,0.8fr)_minmax(170px,0.9fr)] items-center gap-4 border-t border-border px-4 py-3.5 first:border-t-0 max-[820px]:grid-cols-[90px_minmax(0,1fr)_minmax(140px,auto)] max-[820px]:[&>div:last-child]:col-start-2 max-[820px]:[&>div:last-child]:col-end-4 max-[560px]:grid-cols-1 max-[560px]:gap-2.5 max-[560px]:px-3 max-[560px]:[&>div:last-child]:col-start-1 max-[560px]:[&>div:last-child]:col-end-2">
+      <div className="text-xs text-[var(--faint)]">
         <span className="block">{formatDate(summary.datetimeUtc ?? summary.date)}</span>
         <span className="mt-1 block">Bo{summary.bestOf} · {match.games.length} {match.games.length === 1 ? 'game' : 'games'}</span>
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[length:var(--t-2)] text-[var(--muted)]" title={summary.event}>{summary.event}</p>
-        <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[length:var(--t-3)]">
+        <p className="truncate text-xs text-muted-foreground" title={summary.event}>{summary.event}</p>
+        <div className="mt-1.5 flex min-w-0 items-center gap-2 text-sm">
           <strong className={cn('truncate', teamAIsRegional && 'text-[var(--text-strong)]')}>{summary.teamA.name}</strong>
           <span className="shrink-0 font-extrabold text-[var(--text-strong)] tabular-nums">{summary.seriesWinsA}–{summary.seriesWinsB}</span>
           <strong className={cn('truncate', teamBIsRegional && 'text-[var(--text-strong)]')}>{summary.teamB.name}</strong>
@@ -585,26 +565,26 @@ function RegionMatchRow({
       </div>
       <div>
         <span className={cn(
-          'inline-flex items-center rounded-full px-2 py-1 text-[length:var(--t-1)] font-bold',
-          regionalClash ? 'bg-[var(--surface-3)] text-[var(--muted)]' : regionWon ? 'bg-[var(--win-soft)] text-[var(--win)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]',
+          'inline-flex items-center rounded-full px-2 py-1 text-2xs font-bold',
+          regionalClash ? 'bg-[var(--surface-3)] text-muted-foreground' : regionWon ? 'bg-[var(--win-soft)] text-[var(--win)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]',
         )}>
           {regionalClash ? 'Regional matchup' : regionWon ? 'Region win' : 'Region loss'}
         </span>
-        <p className="mt-1.5 text-[length:var(--t-2)] text-[var(--muted)] tabular-nums">
+        <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
           {impactParts.length > 0 ? `Team power ${impactParts.join(' · ')}` : 'Team power held'}
         </p>
       </div>
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-[var(--line)] pl-4 max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:pt-2.5 max-[820px]:pl-0">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-border pl-4 max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:pt-2.5 max-[820px]:pl-0">
         <ArrowRight className="size-4 text-[var(--faint)]" aria-hidden="true" />
         <div>
-          <strong className={cn('block text-[length:var(--t-3)] tabular-nums', typeof directRegionEffect === 'number' && directRegionEffect > 0 ? 'text-[var(--up)]' : typeof directRegionEffect === 'number' && directRegionEffect < 0 ? 'text-[var(--down)]' : 'text-[var(--text)]')}>
+          <strong className={cn('block text-sm tabular-nums', typeof directRegionEffect === 'number' && directRegionEffect > 0 ? 'text-[var(--up)]' : typeof directRegionEffect === 'number' && directRegionEffect < 0 ? 'text-[var(--down)]' : 'text-foreground')}>
             {typeof directRegionEffect === 'number' && directRegionEffect !== 0
               ? `≈ ${formatSignedDecimal(directRegionEffect)} direct region effect`
               : contributingTeam
                 ? 'Region effect held'
                 : 'Outside the top three'}
           </strong>
-          <small className="mt-0.5 block text-[length:var(--t-1)] text-[var(--faint)]">
+          <small className="mt-0.5 block text-2xs text-[var(--faint)]">
             {movement
               ? `Daily checkpoint ${formatSignedDecimal(movement.delta)} → ${formatRating(movement.score)}${contributingTeam ? ` · ${contributingTeam} contributed` : ''}`
               : 'No score checkpoint was published for this date'}
@@ -666,10 +646,10 @@ function flagshipTeamsForRegion(region: RegionStrength, standings: RegionStandin
 
 function DetailStat({ label, value, description }: { label: string; value: string; description: string }) {
   return (
-    <div className="grid min-w-0 gap-[5px] border-r border-b border-[var(--line)] px-4 py-3.5">
+    <div className="grid min-w-0 gap-1 border-r border-b border-border px-4 py-3.5">
       <span className="text-xs font-semibold text-[var(--faint)]">{label}</span>
-      <strong className="text-[length:var(--t-5)] text-[var(--text-strong)] tabular-nums [overflow-wrap:anywhere]">{value}</strong>
-      <p className="text-xs leading-relaxed text-[var(--muted)]">{description}</p>
+      <strong className="text-base text-[var(--text-strong)] tabular-nums [overflow-wrap:anywhere]">{value}</strong>
+      <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   )
 }
@@ -689,9 +669,9 @@ function formatCountWithUnit(value: number | undefined, singular: string) {
 
 function RegionDepthLegend() {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[length:var(--t-2)] text-[var(--muted)]" aria-label="Chart legend">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Chart legend">
       <li className="inline-flex items-center gap-1.5">
-        <span className="size-2.5 rounded-full bg-[var(--accent)]" aria-hidden="true" />
+        <span className="size-2.5 rounded-full bg-[var(--series-1)]" aria-hidden="true" />
         Counts toward region score
       </li>
       <li className="inline-flex items-center gap-1.5">

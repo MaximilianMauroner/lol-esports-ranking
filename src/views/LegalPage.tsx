@@ -17,13 +17,13 @@ export function LegalPage({ page }: { page: LegalPageName }) {
   }, [title])
 
   return (
-    <main className="min-h-screen bg-[var(--bg)] px-[var(--page-x)] py-8 text-[var(--text)]">
+    <main className="min-h-screen bg-[var(--bg)] px-[var(--page-x)] py-8 text-foreground">
       <div className="mx-auto grid w-full max-w-[900px] gap-6">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] pb-5">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div>
-            <a className="text-[length:var(--t-2)] tracking-[0.16em] text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
+            <a className="text-xs tracking-label text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
             <h1 className="mt-2 text-3xl font-bold text-[var(--text-strong)]">{title}</h1>
-            <p className="mt-1 text-sm text-[var(--muted)]">Last updated: {UPDATED_AT}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Last updated: {UPDATED_AT}</p>
           </div>
           <nav className="flex flex-wrap gap-3 text-sm" aria-label="Legal pages">
             <LegalLink href="/legal">Legal</LegalLink>
@@ -34,8 +34,8 @@ export function LegalPage({ page }: { page: LegalPageName }) {
 
         {page === 'legal' ? <LegalNotice /> : page === 'privacy' ? <PrivacyPolicy /> : <Licenses />}
 
-        <footer className="border-t border-[var(--line)] pt-5 text-sm text-[var(--muted)]">
-          <a className="hover:text-[var(--text)] hover:underline" href="/">Back to the rankings</a>
+        <footer className="border-t border-border pt-5 text-sm text-muted-foreground">
+          <a className="hover:text-foreground hover:underline" href="/">Back to the rankings</a>
         </footer>
       </div>
     </main>
@@ -115,7 +115,7 @@ function Licenses() {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--surface)] p-5 text-sm leading-7 text-[var(--muted)] shadow-[var(--shadow-1)]">
+    <section className="rounded-md border border-border bg-card p-5 text-sm leading-7 text-muted-foreground shadow-[var(--shadow-1)]">
       <h2 className="mb-3 text-lg font-bold text-[var(--text-strong)]">{title}</h2>
       {children}
     </section>
@@ -123,7 +123,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function LegalLink({ href, children }: { href: string; children: ReactNode }) {
-  return <a className="text-[var(--muted)] hover:text-[var(--text)] hover:underline" href={href}>{children}</a>
+  return <a className="text-muted-foreground hover:text-foreground hover:underline" href={href}>{children}</a>
 }
 
 function EmailLink() {

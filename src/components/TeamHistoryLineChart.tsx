@@ -30,7 +30,7 @@ export function TeamHistoryLineChart({ yFormat, ...props }: TeamHistoryLineChart
         tooltipWrapperStyle={{ position: 'static', width: '100%' }}
         persistentTooltip
       />
-      <div ref={setDetailsPortal} className="min-w-0 px-[18px] pb-3" role="region" aria-label="Selected chart point details" />
+      <div ref={setDetailsPortal} className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details" />
     </div>
   )
 }
@@ -66,25 +66,25 @@ function TeamHistoryTooltip({
 
   if (rows.length === 0) return null
   return (
-    <div className="grid min-w-0 gap-2 border-t border-[var(--line)] pt-3 text-[length:var(--t-3)] whitespace-normal">
-      <b className="mb-0.5 text-[length:var(--t-2)] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
+    <div className="grid min-w-0 gap-2 border-t border-border pt-3 text-sm whitespace-normal">
+      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
         {rows.map((row) => {
           const closeNote = dailyCloseNote(row.detail)
           return (
             <div className="grid min-w-0 content-start gap-1" key={row.key}>
-              <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-[var(--muted)]">
+              <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-muted-foreground">
                 <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
                 <em className="min-w-0 overflow-hidden text-ellipsis not-italic">{row.label}</em>
                 <div className="grid justify-items-end gap-px">
-                  <strong className="text-[var(--text)] tabular-nums">{yFormat(row.value)}</strong>
+                  <strong className="text-foreground tabular-nums">{yFormat(row.value)}</strong>
                   {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
-                    <b className="text-[length:var(--t-1)] font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)} {row.detail.visibleDeltaUnit === 'rank' ? 'rank positions' : 'Power points'}</b>
+                    <b className="text-2xs font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)} {row.detail.visibleDeltaUnit === 'rank' ? 'rank positions' : 'Power points'}</b>
                   ) : null}
                 </div>
               </div>
-              {row.influence ? <small className="ml-5 text-[length:var(--t-2)] leading-[1.35] text-[var(--faint)]">{row.influence}</small> : null}
-              {closeNote ? <div className="ml-5 text-[length:var(--t-1)] leading-[1.35] text-[var(--muted)] [overflow-wrap:anywhere]">{closeNote}</div> : null}
+              {row.influence ? <small className="ml-5 text-xs leading-[1.35] text-[var(--faint)]">{row.influence}</small> : null}
+              {closeNote ? <div className="ml-5 text-2xs leading-[1.35] text-muted-foreground [overflow-wrap:anywhere]">{closeNote}</div> : null}
               <TooltipMatchList detail={row.detail} />
               <TooltipModelDetail detail={row.detail} />
             </div>
@@ -99,7 +99,7 @@ function TooltipMatchList({ detail }: { detail?: ChartPointDetail }) {
   const matches = detail?.dayMatches
   if (!matches || matches.length <= 1) return null
   return (
-    <div className="ml-5 grid gap-[5px] text-[length:var(--t-1)] leading-[1.35] text-[var(--muted)] [&>div]:[overflow-wrap:anywhere]">
+    <div className="ml-5 grid gap-1 text-2xs leading-[1.35] text-muted-foreground [&>div]:[overflow-wrap:anywhere]">
       {matches.map((match, index) => {
         const label = formatChartInfluence(match)
         return label ? <div key={`${match.event ?? 'match'}-${match.opponent ?? index}-${index}`}>{label}</div> : null
@@ -123,9 +123,9 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
   if (!expected && !residual && attribution.length === 0 && typeof otherDelta !== 'number') return null
 
   return (
-    <div className="ml-5 grid gap-[5px]">
+    <div className="ml-5 grid gap-1">
       {expected || residual ? (
-        <div className="text-[length:var(--t-1)] leading-[1.35] text-[var(--faint)]">
+        <div className="text-2xs leading-[1.35] text-[var(--faint)]">
           {expected ? `Expected win ${expected}` : null}
           {expected && residual ? ' / ' : null}
           {residual ? `Residual ${residual}` : null}
@@ -134,12 +134,12 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
       {attribution.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {attribution.map((entry) => (
-            <span className="inline-flex w-fit items-center rounded-[var(--r-1)] border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-[5px] py-0.5 text-[length:var(--t-1)] text-[var(--muted)] tabular-nums" key={entry.key}>{formatChartAttribution(entry)} Power points</span>
+            <span className="inline-flex w-fit items-center rounded-sm border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-1 py-0.5 text-2xs text-muted-foreground tabular-nums" key={entry.key}>{formatChartAttribution(entry)} Power points</span>
           ))}
         </div>
       ) : null}
       {typeof otherDelta === 'number' ? (
-        <div className="text-[length:var(--t-1)] leading-[1.35] text-[var(--faint)]">Other daily change {formatPreciseSignedDelta(otherDelta)} Power points</div>
+        <div className="text-2xs leading-[1.35] text-[var(--faint)]">Other daily change {formatPreciseSignedDelta(otherDelta)} Power points</div>
       ) : null}
     </div>
   )
