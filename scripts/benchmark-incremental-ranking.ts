@@ -263,6 +263,7 @@ type BenchmarkSetup = {
 }
 
 type FixtureShape = {
+  ratedBaselineMatchCount: number
   importedMatchCount: number
   importedTeamCount: number
   sourceMatchCount: number
@@ -328,6 +329,12 @@ async function runBenchmarkParent() {
       rawHistoryManifests.push(historyManifest)
     }
     const fixtureShape = await assertSingleImportedAppend(baselineManifest, nextManifest)
+    if (process.argv.includes('--enforce-targets')) {
+      assertGateScale('rated baseline matches', fixtureShape.ratedBaselineMatchCount, corpusMinimums.matches)
+      if (fixtureShape.ratedBaselineMatchCount !== benchmarkMatchCount) {
+        throw new Error(`Benchmark rated corpus differs from requested input: ${fixtureShape.ratedBaselineMatchCount} !== ${benchmarkMatchCount}`)
+      }
+    }
 
     const client = await fileBackedS3()
     const { generationId: baselineGenerationId, matchCount: baselineMatchCount, rawDeltaCount: baselineRawDeltaCount } = await seedBaseline(client, baselineManifest, rawHistoryManifests)
@@ -379,6 +386,10 @@ async function runBenchmarkParent() {
       repeat: index + 1,
       computeMs: Number(output.computeMs),
       uploadedBytes: Number(output.uploadedBytes),
+      uploadedBytesBySurface: output.uploadedBytesBySurface,
+      storagePutCount: output.storagePutCount,
+      changedPaths: output.changedPaths,
+      reusedPaths: output.reusedPaths,
       sampledPeakRssBytes,
       sampledPeakAtMs,
       maxRssBytes: Number(output.maxRssBytes),
@@ -467,6 +478,7 @@ async function assertSingleImportedAppend(baselineManifest: string, nextManifest
     throw new Error(`Benchmark fixture is not one imported append: ${JSON.stringify({ added, removed })}`)
   }
   return {
+    ratedBaselineMatchCount: baseline.matches.length,
     importedMatchCount: next.matches.length,
     importedTeamCount: Object.keys(next.teams).length,
     sourceMatchCount: next.importedMatches.length,
@@ -600,6 +612,7 @@ async function runBenchmarkWorker() {
       fixtureReason: 'raw provider files are ignored and unavailable in isolated CI; checked-in canonical pages preserve production match distributions',
       referenceMatchCount: currentShape.matchCount,
       benchmarkMatchCount,
+      baselineMatchCount,
       referenceTeamCount: currentShape.teamCount,
       referencePlayerCount: currentShape.playerCount,
       ...fixtureShape,
@@ -607,7 +620,8 @@ async function runBenchmarkWorker() {
       appendedMatches: fixtureShape.importedMatchCount - baselineMatchCount,
     },
     appendedMatches: fixtureShape.importedMatchCount - baselineMatchCount,
-    corpusValid: benchmarkMatchCount >= corpusMinimums.matches
+    corpusValid: baselineMatchCount === benchmarkMatchCount
+      && baselineMatchCount >= corpusMinimums.matches
       && fixtureShape.sourceTeamCount >= corpusMinimums.teams
       && fixtureShape.sourcePlayerCount >= corpusMinimums.players,
     computeMs: Math.round(computeMs), uploadedBytes,
@@ -758,6 +772,10 @@ async function runMeasuredWorker() {
     output: JSON.parse(lastLine) as {
       computeMs: number
       uploadedBytes: number
+      uploadedBytesBySurface: Record<string, number>
+      storagePutCount: number
+      changedPaths: number
+      reusedPaths: number
       maxRssBytes: number
       fullSnapshotWritten: boolean
       parity: boolean
@@ -1327,6 +1345,7 @@ type StoredObject = {
   etag: string
   contentType?: string
   contentEncoding?: string
+  cacheControl?: string
   metadata?: Record<string, string>
 }
 type PutLog = { key: string; bytes: number }
@@ -1363,6 +1382,7 @@ async function fileBackedS3() {
           ...(name === 'GetObjectCommand' ? { Body: Readable.from([await readFile(stored.filePath)]) } : {}),
           ETag: stored.etag, ContentLength: stored.bytes,
           ContentType: stored.contentType, ContentEncoding: stored.contentEncoding, Metadata: stored.metadata,
+          CacheControl: stored.cacheControl,
         }
       }
       if (name === 'PutObjectCommand') {
@@ -1378,6 +1398,7 @@ async function fileBackedS3() {
           filePath, bytes: bytes.byteLength, etag,
           contentType: typeof input.ContentType === 'string' ? input.ContentType : undefined,
           contentEncoding: typeof input.ContentEncoding === 'string' ? input.ContentEncoding : undefined,
+          cacheControl: typeof input.CacheControl === 'string' ? input.CacheControl : undefined,
           metadata: isStringRecord(input.Metadata) ? input.Metadata : undefined,
         })
         puts.push({ key, bytes: bytes.byteLength })

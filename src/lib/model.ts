@@ -72,14 +72,26 @@ export type RankingModelOutput = {
   predictions: PregamePrediction[]
 }
 
-export type RatingReplayContext = {
+export type RatingEventContext = {
   authoritativeMatches: MatchRecord[]
-  teams: Record<string, TeamProfile>
   eventWeightContext: ReturnType<typeof eventWeightContextForMatches>
+  lastDate: string
+}
+
+export type RatingReplayContext = RatingEventContext & {
+  teams: Record<string, TeamProfile>
   pregamePlayerRatingEdges: Map<string, PregamePlayerRatingEdge>
   teamRosterBasis: Map<string, RosterBasis>
   tournamentLifecycles: ReadonlyMap<string, PlacementTournamentLifecycle>
-  lastDate: string
+}
+
+export function createRatingEventContext(authoritativeMatches: readonly MatchRecord[]): RatingEventContext {
+  const sortedMatches = authoritativeMatches.toSorted(compareReplayMatches)
+  return {
+    authoritativeMatches: sortedMatches,
+    eventWeightContext: eventWeightContextForMatches(sortedMatches),
+    lastDate: sortedMatches.at(-1)?.date ?? new Date().toISOString().slice(0, 10),
+  }
 }
 
 export function createRatingReplayContext(
@@ -87,16 +99,13 @@ export function createRatingReplayContext(
   teams: Record<string, TeamProfile>,
   { tournamentLifecycles = new Map() }: { tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle> } = {},
 ): RatingReplayContext {
-  const sortedMatches = authoritativeMatches.toSorted(compareReplayMatches)
-  const eventWeightContext = eventWeightContextForMatches(sortedMatches)
+  const eventContext = createRatingEventContext(authoritativeMatches)
   return {
-    authoritativeMatches: sortedMatches,
+    ...eventContext,
     teams,
-    eventWeightContext,
-    pregamePlayerRatingEdges: buildPregamePlayerRatingEdges(sortedMatches, { teams, eventWeightContext }),
-    teamRosterBasis: rosterBasisByTeam(sortedMatches),
+    pregamePlayerRatingEdges: buildPregamePlayerRatingEdges(eventContext.authoritativeMatches, { teams, eventWeightContext: eventContext.eventWeightContext }),
+    teamRosterBasis: rosterBasisByTeam(eventContext.authoritativeMatches),
     tournamentLifecycles,
-    lastDate: sortedMatches.at(-1)?.date ?? new Date().toISOString().slice(0, 10),
   }
 }
 
@@ -554,7 +563,7 @@ type DirectHeadToHeadContextInput = {
   lastDate: string
 }
 
-function makeDirectHeadToHeadContextAdjustments({
+export function makeDirectHeadToHeadContextAdjustments({
   displayRatings,
   teams,
   histories,
@@ -636,7 +645,7 @@ function daysBetween(date: string, lastDate: string) {
   return Math.max(0, Math.floor((Date.parse(lastDate) - Date.parse(date)) / 86_400_000))
 }
 
-function makeDisplayRatings(
+export function makeDisplayRatings(
   ratings: Map<string, number>,
   teams: Record<string, TeamProfile>,
   leagueScores: Map<string, number>,

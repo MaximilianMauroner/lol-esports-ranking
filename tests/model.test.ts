@@ -9,7 +9,7 @@ import {
   isPostWorldsPreseasonMatch,
 } from '../src/lib/eventWeighting.ts'
 import { ensureLeague, updateLeagueStrengthForSeries } from '../src/lib/leagueRatings.ts'
-import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
+import { buildPlayerModel, buildRankingModel, createRatingEventContext, createRatingReplayContext } from '../src/lib/model.ts'
 import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, publishedTeamStableOffset } from '../src/lib/ratingCalculations.ts'
 import { compactPlayerRecentMatches } from '../src/lib/snapshot.ts'
 import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/types.ts'
@@ -64,6 +64,7 @@ test('series rows publish one atomic team and league strength update', () => {
   }
   const model = buildRankingModel(seriesFixture({
     id: 'msi-alpha-delta',
+    bestOf: 5,
     date: '2026-02-01',
     event: 'MSI Fixture',
     region: 'International',
@@ -300,6 +301,15 @@ test('an unequal Bo3 prefix stays ongoing and does not count for eligibility', (
   assert.equal(alpha.eligibility.totalGames, 0)
   assert.equal(alpha.history[0]?.source.seriesState, 'ongoing')
   assert.equal(alpha.history[0]?.source.seriesOutcome, undefined)
+})
+
+test('a 2-2 fallback prefix cannot award a series update or eligibility evidence', () => {
+  const model = buildRankingModel(seriesFixture({ id: 'four-game-prefix', bestOf: 1, bestOfBasis: 'fallback',
+    winners: ['Alpha', 'Beta', 'Alpha', 'Beta'] }), { ...teams })
+  const alpha = standingFor(model, 'Alpha')
+  assert.equal(alpha.baseRating, 1500)
+  assert.ok(alpha.history.every((point) => point.ratingUpdate.updateUnit !== 'series-atomic'))
+  assert.equal(alpha.eligibility.totalGames, 0)
 })
 
 test('an international Bo2 tie assigns half a league result without inventing league history wins', () => {
@@ -577,6 +587,7 @@ test('series expectation can value an elite win above an expected sweep', () => 
     ...setup,
     ...seriesFixture({
       id: 'alpha-delta-series',
+      bestOf: 5,
       date: '2026-03-01',
       sourceProvider: 'oracles-elixir',
       event: 'MSI 2026',
@@ -696,7 +707,19 @@ test('post-Worlds preseason games are discounted except Demacia Cup, which keeps
     event: 'LCK 2026 Spring',
   })
   const worldsFinalMatches = [1, 2, 3].map((gameNumber) => ({ ...worldsFinal, id: `worlds-final-${gameNumber}`, sourceMatchId: 'worlds-final-series', gameNumber }))
-  const context = eventWeightContextForMatches([...worldsFinalMatches, demaciaCup, kespaCup, nextYearMatch])
+  const unsortedMatches = [nextYearMatch, worldsFinalMatches[2]!, demaciaCup, worldsFinalMatches[0]!, kespaCup, worldsFinalMatches[1]!]
+  const originalOrder = unsortedMatches.map((match) => match.id)
+  const eventContext = createRatingEventContext(unsortedMatches)
+  const replayContext = createRatingReplayContext(unsortedMatches, { ...teams })
+  const context = eventContext.eventWeightContext
+  assert.deepEqual(eventContext.authoritativeMatches, replayContext.authoritativeMatches)
+  assert.deepEqual(context, replayContext.eventWeightContext)
+  assert.equal(eventContext.lastDate, replayContext.lastDate)
+  assert.equal(eventContext.lastDate, '2026-01-01')
+  assert.deepEqual(eventContext.authoritativeMatches.map((match) => match.id), [
+    'worlds-final-1', 'worlds-final-2', 'worlds-final-3', 'kespa-cup', 'demacia-cup', 'next-year',
+  ])
+  assert.deepEqual(unsortedMatches.map((match) => match.id), originalOrder)
 
   assert.equal(isPostWorldsPreseasonMatch(worldsFinal, context), false)
   assert.equal(isPostWorldsPreseasonMatch(demaciaCup, context), true)

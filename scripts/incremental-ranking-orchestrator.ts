@@ -8,8 +8,8 @@ import { buildExternalCausalBundle, reconcileExternalCausalBundle, REQUIRED_EXTE
 import { replayRankingState } from '../src/lib/incremental/replayOrchestrator'
 import { compareSemanticArtifactMaps, type SemanticArtifactMap } from '../src/lib/incremental/semanticParity'
 import { compareCodeUnits, stableDigest, stableJson, type CanonicalMatchLedger, type RankingChangeClassification } from '../src/lib/incremental/types'
-import { createRatingReplayContext, replayRatingDates, transparentGprModelMetadata } from '../src/lib/model'
-import { RATING_CHECKPOINT_SCHEMA_VERSION, encodeRatingCheckpoint, selectSafeCheckpoint } from '../src/lib/ratingCheckpoint'
+import { createRatingEventContext, createRatingReplayContext, replayRatingDates, transparentGprModelMetadata } from '../src/lib/model'
+import { RATING_CHECKPOINT_SCHEMA_VERSION, encodeRatingCheckpointEnvelope, selectSafeCheckpoint } from '../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract, reconcileRatingCheckpointEvents } from '../src/lib/ratingCheckpointInventory'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, artifactMetaFor, snapshotKey } from '../src/lib/publicArtifacts/schema'
 import { PUBLIC_ARTIFACT_PATHS, publicMatchHistoryPagePath, publicMatchHistoryShardPath, publicScopeArtifactPath, publicTeamHistoryShardPath, publicTournamentMovementShardPath } from '../src/lib/publicArtifacts/writePlan'
@@ -421,7 +421,10 @@ export async function buildRankingIncrementally({
     }
     prunePartialPublicIndexes(candidate.publicPlan.writes, validScopeKeys, validTournamentIds)
     const previousSemantic = semanticMapFromGeneration(restored.publicManifest)
-    const candidateSemantic = semanticMapFromWrites(candidate.publicPlan.writes)
+    const candidateReceipts = candidate.publicPlan.writes.map((write) => prepareArtifactReceipt(write.value))
+    const candidateSemantic = Object.fromEntries(candidate.publicPlan.writes.map((write, index) => [
+      `/data/${write.relativePath}`, { digest: candidateReceipts[index]!.digest },
+    ]))
     const currentSemantic = { ...previousSemantic, ...candidateSemantic }
     const removedPaths = obsoletePublicArtifactPaths({
       previousPaths: Object.keys(previousSemantic),
@@ -440,9 +443,11 @@ export async function buildRankingIncrementally({
     assertArtifactDependencyPlanMatchesSemanticChanges(dependencyPlan, previousSemantic, currentSemantic)
     const changed = new Set(dependencyPlan.logicalPaths)
     const currentPaths = Object.keys(currentSemantic).sort()
-    const changedWrites = candidate.publicPlan.writes.filter((write) => changed.has(`/data/${write.relativePath}`))
-    const root = candidate.publicPlan.writes.find((write) => write.relativePath === 'ranking-summary.json')
-    if (root && !changedWrites.includes(root)) changedWrites.push(root)
+    const changedWriteIndexes = candidate.publicPlan.writes.flatMap((write, index) => changed.has(`/data/${write.relativePath}`) ? [index] : [])
+    const rootIndex = candidate.publicPlan.writes.findIndex((write) => write.relativePath === 'ranking-summary.json')
+    if (rootIndex !== -1 && !changedWriteIndexes.includes(rootIndex)) changedWriteIndexes.push(rootIndex)
+    const changedWrites = changedWriteIndexes.map((index) => candidate.publicPlan.writes[index]!)
+    const changedReceipts = changedWriteIndexes.map((index) => candidateReceipts[index]!)
     let parity: boolean | null = null
 
     if (comparisonMode) {
@@ -462,12 +467,12 @@ export async function buildRankingIncrementally({
         await rm(candidateDir, { recursive: true, force: true })
         return {
           action: 'publish-full', sourceData, build: full, state: fullState, diagnostic,
-          metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
+          metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidateReceipts), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
         }
       }
       await rm(candidateDir, { recursive: true, force: true })
       return {
-        action: 'publish-full', sourceData, build: full, state: fullState, metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
+        action: 'publish-full', sourceData, build: full, state: fullState, metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidateReceipts), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
       }
     }
 
@@ -481,7 +486,7 @@ export async function buildRankingIncrementally({
         removedLogicalPaths: removedPaths,
         expectedLogicalPaths: currentPaths,
       },
-      metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, changedWrites.map((write) => `/data/${write.relativePath}`).sort(), currentPaths.filter((path) => !changed.has(path)), removedPaths, false, parity, null, affectedSnapshotKeys.size), changedWrites), candidate), memoryCollections),
+      metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, changedWrites.map((write) => `/data/${write.relativePath}`).sort(), currentPaths.filter((path) => !changed.has(path)), removedPaths, false, parity, null, affectedSnapshotKeys.size), changedReceipts), candidate), memoryCollections),
     }
   } catch (error) {
     if (candidateDir) await rm(candidateDir, { recursive: true, force: true })
@@ -778,12 +783,13 @@ async function selectReplay(
   const loadedByObject = new Map(restored.checkpoints.map((checkpoint) => [checkpointIdentity(checkpoint.candidate), checkpoint]))
   const checkpoints: RestoredCheckpoint[] = []
   const availableProcessedThroughUtcDates = eligibleReferences.map((candidate) => candidate.boundary.date)
+  let freshEventContext: ReturnType<typeof createRatingEventContext> | undefined
   const selectLoadedCheckpoint = () => selectSafeCheckpoint({
     changedUtcDate: changedDate,
     candidates: checkpoints.map(({ candidate, bundle }) => ({
       id: `${candidate.boundary.date}/${candidate.boundary.matchId}`,
       processedThroughUtcDate: candidate.boundary.date,
-      serialized: JSON.stringify(bundle.ratingCheckpoint),
+      value: bundle.ratingCheckpoint,
       expectedIdentity: {
         importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
         identityTaxonomyHash: stableDigest(sourceData.teams),
@@ -796,14 +802,13 @@ async function selectReplay(
       if (!stored) return { status: 'replay-required', replayFromUtcDate: changedDate, requiresFullReplay: true, reason: 'context-unproven' }
       try {
         const throughDate = checkpoint.metadata.processedThroughUtcDate
-        const freshContext = createRatingReplayContext(sourceData.matches, sourceData.teams, {
-          tournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
-        })
+        const freshContext = freshEventContext ??= createRatingEventContext(sourceData.matches)
+        const tournamentLifecycles = tournamentLifecyclesFor(sourceData, generatedAt, throughDate)
         const eventReconciliation = reconcileRatingCheckpointEvents({
           checkpoint,
           freshMatches: freshContext.authoritativeMatches,
           freshEventWeightContext: freshContext.eventWeightContext,
-          freshTournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
+          freshTournamentLifecycles: tournamentLifecycles,
           availableProcessedThroughUtcDates,
         })
         if (eventReconciliation.status === 'replay-required') {
@@ -818,7 +823,7 @@ async function selectReplay(
           bundle,
           authoritativeMatches: prefixMatches,
           eventWeightContext: checkpoint.state.eventWeightContext,
-          tournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
+          tournamentLifecycles,
           surfaces: externalCausalSurfacesFor(sourceData, throughDate),
           availableProcessedThroughUtcDates,
         })
@@ -980,14 +985,14 @@ function checkpointFromState(sourceData: RankingSourceImport, ledger: CanonicalM
   const prefix = rawPrefix(ledger, date)
   const prefixMatches = sourceData.matches.filter((match) => match.date <= date)
   const eventContract = buildRatingCheckpointEventContract(prefixMatches, state.eventWeightContext, tournamentLifecyclesFor(sourceData, generatedAt))
-  const encoded = encodeRatingCheckpoint(state, {
+  const ratingCheckpoint = encodeRatingCheckpointEnvelope(state, {
     importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
     identityTaxonomyHash: stableDigest(sourceData.teams),
     rawLedgerPrefixHash: prefix.digest,
   }, { processedThroughUtcDate: date, processedThroughMatchId: state.previousMatch.id }, eventContract)
   return {
     boundary: { date, matchId: state.previousMatch.id }, rawPrefix: prefix,
-    ratingCheckpoint: requiredRecord(JSON.parse(encoded), 'encoded rating checkpoint'),
+    ratingCheckpoint,
     causalSummaries: causalSummariesForBundle(buildExternalCausalBundle({
       prefixMatches,
       processedThroughUtcDate: date,
@@ -1456,14 +1461,21 @@ function baseMetrics(classification: RankingChangeClassification['kind'], ledger
   }
 }
 
-function withArtifactBytes(metrics: IncrementalBuildMetrics, writes: SnapshotBuild['publicPlan']['writes']) {
+function prepareArtifactReceipt(value: unknown) {
+  const prepared = prepareSemanticArtifact(value)
+  let semanticBytes = prepared.bytes, compressedBytes = prepared.compressedBytes
+  for (const child of prepared.children ?? []) {
+    semanticBytes += child.bytes
+    compressedBytes += child.compressedBytes
+  }
+  return { digest: prepared.digest, semanticBytes, compressedBytes }
+}
+
+function withArtifactBytes(metrics: IncrementalBuildMetrics, receipts: ReturnType<typeof prepareArtifactReceipt>[]) {
   let semanticBytes = 0, compressedBytes = 0
-  for (const write of writes) {
-    const prepared = prepareSemanticArtifact(write.value)
-    for (const node of [...(prepared.children ?? []), prepared]) {
-      semanticBytes += node.bytes
-      compressedBytes += node.compressedBytes
-    }
+  for (const receipt of receipts) {
+    semanticBytes += receipt.semanticBytes
+    compressedBytes += receipt.compressedBytes
   }
   return { ...metrics, semanticBytes, compressedBytes }
 }

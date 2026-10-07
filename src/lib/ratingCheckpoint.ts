@@ -62,9 +62,8 @@ export type RatingCheckpointValidationResult =
 export type SafeRatingCheckpointCandidate = {
   id: string
   processedThroughUtcDate: string
-  serialized: string
   expectedIdentity: RatingCheckpointIdentity
-}
+} & ({ serialized: string; value?: never } | { value: unknown; serialized?: never })
 
 export type RatingCheckpointCausalProof =
   | { status: 'ready' }
@@ -89,7 +88,7 @@ export type SafeRatingCheckpointSelection =
     }
 
 /**
- * Walks newest-to-oldest and only returns a checkpoint after the serialized
+ * Walks newest-to-oldest and only returns a checkpoint after the canonical
  * payload, compatibility, immutable raw prefix, event state, and all external
  * causal surfaces have been proven safe by the caller.
  */
@@ -114,7 +113,9 @@ export function selectSafeCheckpoint({
 
   for (const candidate of eligible) {
     if (candidate.processedThroughUtcDate >= requiredEarlierThan) continue
-    const validation = validateRatingCheckpoint(candidate.serialized, candidate.expectedIdentity)
+    const validation = candidate.serialized === undefined
+      ? validateRatingCheckpointValue(candidate.value, candidate.expectedIdentity)
+      : validateRatingCheckpoint(candidate.serialized, candidate.expectedIdentity)
     if (!validation.ok
       || validation.checkpoint.metadata.processedThroughUtcDate !== candidate.processedThroughUtcDate) {
       rejectedCandidateIds.push(candidate.id)
@@ -167,6 +168,15 @@ export function encodeRatingCheckpoint(
   boundary: RatingCheckpointBoundary,
   eventContract: RatingCheckpointEventContract,
 ) {
+  return stringifyCanonical(encodeRatingCheckpointEnvelope(state, identity, boundary, eventContract))
+}
+
+export function encodeRatingCheckpointEnvelope(
+  state: RatingRunState,
+  identity: RatingCheckpointIdentity,
+  boundary: RatingCheckpointBoundary,
+  eventContract: RatingCheckpointEventContract,
+) {
   assertBoundary(boundary.processedThroughUtcDate)
   if (state.processedThroughUtcDate !== boundary.processedThroughUtcDate) {
     throw new InvalidRatingCheckpointError(
@@ -209,7 +219,7 @@ export function encodeRatingCheckpoint(
     eventContract,
     payloadDigest: digestCanonical(payload),
   }
-  return stringifyCanonical({ metadata, payload })
+  return { metadata, payload }
 }
 
 export function decodeRatingCheckpoint(
@@ -217,7 +227,21 @@ export function decodeRatingCheckpoint(
   expected: RatingCheckpointIdentity,
 ): DecodedRatingCheckpoint {
   assertIdentity(expected)
-  const envelope = parseEnvelope(serialized)
+  let value: unknown
+  try {
+    value = JSON.parse(serialized)
+  } catch {
+    return invalid('malformed', 'Rating checkpoint is not valid JSON')
+  }
+  return decodeRatingCheckpointValue(value, expected)
+}
+
+export function decodeRatingCheckpointValue(
+  value: unknown,
+  expected: RatingCheckpointIdentity,
+): DecodedRatingCheckpoint {
+  assertIdentity(expected)
+  const envelope = parseEnvelope(value)
   const { metadata, payload } = envelope
 
   if (metadata.schemaVersion !== RATING_CHECKPOINT_SCHEMA_VERSION) {
@@ -275,8 +299,19 @@ export function validateRatingCheckpoint(
   serialized: string,
   expected: RatingCheckpointIdentity,
 ): RatingCheckpointValidationResult {
+  return validateDecodedCheckpoint(() => decodeRatingCheckpoint(serialized, expected))
+}
+
+export function validateRatingCheckpointValue(
+  value: unknown,
+  expected: RatingCheckpointIdentity,
+): RatingCheckpointValidationResult {
+  return validateDecodedCheckpoint(() => decodeRatingCheckpointValue(value, expected))
+}
+
+function validateDecodedCheckpoint(decode: () => DecodedRatingCheckpoint): RatingCheckpointValidationResult {
   try {
-    return { ok: true, checkpoint: decodeRatingCheckpoint(serialized, expected) }
+    return { ok: true, checkpoint: decode() }
   } catch (error) {
     if (error instanceof InvalidRatingCheckpointError) {
       return {
@@ -295,13 +330,7 @@ export function validateRatingCheckpoint(
   }
 }
 
-function parseEnvelope(serialized: string): CheckpointEnvelope {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(serialized)
-  } catch {
-    return invalid('malformed', 'Rating checkpoint is not valid JSON')
-  }
+function parseEnvelope(parsed: unknown): CheckpointEnvelope {
   if (!isRecord(parsed) || !isRecord(parsed.metadata) || !isCanonicalJson(parsed.payload)) {
     return invalid('malformed', 'Rating checkpoint envelope is malformed')
   }
@@ -418,12 +447,41 @@ function stringifyCanonical(value: CanonicalJson): string {
 }
 
 function digestCanonical(value: CanonicalJson) {
-  const text = stringifyCanonical(value)
   let hash = 0xcbf29ce484222325n
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= BigInt(text.charCodeAt(index))
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n)
+  function hashToken(text: string) {
+    let currentHash = hash
+    for (let index = 0; index < text.length; index += 1) {
+      currentHash ^= BigInt(text.charCodeAt(index))
+      currentHash = BigInt.asUintN(64, currentHash * 0x100000001b3n)
+    }
+    hash = currentHash
   }
+  function hashValue(entry: CanonicalJson) {
+    if (entry === null || typeof entry !== 'object') {
+      hashToken(JSON.stringify(entry))
+      return
+    }
+    if (Array.isArray(entry)) {
+      hashToken('[')
+      for (let index = 0; index < entry.length; index += 1) {
+        if (index > 0) hashToken(',')
+        if (index in entry) hashValue(entry[index]!)
+      }
+      hashToken(']')
+      return
+    }
+    hashToken('{')
+    const keys = Object.keys(entry).sort()
+    for (let index = 0; index < keys.length; index += 1) {
+      if (index > 0) hashToken(',')
+      const key = keys[index]!
+      hashToken(JSON.stringify(key))
+      hashToken(':')
+      hashValue(entry[key]!)
+    }
+    hashToken('}')
+  }
+  hashValue(value)
   return `fnv1a64-${hash.toString(16).padStart(16, '0')}`
 }
 

@@ -312,16 +312,54 @@ function expectedStagePointsByLeague(
       points: config.baseStagePoints + contenderShare * (config.maxStagePoints - config.baseStagePoints),
     }
   })
-  const rawExpectedPool = rawTeamPoints.reduce((total, entry) => total + entry.points, 0) || 1
-  const poolScale = actualPointPool / rawExpectedPool
+  const expected = boundedStageExpectations(rawTeamPoints.map((entry) => entry.points), actualPointPool,
+    config.baseStagePoints, config.maxStagePoints)
 
-  rawTeamPoints.forEach((entry) => {
+  rawTeamPoints.forEach((entry, index) => {
     const league = tracker.teamLeagues.get(entry.team) ?? teams[entry.team]?.league ?? 'Unknown'
-    const expectedPoints = entry.points * poolScale
+    const expectedPoints = expected[index]
     byLeague.set(league, (byLeague.get(league) ?? 0) + expectedPoints)
   })
 
   return byLeague
+}
+
+/** Preserve the event pool without assigning an impossible attainment to an entrant. */
+export function boundedStageExpectations(weights: readonly number[], pool: number, minimum: number, maximum: number) {
+  const unitsPerPoint = 2 ** 32
+  const minimumUnits = minimum * unitsPerPoint
+  const maximumUnits = maximum * unitsPerPoint
+  const poolUnits = pool * unitsPerPoint
+  if (!weights.length || weights.some((weight) => !Number.isFinite(weight) || weight <= 0)
+    || !Number.isFinite(pool) || !Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum < 0 || minimum > maximum
+    || ![minimumUnits, maximumUnits, poolUnits, weights.length * maximumUnits].every(Number.isSafeInteger)
+    || pool < weights.length * minimum || pool > weights.length * maximum) throw new Error('Infeasible stage expectation pool')
+  if (pool === weights.length * minimum) return weights.map(() => minimum)
+  if (pool === weights.length * maximum) return weights.map(() => maximum)
+  let low = 0
+  let high = maximum / Math.min(...weights)
+  for (let iteration = 0; iteration < 100; iteration += 1) {
+    const scale = (low + high) / 2
+    const total = weights.reduce((sum, weight) => sum + clamp(weight * scale, minimum, maximum), 0)
+    if (total < pool) low = scale
+    else high = scale
+  }
+  // Binary fractions conserve the pool under both team and league summation.
+  const rawUnits = weights.map((weight) => clamp(weight * (low + high) / 2, minimum, maximum) * unitsPerPoint)
+  const expectedUnits = rawUnits.map(Math.floor)
+  let remaining = poolUnits - expectedUnits.reduce((total, units) => total + units, 0)
+  const priority = rawUnits.map((value, index) => ({ index, fraction: value - expectedUnits[index] }))
+    .sort((left, right) => right.fraction - left.fraction || left.index - right.index)
+  for (const { index } of priority) {
+    if (remaining === 0) break
+    const adjustment = Math.sign(remaining)
+    const adjusted = expectedUnits[index] + adjustment
+    if (adjusted < minimumUnits || adjusted > maximumUnits) continue
+    expectedUnits[index] = adjusted
+    remaining -= adjustment
+  }
+  if (remaining !== 0) throw new Error('Cannot conserve stage expectation pool on the binary precision grid')
+  return expectedUnits.map((units) => units / unitsPerPoint)
 }
 
 function representativesByLeague(tracker: PlacementEventTracker, teams: Record<string, TeamProfile>) {

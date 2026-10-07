@@ -136,10 +136,10 @@ function resolveSeriesFormat(games: MatchRecord[], winsA: number, winsB: number)
   formatConfidence: SeriesFormatConfidence
 } {
   const official = strongestExplicitFormat(games, 'official')
-  if (official) return formatResult(official, 'official', 'high', winsA, winsB)
+  if (official) return { format: official, formatBasis: 'official', formatConfidence: 'high' }
 
   const provider = strongestExplicitFormat(games, 'provider', true)
-  if (provider) return formatResult(provider, 'provider', 'high', winsA, winsB)
+  if (provider) return { format: provider, formatBasis: 'provider', formatConfidence: 'high' }
 
   const proven = scoreProvenFormat(winsA, winsB)
   if (proven > 1) return { format: proven, formatBasis: 'score-inferred', formatConfidence: 'medium' }
@@ -159,32 +159,19 @@ function strongestExplicitFormat(
   return formats.length > 0 ? Math.max(...formats) as SeriesFormat : undefined
 }
 
-function formatResult(
-  explicit: SeriesFormat,
-  formatBasis: Extract<SeriesFormatBasis, 'official' | 'provider'>,
-  formatConfidence: SeriesFormatConfidence,
-  winsA: number,
-  winsB: number,
-) {
-  const proven = scoreProvenFormat(winsA, winsB)
-  if (proven > explicit) {
-    return { format: proven, formatBasis: 'score-inferred' as const, formatConfidence: 'high' as const }
-  }
-  return { format: explicit, formatBasis, formatConfidence }
-}
-
 function scoreProvenFormat(winsA: number, winsB: number): SeriesFormat {
   const maximumWins = Math.max(winsA, winsB)
-  if (maximumWins >= 3) return 5
+  if (maximumWins >= 3 || winsA + winsB > 3) return 5
   if (maximumWins >= 2) return 3
   return 1
 }
 
 function seriesState(format: SeriesFormat, winsA: number, winsB: number, games: number): SeriesState {
   if (games === 0) return 'scheduled'
-  if (format === 2 && winsA === 1 && winsB === 1) return 'completed'
-  if (format === 1 && games > 1) return 'unknown'
+  if (games > format) return 'unknown'
+  if (format === 2) return games === 2 ? 'completed' : 'ongoing'
   const winsNeeded = Math.floor(format / 2) + 1
+  if (winsA > winsNeeded || winsB > winsNeeded) return 'unknown'
   if (Math.max(winsA, winsB) >= winsNeeded) return 'completed'
   return 'ongoing'
 }

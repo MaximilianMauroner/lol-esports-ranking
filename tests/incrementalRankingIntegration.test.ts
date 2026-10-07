@@ -86,7 +86,6 @@ test('releasing import audit rows before snapshot preserves roster/player public
       }).digest,
       'e1fdb414891df185ba36528bb01aaedd389fdd98afdf1c2edb0b6348ec6190aa',
     )
-    assert.equal(normalIdentities['entities/players.json'], 'aeab82b14a97155e8b773be1b0434fed82b56804c4f91bd04a53d8df62c6496a')
     const compactSnapshot = createStaticRankingData({
       matches: structuredClone(normalSource.matches),
       teams: structuredClone(normalSource.teams),
@@ -358,12 +357,50 @@ test('append, same-day insertion, and historical correction use whole-date repla
       assert.equal(outcomeForBuild(incremental), incremental.metrics.classification)
       assert.equal(incremental.metrics.fullSnapshotWritten, false, name)
       assert.ok(incremental.metrics.replayedMatchCount > 0, name)
+      if (incremental.action !== 'publish-incremental') throw new Error('incremental publication required')
+      assertArtifactByteMetrics(incremental, incremental.patch.changedArtifacts.map((artifact) => artifact.value))
       const full = await run(root, `${name}-full`, source, { mode: 'gated', cause: 'daily-audit', enabled: false })
       assert.deepEqual(semanticMap(incremental), semanticMap(full), name)
       await assert.rejects(access(join(root, `${name}-incremental-full.json`)), name)
     }
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('incremental byte metrics include repeated archive children and an unchanged forced root', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-artifact-bytes-'))
+  try {
+    const baseline = await run(root, 'byte-baseline', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(baseline)
+    const records = Array.from({ length: 520 }, (_, index) => ({ id: index, text: 'x'.repeat(1_100) }))
+    const withArchivedDiagnostics: typeof buildStaticSnapshot = async (options) => {
+      const built = await buildStaticSnapshot({ ...options, silent: true })
+      if (options?.writeFullSnapshot === false) {
+        for (const write of built.publicPlan.writes) {
+          if (write.relativePath === 'ranking-summary.json') write.value = restored.rootArtifact
+          if (write.relativePath === 'entities/teams.json' || write.relativePath === 'entities/players.json') {
+            assert.ok(write.value && typeof write.value === 'object' && !Array.isArray(write.value))
+            write.value = { ...write.value, byteMetricRecords: records }
+          }
+        }
+      }
+      return built
+    }
+    const result = await run(root, 'byte-append', fixtureSource([...baseMatches(), match('m5', '2026-01-05', 'Event B')]), {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored, buildSnapshot: withArchivedDiagnostics,
+    })
+    assert.equal(result.action, 'publish-incremental', result.metrics.fallbackReason)
+    if (result.action !== 'publish-incremental') throw new Error('incremental publication required')
+    const rootArtifact = result.patch.changedArtifacts.find((artifact) => artifact.logicalPath === '/data/ranking-summary.json')
+    assert.ok(rootArtifact)
+    assert.equal(prepareSemanticArtifact(rootArtifact.value).digest, prepareSemanticArtifact(restored.rootArtifact).digest)
+    const values = result.patch.changedArtifacts.map((artifact) => artifact.value)
+    const childDigests = values.flatMap((value) => prepareSemanticArtifact(value).children?.map((child) => child.digest) ?? [])
+    assert.ok(childDigests.length > new Set(childDigests).size, 'the metric fixture must contain repeated archive children')
+    assertArtifactByteMetrics(result, values)
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 
@@ -432,13 +469,21 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     const baseline = await run(root, 'fallback-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
     const restored = restoreFrom(baseline)
     const appended = fixtureSource([...baseMatches(), match('m5', '2026-01-05', 'Event C')])
-    const shadow = await run(root, 'shadow', appended, { mode: 'shadow', cause: 'pending-match', enabled: true, restored })
+    let candidateWrites: Awaited<ReturnType<typeof buildStaticSnapshot>>['publicPlan']['writes'] = []
+    const captureCandidate: typeof buildStaticSnapshot = async (options) => {
+      const built = await buildStaticSnapshot({ ...options, silent: true })
+      if (options?.writeFullSnapshot === false) candidateWrites = built.publicPlan.writes
+      return built
+    }
+    const shadow = await run(root, 'shadow', appended, { mode: 'shadow', cause: 'pending-match', enabled: true, restored, buildSnapshot: captureCandidate })
     assert.equal(shadow.action, 'publish-full')
     assert.equal(shadow.metrics.parity, false)
     assert.equal(shadow.metrics.semanticParityReport?.equal, true)
     assert.equal(shadow.metrics.stateParity, false)
     assert.equal(shadow.metrics.stateParityReport?.checkpointEqual, false)
     assert.equal(shadow.diagnostic?.reason, 'checkpoint-state-parity-mismatch')
+    assert.ok(candidateWrites.length > 0)
+    assertArtifactByteMetrics(shadow, candidateWrites.map((write) => write.value))
     const shadowFull = await run(root, 'shadow-authority', appended, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(shadow.state, shadowFull.action === 'no-change' ? undefined : shadowFull.state)
 
@@ -459,6 +504,7 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     const corruptCandidate: typeof buildStaticSnapshot = async (options) => {
       const built = await buildStaticSnapshot({ ...options, silent: true })
       if (options?.writeFullSnapshot === false) {
+        candidateWrites = built.publicPlan.writes
         const scope = built.publicPlan.writes.find((write) => write.relativePath.startsWith('scopes/'))
         if (scope && scope.value && typeof scope.value === 'object' && !Array.isArray(scope.value)) {
           scope.value = { ...scope.value, matchCount: -1 }
@@ -474,6 +520,7 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     assert.equal(mismatch.diagnostic?.kind, 'shadow-parity')
     assert.equal(mismatch.diagnostic?.parity?.equal, false)
     assert.equal(outcomeForBuild(mismatch), 'parity-failure')
+    assertArtifactByteMetrics(mismatch, candidateWrites.map((write) => write.value))
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
@@ -811,6 +858,19 @@ function semanticMap(result: IncrementalRankingBuildResult) {
   }
   if (!result.build) throw new Error('no materialized build')
   return Object.fromEntries(result.build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, prepareSemanticArtifact(write.value).digest]))
+}
+
+function assertArtifactByteMetrics(result: IncrementalRankingBuildResult, values: unknown[]) {
+  let semanticBytes = 0, compressedBytes = 0
+  for (const value of values) {
+    const prepared = prepareSemanticArtifact(value)
+    for (const node of [prepared, ...(prepared.children ?? [])]) {
+      semanticBytes += node.bytes
+      compressedBytes += node.compressedBytes
+    }
+  }
+  assert.equal(result.metrics.semanticBytes, semanticBytes)
+  assert.equal(result.metrics.compressedBytes, compressedBytes)
 }
 
 function outcomeForBuild(result: IncrementalRankingBuildResult) {

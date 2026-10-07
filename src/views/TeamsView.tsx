@@ -1369,13 +1369,13 @@ function uniqueSourceWarnings(warnings: NonNullable<DataSourceInfo['warnings']>)
   })
 }
 
-type RankConfidenceSummary = {
+type RankEvidenceSummary = {
   label: string
   detail: string
   title: string
 }
 
-function summarizeRankConfidence(team: RankingSummaryStanding, standings: RankingSummaryStanding[]): RankConfidenceSummary | null {
+function summarizeRankEvidence(team: RankingSummaryStanding, standings: RankingSummaryStanding[]): RankEvidenceSummary | null {
   const score = teamScoreFor(team)
   const uncertainty = team.ratingComponents?.uncertainty ?? team.uncertainty
   if (typeof score !== 'number' || typeof uncertainty !== 'number' || !Number.isFinite(score) || !Number.isFinite(uncertainty)) {
@@ -1392,12 +1392,12 @@ function summarizeRankConfidence(team: RankingSummaryStanding, standings: Rankin
   const bestRank = 1 + rankedRows.filter((standing) => teamKey(standing) !== teamKeyValue && (teamScoreFor(standing) ?? -Infinity) > high).length
   const worstRank = Math.max(bestRank, 1 + rankedRows.filter((standing) => teamKey(standing) !== teamKeyValue && (teamScoreFor(standing) ?? -Infinity) > low).length)
   const label = bestRank === worstRank
-    ? `Likely ${formatRankValue(bestRank)}`
-    : `Likely ${formatRankValue(bestRank)}-${formatRankValue(worstRank)}`
+    ? formatRankValue(bestRank)
+    : `${formatRankValue(bestRank)}-${formatRankValue(worstRank)}`
   return {
     label,
-    detail: `from ${formatUncertaintyBand(uncertainty)} band`,
-    title: `Power score interval ${formatRating(low)}-${formatRating(high)} compared against current ranked teams.`,
+    detail: `from the ${formatUncertaintyBand(uncertainty)} model evidence band`,
+    title: `Model evidence band ${formatRating(low)}-${formatRating(high)} compared against current ranked teams.`,
   }
 }
 
@@ -1480,7 +1480,7 @@ function TeamDetailDrawer({
   const trendSummary = useMemo(() => summarizeTeamTrend(series), [series])
   const score = teamScoreFor(team)
   const rank = teamRankFor(team)
-  const rankConfidence = useMemo(() => summarizeRankConfidence(team, standings), [team, standings])
+  const rankEvidence = useMemo(() => summarizeRankEvidence(team, standings), [team, standings])
   const weightSummary = useMemo(() => summarizeTeamMatchWeights(series), [series])
   const powerResumeGap = powerResumeGapSummary(team)
   const movement = activeMovement(team)
@@ -1539,7 +1539,7 @@ function TeamDetailDrawer({
               </>
             ) : (
               <>
-                <div title={rankConfidence?.title}><small>Likely rank</small><b>{rankConfidence?.label.replace(/^Likely /, '') ?? 'Unavailable'}</b><small>given the score's uncertainty</small></div>
+                <div title={rankEvidence?.title}><small>Rank from evidence band</small><b>{rankEvidence?.label ?? 'Unavailable'}</b><small>model evidence band</small></div>
                 <div title={rollingMovementTitle(team, 'last 30 days')}><small>Last 30 days</small><b className={cn(movement && (movement.rankMovement ?? 0) > 0 && 'text-[var(--up)]!', movement && (movement.rankMovement ?? 0) < 0 && 'text-[var(--down)]!')}>{movement ? formatRankMovementLabel(movement.rankMovement) : 'No series'}</b><small>{movement ? `${formatRatingMovement(movement.ratingDelta ?? 0)} Power` : 'no scored matches'}</small></div>
                 <div><small>Record</small><b>{formatRecord(team.wins, team.losses)}</b><small>{formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)} · {recordBasisLabel(team.recordBasis)}</small></div>
                 <div title={powerResumeGap?.title}><small>Rank on results alone</small><b>{team.deservedStanding?.rank ? `#${team.deservedStanding.rank}` : 'Unavailable'}</b><small>{powerResumeGap?.isLarge ? 'far from its Power rank' : 'close to its Power rank'}</small></div>
@@ -1620,7 +1620,7 @@ function TeamDetailDrawer({
 
           <details className="rounded-[var(--r-2)] border border-[var(--line)] bg-[var(--detail-surface-2)] p-3">
             <summary className="cursor-pointer text-sm font-semibold">How the score is built</summary>
-            <p className="mt-3 text-sm text-[var(--muted)]">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The score has an uncertainty of {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}, so ranks inside that band can swap. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The model evidence band is {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}. Close ranks can swap as new evidence arrives. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-[var(--muted)] [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-[var(--muted)]">
               {!tournament ? (
                 <span title={powerResumeGap?.title}>

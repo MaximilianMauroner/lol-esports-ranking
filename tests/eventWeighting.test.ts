@@ -116,17 +116,35 @@ test('a tied terminal series cannot grant champion placement evidence', () => {
   assert.equal(state.leaguePlacementDeltas.size, 0)
 })
 
+test('placement conserves the event pool after grouping several entrants into each league', () => {
+  const final = finalGames(3, { event: 'EWC 2025', league: 'EWC', tier: 'minor-international' })
+  const semifinalA = final.map((match) => ({ ...match, id: `semi-a-${match.id}`, sourceMatchId: 'ewc-semifinal-a',
+    date: '2025-11-08', phase: 'Semifinal', teamB: 'Gamma' }))
+  const semifinalB = final.map((match) => ({ ...match, id: `semi-b-${match.id}`, sourceMatchId: 'ewc-semifinal-b',
+    date: '2025-11-08', phase: 'Semifinal', teamA: 'Beta', teamB: 'Delta', winner: 'Beta' }))
+  const state = placementRun([...semifinalA, ...semifinalB, ...final], {
+    ...placementTeams,
+    Gamma: { name: 'Gamma', code: 'GAM', league: 'LCK', region: 'LCK' },
+    Delta: { name: 'Delta', code: 'DEL', league: 'LPL', region: 'LPL' },
+  })
+  const audit = state.eventTrackers.get('ewc:2025')?.placementAudit
+  assert.ok(audit)
+  assert.equal(audit.actualPointPool, 29)
+  assert.equal(audit.expectedPointPool, audit.actualPointPool)
+  assert.equal(audit.centeredDeltaTotal, 0)
+})
+
 const placementTeams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', league: 'LCK', region: 'LCK' },
   Beta: { name: 'Beta', code: 'BET', league: 'LPL', region: 'LPL' },
 }
 
-function placementRun(matches: MatchRecord[]) {
-  const context = createRatingReplayContext(matches, placementTeams, { tournamentLifecycles: new Map([['ewc:2025', {
+function placementRun(matches: MatchRecord[], teams = placementTeams) {
+  const context = createRatingReplayContext(matches, teams, { tournamentLifecycles: new Map([['ewc:2025', {
     status: 'completed', boundaryDate: '2025-11-09', ratedThroughDate: '2025-11-09', dataLag: false, resultCoverageComplete: true,
   }]]) })
   const state = replayRatingDates({ context, replayMatches: matches })
-  finalizeRatingRunStateAtUtcBoundary(state, placementTeams)
+  finalizeRatingRunStateAtUtcBoundary(state, teams)
   return state
 }
 

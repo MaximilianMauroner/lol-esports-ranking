@@ -5,6 +5,7 @@ import { eventWeightContextForMatches } from '../src/lib/eventWeighting.ts'
 import { ensureLeague } from '../src/lib/leagueRatings.ts'
 import { matchesByDate } from '../src/lib/matchContext.ts'
 import {
+  createRatingEventContext,
   finalizeRatingRunStateAtUtcBoundary,
   processRatingUtcDateBoundary,
 } from '../src/lib/model.ts'
@@ -13,9 +14,13 @@ import { buildPregamePlayerRatingEdges } from '../src/lib/playerModel.ts'
 import type { PlacementTournamentLifecycle } from '../src/lib/placementResiduals.ts'
 import {
   decodeRatingCheckpoint,
+  decodeRatingCheckpointValue,
   encodeRatingCheckpoint,
+  encodeRatingCheckpointEnvelope,
   RATING_CHECKPOINT_SCHEMA_VERSION,
+  selectSafeCheckpoint,
   validateRatingCheckpoint,
+  validateRatingCheckpointValue,
   type RatingCheckpointIdentity,
 } from '../src/lib/ratingCheckpoint.ts'
 import {
@@ -44,8 +49,14 @@ test('checkpoint exhaustively and losslessly round-trips every RatingRunState fi
   const state = completeRun(matches)
   const checkpoint = encodeAtBoundary(state, '2026-01-03', matches)
   const decoded = decodeRatingCheckpoint(checkpoint, checkpointIdentity)
+  const value: unknown = JSON.parse(checkpoint)
+  const decodedValue = decodeRatingCheckpointValue(value, checkpointIdentity)
 
   assert.deepEqual(decoded.state, state)
+  assert.deepEqual(decodedValue, decoded)
+  assert.notEqual(decodedValue.state, decoded.state)
+  assert.notEqual(decodedValue.state.ratings, decoded.state.ratings)
+  assert.notEqual(decodedValue.state.eventTrackers, decoded.state.eventTrackers)
   assert.equal(decoded.metadata.schemaVersion, RATING_CHECKPOINT_SCHEMA_VERSION)
   assert.equal(decoded.metadata.modelVersion, transparentGprModelMetadata.version)
   assert.equal(decoded.metadata.modelConfigHash, transparentGprModelMetadata.configHash)
@@ -112,6 +123,8 @@ test('checkpoint validation fails closed for corruption and every invalidation i
   assertInvalid(serialized, { ...checkpointIdentity, identityTaxonomyHash: 'taxonomy-test-v2' }, 'identity-taxonomy')
   assertInvalid(serialized, { ...checkpointIdentity, rawLedgerPrefixHash: 'other-prefix' }, 'raw-ledger-prefix')
   assertInvalid('{not-json', checkpointIdentity, 'malformed')
+  assertInvalid('null', checkpointIdentity, 'malformed')
+  assertInvalid('{"metadata":{},"payload":{}}', checkpointIdentity, 'malformed')
 })
 
 test('checkpoint transport accepts reordered JSON keys and still rejects payload corruption', () => {
@@ -125,11 +138,63 @@ test('checkpoint transport accepts reordered JSON keys and still rejects payload
 
   assert.notEqual(reordered, serialized)
   assert.deepEqual(decodeRatingCheckpoint(reordered, checkpointIdentity), decoded)
+  const reorderedValue: unknown = JSON.parse(reordered)
+  assert.deepEqual(decodeRatingCheckpointValue(reorderedValue, checkpointIdentity), decoded)
 
   const corrupted = reordered.replace('"processedMatchCount":3', '"processedMatchCount":4')
   assert.notEqual(corrupted, reordered)
   assert.ok(corrupted.includes(`"payloadDigest":${JSON.stringify(decoded.metadata.payloadDigest)}`))
   assertInvalid(corrupted, checkpointIdentity, 'payload-digest')
+})
+
+test('envelope encoding retains stored UTF-16 payload digests and fresh live values', () => {
+  const matches = replayMatches()
+  const state = completeRun(matches)
+  state.ratings.set('é😀', -0)
+  state.previousMatch = { ...state.previousMatch!, datetimeUtc: undefined }
+  const envelope = encodeRatingCheckpointEnvelope(state, checkpointIdentity, {
+    processedThroughUtcDate: '2026-01-03',
+    processedThroughMatchId: state.previousMatch.id,
+  }, buildRatingCheckpointEventContract(matches, state.eventWeightContext))
+  const serialized = encodeAtBoundary(state, '2026-01-03', matches)
+  const parsed: unknown = JSON.parse(serialized)
+
+  assert.deepEqual(envelope, parsed)
+  assert.equal(envelope.metadata.payloadDigest, legacyCanonicalPayloadDigest(envelope.payload))
+  const decoded = decodeRatingCheckpointValue(envelope, checkpointIdentity)
+  assert.deepEqual(decoded.state, state)
+  assert.ok(Object.is(decoded.state.ratings.get('é😀'), -0))
+  assert.ok(Object.hasOwn(decoded.state.previousMatch!, 'datetimeUtc'))
+  assert.equal(decoded.state.previousMatch?.datetimeUtc, undefined)
+  const reorderedValue: unknown = JSON.parse(JSON.stringify(envelope, (_key, value: unknown) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+    return Object.fromEntries(Object.entries(value).reverse())
+  }))
+  assert.deepEqual(decodeRatingCheckpointValue(reorderedValue, checkpointIdentity), decoded)
+  const tracker = decoded.state.eventTrackers.values().next().value
+  assert.ok(tracker?.participants instanceof Set)
+  decoded.state.ratings.set('é😀', 1)
+  assert.ok(Object.is(state.ratings.get('é😀'), -0))
+  assert.deepEqual(decodeRatingCheckpointValue(envelope, checkpointIdentity).state, state)
+})
+
+test('both checkpoint transports reject correctly digested unsafe decoded keys', () => {
+  const matches = replayMatches()
+  const state = completeRun(matches)
+  const serialized = encodeAtBoundary(state, '2026-01-03', matches)
+  const envelope = encodeRatingCheckpointEnvelope(state, checkpointIdentity, {
+    processedThroughUtcDate: '2026-01-03',
+    processedThroughMatchId: 'day-three',
+  }, buildRatingCheckpointEventContract(matches, state.eventWeightContext))
+  for (const key of ['__proto__', 'prototype', 'constructor']) {
+    const payload: unknown = JSON.parse('{' + JSON.stringify(key) + ':null,' + JSON.stringify(envelope.payload).slice(1))
+    const unsafe = JSON.stringify({
+      metadata: { ...envelope.metadata, payloadDigest: legacyCanonicalPayloadDigest(payload) },
+      payload,
+    })
+    assert.notEqual(unsafe, serialized)
+    assertInvalid(unsafe, checkpointIdentity, 'malformed')
+  }
 })
 
 test('terminal match identity and exact UTC boundary are mandatory', () => {
@@ -456,10 +521,11 @@ function reconcileReadyState(
   freshMatches: MatchRecord[],
   freshTournamentLifecycles: ReadonlyMap<string, PlacementTournamentLifecycle> = new Map(),
 ) {
+  const eventContext = createRatingEventContext(freshMatches)
   const result = reconcileRatingCheckpointEvents({
     checkpoint,
-    freshMatches,
-    freshEventWeightContext: eventWeightContextForMatches(freshMatches),
+    freshMatches: eventContext.authoritativeMatches,
+    freshEventWeightContext: eventContext.eventWeightContext,
     freshTournamentLifecycles,
   })
   assert.equal(result.status, 'ready')
@@ -479,6 +545,46 @@ function assertInvalid(
   if (result.ok) return
   assert.equal(result.reason, reason)
   assert.equal(result.requiresFullReplay, true)
+  const candidate = {
+    id: 'invalid',
+    processedThroughUtcDate: '2026-01-03',
+    expectedIdentity: identity,
+  }
+  const selectionOptions = {
+    changedUtcDate: '2026-01-04',
+    reconcileCausalProof: () => ({ status: 'ready' as const }),
+  }
+  const rejected = { status: 'full-replay', reason: 'no-safe-checkpoint', rejectedCandidateIds: ['invalid'] }
+  assert.deepEqual(selectSafeCheckpoint({
+    ...selectionOptions, candidates: [{ ...candidate, serialized }],
+  }), rejected)
+  let value: unknown
+  try {
+    value = JSON.parse(serialized)
+  } catch {
+    return
+  }
+  assert.deepEqual(validateRatingCheckpointValue(value, identity), result)
+  assert.deepEqual(selectSafeCheckpoint({
+    ...selectionOptions, candidates: [{ ...candidate, value }],
+  }), rejected)
+}
+
+// Compare with the stored digest contract, which hashes a full canonical string.
+function legacyCanonicalPayloadDigest(payload: unknown) {
+  function canonicalText(value: unknown): string {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+    if (Array.isArray(value)) return '[' + value.map(canonicalText).join(',') + ']'
+    return '{' + Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+      .map(([key, item]) => JSON.stringify(key) + ':' + canonicalText(item)).join(',') + '}'
+  }
+  const text = canonicalText(payload)
+  let hash = 0xcbf29ce484222325n
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= BigInt(text.charCodeAt(index))
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n)
+  }
+  return 'fnv1a64-' + hash.toString(16).padStart(16, '0')
 }
 
 function replayMatches() {
