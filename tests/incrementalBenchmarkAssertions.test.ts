@@ -2,14 +2,25 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   aggregateBenchmarkMetrics,
+  INCREMENTAL_NORMALIZED_COMPUTE_LIMIT,
   INCREMENTAL_SAFETY_PEAK_RSS_BYTES,
   oracleBaselineRewriteEvidence,
+  passesIncrementalComputeBudget,
   passesIncrementalSafetyPeak,
 } from '../scripts/incremental-benchmark-assertions.ts'
 
 test('incremental safety peak is strict at 700 MiB', () => {
   assert.equal(passesIncrementalSafetyPeak(INCREMENTAL_SAFETY_PEAK_RSS_BYTES - 1), true)
   assert.equal(passesIncrementalSafetyPeak(INCREMENTAL_SAFETY_PEAK_RSS_BYTES), false)
+})
+
+test('incremental compute budget is strict in runner-calibration units and rejects missing calibration', () => {
+  const calibrationMs = 4_000
+  const limitMs = INCREMENTAL_NORMALIZED_COMPUTE_LIMIT * calibrationMs
+  assert.equal(passesIncrementalComputeBudget(limitMs - 1, calibrationMs), true)
+  assert.equal(passesIncrementalComputeBudget(limitMs, calibrationMs), false)
+  assert.equal(passesIncrementalComputeBudget(limitMs - 1, calibrationMs * 2), true)
+  assert.equal(passesIncrementalComputeBudget(1, 0), false)
 })
 
 test('raw rewrite evidence follows receipt baseline identities, not byte-size heuristics', () => {
