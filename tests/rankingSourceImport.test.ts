@@ -127,6 +127,24 @@ test('curated inventory preserves input provenance without an inherited provider
   }
 })
 
+test('cached Oracle source coverage serializes without an invented retrieval date', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-source-oracle-provenance-'))
+  try {
+    const csv = join(root, 'cached.csv')
+    await writeFile(csv, oracleCsv([{ id: 'cached', date: '2026-07-26' }]))
+    const data = await importRankingSourceData({ oracleCsvPaths: [csv] })
+    assert.equal(data.matches.length, 1)
+    const source = data.externalSources[0]
+    assert.equal(source.rowCount, 1)
+    assert.equal(source.coverageStart, '2026-07-26')
+    assert.equal(source.coverageEnd, '2026-07-26')
+    assert.equal(source.retrievedAt, undefined)
+    assert.equal(JSON.stringify(data.externalSources).includes('"retrievedAt":'), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function oracleCsv(games: { id: string; date: string }[]) {
   return [
     'gameid,date,year,league,split,playoffs,position,side,teamname,result,kills,totalgold',

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 24,
-  "generatedAt": "2026-10-07T09:01:49.258Z",
+  "generatedAt": "2026-10-07T09:13:45.642Z",
   "source": "Oracle's Elixir primary with Leaguepedia Cargo gap-fill",
   "sources": [
     {
@@ -121,7 +121,6 @@
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-10-07T09:01:40.687Z",
       "coverageStart": "2025-01-12",
       "coverageEnd": "2025-12-29",
       "rowCount": 2349,
@@ -138,7 +137,6 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-10-07T09:01:44.109Z",
       "coverageStart": "2026-01-14",
       "coverageEnd": "2026-07-10",
       "rowCount": 1870,
@@ -1991,8 +1989,8 @@
   "artifactKind": "public-ranking-manifest",
   "artifactMeta": {
     "schemaVersion": 24,
-    "runId": "run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
-    "generatedAt": "2026-10-07T09:01:49.258Z",
+    "runId": "run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+    "generatedAt": "2026-10-07T09:13:45.642Z",
     "modelVersion": "transparent-power-index-v0.2.0",
     "modelConfigHash": "fnv1a-2a9cb549"
   },
@@ -2008,12 +2006,12 @@
     "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
   },
   "summaryMode": "browser-summary",
-  "playerDirectoryUrl": "/data/entities/players.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
-  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
-  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
-  "regionHistoryUrl": "/data/history/region-series.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
-  "tournamentMovementIndexUrl": "/data/history/tournament-moves/index.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
-  "matchHistoryIndexUrl": "/data/matches/index.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+  "playerDirectoryUrl": "/data/entities/players.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+  "regionHistoryUrl": "/data/history/region-series.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+  "tournamentMovementIndexUrl": "/data/history/tournament-moves/index.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+  "matchHistoryIndexUrl": "/data/matches/index.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
   "teamCount": 110,
   "snapshotIndex": {
     "All__All__All": {
@@ -2022,7 +2020,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/all.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/all.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 5333,
       "sourceBreakdown": [
         {
@@ -2048,7 +2046,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2025.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2025.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 2480,
       "sourceBreakdown": [
         {
@@ -2075,7 +2073,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2025-split-1.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2025-split-1.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 479,
       "sourceBreakdown": [
         {
@@ -2102,7 +2100,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2025-split-2.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2025-split-2.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 976,
       "sourceBreakdown": [
         {
@@ -2129,7 +2127,7 @@
         "region": "All",
         "checkpoint": "split-3"
       },
-      "url": "/data/scopes/season-2025-split-3.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2025-split-3.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 955,
       "sourceBreakdown": [
         {
@@ -2155,7 +2153,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2026.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2026.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 2786,
       "sourceBreakdown": [
         {
@@ -2182,7 +2180,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2026-split-1.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2026-split-1.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 737,
       "sourceBreakdown": [
         {
@@ -2202,7 +2200,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2026-split-2.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2026-split-2.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 1146,
       "sourceBreakdown": [
         {
@@ -2229,7 +2227,7 @@
         "region": "All",
         "checkpoint": "split-3"
       },
-      "url": "/data/scopes/season-2026-split-3.json?v=run_20261007090149_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
+      "url": "/data/scopes/season-2026-split-3.json?v=run_20261007091345_transparent-power-index-v0-2-0_fnv1a-2a9cb549",
       "matchCount": 903,
       "sourceBreakdown": [
         {

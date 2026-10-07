@@ -48,6 +48,27 @@ test('Leaguepedia international rows use known team home leagues when explicit f
   assert.notEqual(lpl.delta, 0)
 })
 
+test('Oracle imports preserve known retrieval dates and leave unknown dates absent across repeated imports', () => {
+  const csv = [
+    'gameid,date,year,league,position,side,teamname,result,kills,totalgold',
+    'cached-game,2026-07-26,2026,LCK,team,Blue,T1,1,18,62000',
+    'cached-game,2026-07-26,2026,LCK,team,Red,Gen.G,0,12,59000',
+  ].join('\n')
+  const unknown = importOraclesElixirCsv(csv, { sourceFileName: 'cached.csv' })
+  const repeated = importOraclesElixirCsv(csv, { sourceFileName: 'cached.csv' })
+  assert.equal(unknown.source.retrievedAt, undefined)
+  assert.equal(repeated.source.retrievedAt, undefined)
+  assert.deepEqual(repeated, unknown)
+  assert.equal(JSON.stringify(unknown.source).includes('"retrievedAt":'), false)
+
+  const retrievedAt = '2026-07-26T16:58:58.255Z'
+  const known = importOraclesElixirCsv(csv, { sourceFileName: 'cached.csv', retrievedAt })
+  assert.equal(known.source.retrievedAt, retrievedAt)
+  assert.equal(known.source.gameCount, 1)
+  assert.deepEqual(known.matches, unknown.matches)
+  assert.deepEqual(known.source, { ...unknown.source, retrievedAt })
+})
+
 test('Leaguepedia import retains the public export URL from a downloaded snapshot', () => {
   const sourceUrl = 'https://lol.fandom.com/wiki/Special:CargoExport?tables=ScoreboardGames'
   const result = importLeaguepediaSnapshot({

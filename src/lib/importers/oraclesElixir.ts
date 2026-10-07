@@ -23,7 +23,7 @@ export type OracleImportResult = {
     name: string
     url?: string
     fileName?: string
-    retrievedAt: string
+    retrievedAt?: string
     gameCount: number
     attribution: string
   }
@@ -65,7 +65,7 @@ export function importOraclesElixirCsv(
       name: "Oracle's Elixir CSV",
       url: options.sourceUrl,
       fileName: options.sourceFileName,
-      retrievedAt: options.retrievedAt ?? new Date().toISOString(),
+      retrievedAt: options.retrievedAt,
       gameCount: matches.length,
       attribution: "Aggregated by Oracle's Elixir / Tim Sevenhuysen. Subject to Riot game-data policies.",
     },
