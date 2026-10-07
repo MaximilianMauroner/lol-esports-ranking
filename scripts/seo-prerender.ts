@@ -112,7 +112,7 @@ export function renderHomepagePrerender(data: HomepagePrerenderData) {
     data.seededSample
       ? '<p class="mt-3.5 max-w-[760px] rounded-sm border border-[color-mix(in_oklch,var(--warn)_46%,var(--line))] bg-[var(--warn-soft)] px-3 py-2.5 text-[var(--text-strong)]">Seeded sample data is loaded. These rows must not be treated as official LoL Esports rankings.</p>'
       : '',
-    '<dl class="mt-7 grid grid-cols-4 gap-px overflow-hidden rounded-lg border border-border bg-[var(--line)] max-[760px]:grid-cols-1">',
+    '<dl class="mt-7 grid grid-cols-4 gap-px overflow-hidden rounded-lg border border-border bg-border max-[760px]:grid-cols-1">',
     statMarkup('Model', formatModelVersion(data.modelVersion)),
     statMarkup('Matches', formatNumber(data.matchCount)),
     statMarkup('Coverage', coverageLabel),
@@ -122,7 +122,7 @@ export function renderHomepagePrerender(data: HomepagePrerenderData) {
     teams.length > 0 ? [
       '<section>',
       '<h2 class="text-base font-bold text-[var(--text-strong)]">Top teams</h2>',
-      '<ol class="mt-2.5 grid list-none gap-px overflow-hidden rounded-lg border border-border bg-[var(--line)] p-0">',
+      '<ol class="mt-2.5 grid list-none gap-px overflow-hidden rounded-lg border border-border bg-border p-0">',
       ...teams.map(teamMarkup),
       '</ol>',
       '</section>',
@@ -130,7 +130,7 @@ export function renderHomepagePrerender(data: HomepagePrerenderData) {
     regions.length > 0 ? [
       '<section>',
       '<h2 class="text-base font-bold text-[var(--text-strong)]">Region power</h2>',
-      '<ol class="mt-2.5 grid list-none gap-px overflow-hidden rounded-lg border border-border bg-[var(--line)] p-0">',
+      '<ol class="mt-2.5 grid list-none gap-px overflow-hidden rounded-lg border border-border bg-border p-0">',
       ...regions.map(regionMarkup),
       '</ol>',
       '</section>',

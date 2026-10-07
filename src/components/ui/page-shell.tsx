@@ -35,7 +35,7 @@ export function PageShell({
 export function StatRibbon({ children, label }: { children: ReactNode; label: string }) {
   return (
     <div
-      className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-[var(--line)]"
+      className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border"
       aria-label={label}
     >
       {children}

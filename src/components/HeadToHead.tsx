@@ -52,7 +52,7 @@ export function HeadToHead({ home, away, model }: { home: RankingSummaryStanding
         </span>
         {low !== undefined && high !== undefined ? (
           <span className="relative h-2" aria-hidden="true">
-            <span className="absolute top-0.5 h-1 rounded-full bg-[var(--muted)] opacity-70" style={{ left: `${low}%`, width: `${Math.max(1, high - low)}%` }} />
+            <span className="absolute top-0.5 h-1 rounded-full bg-muted-foreground opacity-70" style={{ left: `${low}%`, width: `${Math.max(1, high - low)}%` }} />
           </span>
         ) : null}
       </div>

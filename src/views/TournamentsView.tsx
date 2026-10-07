@@ -150,9 +150,9 @@ function SeriesCard({ series, timezone, now, forecasts }: { series: TournamentSe
     <CardContent className="grid gap-1 text-sm text-muted-foreground">
       <span>{series.stage ?? 'Stage not supplied'} · {series.bestOf ? `Best of ${series.bestOf}` : 'Format not supplied'}</span>
       <span>{series.startTime ? formatTournamentTime(series.startTime, timezone) : 'Start time not supplied'} · {series.status === 'unknown' ? `Source state: ${series.sourceState || 'unknown'}` : series.status}</span>
-      {forecast ? <div className="mt-2 grid gap-1 border-t border-[var(--border)] pt-2">
+      {forecast ? <div className="mt-2 grid gap-1 border-t border-border pt-2">
         {forecast.status === 'ready' ? <>
-          <strong className="text-[var(--foreground)]">{receipt ? 'Published pre-match forecast' : 'Current model estimate · not archived'}</strong>
+          <strong className="text-foreground">{receipt ? 'Published pre-match forecast' : 'Current model estimate · not archived'}</strong>
           <span>Game win: {first?.name ?? 'Home'} {percent(forecast.homeGameWinProbability)} · {second?.name ?? 'Away'} {percent(forecast.awayGameWinProbability)}</span>
           <span>Series win (Bo{forecast.bestOf}): {first?.name ?? 'Home'} {percent(forecast.homeSeriesWinProbability)} · {second?.name ?? 'Away'} {percent(forecast.awaySeriesWinProbability)}</span>
           {conditional?.status === 'ready' ? <span>Score-conditioned series odds: {percent(conditional.homeSeriesWinProbability)} · {percent(conditional.awaySeriesWinProbability)}. Uses the frozen pre-series model, not in-game telemetry.</span> : null}

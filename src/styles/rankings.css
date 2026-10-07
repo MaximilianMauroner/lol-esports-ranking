@@ -72,11 +72,6 @@ table.ranking-table.board-grid col.board-col-form { width: 128px; }
 table.ranking-table.board-grid col.board-col-record { width: 104px; }
 table.ranking-table.board-grid col.board-col-action { width: 128px; }
 
-table.ranking-table.board-grid tbody td,
-table.ranking-table.board-grid thead th {
-  padding-inline: 12px;
-}
-
 table.ranking-table.board-grid tbody td {
   padding-block: 8px;
 }

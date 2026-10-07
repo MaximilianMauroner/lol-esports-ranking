@@ -17,7 +17,7 @@ export function LegalPage({ page }: { page: LegalPageName }) {
   }, [title])
 
   return (
-    <main className="min-h-screen bg-[var(--bg)] px-[var(--page-x)] py-8 text-foreground">
+    <main className="min-h-screen bg-background px-[var(--page-x)] py-8 text-foreground">
       <div className="mx-auto grid w-full max-w-[900px] gap-6">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div>

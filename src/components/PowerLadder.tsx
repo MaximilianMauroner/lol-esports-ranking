@@ -69,7 +69,7 @@ export function PowerLadder({
       <text x={LEFT} y={12} className="fill-[var(--faint)] text-2xs">Power · 100 pts ≈ {gapExample}% game win</text>
       {ticks.map((tick, index) => (
         <g key={tick}>
-          <line x1={x(tick)} x2={x(tick)} y1={TOP - 4} y2={height - BOTTOM + 4} className="stroke-[var(--line)]" />
+          <line x1={x(tick)} x2={x(tick)} y1={TOP - 4} y2={height - BOTTOM + 4} className="stroke-border" />
           {index % labelEvery === 0 ? (
             <text x={x(tick)} y={height - 8} textAnchor="middle" className="fill-[var(--faint)] text-2xs tabular-nums">{formatRating(tick)}</text>
           ) : null}
@@ -89,7 +89,7 @@ export function PowerLadder({
             width={x2 - x1}
             height={group.length * ROW_HEIGHT - 6}
             rx={6}
-            className="fill-[color-mix(in_oklch,var(--muted)_6%,transparent)] stroke-[var(--line-strong)]"
+            className="fill-[color-mix(in_oklch,var(--muted)_6%,transparent)] stroke-muted-foreground"
           >
             <title>{`Near tie: ${group.map((team) => team.code ?? team.team).join(', ')}`}</title>
           </rect>
@@ -111,11 +111,11 @@ export function PowerLadder({
           >
             <title>{`#${team.rank} ${team.team} · ${formatRating(team.rating)} Power · ±${formatRating(uncertainty)}`}</title>
             <rect x={0} y={y - ROW_HEIGHT / 2} width={WIDTH} height={ROW_HEIGHT} className="fill-transparent group-hover:fill-[var(--surface-2)] group-focus-visible:fill-[var(--surface-3)]" />
-            <text x={4} y={y + 3.5} className="fill-[var(--muted)] font-mono text-2xs font-bold tabular-nums">{team.rank}</text>
+            <text x={4} y={y + 3.5} className="fill-muted-foreground font-mono text-2xs font-bold tabular-nums">{team.rank}</text>
             {tier ? <text x={24} y={y + 3.5} className="font-mono text-2xs font-bold" fill={TIER_FILL[tier]}>{tier}</text> : null}
-            <text x={36} y={y + 3.5} className="fill-[var(--text)] font-mono text-2xs font-bold">{team.code ?? team.team.slice(0, 4)}</text>
+            <text x={36} y={y + 3.5} className="fill-foreground font-mono text-2xs font-bold">{team.code ?? team.team.slice(0, 4)}</text>
             <line x1={x(team.rating - uncertainty)} x2={x(team.rating + uncertainty)} y1={y} y2={y} className="stroke-[var(--line-strong)]" strokeWidth={2} strokeLinecap="round" />
-            <circle cx={x(team.rating)} cy={y} r={4.5} fill={tier ? TIER_FILL[tier] : 'var(--muted)'} className="stroke-[var(--surface)]" strokeWidth={2} />
+            <circle cx={x(team.rating)} cy={y} r={4.5} fill={tier ? TIER_FILL[tier] : 'var(--muted)'} className="stroke-card" strokeWidth={2} />
           </g>
         )
       })}

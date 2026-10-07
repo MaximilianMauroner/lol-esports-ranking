@@ -226,7 +226,7 @@ export function SortHeader({
         variant="ghost"
         size="sm"
         className={cn(
-          'min-h-10 w-full cursor-pointer justify-start gap-1 border-0 bg-transparent px-3.5 py-3 font-[inherit] text-2xs font-semibold tracking-label text-[inherit] uppercase hover:bg-transparent hover:text-foreground focus-visible:rounded-none focus-visible:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--focus)] max-sm:px-1 max-sm:leading-[1.15] max-sm:whitespace-normal',
+          'min-h-10 w-full cursor-pointer justify-start gap-1 border-0 bg-transparent px-3.5 py-3 text-2xs font-semibold tracking-label text-[inherit] uppercase hover:bg-transparent hover:text-foreground focus-visible:rounded-none focus-visible:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--focus)] max-sm:px-1 max-sm:leading-[1.15] max-sm:whitespace-normal',
           align === 'right' && 'justify-end',
           align === 'center' && 'justify-center',
         )}

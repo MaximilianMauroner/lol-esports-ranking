@@ -134,7 +134,7 @@ function GameTableRow({ game }: { game: PublicMatchHistoryEntry }) {
 /** Stacked series cards for phones. One line per team keeps both names at full size. */
 export function SeriesCards({ series, expanded, onToggle, publication }: SeriesListProps) {
   return (
-    <div className="grid gap-px border-t border-border bg-[var(--line)] md:hidden">
+    <div className="grid gap-px border-t border-border bg-border md:hidden">
       {series.map((entry) => (
         <SeriesCard
           series={entry}
@@ -305,8 +305,7 @@ function RatingChangeNote({ change, match, publication }: { change: Exclude<Seri
         </Tooltip>
       </span>
       <a
-        // Important modifiers: the unlayered global `a` color in base.css outranks utilities.
-        className="text-2xs text-[var(--faint)]! underline underline-offset-2 hover:text-foreground!"
+        className="text-2xs text-[var(--faint)] underline underline-offset-2 hover:text-foreground"
         href={impactReportUrl(match, publication)}
         onClick={stopRowToggle}
         aria-label="Report this series"

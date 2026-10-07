@@ -42,7 +42,7 @@ export function WhatChanged({
   return (
     <Panel aria-label="What changed">
       <PanelHeader title="What changed" actions={<span className="text-xs text-[var(--faint)]">{period}</span>} />
-      <ul className="grid gap-px bg-[var(--line)]">
+      <ul className="grid gap-px bg-border">
         {riser ? <MovementRow movement={riser} /> : null}
         {faller ? <MovementRow movement={faller} /> : null}
         {upset ? (

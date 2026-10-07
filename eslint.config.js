@@ -49,7 +49,7 @@ export default defineConfig([
 function designSystemClassRules() {
   const patterns = [
     [String.raw`\btext-\[[0-9.]+(px|rem|em)\]`, 'Use a type-scale class (text-2xs to text-2xl), not an arbitrary font size.'],
-    [String.raw`\b(rounded(-[a-z]{1,2})?-\[var\(--r-[0-9]\)\]|text-\[length:var\(--t-[0-9]\)\]|text-\[var\(--(muted|text)\)\]|border(-[a-z])?-\[var\(--line\)\]|bg-\[var\(--surface\)\])`, 'Use the mapped Tailwind name (rounded-md, text-sm, text-muted-foreground, text-foreground, border-border, bg-card).'],
+    [String.raw`\b(rounded(-[a-z]{1,2})?-\[var\(--r-[0-9]\)\]|text-\[length:var\(--t-[0-9]\)\]|(bg|text|border(-[a-z])?|fill|stroke|divide|ring|outline)-\[var\(--(bg|background|line|border|text|foreground|muted|surface)\)\])`, 'Use the mapped Tailwind name (rounded-md, text-sm, *-background for --bg, *-border for --line, *-foreground for --text, *-muted-foreground for --muted, *-card for --surface).'],
     [String.raw`\b(p[xytrbl]?|m[xytrbl]?|gap(-[xy])?)-\[[0-9.]+(px|rem|em)(_[0-9.]+(px|rem|em))*\]`, 'Use a spacing step on the 4px grid, not an arbitrary px, rem, or em value.'],
     [String.raw`\btracking-\[[0-9.]+em\]`, 'Use tracking-label for uppercase labels.'],
     [String.raw`oklch\(`, 'Use a colour token from base.css, not a raw oklch() value.'],

@@ -899,7 +899,7 @@ function NearTieMark({ position }: { position: NearTiePosition }) {
   return (
     <span
       className={cn(
-        'absolute left-1 w-0.5 bg-[var(--muted)]',
+        'absolute left-1 w-0.5 bg-muted-foreground',
         position === 'start' && 'top-1/2 bottom-0 rounded-t-full',
         position === 'middle' && 'inset-y-0',
         position === 'end' && 'top-0 bottom-1/2 rounded-b-full',
@@ -1226,7 +1226,7 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
         title="Region power"
         actions={href ? <a className="shrink-0 text-xs font-semibold text-[var(--accent-strong)] no-underline hover:underline hover:underline-offset-[3px]" href={href}>Details</a> : undefined}
       />
-      <div className="grid grid-cols-1 gap-px bg-[var(--line)]">
+      <div className="grid grid-cols-1 gap-px bg-border">
         {ranked.map((region) => (
           <div className="flex min-w-0 items-center gap-2.5 bg-card px-4 py-2 [&_.region-badge]:h-5 [&_.region-badge]:w-[22px]" key={region.region}>
             <RegionBadge region={region.region} size="sm" />
@@ -1255,7 +1255,7 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
         <span className="text-base font-semibold">Data and sources</span>
         <small className="text-xs text-[var(--faint)]">Coverage, config, providers</small>
       </summary>
-      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-[var(--line)] [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
+      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
         <span>
           <small>Model</small>
           <b>{formatModelVersion(model?.version)}</b>
@@ -1290,9 +1290,9 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
         </span>
       </div>
       {providers.length > 0 ? (
-        <div className="mx-3 mt-3 grid gap-px bg-[var(--line)]">
+        <div className="mx-3 mt-3 grid gap-px bg-border">
           {providers.map((provider) => (
-            <div className="flex min-w-0 items-center justify-between gap-2 bg-[var(--bg)] px-3 py-2 text-xs text-muted-foreground" key={provider.provider}>
+            <div className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={provider.provider}>
               <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{provider.provider}</span>
               <b className="shrink-0 text-foreground tabular-nums">{formatNumber(provider.matchCount)}</b>
             </div>
@@ -1300,9 +1300,9 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
         </div>
       ) : null}
       {sourceFreshness.length > 0 ? (
-        <div className="mx-3 mt-3 grid gap-px bg-[var(--line)]" aria-label="Source freshness">
+        <div className="mx-3 mt-3 grid gap-px bg-border" aria-label="Source freshness">
           {sourceFreshness.map((source) => (
-            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-[var(--bg)] px-3 py-2 text-xs text-muted-foreground" key={source.name}>
+            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={source.name}>
               <span className="max-w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={source.description}>{compactSourceName(source.name)}</span>
               <b className="shrink-0 whitespace-normal text-foreground tabular-nums">{sourceFreshnessLabel(source)}</b>
             </div>
@@ -1514,7 +1514,7 @@ function TeamDetailDrawer({
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain bg-[var(--detail-surface)] p-4 [&>*]:shrink-0 max-sm:gap-3 max-sm:p-3">
-          <section className="grid grid-cols-4 gap-px overflow-hidden rounded-md border border-border bg-[var(--line)] max-[700px]:grid-cols-2 [&>div]:grid [&>div]:content-start [&>div]:gap-0.5 [&>div]:bg-[var(--detail-surface-2)] [&>div]:px-3.5 [&>div]:py-3 [&_b]:text-base [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-xs [&_small]:text-[var(--faint)]" aria-label={`${team.team} key facts`}>
+          <section className="grid grid-cols-4 gap-px overflow-hidden rounded-md border border-border bg-border max-[700px]:grid-cols-2 [&>div]:grid [&>div]:content-start [&>div]:gap-0.5 [&>div]:bg-[var(--detail-surface-2)] [&>div]:px-3.5 [&>div]:py-3 [&_b]:text-base [&_b]:font-bold [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-xs [&_small]:text-[var(--faint)]" aria-label={`${team.team} key facts`}>
             {tournament && tournamentMovement ? (
               <>
                 <div><small>Opening</small><b>{formatRankValue(tournamentMovement.startRank)} · {formatRating(tournamentMovement.startRating)}</b><small>{formatDate(tournament.startDate)}</small></div>
@@ -1576,7 +1576,7 @@ function TeamDetailDrawer({
                     <b className="truncate font-mono font-bold text-[var(--text-strong)]">{opponent.code ?? opponent.team}</b>
                     <span className="relative h-2.5 overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden="true">
                       <span className="absolute inset-y-0 left-0 rounded-full bg-[var(--series-1)]" style={{ width: `${chance}%` }} />
-                      <span className="absolute inset-y-[-2px] left-1/2 w-px bg-[var(--muted)]" />
+                      <span className="absolute inset-y-[-2px] left-1/2 w-px bg-muted-foreground" />
                     </span>
                     <b className="text-right font-semibold text-[var(--text-strong)] tabular-nums">{chance}%</b>
                   </li>
@@ -2123,7 +2123,7 @@ function PlayerRankingCard({
         <CountBadge>{players.length} players</CountBadge>
       </div>
 
-        <Table containerClassName="player-rank-table mt-4 max-h-[360px] overflow-auto rounded-md border border-border max-sm:max-h-none max-sm:overflow-visible [&_.right]:text-right [&_.ent_b]:block [&_.ent_b]:overflow-hidden [&_.ent_b]:text-ellipsis [&_.ent_b]:whitespace-nowrap [&_.ent_small]:block [&_.ent_small]:overflow-hidden [&_.ent_small]:text-ellipsis [&_.ent_small]:whitespace-nowrap [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_table]:max-sm:block [&_tbody]:max-sm:block [&_td]:border-b [&_td]:border-border [&_td]:px-2 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-middle [&_td]:text-sm [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:border-b [&_th]:border-border [&_th]:bg-[var(--detail-surface-3,var(--surface-3))] [&_th]:px-2 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-2xs [&_th]:font-bold [&_th]:tracking-label [&_th]:text-[var(--faint)] [&_th]:uppercase [&_tr:last-child_td]:border-b-0">
+        <Table containerClassName="player-rank-table mt-4 max-h-[360px] overflow-auto rounded-md border border-border max-sm:max-h-none max-sm:overflow-visible [&_.right]:text-right [&_.ent_b]:block [&_.ent_b]:overflow-hidden [&_.ent_b]:text-ellipsis [&_.ent_b]:whitespace-nowrap [&_.ent_small]:block [&_.ent_small]:overflow-hidden [&_.ent_small]:text-ellipsis [&_.ent_small]:whitespace-nowrap [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_table]:max-sm:block [&_tbody]:max-sm:block [&_td]:border-b [&_td]:border-border [&_td]:px-2 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-middle [&_td]:text-sm [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:border-b [&_th]:border-border [&_th]:bg-[var(--detail-surface-3,var(--surface-3))] [&_th]:py-2.5 [&_tr:last-child_td]:border-b-0">
           <TableHeader>
             <TableRow>
               <TableHead>Rank</TableHead>
@@ -2150,7 +2150,7 @@ function PlayerRankingCard({
                 <TableCell>
                   <Badge variant="secondary" className="whitespace-nowrap text-xs">{player.role}</Badge>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="right">
                   <HeatChip value={player.rating} min={ratingMin} max={ratingMax} label={formatRating(player.rating)} />
                 </TableCell>
                 <TableCell className="right num">{formatTeamGames(player)}</TableCell>
@@ -2206,7 +2206,7 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
         </div>
         <span>{formatRating(team.rating)} {formatUncertaintyBand(components.uncertainty)}</span>
       </div>
-      <div className="grid gap-px overflow-hidden rounded-md border border-border bg-[var(--line)]">
+      <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border">
         <div className={cn(componentLedgerRowClassName, 'bg-[var(--detail-surface-3,var(--surface-3))]')} title="League anchor baseline before team-specific adjustments.">
           <span>{POWER_COMPONENT_LABELS.league}</span>
           <b>{formatRating(components.leagueAnchor)}</b>

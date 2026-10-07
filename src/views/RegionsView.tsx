@@ -675,7 +675,7 @@ function RegionDepthLegend() {
         Counts toward region score
       </li>
       <li className="inline-flex items-center gap-1.5">
-        <span className="size-[7px] rounded-full bg-[var(--muted)]" aria-hidden="true" />
+        <span className="size-[7px] rounded-full bg-muted-foreground" aria-hidden="true" />
         Other ranked team
       </li>
       <li className="inline-flex items-center gap-1.5">

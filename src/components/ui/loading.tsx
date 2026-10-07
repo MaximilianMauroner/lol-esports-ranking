@@ -51,7 +51,7 @@ export function LoadingState({
         </div>
       </div>
       {presentation === 'rows' ? (
-        <div className="mt-4 grid gap-px overflow-hidden rounded-md border border-border bg-[var(--line)]" aria-hidden="true">
+        <div className="mt-4 grid gap-px overflow-hidden rounded-md border border-border bg-border" aria-hidden="true">
           {Array.from({ length: rowCount }, (_, index) => (
             <div className="grid min-h-14 grid-cols-[32px_minmax(0,1fr)_64px] items-center gap-3 bg-[var(--surface-2)] px-3 py-2.5" key={index}>
               <Skeleton className="size-7 rounded-full" />
