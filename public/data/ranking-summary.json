@@ -1,6 +1,6 @@
 {
   "schemaVersion": 24,
-  "generatedAt": "2026-10-07T08:28:09.924Z",
+  "generatedAt": "2026-10-07T08:32:16.264Z",
   "source": "Oracle's Elixir primary with Leaguepedia Cargo gap-fill",
   "sources": [
     {
@@ -121,7 +121,7 @@
     {
       "name": "Oracle's Elixir CSV: 2025_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-10-07T08:28:02.505Z",
+      "retrievedAt": "2026-10-07T08:32:07.602Z",
       "coverageStart": "2025-01-12",
       "coverageEnd": "2025-12-29",
       "rowCount": 2349,
@@ -138,7 +138,7 @@
     {
       "name": "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv",
       "kind": "game-stats",
-      "retrievedAt": "2026-10-07T08:28:06.273Z",
+      "retrievedAt": "2026-10-07T08:32:11.632Z",
       "coverageStart": "2026-01-14",
       "coverageEnd": "2026-07-10",
       "rowCount": 1870,
@@ -314,7 +314,7 @@
   "model": {
     "name": "Transparent Power Index",
     "version": "transparent-power-index-v0.2.0",
-    "configHash": "fnv1a-6a77ca0e",
+    "configHash": "fnv1a-d653868f",
     "ratingScale": {
       "version": "published-power-index-v1",
       "internalAnchor": 1500,
@@ -389,7 +389,7 @@
       "onlineRecencyDecay": "entity-local-composable-half-life-regression-v1",
       "ratingUpdateRecencyWeight": 1,
       "leagueExpectedScoreSource": "pregame-neutral-series-team-power",
-      "sourcePipelineVersion": "canonical-identity-stat-dedupe-player-performance-home-league-v17",
+      "sourcePipelineVersion": "canonical-identity-stat-dedupe-feasible-series-player-performance-home-league-v21",
       "lineupEvidencePolicy": "prior-observed-series-evidence-with-90-day-half-life-v1",
       "partialLineupPolicy": "role-weighted-known-player-evidence-v1",
       "substituteEraPolicy": "three-series-or-twenty-percent-split-share-v1",
@@ -472,7 +472,7 @@
         "knockout": 3,
         "participation": 1
       },
-      "tournamentPlacementPolicy": "highest-attainment-centered-league-residual-aligned-scale-v2",
+      "tournamentPlacementPolicy": "highest-attainment-bounded-grid-pool-centered-league-residual-v4",
       "playerRatingPredictionPolicy": {
         "key": "player-rating",
         "mode": "live",
@@ -834,9 +834,9 @@
   "dataQuality": {
     "matchCount": 4534,
     "pipelineCounts": {
-      "importedMatchCount": 22792,
+      "importedMatchCount": 22794,
       "publishedMatchCount": 4534,
-      "filteredMatchCount": 18258
+      "filteredMatchCount": 18260
     },
     "sourceProviderCounts": {
       "leaguepedia-cargo": 315,
@@ -933,7 +933,7 @@
     "ratingProof": {
       "sourceProvider": "oracles-elixir",
       "modelVersion": "transparent-power-index-v0.2.0",
-      "modelConfigHash": "fnv1a-6a77ca0e",
+      "modelConfigHash": "fnv1a-d653868f",
       "ratedPlayerCount": 486,
       "ratedTeamCount": 71,
       "sampleSize": 42190,
@@ -1042,7 +1042,7 @@
           "team": "Bilibili Gaming",
           "role": "Support",
           "rank": 3,
-          "rating": 159.5,
+          "rating": 159.8,
           "games": 307,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1083,7 +1083,7 @@
           "team": "Bilibili Gaming",
           "role": "Mid",
           "rank": 4,
-          "rating": 158.8,
+          "rating": 158.9,
           "games": 298,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1165,7 +1165,7 @@
           "team": "Hanwha Life Esports",
           "role": "Bot",
           "rank": 6,
-          "rating": 142.7,
+          "rating": 142.8,
           "games": 242,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1214,7 +1214,7 @@
           "team": "Hanwha Life Esports",
           "role": "Jungle",
           "rank": 7,
-          "rating": 142.5,
+          "rating": 142.6,
           "games": 281,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1263,7 +1263,7 @@
           "team": "LYON",
           "role": "Jungle",
           "rank": 8,
-          "rating": 141.3,
+          "rating": 141.4,
           "games": 106,
           "ratingBasis": "sourced-player-stats",
           "sourceProvider": "oracles-elixir",
@@ -1403,71 +1403,71 @@
     "metrics": {
       "target": "published-game",
       "modelVersion": "transparent-power-index-v0.2.0",
-      "modelConfigHash": "fnv1a-6a77ca0e",
+      "modelConfigHash": "fnv1a-d653868f",
       "predictionCount": 4534,
       "accuracy": 0.6321,
       "brierScore": 0.2281,
-      "logLoss": 0.6478,
+      "logLoss": 0.6479,
       "calibration": [
         {
           "bucket": "50-60",
-          "count": 2561,
-          "meanPredicted": 0.545,
-          "observedWinRate": 0.5802
+          "count": 2569,
+          "meanPredicted": 0.5453,
+          "observedWinRate": 0.5804
         },
         {
           "bucket": "60-70",
-          "count": 1389,
-          "meanPredicted": 0.6426,
-          "observedWinRate": 0.6739
+          "count": 1382,
+          "meanPredicted": 0.643,
+          "observedWinRate": 0.6744
         },
         {
           "bucket": "70-80",
-          "count": 512,
-          "meanPredicted": 0.7403,
-          "observedWinRate": 0.752
+          "count": 511,
+          "meanPredicted": 0.7405,
+          "observedWinRate": 0.7515
         },
         {
           "bucket": "80-90",
           "count": 68,
-          "meanPredicted": 0.8259,
+          "meanPredicted": 0.826,
           "observedWinRate": 0.8088
         },
         {
           "bucket": "90-100",
           "count": 4,
-          "meanPredicted": 0.9055,
+          "meanPredicted": 0.9051,
           "observedWinRate": 1
         }
       ],
       "segments": [
         {
           "key": "bo1",
-          "predictionCount": 298,
-          "accuracy": 0.6074,
-          "brierScore": 0.2353,
-          "logLoss": 0.6632
+          "predictionCount": 317,
+          "accuracy": 0.6057,
+          "brierScore": 0.2373,
+          "logLoss": 0.6674
         },
         {
           "key": "bo3-bo5",
-          "predictionCount": 4236,
-          "accuracy": 0.6339,
-          "brierScore": 0.2276,
-          "logLoss": 0.6468
+          "predictionCount": 4217,
+          "accuracy": 0.6341,
+          "brierScore": 0.2274,
+          "logLoss": 0.6464
         },
         {
           "key": "international",
           "predictionCount": 663,
-          "accuracy": 0.644,
-          "brierScore": 0.2224,
-          "logLoss": 0.6355
+          "accuracy": 0.6471,
+          "brierScore": 0.2225,
+          "logLoss": 0.6356
         },
         {
           "key": "cross-region",
           "predictionCount": 398,
-          "accuracy": 0.6583,
-          "brierScore": 0.2141,
-          "logLoss": 0.6168
+          "accuracy": 0.6608,
+          "brierScore": 0.2143,
+          "logLoss": 0.6172
         },
         {
           "key": "side-known",
@@ -1479,23 +1479,23 @@
         {
           "key": "patch-transition",
           "predictionCount": 1611,
-          "accuracy": 0.6207,
-          "brierScore": 0.2317,
-          "logLoss": 0.6561
+          "accuracy": 0.6214,
+          "brierScore": 0.2318,
+          "logLoss": 0.6563
         },
         {
           "key": "roster-change",
           "predictionCount": 629,
-          "accuracy": 0.6645,
-          "brierScore": 0.2243,
-          "logLoss": 0.6401
+          "accuracy": 0.6614,
+          "brierScore": 0.2244,
+          "logLoss": 0.6405
         },
         {
           "key": "unknown-lineup",
           "predictionCount": 309,
           "accuracy": 0.5437,
-          "brierScore": 0.2444,
-          "logLoss": 0.6817
+          "brierScore": 0.2446,
+          "logLoss": 0.6819
         }
       ],
       "baselineComparisons": [
@@ -1509,27 +1509,27 @@
           "logLoss": 0.6931,
           "publishedAccuracyDelta": 0.0973,
           "publishedBrierDelta": 0.0219,
-          "publishedLogLossDelta": 0.0453,
+          "publishedLogLossDelta": 0.0452,
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 298,
-              "accuracy": 0.5134,
+              "predictionCount": 317,
+              "accuracy": 0.5079,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.094,
-              "publishedBrierDelta": 0.0147,
-              "publishedLogLossDelta": 0.0299
+              "publishedAccuracyDelta": 0.0978,
+              "publishedBrierDelta": 0.0127,
+              "publishedLogLossDelta": 0.0257
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 4236,
-              "accuracy": 0.5364,
+              "predictionCount": 4217,
+              "accuracy": 0.5369,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.0975,
-              "publishedBrierDelta": 0.0224,
-              "publishedLogLossDelta": 0.0463
+              "publishedAccuracyDelta": 0.0972,
+              "publishedBrierDelta": 0.0226,
+              "publishedLogLossDelta": 0.0467
             },
             {
               "key": "international",
@@ -1537,9 +1537,9 @@
               "accuracy": 0.5385,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1055,
-              "publishedBrierDelta": 0.0276,
-              "publishedLogLossDelta": 0.0576
+              "publishedAccuracyDelta": 0.1086,
+              "publishedBrierDelta": 0.0275,
+              "publishedLogLossDelta": 0.0575
             },
             {
               "key": "cross-region",
@@ -1547,9 +1547,9 @@
               "accuracy": 0.5603,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.098,
-              "publishedBrierDelta": 0.0359,
-              "publishedLogLossDelta": 0.0763
+              "publishedAccuracyDelta": 0.1005,
+              "publishedBrierDelta": 0.0357,
+              "publishedLogLossDelta": 0.0759
             },
             {
               "key": "side-known",
@@ -1567,9 +1567,9 @@
               "accuracy": 0.5419,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.0788,
-              "publishedBrierDelta": 0.0183,
-              "publishedLogLossDelta": 0.037
+              "publishedAccuracyDelta": 0.0795,
+              "publishedBrierDelta": 0.0182,
+              "publishedLogLossDelta": 0.0368
             },
             {
               "key": "roster-change",
@@ -1577,9 +1577,9 @@
               "accuracy": 0.5199,
               "brierScore": 0.25,
               "logLoss": 0.6931,
-              "publishedAccuracyDelta": 0.1446,
-              "publishedBrierDelta": 0.0257,
-              "publishedLogLossDelta": 0.053
+              "publishedAccuracyDelta": 0.1415,
+              "publishedBrierDelta": 0.0256,
+              "publishedLogLossDelta": 0.0526
             },
             {
               "key": "unknown-lineup",
@@ -1588,8 +1588,8 @@
               "brierScore": 0.25,
               "logLoss": 0.6931,
               "publishedAccuracyDelta": -0.0065,
-              "publishedBrierDelta": 0.0056,
-              "publishedLogLossDelta": 0.0114
+              "publishedBrierDelta": 0.0054,
+              "publishedLogLossDelta": 0.0112
             }
           ]
         },
@@ -1603,25 +1603,25 @@
           "logLoss": 0.6577,
           "publishedAccuracyDelta": 0.0132,
           "publishedBrierDelta": 0.0046,
-          "publishedLogLossDelta": 0.0099,
+          "publishedLogLossDelta": 0.0098,
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 298,
-              "accuracy": 0.6074,
-              "brierScore": 0.2357,
-              "logLoss": 0.6641,
-              "publishedAccuracyDelta": 0,
-              "publishedBrierDelta": 0.0004,
-              "publishedLogLossDelta": 0.0009
+              "predictionCount": 317,
+              "accuracy": 0.6025,
+              "brierScore": 0.2379,
+              "logLoss": 0.6689,
+              "publishedAccuracyDelta": 0.0032,
+              "publishedBrierDelta": 0.0006,
+              "publishedLogLossDelta": 0.0015
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 4236,
-              "accuracy": 0.6197,
-              "brierScore": 0.2325,
-              "logLoss": 0.6573,
-              "publishedAccuracyDelta": 0.0142,
+              "predictionCount": 4217,
+              "accuracy": 0.6201,
+              "brierScore": 0.2323,
+              "logLoss": 0.6569,
+              "publishedAccuracyDelta": 0.014,
               "publishedBrierDelta": 0.0049,
               "publishedLogLossDelta": 0.0105
             },
@@ -1631,9 +1631,9 @@
               "accuracy": 0.5716,
               "brierScore": 0.2413,
               "logLoss": 0.6753,
-              "publishedAccuracyDelta": 0.0724,
-              "publishedBrierDelta": 0.0189,
-              "publishedLogLossDelta": 0.0398
+              "publishedAccuracyDelta": 0.0755,
+              "publishedBrierDelta": 0.0188,
+              "publishedLogLossDelta": 0.0397
             },
             {
               "key": "cross-region",
@@ -1641,9 +1641,9 @@
               "accuracy": 0.5151,
               "brierScore": 0.2484,
               "logLoss": 0.6899,
-              "publishedAccuracyDelta": 0.1432,
-              "publishedBrierDelta": 0.0343,
-              "publishedLogLossDelta": 0.0731
+              "publishedAccuracyDelta": 0.1457,
+              "publishedBrierDelta": 0.0341,
+              "publishedLogLossDelta": 0.0727
             },
             {
               "key": "side-known",
@@ -1661,9 +1661,9 @@
               "accuracy": 0.6207,
               "brierScore": 0.2317,
               "logLoss": 0.6555,
-              "publishedAccuracyDelta": 0,
-              "publishedBrierDelta": 0,
-              "publishedLogLossDelta": -0.0006
+              "publishedAccuracyDelta": 0.0007,
+              "publishedBrierDelta": -0.0001,
+              "publishedLogLossDelta": -0.0008
             },
             {
               "key": "roster-change",
@@ -1671,9 +1671,9 @@
               "accuracy": 0.6582,
               "brierScore": 0.2262,
               "logLoss": 0.645,
-              "publishedAccuracyDelta": 0.0063,
-              "publishedBrierDelta": 0.0019,
-              "publishedLogLossDelta": 0.0049
+              "publishedAccuracyDelta": 0.0032,
+              "publishedBrierDelta": 0.0018,
+              "publishedLogLossDelta": 0.0045
             },
             {
               "key": "unknown-lineup",
@@ -1682,8 +1682,8 @@
               "brierScore": 0.2351,
               "logLoss": 0.662,
               "publishedAccuracyDelta": -0.068,
-              "publishedBrierDelta": -0.0093,
-              "publishedLogLossDelta": -0.0197
+              "publishedBrierDelta": -0.0095,
+              "publishedLogLossDelta": -0.0199
             }
           ]
         },
@@ -1692,92 +1692,92 @@
           "label": "Team-only model",
           "description": "Uses the neutral team and league rating spine before player-rating, execution-residual, and side-context variants.",
           "predictionCount": 4534,
-          "accuracy": 0.6268,
+          "accuracy": 0.6266,
           "brierScore": 0.2338,
-          "logLoss": 0.66,
-          "publishedAccuracyDelta": 0.0053,
+          "logLoss": 0.6601,
+          "publishedAccuracyDelta": 0.0055,
           "publishedBrierDelta": 0.0057,
           "publishedLogLossDelta": 0.0122,
           "segments": [
             {
               "key": "bo1",
-              "predictionCount": 298,
-              "accuracy": 0.6174,
-              "brierScore": 0.2361,
-              "logLoss": 0.6644,
-              "publishedAccuracyDelta": -0.01,
-              "publishedBrierDelta": 0.0008,
-              "publishedLogLossDelta": 0.0012
+              "predictionCount": 317,
+              "accuracy": 0.6215,
+              "brierScore": 0.2364,
+              "logLoss": 0.6651,
+              "publishedAccuracyDelta": -0.0158,
+              "publishedBrierDelta": -0.0009,
+              "publishedLogLossDelta": -0.0023
             },
             {
               "key": "bo3-bo5",
-              "predictionCount": 4236,
-              "accuracy": 0.6275,
+              "predictionCount": 4217,
+              "accuracy": 0.627,
               "brierScore": 0.2336,
               "logLoss": 0.6597,
-              "publishedAccuracyDelta": 0.0064,
-              "publishedBrierDelta": 0.006,
-              "publishedLogLossDelta": 0.0129
+              "publishedAccuracyDelta": 0.0071,
+              "publishedBrierDelta": 0.0062,
+              "publishedLogLossDelta": 0.0133
             },
             {
               "key": "international",
               "predictionCount": 663,
-              "accuracy": 0.629,
-              "brierScore": 0.2287,
-              "logLoss": 0.6492,
-              "publishedAccuracyDelta": 0.015,
-              "publishedBrierDelta": 0.0063,
-              "publishedLogLossDelta": 0.0137
+              "accuracy": 0.6259,
+              "brierScore": 0.2289,
+              "logLoss": 0.6495,
+              "publishedAccuracyDelta": 0.0212,
+              "publishedBrierDelta": 0.0064,
+              "publishedLogLossDelta": 0.0139
             },
             {
               "key": "cross-region",
               "predictionCount": 398,
-              "accuracy": 0.6407,
-              "brierScore": 0.2204,
-              "logLoss": 0.6314,
-              "publishedAccuracyDelta": 0.0176,
-              "publishedBrierDelta": 0.0063,
-              "publishedLogLossDelta": 0.0146
+              "accuracy": 0.6382,
+              "brierScore": 0.2207,
+              "logLoss": 0.632,
+              "publishedAccuracyDelta": 0.0226,
+              "publishedBrierDelta": 0.0064,
+              "publishedLogLossDelta": 0.0148
             },
             {
               "key": "side-known",
               "predictionCount": 4219,
-              "accuracy": 0.6274,
+              "accuracy": 0.6269,
               "brierScore": 0.2336,
-              "logLoss": 0.6597,
-              "publishedAccuracyDelta": 0.0081,
+              "logLoss": 0.6598,
+              "publishedAccuracyDelta": 0.0086,
               "publishedBrierDelta": 0.0059,
-              "publishedLogLossDelta": 0.0127
+              "publishedLogLossDelta": 0.0128
             },
             {
               "key": "patch-transition",
               "predictionCount": 1611,
-              "accuracy": 0.622,
-              "brierScore": 0.2351,
-              "logLoss": 0.6629,
-              "publishedAccuracyDelta": -0.0013,
+              "accuracy": 0.6201,
+              "brierScore": 0.2352,
+              "logLoss": 0.6631,
+              "publishedAccuracyDelta": 0.0013,
               "publishedBrierDelta": 0.0034,
               "publishedLogLossDelta": 0.0068
             },
             {
               "key": "roster-change",
               "predictionCount": 629,
-              "accuracy": 0.6518,
-              "brierScore": 0.2322,
-              "logLoss": 0.6571,
-              "publishedAccuracyDelta": 0.0127,
-              "publishedBrierDelta": 0.0079,
-              "publishedLogLossDelta": 0.017
+              "accuracy": 0.6566,
+              "brierScore": 0.2324,
+              "logLoss": 0.6573,
+              "publishedAccuracyDelta": 0.0048,
+              "publishedBrierDelta": 0.008,
+              "publishedLogLossDelta": 0.0168
             },
             {
               "key": "unknown-lineup",
               "predictionCount": 309,
-              "accuracy": 0.5825,
-              "brierScore": 0.2457,
-              "logLoss": 0.6844,
-              "publishedAccuracyDelta": -0.0388,
-              "publishedBrierDelta": 0.0013,
-              "publishedLogLossDelta": 0.0027
+              "accuracy": 0.5761,
+              "brierScore": 0.2458,
+              "logLoss": 0.6847,
+              "publishedAccuracyDelta": -0.0324,
+              "publishedBrierDelta": 0.0012,
+              "publishedLogLossDelta": 0.0028
             }
           ]
         }
@@ -1785,23 +1785,23 @@
       "playerRatingShadow": {
         "enabled": true,
         "predictionCount": 4534,
-        "accuracy": 0.6367,
+        "accuracy": 0.6365,
         "brierScore": 0.2278,
         "logLoss": 0.6473,
         "brierDelta": 0.006,
-        "logLossDelta": 0.0127,
+        "logLossDelta": 0.0128,
         "rosterChangeBrierDelta": 0.0079,
-        "patchTransitionBrierDelta": 0.0055
+        "patchTransitionBrierDelta": 0.0054
       },
       "executionResidualShadow": {
         "enabled": false,
         "predictionCount": 4534,
-        "accuracy": 0.6381,
+        "accuracy": 0.637,
         "brierScore": 0.2277,
-        "logLoss": 0.6471,
+        "logLoss": 0.6472,
         "brierDelta": 0.0001,
-        "logLossDelta": 0.0002,
-        "crossRegionBrierDelta": -0.0017,
+        "logLossDelta": 0.0001,
+        "crossRegionBrierDelta": -0.0019,
         "patchTransitionBrierDelta": -0.0004
       }
     }
@@ -1865,7 +1865,6 @@
       "LEC 2026 Spring",
       "LEC 2026 Versus",
       "LEC Fan Clash",
-      "LEC/2025 Season/Summer Playoffs",
       "LEC/2026 Season/Summer Season",
       "LPL 2025 Split 1",
       "LPL 2025 Split 2",
@@ -1962,10 +1961,10 @@
   "artifactKind": "public-ranking-manifest",
   "artifactMeta": {
     "schemaVersion": 24,
-    "runId": "run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
-    "generatedAt": "2026-10-07T08:28:09.924Z",
+    "runId": "run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
+    "generatedAt": "2026-10-07T08:32:16.264Z",
     "modelVersion": "transparent-power-index-v0.2.0",
-    "modelConfigHash": "fnv1a-6a77ca0e"
+    "modelConfigHash": "fnv1a-d653868f"
   },
   "ratingScale": {
     "version": "published-power-index-v1",
@@ -1979,12 +1978,12 @@
     "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
   },
   "summaryMode": "browser-summary",
-  "playerDirectoryUrl": "/data/entities/players.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
-  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
-  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
-  "regionHistoryUrl": "/data/history/region-series.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
-  "tournamentMovementIndexUrl": "/data/history/tournament-moves/index.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
-  "matchHistoryIndexUrl": "/data/matches/index.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+  "playerDirectoryUrl": "/data/entities/players.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
+  "teamDirectoryUrl": "/data/entities/teams.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
+  "teamHistoryIndexUrl": "/data/history/team-series/index.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
+  "regionHistoryUrl": "/data/history/region-series.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
+  "tournamentMovementIndexUrl": "/data/history/tournament-moves/index.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
+  "matchHistoryIndexUrl": "/data/matches/index.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
   "teamCount": 102,
   "snapshotIndex": {
     "All__All__All": {
@@ -1993,7 +1992,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/all.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/all.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 4534,
       "sourceBreakdown": [
         {
@@ -2019,7 +2018,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2025.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2025.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 2480,
       "sourceBreakdown": [
         {
@@ -2046,7 +2045,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2025-split-1.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2025-split-1.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 479,
       "sourceBreakdown": [
         {
@@ -2073,7 +2072,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2025-split-2.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2025-split-2.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 976,
       "sourceBreakdown": [
         {
@@ -2100,7 +2099,7 @@
         "region": "All",
         "checkpoint": "split-3"
       },
-      "url": "/data/scopes/season-2025-split-3.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2025-split-3.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 955,
       "sourceBreakdown": [
         {
@@ -2126,7 +2125,7 @@
         "event": "All",
         "region": "All"
       },
-      "url": "/data/scopes/season-2026.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2026.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 1987,
       "sourceBreakdown": [
         {
@@ -2153,7 +2152,7 @@
         "region": "All",
         "checkpoint": "split-1"
       },
-      "url": "/data/scopes/season-2026-split-1.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2026-split-1.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 737,
       "sourceBreakdown": [
         {
@@ -2173,7 +2172,7 @@
         "region": "All",
         "checkpoint": "split-2"
       },
-      "url": "/data/scopes/season-2026-split-2.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2026-split-2.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 1146,
       "sourceBreakdown": [
         {
@@ -2200,7 +2199,7 @@
         "region": "All",
         "checkpoint": "split-3"
       },
-      "url": "/data/scopes/season-2026-split-3.json?v=run_20261007082809_transparent-power-index-v0-2-0_fnv1a-6a77ca0e",
+      "url": "/data/scopes/season-2026-split-3.json?v=run_20261007083216_transparent-power-index-v0-2-0_fnv1a-d653868f",
       "matchCount": 104,
       "sourceBreakdown": [
         {
