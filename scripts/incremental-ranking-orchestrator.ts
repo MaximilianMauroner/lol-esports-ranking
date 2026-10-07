@@ -421,7 +421,10 @@ export async function buildRankingIncrementally({
     }
     prunePartialPublicIndexes(candidate.publicPlan.writes, validScopeKeys, validTournamentIds)
     const previousSemantic = semanticMapFromGeneration(restored.publicManifest)
-    const candidateSemantic = semanticMapFromWrites(candidate.publicPlan.writes)
+    const candidateReceipts = candidate.publicPlan.writes.map((write) => prepareArtifactReceipt(write.value))
+    const candidateSemantic = Object.fromEntries(candidate.publicPlan.writes.map((write, index) => [
+      `/data/${write.relativePath}`, { digest: candidateReceipts[index]!.digest },
+    ]))
     const currentSemantic = { ...previousSemantic, ...candidateSemantic }
     const removedPaths = obsoletePublicArtifactPaths({
       previousPaths: Object.keys(previousSemantic),
@@ -440,9 +443,11 @@ export async function buildRankingIncrementally({
     assertArtifactDependencyPlanMatchesSemanticChanges(dependencyPlan, previousSemantic, currentSemantic)
     const changed = new Set(dependencyPlan.logicalPaths)
     const currentPaths = Object.keys(currentSemantic).sort()
-    const changedWrites = candidate.publicPlan.writes.filter((write) => changed.has(`/data/${write.relativePath}`))
-    const root = candidate.publicPlan.writes.find((write) => write.relativePath === 'ranking-summary.json')
-    if (root && !changedWrites.includes(root)) changedWrites.push(root)
+    const changedWriteIndexes = candidate.publicPlan.writes.flatMap((write, index) => changed.has(`/data/${write.relativePath}`) ? [index] : [])
+    const rootIndex = candidate.publicPlan.writes.findIndex((write) => write.relativePath === 'ranking-summary.json')
+    if (rootIndex !== -1 && !changedWriteIndexes.includes(rootIndex)) changedWriteIndexes.push(rootIndex)
+    const changedWrites = changedWriteIndexes.map((index) => candidate.publicPlan.writes[index]!)
+    const changedReceipts = changedWriteIndexes.map((index) => candidateReceipts[index]!)
     let parity: boolean | null = null
 
     if (comparisonMode) {
@@ -462,12 +467,12 @@ export async function buildRankingIncrementally({
         await rm(candidateDir, { recursive: true, force: true })
         return {
           action: 'publish-full', sourceData, build: full, state: fullState, diagnostic,
-          metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
+          metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, [], currentPaths, removedPaths, true, false, stateParity, affectedSnapshotKeys.size), candidateReceipts), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
         }
       }
       await rm(candidateDir, { recursive: true, force: true })
       return {
-        action: 'publish-full', sourceData, build: full, state: fullState, metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidate.publicPlan.writes), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
+        action: 'publish-full', sourceData, build: full, state: fullState, metrics: { ...withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, dependencyPlan.logicalPaths, currentPaths.filter((path) => !changed.has(path)), removedPaths, true, true, true, affectedSnapshotKeys.size), candidateReceipts), candidate), memoryCollections), semanticParityReport: report, stateParityReport: stateReport },
       }
     }
 
@@ -481,7 +486,7 @@ export async function buildRankingIncrementally({
         removedLogicalPaths: removedPaths,
         expectedLogicalPaths: currentPaths,
       },
-      metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, changedWrites.map((write) => `/data/${write.relativePath}`).sort(), currentPaths.filter((path) => !changed.has(path)), removedPaths, false, parity, null, affectedSnapshotKeys.size), changedWrites), candidate), memoryCollections),
+      metrics: withMemoryCollections(withPlayerLifecycle(withArtifactBytes(metricsFor(classification, ledger, replay, replayedMatchCount, currentSemantic, changedWrites.map((write) => `/data/${write.relativePath}`).sort(), currentPaths.filter((path) => !changed.has(path)), removedPaths, false, parity, null, affectedSnapshotKeys.size), changedReceipts), candidate), memoryCollections),
     }
   } catch (error) {
     if (candidateDir) await rm(candidateDir, { recursive: true, force: true })
@@ -1456,14 +1461,21 @@ function baseMetrics(classification: RankingChangeClassification['kind'], ledger
   }
 }
 
-function withArtifactBytes(metrics: IncrementalBuildMetrics, writes: SnapshotBuild['publicPlan']['writes']) {
+function prepareArtifactReceipt(value: unknown) {
+  const prepared = prepareSemanticArtifact(value)
+  let semanticBytes = prepared.bytes, compressedBytes = prepared.compressedBytes
+  for (const child of prepared.children ?? []) {
+    semanticBytes += child.bytes
+    compressedBytes += child.compressedBytes
+  }
+  return { digest: prepared.digest, semanticBytes, compressedBytes }
+}
+
+function withArtifactBytes(metrics: IncrementalBuildMetrics, receipts: ReturnType<typeof prepareArtifactReceipt>[]) {
   let semanticBytes = 0, compressedBytes = 0
-  for (const write of writes) {
-    const prepared = prepareSemanticArtifact(write.value)
-    for (const node of [...(prepared.children ?? []), prepared]) {
-      semanticBytes += node.bytes
-      compressedBytes += node.compressedBytes
-    }
+  for (const receipt of receipts) {
+    semanticBytes += receipt.semanticBytes
+    compressedBytes += receipt.compressedBytes
   }
   return { ...metrics, semanticBytes, compressedBytes }
 }
