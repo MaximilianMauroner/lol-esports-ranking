@@ -497,7 +497,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       const checkpointRestoreStarted = monotonicNow()
       if (bucketConfig.enabled && bucketClient) {
         try {
-          const [activeState, activePublic] = await Promise.all([
+          let [activeState, activePublic] = await Promise.all([
             readActiveIncrementalState({ config: bucketConfig, client: bucketClient, checkpointLimit: 1 }),
             readActiveContentAddressedGeneration({ config: bucketConfig, client: bucketClient, verifyArtifacts: false }),
           ])
@@ -514,6 +514,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               loadCheckpoints: activeState.loadCheckpoints,
             }
           }
+          // Node 24 can retain these block bindings in the suspended refresh frame.
+          activeState = undefined
+          activePublic = undefined
         } catch (error) {
           metrics.recordStage('checkpoint-validation', {
             durationMs: 0,

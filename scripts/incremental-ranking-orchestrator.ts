@@ -149,17 +149,11 @@ export type IncrementalDiagnostic = {
 /** Release replay inputs once state persistence has completed and only the public patch remains to publish. */
 export function releasePersistedIncrementalInputs(
   result: Exclude<IncrementalRankingBuildResult, { action: 'no-change' }>,
-  restored?: RestoredIncrementalAuthority,
 ) {
   result.sourceData.matches.length = 0
   result.sourceData.importedMatches.length = 0
   result.state.ledger.rows.length = 0
   result.state.checkpoints.length = 0
-  if (restored) {
-    restored.checkpoints.length = 0
-    const rows = restored.canonicalLedger.rows
-    if (Array.isArray(rows)) rows.length = 0
-  }
 }
 
 function releaseRestoredReplayPayloads(restored: RestoredIncrementalAuthority) {
