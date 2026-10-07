@@ -54,7 +54,7 @@ export async function createImplementationRepositoryFixture({
   return {
     root: resolve(root),
     commit: stdout.trim(),
-    cleanup: () => rm(root, { recursive: true, force: true }),
+    cleanup: () => rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
   }
 }
 
