@@ -68,7 +68,7 @@ export function ScopeBar({
 
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--line)] bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2.5"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2.5"
       role="group"
       aria-label="Ranking period"
     >
@@ -97,9 +97,9 @@ export function ScopeBar({
         />
       ) : null}
 
-      <p className="text-xs text-[var(--muted)] max-md:basis-full" aria-live="polite">
+      <p className="text-xs text-muted-foreground max-md:basis-full" aria-live="polite">
         Showing <b className="font-semibold text-[var(--text-strong)]">{selection}</b>
-        {scopeThroughDate ? <> · results through <b className="font-semibold text-[var(--text)]">{formatDate(scopeThroughDate)}</b></> : null}
+        {scopeThroughDate ? <> · results through <b className="font-semibold text-foreground">{formatDate(scopeThroughDate)}</b></> : null}
         {publishedAt ? <span className="max-sm:hidden"> · updated {formatDate(publishedAt)}</span> : null}
       </p>
     </div>

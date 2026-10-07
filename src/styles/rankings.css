@@ -5,21 +5,16 @@
    applies to exactly one table, so it belongs in a stylesheet where it can be
    read. */
 
+/* Head typography comes from TableHead in ui/table.tsx, shared by every
+   table. This rule only adds the board's padding and fill. */
 .ranking-table thead th {
-  padding: 11px 14px;
+  padding: 12px;
   border-bottom: 1px solid var(--line);
   background: var(--surface-2);
-  color: var(--faint);
-  font-size: var(--t-1);
-  font-weight: var(--w-emph);
-  letter-spacing: 0.08em;
-  text-align: left;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .ranking-table tbody td {
-  padding: 11px 14px;
+  padding: 12px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
@@ -73,14 +68,9 @@ table.ranking-table.board-grid {
 table.ranking-table.board-grid col.board-col-rank { width: 88px; }
 table.ranking-table.board-grid col.board-col-score { width: 184px; }
 table.ranking-table.board-grid col.board-col-move { width: 72px; }
-table.ranking-table.board-grid col.board-col-form { width: 112px; }
+table.ranking-table.board-grid col.board-col-form { width: 128px; }
 table.ranking-table.board-grid col.board-col-record { width: 104px; }
 table.ranking-table.board-grid col.board-col-action { width: 128px; }
-
-table.ranking-table.board-grid tbody td,
-table.ranking-table.board-grid thead th {
-  padding-inline: 12px;
-}
 
 table.ranking-table.board-grid tbody td {
   padding-block: 8px;
@@ -115,7 +105,7 @@ table.ranking-table.board-grid tbody td {
     grid-template-rows: auto auto;
     column-gap: 8px;
     align-items: center;
-    padding: 0 10px 0 6px;
+    padding: 0 8px 0 4px;
     min-height: 60px;
     border-bottom: 1px solid var(--line);
   }
@@ -160,7 +150,7 @@ table.ranking-table.board-grid tbody td {
   .board-rankcell {
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
   }
 
   .board-rank {
@@ -255,11 +245,6 @@ table.ranking-table.board-grid tbody td {
   letter-spacing: 0;
 }
 
-.region-badge[data-code-length="4"] { --badge-code: var(--t-0); }
-.region-badge[data-code-length="5"] { --badge-code: 0.52rem; }
-.region-badge--sm[data-code-length="4"] { --badge-code: 0.46rem; }
-.region-badge--sm[data-code-length="5"] { --badge-code: 0.38rem; }
-
 .region-badge--lck { --badge-hue: 215; }
 .region-badge--lpl { --badge-hue: 28; }
 .region-badge--lec { --badge-hue: 286; }
@@ -273,7 +258,7 @@ table.ranking-table.board-grid tbody td {
 .detail-skeleton {
   display: block;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 
 .detail-skeleton--result {
@@ -324,7 +309,7 @@ table.ranking-table.board-grid tbody td {
 }
 
 .recent-match-skeleton p {
-  padding: 9px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--t-2);
@@ -334,9 +319,9 @@ table.ranking-table.board-grid tbody td {
 .recent-match-skeleton__row {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) minmax(92px, auto);
-  gap: 10px;
+  gap: 8px;
   min-height: 64px;
-  padding: 11px 14px;
+  padding: 12px;
   border-top: 1px dotted var(--line);
 }
 
@@ -350,7 +335,7 @@ table.ranking-table.board-grid tbody td {
 .player-rank-skeleton__score {
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -361,7 +346,7 @@ table.ranking-table.board-grid tbody td {
 
 .recent-match-skeleton__chips {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   margin-top: 1px;
 }
 
@@ -376,10 +361,10 @@ table.ranking-table.board-grid tbody td {
 .player-rank-skeleton__row {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 64px 74px;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   min-height: 48px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-top: 1px solid var(--line);
 }
 
@@ -426,8 +411,8 @@ table.ranking-table.board-grid tbody td {
   .player-rank-table tr {
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) auto;
-    gap: 8px 10px;
-    padding: 11px 10px;
+    gap: 8px;
+    padding: 12px 8px;
     border-bottom: 1px solid var(--line);
   }
 
@@ -475,7 +460,7 @@ table.ranking-table.board-grid tbody td {
     content: "Games ";
     color: var(--faint);
     font-size: var(--t-1);
-    letter-spacing: 0.06em;
+    letter-spacing: var(--track-label);
     text-transform: uppercase;
   }
 
@@ -491,7 +476,7 @@ table.ranking-table.board-grid tbody td {
 .trend-chart-skeleton {
   display: grid;
   gap: 12px;
-  padding: 18px 16px 14px;
+  padding: 16px 16px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-2);
   background: var(--detail-surface, var(--surface));
@@ -552,7 +537,7 @@ table.ranking-table.board-grid tbody td {
   color: var(--faint);
   font-size: var(--t-2);
   font-weight: var(--w-emph);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -574,7 +559,7 @@ table.ranking-table.board-grid tbody td {
 
   .compare-table th,
   .compare-table td {
-    padding: 10px 12px;
+    padding: 8px 12px;
   }
 
   .compare-table thead th b {
@@ -608,7 +593,7 @@ table.ranking-table.board-grid tbody td {
 
   .compare-table[data-compare-count="2"] th[scope="row"] {
     font-size: var(--t-1);
-    letter-spacing: 0.06em;
+    letter-spacing: var(--track-label);
     white-space: normal;
     overflow-wrap: anywhere;
   }

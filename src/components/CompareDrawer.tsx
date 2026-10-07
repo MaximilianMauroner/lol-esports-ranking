@@ -54,10 +54,10 @@ export function CompareDrawer<E>({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--text)] shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
+        className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-card p-0 text-foreground shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
       >
-        <SheetHeader className="flex-row items-center gap-3 border-b border-[var(--line)] p-[18px_22px] text-left">
-          <SheetTitle className="mr-auto text-[length:var(--t-5)] font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
+        <SheetHeader className="flex-row items-center gap-3 border-b border-border px-5 py-4 text-left">
+          <SheetTitle className="mr-auto text-base font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
           <SheetClose asChild>
             <Button type="button" variant="ghost">
               <X size={16} aria-hidden="true" />
@@ -74,7 +74,7 @@ export function CompareDrawer<E>({
             <>
                 {before}
                 <Table
-                  containerClassName="max-w-full border-b border-[var(--line)] [contain:paint] [overscroll-behavior-x:contain] [scrollbar-gutter:stable]"
+                  containerClassName="max-w-full border-b border-border [contain:paint] [overscroll-behavior-x:contain] [scrollbar-gutter:stable]"
                   className="compare-table w-full border-collapse"
                   data-compare-count={columns.length}
                 >
@@ -82,9 +82,9 @@ export function CompareDrawer<E>({
                     <TableRow>
                       <TableHead aria-label="Metric" />
                       {columns.map((column) => (
-                        <TableHead key={column.id}>
-                          <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-[length:var(--t-2)] [&_small]:text-[var(--faint)]">
-                            <span className="inline-flex min-w-0 items-center gap-[7px]">
+                        <TableHead key={column.id} className="tracking-normal normal-case">
+                          <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-xs [&_small]:text-[var(--faint)]">
+                            <span className="inline-flex min-w-0 items-center gap-2">
                               {column.badge}
                               <b>{column.name}</b>
                             </span>
@@ -94,7 +94,7 @@ export function CompareDrawer<E>({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="mt-1 rounded-[var(--r-1)]"
+                            className="mt-1 rounded-sm"
                             onClick={() => onRemove(column.id)}
                             aria-label={`Remove ${column.name} from comparison`}
                             title={`Remove ${column.name}`}
@@ -115,7 +115,7 @@ export function CompareDrawer<E>({
                             <TableCell key={columns[index].id} className={best.has(columns[index].id) ? 'best' : ''}>
                               {row.cell(entity)}
                               {best.has(columns[index].id) ? (
-                                <Badge variant="default" className="ml-2 px-1.5 text-[length:var(--t-1)] leading-[1.2] tracking-[0.06em] uppercase" aria-label={`Best ${row.label.toLowerCase()} value`}>
+                                <Badge variant="secondary" className="ml-2 px-1.5 text-2xs leading-[1.2] tracking-label uppercase" aria-label={`Best ${row.label.toLowerCase()} value`}>
                                   Best
                                 </Badge>
                               ) : null}
@@ -126,7 +126,7 @@ export function CompareDrawer<E>({
                     })}
                   </TableBody>
                 </Table>
-              {after ? <div className="grid min-w-0 gap-4 px-[22px] pt-[18px] pb-6 max-sm:p-3.5">{after}</div> : null}
+              {after ? <div className="grid min-w-0 gap-4 px-5 pt-4 pb-6 max-sm:p-3.5">{after}</div> : null}
             </>
           )}
         </div>

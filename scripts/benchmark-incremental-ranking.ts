@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { fork } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { availableParallelism, cpus, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { basename, dirname, join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
@@ -17,10 +17,13 @@ import { buildPlayerModel } from '../src/lib/model.ts'
 import { readProcessPeakRssBytes, refreshWorkerExecArgv } from './refresh-worker-memory.mjs'
 import {
   aggregateBenchmarkMetrics,
+  evaluateIncrementalCompute,
+  INCREMENTAL_NORMALIZED_COMPUTE_LIMIT,
   INCREMENTAL_SAFETY_PEAK_RSS_BYTES,
   oracleBaselineRewriteEvidence,
   passesIncrementalSafetyPeak,
 } from './incremental-benchmark-assertions.ts'
+import { runCalibrationWorkload } from './benchmark-calibration.ts'
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
 const refreshModulePath: string = './refresh-data-if-changed.mjs'
@@ -28,7 +31,6 @@ const { refreshDataIfChanged } = await import(refreshModulePath) as { refreshDat
 
 const corpusMinimums = { matches: 4_477, teams: 102, players: 356 }
 const targets = {
-  computeMs: 15_000,
   safetyPeakRssBytes: INCREMENTAL_SAFETY_PEAK_RSS_BYTES,
   functionalPeakRssBytes: 750 * 1024 * 1024,
   uploadedBytes: 2 * 1024 * 1024,
@@ -50,6 +52,8 @@ if (process.argv.includes('--raw-profile-baseline')) {
 } else if (process.argv.includes('--benchmark-verifier')) {
   if (!root) throw new Error('Benchmark verifier requires RANKING_BENCHMARK_ROOT')
   await runBenchmarkVerifier()
+} else if (process.argv.includes('--calibration-worker')) {
+  runCalibrationWorker()
 } else if (process.argv.includes('--player-profile-worker')) {
   if (!root) throw new Error('Player profile worker requires RANKING_BENCHMARK_ROOT')
   await runPlayerProfileWorker()
@@ -296,6 +300,7 @@ async function runBenchmarkParent() {
     throw new Error(`Checked-in match corpus is undersized: ${checkedInMatches.length} < ${benchmarkMatchCount}`)
   }
   const measurements: Array<Awaited<ReturnType<typeof runMeasuredWorker>> & {
+    calibrationMs: number
     verifierSampledPeakRssBytes: number
     verifierSampleCount: number
   }> = []
@@ -342,10 +347,12 @@ async function runBenchmarkParent() {
     await writeFile(join(root, 'benchmark-setup.json'), JSON.stringify({
       currentShape, benchmarkMatchCount, baselineGenerationId, baselineMatchCount, baselineRawDeltaCount, nextEnd: addedMatch.date, fixtureShape,
     } satisfies BenchmarkSetup))
+    const calibrationMs = await runCalibrationProcess()
     const measurement = await runMeasuredWorker()
     const verification = await runBenchmarkVerifierProcess()
     measurements.push({
       ...measurement,
+      calibrationMs,
       output: { ...measurement.output, ...verification.output },
       verifierSampledPeakRssBytes: verification.sampledPeakRssBytes,
       verifierSampleCount: verification.sampleCount,
@@ -357,11 +364,14 @@ async function runBenchmarkParent() {
     measurement.sampledPeakRssBytes,
     measurement.output.maxRssBytes,
   )))
-  const allFunctional = measurements.every(({ output, sampledPeakRssBytes, sampleCount }) => {
+  const compute = evaluateIncrementalCompute(measurements.map(({ output, calibrationMs }) => ({
+    computeMs: output.computeMs,
+    calibrationMs,
+  })))
+  const allFunctional = compute.pass && measurements.every(({ output, sampledPeakRssBytes, sampleCount }) => {
     const peakRssBytes = Math.max(sampledPeakRssBytes, output.maxRssBytes)
     const restoreDurationMs = refreshStageDuration(output.refreshStages, 'restore')
-    return output.computeMs < targets.computeMs
-      && peakRssBytes < targets.functionalPeakRssBytes
+    return peakRssBytes < targets.functionalPeakRssBytes
       && output.uploadedBytes < targets.uploadedBytes
       && output.fullSnapshotWritten === targets.fullSnapshotWritten
       && output.parity
@@ -382,9 +392,12 @@ async function runBenchmarkParent() {
       && restoreDurationMs > 0
   })
   const pass = allFunctional && passesIncrementalSafetyPeak(effectivePeakRssBytes)
-  const repetitions = measurements.map(({ output, sampledPeakRssBytes, sampledPeakAtMs, sampleCount }, index) => ({
+  const repetitions = measurements.map(({ output, sampledPeakRssBytes, sampledPeakAtMs, sampleCount, calibrationMs }, index) => ({
       repeat: index + 1,
       computeMs: Number(output.computeMs),
+      normalizedCompute: compute.normalized[index]!,
+      mainCpuMs: Number(output.mainCpuMs),
+      calibrationMs,
       uploadedBytes: Number(output.uploadedBytes),
       uploadedBytesBySurface: output.uploadedBytesBySurface,
       storagePutCount: output.storagePutCount,
@@ -420,6 +433,9 @@ async function runBenchmarkParent() {
     repeatCount: repeats,
     aggregate,
     computeMs: aggregate.max.computeMs,
+    normalizedCompute: Math.max(...compute.normalized),
+    calibration: { runsMs: measurements.map(({ calibrationMs }) => calibrationMs), medianMs: compute.calibrationMedianMs },
+    runner: { cpuModel: cpus()[0]?.model, availableParallelism: availableParallelism() },
     uploadedBytes: aggregate.max.uploadedBytes,
     peakRssBytes: effectivePeakRssBytes,
     maxRssBytes: aggregate.max.mainMaxRssBytes,
@@ -519,6 +535,7 @@ async function runBenchmarkWorker() {
   client.resetIo()
   globalThis.gc?.()
   process.send?.({ type: 'measurement-start' })
+  const cpuStarted = process.cpuUsage()
   const started = performance.now()
   const refreshResult = await refreshDataIfChanged([
     '--raw-dir', rawDir,
@@ -549,6 +566,7 @@ async function runBenchmarkWorker() {
     run: async (_command: string, args: string[]) => stageProviderManifest(nextManifest, args),
   })
   const computeMs = performance.now() - started
+  const cpu = process.cpuUsage(cpuStarted)
   const productionRss = process.memoryUsage().rss
   const mainMaxRssBytes = readProcessPeakRssBytes()
   process.send?.({ type: 'measurement-stop' })
@@ -625,6 +643,7 @@ async function runBenchmarkWorker() {
       && fixtureShape.sourceTeamCount >= corpusMinimums.teams
       && fixtureShape.sourcePlayerCount >= corpusMinimums.players,
     computeMs: Math.round(computeMs), uploadedBytes,
+    mainCpuMs: Math.round((cpu.user + cpu.system) / 1000),
     maxRssBytes,
     mainMaxRssBytes,
     rawChildMaxRssBytes,
@@ -649,7 +668,7 @@ async function runBenchmarkWorker() {
     reconciliationMatchCount: reconciliationMatches.length,
     appendedReconciliationStatus: appendedReconciliation?.status,
     target: {
-      computeMs: '<15000', safetyPeakRssBytes: '<734003200', functionalPeakRssBytes: '<786432000',
+      normalizedCompute: `<${INCREMENTAL_NORMALIZED_COMPUTE_LIMIT} (computeMs / median calibrationMs)`, safetyPeakRssBytes: '<734003200', functionalPeakRssBytes: '<786432000',
       uploadedBytes: '<2097152', fullSnapshotWritten: false, parity: true, appendedMatches: 1, materializedScopeCount: 3,
       minimumCorpus: corpusMinimums,
     },
@@ -790,6 +809,25 @@ async function runMeasuredWorker() {
     sampledPeakAtMs,
     sampleCount,
   }
+}
+
+/** Times the fixed calibration workload in a fresh process with the refresh worker's V8 flags. */
+async function runCalibrationProcess() {
+  const { output } = await measureForkedChild(fork(fileURLToPath(import.meta.url), ['--calibration-worker'], {
+    cwd: process.cwd(),
+    execArgv: refreshWorkerExecArgv(process.execArgv),
+    silent: true,
+  }), 'Calibration worker')
+  const calibrationMs = Number(output.calibrationMs)
+  if (!(calibrationMs > 0)) throw new Error('Calibration worker produced no duration')
+  return calibrationMs
+}
+
+function runCalibrationWorker() {
+  globalThis.gc?.()
+  const started = performance.now()
+  const digest = runCalibrationWorkload()
+  process.stdout.write(`${JSON.stringify({ calibrationMs: Math.round(performance.now() - started), digest })}\n`)
 }
 
 async function runBenchmarkVerifierProcess() {

@@ -18,7 +18,7 @@ export function TeamMark({
   return (
     <span
       className={cn(
-        'inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] font-mono text-[length:var(--t-2)] font-extrabold text-[var(--text)]',
+        'inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-[var(--surface-2)] font-mono text-xs font-extrabold text-foreground',
         className,
       )}
       title={`${team} (${label})`}

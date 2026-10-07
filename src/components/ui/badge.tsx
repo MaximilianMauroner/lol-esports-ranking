@@ -13,13 +13,12 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent-strong)]',
-        secondary: 'border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)]',
+        secondary: 'border-border bg-[var(--surface-2)] text-muted-foreground',
         warning: 'border-transparent bg-[var(--warn-soft)] text-[var(--warn)]',
         /* Rank quality. --rank-gold carries this meaning and no other. */
         rank: 'border-[color-mix(in_oklch,var(--rank-gold),var(--line)_54%)] bg-[color-mix(in_oklch,var(--rank-gold)_12%,transparent)] font-bold text-[var(--rank-gold)]',
         /* Competition and event labels. */
-        event: 'border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-2)_72%,transparent)] text-[var(--faint)]',
+        event: 'border-border bg-[color-mix(in_oklch,var(--surface-2)_72%,transparent)] text-[var(--faint)]',
         /* Match outcome. */
         win: 'border-[color-mix(in_oklch,var(--win)_44%,var(--line))] bg-[var(--win-soft)] text-[var(--win)]',
         loss: 'border-[color-mix(in_oklch,var(--loss)_44%,var(--line))] bg-[var(--loss-soft)] text-[var(--loss)]',
@@ -27,7 +26,7 @@ const badgeVariants = cva(
       size: {
         default: '',
         /* Square-ish tier and result marks, sized to align with a table row. */
-        mark: 'grid size-[var(--mark-size,22px)] place-items-center rounded-[var(--r-1)] px-0 py-0 text-center [--mark-size:22px]',
+        mark: 'grid size-[var(--mark-size,22px)] place-items-center rounded-sm px-0 py-0 text-center [--mark-size:22px]',
       },
     },
     defaultVariants: { variant: 'secondary', size: 'default' },

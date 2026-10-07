@@ -69,12 +69,12 @@ export function PowerLadder({
       role="group"
       aria-label={`Power ladder: ${teams.length} ranked teams on one Power axis. Brackets join near ties. Select a team to open it.`}
     >
-      <text x={LEFT} y={12} className="fill-[var(--faint)] text-[10px]">Power · 100 pts ≈ {gapExample}% game win</text>
+      <text x={LEFT} y={12} className="fill-[var(--faint)] text-2xs">Power · 100 pts ≈ {gapExample}% game win</text>
       {ticks.map((tick, index) => (
         <g key={tick}>
-          <line x1={x(tick)} x2={x(tick)} y1={TOP - 4} y2={height - BOTTOM + 4} className="stroke-[var(--line)]" />
+          <line x1={x(tick)} x2={x(tick)} y1={TOP - 4} y2={height - BOTTOM + 4} className="stroke-border" />
           {index % labelEvery === 0 ? (
-            <text x={x(tick)} y={height - 8} textAnchor="middle" className="fill-[var(--faint)] text-[10px] tabular-nums">{formatRating(tick)}</text>
+            <text x={x(tick)} y={height - 8} textAnchor="middle" className="fill-[var(--faint)] text-2xs tabular-nums">{formatRating(tick)}</text>
           ) : null}
         </g>
       ))}
@@ -92,7 +92,7 @@ export function PowerLadder({
             width={x2 - x1}
             height={group.length * ROW_HEIGHT - 6}
             rx={6}
-            className="fill-[color-mix(in_oklch,var(--rank-gold)_7%,transparent)] stroke-[color-mix(in_oklch,var(--rank-gold)_40%,transparent)]"
+            className="fill-[color-mix(in_oklch,var(--muted)_6%,transparent)] stroke-muted-foreground"
           >
             <title>{`Near tie: ${group.map((team) => team.code ?? team.team).join(', ')}`}</title>
           </rect>
@@ -116,11 +116,11 @@ export function PowerLadder({
                 onKeyDown={(event) => onKeyDown(event, team)}
               >
                 <rect x={0} y={y - ROW_HEIGHT / 2} width={WIDTH} height={ROW_HEIGHT} className="fill-transparent group-hover:fill-[var(--surface-2)] group-focus-visible:fill-[var(--surface-3)]" />
-                <text x={4} y={y + 3.5} className="fill-[var(--muted)] font-mono text-[10px] font-bold tabular-nums">{team.rank}</text>
-                {tier ? <text x={24} y={y + 3.5} className="font-mono text-[10px] font-bold" fill={TIER_FILL[tier]}>{tier}</text> : null}
-                <text x={36} y={y + 3.5} className="fill-[var(--text)] font-mono text-[10.5px] font-bold">{team.code ?? team.team.slice(0, 4)}</text>
+                <text x={4} y={y + 3.5} className="fill-muted-foreground font-mono text-2xs font-bold tabular-nums">{team.rank}</text>
+                {tier ? <text x={24} y={y + 3.5} className="font-mono text-2xs font-bold" fill={TIER_FILL[tier]}>{tier}</text> : null}
+                <text x={36} y={y + 3.5} className="fill-foreground font-mono text-2xs font-bold">{team.code ?? team.team.slice(0, 4)}</text>
                 <line x1={x(team.rating - uncertainty)} x2={x(team.rating + uncertainty)} y1={y} y2={y} className="stroke-[var(--line-strong)]" strokeWidth={2} strokeLinecap="round" />
-                <circle cx={x(team.rating)} cy={y} r={4.5} fill={tier ? TIER_FILL[tier] : 'var(--muted)'} className="stroke-[var(--surface)]" strokeWidth={2} />
+                <circle cx={x(team.rating)} cy={y} r={4.5} fill={tier ? TIER_FILL[tier] : 'var(--muted)'} className="stroke-card" strokeWidth={2} />
               </g>
             )} />
             <HoverCardContent side="left" align="start">
@@ -128,22 +128,22 @@ export function PowerLadder({
                 <TeamMark team={team.team} code={team.code} />
                 <div className="min-w-0">
                   <p className="font-semibold text-[var(--text-strong)]">{team.team}</p>
-                  <p className="text-xs text-[var(--muted)]">#{team.rank} · {team.league}{tier ? ` · Tier ${tier}` : ''}</p>
+                  <p className="text-xs text-muted-foreground">#{team.rank} · {team.league}{tier ? ` · Tier ${tier}` : ''}</p>
                 </div>
               </div>
-              <div className="my-3 border-y border-[var(--line)] py-3">
+              <div className="my-3 border-y border-border py-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[var(--muted)]">Power</span>
-                  <strong className="font-mono text-lg tabular-nums">{formatRating(team.rating)} <span className="text-xs font-normal text-[var(--muted)]">±{formatRating(uncertainty)}</span></strong>
+                  <span className="text-muted-foreground">Power</span>
+                  <strong className="font-mono text-lg tabular-nums">{formatRating(team.rating)} <span className="text-xs font-normal text-muted-foreground">±{formatRating(uncertainty)}</span></strong>
                 </div>
-                <p className="mt-1 text-xs text-[var(--muted)]">{formatRating(team.rating - uncertainty)}–{formatRating(team.rating + uncertainty)} · model uncertainty range</p>
+                <p className="mt-1 text-xs text-muted-foreground">{formatRating(team.rating - uncertainty)}–{formatRating(team.rating + uncertainty)} · model uncertainty range</p>
               </div>
               <dl className="flex justify-between gap-4 text-xs">
-                <div><dt className="text-[var(--muted)]">Record</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{team.wins}–{team.losses}</dd></div>
-                <div><dt className="text-[var(--muted)]">Win rate</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{formatRatio(total > 0 ? team.wins / total : undefined)}</dd></div>
-                <div><dt className="mb-1 text-[var(--muted)]">Last five</dt><dd><FormDots form={team.form} /></dd></div>
+                <div><dt className="text-muted-foreground">Record</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{team.wins}–{team.losses}</dd></div>
+                <div><dt className="text-muted-foreground">Win rate</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{formatRatio(total > 0 ? team.wins / total : undefined)}</dd></div>
+                <div><dt className="mb-1 text-muted-foreground">Last five</dt><dd><FormDots form={team.form} /></dd></div>
               </dl>
-              {neighbours.length > 0 ? <p className="mt-3 text-xs text-[var(--muted)]">Near tie with <span className="text-[var(--text)]">{neighbours.map((other) => other.code ?? other.team).join(', ')}</span>.</p> : null}
+              {neighbours.length > 0 ? <p className="mt-3 text-xs text-muted-foreground">Near tie with <span className="text-foreground">{neighbours.map((other) => other.code ?? other.team).join(', ')}</span>.</p> : null}
               <p className="mt-3 text-xs text-[var(--faint)]">Select the row for team details.</p>
             </HoverCardContent>
           </HoverCard>

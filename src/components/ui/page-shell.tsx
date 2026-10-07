@@ -35,7 +35,7 @@ export function PageShell({
 export function StatRibbon({ children, label }: { children: ReactNode; label: string }) {
   return (
     <div
-      className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-px overflow-hidden rounded-[var(--r-3)] border border-[var(--line)] bg-[var(--line)]"
+      className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border"
       aria-label={label}
     >
       {children}
@@ -55,8 +55,8 @@ export function StatCell({
   detail?: ReactNode
 }) {
   return (
-    <div className="grid min-w-0 gap-0.5 bg-[var(--surface)] px-4 py-3">
-      <span className="flex items-center gap-2 text-xs font-medium text-[var(--muted)] [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-[var(--faint)]">
+    <div className="grid min-w-0 gap-0.5 bg-card px-4 py-3">
+      <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-[var(--faint)]">
         {icon}
         {label}
       </span>

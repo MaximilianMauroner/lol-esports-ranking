@@ -82,6 +82,10 @@
   --shadow-1: 0 1px 2px oklch(0 0 0 / 0.38);
   --shadow-2: 0 10px 28px oklch(0 0 0 / 0.38), 0 1px 2px oklch(0 0 0 / 0.46);
   --shadow-pop: 0 24px 64px oklch(0 0 0 / 0.55);
+  /* Upward shadow for trays fixed to the bottom edge. */
+  --shadow-tray: 0 -8px 24px oklch(0 0 0 / 0.35);
+  /* Backdrop behind every drawer and sheet. */
+  --scrim: oklch(0.04 0.003 250 / 0.72);
 
   /* shadcn/ui semantic tokens mapped to the existing LoL Esports palette. */
   --background: var(--bg);
@@ -127,6 +131,9 @@
   --w-emph: 680;
   --w-figure: 800;
 
+  /* Uppercase labels: table heads, eyebrows, stat captions. */
+  --track-label: 0.08em;
+
   /* Spacing, 4px grid. */
   --s-1: 4px;
   --s-2: 8px;
@@ -136,7 +143,10 @@
   --s-8: 32px;
 
   --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+  /* The one monospace face. It must name the @font-face family in index.css;
+     "JetBrains Mono" without "Variable" matched nothing and fell through to
+     the OS mono. */
+  --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
   --app-nav-h: 66px;
   /* Bottom tab bar on phones and the fixed compare tray. Main content pads
@@ -158,10 +168,6 @@
   -webkit-font-smoothing: antialiased;
   color: var(--text);
   background: var(--bg);
-}
-
-* {
-  box-sizing: border-box;
 }
 
 html,
@@ -191,24 +197,25 @@ body::before {
     radial-gradient(600px 300px at 2% 0%, oklch(0.64 0.23 27 / 0.07), transparent 62%);
 }
 
-h1,
-h2,
-h3,
-h4,
-p {
-  margin: 0;
-}
-
-button,
-select,
-input {
-  font: inherit;
-  color: inherit;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
+/* Element defaults live in the base layer. Unlayered element rules beat every
+   Tailwind utility, so a `font: inherit` here once cancelled `text-xs`,
+   `font-medium` and colour classes on every button, select and input.
+   Preflight already resets margins and control fonts in this layer. */
 @layer base {
+  button,
+  select,
+  input {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A bare <b> or <strong> would otherwise get the browser's 700, which is
+     not on the weight scale. */
+  b,
+  strong {
+    font-weight: var(--w-emph);
+  }
+
   a {
     color: var(--accent-strong);
   }
@@ -259,12 +266,22 @@ input {
   }
 }
 
+/* iOS Safari zooms the page when a focused field is smaller than 16px. This
+   rule is unlayered on purpose so it wins over the text-size utilities. */
+@media (pointer: coarse) {
+  input,
+  select {
+    font-size: 16px;
+  }
+}
+
 @media (max-width: 900px), (pointer: coarse) {
   button,
   [role="button"],
   [data-slot="button"],
   [data-slot="toggle"],
   [data-slot="toggle-group-item"],
+  [data-slot="compare-toggle"],
   .team-cell__button {
     min-width: 44px;
     min-height: 44px;

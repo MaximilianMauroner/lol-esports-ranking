@@ -22,7 +22,7 @@ function HoverCardContent({
       <HoverCardPrimitive.Positioner side={side} sideOffset={sideOffset} align={align} alignOffset={alignOffset} className="isolate z-50">
         <HoverCardPrimitive.Popup
           data-slot="hover-card-content"
-          className={cn('w-72 max-w-[calc(100vw-2rem)] rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[var(--surface)] p-4 text-sm text-[var(--text)] shadow-lg outline-none', className)}
+          className={cn('w-72 max-w-[calc(100vw-2rem)] rounded-md border border-[var(--line-strong)] bg-card p-4 text-sm text-foreground shadow-lg outline-none', className)}
           {...props}
         />
       </HoverCardPrimitive.Positioner>

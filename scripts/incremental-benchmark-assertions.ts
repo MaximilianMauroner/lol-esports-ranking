@@ -1,5 +1,36 @@
 export const INCREMENTAL_SAFETY_PEAK_RSS_BYTES = 700 * 1024 * 1024
 
+/**
+ * Incremental refresh time in runner-calibration units: computeMs divided by the
+ * median calibration workload duration on the same runner. A wall-clock limit
+ * cannot gate GitHub-hosted runners, whose speed for this workload varies about
+ * 1.9x for identical code. The limit is 1.4x main on coding-vm and about 1.6x
+ * main on observed CI runners; see docs/incremental-gate-runner-calibration.md
+ * before changing it.
+ */
+export const INCREMENTAL_NORMALIZED_COMPUTE_LIMIT = 6.5
+
+/**
+ * Normalizes each repetition's computeMs by the median calibration duration and
+ * applies the strict limit to every repetition. Empty, zero, negative, or
+ * non-finite durations fail closed.
+ */
+export function evaluateIncrementalCompute(repetitions: readonly { computeMs: number; calibrationMs: number }[]) {
+  const calibrations = repetitions.map(({ calibrationMs }) => calibrationMs).sort((left, right) => left - right)
+  // Odd counts read the same middle value twice; even counts average the two middle values.
+  const calibrationMedianMs = calibrations.length === 0
+    ? Number.NaN
+    : (calibrations[Math.floor((calibrations.length - 1) / 2)]! + calibrations[Math.floor(calibrations.length / 2)]!) / 2
+  const normalized = repetitions.map(({ computeMs }) => computeMs / calibrationMedianMs)
+  const validInput = repetitions.length > 0 && repetitions.every(({ computeMs, calibrationMs }) =>
+    Number.isFinite(computeMs) && computeMs > 0 && Number.isFinite(calibrationMs) && calibrationMs > 0)
+  return {
+    calibrationMedianMs,
+    normalized,
+    pass: validInput && normalized.every((value) => value < INCREMENTAL_NORMALIZED_COMPUTE_LIMIT),
+  }
+}
+
 export type BenchmarkNumericMetrics = {
   computeMs: number
   restoreDurationMs: number

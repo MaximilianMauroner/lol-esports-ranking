@@ -103,7 +103,7 @@ export function LineChart({
   )
 
   if (series.length === 0 || domain === null || data.length === 0) {
-    return <p className="text-[var(--muted)] p-5">No chart data available.</p>
+    return <p className="text-muted-foreground p-5">No chart data available.</p>
   }
 
   const { minT, maxT, minY, maxY } = domain
@@ -126,9 +126,9 @@ export function LineChart({
   return (
     <div className="chart-shell">
       {/* Names come before the lines they identify. */}
-      <div className="flex flex-wrap gap-x-3.5 gap-y-1 px-[18px] pt-3">
+      <div className="flex flex-wrap gap-x-3.5 gap-y-1 px-4 pt-3">
         {series.map((entry) => (
-          <span className="inline-flex items-center gap-[7px] text-[length:var(--t-3)] text-[var(--muted)]" key={entry.id}>
+          <span className="inline-flex items-center gap-2 text-sm text-muted-foreground" key={entry.id}>
             <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: entry.color }} aria-hidden="true" />
             {entry.label}
           </span>
@@ -137,7 +137,7 @@ export function LineChart({
       <ChartContainer
         id={chartId}
         config={config}
-        className="chart relative min-h-[220px] w-full min-w-0 aspect-auto overflow-hidden px-[18px] pt-4 pb-3 [&_svg]:block [&_svg]:size-full [&_svg]:touch-pan-y [&_svg]:overflow-hidden"
+        className="chart relative min-h-[220px] w-full min-w-0 aspect-auto overflow-hidden px-4 pt-4 pb-3 [&_svg]:block [&_svg]:size-full [&_svg]:touch-pan-y [&_svg]:overflow-hidden"
         style={{ height }}
         role="img"
         aria-label={`${yLabel} over time for ${series.map((entry) => entry.label).join(', ')}`}
@@ -363,16 +363,16 @@ function LineChartTooltip({
   if (rows.length === 0) return null
 
   return (
-    <div className="pointer-events-none static z-2 grid gap-[3px] whitespace-nowrap rounded-[var(--r-2)] border border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_96%,transparent)] px-[11px] py-[9px] text-[length:var(--t-3)] shadow-[var(--shadow-2)]">
-      <b className="mb-0.5 text-[length:var(--t-2)] text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
+    <div className="pointer-events-none static z-2 grid gap-1 whitespace-nowrap rounded-md border border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_96%,transparent)] px-3 py-2 text-sm shadow-[var(--shadow-2)]">
+      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
       <div className="grid gap-2">
         {rows.map((row) => (
           <div className="grid gap-1" key={row.key}>
-            <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-[var(--muted)]">
+            <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-muted-foreground">
               <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
               <em className="min-w-0 overflow-hidden text-ellipsis not-italic">{row.label}</em>
               <div className="grid justify-items-end gap-px">
-                <strong className="text-[var(--text)] tabular-nums">{yFormat(row.value)}</strong>
+                <strong className="text-foreground tabular-nums">{yFormat(row.value)}</strong>
               </div>
             </div>
           </div>

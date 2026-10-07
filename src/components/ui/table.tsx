@@ -74,14 +74,15 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
+/** The one column-label style, shared with sortable heads in `SortHeader`. */
+const tableHeadClassName =
+  "h-10 px-2 text-left align-middle text-2xs font-semibold tracking-label whitespace-nowrap text-[var(--faint)] uppercase [&:has([role=checkbox])]:pr-0"
+
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       data-slot="table-head"
-      className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
-        className
-      )}
+      className={cn(tableHeadClassName, className)}
       {...props}
     />
   )
@@ -122,4 +123,5 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  tableHeadClassName,
 }
