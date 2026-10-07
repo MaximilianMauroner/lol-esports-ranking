@@ -32,13 +32,13 @@ const MISSING_NOTE = 'The recorded Power changes do not reconcile for this serie
 /** Series ledger for tablet and desktop widths. The Source column drops below 1100px. */
 export function SeriesTable({ series, expanded, onToggle, publication }: SeriesListProps) {
   return (
-    <Table className="table-fixed" containerClassName="hidden border-t border-[var(--line)] md:block">
+    <Table className="table-fixed" containerClassName="hidden border-t border-border md:block">
       <TableHeader>
-        <TableRow className="bg-[var(--surface-2)] text-xs hover:bg-[var(--surface-2)]">
-          <TableHead className="w-40 pl-4 text-[var(--muted)] lg:w-52 xl:w-56">Date</TableHead>
-          <TableHead className="text-center text-[var(--muted)]">Result</TableHead>
-          <TableHead className="w-48 text-[var(--muted)] lg:w-64 xl:w-72">Rating change</TableHead>
-          <TableHead className="hidden w-32 text-[var(--muted)] min-[1100px]:table-cell">Source</TableHead>
+        <TableRow className="bg-[var(--surface-2)] hover:bg-[var(--surface-2)]">
+          <TableHead className="w-40 pl-4 lg:w-52 xl:w-56">Date</TableHead>
+          <TableHead className="text-center">Result</TableHead>
+          <TableHead className="w-48 lg:w-64 xl:w-72">Rating change</TableHead>
+          <TableHead className="hidden w-32 min-[1100px]:table-cell">Source</TableHead>
           <TableHead className="w-14"><span className="sr-only">Games</span></TableHead>
         </TableRow>
       </TableHeader>
@@ -64,9 +64,9 @@ function SeriesTableRows({ series, expanded, onToggle, publication }: { series: 
   const expandable = series.games.length > 1
   return (
     <Fragment>
-      <TableRow className={cn('border-[var(--line)] hover:bg-[var(--surface-2)]', expandable && 'cursor-pointer')} onClick={expandable ? onToggle : undefined}>
+      <TableRow className={cn('border-border hover:bg-[var(--surface-2)]', expandable && 'cursor-pointer')} onClick={expandable ? onToggle : undefined}>
         <TableCell className="pl-4 whitespace-normal">
-          <span className="block text-xs text-[var(--muted)]">{formatDate(match.datetimeUtc ?? match.date)}</span>
+          <span className="block text-xs text-muted-foreground">{formatDate(match.datetimeUtc ?? match.date)}</span>
           <EventLine match={match} className="mt-1" />
         </TableCell>
         <TableCell>
@@ -84,9 +84,9 @@ function SeriesTableRows({ series, expanded, onToggle, publication }: { series: 
           {change.kind === 'applied' ? (
             <div className="grid gap-1">
               <div className="grid grid-cols-[3rem_auto] items-center justify-start gap-x-2 gap-y-0.5">
-                <span className="truncate text-xs text-[var(--muted)]" title={match.teamA.name}>{match.teamA.code}</span>
+                <span className="truncate text-xs text-muted-foreground" title={match.teamA.name}>{match.teamA.code}</span>
                 <RatingDelta delta={change.teamA} />
-                <span className="truncate text-xs text-[var(--muted)]" title={match.teamB.name}>{match.teamB.code}</span>
+                <span className="truncate text-xs text-muted-foreground" title={match.teamB.name}>{match.teamB.code}</span>
                 <RatingDelta delta={change.teamB} />
               </div>
               <ChanceLine change={change} match={match} />
@@ -108,7 +108,7 @@ function SeriesTableRows({ series, expanded, onToggle, publication }: { series: 
 function GameTableRow({ game }: { game: PublicMatchHistoryEntry }) {
   const gameWinner: SeriesSide = game.winnerId === game.teamA.id ? 'A' : 'B'
   return (
-    <TableRow className="border-dotted border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-2)_62%,transparent)] hover:bg-[var(--surface-2)]">
+    <TableRow className="border-dotted border-border bg-[color-mix(in_oklch,var(--surface-2)_62%,transparent)] hover:bg-[var(--surface-2)]">
       <TableCell className="pl-8 text-xs text-[var(--faint)]">
         Game {game.gameNumber}
         <span className="block text-2xs">{game.patch ? `Patch ${game.patch}` : 'Patch unknown'}</span>
@@ -134,7 +134,7 @@ function GameTableRow({ game }: { game: PublicMatchHistoryEntry }) {
 /** Stacked series cards for phones. One line per team keeps both names at full size. */
 export function SeriesCards({ series, expanded, onToggle, publication }: SeriesListProps) {
   return (
-    <div className="grid gap-px border-t border-[var(--line)] bg-[var(--line)] md:hidden">
+    <div className="grid gap-px border-t border-border bg-border md:hidden">
       {series.map((entry) => (
         <SeriesCard
           series={entry}
@@ -158,11 +158,11 @@ function SeriesCard({ series, expanded, onToggle, publication }: { series: Match
     { side: 'B', team: match.teamB, wins: match.seriesWinsB, delta: change.kind === 'applied' ? change.teamB : undefined },
   ] as const
   return (
-    <div className="min-w-0 bg-[var(--surface)]">
+    <div className="min-w-0 bg-card">
       <div className="px-3.5 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <span className="block text-xs text-[var(--muted)]">{formatDate(match.datetimeUtc ?? match.date)}</span>
+            <span className="block text-xs text-muted-foreground">{formatDate(match.datetimeUtc ?? match.date)}</span>
             <EventLine match={match} className="mt-0.5" />
           </div>
           {expandable ? <ExpandButton expanded={expanded} onToggle={onToggle} match={match} /> : null}
@@ -171,12 +171,12 @@ function SeriesCard({ series, expanded, onToggle, publication }: { series: Match
           {teams.map(({ side, team, wins, delta }) => (
             <Fragment key={side}>
               <TeamName team={team} result={teamResult(winner, side)} align="start" mark />
-              <b className={cn('font-mono text-md tabular-nums', winner === side ? 'text-[var(--text-strong)]' : 'font-normal text-[var(--muted)]')}>{wins}</b>
+              <b className={cn('font-mono text-md tabular-nums', winner === side ? 'text-[var(--text-strong)]' : 'font-normal text-muted-foreground')}>{wins}</b>
               {delta === undefined ? <span /> : <RatingDelta delta={delta} />}
             </Fragment>
           ))}
         </div>
-        <div className="mt-2 grid gap-1 border-t border-dotted border-[var(--line)] pt-2">
+        <div className="mt-2 grid gap-1 border-t border-dotted border-border pt-2">
           {change.kind === 'applied' ? (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <ChanceLine change={change} match={match} />
@@ -187,11 +187,11 @@ function SeriesCard({ series, expanded, onToggle, publication }: { series: Match
         </div>
       </div>
       {expanded ? (
-        <div className="border-t border-[var(--line)] bg-[color-mix(in_oklch,var(--surface-2)_62%,transparent)] px-3.5 py-1">
+        <div className="border-t border-border bg-[color-mix(in_oklch,var(--surface-2)_62%,transparent)] px-3.5 py-1">
           {series.games.map((game) => {
             const gameWinner: SeriesSide = game.winnerId === game.teamA.id ? 'A' : 'B'
             return (
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-dotted border-[var(--line)] py-2 text-sm first:border-0" key={game.id}>
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-dotted border-border py-2 text-sm first:border-0" key={game.id}>
                 <span className="text-2xs text-[var(--faint)]">G{game.gameNumber}</span>
                 <TeamName team={game.teamA} result={teamResult(gameWinner, 'A')} align="end" useCode />
                 <span className="font-mono text-xs text-[var(--faint)] tabular-nums" title={`Series score after game ${game.gameNumber}`}>{game.seriesWinsA}–{game.seriesWinsB}</span>
@@ -210,7 +210,7 @@ function EventLine({ match, className }: { match: PublicMatchHistoryEntry; class
   return (
     <span className={cn('flex min-w-0 items-start gap-1.5', className)}>
       <Badge variant="event" className="shrink-0">{match.league}</Badge>
-      <span className="line-clamp-2 min-w-0 text-xs text-[var(--text)]" title={label}>{label}</span>
+      <span className="line-clamp-2 min-w-0 text-xs text-foreground" title={label}>{label}</span>
     </span>
   )
 }
@@ -230,8 +230,8 @@ function TeamName({ team, result, align, mark = false, useCode = false, classNam
         className={cn(
           'truncate',
           result === 'won' && 'font-semibold text-[var(--text-strong)]',
-          result === 'lost' && 'font-normal text-[var(--muted)]',
-          result === 'level' && 'font-normal text-[var(--text)]',
+          result === 'lost' && 'font-normal text-muted-foreground',
+          result === 'level' && 'font-normal text-foreground',
         )}
         title={team.name}
       >
@@ -290,12 +290,12 @@ function UpsetTag({ change, match }: { change: Extract<SeriesRatingChange, { kin
 function RatingChangeNote({ change, match, publication }: { change: Exclude<SeriesRatingChange, { kind: 'applied' }>; match: PublicMatchHistoryEntry; publication: string }) {
   if (change.kind === 'held') return <span className="text-xs text-[var(--faint)]">Held until the series ends</span>
   return (
-    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1">
         No rating change recorded
         <Tooltip>
           <TooltipTrigger
-            className="grid size-5 place-items-center rounded-[var(--r-1)] text-[var(--faint)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+            className="grid size-5 place-items-center rounded-sm text-[var(--faint)] hover:text-foreground focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
             aria-label={`Why no rating change: ${MISSING_NOTE}`}
             onClick={stopRowToggle}
           >
@@ -305,8 +305,7 @@ function RatingChangeNote({ change, match, publication }: { change: Exclude<Seri
         </Tooltip>
       </span>
       <a
-        // Important modifiers: the unlayered global `a` color in base.css outranks utilities.
-        className="text-2xs text-[var(--faint)]! underline underline-offset-2 hover:text-[var(--text)]!"
+        className="text-2xs text-[var(--faint)] underline underline-offset-2 hover:text-foreground"
         href={impactReportUrl(match, publication)}
         onClick={stopRowToggle}
         aria-label="Report this series"

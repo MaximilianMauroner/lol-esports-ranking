@@ -24,7 +24,7 @@ export function PlayerPerformancePanel({ players, scopeLabel }: { players: Compa
       />
       {performance && diagnostics ? (
         <>
-          <PanelBody className="text-xs leading-relaxed text-[var(--muted)]">
+          <PanelBody className="text-xs leading-relaxed text-muted-foreground">
             Oracle’s Elixir · {diagnostics.sampleGames} rated games in {scopeLabel} with complete role matchups.
             Averages can include previous teams and roles. They are unweighted and are not adjusted for champion, opponent, or league strength.
           </PanelBody>
@@ -45,12 +45,12 @@ export function PlayerPerformancePanel({ players, scopeLabel }: { players: Compa
               })}
             </TableBody>
           </Table>
-          <PanelFooter className="text-xs leading-relaxed text-[var(--muted)]">
+          <PanelFooter className="text-xs leading-relaxed text-muted-foreground">
             Each average uses games where that stat is available. Missing stats are unknown, never zero.
             Damage–gold gap is measured in percentage points; a higher value is not automatically better.
           </PanelFooter>
         </>
-      ) : <PanelBody className="text-sm text-[var(--muted)]">These stats are unavailable in this player’s source snapshot.</PanelBody>}
+      ) : <PanelBody className="text-sm text-muted-foreground">These stats are unavailable in this player’s source snapshot.</PanelBody>}
     </Panel>
   )
 }

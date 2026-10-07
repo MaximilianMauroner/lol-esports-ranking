@@ -109,7 +109,7 @@ export function TournamentsView() {
             {events.map((event) => <option key={event.id} value={event.id}>{event.label} · {event.sourceTournamentId}</option>)}
           </Select>
         </div>
-        <div className="text-sm text-[var(--muted)]">Times shown in {timezone} · Feed last changed {formatTournamentTime(state.feed.fetchedAt, timezone)} · Checked {state.health ? formatTournamentTime(state.health.checkedAt, timezone) : 'unknown'} <Button variant="outline" size="sm" className="ml-2" onClick={() => void refresh()}>Refresh</Button></div>
+        <div className="text-sm text-muted-foreground">Times shown in {timezone} · Feed last changed {formatTournamentTime(state.feed.fetchedAt, timezone)} · Checked {state.health ? formatTournamentTime(state.health.checkedAt, timezone) : 'unknown'} <Button variant="outline" size="sm" className="ml-2" onClick={() => void refresh()}>Refresh</Button></div>
       </div>
       {stale ? <Alert variant="warning" role="status">Schedule may be stale. Last successful feed change: {formatTournamentTime(state.feed.fetchedAt, timezone)}.{state.error ? ` Latest browser check failed: ${state.error}` : ''}{state.health?.warnings.length ? ` Collector: ${state.health.warnings.join(' ')}` : ''}</Alert> : null}
       {state.feed.dataMode === 'synthetic-fixture' ? <Alert variant="warning" role="status">Local synthetic fixture. These are not official LoL Esports fixtures or results.</Alert> : null}
@@ -117,13 +117,13 @@ export function TournamentsView() {
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
         <Alert variant="warning" role="status">Coverage {state.feed.coverage.complete ? 'has warnings' : 'is incomplete'} for {state.feed.coverage.start.slice(0, 10)} to {state.feed.coverage.end.slice(0, 10)}. {state.feed.coverage.warnings.join(' ')}</Alert>
       ) : null}
-      <p className="text-sm text-[var(--muted)]">Source: LoL Esports public site schedule reference (unsupported API). Series results here are source reported and are separate from scored rankings. {FORECASTS_ENABLED ? 'Match estimates use a separately dated Power snapshot; advancement rules are not verified.' : 'Forecast unavailable: rules not verified.'}</p>
+      <p className="text-sm text-muted-foreground">Source: LoL Esports public site schedule reference (unsupported API). Series results here are source reported and are separate from scored rankings. {FORECASTS_ENABLED ? 'Match estimates use a separately dated Power snapshot; advancement rules are not verified.' : 'Forecast unavailable: rules not verified.'}</p>
       {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : (
         <>
           <h2 className="text-lg font-semibold">{selected.label}</h2>
           {(['live', 'upcoming', 'results', 'unresolved'] as const).map((group) => <section key={group} aria-label={group} className="grid gap-3">
             <h3 className="text-base font-semibold capitalize">{group === 'unresolved' ? 'Unresolved results' : group}</h3>
-            {grouped[group].length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{grouped[group].map((series) => <SeriesCard key={series.id} series={series} timezone={timezone} now={now} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />)}</div> : <p className="text-sm text-[var(--muted)]">No {group} series in this schedule window.</p>}
+            {grouped[group].length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{grouped[group].map((series) => <SeriesCard key={series.id} series={series} timezone={timezone} now={now} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />)}</div> : <p className="text-sm text-muted-foreground">No {group} series in this schedule window.</p>}
           </section>)}
         </>
       )}
@@ -147,12 +147,12 @@ function SeriesCard({ series, timezone, now, forecasts }: { series: TournamentSe
   const conditional = receipt && (series.status === 'live' || series.status === 'completed') ? scoreConditionedSeriesOdds(receipt, series) : null
   return <Card size="sm">
     <CardHeader><CardTitle>{first?.name ?? 'TBD'} {score(first?.gameWins)}–{score(second?.gameWins)} {second?.name ?? 'TBD'}</CardTitle></CardHeader>
-    <CardContent className="grid gap-1 text-sm text-[var(--muted)]">
+    <CardContent className="grid gap-1 text-sm text-muted-foreground">
       <span>{series.stage ?? 'Stage not supplied'} · {series.bestOf ? `Best of ${series.bestOf}` : 'Format not supplied'}</span>
       <span>{series.startTime ? formatTournamentTime(series.startTime, timezone) : 'Start time not supplied'} · {series.status === 'unknown' ? `Source state: ${series.sourceState || 'unknown'}` : series.status}</span>
-      {forecast ? <div className="mt-2 grid gap-1 border-t border-[var(--border)] pt-2">
+      {forecast ? <div className="mt-2 grid gap-1 border-t border-border pt-2">
         {forecast.status === 'ready' ? <>
-          <strong className="text-[var(--foreground)]">{receipt ? 'Published pre-match forecast' : 'Current model estimate · not archived'}</strong>
+          <strong className="text-foreground">{receipt ? 'Published pre-match forecast' : 'Current model estimate · not archived'}</strong>
           <span>Game win: {first?.name ?? 'Home'} {percent(forecast.homeGameWinProbability)} · {second?.name ?? 'Away'} {percent(forecast.awayGameWinProbability)}</span>
           <span>Series win (Bo{forecast.bestOf}): {first?.name ?? 'Home'} {percent(forecast.homeSeriesWinProbability)} · {second?.name ?? 'Away'} {percent(forecast.awaySeriesWinProbability)}</span>
           {conditional?.status === 'ready' ? <span>Score-conditioned series odds: {percent(conditional.homeSeriesWinProbability)} · {percent(conditional.awaySeriesWinProbability)}. Uses the frozen pre-series model, not in-game telemetry.</span> : null}

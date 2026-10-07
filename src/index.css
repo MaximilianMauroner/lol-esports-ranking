@@ -78,7 +78,9 @@
     --font-weight-extrabold: var(--w-figure);
 
     --font-heading: var(--sans);
-    --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+    --font-mono: var(--mono);
+
+    --tracking-label: var(--track-label);
 
     --color-chart-5: var(--chart-5);
     --color-chart-4: var(--chart-4);

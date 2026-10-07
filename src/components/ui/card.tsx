@@ -14,7 +14,7 @@ function Card({
       className={cn(
         // The default already is the product's panel: --r-3 corners, a --line
         // border and the --surface fill. Call sites must not restate this.
-        "group/card flex min-w-0 flex-col gap-(--card-spacing) overflow-hidden rounded-[var(--r-3)] border border-[var(--line)] bg-[var(--surface)] py-(--card-spacing) text-sm/relaxed text-card-foreground [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0",
+        "group/card flex min-w-0 flex-col gap-(--card-spacing) overflow-hidden rounded-lg border border-border bg-card py-(--card-spacing) text-sm/relaxed text-card-foreground [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0",
         className
       )}
       {...props}
