@@ -11,7 +11,7 @@ import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
 import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
 import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
-import { rawSourceWorkerExecArgv, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
+import { collectRefreshGarbage, rawSourceWorkerExecArgv, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
 import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
@@ -555,6 +555,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       incrementalBuildOptions.restored = undefined
       restoredIncremental = undefined
       incrementalBuild = await incrementalBuildPromise
+      if (metrics.snapshot().mode === 'gated' && incrementalBuild.action === 'publish-incremental') {
+        // Release temporary artifact and replay data before state persistence allocates buffers.
+        collectRefreshGarbage()
+      }
       providerAvailableAt = incrementalBuild.metrics.providerAvailableAt ?? null
       metrics.recordWork({
         fullBuilds: incrementalBuild.action === 'publish-full' ? 1 : 0,
