@@ -18,7 +18,7 @@ const SCORED_TEAM_COUNT = 3
 
 /**
  * Every ranked team of each region on one shared Power axis. The three teams
- * that make up the region score are accent dots, and the region score itself
+ * that make up the region score are series-1 dots, and the region score itself
  * is a white tick. The standings list below the chart is its table view.
  */
 export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {

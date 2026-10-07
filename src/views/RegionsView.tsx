@@ -227,7 +227,7 @@ function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistory
 
   return (
     <div
-      className="grid min-w-[260px] grid-cols-[minmax(92px,auto)_150px] items-center gap-3 rounded-sm border border-border bg-[var(--surface-2)] px-3 py-2.5 max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px] max-[560px]:w-full max-[560px]:grid-cols-1 [&_circle]:fill-[var(--accent)] [&_polyline]:fill-none [&_polyline]:stroke-[var(--accent)] [&_polyline]:stroke-[2.2] [&_polyline]:[stroke-linecap:round] [&_polyline]:[stroke-linejoin:round] [&_svg]:h-[42px] [&_svg]:w-[150px] [&_svg]:overflow-visible max-[560px]:[&_svg]:w-full"
+      className="grid min-w-[260px] grid-cols-[minmax(92px,auto)_150px] items-center gap-3 rounded-sm border border-border bg-[var(--surface-2)] px-3 py-2.5 max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px] max-[560px]:w-full max-[560px]:grid-cols-1 [&_circle]:fill-[var(--series-1)] [&_polyline]:fill-none [&_polyline]:stroke-[var(--series-1)] [&_polyline]:stroke-[2.2] [&_polyline]:[stroke-linecap:round] [&_polyline]:[stroke-linejoin:round] [&_svg]:h-[42px] [&_svg]:w-[150px] [&_svg]:overflow-visible max-[560px]:[&_svg]:w-full"
       aria-label={`${region} region power trajectory ${formatSignedDecimal(delta)} from ${formatDate(first[0])} to ${formatDate(last[0])}`}
     >
       <div>
@@ -301,7 +301,7 @@ function RegionDetailDrawer({
           showCloseButton={false}
           className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-card p-0 text-foreground shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
         >
-          <SheetHeader className="flex-row items-center gap-3 border-b border-border p-[18px_22px] text-left">
+          <SheetHeader className="flex-row items-center gap-3 border-b border-border px-5 py-4 text-left">
             <SheetTitle className="mr-auto text-base font-semibold text-[var(--text-strong)]">{region.region} region detail</SheetTitle>
             <SheetClose asChild>
               <Button type="button" variant="ghost">

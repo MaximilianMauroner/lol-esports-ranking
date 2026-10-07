@@ -34,7 +34,7 @@ export function SeriesTable({ series, expanded, onToggle, publication }: SeriesL
   return (
     <Table className="table-fixed" containerClassName="hidden border-t border-border md:block">
       <TableHeader>
-        <TableRow className="bg-[var(--surface-2)] text-xs hover:bg-[var(--surface-2)]">
+        <TableRow className="bg-[var(--surface-2)] hover:bg-[var(--surface-2)]">
           <TableHead className="w-40 pl-4 lg:w-52 xl:w-56">Date</TableHead>
           <TableHead className="text-center">Result</TableHead>
           <TableHead className="w-48 lg:w-64 xl:w-72">Rating change</TableHead>

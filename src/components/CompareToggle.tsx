@@ -19,12 +19,13 @@ export function CompareToggle({
   return (
     <label
       className={cn(
-        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-xs font-semibold whitespace-nowrap select-none',
+        'inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-semibold whitespace-nowrap select-none',
         picked
           ? 'border-[var(--selected-line)] bg-[var(--selected-bg)] text-[var(--text-strong)]'
           : 'border-[var(--line-strong)] text-muted-foreground hover:text-foreground',
         className,
       )}
+      data-slot="compare-toggle"
       data-row-click-exclude
     >
       <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={picked} onChange={onToggle} aria-label={`Compare ${label}`} />

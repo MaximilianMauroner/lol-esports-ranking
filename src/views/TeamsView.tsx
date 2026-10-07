@@ -829,7 +829,7 @@ export function TeamsView({
                     Peak <b>{formatRating(insight.peak.value)}</b>
                     {typeof insight.bestRank === 'number' ? ` · best #${insight.bestRank}` : ''}
                   </span>
-                  {insight.driver ? <span className="text-[var(--accent-strong)]">Driven by {insight.driver.label}</span> : null}
+                  {insight.driver ? <span>Driven by <b>{insight.driver.label}</b></span> : null}
                 </div>
               </article>
             ))}
@@ -2136,7 +2136,7 @@ function PlayerRankingCard({
           <TableBody>
             {players.map((player) => (
               <TableRow key={player.id}>
-                <TableCell className={cn('font-mono font-semibold text-muted-foreground tabular-nums', player.rank <= 3 && 'text-[var(--accent-strong)]')}>#{player.rank}</TableCell>
+                <TableCell className={cn('font-mono font-semibold text-muted-foreground tabular-nums', player.rank <= 3 && 'text-[var(--rank-gold)]')}>#{player.rank}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-xs [&_small]:text-[var(--faint)]">
                     <b>{player.name}</b>

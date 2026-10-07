@@ -56,7 +56,7 @@ export function CompareDrawer<E>({
         showCloseButton={false}
         className="data-[side=right]:w-[min(980px,100vw)] data-[side=right]:max-w-none gap-0 border-l border-[var(--line-strong)] bg-card p-0 text-foreground shadow-[var(--shadow-pop)] data-[side=right]:sm:w-[min(980px,94vw)] data-[side=right]:sm:max-w-none"
       >
-        <SheetHeader className="flex-row items-center gap-3 border-b border-border p-[18px_22px] text-left">
+        <SheetHeader className="flex-row items-center gap-3 border-b border-border px-5 py-4 text-left">
           <SheetTitle className="mr-auto text-base font-semibold text-[var(--text-strong)]">{title}</SheetTitle>
           <SheetClose asChild>
             <Button type="button" variant="ghost">

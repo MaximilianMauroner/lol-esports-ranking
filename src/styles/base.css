@@ -281,6 +281,7 @@ body::before {
   [data-slot="button"],
   [data-slot="toggle"],
   [data-slot="toggle-group-item"],
+  [data-slot="compare-toggle"],
   .team-cell__button {
     min-width: 44px;
     min-height: 44px;

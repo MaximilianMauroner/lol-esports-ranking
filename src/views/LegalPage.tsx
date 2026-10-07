@@ -22,7 +22,7 @@ export function LegalPage({ page }: { page: LegalPageName }) {
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div>
             <a className="text-xs tracking-label text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
-            <h1 className="mt-2 text-3xl font-bold text-[var(--text-strong)]">{title}</h1>
+            <h1 className="mt-2 text-xl font-semibold text-[var(--text-strong)]">{title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">Last updated: {UPDATED_AT}</p>
           </div>
           <nav className="flex flex-wrap gap-3 text-sm" aria-label="Legal pages">

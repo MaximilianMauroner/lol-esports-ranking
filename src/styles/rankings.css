@@ -68,7 +68,7 @@ table.ranking-table.board-grid {
 table.ranking-table.board-grid col.board-col-rank { width: 88px; }
 table.ranking-table.board-grid col.board-col-score { width: 184px; }
 table.ranking-table.board-grid col.board-col-move { width: 72px; }
-table.ranking-table.board-grid col.board-col-form { width: 112px; }
+table.ranking-table.board-grid col.board-col-form { width: 128px; }
 table.ranking-table.board-grid col.board-col-record { width: 104px; }
 table.ranking-table.board-grid col.board-col-action { width: 128px; }
 
