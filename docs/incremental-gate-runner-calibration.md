@@ -71,27 +71,39 @@ benchmark output reports unrounded `normalizedCompute`, the calibration runs,
 raw `computeMs`, `mainCpuMs`, and the runner CPU model. `mainCpuMs` is the main
 worker's CPU time and excludes the raw-source child process.
 
-The limit is 1.4 times the measured main value. 1.4 is the geometric midpoint
-between no change and a 2x regression.
+The limit is 1.4 times main's value on coding-vm (4.64). On the observed CI
+runners, main measures about 4.0, so the limit is about 1.6 times main's value.
+1.4 is the geometric midpoint between no change and a 2x regression.
 
 | Local gate on coding-vm, main `4c3d4dd4` | computeMs | calibrationMs | normalizedCompute | Result |
 | --- | --- | --- | --- | --- |
 | Before (15,000 ms limit) | 21,170 / 20,829 / 21,006 | not measured | not measured | failed |
 | After (6.5 limit) | 21,225 / 21,402 / 21,525 | 4,426 / 4,611 / 4,634 | 4.603 / 4.642 / 4.668 | passed |
 
-A 2x compute regression gives about 9.3 and fails. If a CI runner's value
-differs from coding-vm's by up to 25% in either direction, main still passes
-(at most 5.8) and a 2x regression still fails (at least 7.0). The +18% corpus
-branch measures about 1.5 times main's value and would also fail.
+A 2x compute regression fails on every observed host. It gives about 9.3 on
+coding-vm and about 7.7 to 8.3 on CI. If a CI runner's value differs from
+coding-vm's by up to 25% in either direction, main still passes (at most 5.8)
+and a 2x regression still fails (at least 7.0). A 1.5x regression fails on
+coding-vm (about 7.0), but on CI it gives about 6.1 to 6.2 and can pass. The
++18% corpus branch used about 1.47 times main's raw compute on a CI runner of
+similar speed. It would fail on coding-vm and would likely pass on CI.
 
 ## Limits and maintenance
 
-- The [first GitHub CI sample](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/37631526444)
-  on an AMD EPYC 7763 measured `normalizedCompute` from 4.040 to 4.045, about
-  13% below coding-vm's 4.64. This sample is within the 15% transfer band; see
-  the [measurement record](https://github.com/MaximilianMauroner/lol-esports-ranking/pull/83#issuecomment-6039595377).
-  Evidence across additional runner regions remains limited. Further samples
-  must stay within about 15%. If not, replace the workload; do not raise the limit.
+- Two GitHub CI samples of main's ranking code (PR #83 runs) measured
+  `normalizedCompute` below coding-vm's 4.64:
+  - [Run 37631526444](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/37631526444)
+    on an AMD EPYC 7763: 4.040 to 4.045, about 13% below.
+  - [Run 37641207104](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/37641207104)
+    on an AMD EPYC 9V74: 3.860 / 4.053 / 4.142, median 4.053, about 13% below.
+
+  Both samples are within the 15% transfer band; see the
+  [measurement record](https://github.com/MaximilianMauroner/lol-esports-ranking/pull/83#issuecomment-6039595377).
+  The band applies to the median `normalizedCompute` of one run. A single
+  repetition can fall outside it when runner speed drifts between repetitions.
+  For example, repetition 1 of run 37641207104 is 16.8% below 4.64. Evidence
+  across additional runner regions remains limited. If a run median falls
+  outside the band, replace the workload; do not raise the limit.
 - Measure the limit again after a Node major upgrade (`NODE_VERSION` in
   `.github/workflows/checks.yml`) or a calibration workload change. Do not
   change it to admit a slower refresh without a recorded budget decision.

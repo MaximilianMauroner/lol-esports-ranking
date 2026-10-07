@@ -4,8 +4,9 @@ export const INCREMENTAL_SAFETY_PEAK_RSS_BYTES = 700 * 1024 * 1024
  * Incremental refresh time in runner-calibration units: computeMs divided by the
  * median calibration workload duration on the same runner. A wall-clock limit
  * cannot gate GitHub-hosted runners, whose speed for this workload varies about
- * 1.9x for identical code. The limit is 1.4x measured main; see
- * docs/incremental-gate-runner-calibration.md before changing it.
+ * 1.9x for identical code. The limit is 1.4x main on coding-vm and about 1.6x
+ * main on observed CI runners; see docs/incremental-gate-runner-calibration.md
+ * before changing it.
  */
 export const INCREMENTAL_NORMALIZED_COMPUTE_LIMIT = 6.5
 
