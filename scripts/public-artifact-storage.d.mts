@@ -20,3 +20,5 @@ export function createGenerationManifest(options: {
   entries: Array<{ logicalPath: string; digest: string; bytes: number }>
 }): Record<string, unknown>
 export function canonicalJsonFor(value: unknown): string
+export class NonCanonicalJsonError extends Error {}
+export function parseCanonicalJson(text: string): unknown

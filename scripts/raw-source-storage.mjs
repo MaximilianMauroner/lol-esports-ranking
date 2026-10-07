@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { basename, join, resolve } from 'node:path'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { gunzipSync, gzipSync } from 'node:zlib'
-import { canonicalJsonFor } from './public-artifact-storage.mjs'
+import { canonicalJsonFor, NonCanonicalJsonError, parseCanonicalJson } from './public-artifact-storage.mjs'
 import { replaceDirectory } from './replace-directory.ts'
 
 export const RAW_SOURCE_STORAGE_MODE = 'content-addressed-raw-gzip-v2'
@@ -54,12 +54,10 @@ export function decodeRawObject(reference, compressed) {
   if (canonicalBytes.byteLength !== parsedReference.bytes || sha256(canonicalBytes) !== parsedReference.sha256) {
     throw new Error('Raw object semantic digest mismatch')
   }
-  let value
-  try { value = JSON.parse(canonicalBytes.toString('utf8')) } catch (error) {
+  try { return parseCanonicalJson(canonicalBytes.toString('utf8')) } catch (error) {
+    if (error instanceof NonCanonicalJsonError) throw new Error('Raw object is not canonical JSON', { cause: error })
     throw new Error('Raw object JSON is corrupt', { cause: error })
   }
-  if (canonicalJsonFor(value) !== canonicalBytes.toString('utf8')) throw new Error('Raw object is not canonical JSON')
-  return value
 }
 
 export function parseOracleCsv(csv, { sourceFileName, importerVersion }) {

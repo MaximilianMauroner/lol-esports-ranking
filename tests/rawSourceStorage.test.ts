@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { gzipSync } from 'node:zlib'
 import {
   applyOracleDelta,
   decodeRawObject,
@@ -158,6 +160,30 @@ test('raw objects are canonical, deterministic gzip objects and fail closed when
     () => decodeRawObject({ ...reference, sha256: '0'.repeat(64), key: `raw/objects/sha256/${'0'.repeat(64)}` }, left.compressed),
     /semantic digest mismatch/,
   )
+})
+
+test('raw object parsing rejects noncanonical or invalid JSON even with matching integrity fields', () => {
+  for (const { text, error } of [
+    { text: '{"a":[1,true,null],"z":{"10":10,"2":2}}', error: null },
+    { text: '{"z":2,"a":1}', error: /Raw object is not canonical JSON/ },
+    { text: '{"a":[1.0]}', error: /Raw object is not canonical JSON/ },
+    { text: '{"a":1,"a":2}', error: /Raw object is not canonical JSON/ },
+    { text: '{"a":1}\n', error: /Raw object is not canonical JSON/ },
+    { text: '{', error: /Raw object JSON is corrupt/ },
+  ]) {
+    const bytes = Buffer.from(text, 'utf8')
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    const compressed = gzipSync(bytes)
+    const reference: RawObjectReference = {
+      key: `raw/objects/sha256/${digest}`,
+      sha256: digest,
+      bytes: bytes.byteLength,
+      compressedBytes: compressed.byteLength,
+      storageEncoding: 'gzip',
+    }
+    if (error) assert.throws(() => decodeRawObject(reference, compressed), error)
+    else assert.deepEqual(decodeRawObject(reference, compressed), JSON.parse(text))
+  }
 })
 
 test('append deltas reconstruct and materialize importer-equivalent legacy source files', async () => {

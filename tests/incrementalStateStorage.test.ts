@@ -105,6 +105,9 @@ for (const { name, text, canonical } of [
   { name: 'decimal integer', text: '{"value":1.0}', canonical: false },
   { name: 'negative zero', text: '{"value":-0}', canonical: false },
   { name: 'uppercase exponent', text: '{"value":1E+21}', canonical: false },
+  { name: 'duplicate object keys', text: '{"value":1,"value":2}', canonical: false },
+  { name: 'overflow in a primitive array', text: '{"value":[1e309]}', canonical: false },
+  { name: 'numeric keys in nested arrays', text: '[[{"10":10,"2":2}]]', canonical: true },
 ]) {
   test('state object admission ' + (canonical ? 'accepts ' : 'rejects ') + name, async () => {
     const client = memoryS3()
