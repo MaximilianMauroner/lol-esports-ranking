@@ -18,7 +18,7 @@ export function TeamMark({
   return (
     <span
       className={cn(
-        'inline-grid size-9 shrink-0 place-items-center overflow-hidden rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] font-mono text-[length:var(--t-2)] font-extrabold text-[var(--text)]',
+        'inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-1)] border border-[var(--line)] bg-[var(--surface-2)] font-mono text-[length:var(--t-2)] font-extrabold text-[var(--text)]',
         className,
       )}
       title={`${team} (${label})`}
@@ -26,7 +26,7 @@ export function TeamMark({
     >
       {branding?.logo ? (
         <img
-          className={cn('size-full object-contain p-1', imageClassName)}
+          className={cn('size-full min-h-0 min-w-0 object-contain p-1', imageClassName)}
           src={branding.logo}
           alt=""
           width={40}

@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
 import { displayRegionPowerScore, type RegionStrength } from '../lib/regionStrength'
 import { formatRating } from '../lib/display'
+import { TeamMark } from './TeamMark'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card'
 
 type RegionDepthInput = Pick<RegionStrength, 'region' | 'rank' | 'score' | 'topTeams' | 'internationalWins' | 'internationalLosses'>
 
@@ -33,7 +35,7 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
       <svg
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="block h-auto w-full overflow-visible font-[family-name:var(--sans)]"
-        role="img"
+        role="group"
         aria-labelledby={titleId}
         aria-describedby={descId}
       >
@@ -69,20 +71,55 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
               <text x={layout.plotLeft} y={row.dotY + 4} fill="var(--faint)" className="text-[10.5px]">No ranked teams</text>
             )}
 
-            {row.dots.map((dot) => (
-              <g key={dot.team}>
-                <title>{dot.counts ? `${dot.team} · Power ${formatRating(dot.rating)} · counts toward region score` : `${dot.team} · Power ${formatRating(dot.rating)}`}</title>
-                <circle cx={dot.x} cy={row.dotY} r={9} fill="transparent" />
-                <circle
-                  cx={dot.x}
-                  cy={row.dotY}
-                  r={dot.counts ? 5 : 3.5}
-                  fill={dot.counts ? 'var(--accent)' : 'var(--muted)'}
-                  stroke="var(--surface)"
-                  strokeWidth={1.5}
-                />
-              </g>
-            ))}
+            {row.dots.map((dot) => {
+              const difference = dot.rating - row.score
+              const contribution = dot.counts ? `Counts toward ${row.region} score` : `Outside ${row.region}'s top three`
+              return (
+                <HoverCard key={dot.team}>
+                  <HoverCardTrigger delay={250} render={(
+                    <g
+                      role="img"
+                      tabIndex={0}
+                      aria-label={`${dot.team}, Power ${formatRating(dot.rating)}, number ${dot.regionalRank} in ${row.region}. ${contribution}.`}
+                      className="group cursor-help outline-none"
+                    >
+                      <circle cx={dot.x} cy={row.dotY} r={9} fill="transparent" />
+                      <circle
+                        cx={dot.x}
+                        cy={row.dotY}
+                        r={dot.counts ? 5 : 3.5}
+                        fill={dot.counts ? 'var(--accent)' : 'var(--muted)'}
+                        stroke="var(--surface)"
+                        strokeWidth={1.5}
+                      />
+                      <circle cx={dot.x} cy={row.dotY} r={8} fill="none" stroke="var(--focus)" strokeWidth={1.5} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
+                    </g>
+                  )} />
+                  <HoverCardContent side="top">
+                    <div className="flex items-center gap-3">
+                      <TeamMark team={dot.team} code={dot.code} />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[var(--text-strong)]">{dot.team}</p>
+                        <p className="text-xs text-[var(--muted)]">{dot.rank !== undefined ? `#${dot.rank} globally · ` : ''}{row.region}</p>
+                      </div>
+                    </div>
+                    <div className="my-3 flex items-baseline justify-between gap-3 border-y border-[var(--line)] py-3">
+                      <span className="text-[var(--muted)]">Power</span>
+                      <strong className="font-mono text-lg tabular-nums">{formatRating(dot.rating)}</strong>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-3 text-xs">
+                      <div><dt className="text-[var(--muted)]">Rank in {row.region}</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{dot.regionalRank} of {row.dots.length}</dd></div>
+                      <div><dt className="text-[var(--muted)]">{row.region} region score</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{formatRating(row.score)}</dd></div>
+                    </dl>
+                    <p className="mt-2 text-xs text-[var(--muted)]">{difference === 0 ? 'Level with the region score.' : `${formatRating(Math.abs(difference))} Power ${difference > 0 ? 'above' : 'below'} the region score.`}</p>
+                    <div className="mt-3 border-t border-[var(--line)] pt-3 text-xs">
+                      <p className={dot.counts ? 'font-semibold text-[var(--accent)]' : 'font-semibold text-[var(--text)]'}>{contribution}</p>
+                      <p className="mt-1 text-[var(--muted)]">{dot.counts ? `The region score averages the Power of its top ${Math.min(SCORED_TEAM_COUNT, row.dots.length)} ranked ${row.dots.length === 1 ? 'team' : 'teams'}.` : 'This dot shows regional depth. Only the three strongest ranked teams enter the region score.'}</p>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
+              )
+            })}
 
             {row.dots.length > 0 ? (
               <line x1={row.scoreX} x2={row.scoreX} y1={row.dotY - 9} y2={row.dotY + 9} stroke="var(--text-strong)" strokeWidth={2}>
@@ -120,6 +157,9 @@ function useElementWidth(ref: RefObject<HTMLElement | null>) {
 
 type RegionDepthDot = {
   team: string
+  code?: string
+  rank?: number
+  regionalRank: number
   rating: number
   x: number
   counts: boolean
@@ -158,6 +198,9 @@ function regionDepthLayout(regions: RegionDepthInput[], availableWidth: number) 
     const teams = region.topTeams.filter((team) => Number.isFinite(team.rating))
     const dots = teams.map((team, teamIndex) => ({
       team: team.team,
+      code: team.code,
+      rank: team.rank,
+      regionalRank: teamIndex + 1,
       rating: team.rating,
       x: x(team.rating),
       counts: teamIndex < SCORED_TEAM_COUNT,

@@ -5,8 +5,8 @@ import { mergeCommunityMatchSources } from '../src/lib/importers/communitySource
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
-import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
-import { deriveTeamProfilesFromMatches, isCompetitionOnlyLeague, isUnknownLeague, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/lib/teamProfiles'
+import { filterPublishedRatingUniverseInput } from '../src/lib/ratingUniverse'
+import { deriveTeamProfilesFromMatches, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/lib/teamProfiles'
 import type { DataSourceInfo, DataSourceWarning } from '../src/lib/snapshot'
 import type { MatchRecord, TeamProfile } from '../src/types'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -80,7 +80,6 @@ export async function importRankingSourceData({
   const ratingUniverse = filterPublishedRatingUniverseInput(importedMatches, mergedTeams)
   const matches = ratingUniverse.matches
   const teams = ratingUniverse.teams
-  const resolveSourceHomeLeagues = sourceHomeLeagueResolver(importedMatches)
   const oracleWarnings = manifestSourceWarnings('oracle', manifest?.warnings)
   const leaguepediaWarnings = manifestSourceWarnings('leaguepedia', manifest?.warnings)
   const lolEsportsWarnings = manifestSourceWarnings('lolesports', manifest?.warnings)
@@ -96,24 +95,24 @@ export async function importRankingSourceData({
       ...(sourceRefreshReceipt('lolesports', manifest) ? { refreshReceipt: sourceRefreshReceipt('lolesports', manifest) } : {}),
     })),
     ...oracleImports.map((result): DataSourceInfo => {
-      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches.map(resolveSourceHomeLeagues), mergedTeams)
+      const ratedMatches = matches.filter((match) => match.sourceProvider === 'oracles-elixir' && match.sourceFileName === result.source.fileName)
       return {
         name: result.source.fileName ? `Oracle's Elixir CSV: ${result.source.fileName}` : "Oracle's Elixir CSV",
         kind: 'game-stats', url: result.source.url, retrievedAt: result.source.retrievedAt,
         coverageStart: dateRange(ratedMatches).start, coverageEnd: dateRange(ratedMatches).end, rowCount: ratedMatches.length,
-        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after the published team-universe filter. ${result.source.attribution}`,
+        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after source reconciliation and the published team-universe filter. ${result.source.attribution}`,
         status: ratedMatches.length > 0 ? 'active' : 'reference-only',
         ...(oracleWarnings.length ? { warnings: oracleWarnings } : {}),
         ...(sourceRefreshReceipt('oracle', manifest) ? { refreshReceipt: sourceRefreshReceipt('oracle', manifest) } : {}),
       }
     }),
     ...leaguepediaImports.map((result): DataSourceInfo => {
-      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches.map(resolveSourceHomeLeagues), mergedTeams)
+      const ratedMatches = matches.filter((match) => match.sourceProvider === 'leaguepedia-cargo' && match.sourceFileName === result.source.fileName)
       return {
         name: result.source.fileName ? `Leaguepedia Cargo: ${result.source.fileName}` : 'Leaguepedia Cargo',
         kind: 'match-data', url: result.source.url, retrievedAt: result.source.retrievedAt,
         coverageStart: dateRange(ratedMatches).start, coverageEnd: dateRange(ratedMatches).end, rowCount: ratedMatches.length,
-        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after the published team-universe filter. ${result.source.attribution}`,
+        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after source reconciliation and the published team-universe filter. ${result.source.attribution}`,
         status: ratedMatches.length > 0 ? 'active' : 'reference-only',
         ...(leaguepediaWarnings.length ? { warnings: leaguepediaWarnings } : {}),
         ...(sourceRefreshReceipt('leaguepedia', manifest) ? { refreshReceipt: sourceRefreshReceipt('leaguepedia', manifest) } : {}),
@@ -134,30 +133,6 @@ export async function importRankingSourceData({
     source: matches.length > 0 ? describeCommunitySource(oracleImports.length, leaguepediaImports.length)
       : importedMatches.length > 0 ? 'no rated public match data available for published team universe' : 'no public match data available',
     dataMode: matches.length > 0 ? 'scheduled-public-data' : 'no-data', externalSources, tournamentScheduleReferences,
-  }
-}
-
-function sourceHomeLeagueResolver(matches: MatchRecord[]) {
-  const byId = new Map(matches.map((match) => [match.id, match]))
-  const byGameId = new Map(matches.filter((match) => match.sourceGameId).map((match) => [match.sourceGameId, match]))
-  return (original: MatchRecord): MatchRecord => {
-    if (!isCompetitionOnlyLeague(original.league)) return original
-    const retained = byId.get(original.id) ?? (original.sourceGameId ? byGameId.get(original.sourceGameId) : undefined)
-    if (!retained || retained.date !== original.date) return original
-    const sameOrder = retained.teamA === original.teamA && retained.teamB === original.teamB
-    const reversedOrder = retained.teamB === original.teamA && retained.teamA === original.teamB
-    if (!sameOrder && !reversedOrder) return original
-    const resolved = { ...original }
-    for (const side of ['A', 'B'] as const) {
-      const league = original[`team${side}HomeLeague`]
-      if (league && !isUnknownLeague(league)) continue
-      const retainedSide = sameOrder ? side : side === 'A' ? 'B' : 'A'
-      const retainedLeague = retained[`team${retainedSide}HomeLeague`]
-      if (!retainedLeague || isUnknownLeague(retainedLeague)) continue
-      resolved[`team${side}HomeLeague`] = retainedLeague
-      resolved[`team${side}Region`] = retained[`team${retainedSide}Region`]
-    }
-    return resolved
   }
 }
 

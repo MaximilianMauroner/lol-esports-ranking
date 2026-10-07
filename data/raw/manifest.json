@@ -10,7 +10,8 @@
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-09_to_2026-07-10.json",
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-04_to_2026-07-11.json",
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-12_to_2026-07-16.json",
-      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-19_to_2026-07-26.json"
+      "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2026-07-19_to_2026-07-26.json",
+      "leaguepedia/demacia-cup-global-invitational-2026-10-03_to_2026-10-06.json"
     ],
     "oracleCsv": [
       "/home/codex/work/lol-esports-ranking/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",

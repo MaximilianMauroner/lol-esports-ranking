@@ -30,7 +30,7 @@ export async function auditSemanticManifestFreshness(manifestPath: string): Prom
   const referencedPaths = new Set((manifest.files?.leaguepediaJson ?? []).map((path) => resolve(rawDir, path)))
   const managedDir = join(rawDir, 'leaguepedia')
   const managedPaths = (await readdir(managedDir, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && /^scoreboard-games-.*\.json$/i.test(entry.name))
+    .filter((entry) => entry.isFile() && /\.json$/i.test(entry.name))
     .map((entry) => join(managedDir, entry.name))
     .sort()
   const inventories = await Promise.all(managedPaths.map(readScoredInventory))
