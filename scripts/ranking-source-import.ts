@@ -68,6 +68,8 @@ export async function importRankingSourceData({
   for (const jsonPath of lolEsportsPaths) {
     lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(await readFile(jsonPath, 'utf8')), { sourceFileName: basename(jsonPath) }))
   }
+  const oracleSourceOwners = sourceOwnersByMatchId(oracleImports)
+  const leaguepediaSourceOwners = sourceOwnersByMatchId(leaguepediaImports)
   const importedMatches = resolveCompetitionHomeLeagues(mergeCommunityMatchSources({
     oracleMatches: oracleImports.flatMap((result) => result.matches),
     leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
@@ -94,8 +96,8 @@ export async function importRankingSourceData({
       warnings: [{ kind: 'source-policy', severity: 'warning', message: 'LoL Esports persisted APIs are public site endpoints, not a supported official data API; cache responses and keep them reference-only.' }, ...lolEsportsWarnings],
       ...(sourceRefreshReceipt('lolesports', manifest) ? { refreshReceipt: sourceRefreshReceipt('lolesports', manifest) } : {}),
     })),
-    ...oracleImports.map((result): DataSourceInfo => {
-      const ratedMatches = matches.filter((match) => match.sourceProvider === 'oracles-elixir' && match.sourceFileName === result.source.fileName)
+    ...oracleImports.map((result, sourceIndex): DataSourceInfo => {
+      const ratedMatches = matches.filter((match) => match.sourceProvider === 'oracles-elixir' && oracleSourceOwners.get(match.id) === sourceIndex)
       return {
         name: result.source.fileName ? `Oracle's Elixir CSV: ${result.source.fileName}` : "Oracle's Elixir CSV",
         kind: 'game-stats', url: result.source.url, retrievedAt: result.source.retrievedAt,
@@ -106,8 +108,8 @@ export async function importRankingSourceData({
         ...(sourceRefreshReceipt('oracle', manifest) ? { refreshReceipt: sourceRefreshReceipt('oracle', manifest) } : {}),
       }
     }),
-    ...leaguepediaImports.map((result): DataSourceInfo => {
-      const ratedMatches = matches.filter((match) => match.sourceProvider === 'leaguepedia-cargo' && match.sourceFileName === result.source.fileName)
+    ...leaguepediaImports.map((result, sourceIndex): DataSourceInfo => {
+      const ratedMatches = matches.filter((match) => match.sourceProvider === 'leaguepedia-cargo' && leaguepediaSourceOwners.get(match.id) === sourceIndex)
       return {
         name: result.source.fileName ? `Leaguepedia Cargo: ${result.source.fileName}` : 'Leaguepedia Cargo',
         kind: 'match-data', url: result.source.url, retrievedAt: result.source.retrievedAt,
@@ -137,6 +139,16 @@ export async function importRankingSourceData({
 }
 
 function uniquePaths(paths: string[]) { return [...new Set(paths.filter(Boolean).map((path) => resolve(path)))] }
+function sourceOwnersByMatchId(imports: { matches: MatchRecord[] }[]) {
+  const owners = new Map<string, number>()
+  // Reconciliation keeps the first same-provider game and preserves its ID through enrichment.
+  for (const [sourceIndex, result] of imports.entries()) {
+    for (const match of result.matches) {
+      if (!owners.has(match.id)) owners.set(match.id, sourceIndex)
+    }
+  }
+  return owners
+}
 function dateRange(matches: { date?: string }[]) {
   const dates = matches.map((match) => match.date).filter((date): date is string => Boolean(date)).sort()
   return { start: dates[0], end: dates.at(-1) }

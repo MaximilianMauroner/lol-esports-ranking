@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-26T16:58:58.255Z",
+  "generatedAt": "2026-10-07T08:26:39.154Z",
   "start": "2025-01-01",
-  "end": "2026-07-26",
+  "end": "2026-10-06",
   "files": {
     "leaguepediaJson": [
       "/home/codex/work/lol-esports-ranking/data/raw/leaguepedia/scoreboard-games-2025-01-01_to_2026-06-26.json",
@@ -25,51 +25,9 @@
       "/home/codex/work/lol-esports-ranking/data/raw/lolesports/schedule-2026-07-19_to_2026-07-26.json"
     ]
   },
-  "sources": {
-    "lolesports": {
-      "role": "schedule-results-reference",
-      "status": "downloaded",
-      "downloadedCount": 1,
-      "downloadedThisRun": 1,
-      "failedCount": 0,
-      "failedThisRun": 0,
-      "failures": [],
-      "skipped": false,
-      "required": false,
-      "unsupportedApi": true
-    },
-    "oracle": {
-      "role": "primary",
-      "status": "reused",
-      "folderUrl": "https://drive.google.com/drive/folders/1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH",
-      "discoveredCount": 13,
-      "downloadedCount": 0,
-      "downloadedThisRun": 0,
-      "failedCount": 13,
-      "failedThisRun": 13,
-      "failures": [],
-      "skipped": false,
-      "required": false
-    },
-    "leaguepedia": {
-      "role": "backup-gap-fill",
-      "status": "downloaded",
-      "downloadedCount": 1,
-      "downloadedThisRun": 1,
-      "failedCount": 0,
-      "failedThisRun": 0,
-      "failures": [],
-      "skipped": false,
-      "required": false
-    }
-  },
   "warnings": [
-    "Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-19 through 2026-07-26 scored window successfully.",
-    "Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines.",
-    "LoL Esports schedule APIs are unsupported reference endpoints; the refreshed cache is reference-only."
-  ],
-  "refreshWindow": {
-    "start": "2026-07-19",
-    "end": "2026-07-26"
-  }
+    "Historical refresh on 2026-07-26: Full historical Leaguepedia refresh was rate-limited; preserved prior files and fetched the current 2026-07-19 through 2026-07-26 scored window successfully.",
+    "Historical refresh on 2026-07-26: Oracle Google Drive downloads were quota-limited; preserved the existing 2025 and 2026 CSV baselines.",
+    "Historical refresh on 2026-07-26: LoL Esports schedule APIs are unsupported reference endpoints; the refreshed cache is reference-only."
+  ]
 }
