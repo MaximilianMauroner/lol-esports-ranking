@@ -8,8 +8,8 @@ import { buildExternalCausalBundle, reconcileExternalCausalBundle, REQUIRED_EXTE
 import { replayRankingState } from '../src/lib/incremental/replayOrchestrator'
 import { compareSemanticArtifactMaps, type SemanticArtifactMap } from '../src/lib/incremental/semanticParity'
 import { compareCodeUnits, stableDigest, stableJson, type CanonicalMatchLedger, type RankingChangeClassification } from '../src/lib/incremental/types'
-import { createRatingReplayContext, replayRatingDates, transparentGprModelMetadata } from '../src/lib/model'
-import { RATING_CHECKPOINT_SCHEMA_VERSION, encodeRatingCheckpoint, selectSafeCheckpoint } from '../src/lib/ratingCheckpoint'
+import { createRatingEventContext, createRatingReplayContext, replayRatingDates, transparentGprModelMetadata } from '../src/lib/model'
+import { RATING_CHECKPOINT_SCHEMA_VERSION, encodeRatingCheckpointEnvelope, selectSafeCheckpoint } from '../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract, reconcileRatingCheckpointEvents } from '../src/lib/ratingCheckpointInventory'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, artifactMetaFor, snapshotKey } from '../src/lib/publicArtifacts/schema'
 import { PUBLIC_ARTIFACT_PATHS, publicMatchHistoryPagePath, publicMatchHistoryShardPath, publicScopeArtifactPath, publicTeamHistoryShardPath, publicTournamentMovementShardPath } from '../src/lib/publicArtifacts/writePlan'
@@ -778,12 +778,13 @@ async function selectReplay(
   const loadedByObject = new Map(restored.checkpoints.map((checkpoint) => [checkpointIdentity(checkpoint.candidate), checkpoint]))
   const checkpoints: RestoredCheckpoint[] = []
   const availableProcessedThroughUtcDates = eligibleReferences.map((candidate) => candidate.boundary.date)
+  let freshEventContext: ReturnType<typeof createRatingEventContext> | undefined
   const selectLoadedCheckpoint = () => selectSafeCheckpoint({
     changedUtcDate: changedDate,
     candidates: checkpoints.map(({ candidate, bundle }) => ({
       id: `${candidate.boundary.date}/${candidate.boundary.matchId}`,
       processedThroughUtcDate: candidate.boundary.date,
-      serialized: JSON.stringify(bundle.ratingCheckpoint),
+      value: bundle.ratingCheckpoint,
       expectedIdentity: {
         importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
         identityTaxonomyHash: stableDigest(sourceData.teams),
@@ -796,14 +797,13 @@ async function selectReplay(
       if (!stored) return { status: 'replay-required', replayFromUtcDate: changedDate, requiresFullReplay: true, reason: 'context-unproven' }
       try {
         const throughDate = checkpoint.metadata.processedThroughUtcDate
-        const freshContext = createRatingReplayContext(sourceData.matches, sourceData.teams, {
-          tournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
-        })
+        const freshContext = freshEventContext ??= createRatingEventContext(sourceData.matches)
+        const tournamentLifecycles = tournamentLifecyclesFor(sourceData, generatedAt, throughDate)
         const eventReconciliation = reconcileRatingCheckpointEvents({
           checkpoint,
           freshMatches: freshContext.authoritativeMatches,
           freshEventWeightContext: freshContext.eventWeightContext,
-          freshTournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
+          freshTournamentLifecycles: tournamentLifecycles,
           availableProcessedThroughUtcDates,
         })
         if (eventReconciliation.status === 'replay-required') {
@@ -818,7 +818,7 @@ async function selectReplay(
           bundle,
           authoritativeMatches: prefixMatches,
           eventWeightContext: checkpoint.state.eventWeightContext,
-          tournamentLifecycles: tournamentLifecyclesFor(sourceData, generatedAt, throughDate),
+          tournamentLifecycles,
           surfaces: externalCausalSurfacesFor(sourceData, throughDate),
           availableProcessedThroughUtcDates,
         })
@@ -980,14 +980,14 @@ function checkpointFromState(sourceData: RankingSourceImport, ledger: CanonicalM
   const prefix = rawPrefix(ledger, date)
   const prefixMatches = sourceData.matches.filter((match) => match.date <= date)
   const eventContract = buildRatingCheckpointEventContract(prefixMatches, state.eventWeightContext, tournamentLifecyclesFor(sourceData, generatedAt))
-  const encoded = encodeRatingCheckpoint(state, {
+  const ratingCheckpoint = encodeRatingCheckpointEnvelope(state, {
     importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
     identityTaxonomyHash: stableDigest(sourceData.teams),
     rawLedgerPrefixHash: prefix.digest,
   }, { processedThroughUtcDate: date, processedThroughMatchId: state.previousMatch.id }, eventContract)
   return {
     boundary: { date, matchId: state.previousMatch.id }, rawPrefix: prefix,
-    ratingCheckpoint: requiredRecord(JSON.parse(encoded), 'encoded rating checkpoint'),
+    ratingCheckpoint,
     causalSummaries: causalSummariesForBundle(buildExternalCausalBundle({
       prefixMatches,
       processedThroughUtcDate: date,

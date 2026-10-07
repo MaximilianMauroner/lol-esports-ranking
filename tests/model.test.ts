@@ -9,7 +9,7 @@ import {
   isPostWorldsPreseasonMatch,
 } from '../src/lib/eventWeighting.ts'
 import { ensureLeague, updateLeagueStrengthForSeries } from '../src/lib/leagueRatings.ts'
-import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
+import { buildPlayerModel, buildRankingModel, createRatingEventContext, createRatingReplayContext } from '../src/lib/model.ts'
 import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, publishedTeamStableOffset } from '../src/lib/ratingCalculations.ts'
 import { compactPlayerRecentMatches } from '../src/lib/snapshot.ts'
 import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/types.ts'
@@ -707,7 +707,19 @@ test('post-Worlds preseason games are discounted except Demacia Cup, which keeps
     event: 'LCK 2026 Spring',
   })
   const worldsFinalMatches = [1, 2, 3].map((gameNumber) => ({ ...worldsFinal, id: `worlds-final-${gameNumber}`, sourceMatchId: 'worlds-final-series', gameNumber }))
-  const context = eventWeightContextForMatches([...worldsFinalMatches, demaciaCup, kespaCup, nextYearMatch])
+  const unsortedMatches = [nextYearMatch, worldsFinalMatches[2]!, demaciaCup, worldsFinalMatches[0]!, kespaCup, worldsFinalMatches[1]!]
+  const originalOrder = unsortedMatches.map((match) => match.id)
+  const eventContext = createRatingEventContext(unsortedMatches)
+  const replayContext = createRatingReplayContext(unsortedMatches, { ...teams })
+  const context = eventContext.eventWeightContext
+  assert.deepEqual(eventContext.authoritativeMatches, replayContext.authoritativeMatches)
+  assert.deepEqual(context, replayContext.eventWeightContext)
+  assert.equal(eventContext.lastDate, replayContext.lastDate)
+  assert.equal(eventContext.lastDate, '2026-01-01')
+  assert.deepEqual(eventContext.authoritativeMatches.map((match) => match.id), [
+    'worlds-final-1', 'worlds-final-2', 'worlds-final-3', 'kespa-cup', 'demacia-cup', 'next-year',
+  ])
+  assert.deepEqual(unsortedMatches.map((match) => match.id), originalOrder)
 
   assert.equal(isPostWorldsPreseasonMatch(worldsFinal, context), false)
   assert.equal(isPostWorldsPreseasonMatch(demaciaCup, context), true)

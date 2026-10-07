@@ -69,11 +69,16 @@ test('external causal bundle accepts append, replays corrections, and fails clos
   if (unproven.status === 'replay-required') assert.equal(unproven.requiresFullReplay, true)
 })
 
-test('safe checkpoint selection walks back past unsafe candidates and falls back fully when proof is missing or invalid', () => {
-  const candidates = [candidate([match('first', '2026-01-01')], 'one'), candidate([
+for (const transport of ['serialized', 'parsed']) {
+test('safe checkpoint selection walks back and fails closed with ' + transport + ' input', () => {
+  const serializedCandidates = [candidate([match('first', '2026-01-01')], 'one'), candidate([
     match('first', '2026-01-01'),
     match('second', '2026-01-02'),
   ], 'two')]
+  const candidates = transport === 'serialized' ? serializedCandidates : serializedCandidates.map(({ serialized, ...candidate }) => ({
+    ...candidate,
+    value: JSON.parse(serialized),
+  }))
   const selected = selectSafeCheckpoint({
     candidates,
     changedUtcDate: '2026-01-03',
@@ -103,8 +108,9 @@ test('safe checkpoint selection walks back past unsafe candidates and falls back
   })
   assert.equal(full.status, 'full-replay')
 })
+}
 
-function candidate(matches: MatchRecord[], id: string): SafeRatingCheckpointCandidate {
+function candidate(matches: MatchRecord[], id: string) {
   const context = createRatingReplayContext(matches, structuredClone(teams))
   const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
   const terminal = matches.at(-1)!
@@ -123,7 +129,7 @@ function candidate(matches: MatchRecord[], id: string): SafeRatingCheckpointCand
       { processedThroughUtcDate: terminal.date, processedThroughMatchId: terminal.id },
       buildRatingCheckpointEventContract(matches, context.eventWeightContext),
     ),
-  }
+  } satisfies SafeRatingCheckpointCandidate
 }
 
 function match(id: string, date: string): MatchRecord {
