@@ -11,7 +11,7 @@ import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
 import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
 import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
-import { rawSourceWorkerExecArgv } from './refresh-worker-memory.mjs'
+import { rawSourceWorkerExecArgv, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
 import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
@@ -456,7 +456,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         output: {
           found: activeRaw.found,
           rssBytes: process.memoryUsage().rss,
-          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          maxRssBytes: readProcessPeakRssBytes(),
         },
       })
       const rawWorkerStarted = monotonicNow()
@@ -476,7 +476,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         output: {
           objectCount: rawSourceGeneration.objects.length,
           rssBytes: process.memoryUsage().rss,
-          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          maxRssBytes: readProcessPeakRssBytes(),
           childMaxRssBytes: rawWorker.childMaxRssBytes,
           childTotalMs: rawWorker.totalMs,
           sourceAuthorityEvidenceDigest: stagingManifestForRun.sourceAuthorityEvidence?.evidenceDigest,
@@ -486,7 +486,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         durationMs: Number(rawWorker.materializeMs) || 0,
         output: {
           rssBytes: process.memoryUsage().rss,
-          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          maxRssBytes: readProcessPeakRssBytes(),
           childMaxRssBytes: rawWorker.childMaxRssBytes,
         },
       })

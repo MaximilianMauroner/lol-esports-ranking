@@ -13,7 +13,7 @@ import { createPublicArtifactWritePlan, PUBLIC_ARTIFACT_PATHS } from '../src/lib
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { appendRefreshStages, createRefreshMetrics } from './refresh-metrics.mjs'
 import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
-import { collectRefreshGarbage } from './refresh-worker-memory.mjs'
+import { collectRefreshGarbage, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
 
 export type StaticSnapshotBuildOptions = {
   output?: string
@@ -95,7 +95,7 @@ const snapshot = createStaticRankingData({
   onPlayerLifecycleStage: (event) => {
     playerLifecycleEvents.push({
       ...event,
-      rssBytes: Math.max(process.memoryUsage().rss, process.resourceUsage().maxRSS * 1024),
+      rssBytes: readProcessPeakRssBytes(),
     })
   },
   onPlayerLifecycleRelease: (event) => {
@@ -190,7 +190,7 @@ try {
     artifactCount: publicWrites.length,
     outputBytes: publicDataBytes,
     bytesByFamily, bytesByYear, largestLogicalArtifactBytes: largestArtifactBytes,
-    processPeakRssBytes: process.resourceUsage().maxRSS * 1024,
+    processPeakRssBytes: readProcessPeakRssBytes(),
   })
   await appendRefreshStages(env.RANKING_REFRESH_METRICS_PATH, metrics.snapshot({ result: 'running' }))
 

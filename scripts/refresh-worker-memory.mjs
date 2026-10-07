@@ -1,6 +1,25 @@
+import { readFileSync } from 'node:fs'
+
 export const REFRESH_WORKER_MAX_OLD_SPACE_MB = 2048
 export const RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB = 2048
 export const REFRESH_WORKER_MAX_SEMI_SPACE_MB = 4
+
+/** Linux VmHWM resets on exec; resourceUsage().maxRSS can include the setup parent's peak. */
+export function readProcessPeakRssBytes() {
+  const rssBytes = process.memoryUsage().rss
+  let peakRssBytes
+  if (process.platform === 'linux') {
+    const status = readFileSync('/proc/self/status', 'utf8')
+    const match = /^VmHWM:\s+(\d+)[ \t]+kB$/m.exec(status)
+    peakRssBytes = match ? Number(match[1]) * 1024 : NaN
+  } else {
+    peakRssBytes = Math.max(rssBytes, process.resourceUsage().maxRSS * 1024)
+  }
+  if (!Number.isSafeInteger(peakRssBytes) || peakRssBytes <= 0 || peakRssBytes < rssBytes) {
+    throw new Error('Invalid executable peak RSS measurement')
+  }
+  return peakRssBytes
+}
 
 /** Full refreshes materialize ranking history; unchanged probes remain small despite this ceiling. */
 export function refreshWorkerExecArgv(inherited = process.execArgv) {
