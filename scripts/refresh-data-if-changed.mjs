@@ -132,6 +132,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   let refreshState
   let incrementalBuild
   let restoredIncremental
+  let baseGenerationId = null
+  let baseRunId = null
   let rawSourceGeneration
   let providerAvailableAt
   let acceptedRawRecovery
@@ -530,7 +532,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         },
       })
       const crunchStarted = monotonicNow()
-      incrementalBuild = await buildRankingIncrementally({
+      baseGenerationId = restoredIncremental?.stateManifest.generationId ?? null
+      baseRunId = restoredIncremental?.stateManifest.runId ?? null
+      const incrementalBuildOptions = {
         mode: metrics.snapshot().mode,
         cause: metrics.snapshot().cause,
         enabled: true,
@@ -542,7 +546,12 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         diagnosticPath: resolve(rawDir, 'incremental-diagnostic.json'),
         env,
         ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
-      })
+      }
+      const incrementalBuildPromise = buildRankingIncrementally(incrementalBuildOptions)
+      // Node 24 can retain the options object in the suspended async builder.
+      incrementalBuildOptions.restored = undefined
+      restoredIncremental = undefined
+      incrementalBuild = await incrementalBuildPromise
       providerAvailableAt = incrementalBuild.metrics.providerAvailableAt ?? null
       metrics.recordWork({
         fullBuilds: incrementalBuild.action === 'publish-full' ? 1 : 0,
@@ -708,8 +717,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           incrementalState = await persistIncrementalStateBuild({
             state: incrementalBuild.state,
             generationId,
-            baseGenerationId: restoredIncremental?.stateManifest.generationId ?? null,
-            baseRunId: restoredIncremental?.stateManifest.runId ?? null,
+            baseGenerationId,
+            baseRunId,
             config: bucketConfig,
             client: bucketClient,
           })
@@ -724,8 +733,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               rssBytes: process.memoryUsage().rss,
             },
           })
-          releasePersistedIncrementalInputs(incrementalBuild, restoredIncremental)
-          restoredIncremental = undefined
+          releasePersistedIncrementalInputs(incrementalBuild)
         }
         const fencingToken = env.RANKING_REFRESH_FENCING_TOKEN
           ? Number(env.RANKING_REFRESH_FENCING_TOKEN)
