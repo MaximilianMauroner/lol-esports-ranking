@@ -17,10 +17,10 @@ import { buildPlayerModel } from '../src/lib/model.ts'
 import { refreshWorkerExecArgv } from './refresh-worker-memory.mjs'
 import {
   aggregateBenchmarkMetrics,
+  evaluateIncrementalCompute,
   INCREMENTAL_NORMALIZED_COMPUTE_LIMIT,
   INCREMENTAL_SAFETY_PEAK_RSS_BYTES,
   oracleBaselineRewriteEvidence,
-  passesIncrementalComputeBudget,
   passesIncrementalSafetyPeak,
 } from './incremental-benchmark-assertions.ts'
 import { runCalibrationWorkload } from './benchmark-calibration.ts'
@@ -31,7 +31,6 @@ const { refreshDataIfChanged } = await import(refreshModulePath) as { refreshDat
 
 const corpusMinimums = { matches: 4_477, teams: 102, players: 356 }
 const targets = {
-  normalizedCompute: INCREMENTAL_NORMALIZED_COMPUTE_LIMIT,
   safetyPeakRssBytes: INCREMENTAL_SAFETY_PEAK_RSS_BYTES,
   functionalPeakRssBytes: 750 * 1024 * 1024,
   uploadedBytes: 2 * 1024 * 1024,
@@ -365,13 +364,14 @@ async function runBenchmarkParent() {
     measurement.sampledPeakRssBytes,
     measurement.output.maxRssBytes,
   )))
-  const calibrationRunsMs = measurements.map((measurement) => measurement.calibrationMs)
-  const calibrationMs = calibrationRunsMs.toSorted((left, right) => left - right)[Math.floor(calibrationRunsMs.length / 2)]!
-  const allFunctional = measurements.every(({ output, sampledPeakRssBytes, sampleCount }) => {
+  const compute = evaluateIncrementalCompute(measurements.map(({ output, calibrationMs }) => ({
+    computeMs: output.computeMs,
+    calibrationMs,
+  })))
+  const allFunctional = compute.pass && measurements.every(({ output, sampledPeakRssBytes, sampleCount }) => {
     const peakRssBytes = Math.max(sampledPeakRssBytes, output.maxRssBytes)
     const restoreDurationMs = refreshStageDuration(output.refreshStages, 'restore')
-    return passesIncrementalComputeBudget(output.computeMs, calibrationMs)
-      && peakRssBytes < targets.functionalPeakRssBytes
+    return peakRssBytes < targets.functionalPeakRssBytes
       && output.uploadedBytes < targets.uploadedBytes
       && output.fullSnapshotWritten === targets.fullSnapshotWritten
       && output.parity
@@ -392,12 +392,12 @@ async function runBenchmarkParent() {
       && restoreDurationMs > 0
   })
   const pass = allFunctional && passesIncrementalSafetyPeak(effectivePeakRssBytes)
-  const repetitions = measurements.map(({ output, sampledPeakRssBytes, sampledPeakAtMs, sampleCount, calibrationMs: repetitionCalibrationMs }, index) => ({
+  const repetitions = measurements.map(({ output, sampledPeakRssBytes, sampledPeakAtMs, sampleCount, calibrationMs }, index) => ({
       repeat: index + 1,
       computeMs: Number(output.computeMs),
-      normalizedCompute: Number((output.computeMs / calibrationMs).toFixed(3)),
-      cpuMs: Number(output.cpuMs),
-      calibrationMs: repetitionCalibrationMs,
+      normalizedCompute: compute.normalized[index]!,
+      mainCpuMs: Number(output.mainCpuMs),
+      calibrationMs,
       uploadedBytes: Number(output.uploadedBytes),
       uploadedBytesBySurface: output.uploadedBytesBySurface,
       storagePutCount: output.storagePutCount,
@@ -433,8 +433,8 @@ async function runBenchmarkParent() {
     repeatCount: repeats,
     aggregate,
     computeMs: aggregate.max.computeMs,
-    normalizedCompute: Math.max(...repetitions.map((entry) => entry.normalizedCompute)),
-    calibration: { runsMs: calibrationRunsMs, medianMs: calibrationMs },
+    normalizedCompute: Math.max(...compute.normalized),
+    calibration: { runsMs: measurements.map(({ calibrationMs }) => calibrationMs), medianMs: compute.calibrationMedianMs },
     runner: { cpuModel: cpus()[0]?.model, availableParallelism: availableParallelism() },
     uploadedBytes: aggregate.max.uploadedBytes,
     peakRssBytes: effectivePeakRssBytes,
@@ -643,7 +643,7 @@ async function runBenchmarkWorker() {
       && fixtureShape.sourceTeamCount >= corpusMinimums.teams
       && fixtureShape.sourcePlayerCount >= corpusMinimums.players,
     computeMs: Math.round(computeMs), uploadedBytes,
-    cpuMs: Math.round((cpu.user + cpu.system) / 1000),
+    mainCpuMs: Math.round((cpu.user + cpu.system) / 1000),
     maxRssBytes,
     mainMaxRssBytes,
     rawChildMaxRssBytes,

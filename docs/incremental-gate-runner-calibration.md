@@ -27,8 +27,9 @@ the verifier are outside the window. The raw-source child process starts inside
 the window, as it does in production.
 
 Garbage collection is not the cause. A local profile showed 1.6 s of
-main-process GC in a 21.8 s window. Process CPU time (25.5 s) exceeded wall time,
-so the window is CPU-bound.
+main-process GC in a 21.8 s window. Main-process CPU time (25.5 s) exceeded wall
+time, so the window is CPU-bound. This CPU time excludes the raw-source child
+process.
 
 A wall-clock limit cannot work on this runner pool. In the same 30 jobs,
 `tsc -b` took 8.6 to 16.1 s, so runner speed varies about 1.86x. A limit must
@@ -47,12 +48,12 @@ The same CI jobs run `tsc -b`, a single-threaded, allocation-heavy JavaScript
 workload. Its duration tracks the gate's runner factor. I/O-bound unit tests do
 not: they slow about 1.3x where the gate slows 2.3x.
 
-| Code | Runs | computeMs (ms) / tsc (s) |
+| Code | Runs | Compute time (s) / tsc time (s) |
 | --- | ---: | --- |
 | Before `#79` | 16 | 0.91 to 1.07, while computeMs ranges 7,904 to 15,858 |
 | Main after `#79` and branches on it | 6 | 1.11 to 1.19, while computeMs ranges 10,534 to 18,573 |
 | Corpus +18% (`fix/team-previews-demacia-cup`) | 4 | 1.69 to 1.80 |
-| coding-vm (i7-6700K), main | 1 | 1.19 (21,006 / 17.7 s) |
+| coding-vm (i7-6700K), main | 1 | 1.19 (21.006 s / 17.7 s) |
 
 The ratio removes the runner factor. It keeps real code and data growth visible.
 
@@ -64,9 +65,11 @@ the refresh CPU profile: a large live object graph, Map updates and float math,
 canonical JSON, SHA-256, and gzip. Before each repetition, the benchmark runs it
 in a fresh process with the refresh worker's V8 flags.
 
-Each repetition must satisfy `computeMs / median(calibrationMs) < 6.5`. The
-benchmark output reports `normalizedCompute`, the calibration runs, raw
-`computeMs`, `cpuMs`, and the runner CPU model.
+Each repetition must satisfy `computeMs / median(calibrationMs) < 6.5`. For an
+even number of runs, the median is the mean of the two middle values. The
+benchmark output reports unrounded `normalizedCompute`, the calibration runs,
+raw `computeMs`, `mainCpuMs`, and the runner CPU model. `mainCpuMs` is the main
+worker's CPU time and excludes the raw-source child process.
 
 The limit is 1.4 times the measured main value. 1.4 is the geometric midpoint
 between no change and a 2x regression.
@@ -83,10 +86,12 @@ branch measures about 1.5 times main's value and would also fail.
 
 ## Limits and maintenance
 
-- The calibration's tracking on GitHub runners is inferred from `tsc -b` and
-  coding-vm. It is not yet measured directly. The first CI runs must show
-  `normalizedCompute` within about 15% across runner regions. If not, replace
-  the workload; do not raise the limit.
+- The [first GitHub CI sample](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/37631526444)
+  on an AMD EPYC 7763 measured `normalizedCompute` from 4.040 to 4.045, about
+  13% below coding-vm's 4.64. This sample is within the 15% transfer band; see
+  the [measurement record](https://github.com/MaximilianMauroner/lol-esports-ranking/pull/83#issuecomment-6039595377).
+  Evidence across additional runner regions remains limited. Further samples
+  must stay within about 15%. If not, replace the workload; do not raise the limit.
 - Measure the limit again after a Node major upgrade (`NODE_VERSION` in
   `.github/workflows/checks.yml`) or a calibration workload change. Do not
   change it to admit a slower refresh without a recorded budget decision.

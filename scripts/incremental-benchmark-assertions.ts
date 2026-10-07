@@ -9,8 +9,25 @@ export const INCREMENTAL_SAFETY_PEAK_RSS_BYTES = 700 * 1024 * 1024
  */
 export const INCREMENTAL_NORMALIZED_COMPUTE_LIMIT = 6.5
 
-export function passesIncrementalComputeBudget(computeMs: number, calibrationMs: number) {
-  return calibrationMs > 0 && computeMs / calibrationMs < INCREMENTAL_NORMALIZED_COMPUTE_LIMIT
+/**
+ * Normalizes each repetition's computeMs by the median calibration duration and
+ * applies the strict limit to every repetition. Empty, zero, negative, or
+ * non-finite durations fail closed.
+ */
+export function evaluateIncrementalCompute(repetitions: readonly { computeMs: number; calibrationMs: number }[]) {
+  const calibrations = repetitions.map(({ calibrationMs }) => calibrationMs).sort((left, right) => left - right)
+  // Odd counts read the same middle value twice; even counts average the two middle values.
+  const calibrationMedianMs = calibrations.length === 0
+    ? Number.NaN
+    : (calibrations[Math.floor((calibrations.length - 1) / 2)]! + calibrations[Math.floor(calibrations.length / 2)]!) / 2
+  const normalized = repetitions.map(({ computeMs }) => computeMs / calibrationMedianMs)
+  const validInput = repetitions.length > 0 && repetitions.every(({ computeMs, calibrationMs }) =>
+    Number.isFinite(computeMs) && computeMs > 0 && Number.isFinite(calibrationMs) && calibrationMs > 0)
+  return {
+    calibrationMedianMs,
+    normalized,
+    pass: validInput && normalized.every((value) => value < INCREMENTAL_NORMALIZED_COMPUTE_LIMIT),
+  }
 }
 
 export type BenchmarkNumericMetrics = {
