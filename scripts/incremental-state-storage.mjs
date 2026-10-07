@@ -233,13 +233,16 @@ export async function assertStateManifestAuthority(client, config, authority, { 
   if (authority.manifest && canonicalJsonFor(parseIncrementalStateManifest(authority.manifest)) !== canonicalJsonFor(parsed)) {
     throw new Error('Incremental state manifest authority does not match stored manifest')
   }
+  const verifiedObjects = []
   if (verifyObjects) {
-    await assertStoredStateObjectIntegrity(client, config, parsed.canonicalLedger)
+    verifiedObjects.push(await assertStoredStateObjectIntegrity(client, config, parsed.canonicalLedger))
     for (const candidate of parsed.checkpoints) {
-      await assertStoredStateObjectIntegrity(client, config, candidate.object)
+      verifiedObjects.push(await assertStoredStateObjectIntegrity(client, config, candidate.object))
     }
   }
-  return { manifest: parsed, key: authority.key, etag: remote.ETag, bytes: bytes.byteLength, digest }
+  return { manifest: parsed, key: authority.key, etag: remote.ETag, bytes: bytes.byteLength, digest,
+    ...(verifyObjects ? { verifiedObjects } : {}),
+  }
 }
 
 export async function readActiveIncrementalState({ config, client, verifyObjects = true, checkpointLimit } = {}) {
@@ -475,9 +478,11 @@ async function assertStoredStateObjectIntegrity(client, config, reference) {
   let compressedBytes = 0
   let semanticBytes = 0
   const digest = createHash('sha256')
+  const compressedDigest = createHash('sha256')
   const countCompressed = new Transform({
     transform(chunk, _encoding, callback) {
       compressedBytes += chunk.length
+      compressedDigest.update(chunk)
       callback(null, chunk)
     },
   })
@@ -497,6 +502,7 @@ async function assertStoredStateObjectIntegrity(client, config, reference) {
     || semanticBytes !== parsedReference.bytes || digest.digest('hex') !== parsedReference.sha256) {
     throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
   }
+  return { key: expectedKey, digest: parsedReference.sha256, compressedBytes, compressedSha256: compressedDigest.digest('hex') }
 }
 
 export function stateObjectReferenceFor(prepared) {

@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
-import { gunzipSync, gzipSync } from 'node:zlib'
+import zlib, { gunzipSync, gzipSync } from 'node:zlib'
 import {
   assertStateManifestAuthority,
   prepareContentAddressedState,
@@ -478,6 +479,126 @@ test('manifest authority fails closed for mutation, missing objects, and corrupt
   stored.metadata['semantic-bytes'] = String(prepared.manifest.checkpoints[0].object.bytes)
   await assert.rejects(assertStateManifestAuthority(corruptClient, config, corruptWritten.authority), /metadata mismatch|gzip is corrupt/)
 })
+
+test('manifest authority exposes compressed-byte proof only after full object verification', async () => {
+  const client = memoryS3()
+  const prepared = preparedState('compressed-proof')
+  await syncAllStateObjects(client, prepared.objects)
+  const written = await writeIncrementalStateManifest(client, config, prepared)
+  const callerAuthority = { ...written.authority, verifiedObjects: [{ key: 'caller-supplied-proof' }] }
+  const verified = await assertStateManifestAuthority(client, config, callerAuthority)
+  assert.deepEqual(verified.verifiedObjects, prepared.objects.map((object) => ({
+    key: `${config.prefix}/state/objects/sha256/${object.digest}`,
+    digest: object.digest, compressedBytes: object.compressedBytes,
+    compressedSha256: createHash('sha256').update(object.compressed).digest('hex'),
+  })))
+  const unverified = await assertStateManifestAuthority(client, config, callerAuthority, { verifyObjects: false })
+  assert.equal(Object.hasOwn(unverified, 'verifiedObjects'), false)
+})
+
+test('promotion reuses verified state bytes but rechecks alternate gzip bytes with proof scoped to each publication', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-state-proof-'))
+  const publicDir = join(root, 'public')
+  const backing = memoryS3()
+  const generationId = 'state-proof-first'
+  const raw = rawGeneration(generationId)
+  const prepared = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
+  const state = await publishState(backing, prepared)
+  const stateKeys = new Set(prepared.objects.map((object) => `${config.prefix}/state/objects/sha256/${object.digest}`))
+  const targetKey = `${config.prefix}/${prepared.manifest.checkpoints[0].object.key}`
+  const stored = backing.objects.get(targetKey)!
+  const original = Buffer.from(stored.bytes)
+  const alternate = Buffer.from(original)
+  alternate[4] ^= 1 // A changed gzip MTIME preserves both the length and semantic bytes.
+  assert.deepEqual(gunzipSync(alternate), gunzipSync(original))
+  const stateBodies = new Set([...prepared.objects.map((object) => object.compressed), alternate]
+    .map((bytes) => createHash('sha256').update(bytes).digest('hex')))
+  let stateInflates = 0
+  const originalGunzip = gunzipSync
+  t.mock.method(zlib, 'gunzipSync', (bytes: Parameters<typeof gunzipSync>[0], options?: Parameters<typeof gunzipSync>[1]) => {
+    if (Buffer.isBuffer(bytes) && stateBodies.has(createHash('sha256').update(bytes).digest('hex'))) stateInflates += 1
+    return originalGunzip(bytes, options)
+  })
+  syncBuiltinESMExports()
+  let finalCheck = false
+  const finalGets = new Map<string, number>()
+  const client = {
+    objects: backing.objects,
+    async send(command: unknown) {
+      const { name, input } = commandDetails(command)
+      const key = String(input.Key)
+      if (finalCheck && name === 'GetObjectCommand' && stateKeys.has(key)) finalGets.set(key, (finalGets.get(key) ?? 0) + 1)
+      return backing.send(command)
+    },
+  }
+  try {
+    await writePublicFixture(publicDir, generationId)
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId, fencingToken: 1,
+      stateManifestAuthority: state.authority, rawSourceGeneration: raw, config, client,
+      beforePromotionWrite: () => { finalCheck = true },
+    })
+    assert.equal(stateInflates, 0)
+    assert.deepEqual([...finalGets.keys()].sort(), [...stateKeys].sort())
+    assert.ok([...finalGets.values()].every((count) => count === 1))
+
+    finalCheck = false
+    finalGets.clear()
+    const nextId = 'state-proof-next'
+    const nextRaw = rawGeneration(nextId)
+    const next = await publishState(backing, preparedStateWithReceipt(nextId, nextRaw.sourceReceiptDigest))
+    await writePublicFixture(publicDir, nextId)
+    stored.bytes = alternate
+    stateInflates = 0
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: nextId, fencingToken: 2,
+      stateManifestAuthority: next.authority, rawSourceGeneration: nextRaw, config, client,
+      beforePromotionWrite: () => { finalCheck = true; stored.bytes = original },
+    })
+    assert.equal(stateInflates, 1, 'a previous publication proof must not suppress validation of different current bytes')
+    assert.equal(JSON.parse(backing.objects.get(`${config.prefix}/active-generation.json`)!.body).generationId, nextId)
+  } finally {
+    t.mock.restoreAll()
+    syncBuiltinESMExports()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+for (const mutation of ['body', 'metadata', 'missing'] as const) {
+  test(`state-object ${mutation} mutation after verification blocks promotion and preserves the old generation`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'incremental-state-proof-race-'))
+    const publicDir = join(root, 'public')
+    const client = memoryS3()
+    try {
+      await writeBucketJson('active-generation.json', { schemaVersion: 1, generationId: 'current', fencingToken: 1 }, {
+        config, client, ifNoneMatch: '*',
+      })
+      const generationId = `state-proof-${mutation}`
+      const raw = rawGeneration(generationId)
+      const prepared = preparedStateWithReceipt(generationId, raw.sourceReceiptDigest)
+      const state = await publishState(client, prepared)
+      await writePublicFixture(publicDir, generationId)
+      const key = `${config.prefix}/${prepared.manifest.checkpoints[0].object.key}`
+      const stored = client.objects.get(key)!
+      const expected = mutation === 'body' ? /gzip is corrupt/ : mutation === 'metadata' ? /authority mismatch/ : /missing/
+      await assert.rejects(uploadRankingArtifacts({ publicDataDir: publicDir, generationId, fencingToken: 2,
+        stateManifestAuthority: state.authority, rawSourceGeneration: raw, config, client,
+        beforePromotionWrite: () => {
+          if (mutation === 'body') {
+            const changed = Buffer.from(stored.bytes)
+            changed[changed.byteLength - 8] ^= 1 // Mutate the gzip CRC without changing metadata or length.
+            stored.bytes = changed
+          } else if (mutation === 'metadata') {
+            stored.metadata = { ...stored.metadata, sha256: '0'.repeat(64) }
+          } else {
+            client.objects.delete(key)
+          }
+        },
+      }), expected)
+      assert.equal(JSON.parse(client.objects.get(`${config.prefix}/active-generation.json`)!.body).generationId, 'current')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+}
 
 test('active pointers without state authority trigger a full rebuild and promotion resolves both manifests', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-state-public-'))

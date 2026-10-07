@@ -101,7 +101,10 @@ export function assertStateManifestAuthority(
   config: BucketStorageConfig,
   authority: StateManifestAuthority,
   options?: { verifyObjects?: boolean },
-): Promise<StateManifestAuthority & { manifest: IncrementalStateManifest }>
+): Promise<StateManifestAuthority & {
+  manifest: IncrementalStateManifest
+  verifiedObjects?: Array<{ key: string; digest: string; compressedBytes: number; compressedSha256: string }>
+}>
 export function readActiveIncrementalState(options: {
   client: BucketClient
   config: BucketStorageConfig

@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto'
 import { fork } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import type { Profiler } from 'node:inspector'
-import { Session } from 'node:inspector/promises'
 import { copyFile, mkdir, readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -520,60 +518,41 @@ async function runBenchmarkWorker() {
 
   client.resetIo()
   globalThis.gc?.()
-  // Temporary CI trace: remove after the first trace is captured and the timing repair is confirmed.
-  const profiler = new Session()
-  profiler.connect()
-  const { refreshResult, computeMs, productionRss, mainMaxRssBytes, measuredStorageCommands, profile } = await (async () => {
-    try {
-      await profiler.post('Profiler.enable')
-      await profiler.post('Profiler.setSamplingInterval', { interval: 75_000 })
-      await profiler.post('Profiler.start')
-      process.send?.({ type: 'measurement-start' })
-      const started = performance.now()
-      const refreshResult = await refreshDataIfChanged([
-        '--raw-dir', rawDir,
-        '--manifest', materializedManifest,
-        '--state', join(rawDir, 'refresh-state.json'),
-        '--staging-dir', join(refreshRoot, 'staging'),
-        '--output', join(refreshRoot, 'ranking-snapshot.full.json'),
-        '--public-data-dir', join(refreshRoot, 'public'),
-        '--reconciliation-output', join(rawDir, 'reconciliation.json'),
-        '--end', nextEnd,
-        '--force',
-      ], {
-        env: {
-          RANKING_REFRESH_MODE: 'gated',
-          RANKING_REFRESH_CAUSE: 'pending-match',
-          RANKING_REFRESH_RUN_ID: 'production-shaped-local',
-          RANKING_BUCKET_RESTORE_RAW: 'true',
-          RANKING_BUCKET_UPLOAD_ENABLED: 'true',
-          RANKING_REFRESH_LEASE_OWNER: lease.lease.owner,
-          RANKING_REFRESH_FENCING_TOKEN: String(lease.lease.fencingToken),
-          RANKING_REFRESH_LEASE_KEY: 'ops/refresh-lease.json',
-          RANKING_REFRESH_PROMOTION_ETAG: lease.promotionEtag ?? '',
-        },
-        bucketConfig: config,
-        bucketClient: client,
-        now: Date.now,
-        monotonicNow: () => performance.now(),
-        run: async (_command: string, args: string[]) => stageProviderManifest(nextManifest, args),
-      })
-      const computeMs = performance.now() - started
-      const productionRss = process.memoryUsage().rss
-      const mainMaxRssBytes = readProcessPeakRssBytes()
-      process.send?.({ type: 'measurement-stop' })
-      const measuredStorageCommands = { ...client.io }
-      const { profile } = await profiler.post('Profiler.stop')
-      return { refreshResult, computeMs, productionRss, mainMaxRssBytes, measuredStorageCommands, profile }
-    } finally {
-      profiler.disconnect()
-    }
-  })()
-  const cpuRows = summarizeRefreshCpuProfile(profile)
-  process.stdout.write(`${JSON.stringify({ label: 'refresh-cpu-profile',
-    self: [...cpuRows].sort((left, right) => right.selfMs - left.selfMs).slice(0, 25),
-    inclusive: [...cpuRows].sort((left, right) => right.inclusiveMs - left.inclusiveMs).slice(0, 25),
-  })}\n`)
+  process.send?.({ type: 'measurement-start' })
+  const started = performance.now()
+  const refreshResult = await refreshDataIfChanged([
+    '--raw-dir', rawDir,
+    '--manifest', materializedManifest,
+    '--state', join(rawDir, 'refresh-state.json'),
+    '--staging-dir', join(refreshRoot, 'staging'),
+    '--output', join(refreshRoot, 'ranking-snapshot.full.json'),
+    '--public-data-dir', join(refreshRoot, 'public'),
+    '--reconciliation-output', join(rawDir, 'reconciliation.json'),
+    '--end', nextEnd,
+    '--force',
+  ], {
+    env: {
+      RANKING_REFRESH_MODE: 'gated',
+      RANKING_REFRESH_CAUSE: 'pending-match',
+      RANKING_REFRESH_RUN_ID: 'production-shaped-local',
+      RANKING_BUCKET_RESTORE_RAW: 'true',
+      RANKING_BUCKET_UPLOAD_ENABLED: 'true',
+      RANKING_REFRESH_LEASE_OWNER: lease.lease.owner,
+      RANKING_REFRESH_FENCING_TOKEN: String(lease.lease.fencingToken),
+      RANKING_REFRESH_LEASE_KEY: 'ops/refresh-lease.json',
+      RANKING_REFRESH_PROMOTION_ETAG: lease.promotionEtag ?? '',
+    },
+    bucketConfig: config,
+    bucketClient: client,
+    now: Date.now,
+    monotonicNow: () => performance.now(),
+    run: async (_command: string, args: string[]) => stageProviderManifest(nextManifest, args),
+  })
+  const computeMs = performance.now() - started
+  const productionRss = process.memoryUsage().rss
+  const mainMaxRssBytes = readProcessPeakRssBytes()
+  process.send?.({ type: 'measurement-stop' })
+  const measuredStorageCommands = { ...client.io }
   const incrementalMetrics = refreshResult.incrementalMetrics
   if (!isIncrementalMetrics(incrementalMetrics) || incrementalMetrics.fullSnapshotWritten
     || incrementalMetrics.replayedMatchCount !== 1) {
@@ -676,35 +655,6 @@ async function runBenchmarkWorker() {
     },
   }
   process.stdout.write(`${JSON.stringify(output)}\n`)
-}
-
-function summarizeRefreshCpuProfile(profile: Profiler.Profile) {
-  const parents = new Map(profile.nodes.flatMap((node) => (node.children ?? []).map((child) => [child, node.id] as const)))
-  const totals = new Map<string, { functionName: string; url: string; line: number; selfMs: number; inclusiveMs: number }>()
-  const byId = new Map(profile.nodes.map((node) => {
-    const functionName = node.callFrame.functionName
-    const url = basename(node.callFrame.url.split(/[?#]/, 1)[0] ?? '')
-    const line = node.callFrame.lineNumber + 1
-    const key = JSON.stringify([functionName, url, line])
-    const total = totals.get(key) ?? { functionName, url, line, selfMs: 0, inclusiveMs: 0 }
-    totals.set(key, total)
-    return [node.id, total] as const
-  }))
-  for (const [index, sample] of (profile.samples ?? []).entries()) {
-    const durationMs = (profile.timeDeltas?.[index] ?? 0) / 1000
-    const self = byId.get(sample)
-    if (!self) continue
-    self.selfMs += durationMs
-    const included = new Set<typeof self>()
-    for (let id: number | undefined = sample; id !== undefined; id = parents.get(id)) {
-      const total = byId.get(id)
-      if (total && !included.has(total)) {
-        total.inclusiveMs += durationMs
-        included.add(total)
-      }
-    }
-  }
-  return [...totals.values()]
 }
 
 async function runBenchmarkVerifier() {
@@ -813,7 +763,6 @@ async function runMeasuredWorker() {
   })
   clearInterval(timer)
   const lines = Buffer.concat(stdout).toString('utf8').trim().split('\n').filter(Boolean)
-  for (const line of lines) if (line.startsWith('{"label":"refresh-cpu-profile",')) process.stdout.write(`${line}\n`)
   if (exitCode !== 0) {
     throw new Error(`Benchmark worker failed with exit code ${exitCode}: ${Buffer.concat(stderr).toString('utf8')}`)
   }
