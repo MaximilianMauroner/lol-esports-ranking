@@ -11,7 +11,7 @@ import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
 import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
 import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
-import { rawSourceWorkerExecArgv } from './refresh-worker-memory.mjs'
+import { collectRefreshGarbage, rawSourceWorkerExecArgv, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
 import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
@@ -132,6 +132,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
   let refreshState
   let incrementalBuild
   let restoredIncremental
+  let baseGenerationId = null
+  let baseRunId = null
   let rawSourceGeneration
   let providerAvailableAt
   let acceptedRawRecovery
@@ -456,7 +458,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         output: {
           found: activeRaw.found,
           rssBytes: process.memoryUsage().rss,
-          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          maxRssBytes: readProcessPeakRssBytes(),
         },
       })
       const rawWorkerStarted = monotonicNow()
@@ -476,7 +478,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         output: {
           objectCount: rawSourceGeneration.objects.length,
           rssBytes: process.memoryUsage().rss,
-          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          maxRssBytes: readProcessPeakRssBytes(),
           childMaxRssBytes: rawWorker.childMaxRssBytes,
           childTotalMs: rawWorker.totalMs,
           sourceAuthorityEvidenceDigest: stagingManifestForRun.sourceAuthorityEvidence?.evidenceDigest,
@@ -486,7 +488,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         durationMs: Number(rawWorker.materializeMs) || 0,
         output: {
           rssBytes: process.memoryUsage().rss,
-          maxRssBytes: process.resourceUsage().maxRSS * 1024,
+          maxRssBytes: readProcessPeakRssBytes(),
           childMaxRssBytes: rawWorker.childMaxRssBytes,
         },
       })
@@ -495,7 +497,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       const checkpointRestoreStarted = monotonicNow()
       if (bucketConfig.enabled && bucketClient) {
         try {
-          const [activeState, activePublic] = await Promise.all([
+          let [activeState, activePublic] = await Promise.all([
             readActiveIncrementalState({ config: bucketConfig, client: bucketClient, checkpointLimit: 1 }),
             readActiveContentAddressedGeneration({ config: bucketConfig, client: bucketClient, verifyArtifacts: false }),
           ])
@@ -512,6 +514,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               loadCheckpoints: activeState.loadCheckpoints,
             }
           }
+          // Node 24 can retain these block bindings in the suspended refresh frame.
+          activeState = undefined
+          activePublic = undefined
         } catch (error) {
           metrics.recordStage('checkpoint-validation', {
             durationMs: 0,
@@ -530,7 +535,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         },
       })
       const crunchStarted = monotonicNow()
-      incrementalBuild = await buildRankingIncrementally({
+      baseGenerationId = restoredIncremental?.stateManifest.generationId ?? null
+      baseRunId = restoredIncremental?.stateManifest.runId ?? null
+      const incrementalBuildOptions = {
         mode: metrics.snapshot().mode,
         cause: metrics.snapshot().cause,
         enabled: true,
@@ -542,7 +549,16 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         diagnosticPath: resolve(rawDir, 'incremental-diagnostic.json'),
         env,
         ...(rawSourceGeneration ? { sourceReceiptDigest: rawSourceGeneration.sourceReceiptDigest } : {}),
-      })
+      }
+      const incrementalBuildPromise = buildRankingIncrementally(incrementalBuildOptions)
+      // Node 24 can retain the options object in the suspended async builder.
+      incrementalBuildOptions.restored = undefined
+      restoredIncremental = undefined
+      incrementalBuild = await incrementalBuildPromise
+      if (metrics.snapshot().mode === 'gated' && incrementalBuild.action === 'publish-incremental') {
+        // Release temporary artifact and replay data before state persistence allocates buffers.
+        collectRefreshGarbage()
+      }
       providerAvailableAt = incrementalBuild.metrics.providerAvailableAt ?? null
       metrics.recordWork({
         fullBuilds: incrementalBuild.action === 'publish-full' ? 1 : 0,
@@ -708,8 +724,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           incrementalState = await persistIncrementalStateBuild({
             state: incrementalBuild.state,
             generationId,
-            baseGenerationId: restoredIncremental?.stateManifest.generationId ?? null,
-            baseRunId: restoredIncremental?.stateManifest.runId ?? null,
+            baseGenerationId,
+            baseRunId,
             config: bucketConfig,
             client: bucketClient,
           })
@@ -724,8 +740,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               rssBytes: process.memoryUsage().rss,
             },
           })
-          releasePersistedIncrementalInputs(incrementalBuild, restoredIncremental)
-          restoredIncremental = undefined
+          releasePersistedIncrementalInputs(incrementalBuild)
         }
         const fencingToken = env.RANKING_REFRESH_FENCING_TOKEN
           ? Number(env.RANKING_REFRESH_FENCING_TOKEN)

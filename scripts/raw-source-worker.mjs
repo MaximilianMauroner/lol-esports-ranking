@@ -8,6 +8,7 @@ import {
 } from './raw-source-generation.mjs'
 import { parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
 import { validateRawSourceAuthorityMetadata } from './ranking-source-authority.mjs'
+import { readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
 
 const inputPath = process.argv[2]
 const outputPath = process.argv[3]
@@ -16,7 +17,7 @@ if (!inputPath || !outputPath) throw new Error('Raw source worker requires input
 const input = JSON.parse(await readFile(resolve(inputPath), 'utf8'))
 const output = input.action === 'restore' ? await restore(input) : input.action === 'prepare' ? await prepare(input) : undefined
 if (!output) throw new Error(`Unsupported raw source worker action: ${String(input.action)}`)
-const finalOutput = { ...output, childMaxRssBytes: Math.round(process.resourceUsage().maxRSS * 1024) }
+const finalOutput = { ...output, childMaxRssBytes: readProcessPeakRssBytes() }
 const resolvedOutput = resolve(outputPath)
 const temporaryOutput = `${resolvedOutput}.${process.pid}.tmp`
 await mkdir(dirname(resolvedOutput), { recursive: true })

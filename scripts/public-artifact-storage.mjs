@@ -101,6 +101,44 @@ export function canonicalJsonFor(value) {
     .join(',')}}`
 }
 
+export class NonCanonicalJsonError extends Error {}
+
+export function parseCanonicalJson(text) {
+  if (typeof text !== 'string') throw new TypeError('Canonical JSON input must be text')
+  const value = JSON.parse(text)
+  let offset = 0
+  function matchToken(token) {
+    if (!text.startsWith(token, offset)) return false
+    offset += token.length
+    return true
+  }
+  function matchValue(entry) {
+    if (entry === null || typeof entry !== 'object') return matchToken(JSON.stringify(entry) ?? 'null')
+    if (Array.isArray(entry)) {
+      // Parsing without a reviver guarantees dense arrays of JSON values.
+      if (!('toJSON' in entry) && entry.every((item) => item === null || typeof item !== 'object')) {
+        return matchToken(JSON.stringify(entry))
+      }
+      if (!matchToken('[')) return false
+      for (let index = 0; index < entry.length; index += 1) {
+        if (index > 0 && !matchToken(',')) return false
+        if (!matchValue(entry[index])) return false
+      }
+      return matchToken(']')
+    }
+    if (!matchToken('{')) return false
+    const keys = Object.keys(entry).filter((key) => entry[key] !== undefined).sort()
+    for (let index = 0; index < keys.length; index += 1) {
+      if (index > 0 && !matchToken(',')) return false
+      const key = keys[index]
+      if (!matchToken(JSON.stringify(key)) || !matchToken(':') || !matchValue(entry[key])) return false
+    }
+    return matchToken('}')
+  }
+  if (!matchValue(value) || offset !== text.length) throw new NonCanonicalJsonError('JSON text is not canonical')
+  return value
+}
+
 function normalizeKnownLogicalUrls(content) {
   switch (content.artifactKind) {
     case 'public-ranking-manifest':

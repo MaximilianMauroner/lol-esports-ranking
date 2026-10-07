@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
+import { prepareContentAddressedState, prepareStateObject, stateObjectReferenceFor, syncContentAddressedStateObject, writeIncrementalStateManifest } from '../scripts/incremental-state-storage.mjs'
+import { canonicalJsonFor, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import {
   ORACLE_GAME_INVENTORY_DIGEST_SCHEME,
   oracleGameInventory,
@@ -1391,6 +1394,116 @@ test('refresh wrapper uploads refresh state after bucket publish metadata is att
     assert.equal(JSON.parse(publishBody as string).artifactCount, uploadedState.bucket.uploadedCount)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('refresh fallback persists distinct restored generation and run lineage', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lol-ranking-restored-lineage-'))
+  const config = bucketConfig()
+  const rawDir = join(root, 'raw')
+  const publicDataDir = join(root, 'public')
+  const objects = new Map<string, {
+    bytes: Buffer
+    etag: string
+    contentType?: string
+    contentEncoding?: string
+    metadata?: Record<string, string>
+  }>()
+  const client = {
+    async send(command: unknown) {
+      if (command instanceof PutObjectCommand) {
+        const input = command.input
+        assert.ok(typeof input.Body === 'string' || input.Body instanceof Uint8Array)
+        const bytes = typeof input.Body === 'string' ? Buffer.from(input.Body, 'utf8') : Buffer.from(input.Body)
+        const etag = `"fixture-${objects.size}"`
+        objects.set(String(input.Key), { bytes, etag, contentType: input.ContentType, contentEncoding: input.ContentEncoding, metadata: input.Metadata })
+        return { ETag: etag }
+      }
+      assert.ok(command instanceof GetObjectCommand || command instanceof HeadObjectCommand)
+      const stored = objects.get(String(command.input.Key))
+      if (!stored) throw Object.assign(new Error('Missing fixture object'), { name: 'NoSuchKey' })
+      return { Body: stored.bytes, ETag: stored.etag, ContentLength: stored.bytes.byteLength, ContentType: stored.contentType, ContentEncoding: stored.contentEncoding, Metadata: stored.metadata }
+    },
+  }
+  try {
+    const generationId = 'restored-generation'
+    const runId = 'restored-run'
+    const ledger = prepareStateObject({ invalid: 'old ledger forces a full fallback' })
+    const prepared = prepareContentAddressedState({
+      generationId, runId, canonicalLedgerReference: stateObjectReferenceFor(ledger),
+      sourceReceiptDigest: 'a'.repeat(64),
+      compatibility: {
+        modelVersion: 'fixture-model', modelConfigHash: 'fixture-config', importerVersion: 'fixture-importer', taxonomyVersion: 'fixture-taxonomy',
+        ratingCheckpointSchemaVersion: 2, causalPrefixSchemaVersion: 1, publicArtifactSchemaVersion: 23,
+      },
+      checkpoints: [{
+        boundary: { date: '2026-01-01', matchId: 'fixture-match' },
+        rawPrefix: { matchCount: 1, digest: 'b'.repeat(64) },
+        ratingCheckpoint: {},
+        causalSummaries: { sourcedPlayer: {}, dssTeam: {}, dssRegion: {}, rosterEra: {}, playerResume: {} },
+      }],
+    })
+    for (const object of [ledger, ...prepared.objects]) await syncContentAddressedStateObject(client, config, object)
+    const stateAuthority = await writeIncrementalStateManifest(client, config, prepared)
+    const rootManifest = {
+      artifactKind: 'public-ranking-manifest', generatedAt: '2026-06-29T00:00:00.000Z', artifactMeta: { runId: generationId },
+      model: { version: 'fixture-model', configHash: 'fixture-config' }, source: 'test fixture', dataMode: 'sample', sources: [],
+    }
+    const rootArtifact = prepareSemanticArtifact(rootManifest)
+    await client.send(new PutObjectCommand({
+      Bucket: config.bucket, Key: `rankings/objects/sha256/${rootArtifact.digest}`, Body: rootArtifact.compressed, ContentEncoding: 'gzip',
+      Metadata: { sha256: rootArtifact.digest, 'semantic-bytes': String(rootArtifact.bytes), encoding: 'gzip' },
+    }))
+    const publicManifestBytes = Buffer.from(canonicalJsonFor({
+      ...createGenerationManifest({ generationId, rootManifest, entries: [{ logicalPath: '/data/ranking-summary.json', digest: rootArtifact.digest, bytes: rootArtifact.bytes }] }),
+      schemaVersion: 1,
+    }))
+    const manifestKey = `rankings/generations/${generationId}/manifest.json`
+    const manifestDigest = createHash('sha256').update(publicManifestBytes).digest('hex')
+    const publicWrite = await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: manifestKey, Body: publicManifestBytes, Metadata: { sha256: manifestDigest } }))
+    await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: 'rankings/active-generation.json', Body: JSON.stringify({
+      generationId, storageMode: 'content-addressed-gzip-v1', manifestKey, manifestDigest,
+      manifestBytes: publicManifestBytes.byteLength, manifestEtag: publicWrite.ETag,
+      stateManifestKey: stateAuthority.authority.key, stateManifestDigest: stateAuthority.authority.digest,
+    }) }))
+    let persistedLineage: unknown
+    const result = await refreshDataIfChanged([
+      '--raw-dir', rawDir, '--manifest', join(rawDir, 'manifest.json'), '--state', join(rawDir, 'refresh-state.json'),
+      '--staging-dir', join(root, 'staging'), '--output', join(root, 'full.json'), '--public-data-dir', publicDataDir, '--end', '2026-06-29',
+    ], {
+      bucketClient: client, bucketConfig: config,
+      readActiveRawSourceAuthority: async () => ({ found: false }),
+      env: { RANKING_BUCKET_RESTORE_RAW: 'false', RANKING_REFRESH_FENCING_TOKEN: '7' },
+      run: async (_command, args) => {
+        assert.ok(args.includes('scripts/download-local-data.mjs'))
+        const outDir = valueAfter(args, '--out-dir')
+        const sourcePath = join(outDir, '2026.csv')
+        await mkdir(outDir, { recursive: true })
+        await writeFile(sourcePath, [
+          'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
+          'fixture-game,2026-06-29,2026,LCK,Summer,0,26.13,team,Blue,Gen.G,1,18,65000',
+          'fixture-game,2026-06-29,2026,LCK,Summer,0,26.13,team,Red,T1,0,10,58000',
+        ].join('\n'))
+        await writeFile(valueAfter(args, '--manifest'), JSON.stringify({
+          ...manifest(sourcePath), files: { oracleCsv: [sourcePath], leaguepediaJson: [], lolEsportsJson: [] },
+          sources: { oracle: { status: 'downloaded', downloadedCount: 1 } },
+        }))
+      },
+      uploadRankingArtifacts: async (options) => {
+        const manifest = [...objects.entries()].find(([key]) => key === `rankings/state/generations/${options.generationId}.json`)?.[1]
+        assert.ok(manifest)
+        const state = JSON.parse(manifest.bytes.toString('utf8'))
+        persistedLineage = { baseGenerationId: state.baseGenerationId, baseRunId: state.baseRunId }
+        return { enabled: true, bucket: config.bucket, prefix: config.prefix, uploaded: [], unchanged: [], skipped: [], artifactCount: 0, uploadedCount: 0, uploadedBytes: 0, unchangedCount: 0, unchangedBytes: 0 }
+      },
+    })
+    assert.equal(result.incrementalAction, 'publish-full')
+    assert.match(result.incrementalMetrics?.fallbackReason ?? '', /ledger schema is invalid/)
+    assert.deepEqual(persistedLineage, { baseGenerationId: generationId, baseRunId: runId })
+    const state = JSON.parse(await readFile(join(rawDir, 'refresh-state.json'), 'utf8'))
+    assert.equal(state.lastRun.stages.find((stage: { name: string }) => stage.name === 'checkpoint-restore').result, 'completed')
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 

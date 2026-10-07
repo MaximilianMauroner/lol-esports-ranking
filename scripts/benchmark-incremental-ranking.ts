@@ -14,7 +14,7 @@ import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { finalizeRawSourceGeneration, prepareRawSourceGeneration, type ActiveRawSourceAuthority } from './raw-source-generation.mjs'
 import { parseRawSourceReceipt } from './raw-source-storage.mjs'
 import { buildPlayerModel } from '../src/lib/model.ts'
-import { refreshWorkerExecArgv } from './refresh-worker-memory.mjs'
+import { readProcessPeakRssBytes, refreshWorkerExecArgv } from './refresh-worker-memory.mjs'
 import {
   aggregateBenchmarkMetrics,
   evaluateIncrementalCompute,
@@ -112,7 +112,7 @@ async function runPlayerProfileWorker() {
   const players = buildPlayerModel(source.matches, {}, { teams: source.teams })
   const durationMs = Math.round(performance.now() - started)
   const rssBytes = process.memoryUsage().rss
-  const maxRssBytes = Math.round(process.resourceUsage().maxRSS * 1024)
+  const maxRssBytes = readProcessPeakRssBytes()
   process.send?.({ type: 'measurement-stop' })
   process.stdout.write(`${JSON.stringify({
     importedMatchCount: source.matches.length,
@@ -177,7 +177,7 @@ async function runRawProfileNext() {
   })
   const durationMs = Math.round(performance.now() - started)
   const rssBytes = process.memoryUsage().rss
-  const maxRssBytes = Math.round(process.resourceUsage().maxRSS * 1024)
+  const maxRssBytes = readProcessPeakRssBytes()
   process.send?.({ type: 'measurement-stop' })
   process.stdout.write(`${JSON.stringify({
     durationMs,
@@ -568,7 +568,7 @@ async function runBenchmarkWorker() {
   const computeMs = performance.now() - started
   const cpu = process.cpuUsage(cpuStarted)
   const productionRss = process.memoryUsage().rss
-  const mainMaxRssBytes = Math.round(process.resourceUsage().maxRSS * 1024)
+  const mainMaxRssBytes = readProcessPeakRssBytes()
   process.send?.({ type: 'measurement-stop' })
   const measuredStorageCommands = { ...client.io }
   const incrementalMetrics = refreshResult.incrementalMetrics
@@ -729,7 +729,7 @@ async function runBenchmarkVerifier() {
     differenceDetails,
     differingIdentities,
     verifierMs: Math.round(performance.now() - started),
-    verifierMaxRssBytes: Math.round(process.resourceUsage().maxRSS * 1024),
+    verifierMaxRssBytes: readProcessPeakRssBytes(),
   })}\n`)
 }
 
@@ -781,10 +781,10 @@ async function runMeasuredWorker() {
     child.once('close', resolveExit)
   })
   clearInterval(timer)
+  const lines = Buffer.concat(stdout).toString('utf8').trim().split('\n').filter(Boolean)
   if (exitCode !== 0) {
     throw new Error(`Benchmark worker failed with exit code ${exitCode}: ${Buffer.concat(stderr).toString('utf8')}`)
   }
-  const lines = Buffer.concat(stdout).toString('utf8').trim().split('\n').filter(Boolean)
   const lastLine = lines.at(-1)
   if (!lastLine) throw new Error('Benchmark worker produced no result')
   return {

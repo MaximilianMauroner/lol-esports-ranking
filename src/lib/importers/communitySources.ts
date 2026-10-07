@@ -281,7 +281,7 @@ function compatibleGameIdentities(left: MatchRecord, right: MatchRecord) {
     || left.sourceGameId === right.sourceGameId
 }
 
-/** Missing clocks require an exact scoreboard link that is unique in both source directions. */
+/** Exact scoreboard links must be unique in both source directions, with compatible clocks when present. */
 function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMatches: MatchRecord[]) {
   const oracleByStats = new Map<string, MatchRecord[]>()
   const leaguepediaByStats = new Map<string, MatchRecord[]>()
@@ -309,9 +309,9 @@ function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMat
 
 function gameTimesCompatible(left: MatchRecord, right: MatchRecord) {
   if (left.datetimeUtc && right.datetimeUtc) {
-    // Leaguepedia clocks can omit seconds, while Oracle clocks retain them.
+    // Providers can record different game-start moments, even when the exact scoreboard agrees.
     const difference = Math.abs(Date.parse(left.datetimeUtc) - Date.parse(right.datetimeUtc))
-    if (!Number.isFinite(difference) || difference > 60_000) return false
+    if (!Number.isFinite(difference) || difference > 5 * 60_000) return false
   }
   return left.gameLengthSeconds === undefined || right.gameLengthSeconds === undefined || left.gameLengthSeconds === right.gameLengthSeconds
 }

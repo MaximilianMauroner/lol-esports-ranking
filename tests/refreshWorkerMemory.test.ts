@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import {
@@ -6,6 +7,7 @@ import {
   REFRESH_WORKER_MAX_OLD_SPACE_MB,
   REFRESH_WORKER_MAX_SEMI_SPACE_MB,
   rawSourceWorkerExecArgv,
+  readProcessPeakRssBytes,
   refreshWorkerArgs,
   refreshWorkerExecArgv,
 } from '../scripts/refresh-worker-memory.mjs'
@@ -46,6 +48,86 @@ test('refresh worker memory flags are canonical and deduplicate inherited varian
     '--expose-gc',
     '--import=tsx',
   ])
+})
+
+test('Linux executable peak excludes the setup parent memory inherited across fork and exec', {
+  skip: process.platform !== 'linux', timeout: 15_000,
+}, () => {
+  const memoryModule = new URL('../scripts/refresh-worker-memory.mjs', import.meta.url).href
+  const childScript = `
+    import { readProcessPeakRssBytes } from ${JSON.stringify(memoryModule)}
+    const rssBytes = process.memoryUsage().rss
+    process.stdout.write([rssBytes, readProcessPeakRssBytes(), process.resourceUsage().maxRSS * 1024].join('\\n'))
+  `
+  const parentScript = `
+    import { execFileSync } from 'node:child_process'
+    const allocation = Buffer.alloc(96 * 1024 * 1024, 1)
+    const rssBytes = process.memoryUsage().rss
+    const output = execFileSync(process.execPath, ['--input-type=module', '--eval', ${JSON.stringify(childScript)}], {
+      encoding: 'utf8', timeout: 10_000,
+    })
+    if (allocation.at(-1) !== 1) throw new Error('Setup allocation was not resident')
+    process.stdout.write(rssBytes + '\\n' + output)
+  `
+  const [parentRssBytes, childRssBytes, childPeakRssBytes, inheritedPeakRssBytes] = execFileSync(process.execPath,
+    ['--input-type=module', '--eval', parentScript], { encoding: 'utf8', timeout: 12_000 })
+    .trim().split('\n').map(Number)
+  assert.ok(parentRssBytes >= 96 * 1024 * 1024)
+  assert.ok(childPeakRssBytes >= childRssBytes)
+  assert.ok(Number.isSafeInteger(childPeakRssBytes) && childPeakRssBytes > 0)
+  assert.ok(parentRssBytes - childPeakRssBytes >= 64 * 1024 * 1024)
+  assert.ok(inheritedPeakRssBytes - childPeakRssBytes >= 32 * 1024 * 1024)
+})
+
+test('Linux executable peak retains a real allocation after its backing memory is released', {
+  skip: process.platform !== 'linux', timeout: 15_000,
+}, () => {
+  const memoryModule = new URL('../scripts/refresh-worker-memory.mjs', import.meta.url).href
+  const script = `
+    import { readProcessPeakRssBytes } from ${JSON.stringify(memoryModule)}
+    let allocation = Buffer.alloc(96 * 1024 * 1024, 1)
+    if (allocation.at(-1) !== 1) throw new Error('Test allocation was not resident')
+    const allocated = process.memoryUsage()
+    allocation = undefined
+    for (let index = 0; index < 3; index += 1) {
+      globalThis.gc()
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    const released = process.memoryUsage()
+    process.stdout.write([allocated.rss, allocated.external, released.external, readProcessPeakRssBytes()].join('\\n'))
+  `
+  const [allocatedRssBytes, allocatedExternalBytes, releasedExternalBytes, peakRssBytes] = execFileSync(process.execPath,
+    ['--expose-gc', '--input-type=module', '--eval', script], { encoding: 'utf8', timeout: 12_000 })
+    .trim().split('\n').map(Number)
+  assert.ok(allocatedExternalBytes - releasedExternalBytes >= 90 * 1024 * 1024)
+  assert.ok(peakRssBytes >= allocatedRssBytes)
+})
+
+test('Linux executable peak fails closed when procfs high-water data is missing or invalid', {
+  skip: process.platform !== 'linux', timeout: 15_000,
+}, () => {
+  const rssBytes = process.memoryUsage().rss
+  assert.ok(readProcessPeakRssBytes() >= rssBytes)
+  const memoryModule = new URL('../scripts/refresh-worker-memory.mjs', import.meta.url).href
+  const script = `
+    import assert from 'node:assert/strict'
+    import fs from 'node:fs'
+    import { syncBuiltinESMExports } from 'node:module'
+    import { readProcessPeakRssBytes } from ${JSON.stringify(memoryModule)}
+    const originalRead = fs.readFileSync
+    for (const status of ['', 'VmHWM: 0 kB', 'VmHWM: 1 kB', 'VmHWM: 9007199254740991 kB', 'VmHWM: 123 MB']) {
+      fs.readFileSync = (path, ...args) => path === '/proc/self/status' ? status : originalRead(path, ...args)
+      syncBuiltinESMExports()
+      assert.throws(() => readProcessPeakRssBytes(), /Invalid executable peak RSS/)
+    }
+    fs.readFileSync = (path, ...args) => {
+      if (path === '/proc/self/status') throw new Error('procfs unavailable')
+      return originalRead(path, ...args)
+    }
+    syncBuiltinESMExports()
+    assert.throws(() => readProcessPeakRssBytes(), /procfs unavailable/)
+  `
+  execFileSync(process.execPath, ['--input-type=module', '--eval', script], { encoding: 'utf8', timeout: 12_000 })
 })
 
 test('worker, direct, and benchmark entry points share the exact refresh memory policy', async () => {

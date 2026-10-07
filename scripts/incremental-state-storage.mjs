@@ -3,7 +3,7 @@ import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip, gunzipSync, gzipSync } from 'node:zlib'
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
-import { canonicalJsonFor } from './public-artifact-storage.mjs'
+import { canonicalJsonFor, NonCanonicalJsonError, parseCanonicalJson } from './public-artifact-storage.mjs'
 import {
   assertLegacyGenerationCutoverPointer,
   assertLegacyNativeGenerationCutoverPointer,
@@ -233,13 +233,16 @@ export async function assertStateManifestAuthority(client, config, authority, { 
   if (authority.manifest && canonicalJsonFor(parseIncrementalStateManifest(authority.manifest)) !== canonicalJsonFor(parsed)) {
     throw new Error('Incremental state manifest authority does not match stored manifest')
   }
+  const verifiedObjects = []
   if (verifyObjects) {
-    await assertStoredStateObjectIntegrity(client, config, parsed.canonicalLedger)
+    verifiedObjects.push(await assertStoredStateObjectIntegrity(client, config, parsed.canonicalLedger))
     for (const candidate of parsed.checkpoints) {
-      await assertStoredStateObjectIntegrity(client, config, candidate.object)
+      verifiedObjects.push(await assertStoredStateObjectIntegrity(client, config, candidate.object))
     }
   }
-  return { manifest: parsed, key: authority.key, etag: remote.ETag, bytes: bytes.byteLength, digest }
+  return { manifest: parsed, key: authority.key, etag: remote.ETag, bytes: bytes.byteLength, digest,
+    ...(verifyObjects ? { verifiedObjects } : {}),
+  }
 }
 
 export async function readActiveIncrementalState({ config, client, verifyObjects = true, checkpointLimit } = {}) {
@@ -415,44 +418,13 @@ export async function readStoredJsonStateObject(client, config, reference) {
     throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
   }
   try {
-    const canonicalText = canonicalBytes.toString('utf8')
-    const value = JSON.parse(canonicalText)
-    if (!matchesCanonicalJsonText(value, canonicalText)) {
-      throw new Error(`Incremental state object is not canonical JSON: ${expectedKey}`)
-    }
-    return value
+    return parseCanonicalJson(canonicalBytes.toString('utf8'))
   } catch (error) {
+    if (error instanceof NonCanonicalJsonError) {
+      error.message = `Incremental state object is not canonical JSON: ${expectedKey}`
+    }
     throw new Error(`Incremental state object JSON is corrupt: ${expectedKey}`, { cause: error })
   }
-}
-
-function matchesCanonicalJsonText(value, text) {
-  let offset = 0
-  function matchToken(token) {
-    if (!text.startsWith(token, offset)) return false
-    offset += token.length
-    return true
-  }
-  function matchValue(entry) {
-    if (entry === null || typeof entry !== 'object') return matchToken(JSON.stringify(entry) ?? 'null')
-    if (Array.isArray(entry)) {
-      if (!matchToken('[')) return false
-      for (let index = 0; index < entry.length; index += 1) {
-        if (index > 0 && !matchToken(',')) return false
-        if (!matchValue(entry[index])) return false
-      }
-      return matchToken(']')
-    }
-    if (!matchToken('{')) return false
-    const keys = Object.keys(entry).filter((key) => entry[key] !== undefined).sort()
-    for (let index = 0; index < keys.length; index += 1) {
-      if (index > 0 && !matchToken(',')) return false
-      const key = keys[index]
-      if (!matchToken(JSON.stringify(key)) || !matchToken(':') || !matchValue(entry[key])) return false
-    }
-    return matchToken('}')
-  }
-  return matchValue(value) && offset === text.length
 }
 
 async function assertStoredStateObjectIntegrity(client, config, reference) {
@@ -475,9 +447,11 @@ async function assertStoredStateObjectIntegrity(client, config, reference) {
   let compressedBytes = 0
   let semanticBytes = 0
   const digest = createHash('sha256')
+  const compressedDigest = createHash('sha256')
   const countCompressed = new Transform({
     transform(chunk, _encoding, callback) {
       compressedBytes += chunk.length
+      compressedDigest.update(chunk)
       callback(null, chunk)
     },
   })
@@ -497,6 +471,7 @@ async function assertStoredStateObjectIntegrity(client, config, reference) {
     || semanticBytes !== parsedReference.bytes || digest.digest('hex') !== parsedReference.sha256) {
     throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
   }
+  return { key: expectedKey, digest: parsedReference.sha256, compressedBytes, compressedSha256: compressedDigest.digest('hex') }
 }
 
 export function stateObjectReferenceFor(prepared) {

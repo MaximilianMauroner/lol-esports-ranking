@@ -256,6 +256,7 @@ export async function uploadRankingArtifacts({
         ? assertRawSourceGenerationAuthority(client, config, rawAuthority)
         : undefined,
     ])
+    const verifiedStateObjects = new Map((verifiedState?.verifiedObjects ?? []).map((proof) => [proof.key, proof]))
     if (verifiedState && verifiedState.manifest.generationId !== generationId) {
       throw new Error('Incremental state generation does not match public generation')
     }
@@ -338,7 +339,7 @@ export async function uploadRankingArtifacts({
     )
     await assertGenerationReadinessAuthority(client, config, receiptAuthority, publicationReceipt)
     await beforePromotionWrite?.()
-    for (const member of publicationReceipt.objects) await assertPublicationMember(client, config, member)
+    for (const member of publicationReceipt.objects) await assertPublicationMember(client, config, member, verifiedStateObjects)
     const finalLease = await assertBucketLease(leaseAuthority.key, leaseAuthority, {
       config,
       client,
@@ -1095,7 +1096,7 @@ export async function readActiveGenerationPublication({
   return { found: true, receipt }
 }
 
-async function assertPublicationMember(client, config, member) {
+async function assertPublicationMember(client, config, member, verifiedStateObjects) {
   const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: member.key }))
   const stored = await bodyBytes(object.Body)
   if (Number(object.ContentLength) !== member.bytes || stored.byteLength !== member.bytes
@@ -1103,6 +1104,9 @@ async function assertPublicationMember(client, config, member) {
     throw new Error(`Generation publication object authority mismatch: ${member.key}`)
   }
   const relative = relativeBucketKeyAny(config, member.key)
+  const proof = verifiedStateObjects?.get(member.key)
+  if (proof?.digest === member.digest && proof.compressedBytes === member.bytes
+    && createHash('sha256').update(stored).digest('hex') === proof.compressedSha256) return
   let semantic = stored
   if (/^(?:objects|state\/objects|raw\/objects)\/sha256\//.test(relative)) {
     try {

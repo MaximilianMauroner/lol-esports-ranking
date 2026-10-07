@@ -53,11 +53,11 @@ test('scheduled date-window downloads retain a new tournament across refreshes w
       assert.equal(cup.every((game) => game.sourceUrl === baseUrl), true)
       const leaguepediaSources = source.externalSources.filter((entry) => entry.kind === 'match-data')
       assert.equal(leaguepediaSources.length, expectedGames === 6 ? 1 : 2)
-      // Overlapping downloads count their own rows, while the model retains unique games.
+      // Each retained game contributes to one source after overlapping downloads reconcile.
       assert.deepEqual(leaguepediaSources.map((entry) => entry.rowCount).sort((left, right) => (left ?? 0) - (right ?? 0)),
-        expectedGames === 6 ? [fixture.domesticEvidence.length + 6] : [fixture.domesticEvidence.length + 6, 27])
+        expectedGames === 6 ? [fixture.domesticEvidence.length + 6] : [fixture.domesticEvidence.length, 27])
       assert.deepEqual(leaguepediaSources.map((entry) => entry.coverageEnd).sort(),
-        expectedGames === 6 ? [end] : ['2026-10-03', end])
+        expectedGames === 6 ? [end] : [fixture.domesticEvidence.map((game) => game.date).sort().at(-1), end])
       const data = createStaticRankingData({ ...source, rosters: {}, generatedAt: `${end}T18:00:00.000Z` })
       const history = createMatchHistoryArtifacts(data)
       const expectedSeries = expectedGames === 6 ? 6 : 15
@@ -77,7 +77,7 @@ test('scheduled date-window downloads retain a new tournament across refreshes w
   }
 })
 
-test('source coverage uses canonical evidence while preserving explicit duplicate metadata and team identity', async () => {
+test('source coverage excludes discarded duplicate metadata and team identity', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tournament-source-coverage-'))
   try {
     const retainedPath = join(directory, 'retained.json')
@@ -95,8 +95,9 @@ test('source coverage uses canonical evidence while preserving explicit duplicat
     assert.equal(source.matches.length, fixture.domesticEvidence.length + fixture.matches.length)
     assert.equal(source.matches.filter((game) => game.event === event).length, 27)
     const sources = source.externalSources.filter((entry) => entry.kind === 'match-data')
-    assert.deepEqual(sources.map((entry) => entry.rowCount), [39, 1])
-    assert.deepEqual(sources.map((entry) => entry.coverageEnd), ['2026-10-06', first.date])
+    assert.deepEqual(sources.map((entry) => entry.rowCount), [39, 0])
+    assert.deepEqual(sources.map((entry) => entry.coverageEnd), ['2026-10-06', undefined])
+    assert.equal(sources[1].status, 'reference-only')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

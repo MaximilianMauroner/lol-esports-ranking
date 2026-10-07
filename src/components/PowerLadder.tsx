@@ -1,7 +1,10 @@
 import type { KeyboardEvent } from 'react'
 import type { RankingTierLabel } from '../lib/rankingFlair'
 import type { RankingSummaryStanding } from '../lib/snapshot'
-import { formatRating, teamKey } from '../lib/display'
+import { formatRating, formatRatio, teamKey } from '../lib/display'
+import { TeamMark } from './TeamMark'
+import { FormDots } from './ui'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card'
 
 const WIDTH = 320
 const ROW_HEIGHT = 20
@@ -99,24 +102,51 @@ export function PowerLadder({
         const y = TOP + index * ROW_HEIGHT + ROW_HEIGHT / 2
         const tier = tierFor(team)
         const uncertainty = team.uncertainty ?? 0
+        const neighbours = groups.find((group) => group.includes(team))?.filter((other) => other !== team) ?? []
+        const total = team.wins + team.losses
         return (
-          <g
-            key={teamKey(team)}
-            role="button"
-            tabIndex={0}
-            aria-label={`Rank ${team.rank}, ${team.team}, Power ${formatRating(team.rating)}. Open team.`}
-            className="group cursor-pointer outline-none"
-            onClick={() => onOpen(team)}
-            onKeyDown={(event) => onKeyDown(event, team)}
-          >
-            <title>{`#${team.rank} ${team.team} · ${formatRating(team.rating)} Power · ±${formatRating(uncertainty)}`}</title>
-            <rect x={0} y={y - ROW_HEIGHT / 2} width={WIDTH} height={ROW_HEIGHT} className="fill-transparent group-hover:fill-[var(--surface-2)] group-focus-visible:fill-[var(--surface-3)]" />
-            <text x={4} y={y + 3.5} className="fill-muted-foreground font-mono text-2xs font-bold tabular-nums">{team.rank}</text>
-            {tier ? <text x={24} y={y + 3.5} className="font-mono text-2xs font-bold" fill={TIER_FILL[tier]}>{tier}</text> : null}
-            <text x={36} y={y + 3.5} className="fill-foreground font-mono text-2xs font-bold">{team.code ?? team.team.slice(0, 4)}</text>
-            <line x1={x(team.rating - uncertainty)} x2={x(team.rating + uncertainty)} y1={y} y2={y} className="stroke-[var(--line-strong)]" strokeWidth={2} strokeLinecap="round" />
-            <circle cx={x(team.rating)} cy={y} r={4.5} fill={tier ? TIER_FILL[tier] : 'var(--muted)'} className="stroke-card" strokeWidth={2} />
-          </g>
+          <HoverCard key={teamKey(team)}>
+            <HoverCardTrigger delay={250} render={(
+              <g
+                role="button"
+                tabIndex={0}
+                aria-label={`Rank ${team.rank}, ${team.team}, Power ${formatRating(team.rating)}. Open team.`}
+                className="group cursor-pointer outline-none"
+                onClick={() => onOpen(team)}
+                onKeyDown={(event) => onKeyDown(event, team)}
+              >
+                <rect x={0} y={y - ROW_HEIGHT / 2} width={WIDTH} height={ROW_HEIGHT} className="fill-transparent group-hover:fill-[var(--surface-2)] group-focus-visible:fill-[var(--surface-3)]" />
+                <text x={4} y={y + 3.5} className="fill-muted-foreground font-mono text-2xs font-bold tabular-nums">{team.rank}</text>
+                {tier ? <text x={24} y={y + 3.5} className="font-mono text-2xs font-bold" fill={TIER_FILL[tier]}>{tier}</text> : null}
+                <text x={36} y={y + 3.5} className="fill-foreground font-mono text-2xs font-bold">{team.code ?? team.team.slice(0, 4)}</text>
+                <line x1={x(team.rating - uncertainty)} x2={x(team.rating + uncertainty)} y1={y} y2={y} className="stroke-[var(--line-strong)]" strokeWidth={2} strokeLinecap="round" />
+                <circle cx={x(team.rating)} cy={y} r={4.5} fill={tier ? TIER_FILL[tier] : 'var(--muted)'} className="stroke-card" strokeWidth={2} />
+              </g>
+            )} />
+            <HoverCardContent side="left" align="start">
+              <div className="flex items-center gap-3">
+                <TeamMark team={team.team} code={team.code} />
+                <div className="min-w-0">
+                  <p className="font-semibold text-[var(--text-strong)]">{team.team}</p>
+                  <p className="text-xs text-muted-foreground">#{team.rank} · {team.league}{tier ? ` · Tier ${tier}` : ''}</p>
+                </div>
+              </div>
+              <div className="my-3 border-y border-border py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-muted-foreground">Power</span>
+                  <strong className="font-mono text-lg tabular-nums">{formatRating(team.rating)} <span className="text-xs font-normal text-muted-foreground">±{formatRating(uncertainty)}</span></strong>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{formatRating(team.rating - uncertainty)}–{formatRating(team.rating + uncertainty)} · model uncertainty range</p>
+              </div>
+              <dl className="flex justify-between gap-4 text-xs">
+                <div><dt className="text-muted-foreground">Record</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{team.wins}–{team.losses}</dd></div>
+                <div><dt className="text-muted-foreground">Win rate</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{formatRatio(total > 0 ? team.wins / total : undefined)}</dd></div>
+                <div><dt className="mb-1 text-muted-foreground">Last five</dt><dd><FormDots form={team.form} /></dd></div>
+              </dl>
+              {neighbours.length > 0 ? <p className="mt-3 text-xs text-muted-foreground">Near tie with <span className="text-foreground">{neighbours.map((other) => other.code ?? other.team).join(', ')}</span>.</p> : null}
+              <p className="mt-3 text-xs text-[var(--faint)]">Select the row for team details.</p>
+            </HoverCardContent>
+          </HoverCard>
         )
       })}
     </svg>
