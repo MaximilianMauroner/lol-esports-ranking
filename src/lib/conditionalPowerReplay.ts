@@ -11,7 +11,7 @@ import { ratingScaleFromUnknown } from './ratingCalculations'
 import { decodeRatingCheckpointValue, encodeRatingCheckpointEnvelope } from './ratingCheckpoint'
 import { buildRatingCheckpointEventContract, ratingCheckpointInventory, validateRatingCheckpointEventContract } from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
-import { rosterBasisByTeam } from './rosters'
+import { rosterBasisByTeam, rosterFingerprint } from './rosters'
 import { resolveCanonicalSeries } from './seriesResolver'
 import type { TournamentSeries } from './tournamentFeed'
 
@@ -146,6 +146,8 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
       || state.processedMatchCount !== matches.length || new Set(matches.map(matchIdentity)).size !== matches.length) {
       return unavailablePowerPreview('missing-pre-state', 'The complete authoritative prefix must match the processed game count and UTC boundary.')
     }
+    const historicalClockProblem = historicalTimestampProblem(matches)
+    if (historicalClockProblem) return historicalClockProblem
     const expectedRosterBasis = rosterBasisByTeam(matches)
     if (context.teamRosterBasis.size !== expectedRosterBasis.size
       || [...expectedRosterBasis].some(([team, rosterBasis]) => context.teamRosterBasis.get(team) !== rosterBasis)) {
@@ -166,9 +168,11 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
       [...dates.values()].some((date) => !realUtcDate(date) || date > boundary))) {
       return unavailablePowerPreview('missing-pre-state', 'Every rated entity date must be a real UTC date at or before the pinned boundary.')
     }
+    const scoringStateProblem = historicalScoringStateProblem(basis)
+    if (scoringStateProblem) return scoringStateProblem
     if (basis.teamNames.length !== 2 || basis.sourceTeamIds.length !== 2 || basis.sourceTeamIds.some((id) => !nonemptyString(id))
       || basis.sourceTeamIds[0] === basis.sourceTeamIds[1] || basis.teamNames[0] === basis.teamNames[1]
-      || basis.teamNames.some((team) => !hasTeamState(basis, team)) || !coherentHistoryEvidence(basis)) {
+      || basis.teamNames.some((team) => !hasParticipantRoster(basis, team)) || !coherentHistoryEvidence(basis)) {
       return unavailablePowerPreview('missing-pre-state', 'Participants and historical teams need coherent corpus, history, record and rating context evidence.')
     }
     const expectedEventContext = eventWeightContextForMatches(matches)
@@ -287,6 +291,52 @@ function completeStateContainers(state: RatingRunState) {
     && state.eventWeightContext.worldsEndDateByCalendarYear instanceof Map
 }
 
+function historicalTimestampProblem(matches: readonly MatchRecord[]): PowerPreviewUnavailable | null {
+  for (const match of matches) {
+    if (match.datetimeUtc === undefined) continue
+    const timestamp = typeof match.datetimeUtc === 'string' ? Date.parse(match.datetimeUtc) : NaN
+    if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== match.date) {
+      return unavailablePowerPreview('invalid-historical-timestamp', 'Every supplied historical timestamp must be valid and match its UTC replay date. Date-only history may omit timestamps.')
+    }
+    if (match.datetimeUtc !== new Date(timestamp).toISOString()) {
+      return unavailablePowerPreview('historical-timestamp-normalization-required', 'The supplied state needs normalized UTC ISO historical timestamps for production ordering. Reconstruct it with the replay basis adapter; existing state cannot be rewritten or re-pinned here.')
+    }
+  }
+  return null
+}
+
+function historicalScoringStateProblem({ context, state }: ConditionalPowerReplayBasis): PowerPreviewUnavailable | null {
+  const historicalTeams = new Set(context.authoritativeMatches.flatMap((match) => [match.teamA, match.teamB]))
+  for (const team of historicalTeams) {
+    const missingNumericField = (['ratings', 'executionRatings', 'previousDisplayRatings', 'rosterPriorOffsets', 'momentums',
+      'uncertainties', 'wins', 'losses', 'factorCounts', 'teamLastSeasons'] as const)
+      .find((field) => !Number.isFinite(state[field].get(team)))
+    const missingContainer = (['histories', 'forms', 'factorSums', 'latestRatingUpdates'] as const)
+      .find((field) => !state[field].has(team))
+    if (missingNumericField || missingContainer || !state.teamLastRatedDates.has(team)) {
+      return unavailablePowerPreview('missing-pre-state', `Historical team ${team} requires production scoring state for ${missingNumericField ?? missingContainer ?? 'teamLastRatedDates'}.`)
+    }
+    const matches = context.authoritativeMatches.filter((match) => match.teamA === team || match.teamB === team)
+    const hasCompleteRosterEvidence = matches.some((match) => rosterFingerprint(match.teamA === team ? match.teamARoster : match.teamBRoster))
+    if ((matches.some((match) => match.patch) && !nonemptyString(state.lastPatchByTeam.get(team)))
+      || (hasCompleteRosterEvidence && (!state.lastRosterByTeam.has(team) || !nonemptyString(state.lastRosterFingerprintByTeam.get(team))))) {
+      return unavailablePowerPreview('missing-pre-state', `Historical team ${team} is missing patch or roster context established by its supplied corpus.`)
+    }
+  }
+  const historicalLeagues = new Set(context.authoritativeMatches.flatMap((match) => [
+    homeLeagueForMatch(match, 'A', context.teams), homeLeagueForMatch(match, 'B', context.teams),
+  ]))
+  for (const league of historicalLeagues) {
+    const missingNumericField = (['leagueScores', 'previousLeagueScores', 'leagueMatchCounts', 'leagueWins', 'leagueLosses',
+      'leagueExpectedWins', 'leagueOpponentRatingSums', 'leagueLastSeasons'] as const)
+      .find((field) => !Number.isFinite(state[field].get(league)))
+    if (missingNumericField || !state.leagueForms.has(league) || !state.leagueLastRatedDates.has(league)) {
+      return unavailablePowerPreview('missing-pre-state', `Historical home league ${league} requires production scoring state for ${missingNumericField ?? (!state.leagueForms.has(league) ? 'leagueForms' : 'leagueLastRatedDates')}.`)
+    }
+  }
+  return null
+}
+
 function coherentHistoryEvidence({ context, state }: ConditionalPowerReplayBasis) {
   const historicalTeams = new Set(context.authoritativeMatches.flatMap((match) => [match.teamA, match.teamB]))
   for (const team of historicalTeams) {
@@ -315,19 +365,11 @@ function coherentHistoryEvidence({ context, state }: ConditionalPowerReplayBasis
   return true
 }
 
-function hasTeamState(basis: ConditionalPowerReplayBasis, team: string) {
+function hasParticipantRoster(basis: ConditionalPowerReplayBasis, team: string) {
   const league = basis.context.teams[team]?.league
-  const state = basis.state
-  return Boolean(league && league !== 'Unknown' && supportedRegions.has(basis.context.teams[team]!.region) && completeRoster(state.lastRosterByTeam.get(team))
-    && state.histories.has(team) && state.forms.has(team) && state.factorSums.has(team)
-    && basis.context.teamRosterBasis.get(team) === 'sourced'
-    && state.teamLastRatedDates.get(team) && state.lastPatchByTeam.get(team)
-    && Number.isFinite(state.teamLastSeasons.get(team))
-    && state.leagueLastRatedDates.get(league) && Number.isFinite(state.leagueLastSeasons.get(league))
-    && [state.ratings, state.executionRatings, state.previousDisplayRatings, state.rosterPriorOffsets, state.momentums, state.uncertainties, state.wins, state.losses, state.factorCounts]
-      .every((map) => Number.isFinite(map.get(team)))
-    && [state.leagueScores, state.previousLeagueScores, state.leagueMatchCounts, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums]
-      .every((map) => Number.isFinite(map.get(league))))
+  return Boolean(league && league !== 'Unknown' && supportedRegions.has(basis.context.teams[team]!.region)
+    && completeRoster(basis.state.lastRosterByTeam.get(team)) && basis.context.teamRosterBasis.get(team) === 'sourced'
+    && nonemptyString(basis.state.lastPatchByTeam.get(team)))
 }
 
 function completeRoster(roster: MatchRosterSnapshot | undefined) {

@@ -43,6 +43,15 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
       || new Set(matches.map((match) => match.id)).size !== matches.length) {
       return unavailablePowerPreview('missing-pre-state', 'Supply a nonempty identified historical prefix through a complete real UTC date, with unique game IDs and no future records.')
     }
+    for (const match of matches) {
+      if (match.datetimeUtc === undefined) continue
+      const timestamp = typeof match.datetimeUtc === 'string' ? Date.parse(match.datetimeUtc) : NaN
+      if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== match.date) {
+        return unavailablePowerPreview('incomplete-historical-inputs', 'Every supplied historical timestamp must be valid and match its actual UTC replay date. Date-only records may omit the timestamp.')
+      }
+      // Production orders timestamp strings. Normalize known clocks before constructing a detached state.
+      match.datetimeUtc = new Date(timestamp).toISOString()
+    }
     if (matches.some((match) => !completeHistoricalGame(match, source.teams))) {
       return unavailablePowerPreview('incomplete-historical-inputs', 'Historical team profiles, event/format, patch, sides, five-role lineups and performance statistics must be explicit. This adapter cannot reconstruct them from public points.')
     }

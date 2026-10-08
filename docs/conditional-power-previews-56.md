@@ -96,6 +96,15 @@ coverage formula.
 Series and game timestamp offsets are normalized to UTC. All hypothetical games
 must share one future UTC date after the pinned complete boundary; a timestamp's
 local date prefix cannot choose the replay date.
+Historical timestamps remain optional. The adapter rejects invalid or
+date-contradictory supplied clocks and normalizes valid clocks to UTC ISO strings
+before replay. It does not create times for date-only records. An existing pinned
+basis with clocks that need normalization must be rebuilt through the adapter;
+the evaluator cannot change those clocks without changing its historical state.
+Every historical team and observed home league must also have the scoring and
+clock entries produced by the engine. A new payload pin cannot make omitted
+entries complete. The complete, sourced roster requirement applies to the two
+selected participants; valid partial third-team roster evidence stays supported.
 
 The returned offline result keeps a detached copy of the entire input tuple,
 including pre-state, event/lifecycle context, game assumptions, roster/player

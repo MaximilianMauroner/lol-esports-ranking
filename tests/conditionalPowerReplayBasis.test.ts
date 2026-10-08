@@ -185,3 +185,59 @@ test('corpus adapter rejects conflicting historical series scoring metadata and 
     assert.deepEqual(source, fullyIdentified)
   }
 })
+
+test('optional historical timestamps must be valid and match their UTC date without changing the source', () => {
+  for (const datetimeUtc of ['', 'not-a-timestamp', '2026-09-17T12:00:00Z', '2026-09-15T23:30:00-05:00']) {
+    const source = sourceFixture()
+    source.historicalMatches.at(-1)!.datetimeUtc = datetimeUtc
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    assert.equal(result.status, 'unavailable', datetimeUtc)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'incomplete-historical-inputs')
+    assert.deepEqual(source, original)
+  }
+  for (const datetimeUtc of [undefined, '2026-09-15T12:00:00Z', '2026-09-15T07:00:00-05:00']) {
+    const source = sourceFixture()
+    const last = source.historicalMatches.at(-1)!
+    last.datetimeUtc = datetimeUtc
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    if (result.status !== 'ready') throw new Error(result.detail)
+    assert.equal(result.basis.context.authoritativeMatches.find((match) => match.id === last.id)!.datetimeUtc,
+      datetimeUtc === undefined ? undefined : '2026-09-15T12:00:00.000Z')
+    assert.equal(evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: result.basis }).status, 'ready')
+    assert.deepEqual(source, original)
+  }
+})
+
+test('detached historical clocks preserve actual game order and match the UTC production replay', () => {
+  const source = sourceFixture()
+  const games = source.historicalMatches.slice(-2)
+  games.forEach((game, index) => Object.assign(game, {
+    date: source.processedThroughUtcDate, bestOf: 3, bestOfBasis: 'official',
+    officialMatchId: 'historical-time-series', gameNumber: index + 1, winner: 'Alpha',
+  }))
+  games[0]!.datetimeUtc = '2026-09-15T06:40:00Z'
+  games[1]!.datetimeUtc = '2026-09-15T01:50:00-05:00'
+  const original = structuredClone(source)
+  const result = prepareConditionalPowerReplayBasis(source)
+  if (result.status !== 'ready') throw new Error(result.detail)
+  assert.deepEqual(result.basis.context.authoritativeMatches.slice(-2).map((match) => match.id), games.map((match) => match.id))
+  assert.equal(result.basis.state.previousMatch!.id, games[1]!.id)
+
+  const reference = structuredClone(source)
+  reference.historicalMatches.at(-2)!.datetimeUtc = '2026-09-15T06:40:00.000Z'
+  reference.historicalMatches.at(-1)!.datetimeUtc = '2026-09-15T06:50:00.000Z'
+  const context = createRatingReplayContext(reference.historicalMatches, reference.teams, { tournamentLifecycles: reference.tournamentLifecycles })
+  const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+  assert.deepEqual(result.basis.state, state)
+  assert.deepEqual(result.basis.context.pregamePlayerRatingEdges, context.pregamePlayerRatingEdges)
+  const expected = prepareConditionalPowerReplayBasis(reference)
+  if (expected.status !== 'ready') throw new Error(expected.detail)
+  assert.equal(result.basis.preStateId, expected.basis.preStateId)
+  const actualPreview = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: result.basis })
+  const expectedPreview = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: expected.basis })
+  if (actualPreview.status !== 'ready' || expectedPreview.status !== 'ready') throw new Error('The normalized historical controls must support a complete preview.')
+  assert.deepEqual(actualPreview.teams, expectedPreview.teams)
+  assert.deepEqual(source, original)
+})

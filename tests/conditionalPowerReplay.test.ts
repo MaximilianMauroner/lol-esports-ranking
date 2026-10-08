@@ -87,7 +87,7 @@ test('finite state edits require a new payload pin before a conditional replay c
   }
 })
 
-test('the full historical roster-basis map matches the producer for third teams and ignores insertion order', () => {
+function threeTeamConditionalPowerFixture() {
   const input = conditionalPowerFixture()
   const matches = structuredClone(input.basis.context.authoritativeMatches)
   for (const gameNumber of [1, 2]) {
@@ -123,6 +123,11 @@ test('the full historical roster-basis map matches the producer for third teams 
   })
   if (prepared.status !== 'ready') throw new Error(prepared.detail)
   input.basis = prepared.basis
+  return input
+}
+
+test('the full historical roster-basis map matches the producer for third teams and ignores insertion order', () => {
+  const input = threeTeamConditionalPowerFixture()
   assert.equal(input.basis.context.teamRosterBasis.size, 3)
   assert.equal(input.basis.context.teamRosterBasis.get('Gamma'), 'sourced')
   const original = structuredClone(input)
@@ -165,6 +170,106 @@ test('the full historical roster-basis map matches the producer for third teams 
   const originalPartial = structuredClone(partial)
   assert.equal(evaluateConditionalPowerReplay(partial).status, 'ready')
   assert.deepEqual(partial, originalPartial)
+})
+
+test('fresh pins cannot hide missing scoring state for any historical team or home league', () => {
+  const input = threeTeamConditionalPowerFixture()
+  const original = structuredClone(input)
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
+  const teamFields = ['ratings', 'executionRatings', 'previousDisplayRatings', 'rosterPriorOffsets', 'momentums',
+    'uncertainties', 'wins', 'losses', 'factorCounts', 'teamLastSeasons', 'teamLastRatedDates', 'histories', 'forms',
+    'factorSums', 'latestRatingUpdates', 'lastPatchByTeam', 'lastRosterByTeam', 'lastRosterFingerprintByTeam'] as const
+  const leagueFields = ['leagueScores', 'previousLeagueScores', 'leagueMatchCounts', 'leagueWins', 'leagueLosses',
+    'leagueExpectedWins', 'leagueOpponentRatingSums', 'leagueLastSeasons', 'leagueLastRatedDates', 'leagueForms'] as const
+  const omissions = [
+    ...teamFields.map((field) => ({ field, entity: 'Gamma' })),
+    ...leagueFields.map((field) => ({ field, entity: 'LEC' })),
+  ]
+  for (const { field, entity } of omissions) {
+    const scenario = structuredClone(input)
+    assert.equal(scenario.basis.state[field].delete(entity), true, field)
+    pinControlledConditionalPowerBasis(scenario.basis)
+    const changed = structuredClone(scenario)
+    const result = evaluateConditionalPowerReplay(scenario)
+    assert.equal(result.status, 'unavailable', `${entity}/${field}`)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'missing-pre-state', `${entity}/${field}`)
+    assert.deepEqual(scenario, changed)
+  }
+  assert.deepEqual(input, original)
+})
+
+test('all historical home leagues retain scoring coverage after a team changes league', () => {
+  const input = threeTeamConditionalPowerFixture()
+  const prior = structuredClone(input.basis.context.authoritativeMatches.find((match) => match.teamA === 'Gamma')!)
+  Object.assign(prior, { id: 'prior-gamma-lcs', date: '2026-09-13', datetimeUtc: '2026-09-13T05:00:00.000Z',
+    officialMatchId: 'historical-gamma-lcs', bestOf: 1, gameNumber: 1, teamAHomeLeague: 'LCS' })
+  prior.teamARoster!.observedAt = prior.date
+  prior.teamBRoster!.observedAt = prior.date
+  const context = createRatingReplayContext([...input.basis.context.authoritativeMatches, prior], input.basis.context.teams)
+  input.basis.context = context
+  input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+  pinControlledConditionalPowerBasis(input.basis)
+  assert.equal(input.basis.context.teams.Gamma!.league, 'LEC')
+  const original = structuredClone(input)
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
+  for (const field of ['leagueScores', 'leagueLastSeasons', 'leagueLastRatedDates', 'leagueForms'] as const) {
+    const scenario = structuredClone(input)
+    assert.equal(scenario.basis.state[field].delete('LCS'), true)
+    pinControlledConditionalPowerBasis(scenario.basis)
+    const changed = structuredClone(scenario)
+    const result = evaluateConditionalPowerReplay(scenario)
+    assert.equal(result.status, 'unavailable', field)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'missing-pre-state', field)
+    assert.deepEqual(scenario, changed)
+  }
+  assert.deepEqual(input, original)
+})
+
+test('producer-absent optional context and an unobserved third team remain supported', () => {
+  const input = threeTeamConditionalPowerFixture()
+  for (const game of input.basis.context.authoritativeMatches) if (game.teamA === 'Gamma') {
+    delete game.teamARoster
+    game.patch = ''
+  }
+  const teams = { ...input.basis.context.teams, Delta: { name: 'Delta', code: 'DEL', region: 'LEC' as const, league: 'LEC' } }
+  const context = createRatingReplayContext(input.basis.context.authoritativeMatches, teams)
+  input.basis.context = context
+  input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+  pinControlledConditionalPowerBasis(input.basis)
+  assert.equal(context.teamRosterBasis.has('Gamma'), false)
+  for (const field of ['lastPatchByTeam', 'teamLastSplits', 'lastRosterByTeam', 'lastRosterFingerprintByTeam', 'currentRosterContinuity'] as const) {
+    assert.equal(input.basis.state[field].has('Gamma'), false, field)
+  }
+  assert.equal(input.basis.state.teamLastRatedDates.has('Delta'), false)
+  const original = structuredClone(input)
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
+  assert.deepEqual(input, original)
+})
+
+test('direct bases validate historical UTC timestamps without rewriting or re-pinning state', () => {
+  const input = threeTeamConditionalPowerFixture()
+  assert.ok(input.basis.context.authoritativeMatches.some((match) => match.datetimeUtc === undefined))
+  const original = structuredClone(input)
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
+  const variants = [
+    { timestamp: '', reason: 'invalid-historical-timestamp' },
+    { timestamp: 'invalid timestamp', reason: 'invalid-historical-timestamp' },
+    { timestamp: '2026-09-30T05:00:00.000Z', reason: 'invalid-historical-timestamp' },
+    { timestamp: '2026-09-14T23:30:00-05:00', reason: 'invalid-historical-timestamp' },
+    { timestamp: '2026-09-14T05:00:00Z', reason: 'historical-timestamp-normalization-required' },
+    { timestamp: '2026-09-14T01:00:00-04:00', reason: 'historical-timestamp-normalization-required' },
+  ]
+  for (const { timestamp, reason } of variants) {
+    const scenario = structuredClone(input)
+    scenario.basis.context.authoritativeMatches.find((match) => match.id === 'prior-gamma-1')!.datetimeUtc = timestamp
+    pinControlledConditionalPowerBasis(scenario.basis)
+    const changed = structuredClone(scenario)
+    const result = evaluateConditionalPowerReplay(scenario)
+    assert.equal(result.status, 'unavailable', timestamp)
+    if (result.status === 'unavailable') assert.equal(result.reason, reason, timestamp)
+    assert.deepEqual(scenario, changed)
+  }
+  assert.deepEqual(input, original)
 })
 
 test('pre-state pins require structured source identities and the exact checkpoint payload digest', () => {
