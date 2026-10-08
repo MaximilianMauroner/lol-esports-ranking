@@ -37,47 +37,76 @@ pub fn canonical_json(value: &Value) -> Result<String> {
 
 /// Serialize plain JSON without cloning a second tree for large raw objects.
 pub fn canonical_json_value(value: &serde_json::Value) -> String {
-    fn write(value: &serde_json::Value, output: &mut String) {
-        match value {
-            serde_json::Value::Null => output.push_str("null"),
-            serde_json::Value::Bool(value) => {
-                output.push_str(if *value { "true" } else { "false" })
-            }
-            serde_json::Value::Number(value) => output.push_str(&number_text(
-                value.as_f64().expect("JSON number is binary64"),
-            )),
-            serde_json::Value::String(value) => {
-                output.push_str(&serde_json::to_string(value).expect("JSON string is serializable"))
-            }
-            serde_json::Value::Array(values) => {
-                output.push('[');
-                for (index, value) in values.iter().enumerate() {
-                    if index > 0 {
-                        output.push(',');
-                    }
-                    write(value, output);
+    plain_json(value, false)
+}
+
+/// Match JSON.stringify(value, null, 2), including numbers and integer-key order.
+pub fn js_pretty_json_value(value: &serde_json::Value) -> String {
+    plain_json(value, true)
+}
+
+fn plain_json(value: &serde_json::Value, pretty: bool) -> String {
+    let mut text = String::new();
+    write_plain_json(value, &mut text, 0, pretty);
+    text
+}
+
+fn json_indent(output: &mut String, depth: usize) {
+    output.push('\n');
+    output.push_str(&"  ".repeat(depth));
+}
+
+fn write_plain_json(value: &serde_json::Value, output: &mut String, depth: usize, pretty: bool) {
+    match value {
+        serde_json::Value::Null => output.push_str("null"),
+        serde_json::Value::Bool(value) => output.push_str(if *value { "true" } else { "false" }),
+        serde_json::Value::Number(value) => output.push_str(&number_text(
+            value.as_f64().expect("JSON number is binary64"),
+        )),
+        serde_json::Value::String(value) => {
+            output.push_str(&serde_json::to_string(value).expect("JSON string is serializable"))
+        }
+        serde_json::Value::Array(values) => {
+            output.push('[');
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(',');
                 }
-                output.push(']');
+                if pretty {
+                    json_indent(output, depth + 1);
+                }
+                write_plain_json(value, output, depth + 1, pretty);
             }
-            serde_json::Value::Object(values) => {
-                let mut entries = values.iter().collect::<Vec<_>>();
+            if pretty && !values.is_empty() {
+                json_indent(output, depth);
+            }
+            output.push(']');
+        }
+        serde_json::Value::Object(values) => {
+            let mut entries = values.iter().collect::<Vec<_>>();
+            if pretty {
+                entries.sort_by(|(left, _), (right, _)| insertion_key_order(left, right));
+            } else {
                 entries.sort_by(|(left, _), (right, _)| compare_code_units(left, right));
-                output.push('{');
-                for (index, (key, value)) in entries.into_iter().enumerate() {
-                    if index > 0 {
-                        output.push(',');
-                    }
-                    output.push_str(&serde_json::to_string(key).expect("JSON key is serializable"));
-                    output.push(':');
-                    write(value, output);
-                }
-                output.push('}');
             }
+            output.push('{');
+            for (index, (key, value)) in entries.into_iter().enumerate() {
+                if index > 0 {
+                    output.push(',');
+                }
+                if pretty {
+                    json_indent(output, depth + 1);
+                }
+                output.push_str(&serde_json::to_string(key).expect("JSON key is serializable"));
+                output.push_str(if pretty { ": " } else { ":" });
+                write_plain_json(value, output, depth + 1, pretty);
+            }
+            if pretty && !values.is_empty() {
+                json_indent(output, depth);
+            }
+            output.push('}');
         }
     }
-    let mut text = String::new();
-    write(value, &mut text);
-    text
 }
 pub fn stable_json(value: &Value) -> Result<String> {
     serialize(value, Mode::Stable)
@@ -148,14 +177,7 @@ fn serialize(value: &Value, mode: Mode) -> Result<String> {
                 .filter(|(_, value)| !matches!(value, Value::Undefined))
                 .collect::<Vec<_>>();
             if matches!(mode, Mode::Insertion) {
-                entries.sort_by(|(left, _), (right, _)| {
-                    match (array_index(left), array_index(right)) {
-                        (Some(left), Some(right)) => left.cmp(&right),
-                        (Some(_), None) => std::cmp::Ordering::Less,
-                        (None, Some(_)) => std::cmp::Ordering::Greater,
-                        (None, None) => std::cmp::Ordering::Equal,
-                    }
-                });
+                entries.sort_by(|(left, _), (right, _)| insertion_key_order(left, right));
             } else {
                 entries.sort_by(|(left, _), (right, _)| compare_code_units(left, right));
             }
@@ -202,6 +224,15 @@ fn serialize(value: &Value, mode: Mode) -> Result<String> {
             });
             serialize(&Value::Array(values), mode)
         }
+    }
+}
+
+fn insertion_key_order(left: &str, right: &str) -> std::cmp::Ordering {
+    match (array_index(left), array_index(right)) {
+        (Some(left), Some(right)) => left.cmp(&right),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
     }
 }
 

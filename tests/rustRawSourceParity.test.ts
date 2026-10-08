@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
@@ -39,7 +39,9 @@ test('Rust raw seam matches Node baseline, mutation partitions, restore and reba
       await writeFile(join(corpus, 'manifest.json'), JSON.stringify({
         schemaVersion: 1, generatedAt, start: '2026-01-01', end: '2026-01-05',
         files: { oracleCsv: ['oracle.csv'], leaguepediaJson: ['leaguepedia.json'], lolEsportsJson: ['lolesports.json'] },
-        sources: { oracle: { status: 'downloaded', downloadedCount: 1 } }, warnings: [],
+        sources: { oracle: { status: 'downloaded', downloadedCount: 1,
+          metadata: { large: 1e20, small: 1e-6, '10': 'ten', '2': 'two', nested: [1e20, 1e-6, {}, []] },
+        } }, warnings: [],
         refreshWindow: { start: '2026-01-01', end: '2026-01-05' }, refreshAttempt: { cause: 'parity' },
       }))
       if (cycle === 3 && previousReceipt) {
@@ -83,10 +85,11 @@ test('Rust raw seam matches Node baseline, mutation partitions, restore and reba
         ...authority.receipt.lolesports.map(({ object }) => object),
       ]
       const objectFiles = Object.fromEntries(references.map(({ key }) => [key, stored.get(key)!]))
+      if (cycle === 0) await assertRestoreFailures(root, authority, objectFiles)
       for (const worker of ['node', 'rust'] as const) {
         const directory = join(root, `restore-${cycle}-${worker}`)
         await mkdir(directory, { recursive: true })
-        await invoke(worker, directory, { action: 'restore', receipt: authority.receipt, receiptReference: authority.receiptReference, importerVersion, requiredCoverage: { start: '2026-01-01', end: '2026-01-05' }, objectFiles, destinationDir: join(directory, 'raw'), generatedAt })
+        await invoke(worker, directory, { action: 'restore', receipt: authority.receipt, receiptReference: authority.receiptReference, ...(cycle === 0 ? {} : { importerVersion }), requiredCoverage: { start: '2026-01-01', end: '2026-01-05' }, objectFiles, destinationDir: join(directory, 'raw'), generatedAt })
       }
       for (const relative of ['manifest.json', 'oracles-elixir/oracle.csv', 'leaguepedia/leaguepedia.json', 'lolesports/lolesports.json']) {
         assert.deepEqual(await readFile(join(root, `restore-${cycle}-rust/raw`, relative)), await readFile(join(root, `restore-${cycle}-node/raw`, relative)))
@@ -107,6 +110,40 @@ async function receiptWithLongChain(receipt: RawSourceReceipt) {
 }
 
 async function invoke(worker: 'node' | 'rust', directory: string, input: object) {
+  const { code, stderr, outputPath } = await runWorker(worker, directory, input)
+  assert.equal(code, 0, stderr)
+  return readFile(outputPath, 'utf8')
+}
+
+async function assertRestoreFailures(
+  root: string,
+  authority: ReturnType<typeof hydrateFileBackedRawSourceGeneration>,
+  objectFiles: Record<string, string>,
+) {
+  const corruptPath = join(root, 'corrupt-object')
+  await writeFile(corruptPath, 'not gzip')
+  for (const worker of ['node', 'rust'] as const) {
+    for (const failure of ['null importer', 'wrong importer', 'corrupt object']) {
+      const directory = join(root, `invalid-${worker}-${failure}`)
+      const destinationDir = join(directory, 'raw')
+      await mkdir(destinationDir, { recursive: true })
+      await writeFile(join(destinationDir, 'sentinel'), 'preserve existing destination')
+      const corruptedFiles = { ...objectFiles, [authority.receipt.oracle[0].baseline.key]: corruptPath }
+      const result = await runWorker(worker, directory, {
+        action: 'restore', receipt: authority.receipt, receiptReference: authority.receiptReference,
+        importerVersion: failure === 'null importer' ? null : failure === 'wrong importer' ? 'wrong-importer' : importerVersion,
+        objectFiles: failure === 'corrupt object' ? corruptedFiles : objectFiles, destinationDir, generatedAt,
+      })
+      assert.ok(result.code !== null && result.code > 0, `${worker}: ${failure} must exit nonzero`)
+      assert.deepEqual(await readdir(destinationDir), ['sentinel'])
+      assert.equal(await readFile(join(destinationDir, 'sentinel'), 'utf8'), 'preserve existing destination')
+      await assert.rejects(readFile(result.outputPath), { code: 'ENOENT' })
+      assert.ok(!(await readdir(directory)).some((name) => name.startsWith('raw.receipt-next-')))
+    }
+  }
+}
+
+async function runWorker(worker: 'node' | 'rust', directory: string, input: object) {
   await mkdir(directory, { recursive: true })
   const inputPath = join(directory, 'input.json')
   const outputPath = join(directory, 'output.json')
@@ -120,6 +157,5 @@ async function invoke(worker: 'node' | 'rust', directory: string, input: object)
     child.on('error', rejectExit)
     child.on('exit', resolveExit)
   })
-  assert.equal(code, 0, Buffer.concat(stderr).toString('utf8'))
-  return readFile(outputPath, 'utf8')
+  return { code, stderr: Buffer.concat(stderr).toString('utf8'), outputPath }
 }

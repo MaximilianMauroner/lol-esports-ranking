@@ -3,7 +3,7 @@ mod oracle;
 mod types;
 mod validate;
 
-use ranking_contracts::{canonical_json_value, gunzip, gzip, sha256};
+use ranking_contracts::{canonical_json_value, gunzip, gzip, js_pretty_json_value, sha256};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -399,7 +399,7 @@ fn materialize_verified(
         let manifest = materialized_manifest(receipt, generated_at, files, false);
         fs::write_new(
             &next.join("manifest.json"),
-            format!("{}\n", serde_json::to_string_pretty(&manifest)?).as_bytes(),
+            format!("{}\n", js_pretty_json_value(&manifest)).as_bytes(),
         )?;
         fs::replace_directory(&next, destination)?;
         Ok(destination.join("manifest.json"))
@@ -552,7 +552,7 @@ fn restore(
         let manifest = materialized_manifest(&receipt, generated_at, files, true);
         fs::write_new(
             &next.join("manifest.json"),
-            format!("{}\n", serde_json::to_string_pretty(&manifest)?).as_bytes(),
+            format!("{}\n", js_pretty_json_value(&manifest)).as_bytes(),
         )?;
         fs::replace_directory(&next, &destination)?;
         let identity = json!({"generationId":receipt.generation_id,"importerVersion":receipt.importer_version,"coverage":receipt.coverage,"sourceReceiptDigest":receipt.source_receipt_digest,"rawIdentityDigest":receipt.raw_identity_digest,"receiptSchemaVersion":receipt.schema_version,"storageMode":receipt.storage_mode,"receiptReference":reference});
