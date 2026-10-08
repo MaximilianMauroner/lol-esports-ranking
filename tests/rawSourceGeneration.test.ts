@@ -17,6 +17,7 @@ import {
 import { ORACLE_BASELINE_KIND, ORACLE_DELTA_KIND, decodeRawObject, parseOracleCsv, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 import { importRankingSourceData } from '../scripts/ranking-source-import'
 import { uploadContentAddressedRawSourceGeneration } from '../scripts/railway-bucket.mjs'
+import { rawSourceWorkerCommand } from '../scripts/raw-source-worker-command.mjs'
 
 const importerVersion = 'community-source-import-v1'
 
@@ -337,12 +338,8 @@ async function rawWorkerFixture(root: string, name: string, generatedAt = '2026-
 }
 
 async function runRawWorker(inputPath: string, outputPath: string) {
-  const child = spawn(process.execPath, [
-    ...process.execArgv,
-    join(process.cwd(), 'scripts/raw-source-worker.mjs'),
-    inputPath,
-    outputPath,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] })
+  const { command, args } = rawSourceWorkerCommand(inputPath, outputPath)
+  const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
   const stderr: Buffer[] = []
   child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
   const code = await new Promise<number | null>((resolveExit, rejectExit) => {

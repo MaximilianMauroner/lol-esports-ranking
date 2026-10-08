@@ -34,6 +34,51 @@ impl From<&serde_json::Value> for Value {
 pub fn canonical_json(value: &Value) -> Result<String> {
     serialize(value, Mode::Canonical)
 }
+
+/// Serialize plain JSON without cloning a second tree for large raw objects.
+pub fn canonical_json_value(value: &serde_json::Value) -> String {
+    fn write(value: &serde_json::Value, output: &mut String) {
+        match value {
+            serde_json::Value::Null => output.push_str("null"),
+            serde_json::Value::Bool(value) => {
+                output.push_str(if *value { "true" } else { "false" })
+            }
+            serde_json::Value::Number(value) => output.push_str(&number_text(
+                value.as_f64().expect("JSON number is binary64"),
+            )),
+            serde_json::Value::String(value) => {
+                output.push_str(&serde_json::to_string(value).expect("JSON string is serializable"))
+            }
+            serde_json::Value::Array(values) => {
+                output.push('[');
+                for (index, value) in values.iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    write(value, output);
+                }
+                output.push(']');
+            }
+            serde_json::Value::Object(values) => {
+                let mut entries = values.iter().collect::<Vec<_>>();
+                entries.sort_by(|(left, _), (right, _)| compare_code_units(left, right));
+                output.push('{');
+                for (index, (key, value)) in entries.into_iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    output.push_str(&serde_json::to_string(key).expect("JSON key is serializable"));
+                    output.push(':');
+                    write(value, output);
+                }
+                output.push('}');
+            }
+        }
+    }
+    let mut text = String::new();
+    write(value, &mut text);
+    text
+}
 pub fn stable_json(value: &Value) -> Result<String> {
     serialize(value, Mode::Stable)
 }
