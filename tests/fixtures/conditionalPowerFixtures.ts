@@ -91,8 +91,13 @@ export function conditionalPowerFixture(bestOf: 1 | 3 | 5 = 5, outcome: Conditio
 }
 
 /** Public fixture artifacts come from the same exact state as the producer component receipt. */
-export function conditionalPowerReceiptFixture(bestOf: 1 | 3 | 5 = 5) {
+export function conditionalPowerReceiptFixture(bestOf: 1 | 3 | 5 = 5, options: { rawRatings?: readonly [number, number] } = {}) {
   const input = conditionalPowerFixture(bestOf)
+  if (options.rawRatings) {
+    input.basis.state.ratings.set(input.basis.teamNames[0], options.rawRatings[0])
+    input.basis.state.ratings.set(input.basis.teamNames[1], options.rawRatings[1])
+    pinControlledConditionalPowerBasis(input.basis)
+  }
   const generatedAt = new Date(input.now).toISOString()
   const ranking = materializeRankingModel({ context: structuredClone(input.basis.context), state: structuredClone(input.basis.state) })
   const data = createStaticRankingData({
@@ -101,10 +106,12 @@ export function conditionalPowerReceiptFixture(bestOf: 1 | 3 | 5 = 5) {
     precomputedGlobalRanking: ranking, materializeSnapshotKeys: new Set(['All__All__All']), materializeTournamentIds: new Set(),
   })
   const plan = createPublicArtifactWritePlan(data)
+  const artifactMeta = plan.manifest.artifactMeta
+  if (!artifactMeta) throw new Error('The controlled public generation identity is missing')
   const snapshot = plan.snapshots[plan.manifest.defaultSnapshotKey]
   if (!snapshot) throw new Error('The controlled default snapshot is missing')
   const forecastBasis: ForecastBasis = {
-    snapshotId: `${plan.manifest.artifactMeta.runId}/${plan.manifest.defaultSnapshotKey}`,
+    snapshotId: `${artifactMeta.runId}/${plan.manifest.defaultSnapshotKey}`,
     ratingDataAsOf: plan.manifest.coverage.latestMatchDate!, ratingPublishedAt: plan.manifest.generatedAt,
     dataMode: plan.manifest.dataMode, model: plan.manifest.model, snapshot,
     identityMap: {

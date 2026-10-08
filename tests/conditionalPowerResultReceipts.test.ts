@@ -77,3 +77,45 @@ test('offline immutable producer persists only valid receipts and leaves supplie
     assert.deepEqual(input, before)
   } finally { await rm(root, { recursive: true, force: true }) }
 })
+
+test('a corrected preplay schedule selects its current immutable receipt', () => {
+  const fixture = conditionalPowerReceiptFixture()
+  const revised = { ...fixture.series, startTime: '2026-09-16T14:00:00.000Z' }
+  const generated = createConditionalPowerResultReceipt({ series: revised, forecastBasis: fixture.forecastBasis,
+    replayBasis: fixture.basis, generatedAt: fixture.generatedAt })
+  if (generated.status !== 'ready') throw new Error(generated.detail)
+  const forecast = forecastTournamentSeries(revised, fixture.forecastBasis)
+  if (forecast.status !== 'ready') throw new Error(forecast.detail)
+  const ledger: ConditionalPowerResultLedger = { version: 1, receipts: [fixture.receipt, generated.receipt] }
+  assert.ok(isConditionalPowerResultLedger(ledger))
+  const result = conditionalResultFromReceipt({ series: revised, outcome: fixture.outcome, now: fixture.now,
+    forecast, basis: fixture.forecastBasis, ledger })
+  assert.equal(result.status, 'partial')
+  if (result.status === 'partial') assert.equal(result.provenance.eventStateVersion, generated.receipt.eventStateVersion)
+})
+
+test('equal public Power cannot authorize a different canonical participant mapping', () => {
+  const fixture = conditionalPowerReceiptFixture(5, { rawRatings: [50_000, 50_000] })
+  // The production public-scale clamp makes both baseline Power endpoints equal.
+  const tied = structuredClone(fixture.forecastBasis)
+  const endpoints = tied.snapshot.standings.filter((team) => fixture.basis.teamNames.includes(team.team))
+  assert.equal(endpoints.length, 2)
+  assert.equal(endpoints[0]!.rating, endpoints[1]!.rating)
+  assert.equal(endpoints[0]!.rating, fixture.basis.ratingScale.publishedMaximum)
+  assert.ok(fixture.receipt.outputs.every((output) => output.teams.every((team) => team.delta === 0)))
+  const differentScale = structuredClone(fixture.basis)
+  differentScale.ratingScale.spreadMultiplier += 1
+  assert.equal(createConditionalPowerResultReceipt({ series: fixture.series, forecastBasis: fixture.forecastBasis,
+    replayBasis: differentScale, generatedAt: fixture.generatedAt }).status, 'unavailable')
+  for (const mapping of tied.identityMap.mappings) {
+    mapping.sourceTeamId = mapping.sourceTeamId === fixture.basis.sourceTeamIds[0] ? fixture.basis.sourceTeamIds[1] : fixture.basis.sourceTeamIds[0]
+  }
+  const forecast = forecastTournamentSeries(fixture.series, tied)
+  if (forecast.status !== 'ready') throw new Error(forecast.detail)
+  const rejected = createConditionalPowerResultReceipt({ series: fixture.series, forecastBasis: tied,
+    replayBasis: fixture.basis, generatedAt: fixture.generatedAt })
+  assert.equal(rejected.status, 'unavailable')
+  if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'projection-mismatch')
+  assert.equal(conditionalResultFromReceipt({ series: fixture.series, outcome: fixture.outcome, now: fixture.now,
+    forecast, basis: tied, ledger: { version: 1, receipts: [fixture.receipt] } }).status, 'unavailable')
+})

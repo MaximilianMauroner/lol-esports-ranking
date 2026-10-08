@@ -13,7 +13,7 @@ export const stableResultAssumptions = [
   'Future game statistics and execution updates are unavailable and are not invented. Tournament simulations keep frozen strength.',
 ]
 
-type ComponentTeam = { sourceTeamId: string; team: string; before: number; after: number; delta: number }
+type ComponentTeam = { sourceTeamId: string; teamId: string; team: string; before: number; after: number; delta: number }
 export type ConditionalPowerResultReceipt = {
   version: 1
   policy: typeof stableResultPolicy
@@ -61,7 +61,7 @@ function isReceipt(value: unknown): value is ConditionalPowerResultReceipt {
       || typeof output.outcome.loserWins !== 'number' || !scores.includes(output.outcome.loserWins)
       || !Array.isArray(output.teams) || output.teams.length !== 2 || !output.teams.every(isComponentTeam)) return false
     const [home, away] = output.teams
-    if (!home || !away || home.sourceTeamId === away.sourceTeamId) return false
+    if (!home || !away || home.sourceTeamId === away.sourceTeamId || home.teamId === away.teamId) return false
     const key = JSON.stringify([output.outcome.winner, output.outcome.loserWins])
     if (keys.has(key)) return false
     keys.add(key)
@@ -70,7 +70,7 @@ function isReceipt(value: unknown): value is ConditionalPowerResultReceipt {
 }
 
 function isComponentTeam(value: unknown): value is ComponentTeam {
-  return record(value) && text(value.sourceTeamId) && text(value.team)
+  return record(value) && text(value.sourceTeamId) && text(value.teamId) && text(value.team)
     && [value.before, value.after, value.delta].every((entry) => typeof entry === 'number' && Number.isFinite(entry) && Number.isInteger(entry))
     && typeof value.before === 'number' && typeof value.after === 'number' && value.delta === value.after - value.before
 }
@@ -83,7 +83,8 @@ export function conditionalResultFromReceipt(input: {
   const problem = conditionalOutcomeProblem(series, outcome, now)
   if (problem) return problem
   if (!ledger) return unavailablePowerPreview('missing-result-receipt', 'No exact producer result-component receipt is available for this snapshot and event.')
-  const candidates = ledger.receipts.filter((receipt) => receipt.matchId === series.id && receipt.snapshotId === forecast.snapshotId)
+  const candidates = ledger.receipts.filter((receipt) => receipt.matchId === series.id && receipt.snapshotId === forecast.snapshotId
+    && receipt.eventStateVersion === tournamentEventStateVersion(series))
   if (candidates.length !== 1) return unavailablePowerPreview('missing-result-receipt', 'A unique producer receipt matching the current snapshot is required.')
   const receipt = candidates[0]!
   const scale = ratingScaleFromUnknown(receipt.ratingScale)
@@ -99,7 +100,7 @@ export function conditionalResultFromReceipt(input: {
   }
   const selected = receipt.outputs.find((entry) => entry.outcome.winner === outcome.winner && entry.outcome.loserWins === outcome.loserWins)
   if (!selected || !scale || selected.teams.some((team, index) => team.sourceTeamId !== forecast.teams[index]?.sourceTeamId
-    || team.before !== forecast.teams[index]?.rating || team.before < scale.publishedMinimum || team.before > scale.publishedMaximum
+    || team.teamId !== forecast.teams[index]?.teamId || team.before !== forecast.teams[index]?.rating || team.before < scale.publishedMinimum || team.before > scale.publishedMaximum
     || team.after < scale.publishedMinimum || team.after > scale.publishedMaximum)) {
     return unavailablePowerPreview('stale-result-receipt', 'Participant identities and public endpoints must match the current forecast.')
   }

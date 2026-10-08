@@ -2,10 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { evaluateConditionalPowerResultComponent } from '../src/lib/conditionalPowerResultComponent'
 import { legalConditionalScores } from '../src/lib/conditionalPowerPreview'
-import { materializeRankingModel } from '../src/lib/model'
+import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
 import { playerRatingPredictionWeight } from '../src/lib/modelConfig'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
 import { processRatingSeriesForDate } from '../src/lib/ratingSeriesEngine'
+import { eventTrackerKey } from '../src/lib/placementResiduals'
 import { conditionalPowerFixture, pinControlledConditionalPowerBasis } from './fixtures/conditionalPowerFixtures'
 
 test('result component matches production stable updates and frozen-state public projection for every legal outcome', () => {
@@ -21,7 +22,9 @@ test('result component matches production stable updates and frozen-state public
 
         // The reference runs the actual production member path with explicit controlled stats.
         // Priors are fixed to the pinned snapshot, matching this component's declared policy.
-        const production = structuredClone(fixture.basis.state)
+        const baseline = structuredClone(fixture.basis.state)
+        const before = materializeRankingModel({ context: structuredClone(fixture.basis.context), state: baseline })
+        const production = structuredClone(baseline)
         const edges = new Map(fixture.games.map((game) => [game.id, {
           ...fixture.playerEdges.get(game.id)!,
           teamAAdjustment: fixture.basis.state.rosterPriorOffsets.get(game.teamA)! / playerRatingPredictionWeight,
@@ -31,12 +34,11 @@ test('result component matches production stable updates and frozen-state public
           matches: structuredClone(fixture.games), teams: structuredClone(fixture.basis.context.teams), state: production,
           sideAdjustments: new Map(), lastDate: fixture.games[0]!.date, pregamePlayerRatingEdges: edges,
         })
-        const projected = structuredClone(fixture.basis.state)
+        const projected = structuredClone(baseline)
         for (const team of fixture.basis.teamNames) {
           assert.equal(production.histories.get(team)!.filter((point) => point.date === fixture.games[0]!.date && point.ratingUpdate?.teamStableDelta !== 0).length, 1)
           projected.ratings.set(team, production.ratings.get(team)!)
         }
-        const before = materializeRankingModel({ context: structuredClone(fixture.basis.context), state: structuredClone(fixture.basis.state) })
         const after = materializeRankingModel({ context: structuredClone(fixture.basis.context), state: projected })
         assert.deepEqual(component.teams.map((entry) => entry.delta), fixture.basis.teamNames.map((team) =>
           publishedRating(after.standings.find((entry) => entry.team === team)!.rating, fixture.basis.ratingScale)
@@ -47,6 +49,43 @@ test('result component matches production stable updates and frozen-state public
       }
     }
   }
+})
+
+test('historical pending placements finalize the frozen baseline before result expectations', () => {
+  const fixture = conditionalPowerFixture()
+  const matches = fixture.basis.context.authoritativeMatches.map((match, index) => index < 3 ? match : {
+    ...match, date: '2026-09-15', event: 'Controlled historical Worlds', league: 'Worlds', tier: 'worlds-playoffs' as const,
+    phase: 'Finals', bestOf: 5, bestOfBasis: 'official' as const, officialMatchId: 'historical-worlds-final', gameNumber: index - 2, winner: 'Alpha',
+  })
+  const eventId = eventTrackerKey(matches.at(-1)!)
+  fixture.basis.context = createRatingReplayContext(matches, fixture.basis.context.teams, { tournamentLifecycles: new Map([[eventId, {
+    status: 'completed', boundaryDate: '2026-09-15', ratedThroughDate: '2026-09-15', dataLag: false, resultCoverageComplete: true,
+  }]]) })
+  fixture.basis.state = replayRatingDates({ context: fixture.basis.context, replayMatches: matches })
+  pinControlledConditionalPowerBasis(fixture.basis)
+  const original = structuredClone(fixture)
+  const baseline = structuredClone(fixture.basis.state)
+  const before = materializeRankingModel({ context: structuredClone(fixture.basis.context), state: baseline })
+  assert.equal(fixture.basis.state.eventTrackers.get(eventId)!.applied, false)
+  assert.equal(baseline.eventTrackers.get(eventId)!.applied, true)
+  assert.notDeepEqual(baseline.leagueScores, fixture.basis.state.leagueScores)
+  const production = structuredClone(baseline)
+  const edges = new Map(fixture.games.map((game) => [game.id, { ...fixture.playerEdges.get(game.id)!,
+    teamAAdjustment: baseline.rosterPriorOffsets.get(game.teamA)! / playerRatingPredictionWeight,
+    teamBAdjustment: baseline.rosterPriorOffsets.get(game.teamB)! / playerRatingPredictionWeight,
+  }]))
+  processRatingSeriesForDate({ matches: fixture.games, teams: fixture.basis.context.teams, state: production,
+    sideAdjustments: new Map(), lastDate: fixture.games[0]!.date, pregamePlayerRatingEdges: edges })
+  const projected = structuredClone(baseline)
+  for (const team of fixture.basis.teamNames) projected.ratings.set(team, production.ratings.get(team)!)
+  const after = materializeRankingModel({ context: structuredClone(fixture.basis.context), state: projected })
+  const result = evaluateConditionalPowerResultComponent(fixture)
+  if (result.status !== 'partial') throw new Error(result.detail)
+  for (const team of result.teams) {
+    assert.equal(team.before, publishedRating(before.standings.find((row) => row.team === team.team)!.rating, fixture.basis.ratingScale))
+    assert.equal(team.after, publishedRating(after.standings.find((row) => row.team === team.team)!.rating, fixture.basis.ratingScale))
+  }
+  assert.deepEqual(fixture, original)
 })
 
 test('result component needs no hypothetical games or future statistics and preserves all input stores', () => {

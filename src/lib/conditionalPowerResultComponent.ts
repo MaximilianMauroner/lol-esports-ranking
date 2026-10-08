@@ -9,6 +9,7 @@ import { calculateSeriesResultUpdate, seriesStrengthSignal } from './seriesResul
 import { tournamentEventStateVersion } from './tournamentForecast'
 import type { TournamentSeries } from './tournamentFeed'
 import { stableResultAssumptions } from './conditionalPowerResultReceipts'
+import { teamIdFor } from './publicArtifacts/schema'
 
 /** Producer-side only: apply the production stable result update to detached snapshot state. */
 export function evaluateConditionalPowerResultComponent(input: {
@@ -37,12 +38,17 @@ export function evaluateConditionalPowerResultComponent(input: {
   if (metadata.date <= basis.state.processedThroughUtcDate!) {
     return unavailablePowerPreview('stale-pre-state', 'The snapshot must precede the scheduled series UTC date.')
   }
-  const home = resultTeam(basis.teamNames[0], basis)
-  const away = resultTeam(basis.teamNames[1], basis)
-  if (!home || !away) {
-    return unavailablePowerPreview('missing-result-state', 'Raw team and league strength, counts, priors, momentum, uncertainty and roster continuity must all be explicit.')
-  }
   try {
+    // Materialization applies pending historical placement evidence at the snapshot boundary.
+    // Use that same finalized baseline for the result input and both public endpoints.
+    const baselineState = structuredClone(basis.state)
+    const before = materializeRankingModel({ context: structuredClone(basis.context), state: baselineState })
+    const finalizedBasis = { ...basis, state: baselineState }
+    const home = resultTeam(basis.teamNames[0], finalizedBasis)
+    const away = resultTeam(basis.teamNames[1], finalizedBasis)
+    if (!home || !away) {
+      return unavailablePowerPreview('missing-result-state', 'Raw team and league strength, counts, priors, momentum, uncertainty and roster continuity must all be explicit.')
+    }
     const winsNeeded = (series.bestOf + 1) / 2
     const winsA = outcome.winner === 'home' ? winsNeeded : outcome.loserWins
     const winsB = outcome.winner === 'away' ? winsNeeded : outcome.loserWins
@@ -53,10 +59,9 @@ export function evaluateConditionalPowerResultComponent(input: {
       strengthSignal: seriesStrengthSignal(winsA + winsB, series.bestOf, winsA, winsB),
       eventK, international: isInternationalMatch(metadata),
     })
-    const nextState = structuredClone(basis.state)
+    const nextState = structuredClone(baselineState)
     nextState.ratings.set(home.team, home.rawRating + result.seriesDeltaA)
     nextState.ratings.set(away.team, away.rawRating + result.seriesDeltaB)
-    const before = materializeRankingModel({ context: structuredClone(basis.context), state: structuredClone(basis.state) })
     const after = materializeRankingModel({ context: structuredClone(basis.context), state: nextState })
     const teams = basis.teamNames.map((team, index) => {
       const previous = before.standings.find((standing) => standing.team === team)
@@ -65,7 +70,7 @@ export function evaluateConditionalPowerResultComponent(input: {
       if (!sourceTeamId || !previous || !next || !Number.isFinite(previous.rating) || !Number.isFinite(next.rating)) throw new Error('The participant projection is unavailable')
       const previousPoints = publishedRating(previous.rating, basis.ratingScale)
       const nextPoints = publishedRating(next.rating, basis.ratingScale)
-      return { sourceTeamId, team, before: previousPoints, after: nextPoints, delta: nextPoints - previousPoints }
+      return { sourceTeamId, teamId: teamIdFor(previous), team, before: previousPoints, after: nextPoints, delta: nextPoints - previousPoints }
     })
     return {
       status: 'partial' as const, scope: 'stable-team-result' as const, hypothetical: true as const,

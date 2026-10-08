@@ -4,6 +4,7 @@ import { evaluateConditionalPowerResultComponent } from './conditionalPowerResul
 import { isConditionalPowerResultLedger, stableResultPolicy, type ConditionalPowerResultReceipt } from './conditionalPowerResultReceipts'
 import { forecastTournamentSeries, type ForecastBasis } from './tournamentForecast'
 import type { TournamentSeries } from './tournamentFeed'
+import { ratingScaleFromUnknown } from './ratingCalculations'
 
 /** Builds a compact outcome table from exact producer inputs. It has no fetch or write API. */
 export function createConditionalPowerResultReceipt(input: {
@@ -16,11 +17,13 @@ export function createConditionalPowerResultReceipt(input: {
   const now = Date.parse(generatedAt)
   const forecast = forecastTournamentSeries(series, forecastBasis)
   if (forecast.status !== 'ready') return unavailablePowerPreview('missing-public-basis', forecast.detail)
-  if (!Number.isFinite(now) || now < Date.parse(forecast.ratingPublishedAt) || now >= Date.parse(series.startTime ?? '')) {
+  if (!Number.isFinite(now) || Date.parse(forecast.ratingDataAsOf) > Date.parse(forecast.ratingPublishedAt)
+    || now < Date.parse(forecast.ratingPublishedAt) || now >= Date.parse(series.startTime ?? '')) {
     return unavailablePowerPreview('invalid-publication-time', 'A valid generation time after snapshot publication and before series start is required.')
   }
-  if (!replayBasis || replayBasis.state.processedThroughUtcDate !== forecast.ratingDataAsOf.slice(0, 10)
-    || replayBasis.modelVersion !== forecast.modelVersion || replayBasis.modelConfigHash !== forecast.modelConfigHash) {
+  if (!replayBasis || replayBasis.state.processedThroughUtcDate !== new Date(forecast.ratingDataAsOf).toISOString().slice(0, 10)
+    || replayBasis.modelVersion !== forecast.modelVersion || replayBasis.modelConfigHash !== forecast.modelConfigHash
+    || JSON.stringify(ratingScaleFromUnknown(replayBasis.ratingScale)) !== JSON.stringify(ratingScaleFromUnknown(forecastBasis.model.ratingScale))) {
     return unavailablePowerPreview('stale-pre-state', 'The exact producer state must match the current forecast snapshot date and model.')
   }
   const outputs: ConditionalPowerResultReceipt['outputs'] = []
@@ -28,7 +31,8 @@ export function createConditionalPowerResultReceipt(input: {
   for (const winner of ['home', 'away'] as const) for (const loserWins of legalConditionalScores(series.bestOf)) {
     const result = evaluateConditionalPowerResultComponent({ series, outcome: { winner, loserWins }, now, basis: replayBasis })
     if (result.status !== 'partial') return result
-    if (result.teams.some((team, index) => team.sourceTeamId !== forecast.teams[index]?.sourceTeamId || team.before !== forecast.teams[index]?.rating)) {
+    if (result.teams.some((team, index) => team.sourceTeamId !== forecast.teams[index]?.sourceTeamId
+      || team.teamId !== forecast.teams[index]?.teamId || team.before !== forecast.teams[index]?.rating)) {
       return unavailablePowerPreview('projection-mismatch', 'Exact producer pre-state projection must equal both current public Power endpoints.')
     }
     provenance = result.provenance

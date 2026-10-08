@@ -135,10 +135,11 @@ selection when its source or forecast basis changes and removes selectors when
 play begins or the scheduled start passes. Actual completed rating impact remains
 in the evidence ledger. Pre-match odds keep their existing immutable receipt.
 
-The wrapper has no publishing, provider, acknowledgement or artifact-write API.
+The evaluator has no publishing, provider, acknowledgement or artifact-write API.
 Errors return unavailable after any working-state changes have occurred only on
 clones. Closing the selector has no write effect. There is no compatibility code
-or public schema migration.
+or migration of existing public schemas. The optional component companion has its
+own versioned schema; existing consumers and immutable forecast receipts remain valid.
 
 ## Remaining source and authority dependencies
 
@@ -211,7 +212,11 @@ model, state, event, format, roster, stats, prior edges and scores fail closed.
 The existing forecast browser journey checks public missing-data reasons,
 keyboard/mobile selection, basis refresh, live closure and frozen receipt odds.
 
-The numeric companion is implemented and verified with controlled offline inputs.
+The numeric companion is implemented. Controlled checks cover exact production
+stable updates and public endpoints, schedule revisions, tied-Power identity
+errors, historical pending placements, immutable receipt assembly and the offline
+numeric browser journey. Native interactive verification and real-source
+acceptance are recorded separately in the PR.
 Real public-match coverage still requires the ranking producer's authorized exact
 state and a reviewed schedule-to-production event mapping. The local public
 reference omits raw state and cannot recover it from rounded Power. No provider
