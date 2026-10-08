@@ -1,0 +1,1095 @@
+{
+  "schemaVersion": 1,
+  "numberText": [
+    {
+      "bits": "0000000000000000",
+      "text": "0"
+    },
+    {
+      "bits": "8000000000000000",
+      "text": "0"
+    },
+    {
+      "bits": "3ff0000000000000",
+      "text": "1"
+    },
+    {
+      "bits": "bff0000000000000",
+      "text": "-1"
+    },
+    {
+      "bits": "3fb999999999999a",
+      "text": "0.1"
+    },
+    {
+      "bits": "3fd3333333333334",
+      "text": "0.30000000000000004"
+    },
+    {
+      "bits": "3fd5555555555555",
+      "text": "0.3333333333333333"
+    },
+    {
+      "bits": "3fe5555555555555",
+      "text": "0.6666666666666666"
+    },
+    {
+      "bits": "444b1ae4d6e2ef50",
+      "text": "1e+21"
+    },
+    {
+      "bits": "3e7ad7f29abcaf48",
+      "text": "1e-7"
+    },
+    {
+      "bits": "3e8421f5f40d8376",
+      "text": "1.5e-7"
+    },
+    {
+      "bits": "441ac53a7e04bcda",
+      "text": "123456789012345680000"
+    },
+    {
+      "bits": "0000000000000001",
+      "text": "5e-324"
+    },
+    {
+      "bits": "7fefffffffffffff",
+      "text": "1.7976931348623157e+308"
+    },
+    {
+      "bits": "0000000000000001",
+      "text": "5e-324"
+    },
+    {
+      "bits": "433fffffffffffff",
+      "text": "9007199254740991"
+    },
+    {
+      "bits": "4340000000000001",
+      "text": "9007199254740994"
+    },
+    {
+      "bits": "3eb0c6f7a0b5ed8d",
+      "text": "0.000001"
+    },
+    {
+      "bits": "4415af1d78b58c40",
+      "text": "100000000000000000000"
+    },
+    {
+      "bits": "40934a456d5cfaad",
+      "text": "1234.5678"
+    },
+    {
+      "bits": "c09b450000000000",
+      "text": "-1745.25"
+    }
+  ],
+  "canonicalJson": [
+    {
+      "input": null,
+      "canonical": "null",
+      "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "input": true,
+      "canonical": "true",
+      "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+    },
+    {
+      "input": "LØS",
+      "canonical": "\"LØS\"",
+      "sha256": "5882cb9aa96a1d2c7c49a86bf6afafacf51a9c4655bfd1743f6929dc4a80ac47"
+    },
+    {
+      "input": "emoji 🙂 and \"quotes\" \\ \n\t\u0001",
+      "canonical": "\"emoji 🙂 and \\\"quotes\\\" \\\\ \\n\\t\\u0001\"",
+      "sha256": "53b40e02010286ce987e335cf298a3d1efda0351bf5b035bf6e486ae9f144b8b"
+    },
+    {
+      "input": 1745.25,
+      "canonical": "1745.25",
+      "sha256": "bd4e56d6149572768f1e424f5c7a66b2dc66f7e84db5856ff4a8db1e68c3b1f6"
+    },
+    {
+      "input": -0.0001,
+      "canonical": "-0.0001",
+      "sha256": "222a078a380d8532bb6bc925fb6370a707675b6aeb10fb139893049534656886"
+    },
+    {
+      "input": {
+        "2": "two",
+        "10": "ten",
+        "b": 1,
+        "a": 2,
+        "B": 3,
+        "_": 4,
+        "é": 5,
+        "A": [
+          3,
+          2,
+          1
+        ]
+      },
+      "canonical": "{\"10\":\"ten\",\"2\":\"two\",\"A\":[3,2,1],\"B\":3,\"_\":4,\"a\":2,\"b\":1,\"é\":5}",
+      "sha256": "b110c574bd4d9b5669cf890953daaf5e844596e45cf9a6a325e558456aebbd05"
+    },
+    {
+      "input": {
+        "nested": {
+          "z": [
+            {
+              "y": 1,
+              "x": null
+            }
+          ],
+          "a": "LOUD"
+        },
+        "list": [
+          "kt Rolster",
+          "KaBuM!"
+        ],
+        "empty": {},
+        "none": []
+      },
+      "canonical": "{\"empty\":{},\"list\":[\"kt Rolster\",\"KaBuM!\"],\"nested\":{\"a\":\"LOUD\",\"z\":[{\"x\":null,\"y\":1}]},\"none\":[]}",
+      "sha256": "e2f4801112d42e4ed88e6517ac49b226218ff5a5fb294d4fa6fea9249d5ca31e"
+    }
+  ],
+  "stableDigest": [
+    {
+      "input": null,
+      "stableJson": "null",
+      "digest": "fnv1a64-5b9bc4ba528108e4"
+    },
+    {
+      "input": true,
+      "stableJson": "true",
+      "digest": "fnv1a64-5b5c98ef514dbfa5"
+    },
+    {
+      "input": "LØS",
+      "stableJson": "\"LØS\"",
+      "digest": "fnv1a64-ad45daee15fcb3c4"
+    },
+    {
+      "input": "emoji 🙂 and \"quotes\" \\ \n\t\u0001",
+      "stableJson": "\"emoji 🙂 and \\\"quotes\\\" \\\\ \\n\\t\\u0001\"",
+      "digest": "fnv1a64-8f858f05b6db892a"
+    },
+    {
+      "input": 1745.25,
+      "stableJson": "1745.25",
+      "digest": "fnv1a64-48428e1d773471c9"
+    },
+    {
+      "input": -0.0001,
+      "stableJson": "-0.0001",
+      "digest": "fnv1a64-c282b36e976b71b5"
+    },
+    {
+      "input": {
+        "2": "two",
+        "10": "ten",
+        "b": 1,
+        "a": 2,
+        "B": 3,
+        "_": 4,
+        "é": 5,
+        "A": [
+          3,
+          2,
+          1
+        ]
+      },
+      "stableJson": "{\"10\":\"ten\",\"2\":\"two\",\"A\":[3,2,1],\"B\":3,\"_\":4,\"a\":2,\"b\":1,\"é\":5}",
+      "digest": "fnv1a64-f35bf9f5168604aa"
+    },
+    {
+      "input": {
+        "nested": {
+          "z": [
+            {
+              "y": 1,
+              "x": null
+            }
+          ],
+          "a": "LOUD"
+        },
+        "list": [
+          "kt Rolster",
+          "KaBuM!"
+        ],
+        "empty": {},
+        "none": []
+      },
+      "stableJson": "{\"empty\":{},\"list\":[\"kt Rolster\",\"KaBuM!\"],\"nested\":{\"a\":\"LOUD\",\"z\":[{\"x\":null,\"y\":1}]},\"none\":[]}",
+      "digest": "fnv1a64-3f254b1eb9a64d82"
+    }
+  ],
+  "semanticArtifact": [
+    {
+      "input": {
+        "artifactKind": "parity-sample",
+        "schemaVersion": 1,
+        "generatedAt": "2026-10-08T00:00:00.000Z",
+        "modelVersion": "model",
+        "modelConfigHash": "config",
+        "artifactMeta": {
+          "runId": "run"
+        },
+        "teams": [
+          {
+            "teamId": "team:loud:loud",
+            "rating": 1514.25
+          },
+          {
+            "teamId": "team:los:l-s",
+            "rating": 1490
+          }
+        ]
+      },
+      "canonical": "{\"artifactKind\":\"public-semantic-artifact\",\"content\":{\"artifactKind\":\"parity-sample\",\"teams\":[{\"rating\":1514.25,\"teamId\":\"team:loud:loud\"},{\"rating\":1490,\"teamId\":\"team:los:l-s\"}]},\"schemaVersion\":1}",
+      "sha256": "3184adc4936a379cd1c9160d76215473eae481bd5189e8b114a5b41aedf3b9e2",
+      "bytes": 199
+    },
+    {
+      "input": {
+        "artifactKind": "parity-sample",
+        "schemaVersion": 1,
+        "content": {
+          "ü": 1,
+          "u": 2
+        }
+      },
+      "canonical": "{\"artifactKind\":\"public-semantic-artifact\",\"content\":{\"artifactKind\":\"parity-sample\",\"content\":{\"u\":2,\"ü\":1}},\"schemaVersion\":1}",
+      "sha256": "fd0b6dfe0e834b355f95200e4f8161061e20dd7ca87bb76b01ebface4ac9919f",
+      "bytes": 129
+    }
+  ],
+  "configHash": [
+    {
+      "input": null,
+      "hash": "fnv1a-77074ba4"
+    },
+    {
+      "input": true,
+      "hash": "fnv1a-4db211e5"
+    },
+    {
+      "input": "LØS",
+      "hash": "fnv1a-adc3f084"
+    },
+    {
+      "input": "emoji 🙂 and \"quotes\" \\ \n\t\u0001",
+      "hash": "fnv1a-a74df5ca"
+    },
+    {
+      "input": 1745.25,
+      "hash": "fnv1a-3d6bf389"
+    },
+    {
+      "input": -0.0001,
+      "hash": "fnv1a-72e54675"
+    },
+    {
+      "input": {
+        "2": "two",
+        "10": "ten",
+        "b": 1,
+        "a": 2,
+        "B": 3,
+        "_": 4,
+        "é": 5,
+        "A": [
+          3,
+          2,
+          1
+        ]
+      },
+      "hash": "fnv1a-637ae40a"
+    },
+    {
+      "input": {
+        "nested": {
+          "z": [
+            {
+              "y": 1,
+              "x": null
+            }
+          ],
+          "a": "LOUD"
+        },
+        "list": [
+          "kt Rolster",
+          "KaBuM!"
+        ],
+        "empty": {},
+        "none": []
+      },
+      "hash": "fnv1a-4aa698a2"
+    },
+    {
+      "input": {
+        "matchHistoryDeltaPolicy": "public-components-before-and-after-v2",
+        "initialTeamRating": 1500,
+        "initialLeagueRating": 1500,
+        "publishedRatingScale": {
+          "version": "published-power-index-v1",
+          "internalAnchor": 1500,
+          "publishedAnchor": 1800,
+          "spreadMultiplier": 3.25,
+          "publishedMinimum": 1000,
+          "publishedMaximum": 3000,
+          "label": "Power Index",
+          "shortLabel": "Power",
+          "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
+        },
+        "leagueEloWeight": 1,
+        "leagueAdjustmentPolicy": "seasonal-hierarchical-anchor",
+        "publishedLeagueAnchorPolicy": "team-evidence-gated-anchor-relief-v1",
+        "publishedLeagueAnchorShrinkagePolicy": "match-evidence-weighted-league-anchor-v1",
+        "publishedLeagueAnchorShrinkageConfig": {
+          "minimumReliability": 0.35,
+          "fullReliabilityMatches": 12
+        },
+        "publishedSparseStandingPolicy": "last-match-to-current-state-evidence-blend-v1",
+        "publishedSparseStandingConfig": {
+          "minimumReliability": 0.35,
+          "fullReliabilityMatches": 12
+        },
+        "publishedLeagueAnchorReliefConfig": {
+          "minimumGames": 20,
+          "maxUncertainty": 50,
+          "minStableOffset": 15,
+          "maxAdjustment": 20,
+          "leagueGapShare": 0.35
+        },
+        "directHeadToHeadContextPolicy": "recent-same-league-close-rating-tiebreak-v1",
+        "directHeadToHeadContextConfig": {
+          "minimumGames": 20,
+          "maxUncertainty": 50,
+          "maxDays": 30,
+          "minimumBestOf": 3,
+          "maxRatingGap": 6,
+          "maxAdjustment": 3,
+          "overtakeMargin": 0.8
+        },
+        "recencyHalfLifeDays": 454.1791071114875,
+        "normalPatchTeamRetention": 0.985,
+        "splitBreakTeamRetention": 0.92,
+        "seasonStartTeamRetention": 0.8,
+        "splitBreakLeagueRetention": 0.97,
+        "seasonStartLeagueRetention": 0.94,
+        "splitBreakMinimumGapDays": 21,
+        "sideAdjustmentShrinkageGames": 24,
+        "sideAdjustmentLearning": "walk-forward-prior-only",
+        "publishedPredictionSideAdjustment": "side-aware-prior-only",
+        "winProbabilityCalibrationPolicy": "less-shrunk-favorite-calibration-v1",
+        "winProbabilityEloScale": 250,
+        "winProbabilityUncertaintyScale": 620,
+        "winProbabilityUncertaintyFloor": 0.45,
+        "sameDayPredictionBatching": true,
+        "onlineRecencyDecay": "entity-local-composable-half-life-regression-v1",
+        "ratingUpdateRecencyWeight": 1,
+        "leagueExpectedScoreSource": "pregame-neutral-series-team-power",
+        "sourcePipelineVersion": "canonical-identity-stat-dedupe-clock-corroboration-feasible-series-player-performance-home-league-code-unit-order-v23",
+        "lineupEvidencePolicy": "prior-observed-series-evidence-with-90-day-half-life-v1",
+        "partialLineupPolicy": "role-weighted-known-player-evidence-v1",
+        "substituteEraPolicy": "three-series-or-twenty-percent-split-share-v1",
+        "snapshotSeasonScopePolicy": "calendar-aligned-season-ranking-profile-with-prior-baseline",
+        "validationBaselinePolicy": [
+          "coin-flip",
+          "pregame-win-rate",
+          "team-only"
+        ],
+        "rankingTarget": "context-neutral-latent-team-strength",
+        "matchOutcomeTargetPolicy": "match-outcomes-are-evidence-not-ranking-target",
+        "canonicalUpdateUnitPolicy": "series-atomic-team-and-league-strength",
+        "residualBudgetPolicy": "base-evidence-and-realized-delta-budget-v2",
+        "latentStrengthBudgetShareSemantics": "configured shares apply to base evidence; uncertainty, roster volatility, transfer shrinkage, momentum decay, caps, and rounding determine realized movement",
+        "latentStrengthResultBudgetShares": {
+          "teamStable": 0.9,
+          "teamForm": 0.1,
+          "leagueAnchor": 0.12,
+          "playerSignalShadow": 0,
+          "lineupSignalShadow": 0,
+          "directRegionShadow": 0
+        },
+        "domesticStableTransferPolicy": "league-tier-global-transfer-v1",
+        "domesticStableTransferWeightsByTier": {
+          "tier-one": 1,
+          "tier-two": 0.65,
+          "tier-three": 0.38,
+          "emerging": 0.25,
+          "unknown": 0.15
+        },
+        "publishedTeamStableOffsetPolicy": "elite-tail-compressed-stable-offset-v1",
+        "publishedTeamStableOffsetConfig": {
+          "positiveSoftCap": 70,
+          "positiveOverflowScale": 0.3
+        },
+        "publishedRosterPriorPolicy": "current-record-capped-positive-player-prior-v1",
+        "publishedRosterPriorConfig": {
+          "minimumGames": 12,
+          "fullScaleWinRate": 0.5,
+          "floorScaleWinRate": 0.35,
+          "floorScale": 0.25
+        },
+        "rosterBasisSource": "latest-observed-oracle-game-roster",
+        "rosterContinuityFloor": 0.55,
+        "rosterChangeUncertaintyPenalty": 40,
+        "rosterContinuityValueBasis": "role-share",
+        "rosterContinuityMatch": "player-id-by-role",
+        "rosterContinuityRequiresCompleteLineups": true,
+        "rosterContinuity": {
+          "roleValueWeights": {
+            "Top": 0.18,
+            "Jungle": 0.22,
+            "Mid": 0.22,
+            "Bot": 0.2,
+            "Support": 0.18
+          },
+          "requiresCompleteLineups": true
+        },
+        "minimumUncertainty": 20,
+        "maximumUncertainty": 140,
+        "normalUncertainty": 50,
+        "uncertaintyKMultiplierFloor": 0.75,
+        "uncertaintyKMultiplierCeiling": 1.75,
+        "uncertaintyKScale": 100,
+        "rosterVolatilityKCeiling": 1.35,
+        "momentumGameDecay": 0.88,
+        "momentumSplitRetention": 0.2,
+        "momentumPatchRetention": 0.65,
+        "momentumCap": 70,
+        "worldsPlacementResidualK": 2,
+        "msiPlacementResidualK": 1.65,
+        "minorPlacementResidualK": 1.25,
+        "worldsPlacementResidualCap": 35,
+        "msiPlacementResidualCap": 25,
+        "minorPlacementResidualCap": 18,
+        "tournamentPlacementStagePoints": {
+          "champion": 11,
+          "finalist": 8,
+          "semifinal": 5,
+          "knockout": 3,
+          "participation": 1
+        },
+        "tournamentPlacementPolicy": "highest-attainment-bounded-grid-pool-centered-league-residual-v4",
+        "playerRatingPredictionPolicy": {
+          "key": "player-rating",
+          "mode": "live",
+          "liveWeight": 1,
+          "shadowWeight": 1,
+          "gate": {
+            "minimumPredictions": 200,
+            "minimumBrierImprovement": 0.001,
+            "requirePositiveLogLossDelta": true,
+            "requireNonNegativeRosterChangeDelta": true,
+            "requireNonNegativePatchTransitionDelta": true
+          },
+          "description": "Sourced prior-only player ratings are published because the walk-forward gate cleared after Oracle player-stat coverage was added."
+        },
+        "playerRatingPredictionPublishedWeight": 1,
+        "playerRatingPredictionShadowWeight": 1,
+        "firstStandPowerEvidencePolicy": "full-champion-field-at-msi-bracket-weight-v1",
+        "preseasonEventWeightPolicy": "completed-worlds-offseason-except-domestic-season-and-demacia-v3",
+        "preseasonEventWeightMultiplier": 0.35,
+        "preseasonEventWeightWindow": "after a resolved Worlds best-of-five final and before Jan 1 of the next calendar year; domestic season games and Demacia Cup are exempt",
+        "executionResidual": {
+          "executionResidualWeights": {
+            "kills": 0.14,
+            "gold": 0.72,
+            "objectives": 0.14
+          },
+          "executionResidualCap": 0.25,
+          "executionResidualUpdateWeight": 0.25,
+          "executionResidualPredictionPolicy": {
+            "key": "execution-residual",
+            "mode": "shadow",
+            "liveWeight": 1,
+            "shadowWeight": 1,
+            "gate": {
+              "minimumPredictions": 200,
+              "minimumBrierImprovement": 0.001,
+              "requirePositiveLogLossDelta": true,
+              "requireNonNegativeCrossRegionDelta": true,
+              "requireNonNegativePatchTransitionDelta": true
+            },
+            "description": "Execution-residual ratings are trained from post-game stat residuals, but remain shadow-only until walk-forward gates clear across cross-region and patch-transition slices."
+          },
+          "executionResidualPredictionWeight": 0,
+          "executionResidualShadowWeight": 1
+        },
+        "playerModel": {
+          "initialPlayerRating": 100,
+          "sourcedPlayerKFactor": 8,
+          "playerRatingScale": 80,
+          "playerLeagueAnchorRating": 1500,
+          "playerLeagueBaselineCoefficient": 0.2,
+          "playerLeagueBaselineBounds": {
+            "min": 50,
+            "max": 110
+          },
+          "playerLeagueSignalMultiplierByTier": {
+            "tier-one": 1,
+            "tier-two": 0.9,
+            "tier-three": 0.65,
+            "emerging": 0.35,
+            "unknown": 0.25
+          },
+          "playerPregameEdgeCoefficient": 2.5,
+          "playerPregameEdgeSoftCap": 40,
+          "playerPregameEdgeCap": 70,
+          "playerPregameEdgeOverflowMultiplier": 0.4,
+          "playerPregameMinCoverage": 0.6,
+          "playerPregameMinGames": 1,
+          "minimumRankedSourcedPlayerGames": 20,
+          "baseRoleShares": {
+            "Top": 0.18,
+            "Jungle": 0.22,
+            "Mid": 0.22,
+            "Bot": 0.2,
+            "Support": 0.18
+          },
+          "playerImpactWeights": {
+            "objectiveImpactZ": 0.12,
+            "awardResidualZ": 0.06,
+            "recentFormZ": 0.04
+          },
+          "playerImpactMultiplierBounds": {
+            "min": 0.7,
+            "max": 1.45
+          },
+          "sourcedPerformanceWeights": {
+            "win": 0.38,
+            "damageShare": 0.2,
+            "earnedGoldShare": 0.18,
+            "kda": 0.14,
+            "vision": 0.1
+          },
+          "individualResidualMetricVersion": "individual-residual-v0",
+          "individualResidualStrengthProxyWeight": 0.28,
+          "individualResidualScoreScale": 100,
+          "individualResidualMinimumRankedGames": 20,
+          "roleStatBaselines": {
+            "Top": {
+              "damageShare": 0.23,
+              "earnedGoldShare": 0.21,
+              "kda": 3,
+              "vspm": 0.9
+            },
+            "Jungle": {
+              "damageShare": 0.16,
+              "earnedGoldShare": 0.18,
+              "kda": 3.4,
+              "vspm": 1.2
+            },
+            "Mid": {
+              "damageShare": 0.25,
+              "earnedGoldShare": 0.22,
+              "kda": 3.6,
+              "vspm": 1
+            },
+            "Bot": {
+              "damageShare": 0.28,
+              "earnedGoldShare": 0.25,
+              "kda": 3.8,
+              "vspm": 0.8
+            },
+            "Support": {
+              "damageShare": 0.08,
+              "earnedGoldShare": 0.13,
+              "kda": 3.2,
+              "vspm": 2.4
+            }
+          },
+          "playerPerformancePolicy": {
+            "version": "observed-player-performance-v1",
+            "aggregation": "unweighted-per-game-mean",
+            "ratingEffect": "none"
+          }
+        },
+        "eligibility": {
+          "minTotalGames": 20,
+          "currentWindowDays": 90,
+          "minCurrentWindowGames": 6,
+          "maxUncertainty": 105,
+          "minInternationalMatchesForUnanchoredLeague": 2
+        },
+        "leagueTiers": {
+          "leagueTierDefinitions": {
+            "tier-one": {
+              "tier": "tier-one",
+              "label": "Tier-one major",
+              "priorRating": 1500,
+              "description": "Globally anchored leagues with regular international title contention.",
+              "anchorEligible": true
+            },
+            "tier-two": {
+              "tier": "tier-two",
+              "label": "Tier-two major",
+              "priorRating": 1450,
+              "description": "Major-region leagues with recurring international representation but lower title baseline.",
+              "anchorEligible": true
+            },
+            "tier-three": {
+              "tier": "tier-three",
+              "label": "Tier-three regional",
+              "priorRating": 1375,
+              "description": "First-division minor or merged regional leagues that need current international signal for global-board certainty.",
+              "anchorEligible": false
+            },
+            "emerging": {
+              "tier": "emerging",
+              "label": "Emerging or academy",
+              "priorRating": 1300,
+              "description": "Developmental, national, academy, ERL, lower-division, or lower-connectivity leagues.",
+              "anchorEligible": false
+            },
+            "unknown": {
+              "tier": "unknown",
+              "label": "Unknown",
+              "priorRating": 1250,
+              "description": "League identity is missing or not mapped to a competitive tier.",
+              "anchorEligible": false
+            }
+          },
+          "exactLeagueTiers": {
+            "LCK": "tier-one",
+            "LPL": "tier-one",
+            "LEC": "tier-two",
+            "LCS": "tier-two",
+            "LTA": "tier-two",
+            "LTA N": "tier-two",
+            "LTA S": "tier-three",
+            "LCP": "tier-two",
+            "CBLOL": "tier-three",
+            "VCS": "tier-three",
+            "PCS": "tier-three",
+            "LJL": "tier-three",
+            "LLA": "tier-three",
+            "TCL": "emerging",
+            "LCO": "tier-three",
+            "NACL": "emerging",
+            "LCKC": "emerging",
+            "LCK CL": "emerging",
+            "LAS": "emerging",
+            "LFL": "emerging",
+            "LFL2": "emerging",
+            "NLC": "emerging",
+            "NL": "emerging",
+            "PRM": "emerging",
+            "PRMP": "emerging",
+            "LVP SL": "emerging",
+            "LES": "emerging",
+            "LIT": "emerging",
+            "RL": "emerging",
+            "NEXO": "emerging",
+            "CCWS": "emerging",
+            "HC": "emerging",
+            "IC": "emerging",
+            "EM": "emerging",
+            "EMEA MASTERS": "emerging",
+            "AL": "emerging",
+            "HM": "emerging",
+            "HW": "emerging",
+            "HLL": "emerging",
+            "EBL": "emerging",
+            "LPLOL": "emerging",
+            "CD": "emerging",
+            "ROL": "emerging",
+            "LRN": "emerging",
+            "LRS": "emerging",
+            "LTS": "emerging",
+            "CT": "emerging"
+          },
+          "emergingLeaguePatternRules": [
+            {
+              "source": "\\bacademy\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\bchallengers?\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\bdevelopment\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\bdivision\\s*2\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\bd2\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\belite\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\bnational\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\bproving grounds\\b",
+              "flags": "i"
+            },
+            {
+              "source": "\\bsecondary\\b",
+              "flags": "i"
+            }
+          ],
+          "leagueConnectivityShrinkageMatches": 8,
+          "leagueEffectiveRatingCapsByTier": {
+            "emerging": 1375,
+            "unknown": 1250
+          }
+        },
+        "regionTaxonomy": {
+          "source": "Riot LoL Esports top-level region menu and LCP format update",
+          "sourceObservedAt": "2026-06-27",
+          "currentTopTierRegions": [
+            "LCS",
+            "CBLOL",
+            "LEC",
+            "LCK",
+            "LPL",
+            "LCP"
+          ],
+          "majorRegionPowerRegions": [
+            "LCS",
+            "CBLOL",
+            "LEC",
+            "LCK",
+            "LPL",
+            "LCP"
+          ],
+          "apacDomesticFeederLeagues": [
+            "PCS",
+            "VCS",
+            "LJL",
+            "LCO",
+            "LTS"
+          ],
+          "apacFlagshipRegion": "LCP",
+          "policy": "Region Power is limited to current international-participant top-tier regions. Domestic feeder and lower-tier ecosystems remain available for team scopes but are ignored for Region Power calculations unless they are part of the region power league layer."
+        },
+        "ratingUniverse": {
+          "policy": "current-top-tier-domestic-league-only-v1",
+          "ratedTeamLeagues": [
+            "LCS",
+            "CBLOL",
+            "LEC",
+            "LCK",
+            "LPL",
+            "LCP"
+          ],
+          "sideRule": "A match enters the published rating run only when both sides resolve to a rated domestic home league.",
+          "teamRule": "A team enters the published rating run only when its resolved league is one of the rated team leagues."
+        },
+        "walkForwardSegments": [
+          "bo1",
+          "bo3-bo5",
+          "international",
+          "cross-region",
+          "side-known",
+          "patch-transition",
+          "roster-change",
+          "partial-lineup",
+          "unknown-lineup"
+        ],
+        "eventKFactors": {
+          "worlds-playoffs": 39,
+          "worlds-main": 27,
+          "msi-bracket": 34,
+          "msi-play-in": 27,
+          "major-playoffs": 22,
+          "regional-regular": 14,
+          "minor-international": 23,
+          "qualifier": 12
+        },
+        "eventWeights": {
+          "worlds-playoffs": 2.7857142857142856,
+          "worlds-main": 1.9285714285714286,
+          "msi-bracket": 2.4285714285714284,
+          "msi-play-in": 1.9285714285714286,
+          "major-playoffs": 1.5714285714285714,
+          "regional-regular": 1,
+          "minor-international": 1.6428571428571428,
+          "qualifier": 0.8571428571428571
+        }
+      },
+      "hash": "fnv1a-5eebb6ce"
+    }
+  ],
+  "codeUnitOrder": {
+    "input": [
+      "kt Rolster",
+      "KaBuM! Esports",
+      "Édition",
+      "EDward Gaming",
+      "Edition",
+      "100 Thieves",
+      "_unknown",
+      "LØS",
+      "LOUD",
+      "a-b",
+      "a_b",
+      "ab",
+      "🙂",
+      "￿"
+    ],
+    "sorted": [
+      "100 Thieves",
+      "EDward Gaming",
+      "Edition",
+      "KaBuM! Esports",
+      "LOUD",
+      "LØS",
+      "_unknown",
+      "a-b",
+      "a_b",
+      "ab",
+      "kt Rolster",
+      "Édition",
+      "🙂",
+      "￿"
+    ]
+  },
+  "mathRound": [
+    {
+      "bits": "3fe0000000000000",
+      "result": 1
+    },
+    {
+      "bits": "3ff8000000000000",
+      "result": 2
+    },
+    {
+      "bits": "4004000000000000",
+      "result": 3
+    },
+    {
+      "bits": "bfe0000000000000",
+      "result": 0
+    },
+    {
+      "bits": "bff8000000000000",
+      "result": -1
+    },
+    {
+      "bits": "c004000000000000",
+      "result": -2
+    },
+    {
+      "bits": "3fdfffffffffffff",
+      "result": 0
+    },
+    {
+      "bits": "bfdfffffffffffff",
+      "result": 0
+    },
+    {
+      "bits": "409b460000000000",
+      "result": 1746
+    },
+    {
+      "bits": "c09b460000000000",
+      "result": -1745
+    },
+    {
+      "bits": "432fffffffffffff",
+      "result": 4503599627370496
+    }
+  ],
+  "toFixed": [
+    {
+      "bits": "3ff0147ae147ae14",
+      "digits": 2,
+      "text": "1.00"
+    },
+    {
+      "bits": "4005666666666666",
+      "digits": 2,
+      "text": "2.67"
+    },
+    {
+      "bits": "3ff7333333333333",
+      "digits": 1,
+      "text": "1.4"
+    },
+    {
+      "bits": "bff8000000000000",
+      "digits": 0,
+      "text": "-2"
+    },
+    {
+      "bits": "3fe0000000000000",
+      "digits": 0,
+      "text": "1"
+    },
+    {
+      "bits": "4004000000000000",
+      "digits": 0,
+      "text": "3"
+    },
+    {
+      "bits": "3eb0c6f7a0b5ed8d",
+      "digits": 3,
+      "text": "0.000"
+    },
+    {
+      "bits": "444b1ae4d6e2ef50",
+      "digits": 2,
+      "text": "1e+21"
+    },
+    {
+      "bits": "405edd2f1a9fbe77",
+      "digits": 0,
+      "text": "123"
+    },
+    {
+      "bits": "3fd3333333333334",
+      "digits": 3,
+      "text": "0.300"
+    },
+    {
+      "bits": "bf1a36e2eb1c432d",
+      "digits": 2,
+      "text": "-0.00"
+    },
+    {
+      "bits": "409b45051eb851eb",
+      "digits": 2,
+      "text": "1745.25"
+    },
+    {
+      "bits": "3f40624dd2f1a9fc",
+      "digits": 3,
+      "text": "0.001"
+    }
+  ],
+  "math": [
+    {
+      "operation": "exp",
+      "left": "3ff0000000000000",
+      "result": "4005bf0a8b145769"
+    },
+    {
+      "operation": "exp",
+      "left": "bfe0000000000000",
+      "result": "3fe368b2fc6f960a"
+    },
+    {
+      "operation": "exp",
+      "left": "400e000000000000",
+      "result": "404542b2d0a266e7"
+    },
+    {
+      "operation": "log",
+      "left": "4000000000000000",
+      "result": "3fe62e42fefa39ef"
+    },
+    {
+      "operation": "log",
+      "left": "3fd3333333333333",
+      "result": "bff34378fcbda721"
+    },
+    {
+      "operation": "log",
+      "left": "409b450000000000",
+      "result": "401ddbce0514c0c7"
+    },
+    {
+      "operation": "pow",
+      "left": "4024000000000000",
+      "right": "bfdc000000000000",
+      "result": "3fd75f034d79e965"
+    },
+    {
+      "operation": "pow",
+      "left": "4024000000000000",
+      "right": "3fb0000000000000",
+      "result": "3ff279fcaca404e6"
+    },
+    {
+      "operation": "pow",
+      "left": "4000000000000000",
+      "right": "bff8000000000000",
+      "result": "3fd6a09e667f3bcd"
+    },
+    {
+      "operation": "pow",
+      "left": "3fe0000000000000",
+      "right": "3fb4daeef2a5b835",
+      "result": "3fee3e3c1a5ea07e"
+    }
+  ],
+  "providerTime": [
+    {
+      "input": "2025-01-11 17:13:25",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2026-07-01 08:10:16",
+      "instantMs": 1782893416000,
+      "date": "2026-07-01",
+      "datetimeUtc": "2026-07-01T08:10:16.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11 17:13",
+      "instantMs": 1736615580000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:00.000Z"
+    },
+    {
+      "input": "2025-01-11 17:13:25.5",
+      "instantMs": 1736615605500,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.500Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25Z",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25.000+09:00",
+      "instantMs": 1736583205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11",
+      "instantMs": 1736553600000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T00:00:00.000Z"
+    },
+    {
+      "input": "not a date",
+      "instantMs": null,
+      "date": "not a date",
+      "datetimeUtc": null
+    },
+    {
+      "input": "",
+      "instantMs": null,
+      "date": "",
+      "datetimeUtc": null
+    }
+  ]
+}

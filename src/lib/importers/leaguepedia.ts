@@ -8,6 +8,7 @@ import {
 } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor, cleanDisplayName, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 import { compareCodeUnits } from '../codeUnitOrder.mjs'
+import { providerDate, providerDatetimeUtc } from './providerTime'
 
 export type LeaguepediaSnapshot = {
   source?: string
@@ -102,7 +103,7 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
   const winner = canonicalTeamNameFor(text(game.winner))
   const event = text(game.event) || 'Leaguepedia event'
   const rawDatetimeUtc = text(game.datetimeUtc)
-  const date = normalizeDate(text(game.date) || rawDatetimeUtc)
+  const date = providerDate(text(game.date) || rawDatetimeUtc)
   if (!sourceGameId || !teamA || !teamB || !winner || !date) return null
 
   const league = inferLeague(event)
@@ -122,7 +123,7 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
     sourceFileName: options.sourceFileName,
     dataCompleteness: hasScoreboardStats(game) ? 'scoreboard-game-stats' : 'match-result-only',
     date,
-    datetimeUtc: normalizeDatetimeUtc(rawDatetimeUtc),
+    datetimeUtc: providerDatetimeUtc(rawDatetimeUtc),
     season,
     event,
     phase,
@@ -184,21 +185,6 @@ function numberOrZero(value: unknown) {
   if (typeof value !== 'string' || value.trim() === '') return 0
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
-}
-
-function normalizeDate(valueToNormalize: string) {
-  if (!valueToNormalize) return ''
-  const sourceDate = valueToNormalize.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
-  if (sourceDate) return sourceDate
-  const parsed = Date.parse(valueToNormalize)
-  if (Number.isFinite(parsed)) return new Date(parsed).toISOString().slice(0, 10)
-  return valueToNormalize.slice(0, 10)
-}
-
-function normalizeDatetimeUtc(valueToNormalize: string) {
-  if (!valueToNormalize) return undefined
-  const parsed = Date.parse(valueToNormalize)
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
 }
 
 function yearFromDate(date: string) {
