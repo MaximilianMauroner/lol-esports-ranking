@@ -107,3 +107,5 @@ After removing volatile fields (timestamps, run ids, config hash, pipeline versi
 - Final validation and PR review results will be recorded on the prerequisite PR.
 
 - Final affected suite: 111/111 passed, including alternate gzip sizes and measured closure, legacy authority reads, corrupt payload rejection, conditional-create races, and the >40 MB archive. Typecheck and lint passed. Guarded run: sampled peak about 946 MiB, zero swap. Full suite and CI gates pending.
+
+- Full suite on first #88 head: 918/925 passed; seven bucket inventory tests exposed a missed semantic-reference reader. Finder, verifier, parent, and Codex bot confirmed the same P2. Published before repair. The two-file inventory repair passed 18/18 tests under the guard and six focused tests independently; declared legacy, publication, and audit transport measurements remain strict.
