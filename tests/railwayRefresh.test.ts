@@ -3,8 +3,9 @@ import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
+import { pathToFileURL } from 'node:url'
 import test from 'node:test'
 import { prepareContentAddressedState, prepareStateObject, stateObjectReferenceFor, syncContentAddressedStateObject, writeIncrementalStateManifest } from '../scripts/incremental-state-storage.mjs'
 import { canonicalJsonFor, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
@@ -613,7 +614,7 @@ test('refresh wrapper ignores legacy unverified bucket raw files when bootstrapp
   }
 })
 
-test('verified startup restore honors a custom manifest path', async () => {
+test('verified startup restore honors a custom manifest path and scoped Node worker', async () => {
   const root = await mkdtemp(join(tmpdir(), 'lol-ranking-custom-manifest-restore-'))
   const rawDir = join(root, 'raw')
   const manifestPath = join(root, 'authority', 'custom-manifest.json')
@@ -688,6 +689,7 @@ test('verified startup restore honors a custom manifest path', async () => {
     },
   }
   let downloadStart = ''
+  const restoreAmbientWorker = overrideAmbientRawWorker('rust', join(root, 'missing-ambient-binary'))
   try {
     await refreshDataIfChanged([
       '--raw-dir', rawDir,
@@ -700,7 +702,12 @@ test('verified startup restore honors a custom manifest path', async () => {
     ], {
       bucketClient: client,
       bucketConfig: bucketConfig(),
-      env: { RANKING_BUCKET_RESTORE_RAW: 'true', RANKING_BUCKET_UPLOAD_ENABLED: 'false' },
+      env: {
+        RANKING_BUCKET_RESTORE_RAW: 'true',
+        RANKING_BUCKET_UPLOAD_ENABLED: 'false',
+        RANKING_RAW_SOURCE_WORKER: 'node',
+        RANKING_REFRESH_BINARY: join(root, 'unused-scoped-binary'),
+      },
       readActiveRawSourceAuthority: readRawAuthority,
       run: async (_command, args) => {
         downloadStart = valueAfter(args, '--start')
@@ -731,6 +738,7 @@ test('verified startup restore honors a custom manifest path', async () => {
     assert.equal(customManifest.start, '2025-01-01')
     assert.equal(customManifest.files.oracleCsv.some((path: string) => path.endsWith('/2026.csv')), true)
   } finally {
+    restoreAmbientWorker()
     await rm(root, { recursive: true, force: true })
   }
 })
@@ -845,13 +853,15 @@ test('refresh wrapper merges rolling downloads into existing raw baseline', asyn
   }
 })
 
-test('refresh wrapper preserves artifacts when current match sources are unavailable', async () => {
+test('refresh wrapper preserves artifacts and uses scoped Rust worker for verified recovery and preparation', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-stale-refresh-'))
   const rawDir = join(tempDir, 'raw')
   const manifestPath = join(rawDir, 'manifest.json')
   const statePath = join(rawDir, 'refresh-state.json')
   const stagingDir = join(tempDir, 'staging')
   const previousOraclePath = join(rawDir, 'oracles-elixir', '2026.csv')
+  const scopedBinary = join(tempDir, 'scoped-raw-worker.mjs')
+  const workerLog = join(tempDir, 'raw-worker-actions.jsonl')
   const previousOracleCsv = [
     'gameid,date,year,league,split,playoffs,patch,position,side,teamname,result,kills,totalgold',
     'recovery-game,2026-07-08,2026,LCK,Summer,0,26.13,team,Blue,Gen.G,1,18,65000',
@@ -882,7 +892,21 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     throw new Error(`Unexpected command: ${command} ${commandArgs.join(' ')}`)
   }
 
+  const restoreAmbientWorker = overrideAmbientRawWorker('node', join(tempDir, 'missing-ambient-binary'))
   try {
+    await writeFile(scopedBinary, `#!${process.execPath}
+import assert from 'node:assert/strict'
+import { appendFile, readFile } from 'node:fs/promises'
+assert.equal(process.argv[2], 'raw-source')
+assert.equal(process.env.RANKING_RAW_SOURCE_WORKER, 'rust')
+assert.equal(process.env.RANKING_REFRESH_BINARY, ${JSON.stringify(scopedBinary)})
+const inputPath = process.argv[3]
+const outputPath = process.argv[4]
+const input = JSON.parse(await readFile(inputPath, 'utf8'))
+await appendFile(${JSON.stringify(workerLog)}, JSON.stringify(input.action) + '\\n')
+process.argv = [process.execPath, ${JSON.stringify(resolve('scripts/raw-source-worker.mjs'))}, inputPath, outputPath]
+await import(${JSON.stringify(pathToFileURL(resolve('scripts/raw-source-worker.mjs')).href)})
+`, { mode: 0o700 })
     await mkdir(join(rawDir, 'oracles-elixir'), { recursive: true })
     await writeFile(previousOraclePath, previousOracleCsv)
     await writeFile(manifestPath, `${JSON.stringify({
@@ -1062,6 +1086,8 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
         RANKING_REUSE_RAW_ON_SOURCE_FAILURE: 'true',
         RANKING_FORCE_REFRESH: 'true',
         RANKING_REFRESH_FENCING_TOKEN: '7',
+        RANKING_RAW_SOURCE_WORKER: 'rust',
+        RANKING_REFRESH_BINARY: scopedBinary,
       },
     })
     const rebuiltManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
@@ -1091,6 +1117,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     assert.equal(recoveryValidation.output.receiptDigest, receiptReference.sha256)
     assert.equal(recoveryValidation.output.objectCount, 1)
     assert.ok(recoveryValidation.output.childMaxRssBytes > 0)
+    assert.deepEqual((await readFile(workerLog, 'utf8')).trim().split('\n').map((line) => JSON.parse(line)), ['restore', 'prepare'])
 
     await rm(previousOraclePath)
     const missingPriorRaw = await runUnavailable(true, true)
@@ -1098,6 +1125,7 @@ test('refresh wrapper preserves artifacts when current match sources are unavail
     assert.equal(missingPriorRaw.status, 'stale-source')
     assert.equal(missingPriorRaw.incrementalAction, undefined)
   } finally {
+    restoreAmbientWorker()
     await rm(tempDir, { recursive: true, force: true })
   }
 })
@@ -1932,6 +1960,19 @@ function manifest(leaguepediaPath: string, generatedAt = '2026-06-29T00:00:00.00
       },
     },
     warnings: [],
+  }
+}
+
+function overrideAmbientRawWorker(worker: string, binary: string) {
+  const previousWorker = process.env.RANKING_RAW_SOURCE_WORKER
+  const previousBinary = process.env.RANKING_REFRESH_BINARY
+  process.env.RANKING_RAW_SOURCE_WORKER = worker
+  process.env.RANKING_REFRESH_BINARY = binary
+  return () => {
+    if (previousWorker === undefined) delete process.env.RANKING_RAW_SOURCE_WORKER
+    else process.env.RANKING_RAW_SOURCE_WORKER = previousWorker
+    if (previousBinary === undefined) delete process.env.RANKING_REFRESH_BINARY
+    else process.env.RANKING_REFRESH_BINARY = previousBinary
   }
 }
 
