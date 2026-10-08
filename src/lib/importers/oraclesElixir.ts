@@ -7,6 +7,7 @@ import {
 } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 import { compareCodeUnits } from '../codeUnitOrder.mjs'
+import { providerDate, providerDatetimeUtc } from './providerTime'
 
 type CsvRecord = Record<string, string>
 
@@ -123,7 +124,7 @@ function normalizeGame(
     identityRegion: redIdentity?.region,
   })
   const rawDate = value(first, 'date')
-  const date = normalizeDate(rawDate)
+  const date = providerDate(rawDate)
   const format = bestOfForGame(first, playoffs)
 
   return {
@@ -134,7 +135,7 @@ function normalizeGame(
     sourceFileName: options.sourceFileName,
     dataCompleteness: value(first, 'datacompleteness') || undefined,
     date,
-    datetimeUtc: normalizeDatetimeUtc(rawDate),
+    datetimeUtc: /[T ]\d{2}:\d{2}/.test(rawDate) ? providerDatetimeUtc(rawDate) : undefined,
     season: year || new Date().getUTCFullYear(),
     event: event || league,
     phase: playoffs ? 'Playoffs' : 'Regular season',
@@ -421,22 +422,8 @@ function sum(rows: CsvRecord[], key: string) {
   return rows.reduce((total, row) => total + numberValue(row, key), 0)
 }
 
-function normalizeDate(valueToNormalize: string) {
-  const sourceDate = valueToNormalize.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
-  if (sourceDate) return sourceDate
-  const parsed = Date.parse(valueToNormalize)
-  if (Number.isFinite(parsed)) return new Date(parsed).toISOString().slice(0, 10)
-  return valueToNormalize.slice(0, 10)
-}
-
-function normalizeDatetimeUtc(valueToNormalize: string) {
-  if (!/[T ]\d{2}:\d{2}/.test(valueToNormalize)) return undefined
-  const parsed = Date.parse(valueToNormalize)
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
-}
-
 function yearFromDate(date: string) {
-  const parsed = Number(normalizeDate(date).slice(0, 4))
+  const parsed = Number(providerDate(date).slice(0, 4))
   return Number.isFinite(parsed) ? parsed : 0
 }
 
