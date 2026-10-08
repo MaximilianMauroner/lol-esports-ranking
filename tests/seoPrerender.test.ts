@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { referencePublicDataDir, referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -6,7 +8,7 @@ import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
 import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
 
 test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
-  const html = await renderHomepagePrerenderFromPublicData()
+  const html = await renderHomepagePrerenderFromPublicData(join(referencePublicDir, '..'))
 
   assert.match(html, /<h1>LoL Esports Power Index<\/h1>/)
   assert.match(html, /Top teams/)
@@ -15,12 +17,12 @@ test('homepage prerender includes ranking snapshot content from public artifacts
   assert.match(html, new RegExp(escapeRegExp(escapedNotice())))
   assert.doesNotMatch(html, /<script\b/i)
 
-  const manifest = JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8'))
+  const manifest = JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8'))
   assert.ok(html.includes(`Source: ${escapeHtml(manifest.source)}`))
   const expectedKey = preferredPublicSnapshotKey(Object.keys(manifest.snapshotIndex), manifest.defaultSnapshotKey)
   assert.ok(expectedKey)
   assert.match(html, new RegExp(`data-snapshot-key="${escapeRegExp(expectedKey)}"`))
-  const shardPath = manifest.snapshotIndex[expectedKey].url.split('?', 1)[0].replace(/^\/data\//, 'public/data/')
+  const shardPath = manifest.snapshotIndex[expectedKey].url.split('?', 1)[0].replace(/^\/data\//, `${referencePublicDataDir}/`)
   const shard = JSON.parse(await readFile(shardPath, 'utf8')) as {
     standings: Array<{ team: string; eligibility?: { eligible?: boolean } }>
   }

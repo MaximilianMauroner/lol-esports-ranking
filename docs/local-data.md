@@ -1,0 +1,51 @@
+# Local ranking data
+
+`public/data/` is generated browser output. It is ignored by Git, as are provider
+downloads, full calculation artifacts, and the downloaded reference corpus.
+Source manifests, code, and focused test fixtures remain tracked.
+
+For a quick local start:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm data:pull
+pnpm dev
+```
+
+`data:pull` downloads the Node reference snapshot from the immutable GitHub source
+archive pinned in `scripts/reference-public-data.mjs`. The downloader verifies a
+SHA-256 digest over the complete sorted path and file-digest list before using it.
+The cache lives in `data/reference/<revision>/public/data`. A failed download or
+checksum does not replace the existing local payload. This snapshot has its own
+source, coverage, model, and config metadata. It is a fixed reference, not a live
+refresh or an official Riot ranking.
+
+To build current rankings from provider inputs instead:
+
+```sh
+pnpm data:download
+pnpm data:crunch
+```
+
+These commands write ignored local files. Review and commit a changed
+`data/raw/manifest.json` only when the source manifest change belongs to the work.
+Do not add generated browser files to a PR.
+
+`pnpm test` downloads and verifies the reference corpus before running tests.
+The incremental benchmark uses the same pinned corpus. Both read the cache
+directly, so they neither need nor replace your local `public/data` tree. Once
+cached, these checks do not need another download. A clean CI runner needs access
+to GitHub codeload and a `tar` executable; download or integrity failures fail the
+check rather than skipping coverage. To update the corpus intentionally, update
+the pinned revision and checksum together and review the resulting gate metrics.
+
+`pnpm build` includes local public data when it exists. For a static deployment,
+run `data:pull` or `data:crunch` first. Railway's build downloads the reference
+fallback before bundling and prerendering. The server continues to prefer bucket
+data, which the cron refresh publishes independently of Git. No provider fetch,
+bucket write, or production deployment is part of `data:pull`.
+
+Existing Git history still contains earlier data snapshots. This change removes
+them from future commits without rewriting history. The pinned historical
+snapshot is a deliberate test and benchmark input, not a second tracked copy of
+the generated payload.

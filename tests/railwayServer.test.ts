@@ -1,3 +1,4 @@
+import { referencePublicDataDir, referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -755,14 +756,14 @@ type TestServer = {
 }
 
 async function contentAddressedReaderFixture() {
-  const rootSource: unknown = JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8'))
+  const rootSource: unknown = JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8'))
   const rankingManifest = parsePublicRankingManifest(rootSource)
   const generationId = rankingManifest.artifactMeta?.runId
   if (!generationId) throw new Error('Expected ranking fixture to declare an artifact runId')
   const snapshotKey = rankingManifest.defaultSnapshotKey
   const snapshotEntry = rankingManifest.snapshotIndex[snapshotKey]
   const snapshotPath = new URL(snapshotEntry.url, 'https://fixture.invalid').pathname
-  const shardSource: unknown = JSON.parse(await readFile(join('public', snapshotPath.replace(/^\//, '')), 'utf8'))
+  const shardSource: unknown = JSON.parse(await readFile(join(referencePublicDir, snapshotPath.replace(/^\//, '')), 'utf8'))
   const rootArtifact = prepareSemanticArtifact(rootSource)
   const shardArtifact = prepareSemanticArtifact(shardSource)
   const logicalPaths = rankingManifestLogicalPaths(rankingManifest)
