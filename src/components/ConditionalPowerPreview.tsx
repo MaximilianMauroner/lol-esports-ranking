@@ -15,7 +15,7 @@ export function ConditionalPowerPreview({ series, forecast, now }: { series: Tou
     <summary className="cursor-pointer font-semibold text-foreground">Conditional Power preview</summary>
     <div className="mt-2 grid min-w-0 gap-2">
       <p>Hypothetical outcome. This does not change ratings or frozen-strength tournament simulations.</p>
-      {forecast?.status === 'ready' ? <p>Current Power (snapshot): {forecast.teams.map((team) => `${team.name} ${team.rating}`).join(' · ')}</p> : null}
+      {forecast?.status === 'ready' ? <p>{series.status === 'upcoming' ? 'Current' : 'Pre-match'} Power (snapshot): {forecast.teams.map((team) => `${team.name} ${team.rating}`).join(' · ')}</p> : null}
       {canChoose ? <div className="grid grid-cols-2 gap-2">
         <div className="grid min-w-0 gap-1">
           <label htmlFor={`${id}-winner`}>Winner</label>

@@ -1,11 +1,13 @@
 import type { EventTier, MatchRecord, MatchRosterSnapshot, PublishedRatingScale } from '../types'
 import { conditionalOutcomeProblem, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from './conditionalPowerPreview'
-import { eventKFactorForMatch, eventWeightForMatch } from './eventWeighting'
+import { eventKFactorForMatch, eventWeightContextForMatches, eventWeightForMatch } from './eventWeighting'
+import { homeLeagueForMatch } from './matchContext'
 import { materializeRankingModel, replayRatingDates, type RatingReplayContext } from './model'
 import { transparentGprModelMetadata } from './modelConfig'
 import type { PregamePlayerRatingEdge } from './playerModel'
 import { publishedRating } from './publishedRatingArtifacts'
 import { ratingScaleFromUnknown } from './ratingCalculations'
+import { buildRatingCheckpointEventContract, ratingCheckpointInventory, validateRatingCheckpointEventContract } from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
 import { rosterBasisByTeam } from './rosters'
 import { resolveCanonicalSeries } from './seriesResolver'
@@ -52,26 +54,18 @@ export function evaluateConditionalPowerReplay(input: ReplayInput): ConditionalP
   const problem = conditionalOutcomeProblem(input.series, input.outcome, input.now)
   if (problem) return problem
   if (!input.basis) return unavailablePowerPreview('missing-pre-state', 'A pinned internal pre-series state is required; public Power and forecast receipts are insufficient.')
-  const basis = structuredClone(input.basis)
-  if (basis.modelVersion !== transparentGprModelMetadata.version || basis.modelConfigHash !== transparentGprModelMetadata.configHash) {
-    return unavailablePowerPreview('model-mismatch', 'The pinned model/config must match the production evaluator in this revision.')
-  }
-  if (!ratingScaleFromUnknown(basis.ratingScale)) return unavailablePowerPreview('missing-scale', 'A valid public rating scale is required.')
-  if (!basis.preStateId || !basis.state.processedThroughUtcDate || basis.context.lastDate !== basis.state.processedThroughUtcDate) {
-    return unavailablePowerPreview('missing-pre-state', 'A dated, identified complete UTC-boundary state is required.')
-  }
-  if (basis.event.id !== input.series.eventId || basis.sourceTeamIds.some((id, index) => id !== input.series.teams[index]?.id)) {
-    return unavailablePowerPreview('identity-mismatch', 'The pinned event and source participants must match the upcoming series.')
-  }
-  if (basis.teamNames[0] === basis.teamNames[1] || basis.teamNames.some((team) => !hasTeamState(basis, team))) {
-    return unavailablePowerPreview('missing-pre-state', 'Both participants need explicit team, league, roster and numeric rating state.')
-  }
-  if (!input.games?.length || !input.playerEdges) return unavailablePowerPreview('missing-future-inputs', 'Complete hypothetical game inputs and explicit player prior edges are required.')
-  const games = structuredClone([...input.games])
-  const playerEdges = new Map(structuredClone([...input.playerEdges]))
-  const invalid = scenarioProblem(input, basis, games, playerEdges)
-  if (invalid) return invalid
   try {
+    const basis = structuredClone(input.basis)
+    const basisProblem = conditionalPowerBasisProblem(basis)
+    if (basisProblem) return basisProblem
+    if (basis.event.id !== input.series.eventId || basis.sourceTeamIds.some((id, index) => id !== input.series.teams[index]?.id)) {
+      return unavailablePowerPreview('identity-mismatch', 'The pinned event and source participants must match the upcoming series.')
+    }
+    if (!input.games?.length || !input.playerEdges) return unavailablePowerPreview('missing-future-inputs', 'Complete hypothetical game inputs and explicit player prior edges are required.')
+    const games = structuredClone([...input.games])
+    const playerEdges = new Map(structuredClone([...input.playerEdges]))
+    const invalid = scenarioProblem(input, basis, games, playerEdges)
+    if (invalid) return invalid
     const before = materializeRankingModel({ context: basis.context, state: structuredClone(basis.state) })
     const context: RatingReplayContext = {
       ...basis.context,
@@ -96,7 +90,7 @@ export function evaluateConditionalPowerReplay(input: ReplayInput): ConditionalP
         modelVersion: basis.modelVersion, modelConfigHash: basis.modelConfigHash, preStateId: basis.preStateId,
         ratingScale: basis.ratingScale, matchId: input.series.id, eventId: input.series.eventId,
         canonicalSeriesId: resolveCanonicalSeries(games)[0]!.id, bestOf: input.series.bestOf!, outcome: structuredClone(input.outcome),
-        ratingDataAsOf: basis.state.processedThroughUtcDate,
+        ratingDataAsOf: basis.context.lastDate,
         eventK: eventKFactorForMatch(games.at(-1)!, basis.state.eventWeightContext),
         eventWeight: eventWeightForMatch(games.at(-1)!, basis.state.eventWeightContext),
       },
@@ -114,6 +108,107 @@ export function evaluateConditionalPowerReplay(input: ReplayInput): ConditionalP
   }
 }
 
+/** Checks a supplied complete pre-state against its authoritative prefix without replaying or changing it. */
+export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis): PowerPreviewUnavailable | null {
+  try {
+    if (basis.modelVersion !== transparentGprModelMetadata.version || basis.modelConfigHash !== transparentGprModelMetadata.configHash) {
+      return unavailablePowerPreview('model-mismatch', 'The pinned model/config must match the production evaluator in this revision.')
+    }
+    if (!ratingScaleFromUnknown(basis.ratingScale)) return unavailablePowerPreview('missing-scale', 'A valid public rating scale is required.')
+    const { context, state } = basis
+    const boundary = state.processedThroughUtcDate
+    if (!basis.preStateId || !realUtcDate(boundary) || context.lastDate !== boundary || !completeStateContainers(state)
+      || !(context.pregamePlayerRatingEdges instanceof Map) || !(context.teamRosterBasis instanceof Map)
+      || !(context.tournamentLifecycles instanceof Map) || !(context.eventWeightContext.worldsEndDateByCalendarYear instanceof Map)) {
+      return unavailablePowerPreview('missing-pre-state', 'A dated, identified complete UTC-boundary state and all replay containers are required.')
+    }
+    if ([...context.tournamentLifecycles.values()].some((lifecycle) => lifecycle.status === 'completed'
+      && (!realUtcDate(lifecycle.boundaryDate) || lifecycle.boundaryDate > boundary))) {
+      return unavailablePowerPreview('unsupported-future-placement', 'Completed tournament placement boundaries after the pinned pre-state are unsupported. Future placements cannot be silently omitted from a conditional replay.')
+    }
+    const matches = context.authoritativeMatches
+    if (!Array.isArray(matches) || !matches.length || matches.some((match) => !match.id || !matchIdentity(match) || !realUtcDate(match.date) || match.date > boundary)
+      || state.processedMatchCount !== matches.length || new Set(matches.map(matchIdentity)).size !== matches.length) {
+      return unavailablePowerPreview('missing-pre-state', 'The complete authoritative prefix must match the processed game count and UTC boundary.')
+    }
+    const terminalIds = matches.filter((match) => match.date === boundary).map(matchIdentity).sort()
+    const previousMatch = state.previousMatch
+    if (!terminalIds.length || JSON.stringify(terminalIds) !== JSON.stringify([...state.processedThroughUtcDateMatchIds].sort())
+      || !previousMatch || previousMatch.date !== boundary
+      || !matches.some((match) => matchIdentity(match) === matchIdentity(previousMatch)
+        && match.id === previousMatch.id && match.date === previousMatch.date)) {
+      return unavailablePowerPreview('missing-pre-state', 'The state must prove every terminal UTC-date identity and its previous match in the authoritative prefix.')
+    }
+    if ([state.teamLastRatedDates, state.leagueLastRatedDates, state.leagueLastUpdated].some((dates) =>
+      [...dates.values()].some((date) => !realUtcDate(date) || date > boundary))) {
+      return unavailablePowerPreview('missing-pre-state', 'Every rated entity date must be a real UTC date at or before the pinned boundary.')
+    }
+    if (basis.teamNames.length !== 2 || basis.sourceTeamIds.length !== 2 || basis.sourceTeamIds.some((id) => !id)
+      || basis.sourceTeamIds[0] === basis.sourceTeamIds[1] || basis.teamNames[0] === basis.teamNames[1]
+      || basis.teamNames.some((team) => !hasTeamState(basis, team)) || !coherentHistoryEvidence(basis)) {
+      return unavailablePowerPreview('missing-pre-state', 'Participants and historical teams need coherent corpus, history, record and rating context evidence.')
+    }
+    const expectedEventContext = eventWeightContextForMatches(matches)
+    if (JSON.stringify([...context.eventWeightContext.worldsEndDateByCalendarYear].sort())
+      !== JSON.stringify([...expectedEventContext.worldsEndDateByCalendarYear].sort())) {
+      return unavailablePowerPreview('missing-pre-state', 'The pinned event weighting context must match its authoritative corpus.')
+    }
+    validateRatingCheckpointEventContract(state, boundary, buildRatingCheckpointEventContract(matches, context.eventWeightContext, context.tournamentLifecycles))
+    return null
+  } catch (error) {
+    return unavailablePowerPreview('missing-pre-state', error instanceof Error ? error.message : 'The supplied replay basis is malformed or incomplete.')
+  }
+}
+
+function realUtcDate(date: string | undefined): date is string {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false
+  const timestamp = Date.parse(`${date}T00:00:00.000Z`)
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === date
+}
+
+function matchIdentity(match: MatchRecord) {
+  return match.officialGameId ?? match.sourceGameId ?? match.id
+}
+
+const nonMapStateFields = new Set<keyof RatingRunState>([
+  'leagueHistory', 'predictions', 'eventWeightContext', 'previousMatch',
+  'processedThroughUtcDate', 'processedThroughUtcDateMatchIds', 'processedMatchCount',
+])
+
+function completeStateContainers(state: RatingRunState) {
+  return ratingCheckpointInventory.includedFields.every((field) => nonMapStateFields.has(field) || state[field] instanceof Map)
+    && Array.isArray(state.leagueHistory) && Array.isArray(state.predictions) && Array.isArray(state.processedThroughUtcDateMatchIds)
+    && state.eventWeightContext.worldsEndDateByCalendarYear instanceof Map
+}
+
+function coherentHistoryEvidence({ context, state }: ConditionalPowerReplayBasis) {
+  const historicalTeams = new Set(context.authoritativeMatches.flatMap((match) => [match.teamA, match.teamB]))
+  for (const team of historicalTeams) {
+    const matches = context.authoritativeMatches.filter((match) => match.teamA === team || match.teamB === team)
+    const history = state.histories.get(team)
+    const wins = matches.filter((match) => match.winner === team).length
+    if (!Array.isArray(history) || history.length !== matches.length || state.wins.get(team) !== wins
+      || state.losses.get(team) !== matches.length - wins || state.factorCounts.get(team) !== matches.length) return false
+    const expectedEvidence = matches.map((match) => JSON.stringify([
+      match.date, match.event, match.teamA === team ? match.teamB : match.teamA, match.tier, match.winner === team ? 'W' : 'L',
+      match.sourceProvider, match.sourceGameId, match.sourceMatchId, match.officialGameId, match.officialMatchId, match.officialEventId,
+    ])).sort()
+    const historyEvidence = history.map((point) => JSON.stringify([
+      point.date, point.event, point.opponent, point.tier, point.result, point.source.provider,
+      point.source.gameId, point.source.matchId, point.source.officialGameId, point.source.officialMatchId, point.source.officialEventId,
+    ])).sort()
+    if (JSON.stringify(expectedEvidence) !== JSON.stringify(historyEvidence)
+      || history.some((point) => ![point.rating, point.baseRating, point.delta, ...Object.values(point.ratingComponents)].every(Number.isFinite))
+      || state.teamLastRatedDates.get(team) !== matches.map((match) => match.date).sort().at(-1)) return false
+  }
+  for (const [league, date] of state.leagueLastRatedDates) {
+    const matches = context.authoritativeMatches.filter((match) => homeLeagueForMatch(match, 'A', context.teams) === league
+      || homeLeagueForMatch(match, 'B', context.teams) === league)
+    if (date !== matches.map((match) => match.date).sort().at(-1)) return false
+  }
+  return true
+}
+
 function hasTeamState(basis: ConditionalPowerReplayBasis, team: string) {
   const league = basis.context.teams[team]?.league
   const state = basis.state
@@ -123,9 +218,9 @@ function hasTeamState(basis: ConditionalPowerReplayBasis, team: string) {
     && state.teamLastRatedDates.get(team) && state.lastPatchByTeam.get(team)
     && Number.isFinite(state.teamLastSeasons.get(team))
     && state.leagueLastRatedDates.get(league) && Number.isFinite(state.leagueLastSeasons.get(league))
-    && [state.ratings, state.executionRatings, state.rosterPriorOffsets, state.momentums, state.uncertainties, state.wins, state.losses]
+    && [state.ratings, state.executionRatings, state.previousDisplayRatings, state.rosterPriorOffsets, state.momentums, state.uncertainties, state.wins, state.losses, state.factorCounts]
       .every((map) => Number.isFinite(map.get(team)))
-    && [state.leagueScores, state.leagueMatchCounts, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums]
+    && [state.leagueScores, state.previousLeagueScores, state.leagueMatchCounts, state.leagueWins, state.leagueLosses, state.leagueExpectedWins, state.leagueOpponentRatingSums]
       .every((map) => Number.isFinite(map.get(league))))
 }
 
@@ -167,9 +262,16 @@ function scenarioProblem(input: ReplayInput, basis: ConditionalPowerReplayBasis,
     return unavailablePowerPreview('missing-future-inputs', 'Lineups, patch, sides, duration and every performance statistic must be explicit. Missing objectives cannot become zero.')
   }
   if (games.some((game) => {
+    const homePlayers = new Set(game.teamARoster!.players.map((player) => player.id))
+    return game.teamBRoster!.players.some((player) => homePlayers.has(player.id))
+  })) return unavailablePowerPreview('unsupported-scenario', 'Opposing lineups must have distinct player identities in each game.')
+  if (games.some((game) => {
     const edge = playerEdges.get(game.id)
     return !edge || !Number.isFinite(edge.teamAAdjustment) || !Number.isFinite(edge.teamBAdjustment)
-      || edge.teamAEvidenceBasis === 'unavailable' || edge.teamBEvidenceBasis === 'unavailable'
-  })) return unavailablePowerPreview('missing-player-priors', 'Explicit available player prior edges are required for every hypothetical game.')
+      || !['prior-observed', 'pregame-confirmed'].includes(edge.teamAEvidenceBasis)
+      || !['prior-observed', 'pregame-confirmed'].includes(edge.teamBEvidenceBasis)
+      || ![edge.teamACoverage, edge.teamBCoverage, edge.teamAFreshnessWeight, edge.teamBFreshnessWeight]
+        .every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)
+  })) return unavailablePowerPreview('missing-player-priors', 'Every hypothetical game needs explicit available player prior adjustments, evidence, coverage and freshness within their valid ranges.')
   return null
 }

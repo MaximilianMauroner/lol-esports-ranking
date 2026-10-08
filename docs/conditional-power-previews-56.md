@@ -1,7 +1,8 @@
 # Conditional Power previews (#56)
 
-The supported slice is an offline, complete-input conditional replay and a match
-card that explains public unavailability. It does not activate production or
+The supported slice is a read-only historical-corpus adapter, an offline
+complete-input conditional replay and a match card that explains public
+unavailability. It does not activate production or
 publish a preview artifact. The existing tournament forecast flag controls the
 card. No projected ranks or changed tournament simulation strengths are included.
 
@@ -40,6 +41,25 @@ must still be supplied to a complete replay, rather than filled with fake zeros.
 
 ## Evaluation and units
 
+`prepareConditionalPowerReplayBasis` implements the internal adapter in the
+preview module. It clones a caller-supplied historical prefix, team directory
+and explicit tournament lifecycle map. It derives causal historical player
+edges with `createRatingReplayContext`, replays the complete prefix with
+`replayRatingDates`, and uses the production checkpoint encoder/decoder to
+validate state shape and pin the payload digest. Importer version, identity
+taxonomy hash and raw prefix hash are included in the pre-state identity.
+No checkpoint file is written. Incomplete historical stats, lineups, profiles,
+format or chronology are rejected before replay.
+
+The source producer must identify the supplied prefix as complete, including
+all games on its terminal UTC date. A caller-supplied hash does not certify
+provider completeness. The adapter records the identities of historical games
+whose production pregame player prior is unavailable, including cold starts.
+It preserves production initial priors and never describes those gaps as
+confirmed lineup evidence. Future games still need explicit available player
+edges and complete inputs. This adapter is a supported implementation choice
+within #56; defining it is not deferred to Max or the model owner.
+
 `evaluateConditionalPowerReplay` accepts only caller-supplied synthetic games.
 It clones state, context, games and player edges, calls `replayRatingDates`, then
 `materializeRankingModel`. Both before and after use the same production standing
@@ -62,6 +82,35 @@ Errors return unavailable after any working-state changes have occurred only on
 clones. Closing the selector has no write effect. There is no compatibility code
 or public schema migration.
 
+## Remaining source and authority dependencies
+
+The public #46 receipt is a forecast receipt, not a lossless state checkpoint.
+Published ratings and components are rounded, scaled, capped or compressed.
+They cannot recover the raw residuals that the production update consumes.
+The current worktree contains a raw manifest, but no complete raw historical
+corpus in `data/raw/`. Its external file references are not accessed here.
+
+| Missing input | Exact fields or evidence | Responsible source and next action |
+| --- | --- | --- |
+| Reproducible historical pre-state | Complete `MatchRecord` prefix, `TeamProfile` directory, lifecycle map, importer/taxonomy/prefix identity and complete UTC boundary | Ranking corpus/artifact producer (`scripts/build-static-snapshot.ts`, #46/#37) must provide an authorized offline immutable copy. The adapter now reconstructs the state; no implementation decision from Max is needed. |
+| Raw internal state if a checkpoint is supplied instead | Team `ratings`, `executionRatings`, `rosterPriorOffsets`, `momentums`, `uncertainties`; raw league scores/counts/records; full histories, decay dates, roster state, event trackers and terminal identities | Existing production checkpoint/corpus producer owns the evidence. Compact public standings and forecast receipts are insufficient. This slice reconstructs from a complete corpus rather than introducing a new checkpoint/public contract. |
+| Real event assumptions | Canonical event/team/series mapping, tier, phase, lifecycle and pinned event calendar | Canonical schedule/event producer must provide the sourced mapping. Schedule labels alone cannot establish weighting or terminal placement evidence. |
+| Future game inputs | Five-role player IDs, causal player edges, patch, side assignment, UTC date/time, ordered games, kills/gold/objectives/duration | Official/provider lineup and game sources own confirmations. Before play, performance stats are unknown. Full future deltas remain unavailable unless every input is explicitly supplied as a hypothetical assumption. |
+
+The active #84 owner controls its Rust migration/CLI/contracts. This PR does not
+change those files or ask that owner to choose the reversible preview adapter.
+A result-only transition is not exported by the current production engine. It
+still evaluates the execution channel from detailed stats, even at zero current
+prediction weight. Filling unknown stats with zero or running invalid values to
+extract a stable component would not satisfy the production parity contract.
+Introducing that model boundary belongs to a separately scoped production-engine
+change coordinated with #84, rather than this preview-only slice.
+
+Completed lifecycle boundaries after the pinned pre-state are unsupported in
+this slice. Prefix-only event trackers cannot apply a newly completed future
+event's placement evidence. The evaluator rejects that assumption explicitly;
+historical pending placement evidence remains part of the production replay.
+
 ## Acceptance limits and checks
 
 Controlled fixture parity covers both winners, all decisive Bo1/3/5 scores,
@@ -73,9 +122,12 @@ The existing forecast browser journey checks public missing-data reasons,
 keyboard/mobile selection, basis refresh, live closure and frozen receipt odds.
 
 Full #56 acceptance remains blocked: numeric previews for real public matches
-need an approved internal pre-state/provenance adapter plus verified event and
-future-input assumptions. #46 public receipts do not supply those inputs. The
-ranking/model owner must define that adapter and coverage policy in a later slice.
+need the source inputs listed above and a public integration with a supported
+complete calculation or a separately scoped result-only production transition.
+The safe internal corpus adapter is implemented here. #46 public receipts do not
+supply its source inputs, and future game statistics cannot be sourced before
+play. The remaining blocker is source evidence and the production boundary,
+not permission for a reversible preview implementation choice.
 This PR must not close #56 or claim numerical public preview acceptance. Synthetic
 fixture/browser evidence proves only the supported slice, not production or user
 acceptance. #37's real generation reconciliation remains owned by its separately

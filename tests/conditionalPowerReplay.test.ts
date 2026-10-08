@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { evaluateConditionalPowerReplay } from '../src/lib/conditionalPowerReplay'
+import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay } from '../src/lib/conditionalPowerReplay'
 import { legalConditionalScores, publicConditionalPowerPreview } from '../src/lib/conditionalPowerPreview'
-import { materializeRankingModel, replayRatingDates } from '../src/lib/model'
+import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
+import { eventTrackerKey } from '../src/lib/placementResiduals'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
 import { rosterBasisByTeam } from '../src/lib/rosters'
 import { conditionalPowerFixture } from './fixtures/conditionalPowerFixtures'
@@ -95,6 +96,171 @@ test('missing or unsupported inputs fail closed without changing canonical state
   assert.equal(evaluateConditionalPowerReplay({ ...input, basis: null }).status, 'unavailable')
   assert.equal(evaluateConditionalPowerReplay({ ...input, games: null }).status, 'unavailable')
   assert.equal(evaluateConditionalPowerReplay({ ...input, playerEdges: null }).status, 'unavailable')
+})
+
+test('incomplete or inconsistent pre-state evidence is unavailable instead of producing a numeric delta', () => {
+  const mutations: Array<(input: ReturnType<typeof conditionalPowerFixture>) => void> = [
+    (input) => { input.basis.state.processedThroughUtcDate = '2026-02-30'; input.basis.context.lastDate = '2026-02-30' },
+    (input) => { input.basis.state.teamLastRatedDates.set('Alpha', 'not-a-date') },
+    (input) => { input.basis.state.teamLastRatedDates.set('Alpha', '2026-10-15') },
+    (input) => { input.basis.state.teamLastRatedDates.set('Alpha', '2026-06-15') },
+    (input) => { input.basis.state.leagueLastRatedDates.set('LCK', '2026-02-30') },
+    (input) => { input.basis.state.leagueLastRatedDates.set('LCK', '2026-10-15') },
+    (input) => { input.basis.state.histories.set('Alpha', []) },
+    (input) => { input.basis.state.histories.get('Alpha')![0]!.opponent = 'Unrelated opponent' },
+    (input) => { input.basis.state.wins.set('Alpha', 0) },
+    (input) => { input.basis.state.processedThroughUtcDateMatchIds = [] },
+    (input) => { input.basis.state.processedThroughUtcDateMatchIds.push('unobserved-terminal-game') },
+    (input) => { input.basis.state.previousMatch = input.basis.context.authoritativeMatches[0] },
+    (input) => { input.basis.state.previousMatch = { ...input.basis.state.previousMatch!, id: 'unobserved-terminal-game' } },
+    (input) => { input.basis.state.processedMatchCount -= 1 },
+    (input) => { input.basis.context.authoritativeMatches = [] },
+    (input) => { input.basis.context.authoritativeMatches.push({ ...input.basis.context.authoritativeMatches.at(-1)!, id: 'omitted-game-on-terminal-date' }) },
+    (input) => { input.basis.context.authoritativeMatches.pop(); input.basis.state.processedMatchCount -= 1 },
+    (input) => { input.basis.context.eventWeightContext.worldsEndDateByCalendarYear = new Map([[2026, '2026-09-10']]) },
+    (input) => { input.basis.state.eventWeightContext = { worldsEndDateByCalendarYear: new Map([[2026, '2026-09-10']]) } },
+  ]
+  assert.equal(conditionalPowerBasisProblem(conditionalPowerFixture().basis), null)
+  for (const mutate of mutations) {
+    const input = conditionalPowerFixture()
+    mutate(input)
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', mutate.toString())
+    assert.deepEqual(input, original)
+  }
+})
+
+test('pre-state event trackers must prove the same corpus and lifecycle as the replay context', () => {
+  const input = conditionalPowerFixture()
+  const matches = input.basis.context.authoritativeMatches.map((match) => ({
+    ...match, tier: 'worlds-main' as const, event: 'Controlled Worlds history', league: 'Worlds',
+  }))
+  input.basis.context = createRatingReplayContext(matches, structuredClone(input.basis.context.teams))
+  input.basis.state = replayRatingDates({ context: input.basis.context, replayMatches: matches })
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
+  const [eventId, tracker] = input.basis.state.eventTrackers.entries().next().value!
+  const mutations: Array<(scenario: typeof input) => void> = [
+    (scenario) => { scenario.basis.state.eventTrackers.clear() },
+    (scenario) => { scenario.basis.state.eventTrackers.get(eventId)!.matches.pop() },
+    (scenario) => { scenario.basis.state.eventTrackers.get(eventId)!.preEventPowers.clear() },
+    (scenario) => { scenario.basis.context.tournamentLifecycles = new Map([[eventId, {
+      status: 'completed', boundaryDate: tracker.endDate, ratedThroughDate: tracker.endDate,
+      dataLag: false, resultCoverageComplete: true,
+    }]]) },
+  ]
+  for (const mutate of mutations) {
+    const scenario = structuredClone(input)
+    mutate(scenario)
+    const original = structuredClone(scenario)
+    assert.equal(evaluateConditionalPowerReplay(scenario).status, 'unavailable')
+    assert.deepEqual(scenario, original)
+  }
+})
+
+test('completed future placement boundaries are unsupported while historical pending placement retains production parity', () => {
+  const future = conditionalPowerFixture()
+  future.basis.context.tournamentLifecycles = new Map([[eventTrackerKey(future.games[0]!), {
+    status: 'completed', boundaryDate: future.games[0]!.date, ratedThroughDate: future.games[0]!.date,
+    dataLag: false, resultCoverageComplete: true,
+  }]])
+  const originalFuture = structuredClone(future)
+  const unavailable = evaluateConditionalPowerReplay(future)
+  assert.equal(unavailable.status, 'unavailable')
+  if (unavailable.status === 'unavailable') assert.equal(unavailable.reason, 'unsupported-future-placement')
+  assert.deepEqual(future, originalFuture)
+
+  const historical = conditionalPowerFixture()
+  const matches = historical.basis.context.authoritativeMatches.map((match, index) => index < 3 ? match : {
+    ...match, event: 'Controlled historical Worlds', league: 'Worlds', tier: 'worlds-playoffs' as const, phase: 'Finals',
+    bestOf: 5, bestOfBasis: 'official' as const, officialMatchId: 'historical-worlds-final', gameNumber: index - 2,
+    winner: 'Alpha',
+  })
+  const boundary = matches.at(-1)!.date
+  const historicalEventId = eventTrackerKey(matches.at(-1)!)
+  const context = createRatingReplayContext(matches, structuredClone(historical.basis.context.teams), { tournamentLifecycles: new Map([[historicalEventId, {
+    status: 'completed', boundaryDate: boundary, ratedThroughDate: boundary, dataLag: false, resultCoverageComplete: true,
+  }]]) })
+  historical.basis.context = context
+  historical.basis.state = replayRatingDates({ context, replayMatches: matches })
+  assert.equal(historical.basis.state.eventTrackers.get(historicalEventId)!.applied, false)
+  const originalHistorical = structuredClone(historical)
+  const beforeState = structuredClone(historical.basis.state)
+  const before = materializeRankingModel({ context: structuredClone(context), state: beforeState })
+  assert.equal(beforeState.eventTrackers.get(historicalEventId)!.applied, true)
+  assert.ok([...beforeState.leaguePlacementDeltas.values()].some((delta) => delta !== 0))
+  const replayContext = structuredClone(context)
+  replayContext.authoritativeMatches.push(...structuredClone(historical.games))
+  replayContext.lastDate = historical.games[0]!.date
+  replayContext.teamRosterBasis = rosterBasisByTeam(replayContext.authoritativeMatches)
+  for (const [id, edge] of historical.playerEdges) replayContext.pregamePlayerRatingEdges.set(id, structuredClone(edge))
+  const afterState = replayRatingDates({ context: replayContext, state: structuredClone(historical.basis.state), replayMatches: structuredClone(historical.games) })
+  const after = materializeRankingModel({ context: replayContext, state: afterState })
+  const preview = evaluateConditionalPowerReplay(historical)
+  if (preview.status !== 'ready') throw new Error(preview.detail)
+  for (const team of preview.teams) {
+    const beforePower = publishedRating(before.standings.find((row) => row.team === team.team)!.rating, historical.basis.ratingScale)
+    const afterPower = publishedRating(after.standings.find((row) => row.team === team.team)!.rating, historical.basis.ratingScale)
+    assert.deepEqual(team, { team: team.team, before: beforePower, after: afterPower, delta: afterPower - beforePower })
+  }
+  assert.deepEqual(historical, originalHistorical)
+})
+
+test('malformed required state maps and clone errors return unavailable without throwing', () => {
+  for (const field of ['ratings', 'lastRosterByTeam', 'leagueScores', 'latestRatingUpdates', 'factorCounts'] as const) {
+    const input = conditionalPowerFixture()
+    Reflect.deleteProperty(input.basis.state, field)
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', field)
+    assert.deepEqual(input, original)
+  }
+  const input = conditionalPowerFixture()
+  Reflect.set(input.basis.state, 'ratings', () => new Map())
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'unavailable')
+})
+
+test('a player cannot appear in both opposing lineups in one hypothetical game', () => {
+  const input = conditionalPowerFixture()
+  input.games[0]!.teamBRoster = structuredClone(input.games[0]!.teamARoster)
+  const original = structuredClone(input)
+  const result = evaluateConditionalPowerReplay(input)
+  assert.equal(result.status, 'unavailable')
+  if (result.status === 'unavailable') assert.equal(result.reason, 'unsupported-scenario')
+  assert.deepEqual(input, original)
+})
+
+test('future player priors require explicit valid evidence, coverage and freshness rather than production defaults', () => {
+  for (const field of ['teamAEvidenceBasis', 'teamBEvidenceBasis'] as const) {
+    for (const value of [undefined, 'unavailable', 'unsupported-evidence']) {
+      const input = conditionalPowerFixture()
+      Reflect.set(input.playerEdges.get(input.games[0]!.id)!, field, value)
+      const original = structuredClone(input)
+      const result = evaluateConditionalPowerReplay(input)
+      assert.equal(result.status, 'unavailable', `${field}: ${value}`)
+      if (result.status === 'unavailable') assert.equal(result.reason, 'missing-player-priors')
+      assert.deepEqual(input, original)
+    }
+  }
+  for (const field of ['teamACoverage', 'teamBCoverage', 'teamAFreshnessWeight', 'teamBFreshnessWeight'] as const) {
+    for (const value of [undefined, NaN, -0.1, 1.1]) {
+      const input = conditionalPowerFixture()
+      Reflect.set(input.playerEdges.get(input.games[0]!.id)!, field, value)
+      const original = structuredClone(input)
+      const result = evaluateConditionalPowerReplay(input)
+      assert.equal(result.status, 'unavailable', `${field}: ${value}`)
+      if (result.status === 'unavailable') assert.equal(result.reason, 'missing-player-priors')
+      assert.deepEqual(input, original)
+    }
+  }
+  const input = conditionalPowerFixture()
+  for (const edge of input.playerEdges.values()) {
+    edge.teamAEvidenceBasis = 'prior-observed'
+    edge.teamBEvidenceBasis = 'prior-observed'
+    edge.teamACoverage = 0
+    edge.teamBFreshnessWeight = 0
+  }
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
 })
 
 test('production replay errors and cancelled selections have no writes to input maps or provider calls', (t) => {

@@ -140,6 +140,8 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     const liveSection = page.locator('section[aria-label="live"]')
     await liveSection.getByText('Conditional Power preview', { exact: true }).click()
     assert.match(await liveSection.innerText(), /Pre-series Power previews close when the source reports play/)
+    assert.match(await liveSection.innerText(), /Pre-match Power \(snapshot\): T1/)
+    assert.doesNotMatch(await liveSection.innerText(), /Current Power \(snapshot\):/)
     assert.equal(await liveSection.getByLabel('Winner', { exact: true }).count(), 0)
     ledgerStatus = 503
     feed = { ...feed, fetchedAt: afterMinutes(21) }
@@ -155,6 +157,8 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     assert.match(await page.locator('section[aria-label="results"]').innerText(), /Published pre-match forecast/)
     await page.locator('section[aria-label="results"]').getByText('Conditional Power preview', { exact: true }).click()
     assert.match(await page.locator('section[aria-label="results"]').innerText(), /Actual rating impact belongs to the rating evidence ledger/)
+    assert.match(await page.locator('section[aria-label="results"]').innerText(), /Pre-match Power \(snapshot\): T1/)
+    assert.doesNotMatch(await page.locator('section[aria-label="results"]').innerText(), /Current Power \(snapshot\):/)
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: 800 })
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
