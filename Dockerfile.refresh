@@ -2,7 +2,7 @@
 FROM rust:1.98-slim-bookworm AS build
 WORKDIR /app
 COPY worker ./worker
-RUN cargo build --manifest-path worker/Cargo.toml --release --locked --package ranking-refresh --jobs 2
+RUN cargo +1.98.0 build --manifest-path worker/Cargo.toml --release --locked --package ranking-refresh --jobs 2
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates && rm -rf /var/lib/apt/lists/*

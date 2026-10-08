@@ -6,8 +6,8 @@ refresh worker. The web server and browser remain in TypeScript.
 The workspace requires Rust 1.98.0. From the repository root:
 
 ```sh
-cargo test --manifest-path worker/Cargo.toml --workspace --locked
-cargo build --manifest-path worker/Cargo.toml --package ranking-refresh --locked
+cargo +1.98.0 test --manifest-path worker/Cargo.toml --workspace --locked
+cargo +1.98.0 build --manifest-path worker/Cargo.toml --package ranking-refresh --locked
 pnpm exec tsx --tsconfig tsconfig.app.json scripts/check-rust-parity.ts
 docker build -f Dockerfile.refresh -t ranking-refresh .
 docker run --rm ranking-refresh contracts
