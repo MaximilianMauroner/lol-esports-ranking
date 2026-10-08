@@ -65,12 +65,12 @@ test('native fetch matches Node files and manifests on recorded paginated provid
             assert.equal(text, 'gameid,date,league,side\na,2026-01-01,LCK,Blue\na,2026-01-01,LCK,Red\n')
           } else {
             const other = join(root, 'node', path.includes('/leaguepedia/') ? 'leaguepedia' : 'lolesports', basename(path))
-            if (worker === 'rust') assert.deepEqual(normalize(JSON.parse(text)), normalize(JSON.parse(await readFile(other, 'utf8'))))
+            if (worker === 'rust') assert.equal(JSON.stringify(normalize(JSON.parse(text)), null, 2), JSON.stringify(normalize(JSON.parse(await readFile(other, 'utf8'))), null, 2))
           }
         }
       }
     }
-    assert.deepEqual(manifests[1], manifests[0])
+    assert.equal(JSON.stringify(manifests[1], null, 2), JSON.stringify(manifests[0], null, 2))
     assert.deepEqual(requestTraces[1], requestTraces[0])
     assert.equal(requestTraces[0].length, 7)
   } finally {
