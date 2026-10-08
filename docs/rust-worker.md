@@ -3,6 +3,10 @@
 The Rust worker is being added in stages for issue #84. Node remains the default
 refresh worker. The web server and browser remain in TypeScript.
 
+Malformed LoL Esports JSON responses use the warning text `Invalid JSON response`
+in both workers. Only JSON parsing errors use this text; HTTP, network, retry, and
+body-read errors keep their diagnostics. Earlier stored warnings remain readable.
+
 The workspace requires Rust 1.98.0. From the repository root:
 
 ```sh
