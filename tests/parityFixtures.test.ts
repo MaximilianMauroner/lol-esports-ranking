@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { promisify } from 'node:util'
-import { providerDatetimeUtc } from '../src/lib/importers/providerTime'
+import { providerDate, providerDatetimeUtc } from '../src/lib/importers/providerTime'
 import { buildParityFixtures } from '../scripts/parity-fixtures'
 
 const exec = promisify(execFile)
@@ -24,6 +24,16 @@ test('lowercase zone-less provider timestamps preserve UTC clocks and low years'
   }
   assert.equal(providerDatetimeUtc('2025-01-11t17:13:25z'), '2025-01-11T17:13:25.000Z')
   assert.equal(providerDatetimeUtc('2025-01-11t17:13:25+09:00'), '2025-01-11T08:13:25.000Z')
+})
+
+test('malformed provider dates use ten UTF-16 units and replace only lone surrogates', () => {
+  assert.equal(providerDate('🙂🙂🙂🙂🙂🙂'), '🙂🙂🙂🙂🙂')
+  assert.equal(providerDate('abcdefghi🙂'), 'abcdefghi\ufffd')
+  assert.equal(providerDate('abcdefgh🙂tail'), 'abcdefgh🙂')
+  assert.equal(providerDate('é🙂🙂🙂🙂🙂tail'), 'é🙂🙂🙂🙂\ufffd')
+  // Lone input units stay outside JSON golden inputs because Rust strings require Unicode scalars.
+  assert.equal(providerDate('abc\ud800def'), 'abc\ufffddef')
+  assert.equal(providerDate('2025-01-11T17:13:25Z'), '2025-01-11')
 })
 
 test('provider timestamp fixtures agree in fresh UTC and non-UTC processes', async () => {

@@ -22,7 +22,8 @@ UTF-16 code-unit order, canonical JSON, hashes, and provider timestamps. Gzip
 output can differ between workers. Stored identity uses the digest of validated
 uncompressed bytes, as described in [storage identity](storage-identity.md).
 
-`exp` and `log` preserve V8's evaluation order. `pow` follows Node 24's
+`exp` and `log` preserve V8's evaluation order, including the NaN payload for
+negative logarithm inputs. `pow` follows Node 24's
 `use_std_math_pow` default and uses the platform math library after its
 ECMAScript special cases. CI runs the golden tests on Linux and inside the
 Debian worker image. Other platforms and Node versions need the same parity
@@ -32,6 +33,9 @@ Provider time parity covers four-digit calendar dates, minute/second clocks and
 explicit numeric zones, including the bounded legacy space-separated forms.
 Zone-less clocks use UTC with space, uppercase `T`, or lowercase `t` separators;
 lowercase `t` no longer uses Node's legacy host time zone.
+Malformed date fallbacks retain the first ten UTF-16 units and replace unpaired
+surrogates with U+FFFD in both workers. Parsed dates and ASCII fallbacks keep their
+existing behavior; stored date values are not rewritten.
 Zone arithmetic must fit signed 32-bit seconds. Natural-language dates and V8's
 extreme integer-overflow forms are outside this contract. For example, Node can
 turn an offset of `+999999999:59` into an unrelated date through legacy overflow;

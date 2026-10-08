@@ -1350,6 +1350,51 @@
       "left": "3fe0000000000000",
       "right": "3fb4daeef2a5b835",
       "result": "3fee3e3c1a5ea07e"
+    },
+    {
+      "operation": "log",
+      "left": "bff0000000000000",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "bfe0000000000000",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "8000000000000001",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "fff0000000000000",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "8000000000000000",
+      "result": "fff0000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "0000000000000000",
+      "result": "fff0000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "0000000000000001",
+      "result": "c0874385446d71c3"
+    },
+    {
+      "operation": "log",
+      "left": "7ff0000000000000",
+      "result": "7ff0000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "7ff8000000000000",
+      "result": "7ff8000000000000"
     }
   ],
   "providerTime": [
@@ -2191,6 +2236,30 @@
       "input": "2025-01-11t17:13:25+09",
       "instantMs": null,
       "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "🙂🙂🙂🙂🙂🙂",
+      "instantMs": null,
+      "date": "🙂🙂🙂🙂🙂",
+      "datetimeUtc": null
+    },
+    {
+      "input": "abcdefghi🙂",
+      "instantMs": null,
+      "date": "abcdefghi�",
+      "datetimeUtc": null
+    },
+    {
+      "input": "abcdefgh🙂tail",
+      "instantMs": null,
+      "date": "abcdefgh🙂",
+      "datetimeUtc": null
+    },
+    {
+      "input": "é🙂🙂🙂🙂🙂tail",
+      "instantMs": null,
+      "date": "é🙂🙂🙂🙂�",
       "datetimeUtc": null
     }
   ]

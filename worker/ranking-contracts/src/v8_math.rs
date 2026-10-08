@@ -107,7 +107,7 @@ pub fn log(mut x: f64) -> f64 {
             return f64::NEG_INFINITY;
         }
         if hx < 0 {
-            return f64::NAN;
+            return f64::from_bits(0x7ff4000000000000);
         }
         k -= 54;
         x *= f64::from_bits(0x4350000000000000);
