@@ -112,6 +112,7 @@ export type IncrementalStateBuild = {
 }
 
 type SnapshotBuild = Awaited<ReturnType<typeof buildStaticSnapshot>>
+type RawPrefixForDate = (throughDate: string) => ReturnType<typeof rawPrefix>
 
 export type IncrementalRankingBuildResult =
   | { action: 'no-change'; sourceData: RankingSourceImport; metrics: IncrementalBuildMetrics }
@@ -342,7 +343,8 @@ export async function buildRankingIncrementally({
     const changes = changesForClassification(previousLedger, ledger, classification)
     previousLedger = undefined
     if (mode === 'gated' && !comparisonMode) memoryCollections.afterInputRelease = collectRefreshGarbage()
-    const replay = await selectReplay(restored, sourceData, ledger, classification, generatedAt)
+    const prefixForDate = createRawPrefixReader(ledger)
+    const replay = await selectReplay(restored, sourceData, prefixForDate, classification, generatedAt)
     releaseRestoredReplayPayloads(restored)
     const {
       replayModel,
@@ -351,6 +353,7 @@ export async function buildRankingIncrementally({
     } = replayAndBuildTerminalState(
       sourceData,
       ledger,
+      prefixForDate,
       restored,
       replay,
       generatedAt,
@@ -538,6 +541,7 @@ function buildCurrentCanonicalLedger(
 function replayAndBuildTerminalState(
   sourceData: RankingSourceImport,
   ledger: CanonicalMatchLedger,
+  prefixForDate: RawPrefixForDate,
   restored: RestoredIncrementalAuthority,
   replay: Awaited<ReturnType<typeof selectReplay>>,
   generatedAt: string,
@@ -557,6 +561,7 @@ function replayAndBuildTerminalState(
     state: buildTerminalState(
       sourceData,
       ledger,
+      prefixForDate,
       result.state,
       restored,
       generatedAt,
@@ -766,14 +771,14 @@ function stateCompatibility(sourceData: RankingSourceImport): StateCompatibility
 async function selectReplay(
   restored: RestoredIncrementalAuthority,
   sourceData: RankingSourceImport,
-  ledger: CanonicalMatchLedger,
+  prefixForDate: RawPrefixForDate,
   classification: RankingChangeClassification,
   generatedAt: string,
 ) {
   const changedDate = classification.earliestChangedUtcDate
   if (!changedDate) return { replayFromUtcDate: undefined, rejectedCandidates: [], candidateCount: restored.stateManifest.checkpoints.length }
   const eligibleReferences = restored.stateManifest.checkpoints
-    .filter((candidate) => candidate.boundary.date < changedDate && rawPrefixMatchesLedger(candidate.rawPrefix, ledger, candidate.boundary.date))
+    .filter((candidate) => candidate.boundary.date < changedDate && rawPrefixMatchesLedger(candidate.rawPrefix, prefixForDate, candidate.boundary.date))
     .toReversed()
   const checkpointIdentity = (candidate: IncrementalStateManifest['checkpoints'][number]) =>
     `${candidate.boundary.date}\u0000${candidate.boundary.matchId}\u0000${candidate.object.sha256}`
@@ -936,6 +941,7 @@ function metadataOnlyRootArtifact(previous: Record<string, unknown>, sourceData:
 function buildTerminalState(
   sourceData: RankingSourceImport,
   ledger: CanonicalMatchLedger,
+  prefixForDate: RawPrefixForDate,
   state: ReturnType<typeof replayRankingState>['state'],
   restored: RestoredIncrementalAuthority,
   generatedAt: string,
@@ -943,7 +949,7 @@ function buildTerminalState(
   sourceReceiptDigest?: string,
 ): IncrementalStateBuild {
   const previous = restored.stateManifest.checkpoints
-    .filter((candidate) => rawPrefixMatchesLedger(candidate.rawPrefix, ledger, candidate.boundary.date))
+    .filter((candidate) => rawPrefixMatchesLedger(candidate.rawPrefix, prefixForDate, candidate.boundary.date))
     .map((candidate) => ({
     boundary: candidate.boundary,
     rawPrefix: candidate.rawPrefix,
@@ -955,7 +961,7 @@ function buildTerminalState(
     previous.map((checkpoint) => [`${checkpoint.boundary.date}\u0000${checkpoint.boundary.matchId}`, checkpoint]),
   )
   if (persistTerminalCheckpoint || previous.length === 0) {
-    const terminal = checkpointFromState(sourceData, ledger, state, generatedAt)
+    const terminal = checkpointFromState(sourceData, ledger, state, generatedAt, prefixForDate)
     byBoundary.set(`${terminal.boundary.date}\u0000${terminal.boundary.matchId}`, terminal)
   }
   return {
@@ -976,10 +982,10 @@ function resolvedSourceReceiptDigest(provided: string | undefined, ledger: Canon
   return digest
 }
 
-function checkpointFromState(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, state: ReturnType<typeof replayRatingDates>, generatedAt: string) {
+function checkpointFromState(sourceData: RankingSourceImport, ledger: CanonicalMatchLedger, state: ReturnType<typeof replayRatingDates>, generatedAt: string, prefixForDate?: RawPrefixForDate) {
   if (!state.processedThroughUtcDate || !state.previousMatch) throw new Error('Cannot encode an incomplete rating boundary')
   const date = state.processedThroughUtcDate
-  const prefix = rawPrefix(ledger, date)
+  const prefix = prefixForDate?.(date) ?? rawPrefix(ledger, date)
   const prefixMatches = sourceData.matches.filter((match) => match.date <= date)
   const eventContract = buildRatingCheckpointEventContract(prefixMatches, state.eventWeightContext, tournamentLifecyclesFor(sourceData, generatedAt))
   const ratingCheckpoint = encodeRatingCheckpointEnvelope(state, {
@@ -1107,8 +1113,21 @@ function rawPrefix(ledger: CanonicalMatchLedger, throughDate: string) {
   return { matchCount: rows.length, digest: sha256(stableJson(rows.map((row) => ({ key: row.key, scoringDigest: row.scoringDigest, utcDate: row.utcDate })))) }
 }
 
-function rawPrefixMatchesLedger(prefix: { matchCount: number; digest: string }, ledger: CanonicalMatchLedger, throughDate: string) {
-  const current = rawPrefix(ledger, throughDate)
+function createRawPrefixReader(ledger: CanonicalMatchLedger): RawPrefixForDate {
+  // The ledger stays fixed during one build. Cache values, never candidate verdicts.
+  const byDate = new Map<string, ReturnType<typeof rawPrefix>>()
+  return (throughDate) => {
+    let prefix = byDate.get(throughDate)
+    if (!prefix) {
+      prefix = rawPrefix(ledger, throughDate)
+      byDate.set(throughDate, prefix)
+    }
+    return prefix
+  }
+}
+
+function rawPrefixMatchesLedger(prefix: { matchCount: number; digest: string }, prefixForDate: RawPrefixForDate, throughDate: string) {
+  const current = prefixForDate(throughDate)
   return current.matchCount === prefix.matchCount && current.digest === prefix.digest
 }
 
