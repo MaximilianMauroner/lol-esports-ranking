@@ -1,4 +1,4 @@
-import { referencePublicDataDir } from '../scripts/reference-public-data.mjs'
+import { referencePublicDataDir, referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -1674,7 +1674,7 @@ async function writeContentAddressedFixture(publicDir: string, generationId: str
   const rootManifest = JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8'))
   const defaultKey = rootManifest.defaultSnapshotKey
   const defaultEntry = rootManifest.snapshotIndex[defaultKey]
-  const shard = JSON.parse(await readFile(`public${new URL(defaultEntry.url, 'https://fixture.invalid').pathname}`, 'utf8'))
+  const shard = JSON.parse(await readFile(join(referencePublicDir, new URL(defaultEntry.url, 'https://fixture.invalid').pathname.slice(1)), 'utf8'))
   const generatedAt = '2026-07-11T00:00:00.000Z'
   rootManifest.generatedAt = generatedAt
   rootManifest.artifactMeta = {
