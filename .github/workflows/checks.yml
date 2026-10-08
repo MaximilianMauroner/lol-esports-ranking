@@ -52,7 +52,7 @@ jobs:
   rust-contracts:
     name: Rust contracts and model config parity
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -92,6 +92,12 @@ jobs:
         run: |
           cargo +1.98.0 build --manifest-path worker/Cargo.toml --package ranking-refresh --release --locked
           node --max-old-space-size=2048 --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --raw-seam-parity
+      - name: Rust provider replay and failure integration
+        env:
+          RANKING_PROVIDER_FETCH_WORKER: rust
+          RANKING_REFRESH_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
+          RANKING_RUST_TEST_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
+        run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/downloadLocalData.test.ts tests/rustProviderFetchParity.test.ts
       - name: Build worker image
         run: docker build -f Dockerfile.refresh -t ranking-refresh .
       - name: Fixture tests in image build environment
