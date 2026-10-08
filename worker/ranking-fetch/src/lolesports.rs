@@ -1,6 +1,6 @@
 use crate::{
     Options, Result,
-    http::{Http, Policy},
+    http::{Http, Policy, set_query_parameter},
     timestamp, write_json,
 };
 use reqwest::Url;
@@ -36,13 +36,11 @@ pub fn download(
     let mut warnings = vec![WARNING.to_owned()];
     let fetch = |http: &mut Http, path: &str, key: Option<(&str, &str)>| -> Result<Value> {
         let mut url = Url::parse(&format!("{base}/{path}"))?;
-        url.query_pairs_mut().append_pair("hl", locale);
+        set_query_parameter(&mut url, "hl", locale);
         if let Some((key, value)) = key {
-            url.query_pairs_mut().append_pair(key, value);
+            set_query_parameter(&mut url, key, value);
         }
-        Ok(serde_json::from_slice(
-            &http.get(url, &headers, &Policy::default())?.body,
-        )?)
+        http.get(url, &headers, &Policy::default())?.json()
     };
     let result = (|| -> Result<Value> {
         let initial = fetch(http, "getSchedule", None)?;
@@ -151,10 +149,12 @@ pub fn download(
     match result {
         Ok(value) => write_json(output, &value),
         Err(error) => {
-            write_json(
-                output,
-                &json!({"source":format!("{base}/getSchedule"),"fetchedAt":timestamp(),"locale":locale,"start":start,"end":end,"status":"failed","fetchTelemetry":http.snapshot(),"events":[],"schedulePages":[],"eventDetails":[],"warnings":warnings}),
-            )?;
+            if http.terminal_failure {
+                write_json(
+                    output,
+                    &json!({"source":format!("{base}/getSchedule"),"fetchedAt":timestamp(),"locale":locale,"start":start,"end":end,"status":"failed","fetchTelemetry":http.snapshot(),"events":[],"schedulePages":[],"eventDetails":[],"warnings":warnings}),
+                )?;
+            }
             Err(error)
         }
     }
