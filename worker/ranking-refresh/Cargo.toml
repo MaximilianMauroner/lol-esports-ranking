@@ -7,4 +7,3 @@ publish.workspace = true
 
 [dependencies]
 ranking-contracts = { path = "../ranking-contracts" }
-serde_json.workspace = true

@@ -190,7 +190,6 @@ name = "ranking-refresh"
 version = "0.1.0"
 dependencies = [
  "ranking-contracts",
- "serde_json",
 ]
 
 [[package]]

@@ -1,9 +1,10 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, SecondsFormat};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, SecondsFormat, Timelike};
 
 /// Accepted provider formats are explicit; a host timezone never affects a zone-less value.
 pub fn provider_instant(value: &str) -> Option<i64> {
     if let Ok(date) = DateTime::parse_from_rfc3339(value) {
-        return Some(date.timestamp_millis());
+        // Chrono represents leap seconds with nanoseconds >= 1e9; Node rejects them.
+        return (date.nanosecond() < 1_000_000_000).then(|| date.timestamp_millis());
     }
     for format in [
         "%Y-%m-%d %H:%M:%S%.f",
@@ -12,7 +13,7 @@ pub fn provider_instant(value: &str) -> Option<i64> {
         "%Y-%m-%dT%H:%M",
     ] {
         if let Ok(date) = NaiveDateTime::parse_from_str(value, format) {
-            return Some(date.and_utc().timestamp_millis());
+            return (date.nanosecond() < 1_000_000_000).then(|| date.and_utc().timestamp_millis());
         }
     }
     NaiveDate::parse_from_str(value, "%Y-%m-%d")
