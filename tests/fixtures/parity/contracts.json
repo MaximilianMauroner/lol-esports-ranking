@@ -245,6 +245,45 @@
     },
     {
       "encodedInput": {
+        "$type": "set",
+        "values": [
+          {
+            "$type": "undefined"
+          },
+          "z",
+          "undefined",
+          "a",
+          null
+        ]
+      },
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "encodedInput": {
+        "$type": "map",
+        "entries": [
+          [
+            {
+              "$type": "undefined"
+            },
+            1
+          ],
+          [
+            "z",
+            2
+          ],
+          [
+            "undefined",
+            3
+          ]
+        ]
+      },
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "encodedInput": {
         "nested": {
           "$type": "set",
           "values": [
@@ -434,6 +473,45 @@
       },
       "stableJson": "[10,9,{\"b\":1},{\"a\":2}]",
       "digest": "fnv1a64-bf9ad1f5c79a0e89"
+    },
+    {
+      "encodedInput": {
+        "$type": "set",
+        "values": [
+          {
+            "$type": "undefined"
+          },
+          "z",
+          "undefined",
+          "a",
+          null
+        ]
+      },
+      "stableJson": "[\"a\",null,\"undefined\",\"z\",]",
+      "digest": "fnv1a64-4f579b55ec4e4b39"
+    },
+    {
+      "encodedInput": {
+        "$type": "map",
+        "entries": [
+          [
+            {
+              "$type": "undefined"
+            },
+            1
+          ],
+          [
+            "z",
+            2
+          ],
+          [
+            "undefined",
+            3
+          ]
+        ]
+      },
+      "stableJson": "[[,1],[\"undefined\",3],[\"z\",2]]",
+      "digest": "fnv1a64-df32f81758580b47"
     },
     {
       "encodedInput": {
@@ -1370,6 +1448,186 @@
       "instantMs": null,
       "date": "2016-12-31",
       "datetimeUtc": null
+    },
+    {
+      "input": "2025-02-29",
+      "instantMs": 1740787200000,
+      "date": "2025-02-29",
+      "datetimeUtc": "2025-03-01T00:00:00.000Z"
+    },
+    {
+      "input": "2024-02-30 12:34:56",
+      "instantMs": 1709296496000,
+      "date": "2024-02-30",
+      "datetimeUtc": "2024-03-01T12:34:56.000Z"
+    },
+    {
+      "input": "2025-02-31T12:34:56Z",
+      "instantMs": 1741005296000,
+      "date": "2025-02-31",
+      "datetimeUtc": "2025-03-03T12:34:56.000Z"
+    },
+    {
+      "input": "2025-04-31T12:34:56+09:00",
+      "instantMs": 1746070496000,
+      "date": "2025-04-31",
+      "datetimeUtc": "2025-05-01T03:34:56.000Z"
+    },
+    {
+      "input": "2025-02-00T00:00Z",
+      "instantMs": null,
+      "date": "2025-02-00",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-02-32T00:00Z",
+      "instantMs": null,
+      "date": "2025-02-32",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-13-01T00:00Z",
+      "instantMs": null,
+      "date": "2025-13-01",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-12-31 24:00",
+      "instantMs": 1767225600000,
+      "date": "2025-12-31",
+      "datetimeUtc": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "input": "2024-02-30T24:00:00.0000Z",
+      "instantMs": 1709337600000,
+      "date": "2024-02-30",
+      "datetimeUtc": "2024-03-02T00:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11T24:00:00.0001Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 24:00:00.0001",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T24:01Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T24:00:01Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T25:00Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13Z",
+      "instantMs": 1736615580000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:00.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13+0900",
+      "instantMs": 1736583180000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:13:00.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13-09:30",
+      "instantMs": 1736649780000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-12T02:43:00.000Z"
+    },
+    {
+      "input": "2025-01-11t17:13:25z",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25.123456789Z",
+      "instantMs": 1736615605123,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.123Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+24:00",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:25+09:60",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-1-11T17:13:25Z",
+      "instantMs": null,
+      "date": "2025-1-11T",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-1T17:13:25Z",
+      "instantMs": null,
+      "date": "2025-01-1T",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T7:13:25Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:3:25Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:5Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:25.Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "0000-01-01T00:00:00+01:00",
+      "instantMs": -62167222800000,
+      "date": "0000-01-01",
+      "datetimeUtc": "-000001-12-31T23:00:00.000Z"
+    },
+    {
+      "input": "9999-12-31T24:00Z",
+      "instantMs": 253402300800000,
+      "date": "9999-12-31",
+      "datetimeUtc": "+010000-01-01T00:00:00.000Z"
+    },
+    {
+      "input": "9999-12-31T23:59:59-01:00",
+      "instantMs": 253402304399000,
+      "date": "9999-12-31",
+      "datetimeUtc": "+010000-01-01T00:59:59.000Z"
     }
   ]
 }
