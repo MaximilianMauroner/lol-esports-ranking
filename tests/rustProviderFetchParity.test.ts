@@ -7,8 +7,77 @@ import { basename, join } from 'node:path'
 import test from 'node:test'
 import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib'
 import { createProviderFetchTelemetry, fetchWithRetry } from '../scripts/provider-fetch-retry.mjs'
+import { prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 
 const binary = process.env.RANKING_RUST_TEST_BINARY
+
+test('malformed event-detail JSON has stable warnings without retries and later details continue', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'lolesports-json-parity-'))
+  try {
+    for (const scenario of [
+      { name: 'HTML', body: '<html>unexpected page</html>', continue: false },
+      { name: 'truncated', body: '{"data":', continue: false },
+      { name: 'invalid token', body: '{"data":undefined}', continue: false },
+      { name: 'later valid detail', body: '{"data":', continue: true },
+    ]) {
+      await context.test(scenario.name, async (caseContext) => {
+        const requests: string[] = []
+        const events = [{ startTime: '2026-01-01T01:00:00Z', match: { id: 'bad' } },
+          ...(scenario.continue ? [{ startTime: '2026-01-01T02:00:00Z', match: { id: 'good' } }] : [])]
+        const server = createServer((request, response) => {
+          const url = new URL(request.url ?? '/', 'http://fixture.invalid')
+          requests.push(url.pathname + (url.searchParams.has('id') ? `:${url.searchParams.get('id')}` : ''))
+          response.writeHead(200, { 'content-type': 'application/json', connection: 'close' })
+          response.end(url.pathname === '/getSchedule'
+            ? JSON.stringify({ data: { schedule: { pages: {}, events } } })
+            : url.searchParams.get('id') === 'bad' ? scenario.body : JSON.stringify({ data: { event: { id: 'good', games: [{ id: 'game-good' }] } } }))
+        })
+        try {
+          await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+          const address = server.address()
+          assert.ok(address && typeof address !== 'string')
+          const base = `http://127.0.0.1:${address.port}`
+          let nodeArtifact: unknown
+          let nodeDigest: string | undefined
+          for (const worker of ['node', 'rust'] as const) {
+            await caseContext.test(worker, { skip: worker === 'rust' && !binary }, async () => {
+              const directory = join(root, `${scenario.name}-${worker}`)
+              const before = requests.length
+              const result = await invoke(worker, ['--start', '2026-01-01', '--end', '2026-01-01',
+                '--out-dir', directory, '--oracle', 'false', '--leaguepedia', 'false',
+                '--lolesports-base-url', base, '--lolesports-older-pages', '0', '--lolesports-newer-pages', '0',
+                '--lolesports-detail-limit', '2'])
+              assert.equal(result.code, 0, result.stderr)
+              const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'))
+              assert.equal(manifest.sources.lolesports.status, 'downloaded')
+              const artifact = JSON.parse(await readFile(manifest.files.lolEsportsJson[0], 'utf8'))
+              assert.equal(artifact.fetchTelemetry.requests, scenario.continue ? 3 : 2)
+              assert.equal(artifact.fetchTelemetry.retryCount, 0)
+              assert.deepEqual(artifact.fetchTelemetry.retries, [])
+              assert.deepEqual(artifact.warnings.slice(1), ['LoL Esports getEventDetails failed for bad: Invalid JSON response'])
+              assert.deepEqual(artifact.eventDetails, scenario.continue ? [{ id: 'good', event: { id: 'good', games: [{ id: 'game-good' }] } }] : [])
+              assert.deepEqual(requests.slice(before), ['/getSchedule', '/getEventDetails:bad', ...(scenario.continue ? ['/getEventDetails:good'] : [])])
+              const normalized = normalize(artifact)
+              const digest = prepareSemanticArtifact(normalized, { compress: false }).digest
+              if (worker === 'node') {
+                nodeArtifact = normalized
+                nodeDigest = digest
+              } else {
+                assert.deepEqual(normalized, nodeArtifact)
+                assert.equal(digest, nodeDigest)
+              }
+            })
+          }
+        } finally {
+          server.closeAllConnections()
+          await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+        }
+      })
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('native fetch matches Node files and manifests on recorded paginated provider responses', { skip: !binary }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'rust-fetch-parity-'))
