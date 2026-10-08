@@ -2,14 +2,16 @@ import { createPublicRankingManifestLoader } from './publicArtifacts/manifestLoa
 import { fetchPublicSnapshotShard } from './publicArtifacts/resolver'
 import { resolvePublicArtifactUrl } from './publicArtifacts/urlResolver'
 import { isForecastLedger, isTournamentTeamIdentityMap, type ForecastBasis, type ForecastLedger } from './tournamentForecast'
+import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from './conditionalPowerResultReceipts'
 
 const MANIFEST_URL = import.meta.env?.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
 const IDENTITY_URL = '/tournament-data/forecasts/team-ids.json'
 const LEDGER_URL = '/tournament-data/forecasts/ledger.json'
+const POWER_PREVIEWS_URL = '/tournament-data/forecasts/power-previews.json'
 
 /** Optional read-only artifacts; absence leaves the schedule usable. No collector or publisher calls occur here. */
 export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fetch): Promise<{
-  basis: ForecastBasis | null; reason?: string
+  basis: ForecastBasis | null; reason?: string; powerPreviews?: ConditionalPowerResultLedger | null
 }> {
   try {
     const boundedFetch: typeof fetch = (input, init) => fetcher(input, {
@@ -25,7 +27,9 @@ export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fe
     const entry = manifest.snapshotIndex[key]
     if (!entry) throw new Error('The current default rating snapshot is unavailable.')
     const snapshot = await fetchPublicSnapshotShard(resolvePublicArtifactUrl(entry.url, MANIFEST_URL), key, entry, manifest, { fetcher: boundedFetch })
-    return { basis: {
+    const response = await boundedFetch(POWER_PREVIEWS_URL, { cache: 'no-store' }).catch(() => null)
+    const previewValue: unknown = response?.ok ? await response.json().catch(() => null) : null
+    return { powerPreviews: isConditionalPowerResultLedger(previewValue) ? previewValue : null, basis: {
       snapshotId: `${manifest.artifactMeta?.runId ?? manifest.generatedAt}/${key}`,
       ratingDataAsOf: manifest.coverage.latestMatchDate ?? '', ratingPublishedAt: manifest.generatedAt,
       dataMode: manifest.dataMode, model: manifest.model, snapshot, identityMap: identityValue,

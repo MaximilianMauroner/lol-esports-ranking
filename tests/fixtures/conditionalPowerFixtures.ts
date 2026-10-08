@@ -8,6 +8,11 @@ import type { TournamentSeries } from '../../src/lib/tournamentFeed'
 import { encodeRatingCheckpointEnvelope } from '../../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract } from '../../src/lib/ratingCheckpointInventory'
 import { digestCausalValue } from '../../src/lib/causalRecompute'
+import { materializeRankingModel } from '../../src/lib/model'
+import { createStaticRankingData } from '../../src/lib/snapshot'
+import { createPublicArtifactWritePlan } from '../../src/lib/publicArtifacts/writePlan'
+import { createConditionalPowerResultReceipt } from '../../src/lib/conditionalPowerResultReceiptBuilder'
+import type { ForecastBasis } from '../../src/lib/tournamentForecast'
 
 const roles: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 function roster(team: string, date: string): MatchRosterSnapshot {
@@ -83,4 +88,36 @@ export function conditionalPowerFixture(bestOf: 1 | 3 | 5 = 5, outcome: Conditio
   }
   const playerEdges = new Map(games.map((game) => [game.id, structuredClone(edge)]))
   return { series, outcome, now: Date.parse('2026-09-16T11:00:00.000Z'), basis, games, playerEdges }
+}
+
+/** Public fixture artifacts come from the same exact state as the producer component receipt. */
+export function conditionalPowerReceiptFixture(bestOf: 1 | 3 | 5 = 5) {
+  const input = conditionalPowerFixture(bestOf)
+  const generatedAt = new Date(input.now).toISOString()
+  const ranking = materializeRankingModel({ context: structuredClone(input.basis.context), state: structuredClone(input.basis.state) })
+  const data = createStaticRankingData({
+    matches: input.basis.context.authoritativeMatches, teams: input.basis.context.teams, rosters: {},
+    generatedAt: '2026-09-16T10:00:00.000Z', source: 'Controlled offline Power-component fixture', dataMode: 'seeded-sample',
+    precomputedGlobalRanking: ranking, materializeSnapshotKeys: new Set(['All__All__All']), materializeTournamentIds: new Set(),
+  })
+  const plan = createPublicArtifactWritePlan(data)
+  const snapshot = plan.snapshots[plan.manifest.defaultSnapshotKey]
+  if (!snapshot) throw new Error('The controlled default snapshot is missing')
+  const forecastBasis: ForecastBasis = {
+    snapshotId: `${plan.manifest.artifactMeta.runId}/${plan.manifest.defaultSnapshotKey}`,
+    ratingDataAsOf: plan.manifest.coverage.latestMatchDate!, ratingPublishedAt: plan.manifest.generatedAt,
+    dataMode: plan.manifest.dataMode, model: plan.manifest.model, snapshot,
+    identityMap: {
+      version: 1, source: 'lolesports-persisted-site-api', revision: 'controlled-component-identities',
+      mappings: input.basis.teamNames.map((team, index) => {
+        const sourceTeamId = input.basis.sourceTeamIds[index]
+        const row = snapshot.standings.find((entry) => entry.team === team)
+        if (!sourceTeamId || !row) throw new Error('The controlled identity mapping is incomplete')
+        return { sourceTeamId, teamId: row.teamId }
+      }),
+    },
+  }
+  const result = createConditionalPowerResultReceipt({ series: input.series, forecastBasis, replayBasis: input.basis, generatedAt })
+  if (result.status !== 'ready') throw new Error(result.detail)
+  return { ...input, generatedAt, forecastBasis, plan, receipt: result.receipt }
 }

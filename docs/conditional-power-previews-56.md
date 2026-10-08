@@ -1,10 +1,13 @@
 # Conditional Power previews (#56)
 
-The supported slice is a read-only historical-corpus adapter, an offline
-complete-input conditional replay and a match card that explains public
-unavailability. It does not activate production or
-publish a preview artifact. The existing tournament forecast flag controls the
-card. No projected ranks or changed tournament simulation strengths are included.
+The supported slice includes a partial numeric preview for the stable-team
+series-result component, an offline complete-input replay and a match card with
+legal winner/score controls. Both calculations use production functions and
+public endpoint conversion. The partial component requires an exact producer
+state and pinned event mapping; a forecast alone cannot supply these inputs.
+No production activation or real artifact publication occurs. The existing
+forecast flag controls the card. Projected ranks and tournament simulation
+strength changes are excluded.
 
 ## Dependency state
 
@@ -152,14 +155,34 @@ corpus in `data/raw/`. Its external file references are not accessed here.
 | Real event assumptions | Canonical event/team/series mapping, region, tier, phase, lifecycle and pinned event calendar | Canonical schedule/event producer must provide the sourced mapping. Schedule labels alone cannot establish weighting or terminal placement evidence. |
 | Future game inputs | Five-role player IDs, causal player edges, patch, side assignment, UTC date/time, ordered games, kills/gold/objectives/duration | Official/provider lineup and game sources own confirmations. Before play, performance stats are unknown. Full future deltas remain unavailable unless every input is explicitly supplied as a hypothetical assumption. |
 
-The active #84 owner controls its Rust migration/CLI/contracts. This PR does not
-change those files or ask that owner to choose the reversible preview adapter.
-A result-only transition is not exported by the current production engine. It
-still evaluates the execution channel from detailed stats, even at zero current
-prediction weight. Filling unknown stats with zero or running invalid values to
-extract a stable component would not satisfy the production parity contract.
-Introducing that model boundary belongs to a separately scoped production-engine
-change coordinated with #84, rather than this preview-only slice.
+`evaluateConditionalPowerResultComponent` applies only the production stable-team
+result deltas to a detached snapshot. `calculateSeriesResultUpdate` is the shared
+production boundary; the engine still applies its original form, league and
+execution updates. No model parameter changes accompany this extraction.
+
+The component freezes snapshot player priors, lineup continuity, momentum,
+uncertainty, league scores, records and historical evidence. It recomputes the
+production standing projection after changing only the two stable ratings.
+The scheduled UTC date selects event weighting. Time decay, patch changes,
+placements, other future matches and game-performance training are excluded.
+These assumptions appear on the card. The number is labeled **Stable-team result
+component**; the full future Power delta remains unavailable.
+
+`createConditionalPowerResultReceipt` produces all legal outcomes from exact
+state and the same public forecast basis. Both baseline endpoints must match
+current public Power. Receipts bind model/config, scale, event/source state,
+identity-map revision, snapshot, dates and the state/context digest.
+`publishConditionalPowerResultOffline` persists immutable local receipts;
+`readConditionalPowerResultsOffline` validates them. `conditionalPowerResultArtifact`
+assembles the optional `forecasts/power-previews.json` companion in memory for
+`/tournament-data/forecasts/power-previews.json`. It does not deliver or publish it.
+The UI loads it read-only and rejects stale or ambiguous inputs. No raw state
+enters the browser bundle. Missing companions preserve the existing unavailable
+state. Production delivery remains a separately authorized producer action.
+
+The Rust owner confirmed no overlapping ownership of the shared TypeScript series
+calculation or snapshot projection. Migration, CLI, contracts, benchmark and
+harness work remain with that owner.
 
 Completed lifecycle boundaries after the pinned pre-state are unsupported in
 this slice. Prefix-only event trackers cannot apply a newly completed future
@@ -188,14 +211,16 @@ model, state, event, format, roster, stats, prior edges and scores fail closed.
 The existing forecast browser journey checks public missing-data reasons,
 keyboard/mobile selection, basis refresh, live closure and frozen receipt odds.
 
-Full #56 acceptance remains blocked: numeric previews for real public matches
-need the source inputs listed above and a public integration with a supported
-complete calculation or a separately scoped result-only production transition.
-The safe internal corpus adapter is implemented here. #46 public receipts do not
-supply its source inputs, and future game statistics cannot be sourced before
-play. The remaining blocker is source evidence and the production boundary,
-not permission for a reversible preview implementation choice.
-This PR must not close #56 or claim numerical public preview acceptance. Synthetic
-fixture/browser evidence proves only the supported slice, not production or user
-acceptance. #37's real generation reconciliation remains owned by its separately
-authorized production replay. No model parameters change here.
+The numeric companion is implemented and verified with controlled offline inputs.
+Real public-match coverage still requires the ranking producer's authorized exact
+state and a reviewed schedule-to-production event mapping. The local public
+reference omits raw state and cannot recover it from rounded Power. No provider
+or production access is performed here. Future statistics cannot be obtained
+before play, so complete future deltas remain unavailable by design; the stable
+component is the supported calculation permitted by #56.
+
+Controlled/browser evidence does not establish real-generation or user acceptance.
+Keep #56 open while those source and delivery requirements remain unsatisfied.
+#37's real generation reconciliation remains owned by its separately authorized
+production replay. Historical heap disposition is a separate merge hold; passing
+preview tests cannot waive it.

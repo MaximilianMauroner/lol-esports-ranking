@@ -348,7 +348,7 @@ export function rosterVolatilityMultiplier(continuity?: number) {
   return clamp(1 + (1 - continuity) * 0.5, 1, rosterVolatilityKCeiling)
 }
 
-export function isInternationalMatch(match: MatchRecord) {
+export function isInternationalMatch(match: Pick<MatchRecord, 'league' | 'event' | 'region' | 'tier'>) {
   if (isDemaciaCupEvent(`${match.league} ${match.event}`)) return false
   return match.region === 'International' || ['worlds-playoffs', 'worlds-main', 'msi-bracket', 'msi-play-in', 'minor-international'].includes(match.tier)
 }
