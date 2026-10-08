@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay, hasUniqueConditionalPowerGameAliases } from '../src/lib/conditionalPowerReplay'
+import type { MatchRecord } from '../src/types'
+import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases } from '../src/lib/conditionalPowerReplay'
 import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerReplayBasis'
 import { legalConditionalScores, publicConditionalPowerPreview } from '../src/lib/conditionalPowerPreview'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
@@ -127,6 +128,73 @@ function threeTeamConditionalPowerFixture() {
 }
 
 const gameAliasFields = ['id', 'officialGameId', 'sourceGameId'] as const
+
+test('fresh production pins reject historical series aliases shared by distinct canonical owners', () => {
+  const baseline = threeTeamConditionalPowerFixture()
+  const cases: Array<{ label: string; mutate: (first: MatchRecord, second: MatchRecord) => void }> = [
+    { label: 'raw source match alias', mutate: (first, second) => { first.sourceMatchId = second.sourceMatchId = 'shared-source-series' } },
+    { label: 'production-normalized source match root', mutate: (first, second) => {
+      first.sourceMatchId = 'shared-source-series_game1'; second.sourceMatchId = 'shared-source-series_game2'
+    } },
+    { label: 'source game root hidden by higher-priority source match IDs', mutate: (first, second) => {
+      first.sourceMatchId = 'distinct-source-first'; second.sourceMatchId = 'distinct-source-second'
+      first.sourceGameId = 'shared-game-series_game1'; second.sourceGameId = 'shared-game-series_game2'
+    } },
+    { label: 'official match alias and raw source match alias', mutate: (first, second) => { second.sourceMatchId = first.officialMatchId } },
+    { label: 'official match alias and normalized source game root', mutate: (first, second) => {
+      second.sourceMatchId = 'distinct-higher-priority-source'; second.sourceGameId = `${first.officialMatchId}_game2`
+    } },
+    { label: 'normalized roots across source match and source game namespaces', mutate: (first, second) => {
+      first.sourceMatchId = 'shared-cross-source_game1'; second.sourceGameId = 'shared-cross-source_game2'
+    } },
+  ]
+  for (const { label, mutate } of cases) {
+    const input = structuredClone(baseline)
+    const first = input.basis.context.authoritativeMatches.find((match) => match.id === 'prior-0')!
+    const second = input.basis.context.authoritativeMatches.find((match) => match.id === 'prior-1')!
+    first.officialMatchId = 'controlled-historical-first'
+    second.officialMatchId = 'controlled-historical-second'
+    mutate(first, second)
+    const context = createRatingReplayContext(input.basis.context.authoritativeMatches, input.basis.context.teams)
+    input.basis.context = context
+    input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+    pinControlledConditionalPowerBasis(input.basis)
+    const original = structuredClone(input)
+    assert.equal(hasUniqueConditionalPowerGameAliases(context.authoritativeMatches), true, label)
+    assert.equal(hasUniqueConditionalPowerSeriesAliases(context.authoritativeMatches), false, label)
+    assert.equal(input.basis.state.processedMatchCount, context.authoritativeMatches.length, label)
+    assert.equal(resolveCanonicalSeries(context.authoritativeMatches).filter((series) => series.id === `official-match\u0000${first.officialMatchId}`
+      || series.id === `official-match\u0000${second.officialMatchId}`).length, 2, label)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', label)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'duplicate-series-alias', label)
+    assert.deepEqual(input, original, label)
+  }
+})
+
+test('repeated raw and normalized source aliases within one canonical series preserve its preview', () => {
+  const baseline = threeTeamConditionalPowerFixture()
+  const expected = evaluateConditionalPowerReplay(baseline)
+  if (expected.status !== 'ready') throw new Error(expected.detail)
+  for (const mode of ['raw-source-match', 'normalized-source-match', 'normalized-source-game'] as const) {
+    const input = structuredClone(baseline)
+    for (const match of input.basis.context.authoritativeMatches.filter((game) => game.teamA === 'Gamma')) {
+      match.sourceMatchId = mode === 'raw-source-match' ? match.officialMatchId : `${match.officialMatchId}_game${match.gameNumber}`
+      if (mode === 'normalized-source-game') match.sourceGameId = `${match.officialMatchId}_game${match.gameNumber}`
+    }
+    const context = createRatingReplayContext(input.basis.context.authoritativeMatches, input.basis.context.teams)
+    input.basis.context = context
+    input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+    pinControlledConditionalPowerBasis(input.basis)
+    const original = structuredClone(input)
+    assert.equal(hasUniqueConditionalPowerGameAliases(context.authoritativeMatches), true, mode)
+    assert.equal(hasUniqueConditionalPowerSeriesAliases(context.authoritativeMatches), true, mode)
+    const result = evaluateConditionalPowerReplay(input)
+    if (result.status !== 'ready') throw new Error(`${mode}: ${result.detail}`)
+    assert.deepEqual(result.teams, expected.teams, mode)
+    assert.deepEqual(input, original, mode)
+  }
+})
 
 test('fresh production pins cannot admit cross-row historical game aliases in any identity namespace', () => {
   const baseline = threeTeamConditionalPowerFixture()

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { MatchRecord } from '../src/types'
 import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerReplayBasis'
 import { evaluateConditionalPowerReplay } from '../src/lib/conditionalPowerReplay'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
@@ -276,4 +277,62 @@ test('the corpus adapter rejects cross-record game aliases before replay and pre
   if (expected.status !== 'ready' || result.status !== 'ready') throw new Error('Aliases within one row must preserve supported previews.')
   assert.deepEqual(result.teams, expected.teams)
   assert.deepEqual(source, original)
+})
+
+test('the corpus adapter rejects duplicate historical series aliases even when every game identity is unique', () => {
+  const cases: Array<{ label: string; mutate: (first: MatchRecord, second: MatchRecord) => void }> = [
+    { label: 'repeated raw source match ID', mutate: (first, second) => { first.sourceMatchId = second.sourceMatchId = 'duplicate-source-match' } },
+    { label: 'different suffixes with one production-normalized source match root', mutate: (first, second) => {
+      first.sourceMatchId = 'duplicate-source-match_game1'; second.sourceMatchId = 'duplicate-source-match_game2'
+    } },
+    { label: 'source game root hidden by official and source match IDs', mutate: (first, second) => {
+      first.sourceMatchId = 'higher-priority-first'; second.sourceMatchId = 'higher-priority-second'
+      first.sourceGameId = 'duplicate-source-game_game1'; second.sourceGameId = 'duplicate-source-game_game2'
+    } },
+    { label: 'official ID reused as a normalized source match root', mutate: (first, second) => { second.sourceMatchId = `${first.officialMatchId}_game1` } },
+    { label: 'official ID reused as a normalized source game root', mutate: (first, second) => { second.sourceGameId = `${first.officialMatchId}_game2` } },
+    { label: 'source match and source game aliases normalize to one root', mutate: (first, second) => {
+      first.sourceMatchId = 'duplicate-cross-source_game1'; second.sourceGameId = 'duplicate-cross-source_game2'
+    } },
+  ]
+  for (const { label, mutate } of cases) {
+    const source = sourceFixture()
+    const first = source.historicalMatches[0]!
+    const second = source.historicalMatches[1]!
+    first.officialMatchId = 'adapter-historical-first'
+    second.officialMatchId = 'adapter-historical-second'
+    mutate(first, second)
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    assert.equal(result.status, 'unavailable', label)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'duplicate-series-alias', label)
+    assert.deepEqual(source, original, label)
+  }
+})
+
+test('the corpus adapter accepts repeated raw and normalized aliases owned by one completed series', () => {
+  const source = sourceFixture()
+  const games = source.historicalMatches.slice(-2)
+  for (const [index, game] of games.entries()) Object.assign(game, {
+    date: source.processedThroughUtcDate, officialMatchId: 'adapter-within-series',
+    bestOf: 3, bestOfBasis: 'official', gameNumber: index + 1, winner: 'Alpha',
+  })
+  const control = prepareConditionalPowerReplayBasis(source)
+  if (control.status !== 'ready') throw new Error(control.detail)
+  const expected = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: control.basis })
+  if (expected.status !== 'ready') throw new Error(expected.detail)
+  for (const mode of ['raw', 'normalized'] as const) {
+    const candidate = structuredClone(source)
+    for (const game of candidate.historicalMatches.slice(-2)) {
+      game.sourceMatchId = mode === 'raw' ? game.officialMatchId : `${game.officialMatchId}_game${game.gameNumber}`
+      game.sourceGameId = `${game.officialMatchId}_game${game.gameNumber}`
+    }
+    const original = structuredClone(candidate)
+    const prepared = prepareConditionalPowerReplayBasis(candidate)
+    if (prepared.status !== 'ready') throw new Error(`${mode}: ${prepared.detail}`)
+    const result = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: prepared.basis })
+    if (result.status !== 'ready') throw new Error(`${mode}: ${result.detail}`)
+    assert.deepEqual(result.teams, expected.teams, mode)
+    assert.deepEqual(candidate, original, mode)
+  }
 })

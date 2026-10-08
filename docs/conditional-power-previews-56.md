@@ -93,6 +93,9 @@ Within both historical and hypothetical inputs, every raw, official and source
 game alias must belong to one record. Repeated aliases within that record are
 valid. Conflicting records return unavailable; the preview cannot drop evidence
 or invent a replacement identity.
+Every historical official, source and production-normalized series alias must
+also belong to one canonical series. All games within that series may share an
+alias. Cross-series reuse returns unavailable before replay or projection.
 Supplied player edges must obey the current production cap and its zero-adjustment
 rules below minimum coverage or at zero freshness. Explicit zero edges remain
 supported; the preview never scales adjustments by an invented probability or

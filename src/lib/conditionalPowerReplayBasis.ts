@@ -1,7 +1,7 @@
 import { eventTierConfig } from '../data/rankingConfig'
 import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../types'
 import { unavailablePowerPreview, type PowerPreviewUnavailable } from './conditionalPowerPreview'
-import { conditionalPowerBasisProblem, hasUniqueConditionalPowerGameAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
+import { conditionalPowerBasisProblem, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
 import { createRatingReplayContext, replayRatingDates } from './model'
 import type { PlacementTournamentLifecycle } from './placementResiduals'
 import { decodeRatingCheckpoint, encodeRatingCheckpoint, type RatingCheckpointIdentity } from './ratingCheckpoint'
@@ -59,6 +59,9 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
     }
     if (resolveCanonicalSeries(matches).some((series) => !completeHistoricalSeries(series))) {
       return unavailablePowerPreview('incomplete-historical-inputs', 'Every historical series must have consistent event scoring metadata and supplied event IDs, a verified format and a legal decisive final score within one UTC replay date. Conflicting, ongoing, unknown or cross-date series cannot establish complete historical coverage.')
+    }
+    if (!hasUniqueConditionalPowerSeriesAliases(matches)) {
+      return unavailablePowerPreview('duplicate-series-alias', 'Historical official, source and production-normalized series aliases must have one canonical series owner. Conflicting series cannot be dropped, merged or given invented identities.')
     }
     const context = createRatingReplayContext(matches, source.teams, { tournamentLifecycles: source.tournamentLifecycles })
     const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })

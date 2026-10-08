@@ -151,6 +151,9 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
     }
     const historicalClockProblem = historicalTimestampProblem(matches)
     if (historicalClockProblem) return historicalClockProblem
+    if (!hasUniqueConditionalPowerSeriesAliases(matches)) {
+      return unavailablePowerPreview('duplicate-series-alias', 'Every historical official, source and production-normalized series alias must belong to one canonical series. Duplicate series evidence cannot establish a replay basis.')
+    }
     const expectedRosterBasis = rosterBasisByTeam(matches)
     if (context.teamRosterBasis.size !== expectedRosterBasis.size
       || [...expectedRosterBasis].some(([team, rosterBasis]) => context.teamRosterBasis.get(team) !== rosterBasis)) {
@@ -272,6 +275,19 @@ function seriesIdentityAliases(matches: readonly MatchRecord[]) {
     if ((kind === 'source-match' || kind === 'source-game-series') && nonemptyString(sourceSeriesId)) aliases.push(sourceSeriesId)
   }
   return aliases
+}
+
+/** Preview-internal guard: a series may repeat its aliases, but another canonical series cannot claim them. */
+export function hasUniqueConditionalPowerSeriesAliases(matches: readonly MatchRecord[]): boolean {
+  const observedAliases = new Set<string>()
+  for (const series of resolveCanonicalSeries(matches)) {
+    const aliases = new Set(seriesIdentityAliases(series.games))
+    for (const alias of aliases) {
+      if (observedAliases.has(alias)) return false
+    }
+    for (const alias of aliases) observedAliases.add(alias)
+  }
+  return true
 }
 
 function reusedReplayIdentityProblem(seriesId: string, historical: readonly MatchRecord[], games: readonly MatchRecord[]): PowerPreviewUnavailable | null {
