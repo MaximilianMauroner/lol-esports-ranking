@@ -70,3 +70,6 @@ public/data/**/*.tmp
 
 /lol-ranking-dev-current-branch.png
 /.agent/sessions/
+
+# Rust build products
+/worker/target/
