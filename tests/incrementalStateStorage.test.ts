@@ -473,6 +473,51 @@ test('state reuse accepts alternate gzip sizes and rejects forged semantic paylo
   }
 })
 
+test('state reuse and race reuse reject GET authority failures after a valid HEAD', async (t) => {
+  const prepared = prepareStateObject({ value: 'compressible-data'.repeat(100) })
+  const metadata = { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' }
+  const badCrc = Buffer.from(prepared.compressed)
+  badCrc[badCrc.byteLength - 8] ^= 1
+  const truncated = prepared.compressed.subarray(0, prepared.compressed.byteLength - 1)
+  const mutations = [
+    { name: 'type', changes: () => ({ ContentType: 'text/plain' }) },
+    { name: 'encoding', changes: () => ({ ContentEncoding: 'identity' }) },
+    { name: 'digest', changes: () => ({ Metadata: { ...metadata, sha256: '0'.repeat(64) } }) },
+    { name: 'semantic size', changes: () => ({ Metadata: { ...metadata, 'semantic-bytes': String(prepared.bytes + 1) } }) },
+    { name: 'encoding metadata', changes: () => ({ Metadata: { ...metadata, encoding: 'identity' } }) },
+    { name: 'absent length', changes: () => ({ ContentLength: undefined }) },
+    { name: 'zero length', changes: () => ({ ContentLength: 0 }) },
+    { name: 'unsafe length', changes: () => ({ ContentLength: Number.MAX_SAFE_INTEGER + 1 }) },
+    { name: 'mismatched length', changes: () => ({ ContentLength: prepared.compressedBytes + 1 }) },
+    { name: 'CRC', changes: () => ({ Body: Readable.from([badCrc]) }), error: /gzip is corrupt/ },
+    { name: 'truncation', changes: () => ({ Body: Readable.from([truncated]), ContentLength: truncated.byteLength }), error: /gzip is corrupt/ },
+  ]
+  for (const race of [false, true]) {
+    for (const mutation of mutations) {
+      await t.test(`${race ? 'race reuse' : 'reuse'}: ${mutation.name}`, async () => {
+        const backing = memoryS3()
+        await syncContentAddressedStateObject(backing, config, prepared)
+        let headMissed = false
+        let validHeads = 0
+        const client = {
+          async send(command: unknown) {
+            const { name } = commandDetails(command)
+            if (race && !headMissed && name === 'HeadObjectCommand') {
+              headMissed = true
+              throw Object.assign(new Error('missing'), { name: 'NotFound' })
+            }
+            const response = await backing.send(command)
+            if (name === 'HeadObjectCommand') validHeads += 1
+            return name === 'GetObjectCommand' ? { ...response, ...mutation.changes() } : response
+          },
+        }
+        await assert.rejects(syncContentAddressedStateObject(client, config, prepared), mutation.error ?? /metadata mismatch/)
+        assert.equal(validHeads, 1)
+      })
+    }
+  }
+})
+
 test('new state identities normalize reused legacy references and stored manifests remain byte-stable', async () => {
   const original = preparedState('legacy-state')
   const legacy = { ...original.manifest,
