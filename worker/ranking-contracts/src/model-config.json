@@ -1,0 +1,493 @@
+{
+  "matchHistoryDeltaPolicy": "public-components-before-and-after-v2",
+  "initialTeamRating": 1500,
+  "initialLeagueRating": 1500,
+  "publishedRatingScale": {
+    "version": "published-power-index-v1",
+    "internalAnchor": 1500,
+    "publishedAnchor": 1800,
+    "spreadMultiplier": 3.25,
+    "publishedMinimum": 1000,
+    "publishedMaximum": 3000,
+    "label": "Power Index",
+    "shortLabel": "Power",
+    "description": "Versioned public ladder scale. Calibrated internal Elo remains the prediction source of truth."
+  },
+  "leagueEloWeight": 1,
+  "leagueAdjustmentPolicy": "seasonal-hierarchical-anchor",
+  "publishedLeagueAnchorPolicy": "team-evidence-gated-anchor-relief-v1",
+  "publishedLeagueAnchorShrinkagePolicy": "match-evidence-weighted-league-anchor-v1",
+  "publishedLeagueAnchorShrinkageConfig": {
+    "minimumReliability": 0.35,
+    "fullReliabilityMatches": 12
+  },
+  "publishedSparseStandingPolicy": "last-match-to-current-state-evidence-blend-v1",
+  "publishedSparseStandingConfig": {
+    "minimumReliability": 0.35,
+    "fullReliabilityMatches": 12
+  },
+  "publishedLeagueAnchorReliefConfig": {
+    "minimumGames": 20,
+    "maxUncertainty": 50,
+    "minStableOffset": 15,
+    "maxAdjustment": 20,
+    "leagueGapShare": 0.35
+  },
+  "directHeadToHeadContextPolicy": "recent-same-league-close-rating-tiebreak-v1",
+  "directHeadToHeadContextConfig": {
+    "minimumGames": 20,
+    "maxUncertainty": 50,
+    "maxDays": 30,
+    "minimumBestOf": 3,
+    "maxRatingGap": 6,
+    "maxAdjustment": 3,
+    "overtakeMargin": 0.8
+  },
+  "recencyHalfLifeDays": 454.1791071114875,
+  "normalPatchTeamRetention": 0.985,
+  "splitBreakTeamRetention": 0.92,
+  "seasonStartTeamRetention": 0.8,
+  "splitBreakLeagueRetention": 0.97,
+  "seasonStartLeagueRetention": 0.94,
+  "splitBreakMinimumGapDays": 21,
+  "sideAdjustmentShrinkageGames": 24,
+  "sideAdjustmentLearning": "walk-forward-prior-only",
+  "publishedPredictionSideAdjustment": "side-aware-prior-only",
+  "winProbabilityCalibrationPolicy": "less-shrunk-favorite-calibration-v1",
+  "winProbabilityEloScale": 250,
+  "winProbabilityUncertaintyScale": 620,
+  "winProbabilityUncertaintyFloor": 0.45,
+  "sameDayPredictionBatching": true,
+  "onlineRecencyDecay": "entity-local-composable-half-life-regression-v1",
+  "ratingUpdateRecencyWeight": 1,
+  "leagueExpectedScoreSource": "pregame-neutral-series-team-power",
+  "sourcePipelineVersion": "canonical-identity-stat-dedupe-clock-corroboration-feasible-series-player-performance-home-league-code-unit-order-v23",
+  "lineupEvidencePolicy": "prior-observed-series-evidence-with-90-day-half-life-v1",
+  "partialLineupPolicy": "role-weighted-known-player-evidence-v1",
+  "substituteEraPolicy": "three-series-or-twenty-percent-split-share-v1",
+  "snapshotSeasonScopePolicy": "calendar-aligned-season-ranking-profile-with-prior-baseline",
+  "validationBaselinePolicy": [
+    "coin-flip",
+    "pregame-win-rate",
+    "team-only"
+  ],
+  "rankingTarget": "context-neutral-latent-team-strength",
+  "matchOutcomeTargetPolicy": "match-outcomes-are-evidence-not-ranking-target",
+  "canonicalUpdateUnitPolicy": "series-atomic-team-and-league-strength",
+  "residualBudgetPolicy": "base-evidence-and-realized-delta-budget-v2",
+  "latentStrengthBudgetShareSemantics": "configured shares apply to base evidence; uncertainty, roster volatility, transfer shrinkage, momentum decay, caps, and rounding determine realized movement",
+  "latentStrengthResultBudgetShares": {
+    "teamStable": 0.9,
+    "teamForm": 0.1,
+    "leagueAnchor": 0.12,
+    "playerSignalShadow": 0,
+    "lineupSignalShadow": 0,
+    "directRegionShadow": 0
+  },
+  "domesticStableTransferPolicy": "league-tier-global-transfer-v1",
+  "domesticStableTransferWeightsByTier": {
+    "tier-one": 1,
+    "tier-two": 0.65,
+    "tier-three": 0.38,
+    "emerging": 0.25,
+    "unknown": 0.15
+  },
+  "publishedTeamStableOffsetPolicy": "elite-tail-compressed-stable-offset-v1",
+  "publishedTeamStableOffsetConfig": {
+    "positiveSoftCap": 70,
+    "positiveOverflowScale": 0.3
+  },
+  "publishedRosterPriorPolicy": "current-record-capped-positive-player-prior-v1",
+  "publishedRosterPriorConfig": {
+    "minimumGames": 12,
+    "fullScaleWinRate": 0.5,
+    "floorScaleWinRate": 0.35,
+    "floorScale": 0.25
+  },
+  "rosterBasisSource": "latest-observed-oracle-game-roster",
+  "rosterContinuityFloor": 0.55,
+  "rosterChangeUncertaintyPenalty": 40,
+  "rosterContinuityValueBasis": "role-share",
+  "rosterContinuityMatch": "player-id-by-role",
+  "rosterContinuityRequiresCompleteLineups": true,
+  "rosterContinuity": {
+    "roleValueWeights": {
+      "Top": 0.18,
+      "Jungle": 0.22,
+      "Mid": 0.22,
+      "Bot": 0.2,
+      "Support": 0.18
+    },
+    "requiresCompleteLineups": true
+  },
+  "minimumUncertainty": 20,
+  "maximumUncertainty": 140,
+  "normalUncertainty": 50,
+  "uncertaintyKMultiplierFloor": 0.75,
+  "uncertaintyKMultiplierCeiling": 1.75,
+  "uncertaintyKScale": 100,
+  "rosterVolatilityKCeiling": 1.35,
+  "momentumGameDecay": 0.88,
+  "momentumSplitRetention": 0.2,
+  "momentumPatchRetention": 0.65,
+  "momentumCap": 70,
+  "worldsPlacementResidualK": 2,
+  "msiPlacementResidualK": 1.65,
+  "minorPlacementResidualK": 1.25,
+  "worldsPlacementResidualCap": 35,
+  "msiPlacementResidualCap": 25,
+  "minorPlacementResidualCap": 18,
+  "tournamentPlacementStagePoints": {
+    "champion": 11,
+    "finalist": 8,
+    "semifinal": 5,
+    "knockout": 3,
+    "participation": 1
+  },
+  "tournamentPlacementPolicy": "highest-attainment-bounded-grid-pool-centered-league-residual-v4",
+  "playerRatingPredictionPolicy": {
+    "key": "player-rating",
+    "mode": "live",
+    "liveWeight": 1,
+    "shadowWeight": 1,
+    "gate": {
+      "minimumPredictions": 200,
+      "minimumBrierImprovement": 0.001,
+      "requirePositiveLogLossDelta": true,
+      "requireNonNegativeRosterChangeDelta": true,
+      "requireNonNegativePatchTransitionDelta": true
+    },
+    "description": "Sourced prior-only player ratings are published because the walk-forward gate cleared after Oracle player-stat coverage was added."
+  },
+  "playerRatingPredictionPublishedWeight": 1,
+  "playerRatingPredictionShadowWeight": 1,
+  "firstStandPowerEvidencePolicy": "full-champion-field-at-msi-bracket-weight-v1",
+  "preseasonEventWeightPolicy": "completed-worlds-offseason-except-domestic-season-and-demacia-v3",
+  "preseasonEventWeightMultiplier": 0.35,
+  "preseasonEventWeightWindow": "after a resolved Worlds best-of-five final and before Jan 1 of the next calendar year; domestic season games and Demacia Cup are exempt",
+  "executionResidual": {
+    "executionResidualWeights": {
+      "kills": 0.14,
+      "gold": 0.72,
+      "objectives": 0.14
+    },
+    "executionResidualCap": 0.25,
+    "executionResidualUpdateWeight": 0.25,
+    "executionResidualPredictionPolicy": {
+      "key": "execution-residual",
+      "mode": "shadow",
+      "liveWeight": 1,
+      "shadowWeight": 1,
+      "gate": {
+        "minimumPredictions": 200,
+        "minimumBrierImprovement": 0.001,
+        "requirePositiveLogLossDelta": true,
+        "requireNonNegativeCrossRegionDelta": true,
+        "requireNonNegativePatchTransitionDelta": true
+      },
+      "description": "Execution-residual ratings are trained from post-game stat residuals, but remain shadow-only until walk-forward gates clear across cross-region and patch-transition slices."
+    },
+    "executionResidualPredictionWeight": 0,
+    "executionResidualShadowWeight": 1
+  },
+  "playerModel": {
+    "initialPlayerRating": 100,
+    "sourcedPlayerKFactor": 8,
+    "playerRatingScale": 80,
+    "playerLeagueAnchorRating": 1500,
+    "playerLeagueBaselineCoefficient": 0.2,
+    "playerLeagueBaselineBounds": {
+      "min": 50,
+      "max": 110
+    },
+    "playerLeagueSignalMultiplierByTier": {
+      "tier-one": 1,
+      "tier-two": 0.9,
+      "tier-three": 0.65,
+      "emerging": 0.35,
+      "unknown": 0.25
+    },
+    "playerPregameEdgeCoefficient": 2.5,
+    "playerPregameEdgeSoftCap": 40,
+    "playerPregameEdgeCap": 70,
+    "playerPregameEdgeOverflowMultiplier": 0.4,
+    "playerPregameMinCoverage": 0.6,
+    "playerPregameMinGames": 1,
+    "minimumRankedSourcedPlayerGames": 20,
+    "baseRoleShares": {
+      "Top": 0.18,
+      "Jungle": 0.22,
+      "Mid": 0.22,
+      "Bot": 0.2,
+      "Support": 0.18
+    },
+    "playerImpactWeights": {
+      "objectiveImpactZ": 0.12,
+      "awardResidualZ": 0.06,
+      "recentFormZ": 0.04
+    },
+    "playerImpactMultiplierBounds": {
+      "min": 0.7,
+      "max": 1.45
+    },
+    "sourcedPerformanceWeights": {
+      "win": 0.38,
+      "damageShare": 0.2,
+      "earnedGoldShare": 0.18,
+      "kda": 0.14,
+      "vision": 0.1
+    },
+    "individualResidualMetricVersion": "individual-residual-v0",
+    "individualResidualStrengthProxyWeight": 0.28,
+    "individualResidualScoreScale": 100,
+    "individualResidualMinimumRankedGames": 20,
+    "roleStatBaselines": {
+      "Top": {
+        "damageShare": 0.23,
+        "earnedGoldShare": 0.21,
+        "kda": 3,
+        "vspm": 0.9
+      },
+      "Jungle": {
+        "damageShare": 0.16,
+        "earnedGoldShare": 0.18,
+        "kda": 3.4,
+        "vspm": 1.2
+      },
+      "Mid": {
+        "damageShare": 0.25,
+        "earnedGoldShare": 0.22,
+        "kda": 3.6,
+        "vspm": 1
+      },
+      "Bot": {
+        "damageShare": 0.28,
+        "earnedGoldShare": 0.25,
+        "kda": 3.8,
+        "vspm": 0.8
+      },
+      "Support": {
+        "damageShare": 0.08,
+        "earnedGoldShare": 0.13,
+        "kda": 3.2,
+        "vspm": 2.4
+      }
+    },
+    "playerPerformancePolicy": {
+      "version": "observed-player-performance-v1",
+      "aggregation": "unweighted-per-game-mean",
+      "ratingEffect": "none"
+    }
+  },
+  "eligibility": {
+    "minTotalGames": 20,
+    "currentWindowDays": 90,
+    "minCurrentWindowGames": 6,
+    "maxUncertainty": 105,
+    "minInternationalMatchesForUnanchoredLeague": 2
+  },
+  "leagueTiers": {
+    "leagueTierDefinitions": {
+      "tier-one": {
+        "tier": "tier-one",
+        "label": "Tier-one major",
+        "priorRating": 1500,
+        "description": "Globally anchored leagues with regular international title contention.",
+        "anchorEligible": true
+      },
+      "tier-two": {
+        "tier": "tier-two",
+        "label": "Tier-two major",
+        "priorRating": 1450,
+        "description": "Major-region leagues with recurring international representation but lower title baseline.",
+        "anchorEligible": true
+      },
+      "tier-three": {
+        "tier": "tier-three",
+        "label": "Tier-three regional",
+        "priorRating": 1375,
+        "description": "First-division minor or merged regional leagues that need current international signal for global-board certainty.",
+        "anchorEligible": false
+      },
+      "emerging": {
+        "tier": "emerging",
+        "label": "Emerging or academy",
+        "priorRating": 1300,
+        "description": "Developmental, national, academy, ERL, lower-division, or lower-connectivity leagues.",
+        "anchorEligible": false
+      },
+      "unknown": {
+        "tier": "unknown",
+        "label": "Unknown",
+        "priorRating": 1250,
+        "description": "League identity is missing or not mapped to a competitive tier.",
+        "anchorEligible": false
+      }
+    },
+    "exactLeagueTiers": {
+      "LCK": "tier-one",
+      "LPL": "tier-one",
+      "LEC": "tier-two",
+      "LCS": "tier-two",
+      "LTA": "tier-two",
+      "LTA N": "tier-two",
+      "LTA S": "tier-three",
+      "LCP": "tier-two",
+      "CBLOL": "tier-three",
+      "VCS": "tier-three",
+      "PCS": "tier-three",
+      "LJL": "tier-three",
+      "LLA": "tier-three",
+      "TCL": "emerging",
+      "LCO": "tier-three",
+      "NACL": "emerging",
+      "LCKC": "emerging",
+      "LCK CL": "emerging",
+      "LAS": "emerging",
+      "LFL": "emerging",
+      "LFL2": "emerging",
+      "NLC": "emerging",
+      "NL": "emerging",
+      "PRM": "emerging",
+      "PRMP": "emerging",
+      "LVP SL": "emerging",
+      "LES": "emerging",
+      "LIT": "emerging",
+      "RL": "emerging",
+      "NEXO": "emerging",
+      "CCWS": "emerging",
+      "HC": "emerging",
+      "IC": "emerging",
+      "EM": "emerging",
+      "EMEA MASTERS": "emerging",
+      "AL": "emerging",
+      "HM": "emerging",
+      "HW": "emerging",
+      "HLL": "emerging",
+      "EBL": "emerging",
+      "LPLOL": "emerging",
+      "CD": "emerging",
+      "ROL": "emerging",
+      "LRN": "emerging",
+      "LRS": "emerging",
+      "LTS": "emerging",
+      "CT": "emerging"
+    },
+    "emergingLeaguePatternRules": [
+      {
+        "source": "\\bacademy\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\bchallengers?\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\bdevelopment\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\bdivision\\s*2\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\bd2\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\belite\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\bnational\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\bproving grounds\\b",
+        "flags": "i"
+      },
+      {
+        "source": "\\bsecondary\\b",
+        "flags": "i"
+      }
+    ],
+    "leagueConnectivityShrinkageMatches": 8,
+    "leagueEffectiveRatingCapsByTier": {
+      "emerging": 1375,
+      "unknown": 1250
+    }
+  },
+  "regionTaxonomy": {
+    "source": "Riot LoL Esports top-level region menu and LCP format update",
+    "sourceObservedAt": "2026-06-27",
+    "currentTopTierRegions": [
+      "LCS",
+      "CBLOL",
+      "LEC",
+      "LCK",
+      "LPL",
+      "LCP"
+    ],
+    "majorRegionPowerRegions": [
+      "LCS",
+      "CBLOL",
+      "LEC",
+      "LCK",
+      "LPL",
+      "LCP"
+    ],
+    "apacDomesticFeederLeagues": [
+      "PCS",
+      "VCS",
+      "LJL",
+      "LCO",
+      "LTS"
+    ],
+    "apacFlagshipRegion": "LCP",
+    "policy": "Region Power is limited to current international-participant top-tier regions. Domestic feeder and lower-tier ecosystems remain available for team scopes but are ignored for Region Power calculations unless they are part of the region power league layer."
+  },
+  "ratingUniverse": {
+    "policy": "current-top-tier-domestic-league-only-v1",
+    "ratedTeamLeagues": [
+      "LCS",
+      "CBLOL",
+      "LEC",
+      "LCK",
+      "LPL",
+      "LCP"
+    ],
+    "sideRule": "A match enters the published rating run only when both sides resolve to a rated domestic home league.",
+    "teamRule": "A team enters the published rating run only when its resolved league is one of the rated team leagues."
+  },
+  "walkForwardSegments": [
+    "bo1",
+    "bo3-bo5",
+    "international",
+    "cross-region",
+    "side-known",
+    "patch-transition",
+    "roster-change",
+    "partial-lineup",
+    "unknown-lineup"
+  ],
+  "eventKFactors": {
+    "worlds-playoffs": 39,
+    "worlds-main": 27,
+    "msi-bracket": 34,
+    "msi-play-in": 27,
+    "major-playoffs": 22,
+    "regional-regular": 14,
+    "minor-international": 23,
+    "qualifier": 12
+  },
+  "eventWeights": {
+    "worlds-playoffs": 2.7857142857142856,
+    "worlds-main": 1.9285714285714286,
+    "msi-bracket": 2.4285714285714284,
+    "msi-play-in": 1.9285714285714286,
+    "major-playoffs": 1.5714285714285714,
+    "regional-regular": 1,
+    "minor-international": 1.6428571428571428,
+    "qualifier": 0.8571428571428571
+  }
+}

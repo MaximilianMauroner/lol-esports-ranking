@@ -1,0 +1,16 @@
+[workspace]
+members = ["ranking-contracts", "ranking-refresh"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.88"
+version = "0.1.0"
+publish = false
+
+[workspace.dependencies]
+serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"] }
+sha2 = "0.10"
+flate2 = "1.1"
+ryu-js = "1.0.3"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
