@@ -6,6 +6,7 @@ import { createRatingReplayContext, replayRatingDates } from './model'
 import type { PlacementTournamentLifecycle } from './placementResiduals'
 import { decodeRatingCheckpoint, encodeRatingCheckpoint, type RatingCheckpointIdentity } from './ratingCheckpoint'
 import { buildRatingCheckpointEventContract } from './ratingCheckpointInventory'
+import { canonicalSeriesOutcomeForTeam, resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
 
 type BasisSource = Omit<ConditionalPowerReplayBasis, 'context' | 'state' | 'preStateId'> & {
   /** The producer must identify the complete immutable prefix, including its terminal UTC date. */
@@ -45,6 +46,9 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
     if (matches.some((match) => !completeHistoricalGame(match, source.teams))) {
       return unavailablePowerPreview('incomplete-historical-inputs', 'Historical team profiles, event/format, patch, sides, five-role lineups and performance statistics must be explicit. This adapter cannot reconstruct them from public points.')
     }
+    if (resolveCanonicalSeries(matches).some((series) => !completeHistoricalSeries(series))) {
+      return unavailablePowerPreview('incomplete-historical-inputs', 'Every historical series must have a verified consistent format and a legal decisive final score. Ongoing or unknown series cannot establish complete historical coverage.')
+    }
     const context = createRatingReplayContext(matches, source.teams, { tournamentLifecycles: source.tournamentLifecycles })
     const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
     const eventContract = buildRatingCheckpointEventContract(context.authoritativeMatches, context.eventWeightContext, context.tournamentLifecycles)
@@ -80,6 +84,14 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
   } catch (error) {
     return unavailablePowerPreview('basis-rejected', error instanceof Error ? error.message : 'The production replay could not prepare this historical basis.')
   }
+}
+
+function completeHistoricalSeries(series: CanonicalSeries) {
+  const winsNeeded = (series.format + 1) / 2
+  return series.state === 'completed' && [1, 3, 5].includes(series.format)
+    && Math.max(series.winsA, series.winsB) === winsNeeded && Math.min(series.winsA, series.winsB) < winsNeeded
+    && series.games.every((game) => game.bestOf === series.format)
+    && canonicalSeriesOutcomeForTeam(series, series.finalMatch.winner) === 1
 }
 
 function isUtcDate(date: string) {

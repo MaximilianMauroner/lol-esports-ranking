@@ -79,3 +79,35 @@ test('corpus adapter rejects absent, incomplete or future historical evidence wi
     assert.deepEqual(source, original)
   }
 })
+
+test('corpus adapter requires complete legal historical series before production replay', () => {
+  for (const bestOf of [3, 5]) for (const bestOfBasis of ['official', 'provider'] as const) {
+    const incomplete = sourceFixture()
+    Object.assign(incomplete.historicalMatches.at(-1)!, { bestOf, bestOfBasis, officialMatchId: 'historical-series', gameNumber: 1 })
+    const original = structuredClone(incomplete)
+    const rejected = prepareConditionalPowerReplayBasis(incomplete)
+    assert.equal(rejected.status, 'unavailable', `${bestOfBasis} Bo${bestOf}`)
+    if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'incomplete-historical-inputs')
+    assert.deepEqual(incomplete, original)
+
+    const complete = sourceFixture()
+    const winsNeeded = (bestOf + 1) / 2
+    complete.historicalMatches.slice(-winsNeeded).forEach((game, index) => Object.assign(game, {
+      date: complete.processedThroughUtcDate, bestOf, bestOfBasis, officialMatchId: 'historical-series',
+      gameNumber: index + 1, winner: 'Alpha',
+    }))
+    const completedOriginal = structuredClone(complete)
+    assert.equal(prepareConditionalPowerReplayBasis(complete).status, 'ready', `${bestOfBasis} completed Bo${bestOf}`)
+    assert.deepEqual(complete, completedOriginal)
+  }
+
+  const illegal = sourceFixture()
+  illegal.historicalMatches.slice(-3).forEach((game, index) => Object.assign(game, {
+    date: illegal.processedThroughUtcDate, bestOf: 3, officialMatchId: 'historical-series', gameNumber: index + 1,
+    winner: index < 2 ? 'Alpha' : 'Beta',
+  }))
+  const original = structuredClone(illegal)
+  const result = prepareConditionalPowerReplayBasis(illegal)
+  assert.equal(result.status, 'unavailable', 'The series continued after Alpha had already won.')
+  assert.deepEqual(illegal, original)
+})

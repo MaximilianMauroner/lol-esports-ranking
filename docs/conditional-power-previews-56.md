@@ -33,7 +33,8 @@ must still be supplied to a complete replay, rather than filled with fake zeros.
 | Format and final score | Format may be known | Accept only decisive Bo1/3/5 and legal terminal scores |
 | Full internal state and league state | Absent from public receipts | Require a complete identified prior UTC boundary |
 | Model/config and public scale | Present with a valid forecast basis | Match this evaluator's production config; validate the explicit output scale |
-| Event tier, phase, weighting and lifecycle | Schedule is insufficient | Pin explicit event metadata and the complete replay context |
+| Event region, tier, phase, weighting and lifecycle | Schedule is insufficient | Pin explicit event metadata and the complete replay context; reject conflicting game regions |
+| Team home-league identity | Competition labels do not establish membership | Require explicit, unambiguous latest historical home-league evidence matching each team profile |
 | Future time, patch, sides and game order | Unknown | Require every game explicitly; one later UTC date only |
 | Five-role lineup identities and player prior edges | Roster basis alone is insufficient | Require complete lineups and explicit available prior edges |
 | Kills, gold, towers, dragons, barons and duration | Unknown | Require finite supplied values; absent objectives do not become zero |
@@ -49,7 +50,9 @@ edges with `createRatingReplayContext`, replays the complete prefix with
 validate state shape and pin the payload digest. Importer version, identity
 taxonomy hash and raw prefix hash are included in the pre-state identity.
 No checkpoint file is written. Incomplete historical stats, lineups, profiles,
-format or chronology are rejected before replay.
+format or chronology are rejected before replay. The production canonical series
+resolver must prove a legal decisive final score for every historical series.
+Ongoing or unknown historical series are unsupported by this complete-input slice.
 
 The source producer must identify the supplied prefix as complete, including
 all games on its terminal UTC date. A caller-supplied hash does not certify
@@ -68,6 +71,13 @@ between those public endpoints, including rounding and clamping. It is not a
 scaled probability, raw internal stable delta, history rank, or promise about a
 future publication. The complete conditional result holds all supplied inputs
 fixed. It does not assert that those future inputs are known for a real match.
+Hypothetical raw/canonical game and series identities must be distinct from the
+historical prefix. Each historical team's latest date must contain explicit,
+consistent home-league source fields matching its profile. Absent or conflicting
+membership evidence returns unavailable; the mutable directory fallback and
+coincident league dates cannot supply that proof. Supplied hypothetical team
+region overrides must match the directory, and every game region must match the
+pinned event region.
 Series and game timestamp offsets are normalized to UTC. All hypothetical games
 must share one future UTC date after the pinned complete boundary; a timestamp's
 local date prefix cannot choose the replay date.
@@ -95,9 +105,9 @@ corpus in `data/raw/`. Its external file references are not accessed here.
 
 | Missing input | Exact fields or evidence | Responsible source and next action |
 | --- | --- | --- |
-| Reproducible historical pre-state | Complete `MatchRecord` prefix, `TeamProfile` directory, lifecycle map, importer/taxonomy/prefix identity and complete UTC boundary | Ranking corpus/artifact producer (`scripts/build-static-snapshot.ts`, #46/#37) must provide an authorized offline immutable copy. The adapter now reconstructs the state; no implementation decision from Max is needed. |
+| Reproducible historical pre-state | Complete `MatchRecord` prefix with decisive historical series and explicit latest `teamAHomeLeague`/`teamBHomeLeague`, `TeamProfile` directory, lifecycle map, importer/taxonomy/prefix identity and complete UTC boundary | Ranking corpus/artifact producer (`scripts/build-static-snapshot.ts`, #46/#37) must provide an authorized offline immutable copy. The adapter now reconstructs the state; no implementation decision from Max is needed. |
 | Raw internal state if a checkpoint is supplied instead | Team `ratings`, `executionRatings`, `rosterPriorOffsets`, `momentums`, `uncertainties`; raw league scores/counts/records; full histories, decay dates, roster state, event trackers and terminal identities | Existing production checkpoint/corpus producer owns the evidence. Compact public standings and forecast receipts are insufficient. This slice reconstructs from a complete corpus rather than introducing a new checkpoint/public contract. |
-| Real event assumptions | Canonical event/team/series mapping, tier, phase, lifecycle and pinned event calendar | Canonical schedule/event producer must provide the sourced mapping. Schedule labels alone cannot establish weighting or terminal placement evidence. |
+| Real event assumptions | Canonical event/team/series mapping, region, tier, phase, lifecycle and pinned event calendar | Canonical schedule/event producer must provide the sourced mapping. Schedule labels alone cannot establish weighting or terminal placement evidence. |
 | Future game inputs | Five-role player IDs, causal player edges, patch, side assignment, UTC date/time, ordered games, kills/gold/objectives/duration | Official/provider lineup and game sources own confirmations. Before play, performance stats are unknown. Full future deltas remain unavailable unless every input is explicitly supplied as a hypothetical assumption. |
 
 The active #84 owner controls its Rust migration/CLI/contracts. This PR does not

@@ -1,4 +1,4 @@
-import type { EventTier, MatchRecord, MatchRosterSnapshot, PublishedRatingScale } from '../types'
+import type { EventTier, MatchRecord, MatchRosterSnapshot, PublishedRatingScale, Region } from '../types'
 import { eventTierConfig } from '../data/rankingConfig'
 import { conditionalOutcomeProblem, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from './conditionalPowerPreview'
 import { eventKFactorForMatch, eventWeightContextForMatches, eventWeightForMatch } from './eventWeighting'
@@ -24,7 +24,7 @@ export type ConditionalPowerReplayBasis = {
   state: RatingRunState
   sourceTeamIds: [string, string]
   teamNames: [string, string]
-  event: { id: string; name: string; league: string; phase: string; tier: EventTier }
+  event: { id: string; name: string; league: string; phase: string; tier: EventTier; region: Region }
 }
 
 type ReplayInput = {
@@ -73,6 +73,8 @@ export function evaluateConditionalPowerReplay(input: ReplayInput): ConditionalP
     if (invalid) return invalid
     // Production sorts timestamp strings. Normalize detached rows so their order follows the validated instants.
     for (const game of games) game.datetimeUtc = new Date(Date.parse(game.datetimeUtc!)).toISOString()
+    const identityProblem = reusedReplayIdentityProblem(input.series.id, basis.context.authoritativeMatches, games)
+    if (identityProblem) return identityProblem
     const before = materializeRankingModel({ context: basis.context, state: structuredClone(basis.state) })
     const context: RatingReplayContext = {
       ...basis.context,
@@ -123,8 +125,8 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
     }
     if (!ratingScaleFromUnknown(basis.ratingScale)) return unavailablePowerPreview('missing-scale', 'A valid public rating scale is required.')
     if (![basis.event.id, basis.event.name, basis.event.league, basis.event.phase].every(nonemptyString)
-      || !Object.hasOwn(eventTierConfig, basis.event.tier)) {
-      return unavailablePowerPreview('missing-event-context', 'A nonempty pinned event identity, name, league, phase and supported event tier are required.')
+      || !Object.hasOwn(eventTierConfig, basis.event.tier) || !supportedRegions.has(basis.event.region)) {
+      return unavailablePowerPreview('missing-event-context', 'A nonempty pinned event identity, name, league, phase and supported explicit tier and region are required.')
     }
     const { context, state } = basis
     const boundary = state.processedThroughUtcDate
@@ -141,6 +143,9 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
     if (!Array.isArray(matches) || !matches.length || matches.some((match) => !nonemptyString(match.id) || !nonemptyString(matchIdentity(match)) || !realUtcDate(match.date) || match.date > boundary)
       || state.processedMatchCount !== matches.length || new Set(matches.map(matchIdentity)).size !== matches.length) {
       return unavailablePowerPreview('missing-pre-state', 'The complete authoritative prefix must match the processed game count and UTC boundary.')
+    }
+    if (!explicitLatestHomeLeaguesMatchContext(context)) {
+      return unavailablePowerPreview('missing-home-league-context', 'Every historical team needs an explicit, unambiguous home league on its latest UTC date that matches the team directory.')
     }
     const terminalIds = matches.filter((match) => match.date === boundary).map(matchIdentity).sort()
     const previousMatch = state.previousMatch
@@ -173,6 +178,49 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
 
 function nonemptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+const supportedRegions = new Set<Region>(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL', 'VCS', 'PCS', 'International'])
+
+function explicitLatestHomeLeaguesMatchContext(context: RatingReplayContext) {
+  const teams = new Set(context.authoritativeMatches.flatMap((match) => [match.teamA, match.teamB]))
+  for (const team of teams) {
+    const matches = context.authoritativeMatches.filter((match) => match.teamA === team || match.teamB === team)
+    const latestDate = matches.map((match) => match.date).sort().at(-1)
+    const league = context.teams[team]?.league
+    if (!nonemptyString(league) || league === 'Unknown' || matches.filter((match) => match.date === latestDate).some((match) => {
+      const observedLeague = match.teamA === team ? match.teamAHomeLeague : match.teamBHomeLeague
+      return !nonemptyString(observedLeague) || observedLeague !== league
+    })) return false
+  }
+  return true
+}
+
+function gameIdentityAliases(match: MatchRecord) {
+  return [match.id, match.officialGameId, match.sourceGameId].filter(nonemptyString)
+}
+
+function seriesIdentityAliases(matches: readonly MatchRecord[]) {
+  const aliases = matches.flatMap((match) => [match.officialMatchId, match.sourceMatchId].filter(nonemptyString))
+  for (const series of resolveCanonicalSeries(matches)) {
+    aliases.push(series.id)
+    // Use the source-series identity already normalized by the production resolver.
+    const [kind, , sourceSeriesId] = series.id.split('\u0000')
+    if ((kind === 'source-match' || kind === 'source-game-series') && nonemptyString(sourceSeriesId)) aliases.push(sourceSeriesId)
+  }
+  return aliases
+}
+
+function reusedReplayIdentityProblem(seriesId: string, historical: readonly MatchRecord[], games: readonly MatchRecord[]): PowerPreviewUnavailable | null {
+  const historicalGameIds = new Set(historical.flatMap(gameIdentityAliases))
+  if (games.flatMap(gameIdentityAliases).some((id) => historicalGameIds.has(id))) {
+    return unavailablePowerPreview('reused-game-identity', 'Hypothetical raw and canonical game identities must be distinct from every historical game alias.')
+  }
+  const historicalSeriesIds = new Set(seriesIdentityAliases(historical))
+  if ([seriesId, ...seriesIdentityAliases(games)].some((id) => historicalSeriesIds.has(id))) {
+    return unavailablePowerPreview('reused-series-identity', 'The hypothetical series must not reuse any historical official, source or canonical series identity.')
+  }
+  return null
 }
 
 function realUtcDate(date: string | undefined): date is string {
@@ -227,7 +275,7 @@ function coherentHistoryEvidence({ context, state }: ConditionalPowerReplayBasis
 function hasTeamState(basis: ConditionalPowerReplayBasis, team: string) {
   const league = basis.context.teams[team]?.league
   const state = basis.state
-  return Boolean(league && league !== 'Unknown' && completeRoster(state.lastRosterByTeam.get(team))
+  return Boolean(league && league !== 'Unknown' && supportedRegions.has(basis.context.teams[team]!.region) && completeRoster(state.lastRosterByTeam.get(team))
     && state.histories.has(team) && state.forms.has(team) && state.factorSums.has(team)
     && basis.context.teamRosterBasis.get(team) === 'sourced'
     && state.teamLastRatedDates.get(team) && state.lastPatchByTeam.get(team)
@@ -259,12 +307,14 @@ function scenarioProblem(input: ReplayInput, basis: ConditionalPowerReplayBasis,
   }
   if (games.some((game, index) => game.sourceProvider !== 'seed' || game.officialMatchId !== input.series.id
     || game.officialEventId !== basis.event.id || game.event !== basis.event.name || game.league !== basis.event.league
-    || game.tier !== basis.event.tier || game.phase !== basis.event.phase
+    || game.tier !== basis.event.tier || game.phase !== basis.event.phase || game.region !== basis.event.region
     || game.date !== expectedDate || game.date <= basis.state.processedThroughUtcDate!
     || game.season !== Number(expectedDate.slice(0, 4)) || game.bestOf !== input.series.bestOf || game.bestOfBasis !== 'official'
     || game.teamA !== basis.teamNames[0] || game.teamB !== basis.teamNames[1]
     || (game.teamAHomeLeague !== undefined && game.teamAHomeLeague !== basis.context.teams[game.teamA]?.league)
     || (game.teamBHomeLeague !== undefined && game.teamBHomeLeague !== basis.context.teams[game.teamB]?.league)
+    || (game.teamARegion !== undefined && game.teamARegion !== basis.context.teams[game.teamA]?.region)
+    || (game.teamBRegion !== undefined && game.teamBRegion !== basis.context.teams[game.teamB]?.region)
     || !basis.teamNames.includes(game.winner) || game.gameNumber !== index + 1
     || !game.datetimeUtc || !Number.isFinite(Date.parse(game.datetimeUtc))
     || new Date(Date.parse(game.datetimeUtc)).toISOString().slice(0, 10) !== expectedDate

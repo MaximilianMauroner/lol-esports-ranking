@@ -6,6 +6,7 @@ import { createRatingReplayContext, materializeRankingModel, replayRatingDates }
 import { eventTrackerKey } from '../src/lib/placementResiduals'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
 import { rosterBasisByTeam } from '../src/lib/rosters'
+import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { conditionalPowerFixture } from './fixtures/conditionalPowerFixtures'
 
 test('conditional public points equal isolated production replay for every legal winner/score, event weight and compressed scale', () => {
@@ -228,6 +229,7 @@ test('conditional replay requires identified series, games and pinned event meta
       const game = input.games[0]!
       const edge = input.playerEdges.get(game.id)!
       input.playerEdges.delete(game.id)
+      // Corrupt the required runtime ID and keep its prior keyed identically to exercise the old bypass.
       Reflect.set(game, 'id', value)
       input.playerEdges.set(game.id, edge)
     } },
@@ -256,6 +258,122 @@ test('conditional replay requires identified series, games and pinned event meta
     assert.equal(result.status, 'unavailable')
     if (result.status === 'unavailable') assert.equal(result.reason, 'missing-event-context')
   }
+})
+
+test('hypothetical game and series identities cannot alias the historical prefix', () => {
+  type Fixture = ReturnType<typeof conditionalPowerFixture>
+  const renameGame = (input: Fixture, id: string) => {
+    const game = input.games[0]!
+    const edge = input.playerEdges.get(game.id)!
+    input.playerEdges.delete(game.id)
+    game.id = id
+    input.playerEdges.set(id, edge)
+  }
+  const renameSeries = (input: Fixture, id: string) => {
+    input.series.id = id
+    for (const game of input.games) game.officialMatchId = id
+  }
+  const cases: Array<{
+    label: string; reason: string; seedHistory?: (game: Fixture['games'][number]) => void
+    mutate: (input: Fixture) => void
+  }> = [
+    { label: 'raw game ID', reason: 'reused-game-identity', mutate: (input) => renameGame(input, 'prior-0') },
+    { label: 'official game ID aliases a raw ID', reason: 'reused-game-identity', mutate: (input) => { input.games[0]!.officialGameId = 'prior-0' } },
+    { label: 'source game ID aliases a raw ID', reason: 'reused-game-identity', mutate: (input) => { input.games[0]!.sourceGameId = 'prior-0' } },
+    { label: 'raw game ID aliases a source ID', reason: 'reused-game-identity', seedHistory: (game) => { game.sourceGameId = 'historical-source-game' },
+      mutate: (input) => renameGame(input, 'historical-source-game') },
+    { label: 'source game ID aliases an official ID', reason: 'reused-game-identity', seedHistory: (game) => { game.officialGameId = 'historical-official-game' },
+      mutate: (input) => { input.games[0]!.sourceGameId = 'historical-official-game' } },
+    { label: 'official series ID', reason: 'reused-series-identity', seedHistory: (game) => { game.officialMatchId = 'historical-official-series' },
+      mutate: (input) => renameSeries(input, 'historical-official-series') },
+    { label: 'raw source series ID', reason: 'reused-series-identity', seedHistory: (game) => { game.sourceMatchId = 'historical-source-series_game1' },
+      mutate: (input) => renameSeries(input, 'historical-source-series_game1') },
+    { label: 'resolved source series alias', reason: 'reused-series-identity', seedHistory: (game) => { game.sourceMatchId = 'historical-source-series_game1' },
+      mutate: (input) => renameSeries(input, 'historical-source-series') },
+    { label: 'resolved source-game series alias', reason: 'reused-series-identity', seedHistory: (game) => { game.sourceGameId = 'historical-source-series_game1' },
+      mutate: (input) => renameSeries(input, 'historical-source-series') },
+    { label: 'canonical source series ID', reason: 'reused-series-identity', seedHistory: (game) => { game.sourceMatchId = 'historical-source-series_game1' },
+      mutate: (input) => renameSeries(input, resolveCanonicalSeries([input.basis.context.authoritativeMatches[0]!])[0]!.id) },
+    { label: 'canonical fallback series ID', reason: 'reused-series-identity',
+      mutate: (input) => renameSeries(input, resolveCanonicalSeries([input.basis.context.authoritativeMatches[0]!])[0]!.id) },
+    { label: 'scenario source series alias', reason: 'reused-series-identity', seedHistory: (game) => { game.sourceMatchId = 'historical-source-series' },
+      mutate: (input) => { input.games[0]!.sourceMatchId = 'historical-source-series' } },
+  ]
+  for (const { label, reason, seedHistory, mutate } of cases) {
+    const input = conditionalPowerFixture()
+    if (seedHistory) {
+      seedHistory(input.basis.context.authoritativeMatches[0]!)
+      const context = createRatingReplayContext(input.basis.context.authoritativeMatches, structuredClone(input.basis.context.teams))
+      input.basis.context = context
+      input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+    }
+    assert.equal(evaluateConditionalPowerReplay(input).status, 'ready', `control: ${label}`)
+    mutate(input)
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', label)
+    if (result.status === 'unavailable') assert.equal(result.reason, reason, label)
+    assert.deepEqual(input, original)
+  }
+})
+
+test('latest historical home-league evidence must be explicit and agree across a UTC date and the directory', () => {
+  const mutations: Array<(input: ReturnType<typeof conditionalPowerFixture>) => void> = [
+    (input) => { input.basis.context.authoritativeMatches.at(-1)!.teamAHomeLeague = undefined },
+    (input) => { input.basis.context.authoritativeMatches.at(-1)!.teamBHomeLeague = undefined },
+    (input) => { input.basis.context.authoritativeMatches.at(-1)!.teamAHomeLeague = '' },
+    (input) => { input.basis.context.authoritativeMatches.at(-1)!.teamAHomeLeague = 'Worlds' },
+    (input) => { input.basis.context.teams.Alpha!.league = 'LPL' },
+    (input) => {
+      const matches = input.basis.context.authoritativeMatches
+      matches.push({ ...matches.at(-1)!, id: 'conflicting-latest-home-league', teamAHomeLeague: 'LPL' })
+      const context = createRatingReplayContext(matches, structuredClone(input.basis.context.teams))
+      input.basis.context = context
+      input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+    },
+  ]
+  for (const mutate of mutations) {
+    const input = conditionalPowerFixture()
+    mutate(input)
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable')
+    if (result.status === 'unavailable') assert.equal(result.reason, 'missing-home-league-context')
+    assert.deepEqual(input, original)
+  }
+})
+
+test('event region and supplied team region overrides must match the pinned event and directory', () => {
+  for (const region of [undefined, '', ' \t ', 'Unknown']) {
+    const input = conditionalPowerFixture()
+    Reflect.set(input.basis.event, 'region', region)
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable')
+    if (result.status === 'unavailable') assert.equal(result.reason, 'missing-event-context')
+    assert.deepEqual(input, original)
+  }
+  const mutations: Array<(input: ReturnType<typeof conditionalPowerFixture>) => void> = [
+    (input) => { input.games[0]!.region = 'International' },
+    (input) => { input.basis.event.region = 'International' },
+    (input) => { input.games[0]!.teamARegion = 'LPL' },
+    (input) => { input.games[0]!.teamBRegion = 'LCK' },
+  ]
+  for (const mutate of mutations) {
+    const input = conditionalPowerFixture()
+    mutate(input)
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable')
+    if (result.status === 'unavailable') assert.equal(result.reason, 'unsupported-scenario')
+    assert.deepEqual(input, original)
+  }
+  const input = conditionalPowerFixture()
+  for (const game of input.games) {
+    game.teamARegion = 'LCK'
+    game.teamBRegion = 'LPL'
+  }
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
 })
 
 test('incomplete or inconsistent pre-state evidence is unavailable instead of producing a numeric delta', () => {

@@ -16,6 +16,7 @@ function game(id: string, date: string, winner: string): MatchRecord {
   return {
     id, sourceProvider: 'seed', date, season: 2026, event: 'Controlled LCK fixture', phase: 'Regular season',
     region: 'LCK', league: 'LCK', teamA: 'Alpha', teamB: 'Beta', winner,
+    teamAHomeLeague: 'LCK', teamBHomeLeague: 'LPL',
     tier: 'regional-regular', patch: '26.1', bestOf: 1, bestOfBasis: 'official',
     teamASide: 'blue', teamBSide: 'red', teamARoster: roster('Alpha', date), teamBRoster: roster('Beta', date),
     teamAKills: 18, teamBKills: 12, teamAGold: 65000, teamBGold: 58000,
@@ -42,7 +43,7 @@ export function conditionalPowerFixture(bestOf: 1 | 3 | 5 = 5, outcome: Conditio
     modelVersion: transparentGprModelMetadata.version, modelConfigHash: transparentGprModelMetadata.configHash,
     preStateId: 'controlled-fixture/utc-2026-09-15', ratingScale: structuredClone(transparentGprModelMetadata.ratingScale),
     context, state, sourceTeamIds: ['fixture-alpha', 'fixture-beta'], teamNames: ['Alpha', 'Beta'],
-    event: { id: 'worlds:2026:controlled', name: 'Controlled Worlds fixture', league: 'Worlds', phase: 'Quarterfinals', tier },
+    event: { id: 'worlds:2026:controlled', name: 'Controlled Worlds fixture', league: 'Worlds', phase: 'Quarterfinals', tier, region: 'LCK' },
   }
   const series: TournamentSeries = {
     id: 'controlled-series', eventId: basis.event.id, startTime: '2026-09-16T12:00:00.000Z', stage: 'Quarterfinals',
@@ -53,7 +54,7 @@ export function conditionalPowerFixture(bestOf: 1 | 3 | 5 = 5, outcome: Conditio
   const wins = (bestOf + 1) / 2
   const winner = outcome.winner === 'home' ? 'Alpha' : 'Beta'
   const loser = outcome.winner === 'home' ? 'Beta' : 'Alpha'
-  const games = Array.from({ length: wins + outcome.loserWins }, (_, index) => ({
+  const games: MatchRecord[] = Array.from({ length: wins + outcome.loserWins }, (_, index) => ({
     ...game(`hypothetical-${index}`, '2026-09-16', index < outcome.loserWins ? loser : winner),
     officialMatchId: series.id, officialEventId: series.eventId, gameNumber: index + 1,
     datetimeUtc: `2026-09-16T${String(12 + index).padStart(2, '0')}:00:00.000Z`,
