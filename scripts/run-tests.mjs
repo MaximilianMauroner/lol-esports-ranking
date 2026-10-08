@@ -1,5 +1,8 @@
 import { globSync } from 'node:fs'
 import { spawn } from 'node:child_process'
+import { ensureReferencePublicData } from './reference-public-data.mjs'
+
+await ensureReferencePublicData()
 
 const browserJourneys = [
   'tests/rankingArchiveBrowser.test.ts',

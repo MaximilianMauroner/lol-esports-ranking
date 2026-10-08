@@ -2,7 +2,7 @@ import { createWriteStream } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, readdir, rename, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
@@ -12,11 +12,19 @@ import { promisify } from 'node:util'
 const referenceCommit = '8adbc0a4239fd0dfba2094b3e70f60b513560de4'
 const referenceDigest = '873eb6c5d35b1f43f83e9f248bd53090be9c99932a13bef5079396c18075fc0c'
 const root = fileURLToPath(new URL('..', import.meta.url))
-export const referencePublicDir = join(root, 'data/reference', referenceCommit, 'public')
+const candidatePublicDir = process.env.RANKING_TEST_PUBLIC_DIR
+// All test readers, including /data URL readers, must use the same public root.
+export const referencePublicDir = candidatePublicDir
+  ? resolve(candidatePublicDir)
+  : join(root, 'data/reference', referenceCommit, 'public')
 export const referencePublicDataDir = join(referencePublicDir, 'data')
 const exec = promisify(execFile)
 
 export async function ensureReferencePublicData() {
+  if (candidatePublicDir) {
+    await verifyCandidatePublicData(referencePublicDataDir)
+    return referencePublicDataDir
+  }
   try {
     await verifyReferencePublicData(referencePublicDataDir)
     return referencePublicDataDir
@@ -39,6 +47,31 @@ export async function ensureReferencePublicData() {
     return referencePublicDataDir
   } finally {
     await rm(staging, { recursive: true, force: true })
+  }
+}
+
+async function verifyCandidatePublicData(directory) {
+  // Schema and cross-artifact validation belong to the artifact tests. Preflight
+  // rejects incomplete or unreadable candidates before starting any test workers.
+  const required = [
+    'ranking-summary.json',
+    'entities/teams.json',
+    'entities/players.json',
+    'matches/index.json',
+    'history/team-series/index.json',
+    'history/region-series.json',
+    'history/tournament-moves/index.json',
+  ]
+  for (const path of new Set([...required, ...await jsonPaths(directory)])) {
+    await readCandidateJson(directory, path)
+  }
+}
+
+async function readCandidateJson(directory, path) {
+  try {
+    JSON.parse(await readFile(join(directory, path), 'utf8'))
+  } catch (cause) {
+    throw new Error(`Release candidate artifact is missing or invalid: ${join(directory, path)}`, { cause })
   }
 }
 
