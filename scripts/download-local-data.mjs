@@ -74,7 +74,7 @@ if (!skipOracle) {
 
 if (!skipLeaguepedia) {
   try {
-    await run('node', [
+    await run([
       'scripts/fetch-leaguepedia.mjs',
       '--start',
       start,
@@ -96,7 +96,7 @@ if (!skipLeaguepedia) {
 
 if (!skipLolEsports) {
   try {
-    await run('node', [
+    await run([
       'scripts/fetch-lolesports-schedule.mjs',
       '--start',
       start,
@@ -220,13 +220,13 @@ async function loadOracleSources() {
   }
 }
 
-function run(command, commandArgs) {
+function run(commandArgs) {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, commandArgs, { stdio: 'inherit' })
+    const child = spawn(process.execPath, commandArgs, { stdio: 'inherit' })
     child.on('error', rejectRun)
     child.on('exit', (code) => {
       if (code === 0) resolveRun()
-      else rejectRun(new Error(`${command} ${commandArgs.join(' ')} exited with ${code}`))
+      else rejectRun(new Error(`node ${commandArgs.join(' ')} exited with ${code}`))
     })
   })
 }
