@@ -5,28 +5,25 @@ pub fn provider_instant(value: &str) -> Option<i64> {
     if !value.is_ascii() || value.len() < 10 || &value[4..5] != "-" || &value[7..8] != "-" {
         return None;
     }
-    let year = decimal(&value[..4])? as i32;
+    let year = decimal(&value[..4])?;
     let month = decimal(&value[5..7])?;
     let day = decimal(&value[8..10])?;
-    if !(1..=31).contains(&day) {
-        return None;
-    }
-    // Date.parse rolls valid day fields into the next month, including February 30.
-    let date =
-        NaiveDate::from_ymd_opt(year, month, 1)?.checked_add_days(Days::new(u64::from(day - 1)))?;
     if value.len() == 10 {
+        let date = calendar_date(year, month, day, false)?;
         return Some(date.and_hms_opt(0, 0, 0)?.and_utc().timestamp_millis());
     }
     let separator = value.as_bytes()[10];
     if !matches!(separator, b'T' | b't' | b' ') {
         return None;
     }
-    let (clock, offset) = parse_zone(&value[11..])?;
+    let (clock, offset) = parse_zone(&value[11..], separator == b' ')?;
     // Only the uppercase provider grammar assigns UTC to timestamps without a zone.
     if separator == b't' && offset.is_none() {
         return None;
     }
-    let (hour, minute, second, millis) = parse_clock(clock, separator == b' ' && offset.is_some())?;
+    let legacy = separator == b' ' && offset.is_some();
+    let date = calendar_date(year, month, day, legacy)?;
+    let (hour, minute, second, millis) = parse_clock(clock, legacy)?;
     let instant = date
         .and_hms_milli_opt(hour % 24, minute, second, millis)?
         .checked_add_signed(Duration::days(i64::from(hour == 24)))?
@@ -35,7 +32,28 @@ pub fn provider_instant(value: &str) -> Option<i64> {
     instant.checked_sub(i64::from(offset.unwrap_or(0)) * 1000)
 }
 
-fn parse_zone(value: &str) -> Option<(&str, Option<i32>)> {
+fn calendar_date(year: u32, month: u32, day: u32, legacy: bool) -> Option<NaiveDate> {
+    // In the legacy parser, a leading 1..31 denotes month/day/year.
+    let (year, month, day) = if legacy && (1..=31).contains(&year) {
+        (day, year, month)
+    } else {
+        (year, month, day)
+    };
+    let year = if legacy && year < 50 {
+        year + 2000
+    } else if legacy && year < 100 {
+        year + 1900
+    } else {
+        year
+    };
+    if !(1..=31).contains(&day) {
+        return None;
+    }
+    // Date.parse rolls valid day fields into the next month, including February 30.
+    NaiveDate::from_ymd_opt(year as i32, month, 1)?.checked_add_days(Days::new(u64::from(day - 1)))
+}
+
+fn parse_zone(value: &str, legacy: bool) -> Option<(&str, Option<i32>)> {
     if let Some(clock) = value.strip_suffix(['Z', 'z']) {
         return Some((clock, Some(0)));
     }
@@ -43,15 +61,19 @@ fn parse_zone(value: &str) -> Option<(&str, Option<i32>)> {
         return Some((value, None));
     };
     let zone = &value[index + 1..];
-    let (hour, minute) = match zone.len() {
-        4 => (decimal(&zone[..2])?, decimal(&zone[2..])?),
-        5 if &zone[2..3] == ":" => (decimal(&zone[..2])?, decimal(&zone[3..])?),
-        _ => return None,
+    let seconds = if legacy {
+        legacy_zone_seconds(zone)?
+    } else {
+        let (hour, minute) = match zone.len() {
+            4 => (decimal(&zone[..2])?, decimal(&zone[2..])?),
+            5 if &zone[2..3] == ":" => (decimal(&zone[..2])?, decimal(&zone[3..])?),
+            _ => return None,
+        };
+        if hour > 23 || minute > 59 {
+            return None;
+        }
+        (hour * 3600 + minute * 60) as i32
     };
-    if hour > 23 || minute > 59 {
-        return None;
-    }
-    let seconds = (hour * 3600 + minute * 60) as i32;
     Some((
         &value[..index],
         Some(if value.as_bytes()[index] == b'-' {
@@ -60,6 +82,30 @@ fn parse_zone(value: &str) -> Option<(&str, Option<i32>)> {
             seconds
         }),
     ))
+}
+
+fn legacy_zone_seconds(value: &str) -> Option<i32> {
+    let (hour, minute) = if let Some((hour, minute)) = value.split_once(':') {
+        let hour = if hour.is_empty() { 0 } else { decimal(hour)? };
+        let minute = if minute.is_empty() {
+            0
+        } else {
+            decimal(minute)?
+        };
+        if minute > 59 {
+            return None;
+        }
+        (hour, minute)
+    } else {
+        let number = decimal(value)?;
+        match value.len() {
+            1 | 2 => (number, 0),
+            3 | 4 => (number / 100, number % 100),
+            _ => return None,
+        }
+    };
+    // Bound offset seconds; V8's extreme legacy integer-overflow forms are unsupported.
+    i32::try_from(hour.checked_mul(3600)?.checked_add(minute * 60)?).ok()
 }
 
 fn parse_clock(value: &str, truncate_midnight_fraction: bool) -> Option<(u32, u32, u32, u32)> {
