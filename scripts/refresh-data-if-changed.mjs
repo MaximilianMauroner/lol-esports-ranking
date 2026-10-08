@@ -13,6 +13,7 @@ import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } fro
 import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
 import { collectRefreshGarbage, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
 import { rawSourceWorkerCommand } from './raw-source-worker-command.mjs'
+import { providerFetchWorkerCommand } from './provider-fetch-worker-command.mjs'
 import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
@@ -144,8 +145,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     const providerStarted = monotonicNow()
     let providerCommandError
     try {
-      await (options.run ?? runCommand)(process.execPath, [
-        'scripts/download-local-data.mjs',
+      const { command, args: providerArgs } = providerFetchWorkerCommand([
         '--start',
         start,
         '--end',
@@ -155,7 +155,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         '--manifest',
         stagingManifestPath,
         ...extraDownloadArgs,
-      ])
+      ], env)
+      await (options.run ?? runCommand)(command, providerArgs, { env })
     } catch (error) {
       providerCommandError = error
     }
@@ -1625,9 +1626,9 @@ function splitExtraArgs(value) {
   return String(value).split(/\s+/).map((entry) => entry.trim()).filter(Boolean)
 }
 
-function runCommand(command, commandArgs) {
+function runCommand(command, commandArgs, { env } = {}) {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, commandArgs, { stdio: 'inherit' })
+    const child = spawn(command, commandArgs, { stdio: 'inherit', env })
     child.on('error', rejectRun)
     child.on('exit', (code) => {
       if (code === 0) resolveRun()

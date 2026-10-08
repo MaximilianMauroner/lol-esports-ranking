@@ -8,3 +8,4 @@ publish.workspace = true
 [dependencies]
 ranking-contracts = { path = "../ranking-contracts" }
 ranking-raw-source = { path = "../ranking-raw-source" }
+ranking-fetch = { path = "../ranking-fetch" }

@@ -4,6 +4,13 @@ fn main() {
         println!("{}", ranking_contracts::model::metadata());
         return;
     }
+    if args.first().is_some_and(|command| command == "fetch") {
+        if let Err(error) = ranking_fetch::run(&args[1..]) {
+            eprintln!("fetch: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if let [command, input, output] = args.as_slice()
         && command == "raw-source"
     {
@@ -13,6 +20,8 @@ fn main() {
         }
         return;
     }
-    eprintln!("usage: ranking-refresh contracts | raw-source <input.json> <output.json>");
+    eprintln!(
+        "usage: ranking-refresh contracts | raw-source <input.json> <output.json> | fetch [flags]"
+    );
     std::process::exit(2);
 }
