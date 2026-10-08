@@ -1,0 +1,1339 @@
+{
+  "schemaVersion": 1,
+  "numberText": [
+    {
+      "bits": "0000000000000000",
+      "text": "0"
+    },
+    {
+      "bits": "8000000000000000",
+      "text": "0"
+    },
+    {
+      "bits": "3ff0000000000000",
+      "text": "1"
+    },
+    {
+      "bits": "bff0000000000000",
+      "text": "-1"
+    },
+    {
+      "bits": "3fb999999999999a",
+      "text": "0.1"
+    },
+    {
+      "bits": "3fd3333333333334",
+      "text": "0.30000000000000004"
+    },
+    {
+      "bits": "3fd5555555555555",
+      "text": "0.3333333333333333"
+    },
+    {
+      "bits": "3fe5555555555555",
+      "text": "0.6666666666666666"
+    },
+    {
+      "bits": "444b1ae4d6e2ef50",
+      "text": "1e+21"
+    },
+    {
+      "bits": "3e7ad7f29abcaf48",
+      "text": "1e-7"
+    },
+    {
+      "bits": "3e8421f5f40d8376",
+      "text": "1.5e-7"
+    },
+    {
+      "bits": "441ac53a7e04bcda",
+      "text": "123456789012345680000"
+    },
+    {
+      "bits": "0000000000000001",
+      "text": "5e-324"
+    },
+    {
+      "bits": "7fefffffffffffff",
+      "text": "1.7976931348623157e+308"
+    },
+    {
+      "bits": "0000000000000001",
+      "text": "5e-324"
+    },
+    {
+      "bits": "433fffffffffffff",
+      "text": "9007199254740991"
+    },
+    {
+      "bits": "4340000000000001",
+      "text": "9007199254740994"
+    },
+    {
+      "bits": "3eb0c6f7a0b5ed8d",
+      "text": "0.000001"
+    },
+    {
+      "bits": "4415af1d78b58c40",
+      "text": "100000000000000000000"
+    },
+    {
+      "bits": "40934a456d5cfaad",
+      "text": "1234.5678"
+    },
+    {
+      "bits": "c09b450000000000",
+      "text": "-1745.25"
+    }
+  ],
+  "canonicalJson": [
+    {
+      "encodedInput": null,
+      "canonical": "null",
+      "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "encodedInput": true,
+      "canonical": "true",
+      "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+    },
+    {
+      "encodedInput": "LØS",
+      "canonical": "\"LØS\"",
+      "sha256": "5882cb9aa96a1d2c7c49a86bf6afafacf51a9c4655bfd1743f6929dc4a80ac47"
+    },
+    {
+      "encodedInput": "emoji 🙂 and \"quotes\" \\ \n\t\u0001",
+      "canonical": "\"emoji 🙂 and \\\"quotes\\\" \\\\ \\n\\t\\u0001\"",
+      "sha256": "53b40e02010286ce987e335cf298a3d1efda0351bf5b035bf6e486ae9f144b8b"
+    },
+    {
+      "encodedInput": 1745.25,
+      "canonical": "1745.25",
+      "sha256": "bd4e56d6149572768f1e424f5c7a66b2dc66f7e84db5856ff4a8db1e68c3b1f6"
+    },
+    {
+      "encodedInput": -0.0001,
+      "canonical": "-0.0001",
+      "sha256": "222a078a380d8532bb6bc925fb6370a707675b6aeb10fb139893049534656886"
+    },
+    {
+      "encodedInput": {
+        "2": "two",
+        "10": "ten",
+        "b": 1,
+        "a": 2,
+        "B": 3,
+        "_": 4,
+        "é": 5,
+        "A": [
+          3,
+          2,
+          1
+        ]
+      },
+      "canonical": "{\"10\":\"ten\",\"2\":\"two\",\"A\":[3,2,1],\"B\":3,\"_\":4,\"a\":2,\"b\":1,\"é\":5}",
+      "sha256": "b110c574bd4d9b5669cf890953daaf5e844596e45cf9a6a325e558456aebbd05"
+    },
+    {
+      "encodedInput": {
+        "nested": {
+          "z": [
+            {
+              "y": 1,
+              "x": null
+            }
+          ],
+          "a": "LOUD"
+        },
+        "list": [
+          "kt Rolster",
+          "KaBuM!"
+        ],
+        "empty": {},
+        "none": []
+      },
+      "canonical": "{\"empty\":{},\"list\":[\"kt Rolster\",\"KaBuM!\"],\"nested\":{\"a\":\"LOUD\",\"z\":[{\"x\":null,\"y\":1}]},\"none\":[]}",
+      "sha256": "e2f4801112d42e4ed88e6517ac49b226218ff5a5fb294d4fa6fea9249d5ca31e"
+    },
+    {
+      "encodedInput": {
+        "$type": "number",
+        "bits": "8000000000000000"
+      },
+      "canonical": "0",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "encodedInput": [
+        1,
+        {
+          "$type": "undefined"
+        },
+        {
+          "$type": "number",
+          "bits": "8000000000000000"
+        },
+        0
+      ],
+      "canonical": "[1,null,0,0]",
+      "sha256": "8adddf16774d5e2cf3d91bd3030fc620f7a93664d0fa74a0bdbd1f2eb3d20fc7"
+    },
+    {
+      "encodedInput": {
+        "kept": 1,
+        "dropped": {
+          "$type": "undefined"
+        },
+        "zero": {
+          "$type": "number",
+          "bits": "8000000000000000"
+        }
+      },
+      "canonical": "{\"kept\":1,\"zero\":0}",
+      "sha256": "303eb6fcaf9547365dba4a2cb50d10907efb172a127a216ffe280f47996caa1e"
+    },
+    {
+      "encodedInput": {
+        "$type": "map",
+        "entries": [
+          [
+            "b",
+            1
+          ],
+          [
+            10,
+            "ten"
+          ],
+          [
+            9,
+            "nine"
+          ],
+          [
+            "a",
+            {
+              "z": {
+                "$type": "undefined"
+              },
+              "y": {
+                "$type": "number",
+                "bits": "8000000000000000"
+              }
+            }
+          ]
+        ]
+      },
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "encodedInput": {
+        "$type": "set",
+        "values": [
+          {
+            "b": 1
+          },
+          {
+            "a": 2
+          },
+          10,
+          9
+        ]
+      },
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "encodedInput": {
+        "nested": {
+          "$type": "set",
+          "values": [
+            "b",
+            "a"
+          ]
+        },
+        "list": [
+          {
+            "$type": "undefined"
+          }
+        ]
+      },
+      "canonical": "{\"list\":[null],\"nested\":{}}",
+      "sha256": "a919a71e0d97f5c4cebdaa4c9c008aadd84a1113ade0231f7bf0ccdb0545ccc3"
+    },
+    {
+      "encodedInput": {
+        "$type": "number",
+        "bits": "7ff8000000000000"
+      },
+      "canonical": "null",
+      "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "encodedInput": {
+        "$type": "number",
+        "bits": "7ff0000000000000"
+      },
+      "canonical": "null",
+      "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    }
+  ],
+  "stableDigest": [
+    {
+      "encodedInput": null,
+      "stableJson": "null",
+      "digest": "fnv1a64-5b9bc4ba528108e4"
+    },
+    {
+      "encodedInput": true,
+      "stableJson": "true",
+      "digest": "fnv1a64-5b5c98ef514dbfa5"
+    },
+    {
+      "encodedInput": "LØS",
+      "stableJson": "\"LØS\"",
+      "digest": "fnv1a64-ad45daee15fcb3c4"
+    },
+    {
+      "encodedInput": "emoji 🙂 and \"quotes\" \\ \n\t\u0001",
+      "stableJson": "\"emoji 🙂 and \\\"quotes\\\" \\\\ \\n\\t\\u0001\"",
+      "digest": "fnv1a64-8f858f05b6db892a"
+    },
+    {
+      "encodedInput": 1745.25,
+      "stableJson": "1745.25",
+      "digest": "fnv1a64-48428e1d773471c9"
+    },
+    {
+      "encodedInput": -0.0001,
+      "stableJson": "-0.0001",
+      "digest": "fnv1a64-c282b36e976b71b5"
+    },
+    {
+      "encodedInput": {
+        "2": "two",
+        "10": "ten",
+        "b": 1,
+        "a": 2,
+        "B": 3,
+        "_": 4,
+        "é": 5,
+        "A": [
+          3,
+          2,
+          1
+        ]
+      },
+      "stableJson": "{\"10\":\"ten\",\"2\":\"two\",\"A\":[3,2,1],\"B\":3,\"_\":4,\"a\":2,\"b\":1,\"é\":5}",
+      "digest": "fnv1a64-f35bf9f5168604aa"
+    },
+    {
+      "encodedInput": {
+        "nested": {
+          "z": [
+            {
+              "y": 1,
+              "x": null
+            }
+          ],
+          "a": "LOUD"
+        },
+        "list": [
+          "kt Rolster",
+          "KaBuM!"
+        ],
+        "empty": {},
+        "none": []
+      },
+      "stableJson": "{\"empty\":{},\"list\":[\"kt Rolster\",\"KaBuM!\"],\"nested\":{\"a\":\"LOUD\",\"z\":[{\"x\":null,\"y\":1}]},\"none\":[]}",
+      "digest": "fnv1a64-3f254b1eb9a64d82"
+    },
+    {
+      "encodedInput": {
+        "$type": "number",
+        "bits": "8000000000000000"
+      },
+      "stableJson": "0",
+      "digest": "fnv1a64-af63ad4c86019caf"
+    },
+    {
+      "encodedInput": [
+        1,
+        {
+          "$type": "undefined"
+        },
+        {
+          "$type": "number",
+          "bits": "8000000000000000"
+        },
+        0
+      ],
+      "stableJson": "[1,,0,0]",
+      "digest": "fnv1a64-62b5541108d8af2e"
+    },
+    {
+      "encodedInput": {
+        "kept": 1,
+        "dropped": {
+          "$type": "undefined"
+        },
+        "zero": {
+          "$type": "number",
+          "bits": "8000000000000000"
+        }
+      },
+      "stableJson": "{\"kept\":1,\"zero\":0}",
+      "digest": "fnv1a64-d99757cd7159ed30"
+    },
+    {
+      "encodedInput": {
+        "$type": "map",
+        "entries": [
+          [
+            "b",
+            1
+          ],
+          [
+            10,
+            "ten"
+          ],
+          [
+            9,
+            "nine"
+          ],
+          [
+            "a",
+            {
+              "z": {
+                "$type": "undefined"
+              },
+              "y": {
+                "$type": "number",
+                "bits": "8000000000000000"
+              }
+            }
+          ]
+        ]
+      },
+      "stableJson": "[[10,\"ten\"],[9,\"nine\"],[\"a\",{\"y\":0}],[\"b\",1]]",
+      "digest": "fnv1a64-c0c8f648ac2b5ed3"
+    },
+    {
+      "encodedInput": {
+        "$type": "set",
+        "values": [
+          {
+            "b": 1
+          },
+          {
+            "a": 2
+          },
+          10,
+          9
+        ]
+      },
+      "stableJson": "[10,9,{\"b\":1},{\"a\":2}]",
+      "digest": "fnv1a64-bf9ad1f5c79a0e89"
+    },
+    {
+      "encodedInput": {
+        "nested": {
+          "$type": "set",
+          "values": [
+            "b",
+            "a"
+          ]
+        },
+        "list": [
+          {
+            "$type": "undefined"
+          }
+        ]
+      },
+      "stableJson": "{\"list\":[],\"nested\":[\"a\",\"b\"]}",
+      "digest": "fnv1a64-fd7e28bcc3c1100f"
+    },
+    {
+      "encodedInput": {
+        "$type": "number",
+        "bits": "7ff8000000000000"
+      },
+      "throws": true
+    },
+    {
+      "encodedInput": {
+        "$type": "number",
+        "bits": "7ff0000000000000"
+      },
+      "throws": true
+    }
+  ],
+  "semanticArtifact": [
+    {
+      "input": {
+        "artifactKind": "parity-sample",
+        "schemaVersion": 1,
+        "generatedAt": "2026-10-08T00:00:00.000Z",
+        "modelVersion": "model",
+        "modelConfigHash": "config",
+        "artifactMeta": {
+          "runId": "run"
+        },
+        "teams": [
+          {
+            "teamId": "team:loud:loud",
+            "rating": 1514.25
+          },
+          {
+            "teamId": "team:los:l-s",
+            "rating": 1490
+          }
+        ]
+      },
+      "canonical": "{\"artifactKind\":\"public-semantic-artifact\",\"content\":{\"artifactKind\":\"parity-sample\",\"teams\":[{\"rating\":1514.25,\"teamId\":\"team:loud:loud\"},{\"rating\":1490,\"teamId\":\"team:los:l-s\"}]},\"schemaVersion\":1}",
+      "sha256": "3184adc4936a379cd1c9160d76215473eae481bd5189e8b114a5b41aedf3b9e2",
+      "bytes": 199
+    },
+    {
+      "input": {
+        "artifactKind": "parity-sample",
+        "schemaVersion": 1,
+        "content": {
+          "ü": 1,
+          "u": 2
+        }
+      },
+      "canonical": "{\"artifactKind\":\"public-semantic-artifact\",\"content\":{\"artifactKind\":\"parity-sample\",\"content\":{\"u\":2,\"ü\":1}},\"schemaVersion\":1}",
+      "sha256": "fd0b6dfe0e834b355f95200e4f8161061e20dd7ca87bb76b01ebface4ac9919f",
+      "bytes": 129
+    }
+  ],
+  "configHash": [
+    {
+      "input": null,
+      "hash": "fnv1a-77074ba4"
+    },
+    {
+      "input": true,
+      "hash": "fnv1a-4db211e5"
+    },
+    {
+      "input": "LØS",
+      "hash": "fnv1a-adc3f084"
+    },
+    {
+      "input": "emoji 🙂 and \"quotes\" \\ \n\t\u0001",
+      "hash": "fnv1a-a74df5ca"
+    },
+    {
+      "input": 1745.25,
+      "hash": "fnv1a-3d6bf389"
+    },
+    {
+      "input": -0.0001,
+      "hash": "fnv1a-72e54675"
+    },
+    {
+      "input": {
+        "2": "two",
+        "10": "ten",
+        "b": 1,
+        "a": 2,
+        "B": 3,
+        "_": 4,
+        "é": 5,
+        "A": [
+          3,
+          2,
+          1
+        ]
+      },
+      "hash": "fnv1a-637ae40a"
+    },
+    {
+      "input": {
+        "nested": {
+          "z": [
+            {
+              "y": 1,
+              "x": null
+            }
+          ],
+          "a": "LOUD"
+        },
+        "list": [
+          "kt Rolster",
+          "KaBuM!"
+        ],
+        "empty": {},
+        "none": []
+      },
+      "hash": "fnv1a-4aa698a2"
+    }
+  ],
+  "codeUnitOrder": {
+    "input": [
+      "kt Rolster",
+      "KaBuM! Esports",
+      "Édition",
+      "EDward Gaming",
+      "Edition",
+      "100 Thieves",
+      "_unknown",
+      "LØS",
+      "LOUD",
+      "a-b",
+      "a_b",
+      "ab",
+      "🙂",
+      "￿"
+    ],
+    "sorted": [
+      "100 Thieves",
+      "EDward Gaming",
+      "Edition",
+      "KaBuM! Esports",
+      "LOUD",
+      "LØS",
+      "_unknown",
+      "a-b",
+      "a_b",
+      "ab",
+      "kt Rolster",
+      "Édition",
+      "🙂",
+      "￿"
+    ]
+  },
+  "mathRound": [
+    {
+      "bits": "3fe0000000000000",
+      "result": "3ff0000000000000"
+    },
+    {
+      "bits": "3ff8000000000000",
+      "result": "4000000000000000"
+    },
+    {
+      "bits": "4004000000000000",
+      "result": "4008000000000000"
+    },
+    {
+      "bits": "bfe0000000000000",
+      "result": "8000000000000000"
+    },
+    {
+      "bits": "bff8000000000000",
+      "result": "bff0000000000000"
+    },
+    {
+      "bits": "c004000000000000",
+      "result": "c000000000000000"
+    },
+    {
+      "bits": "3fdfffffffffffff",
+      "result": "0000000000000000"
+    },
+    {
+      "bits": "bfdfffffffffffff",
+      "result": "8000000000000000"
+    },
+    {
+      "bits": "409b460000000000",
+      "result": "409b480000000000"
+    },
+    {
+      "bits": "c09b460000000000",
+      "result": "c09b440000000000"
+    },
+    {
+      "bits": "432fffffffffffff",
+      "result": "4330000000000000"
+    }
+  ],
+  "toFixed": [
+    {
+      "bits": "3ff0147ae147ae14",
+      "digits": 2,
+      "text": "1.00"
+    },
+    {
+      "bits": "4005666666666666",
+      "digits": 2,
+      "text": "2.67"
+    },
+    {
+      "bits": "3ff7333333333333",
+      "digits": 1,
+      "text": "1.4"
+    },
+    {
+      "bits": "bff8000000000000",
+      "digits": 0,
+      "text": "-2"
+    },
+    {
+      "bits": "3fe0000000000000",
+      "digits": 0,
+      "text": "1"
+    },
+    {
+      "bits": "4004000000000000",
+      "digits": 0,
+      "text": "3"
+    },
+    {
+      "bits": "3eb0c6f7a0b5ed8d",
+      "digits": 3,
+      "text": "0.000"
+    },
+    {
+      "bits": "444b1ae4d6e2ef50",
+      "digits": 2,
+      "text": "1e+21"
+    },
+    {
+      "bits": "405edd2f1a9fbe77",
+      "digits": 0,
+      "text": "123"
+    },
+    {
+      "bits": "3fd3333333333334",
+      "digits": 3,
+      "text": "0.300"
+    },
+    {
+      "bits": "bf1a36e2eb1c432d",
+      "digits": 2,
+      "text": "-0.00"
+    },
+    {
+      "bits": "409b45051eb851eb",
+      "digits": 2,
+      "text": "1745.25"
+    },
+    {
+      "bits": "3f40624dd2f1a9fc",
+      "digits": 3,
+      "text": "0.001"
+    }
+  ],
+  "math": [
+    {
+      "operation": "exp",
+      "left": "3ff0000000000000",
+      "result": "4005bf0a8b145769"
+    },
+    {
+      "operation": "exp",
+      "left": "bfe0000000000000",
+      "result": "3fe368b2fc6f960a"
+    },
+    {
+      "operation": "exp",
+      "left": "400e000000000000",
+      "result": "404542b2d0a266e7"
+    },
+    {
+      "operation": "log",
+      "left": "4000000000000000",
+      "result": "3fe62e42fefa39ef"
+    },
+    {
+      "operation": "log",
+      "left": "3fd3333333333333",
+      "result": "bff34378fcbda721"
+    },
+    {
+      "operation": "log",
+      "left": "409b450000000000",
+      "result": "401ddbce0514c0c7"
+    },
+    {
+      "operation": "exp",
+      "left": "4008ef936c5cad75",
+      "result": "403693fe5b388492"
+    },
+    {
+      "operation": "exp",
+      "left": "bfd2382b6bbef7e0",
+      "result": "3fe8127b9857693c"
+    },
+    {
+      "operation": "log",
+      "left": "40a288e5fa8b0cce",
+      "result": "401f1632c93ddb16"
+    },
+    {
+      "operation": "log",
+      "left": "409a43b41c090a75",
+      "result": "401db559b6cd2c50"
+    },
+    {
+      "operation": "exp",
+      "left": "bffce07662c00000",
+      "result": "3fc50e93287fb61f"
+    },
+    {
+      "operation": "exp",
+      "left": "bfdd94501c000000",
+      "result": "3fe4283a5e8fb777"
+    },
+    {
+      "operation": "exp",
+      "left": "4001ce82db400000",
+      "result": "402285be4ef96b41"
+    },
+    {
+      "operation": "exp",
+      "left": "400d0e9947c00000",
+      "result": "4042e58677dac6e5"
+    },
+    {
+      "operation": "exp",
+      "left": "400779e47a400000",
+      "result": "4032cffb68551464"
+    },
+    {
+      "operation": "exp",
+      "left": "401443a0fb300000",
+      "result": "4063d1778bd3d5a0"
+    },
+    {
+      "operation": "exp",
+      "left": "bfde23aa5f000000",
+      "result": "3fe3fb4679708e7a"
+    },
+    {
+      "operation": "exp",
+      "left": "3ff35662b6800000",
+      "result": "400aca42de4c20cd"
+    },
+    {
+      "operation": "exp",
+      "left": "c01560c16ce00000",
+      "result": "3f738e5119380990"
+    },
+    {
+      "operation": "exp",
+      "left": "400e2afaf7400000",
+      "result": "4045b620eeccc342"
+    },
+    {
+      "operation": "exp",
+      "left": "3fe7d8b16e800000",
+      "result": "4000dadcd8be2e5a"
+    },
+    {
+      "operation": "exp",
+      "left": "3fec76cc2f800000",
+      "result": "400378a92d913615"
+    },
+    {
+      "operation": "exp",
+      "left": "4015f5c853900000",
+      "result": "406e4866b1a56caa"
+    },
+    {
+      "operation": "exp",
+      "left": "4007261544600000",
+      "result": "40320ee0b90f71e1"
+    },
+    {
+      "operation": "exp",
+      "left": "c007ca8ed2200000",
+      "result": "3faa2a37e3f72c4e"
+    },
+    {
+      "operation": "exp",
+      "left": "c005aca40f000000",
+      "result": "3fb10b9f16aca1eb"
+    },
+    {
+      "operation": "exp",
+      "left": "4013630baaa00000",
+      "result": "405fd4a5d472c7d4"
+    },
+    {
+      "operation": "exp",
+      "left": "3fef6d14bf000000",
+      "result": "40055c16e1407510"
+    },
+    {
+      "operation": "exp",
+      "left": "400376d0a8000000",
+      "result": "4026c94f3e281af5"
+    },
+    {
+      "operation": "exp",
+      "left": "3ff4147582400000",
+      "result": "400c1004251c32e8"
+    },
+    {
+      "operation": "exp",
+      "left": "3ff9ae5220800000",
+      "result": "4013e9a0bf5741d0"
+    },
+    {
+      "operation": "exp",
+      "left": "c0048902ff600000",
+      "result": "3fb3a767cc792b3c"
+    },
+    {
+      "operation": "exp",
+      "left": "c0045e7eb6a00000",
+      "result": "3fb410f3285857c6"
+    },
+    {
+      "operation": "exp",
+      "left": "bffe3c31d5800000",
+      "result": "3fc357d38b276162"
+    },
+    {
+      "operation": "exp",
+      "left": "4003005951600000",
+      "result": "40258174e29b0268"
+    },
+    {
+      "operation": "exp",
+      "left": "c0150cf660600000",
+      "result": "3f753935381491e1"
+    },
+    {
+      "operation": "exp",
+      "left": "40103c0528500000",
+      "result": "404cf26df838b0f0"
+    },
+    {
+      "operation": "exp",
+      "left": "c013a13adac00000",
+      "result": "3f7e46581eb12602"
+    },
+    {
+      "operation": "exp",
+      "left": "40031ce890000000",
+      "result": "4025cec4bbdfa0ba"
+    },
+    {
+      "operation": "exp",
+      "left": "c0105fcfccc00000",
+      "result": "3f91147810fe92c3"
+    },
+    {
+      "operation": "exp",
+      "left": "bf9d0811c0000000",
+      "result": "3fef1b025d987134"
+    },
+    {
+      "operation": "exp",
+      "left": "4011f7d2d2000000",
+      "result": "405653473196319f"
+    },
+    {
+      "operation": "log",
+      "left": "40a70c9302b24d67",
+      "result": "401ff568d9260f89"
+    },
+    {
+      "operation": "log",
+      "left": "406a32ac34b4d0a3",
+      "result": "40156167bf7504f1"
+    },
+    {
+      "operation": "log",
+      "left": "40b2f86413923b0a",
+      "result": "4020f9e1cc7a9f60"
+    },
+    {
+      "operation": "log",
+      "left": "40a4e7553278330a",
+      "result": "401f915c52e815f8"
+    },
+    {
+      "operation": "log",
+      "left": "409a21f3cf4f3b1e",
+      "result": "401db03282257998"
+    },
+    {
+      "operation": "log",
+      "left": "40b08d5d20d55855",
+      "result": "4020b41193d486bd"
+    },
+    {
+      "operation": "log",
+      "left": "40afbca91a59935c",
+      "result": "40209e785cfa91a0"
+    },
+    {
+      "operation": "log",
+      "left": "409221153938c51e",
+      "result": "401c39c32fd8b85a"
+    },
+    {
+      "operation": "log",
+      "left": "407a879838f4df85",
+      "result": "40183412a15a9e5a"
+    },
+    {
+      "operation": "log",
+      "left": "4077c8f3482fc029",
+      "result": "4017c43dde861f36"
+    },
+    {
+      "operation": "log",
+      "left": "40879002824d6599",
+      "result": "401a80674868c50f"
+    },
+    {
+      "operation": "log",
+      "left": "40a97513203e0043",
+      "result": "40202d95d38ea6c2"
+    },
+    {
+      "operation": "log",
+      "left": "409924ba8e09c614",
+      "result": "401d88af56f3dd1b"
+    },
+    {
+      "operation": "log",
+      "left": "40ac45deb8af2371",
+      "result": "4020634b74e5c3fa"
+    },
+    {
+      "operation": "log",
+      "left": "40ab5fd4f9c8335c",
+      "result": "402052c203f1b9a8"
+    },
+    {
+      "operation": "log",
+      "left": "40b047011684a152",
+      "result": "4020ab7ee9f61e62"
+    },
+    {
+      "operation": "log",
+      "left": "4096d472e9b06d70",
+      "result": "401d25d7108ae8a5"
+    },
+    {
+      "operation": "log",
+      "left": "40a1061081e41200",
+      "result": "401ebf1d8abcbca1"
+    },
+    {
+      "operation": "log",
+      "left": "40b17658eac7c2df",
+      "result": "4020cf792d7ec543"
+    },
+    {
+      "operation": "log",
+      "left": "40a88b64317c70cd",
+      "result": "40201ae3a260ea6e"
+    },
+    {
+      "operation": "log",
+      "left": "40ad57fe4541720a",
+      "result": "40207653e93ed326"
+    },
+    {
+      "operation": "log",
+      "left": "40a9938b8c53c500",
+      "result": "40202ff938bf5e9b"
+    },
+    {
+      "operation": "log",
+      "left": "40b22d69735ff6ec",
+      "result": "4020e405b2c7e17e"
+    },
+    {
+      "operation": "log",
+      "left": "40a43dae79f6831f",
+      "result": "401f705f1614d67d"
+    },
+    {
+      "operation": "log",
+      "left": "40addb687ca70252",
+      "result": "40207f350f842854"
+    },
+    {
+      "operation": "log",
+      "left": "40a8f93a838868a4",
+      "result": "402023c30cf161ac"
+    },
+    {
+      "operation": "log",
+      "left": "409eca1a1293c0b8",
+      "result": "401e581ef00bdbb4"
+    },
+    {
+      "operation": "log",
+      "left": "40b0f3edffed5429",
+      "result": "4020c050672661b2"
+    },
+    {
+      "operation": "log",
+      "left": "40a34ea9132a1ed7",
+      "result": "401f40031a5e6e77"
+    },
+    {
+      "operation": "log",
+      "left": "40acde2dc897dde1",
+      "result": "40206df506f1eeed"
+    },
+    {
+      "operation": "log",
+      "left": "409d8f2db9c1d814",
+      "result": "401e2e5e328dc31e"
+    },
+    {
+      "operation": "log",
+      "left": "40a048d2fbd66f48",
+      "result": "401e91a7eae7d0f8"
+    },
+    {
+      "operation": "log",
+      "left": "3fedaeff2a9cf423",
+      "result": "bfb33c7ed4dd5a8b"
+    },
+    {
+      "operation": "log",
+      "left": "3fe743e288cbd2d4",
+      "result": "bfd466dd0276e4bc"
+    },
+    {
+      "operation": "log",
+      "left": "3fe9644d6afe0113",
+      "result": "bfcd9b8b9bd9ec33"
+    },
+    {
+      "operation": "log",
+      "left": "3fe05c117cc6e4dc",
+      "result": "bfe57829ffe82625"
+    },
+    {
+      "operation": "log",
+      "left": "3fbe948b3feb6c59",
+      "result": "c000ffa33da56729"
+    },
+    {
+      "operation": "log",
+      "left": "3fe47c09e872a206",
+      "result": "bfdc8c58eb6c5998"
+    },
+    {
+      "operation": "log",
+      "left": "3fd4eff44478fba8",
+      "result": "bff1e0aa3593714a"
+    },
+    {
+      "operation": "log",
+      "left": "3fcc79c88b3df898",
+      "result": "bff80c3349a5afdf"
+    },
+    {
+      "operation": "log",
+      "left": "3fc455d4e250ea5b",
+      "result": "bffd6f4cede36855"
+    },
+    {
+      "operation": "log",
+      "left": "3fe10fb8e720cc2e",
+      "result": "bfe420155054defa"
+    },
+    {
+      "operation": "log",
+      "left": "3fc560bdb3d2e9dd",
+      "result": "bffca27ffc17853d"
+    },
+    {
+      "operation": "log",
+      "left": "3fec5d6358dd17c8",
+      "result": "bfbedecb335ca1f2"
+    },
+    {
+      "operation": "log",
+      "left": "3fe9813c8eb891c5",
+      "result": "bfcd0a031a5194ff"
+    },
+    {
+      "operation": "log",
+      "left": "3fa63fd4a2a92dba",
+      "result": "c009168da5605e76"
+    },
+    {
+      "operation": "log",
+      "left": "3fe3997d4ecb807c",
+      "result": "bfdf5fe6c831a91c"
+    },
+    {
+      "operation": "log",
+      "left": "3fb2cb4c2fa877ab",
+      "result": "c004e49fbb81f1ea"
+    },
+    {
+      "operation": "log",
+      "left": "3feb78d83b376b48",
+      "result": "bfc3874f1301fe93"
+    },
+    {
+      "operation": "log",
+      "left": "3fea7fe3b24832db",
+      "result": "bfc8244a1bc9fdae"
+    },
+    {
+      "operation": "log",
+      "left": "3f50bbc1e570f388",
+      "result": "c01b8bee8be3ff09"
+    },
+    {
+      "operation": "log",
+      "left": "3feacc8740a268ff",
+      "result": "bfc6b42db68efeb4"
+    },
+    {
+      "operation": "log",
+      "left": "3fe0d6e8db99f502",
+      "result": "bfe48b56c1aae8cf"
+    },
+    {
+      "operation": "log",
+      "left": "3fe6ba0c6d74560f",
+      "result": "bfd5e67e2865d921"
+    },
+    {
+      "operation": "log",
+      "left": "3fdb6173cc5ef7e3",
+      "result": "bfeb2b61d6d4d509"
+    },
+    {
+      "operation": "log",
+      "left": "3fd50c0d2ca19695",
+      "result": "bff1cb3fd9a074fd"
+    },
+    {
+      "operation": "log",
+      "left": "3fecf6667a15f89e",
+      "result": "bfb9882a664ebfaa"
+    },
+    {
+      "operation": "log",
+      "left": "3fd09484b912e863",
+      "result": "bff59c5f5ae08cbe"
+    },
+    {
+      "operation": "log",
+      "left": "3fe5c4e902451453",
+      "result": "bfd8a7c880ec7409"
+    },
+    {
+      "operation": "log",
+      "left": "3fdb916405fab1e9",
+      "result": "bfeaf38c0514689a"
+    },
+    {
+      "operation": "log",
+      "left": "3feb858a42e26cc6",
+      "result": "bfc34c35ec21283a"
+    },
+    {
+      "operation": "log",
+      "left": "3fd9c3fccf37c375",
+      "result": "bfed1d709b10c433"
+    },
+    {
+      "operation": "log",
+      "left": "3fee454ad94368a9",
+      "result": "bfac71e7fb9610d5"
+    },
+    {
+      "operation": "log",
+      "left": "3fd4d5972fb34a90",
+      "result": "bff1f4dc7c66416a"
+    },
+    {
+      "operation": "pow",
+      "left": "4024000000000000",
+      "right": "bfdc000000000000",
+      "result": "3fd75f034d79e965"
+    },
+    {
+      "operation": "pow",
+      "left": "4024000000000000",
+      "right": "3fb0000000000000",
+      "result": "3ff279fcaca404e6"
+    },
+    {
+      "operation": "pow",
+      "left": "4000000000000000",
+      "right": "bff8000000000000",
+      "result": "3fd6a09e667f3bcd"
+    },
+    {
+      "operation": "pow",
+      "left": "3fe0000000000000",
+      "right": "3fb4daeef2a5b835",
+      "result": "3fee3e3c1a5ea07e"
+    }
+  ],
+  "providerTime": [
+    {
+      "input": "2025-01-11 17:13:25",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2026-07-01 08:10:16",
+      "instantMs": 1782893416000,
+      "date": "2026-07-01",
+      "datetimeUtc": "2026-07-01T08:10:16.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11 17:13",
+      "instantMs": 1736615580000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:00.000Z"
+    },
+    {
+      "input": "2025-01-11 17:13:25.5",
+      "instantMs": 1736615605500,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.500Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25Z",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25.000+09:00",
+      "instantMs": 1736583205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11",
+      "instantMs": 1736553600000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T00:00:00.000Z"
+    },
+    {
+      "input": "not a date",
+      "instantMs": null,
+      "date": "not a date",
+      "datetimeUtc": null
+    },
+    {
+      "input": "",
+      "instantMs": null,
+      "date": "",
+      "datetimeUtc": null
+    }
+  ]
+}

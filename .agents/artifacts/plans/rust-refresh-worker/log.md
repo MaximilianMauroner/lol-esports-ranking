@@ -5,9 +5,10 @@ Issue: #84
 
 ## Progress
 
-- [ ] M0 prerequisite A: code-unit order for data, model config bump (this PR)
-- [ ] M0 prerequisite B: digest-based reuse checks for state, raw, and public objects
-- [ ] M0 golden fixtures exporter
+- [ ] M0 prerequisite A: code-unit order for data, model config bump (#85)
+- [ ] M0 golden fixtures exporter and UTC provider timestamps (stacked on #85)
+- [ ] M0 prerequisite B: digest-based identity for stored objects (before M1)
+- [ ] Start of M5: mini full-generation fixture (moved from M0, see decisions)
 - [ ] M1 Rust contracts crate
 - [ ] M2 Raw source worker
 - [ ] M3 Provider fetch
@@ -27,6 +28,30 @@ Issue: #84
 - 2026-10-08, agent: apply code-unit order to all of `src/lib/**` and `scripts/**`, guarded by ESLint `no-restricted-properties`. Views and components keep `localeCompare` for display. Reason: a directory rule is easy to enforce; a list of worker-graph files would drift.
 - 2026-10-08, agent: bump `sourcePipelineVersion` to `...-code-unit-order-v23`. Reason: ordering feeds series identity and replay tie-breaks; the bump changes the config hash (`fnv1a-2a9cb549` to `fnv1a-5eebb6ce`) and invalidates incremental state once.
 
+- 2026-10-08, review: the digest-based identity change (reuse checks and reference format, decision 2) stays in M0, before M1. Reason: raw receipt references include `compressedBytes` (`parseRawObjectReference`, `scripts/raw-source-storage.mjs:601-606`). These lengths feed the receipt's canonical bytes, its `rawIdentityDigest`, and its key. Without the change, M2 key parity needs Node's exact zlib output: for a 1.6 MB Leaguepedia file at level 9, Node's zlib `1.3.2.1-motley` gives 127,153 bytes and system zlib 1.3 gives 127,522. Gzip bytes are therefore intentionally not a fixture.
+- 2026-10-08, agent: move the mini full-generation fixture to the start of M5. Reason: only M5 consumes it, and the model can change before then; freezing it now would only cause churn.
+- 2026-10-08, agent: parse zone-less provider timestamps as UTC in code (`src/lib/importers/providerTime.ts`). Reason: published `datetimeUtc` depended on the process time zone. Production is UTC (see Railway environment), and all 39,330 distinct local raw timestamps parse identically, so published output does not change and no config bump is needed.
+
+## Deferred contracts
+
+These byte contracts are not in the M0 fixtures. Each milestone adds them before it ports the code.
+
+- M5: `$checkpointType` encoding and `digestCanonical` (`src/lib/ratingCheckpoint.ts`).
+- M5: `$causal` encoding (`src/lib/causalRecompute.ts`).
+- M5: checkpoint inventory `stableJson` and `fnv1a64` (`src/lib/ratingCheckpointInventory.ts`).
+- M5: Oracle player-id FNV-32 after `trim`, `toLowerCase`, and `\s+` collapse (`src/lib/importers/oraclesElixir.ts`). JS `\s` and `trim` include U+FEFF; Rust `char::is_whitespace` does not.
+- M6a: source fingerprint `stableJson` in `scripts/refresh-data-if-changed.mjs`. It writes `{a: undefined}` as the text `{"a":undefined}`.
+
+M1 note: the cross-language CI job must compute the model config hash from the live parameters in both workers and compare them on every change. The fixture pins only the hash algorithm on samples, because a frozen copy of the live parameters would fail on every model change (Codex suggested it in #86; declined for that reason).
+
+M1 note: `parseProviderInstant` falls back to V8 `Date.parse` for forms that do not match the zone-less pattern. The Rust port must copy that fallback for the forms it accepts, or reject them.
+
+## Railway environment
+
+- Time zone: UTC+0 in January and July. Source: production generation `run_20261008001549` on https://lol.lab4code.com publishes raw Oracle times `2026-01-23 13:26:53` and `2026-07-01 08:10:16` as `...13:26:53.000Z` and `...08:10:16.000Z` (public content objects, read on 2026-10-08).
+- `LANG`: not needed after #85, because no data code uses locale collation.
+- Node version: unknown. No repository source states it; `package.json` allows `>=24 <25`.
+
 ## Surprises
 
 - Five copies of `compareCodeUnits` already existed (one export in `src/lib/incremental/types.ts`, four private). This PR keeps one shared `.mjs` helper so that plain `.mjs` scripts, such as the web server's storage modules, can import it without `tsx`.
@@ -44,15 +69,21 @@ After removing volatile fields (timestamps, run ids, config hash, pipeline versi
 - Four historical rank values change between teams with equal ratings.
 - The `main` build reproduces the committed `public/data` apart from two wall-clock fields (`freshnessDays`, `asOf`).
 
+## Baseline
+
+- `main`-equivalent code (#81 final head 610f30e4, CI run 37686933886, AMD EPYC 7763): gate passed; normalized compute 5.918 / 5.886 / 5.884; computeMs 26,801 / 26,657 / 26,650; peak 672 / 660 / 569 MiB.
+- #85 head 94c1d4b3 (CI run 37757838386, AMD EPYC 9V45): gate passed; normalized compute 6.075 / 6.074 / 6.074; peak 594 / 592 / 593 MiB; parity in all repetitions.
+- Local: Node v24.21.0, zlib 1.3.2.1-motley-8002e91, cargo 1.98.0.
+
 ## Acceptance checks
 
 ```json
 [
-  {"id": "baseline", "check": "Baseline verify and gate results on origin/main are recorded", "proof": "Log entry with pnpm run verify result, gate peak memory, and normalized compute", "passes": false},
+  {"id": "baseline", "check": "Baseline verify and gate results on origin/main are recorded", "proof": "Log entry with pnpm run verify result, gate peak memory, and normalized compute", "passes": true},
   {"id": "railway-env", "check": "Railway Node version, TZ, and LANG are recorded with their source", "proof": "Log entry naming the source", "passes": false},
-  {"id": "fixtures-stable", "check": "Fixture export is deterministic", "proof": "Two exporter runs produce identical files (diff is empty)", "passes": false},
+  {"id": "fixtures-stable", "check": "Fixture export is deterministic", "proof": "Two exporter runs produce identical files (diff is empty)", "passes": true},
   {"id": "rust-contracts", "check": "Rust matches every golden fixture", "proof": "cargo test passes in CI; a changed fixture byte makes it fail", "passes": false},
-  {"id": "raw-worker-parity", "check": "Rust raw source worker output equals Node's", "proof": "Equal prepared object keys and bytes on the benchmark corpus and data/raw; both peak memory values in the log", "passes": false},
+  {"id": "raw-worker-parity", "check": "Rust raw source worker output equals Node's", "proof": "Equal prepared object keys, digests and canonical bytes on the benchmark corpus and data/raw; both peak memory values in the log", "passes": false},
   {"id": "fetch-parity", "check": "Rust fetch output equals Node's on recorded responses", "proof": "Test comparing staging files and manifest passes", "passes": false},
   {"id": "bucket-parity", "check": "Rust bucket writes equal Node's and respect the lease", "proof": "MinIO object set comparison passes; lease-change test blocks promotion", "passes": false},
   {"id": "model-parity", "check": "Full and incremental Rust builds equal Node's digests", "proof": "Benchmark spawn mode reports zero differing paths, equal state digests, equal reconciliation", "passes": false},
@@ -62,5 +93,6 @@ After removing volatile fields (timestamps, run ids, config hash, pipeline versi
 ]
 ```
 
-`baseline` stays false: `pnpm run verify` passed on the branch, but the gate was not run locally; CI runs it.
-`railway-env` stays false: no source in the repository states the Railway Node version, `TZ`, or `LANG`.
+`baseline`: CI verify and gate on the `main`-equivalent head, see Baseline.
+`fixtures-stable`: `pnpm run fixtures:parity` twice, and once with `TZ=Asia/Seoul`, gave byte-identical files.
+`railway-env` stays false: the time zone is verified and `LANG` no longer matters, but the Node version is unknown.
