@@ -108,7 +108,6 @@ type TeamDataSummary = {
   hiddenFromRankedCount?: number
 }
 
-const TEAM_RANK_AXIS_LIMIT = 60
 const TEAM_PAGE_SIZES = [15, 25, 50, 80] as const
 const DEFAULT_TEAM_PAGE_SIZE = 25
 const RECENT_MATCH_PAGE_SIZE = 5
@@ -537,7 +536,7 @@ export function TeamsView({
                   onChange={setTierFilter}
                 />
                 {tournamentOptions.length > 1 || tournamentMovementIndexState.status === 'loading' ? (
-                  <label className="inline-flex min-w-0 items-center [&_[data-slot=select]]:w-[clamp(170px,22vw,240px)] max-sm:w-full max-sm:[&_[data-slot=select]]:w-full">
+                  <label className="inline-flex min-w-0 max-w-full items-center [&_[data-slot=select]]:max-w-full max-sm:w-full max-sm:[&>span]:w-full max-sm:[&_[data-slot=select]]:w-full">
                     <span className="sr-only">Tournament</span>
                     <Select value={activeTournamentFilter} onChange={(event) => updateTournamentFilter(event.target.value as TournamentFilterValue)}>
                       {tournamentOptions.map((option) => (
@@ -596,7 +595,7 @@ export function TeamsView({
                 <span><b className="font-semibold text-muted-foreground">100 points</b> ≈ {gapExample}% game win</span>
                 {rankedOrder ? <span><b className="font-semibold text-muted-foreground">Bracket</b> near tie: under {Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game</span> : null}
                 <span className="max-sm:hidden"><b className="font-semibold text-muted-foreground">{activeTournament ? 'Event move' : '30 days'}</b> rank change {movementPeriod}</span>
-                <span className="max-sm:hidden"><b className="font-semibold text-muted-foreground">Form</b> last five, oldest first</span>
+                <span><b className="font-semibold text-muted-foreground">Form</b> oldest → latest · latest underlined</span>
               </p>
             </PanelBody>
 
@@ -647,7 +646,7 @@ export function TeamsView({
                       <TableHead>Team</TableHead>
                       <SortHeader label="Power" columnKey="rating" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} className="board-col-score" />
                       <TableHead className="board-col-move" title={activeTournament ? 'Rank change from the tournament start to its endpoint.' : `Rank change on match history, ${movementPeriod}.`}>{activeTournament ? 'Event' : '30 days'}</TableHead>
-                      <TableHead className="board-col-form" title="Last five results, oldest first.">Form</TableHead>
+                      <TableHead className="board-col-form" title="Last five results, oldest to latest. Latest result is underlined.">Form</TableHead>
                       <SortHeader label="Record" columnKey="wins" sortKey={sortKey} descending={sortDirection === 'descending'} onSort={onSort} align="right" className="board-col-record" />
                       <TableHead className="board-col-action"><span className="sr-only">Compare and open</span></TableHead>
                     </TableRow>
@@ -771,7 +770,9 @@ export function TeamsView({
           description={
             activeTournament
               ? `${tournamentBoundaryLabel(activeTournament.status)} boundary ${formatDate(activeTournament.boundaryDate)}, rated through ${formatDate(activeTournament.ratedThroughDate)}.`
-              : `${pickedFocusTeams.length > 0 ? 'Your compared teams' : `Top ${DEFAULT_FOCUS_TEAMS} on the board. Tick Compare to choose teams`}. Daily close from match history; gaps mark weeks without matches.`
+              : metric === 'rank'
+                ? 'Published ranks at recorded dates. Select a team to highlight its path.'
+                : `${pickedFocusTeams.length > 0 ? 'Your compared teams' : `Top ${DEFAULT_FOCUS_TEAMS} on the board. Tick Compare to choose teams`}. Daily close from match history; dashed lines connect long breaks between recorded points.`
           }
           actions={
             <Segmented
@@ -807,12 +808,36 @@ export function TeamsView({
               yTickFormat={metric === 'rank' ? (value) => Math.round(value) === 1 ? '#1 best' : `#${Math.round(value)}` : undefined}
               yDomain={rankAxis?.domain}
               yTicks={rankAxis?.ticks}
+              interactiveLegend={metric === 'rank'}
               yReverse={metric === 'rank'}
               curve={metric === 'rank' ? 'step' : 'linear'}
             />
           </Suspense>
         )}
-        {insights.length > 0 ? (
+        {metric === 'rank' && chartSeries.length > 0 ? (
+          <PanelBody className="pt-1 pb-4">
+            <Table className="text-xs" aria-label="Rank changes over the shown period">
+              <TableHeader><TableRow><TableHead>Team</TableHead><TableHead>Start</TableHead><TableHead>Best</TableHead><TableHead>Latest</TableHead><TableHead>Change</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {chartSeries.map((entry) => {
+                  const start = entry.points[0].y
+                  const latest = entry.points.at(-1)!.y
+                  const best = Math.min(...entry.points.map((point) => point.y))
+                  const movement = start - latest
+                  return (
+                    <TableRow key={entry.id}>
+                      <TableCell className="font-semibold">{entry.label}</TableCell>
+                      <TableCell className="tabular-nums">#{start}</TableCell>
+                      <TableCell className="tabular-nums">#{best}</TableCell>
+                      <TableCell className="font-semibold tabular-nums">#{latest}</TableCell>
+                      <TableCell className={cn('tabular-nums', movement > 0 && 'text-[var(--up)]', movement < 0 && 'text-[var(--down)]')}>{movement === 0 ? 'Same' : `${movement > 0 ? 'Up' : 'Down'} ${Math.abs(movement)}`}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </PanelBody>
+        ) : metric !== 'rank' && insights.length > 0 ? (
           <PanelBody className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2.5 pt-1 pb-4">
             {insights.map(({ team, color, insight }) => (
               <article className="grid gap-2 rounded-md border border-border bg-[var(--surface-2)] px-3.5 py-3" key={teamKey(team)}>
@@ -1203,12 +1228,11 @@ function rankAxisForSeries(series: ChartSeries[]) {
     .map((rank) => Math.round(rank))
   if (ranks.length === 0) return undefined
   const axisMax = Math.max(5, Math.max(...ranks))
-  const clampedMax = Math.min(TEAM_RANK_AXIS_LIMIT, axisMax)
-  const ticks = clampedMax <= 8
-    ? Array.from({ length: clampedMax }, (_, index) => index + 1)
-    : uniqueSorted([1, Math.round(clampedMax * 0.25), Math.round(clampedMax * 0.5), Math.round(clampedMax * 0.75), clampedMax])
+  const ticks = axisMax <= 8
+    ? Array.from({ length: axisMax }, (_, index) => index + 1)
+    : uniqueSorted([1, Math.round(axisMax * 0.25), Math.round(axisMax * 0.5), Math.round(axisMax * 0.75), axisMax])
   return {
-    domain: { min: 1, max: clampedMax },
+    domain: { min: 1, max: axisMax },
     ticks,
   }
 }

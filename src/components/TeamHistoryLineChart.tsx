@@ -60,18 +60,26 @@ function TeamHistoryTooltip({
         color: item.color ?? 'var(--muted)',
         detail: pointDetail,
         influence: formatChartInfluence(pointDetail),
+        result: pointDetail ? formatChartInfluence({
+          ...pointDetail,
+          delta: undefined,
+          event: pointDetail.kind && pointDetail.kind !== 'match' ? pointDetail.event : undefined,
+        }) : undefined,
       }
     })
     .filter((row): row is NonNullable<typeof row> => row !== null)
 
   if (rows.length === 0) return null
+  const selectedDate = formatChartTooltipTimestamp(payload)
   return (
-    <div className="grid min-w-0 gap-2 border-t border-border pt-3 text-sm whitespace-normal">
-      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
+    <div
+      className="grid min-w-0 gap-2 border-t border-border pt-3 text-sm whitespace-normal"
+      // Portal clicks still bubble through Recharts. Keep disclosures from selecting a point.
+      onClick={(event) => event.stopPropagation()}
+    >
+      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{selectedDate}</b>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
-        {rows.map((row) => {
-          const closeNote = dailyCloseNote(row.detail)
-          return (
+        {rows.map((row) => (
             <div className="grid min-w-0 content-start gap-1" key={row.key}>
               <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-muted-foreground">
                 <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
@@ -79,18 +87,33 @@ function TeamHistoryTooltip({
                 <div className="grid justify-items-end gap-px">
                   <strong className="text-foreground tabular-nums">{yFormat(row.value)}</strong>
                   {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
-                    <b className="text-2xs font-semibold text-[var(--faint)] uppercase tabular-nums">Vs previous day {formatPreciseSignedDelta(row.detail.visibleDelta)} {row.detail.visibleDeltaUnit === 'rank' ? 'rank positions' : 'Power points'}</b>
+                    <span className="text-xs text-muted-foreground tabular-nums" title="Change since the previous recorded point">{formatPreciseSignedDelta(row.detail.visibleDelta)} {row.detail.visibleDeltaUnit === 'rank' ? 'rank positions' : 'Power'}</span>
                   ) : null}
                 </div>
               </div>
-              {row.influence ? <small className="ml-5 text-xs leading-[1.35] text-[var(--faint)]">{row.influence}</small> : null}
-              {closeNote ? <div className="ml-5 text-2xs leading-[1.35] text-muted-foreground [overflow-wrap:anywhere]">{closeNote}</div> : null}
-              <TooltipMatchList detail={row.detail} />
-              <TooltipModelDetail detail={row.detail} />
+              {row.result ? <small className="ml-5 text-xs text-muted-foreground">{row.result}</small> : null}
             </div>
-          )
-        })}
+        ))}
       </div>
+      {rows.some((row) => row.detail) ? (
+        <details key={selectedDate} className="mt-1 text-xs text-muted-foreground">
+          <summary className="w-fit cursor-pointer rounded-sm py-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]">Match and model details</summary>
+          <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
+            {rows.filter((row) => row.detail).map((row) => {
+              const closeNote = dailyCloseNote(row.detail)
+              return (
+                <div className="grid min-w-0 content-start gap-1" key={row.key}>
+                  <b className="text-foreground">{row.label}</b>
+                  {row.influence ? <p className="ml-5">{row.influence}</p> : null}
+                  {closeNote ? <p className="ml-5 leading-[1.35] [overflow-wrap:anywhere]">{closeNote}</p> : null}
+                  <TooltipMatchList detail={row.detail} />
+                  <TooltipModelDetail detail={row.detail} />
+                </div>
+              )
+            })}
+          </div>
+        </details>
+      ) : null}
     </div>
   )
 }
@@ -139,7 +162,7 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
         </div>
       ) : null}
       {typeof otherDelta === 'number' ? (
-        <div className="text-2xs leading-[1.35] text-[var(--faint)]">Other daily change {formatPreciseSignedDelta(otherDelta)} Power points</div>
+        <div className="text-2xs leading-[1.35] text-[var(--faint)]">Other change {formatPreciseSignedDelta(otherDelta)} Power points</div>
       ) : null}
     </div>
   )
@@ -157,7 +180,7 @@ function dailyCloseNote(detail?: ChartPointDetail) {
 
   const driver = strongestComponentDriver(detail)
   const driverText = driver ? ` Largest component change: ${driver.label} ${formatPreciseSignedDelta(driver.value)}.` : ''
-  return `Match result effect: ${formatPreciseSignedDelta(matchDelta)}. Overall change from previous day: ${formatPreciseSignedDelta(visibleDelta)}.${driverText}`
+  return `Match result effect: ${formatPreciseSignedDelta(matchDelta)}. Overall change from previous recorded point: ${formatPreciseSignedDelta(visibleDelta)}.${driverText}`
 }
 
 function matchLedgerDelta(detail?: ChartPointDetail) {

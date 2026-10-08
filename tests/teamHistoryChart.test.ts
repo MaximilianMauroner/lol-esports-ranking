@@ -159,3 +159,30 @@ test('tournament rank movement never reconciles Power attribution as rank positi
   assert.equal(power.detail?.visibleDeltaUnit, 'power')
   assert.equal(nonMatchDeltaFor(power.detail), undefined)
 })
+
+test('loading another team does not renumber published historical ranks', () => {
+  const alpha: TeamHistorySeries = { team: 'Alpha', currentStanding: { asOf: '2026-03-19', rating: 2010, rank: 9, lastMatchRating: 2010, adjustment: 0 }, points: [
+    ['2026-03-18', 2000, 12],
+    ['2026-03-19', 2010, 9],
+  ] }
+  const beta: TeamHistorySeries = { team: 'Beta', currentStanding: { asOf: '2026-03-19', rating: 2110, rank: 3, lastMatchRating: 2110, adjustment: 0 }, points: [
+    ['2026-03-18', 2100, 4],
+    ['2026-03-19', 2110, 3],
+  ] }
+  const alone = deriveDailyRankSeries({ alpha }).get('alpha')!
+  const together = deriveDailyRankSeries({ alpha, beta }).get('alpha')!
+  assert.deepEqual(alone.map((point) => point.y), [12, 9])
+  assert.deepEqual(together, alone)
+  assert.equal(alone[1].detail?.visibleDelta, -3)
+  assert.equal(alone[1].detail?.visibleDeltaUnit, 'rank')
+})
+
+test('rank history uses the last recorded rank of each day and skips invalid ranks', () => {
+  const alpha: TeamHistorySeries = { team: 'Alpha', currentStanding: { asOf: '2026-03-20', rating: 2020, rank: 61, lastMatchRating: 2020, adjustment: 0 }, points: [
+    ['2026-03-18', 2000, 70],
+    ['2026-03-18', 2010, 65],
+    ['2026-03-19', 2010, 0],
+    ['2026-03-20', 2020, 61],
+  ] }
+  assert.deepEqual(deriveDailyRankSeries({ alpha }).get('alpha')?.map((point) => point.y), [65, 61])
+})

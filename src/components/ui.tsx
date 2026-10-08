@@ -58,7 +58,7 @@ export function FormDots({ form }: { form?: string[] }) {
   const recent = (form ?? []).slice(-5)
   if (recent.length === 0) return <span className="text-muted-foreground">—</span>
   return (
-    <span className="inline-flex gap-1" aria-label={`Recent form: ${recent.join(', ')}`}>
+    <span className="inline-flex gap-1" aria-label={`Recent form, oldest to latest: ${recent.join(', ')}. Latest: ${recent.at(-1)}.`} title="Oldest to latest. Underlined result is the latest.">
       {recent.map((result, index) => {
         const normalized = result.toLowerCase()
         const tone = normalized === 'w' ? 'w' : normalized === 't' ? 't' : 'l'
@@ -71,6 +71,7 @@ export function FormDots({ form }: { form?: string[] }) {
               tone === 'w' && 'bg-[var(--win-soft)] text-[var(--win)]',
               tone === 'l' && 'bg-[var(--loss-soft)] text-[var(--loss)]',
               tone === 't' && 'bg-[var(--surface-3)] text-muted-foreground',
+              index === recent.length - 1 && 'underline decoration-2 underline-offset-2',
             )}
             aria-hidden="true"
           >

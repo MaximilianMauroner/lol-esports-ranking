@@ -1,4 +1,4 @@
-import { useId, useMemo, type CSSProperties, type ReactElement } from 'react'
+import { useId, useMemo, useState, type CSSProperties, type ReactElement } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { Button } from './ui/button'
 import { ChartContainer, type ChartConfig } from './ui/chart'
 import { formatChartTimestamp, formatChartTooltipTimestamp } from '../lib/chartTime'
 
@@ -27,8 +28,8 @@ type ChartDatum = { t: number } & Record<string, unknown>
 
 /**
  * One drawn line. A series with a long gap in its data is split into several
- * segments that share its colour and label, so the chart shows the gap instead
- * of a straight diagonal that reads as a steady trend.
+ * segments that share its colour and label. A dashed connector marks the gap
+ * without presenting the interval as a recorded trend.
  */
 type SeriesMeta = {
   key: string
@@ -56,6 +57,7 @@ export type LineChartProps = {
   tooltipContent?: ReactElement
   tooltipPortal?: HTMLElement | null
   tooltipWrapperStyle?: CSSProperties
+  interactiveLegend?: boolean
   persistentTooltip?: boolean
 }
 
@@ -83,11 +85,14 @@ export function LineChart({
   tooltipPortal,
   tooltipWrapperStyle,
   persistentTooltip = false,
+  interactiveLegend = false,
 }: LineChartProps) {
+  const [focusedSeriesId, setFocusedSeriesId] = useState<string>()
+  const focusedId = interactiveLegend && series.some((entry) => entry.id === focusedSeriesId) ? focusedSeriesId : undefined
   const chartId = useId().replace(/:/g, '')
   const summaryId = `${chartId}-summary`
   const domain = useMemo(() => computeDomain(series, yDomain), [series, yDomain])
-  const { data, meta } = useMemo(() => buildChartData(series), [series])
+  const { data, meta, gaps } = useMemo(() => buildChartData(series), [series])
   const config = useMemo<ChartConfig>(
     () =>
       Object.fromEntries(
@@ -126,8 +131,14 @@ export function LineChart({
   return (
     <div className="chart-shell">
       {/* Names come before the lines they identify. */}
-      <div className="flex flex-wrap gap-x-3.5 gap-y-1 px-4 pt-3">
-        {series.map((entry) => (
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pt-3" role={interactiveLegend ? 'group' : undefined} aria-label={interactiveLegend ? 'Highlight a team' : undefined}>
+        {interactiveLegend ? <Button variant="ghost" size="tab" aria-pressed={!focusedId} onClick={() => setFocusedSeriesId(undefined)}>All teams</Button> : null}
+        {series.map((entry) => interactiveLegend ? (
+          <Button key={entry.id} variant="ghost" size="tab" aria-pressed={focusedId === entry.id} onClick={() => setFocusedSeriesId(entry.id)} className={focusedId && focusedId !== entry.id ? 'opacity-45' : undefined}>
+            <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: entry.color }} aria-hidden="true" />
+            {entry.label}
+          </Button>
+        ) : (
           <span className="inline-flex items-center gap-2 text-sm text-muted-foreground" key={entry.id}>
             <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: entry.color }} aria-hidden="true" />
             {entry.label}
@@ -173,6 +184,9 @@ export function LineChart({
             trigger={persistentTooltip ? 'click' : 'hover'}
             defaultIndex={persistentTooltip ? data.length - 1 : undefined}
           />
+          {gaps.map(({ key, series: entry }) => (
+            <Line key={key} dataKey={key} opacity={focusedId && focusedId !== entry.id ? 0.18 : 1} stroke={entry.color} strokeWidth={1.5} strokeDasharray="4 4" connectNulls dot={false} activeDot={false} tooltipType="none" isAnimationActive={false} />
+          ))}
           {meta.map(({ key, series: entry }) => (
             <Line
               key={key}
@@ -180,6 +194,7 @@ export function LineChart({
               name={entry.label}
               type={lineType}
               stroke={entry.color}
+              opacity={focusedId && focusedId !== entry.id ? 0.18 : 1}
               strokeWidth={2}
               connectNulls
               dot={entry.points.length <= 36 && series.length <= 2 ? { r: 3.2, strokeWidth: 2 } : false}
@@ -200,6 +215,7 @@ export function LineChart({
           ))}
         </RechartsLineChart>
       </ChartContainer>
+      {gaps.length > 0 ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines join recorded points more than 21 days apart. No ratings are recorded between them.</p> : null}
       <div id={summaryId} className="sr-only">{summaryText}</div>
 
     </div>
@@ -233,14 +249,24 @@ function formatPointSummary(point: ChartSeries['points'][number], formatValue: (
 function buildChartData(series: ChartSeries[]) {
   const dataByTime = new Map<number, ChartDatum>()
   const meta: SeriesMeta[] = []
+  const gaps: SeriesMeta[] = []
 
   series.forEach((entry, index) => {
     let segment = 0
-    let previousT: number | undefined
+    let previousPoint: ChartPoint | undefined
     for (const point of entry.points) {
       if (!isValidPoint(point)) continue
-      if (previousT !== undefined && point.t - previousT > SEGMENT_GAP_MS) segment += 1
-      previousT = point.t
+      if (previousPoint && point.t - previousPoint.t > SEGMENT_GAP_MS) {
+        const gapKey = `gap${index}_${segment}`
+        gaps.push({ key: gapKey, series: entry })
+        const previousDatum = dataByTime.get(previousPoint.t) ?? { t: previousPoint.t }
+        previousDatum[gapKey] = previousPoint.y
+        const nextDatum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
+        nextDatum[gapKey] = point.y
+        dataByTime.set(point.t, nextDatum)
+        segment += 1
+      }
+      previousPoint = point
       const key = `series${index}_${segment}`
       if (meta.at(-1)?.key !== key) meta.push({ key, series: entry })
       const datum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
@@ -253,6 +279,7 @@ function buildChartData(series: ChartSeries[]) {
   return {
     data: [...dataByTime.values()].sort((left, right) => left.t - right.t),
     meta,
+    gaps,
   }
 }
 
