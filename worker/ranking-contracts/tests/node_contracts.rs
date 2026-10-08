@@ -145,6 +145,7 @@ fn node_semantic_artifact_contracts() {
         let envelope =
             json!({"artifactKind":"public-semantic-artifact", "schemaVersion":1, "content":input});
         let text = canonical_json(&Value::from(&envelope)).unwrap();
+        assert_eq!(canonical_json_value(&envelope), text);
         assert_eq!(text, entry["canonical"].as_str().unwrap());
         assert_eq!(sha256(text.as_bytes()), entry["sha256"].as_str().unwrap());
         assert_eq!(text.len() as u64, entry["bytes"].as_u64().unwrap());
@@ -152,6 +153,17 @@ fn node_semantic_artifact_contracts() {
         assert_eq!(compressed, gzip(text.as_bytes()).unwrap());
         assert_eq!(gunzip(&compressed).unwrap(), text.as_bytes());
         assert!(gunzip(b"invalid gzip").is_err());
+    }
+}
+
+#[test]
+fn borrowed_json_matches_node_canonical_bytes() {
+    // Parse Node's expected canonical output to exercise plain JSON values without tags.
+    for entry in fixtures()["canonicalJson"].as_array().unwrap() {
+        if let Some(text) = entry["canonical"].as_str() {
+            let value: Json = serde_json::from_str(text).unwrap();
+            assert_eq!(canonical_json_value(&value), text, "{entry}");
+        }
     }
 }
 
