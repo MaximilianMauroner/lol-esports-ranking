@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { promisify } from 'node:util'
+import { providerFetchWorkerCommand } from '../scripts/provider-fetch-worker-command.mjs'
 
 const execFileAsync = promisify(execFile)
 
@@ -24,8 +25,7 @@ test('local data download manifest records Oracle primary and Leaguepedia backup
     })
     const { port } = server.address() as AddressInfo
 
-    await execFileAsync(process.execPath, [
-      'scripts/download-local-data.mjs',
+    await runDownloader([
       '--out-dir',
       tempDir,
       '--manifest',
@@ -40,7 +40,7 @@ test('local data download manifest records Oracle primary and Leaguepedia backup
       'false',
       '--riot-gpr',
       'false',
-    ], { cwd: process.cwd(), maxBuffer: 1024 * 1024 })
+    ])
 
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     assert.equal(manifest.sources.oracle.role, 'primary')
@@ -78,8 +78,7 @@ test('LoL Esports reference download failure is warning-only unless required', a
     const { port } = server.address() as AddressInfo
     const lolesportsBaseUrl = `http://127.0.0.1:${port}`
 
-    await execFileAsync(process.execPath, [
-      'scripts/download-local-data.mjs',
+    await runDownloader([
       '--out-dir',
       tempDir,
       '--manifest',
@@ -98,7 +97,7 @@ test('LoL Esports reference download failure is warning-only unless required', a
       '0',
       '--riot-gpr',
       'false',
-    ], { cwd: process.cwd(), maxBuffer: 1024 * 1024 })
+    ])
 
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     assert.equal(manifest.sources.lolesports.status, 'failed')
@@ -107,8 +106,7 @@ test('LoL Esports reference download failure is warning-only unless required', a
     assert.match(manifest.warnings.join('\n'), /LoL Esports schedule reference was not downloaded/)
 
     await assert.rejects(
-      execFileAsync(process.execPath, [
-        'scripts/download-local-data.mjs',
+      runDownloader([
         '--out-dir',
         tempDir,
         '--manifest',
@@ -123,7 +121,7 @@ test('LoL Esports reference download failure is warning-only unless required', a
         'true',
         '--riot-gpr',
         'false',
-      ], { cwd: process.cwd(), maxBuffer: 1024 * 1024 }),
+      ]),
       /LoL Esports schedule reference download is required but failed/,
     )
   } finally {
@@ -164,8 +162,7 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
     })
     const { port } = server.address() as AddressInfo
 
-    await execFileAsync(process.execPath, [
-      'scripts/download-local-data.mjs',
+    await runDownloader([
       '--out-dir',
       tempDir,
       '--manifest',
@@ -184,7 +181,7 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
       'false',
       '--riot-gpr',
       'false',
-    ], { cwd: process.cwd(), maxBuffer: 1024 * 1024 })
+    ])
 
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     assert.equal(manifest.sources.oracle.status, 'failed')
@@ -206,3 +203,8 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
     await rm(tempDir, { recursive: true, force: true })
   }
 })
+
+async function runDownloader(flags: string[]) {
+  const { command, args } = providerFetchWorkerCommand(flags)
+  return execFileAsync(command, args, { cwd: process.cwd(), maxBuffer: 1024 * 1024 })
+}
