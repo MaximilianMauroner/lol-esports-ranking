@@ -49,6 +49,11 @@ fallback before bundling and prerendering. The server continues to prefer bucket
 data, which the cron refresh publishes independently of Git. No provider fetch,
 bucket write, or production deployment is part of `data:pull`.
 
+Runtime HTML and the sitemap use the active bucket root and its selected season
+shard. They read the same generation and verify its artifact identities; a failed
+bucket read uses the complete local snapshot. Later promotions appear without a
+server restart.
+
 Existing Git history still contains earlier data snapshots. This change removes
 them from future commits without rewriting history. The pinned historical
 snapshot is a deliberate test and benchmark input, not a second tracked copy of

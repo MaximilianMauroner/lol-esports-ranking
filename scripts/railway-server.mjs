@@ -13,8 +13,16 @@ import {
   headBucketObject,
   preparePresignedBucketDelivery,
   readBucketJson,
+  readActiveContentAddressedGeneration,
 } from './railway-bucket.mjs'
-import { injectHomepagePrerender, renderHomepagePrerenderFromDataDir, renderSitemapFromDataDir } from './seo-prerender.ts'
+import { canonicalJsonFor, canonicalPublicLogicalPath } from './public-artifact-storage.mjs'
+import {
+  injectHomepagePrerender,
+  loadHomepagePrerenderSnapshot,
+  loadHomepagePrerenderSnapshotFromDataDir,
+  renderHomepagePrerenderSnapshot,
+  renderSitemapFromManifest,
+} from './seo-prerender.ts'
 
 const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
@@ -189,7 +197,7 @@ async function serveAppShell(response, headOnly, requestHeaders) {
   }
 
   try {
-    const prerendered = await renderHomepagePrerenderFromDataDir(publicDataDir)
+    const prerendered = renderHomepagePrerenderSnapshot(await loadCrawlerSnapshot())
     html = injectHomepagePrerender(html, prerendered)
   } catch (error) {
     console.warn(`Live homepage prerender fallback used: ${error instanceof Error ? error.message : String(error)}`)
@@ -215,7 +223,7 @@ async function serveLiveSitemap(response, headOnly, requestHeaders) {
   }
   try {
     const sitemap = await readFile(sitemapPath, 'utf8')
-    const rendered = await renderSitemapFromDataDir(publicDataDir, sitemap)
+    const rendered = renderSitemapFromManifest((await loadCrawlerSnapshot()).manifest, sitemap)
     await sendText(response, rendered, {
       cacheControl: cacheControlForPath('sitemap.xml'),
       contentType: 'application/xml; charset=utf-8',
@@ -230,6 +238,50 @@ async function serveLiveSitemap(response, headOnly, requestHeaders) {
     })
     if (!served) sendJson(response, 404, { ok: false, error: 'Not found' })
   }
+}
+
+async function loadCrawlerSnapshot() {
+  if (bucketConfig.enabled) {
+    try {
+      const authority = await readActiveContentAddressedGeneration({
+        ...bucketStorage, verifyArtifacts: false, resolveDirectory: true, verifyPublicationClosure: false,
+      })
+      let snapshot
+      if (authority.found) {
+        const root = authority.rootArtifact
+        const manifest = authority.manifest
+        if (root.model?.version !== manifest.model.version || root.model?.configHash !== manifest.model.configHash
+          || root.source !== manifest.provenance.source || root.dataMode !== manifest.provenance.dataMode
+          || canonicalJsonFor([...new Set(root.sources.map((source) => source.name))].sort())
+            !== canonicalJsonFor([...new Set(manifest.provenance.sourceProviders)].sort())) {
+          throw new Error('Crawler ranking root provenance mismatch')
+        }
+        snapshot = await loadHomepagePrerenderSnapshot(async (url) => {
+          const path = canonicalPublicLogicalPath(url)
+          if (path === '/data/ranking-summary.json') return { ...root, generatedAt: manifest.generatedAt }
+          return (await authority.loadArtifacts([path]))[path]
+        })
+      } else {
+        // Legacy files remain pinned to the pointer read above, even during promotion.
+        const generation = authority.active?.generationId
+        if (generation !== undefined && (typeof generation !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(generation))) {
+          throw new Error('Crawler legacy generation is invalid')
+        }
+        const prefix = generation ? `generations/${generation}/data` : 'data'
+        snapshot = await loadHomepagePrerenderSnapshot(async (url) => {
+          const path = canonicalPublicLogicalPath(url).slice('/data/'.length)
+          const artifact = await readBucketJson(`${prefix}/${path}`, bucketStorage)
+          if (!artifact.found) throw new Error(`Crawler bucket artifact is missing: ${path}`)
+          return artifact.value
+        })
+      }
+      if (!snapshot.manifest || !snapshot.shard || !snapshot.snapshotKey) throw new Error('Crawler bucket snapshot is incomplete')
+      return snapshot
+    } catch (error) {
+      console.warn(`Crawler bucket fallback used: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return loadHomepagePrerenderSnapshotFromDataDir(publicDataDir)
 }
 
 async function sendText(response, text, { cacheControl, contentType, headOnly, requestHeaders }) {

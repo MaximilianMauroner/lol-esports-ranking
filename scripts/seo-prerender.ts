@@ -57,9 +57,16 @@ export async function renderHomepagePrerenderFromPublicData(rootDir = process.cw
 }
 
 export async function renderHomepagePrerenderFromDataDir(publicDataDir: string) {
-  const manifest = await readJson(join(publicDataDir, 'ranking-summary.json'))
-  const manifestRecord = asRecord(manifest)
-  if (!manifestRecord) return renderFallbackHomepagePrerender()
+  return renderHomepagePrerenderSnapshot(await loadHomepagePrerenderSnapshotFromDataDir(publicDataDir))
+}
+
+export async function loadHomepagePrerenderSnapshotFromDataDir(publicDataDir: string) {
+  return loadHomepagePrerenderSnapshot((url) => readJson(publicPathForDataUrl(publicDataDir, url)))
+}
+
+export async function loadHomepagePrerenderSnapshot(loadArtifact: (url: string) => Promise<unknown>) {
+  const manifestRecord = asRecord(await loadArtifact('/data/ranking-summary.json'))
+  if (!manifestRecord) return { manifest: undefined, shard: undefined, snapshotKey: undefined }
 
   const defaultSnapshotKey = stringField(manifestRecord, 'defaultSnapshotKey')
   const snapshotIndex = recordField(manifestRecord, 'snapshotIndex')
@@ -68,12 +75,15 @@ export async function renderHomepagePrerenderFromDataDir(publicDataDir: string) 
     ? recordField(snapshotIndex, snapshotKey)
     : undefined
   const shardUrl = snapshotEntry ? stringField(snapshotEntry, 'url') : undefined
-  const shard = shardUrl ? await readJson(publicPathForDataUrl(publicDataDir, shardUrl)) : undefined
-  const shardRecord = asRecord(shard)
+  const shard = shardUrl ? asRecord(await loadArtifact(shardUrl)) : undefined
+  return { manifest: manifestRecord, shard, snapshotKey }
+}
 
+export function renderHomepagePrerenderSnapshot(snapshot: Awaited<ReturnType<typeof loadHomepagePrerenderSnapshot>>) {
+  if (!snapshot.manifest) return renderFallbackHomepagePrerender()
   return renderHomepagePrerender({
-    ...extractHomepagePrerenderData(manifestRecord, shardRecord),
-    snapshotKey,
+    ...extractHomepagePrerenderData(snapshot.manifest, snapshot.shard),
+    snapshotKey: snapshot.snapshotKey,
   })
 }
 
@@ -85,8 +95,8 @@ export function injectHomepagePrerender(html: string, prerendered: string) {
   return `${html.slice(0, contentStart)}${prerendered}${html.slice(end)}`
 }
 
-export async function renderSitemapFromDataDir(publicDataDir: string, sitemap: string) {
-  const manifest = asRecord(await readJson(join(publicDataDir, 'ranking-summary.json')))
+export function renderSitemapFromManifest(value: unknown, sitemap: string) {
+  const manifest = asRecord(value)
   const generatedAt = manifest ? stringField(manifest, 'generatedAt') : undefined
   const generatedDate = generatedAt && !Number.isNaN(new Date(generatedAt).getTime())
     ? generatedAt.slice(0, 10)
