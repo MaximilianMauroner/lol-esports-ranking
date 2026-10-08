@@ -68,7 +68,7 @@ pub fn download(
         let html = match discovery {
             Ok(response) => response.text().into_owned(),
             Err(error) => {
-                let message = error.to_string();
+                let message = discovery_failure_message(&error.to_string());
                 failures.push(
                     json!({"source":"Oracle Google Drive folder","url":folder_url,"error":message}),
                 );
@@ -160,4 +160,48 @@ pub fn download(
         folder_url,
         discovered_count: original_count,
     })
+}
+
+fn discovery_failure_message(message: &str) -> String {
+    let status = message
+        .strip_prefix("HTTP ")
+        .and_then(|value| value.split_once(" from "))
+        .and_then(|(status, _)| status.parse::<u16>().ok());
+    match status {
+        Some(status)
+            if !(200..=299).contains(&status)
+                && status != 429
+                && !(500..=599).contains(&status) =>
+        {
+            format!("HTTP {status} from Oracle Google Drive folder")
+        }
+        _ => message.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::discovery_failure_message;
+
+    #[test]
+    fn discovery_failure_matches_node_terminal_http_diagnostic() {
+        for status in [403, 404] {
+            assert_eq!(
+                discovery_failure_message(&format!(
+                    "HTTP {status} from https://drive.google.com/embeddedfolderview?id=fixture#list"
+                )),
+                format!("HTTP {status} from Oracle Google Drive folder")
+            );
+        }
+        for message in [
+            "Provider request exhausted retries: http-503",
+            "Provider request failed after 5 attempt(s): fetch failed",
+            "Provider request exceeded maxElapsedMs",
+            "terminated",
+            "HTTP 429 from https://drive.google.com/embeddedfolderview",
+            "HTTP 503 from https://drive.google.com/embeddedfolderview",
+        ] {
+            assert_eq!(discovery_failure_message(message), message);
+        }
+    }
 }
