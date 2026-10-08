@@ -10,7 +10,7 @@ const browserJourneys = [
   'tests/tournamentForecastBrowser.test.ts',
 ]
 const browserSet = new Set(browserJourneys)
-const otherTests = globSync('tests/**/*.test.ts').filter((path) => !browserSet.has(path)).sort()
+const otherTests = [...globSync('tests/**/*.test.ts'), ...globSync('tests/**/*.test.mjs')].filter((path) => !browserSet.has(path)).sort()
 
 async function run(files) {
   const child = spawn('pnpm', ['exec', 'tsx', '--tsconfig', 'tsconfig.app.json', '--test', ...files], { stdio: 'inherit' })
