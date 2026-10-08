@@ -27,14 +27,17 @@ Live site: [lol.lab4code.com](https://lol.lab4code.com/) · [Source code](https:
 
 ## Status
 
-For static deployments, the app serves the latest committed browser-safe snapshot from `public/data/`. On Railway, the same `/data/*` payload can be served from Railway Bucket storage after refresh. It is not an official Riot ranking, and each public ranking claim should stay tied to the data source manifest, model version, config hash, and coverage window that produced it. While the model is pre-1.0, `model.version` is intentionally stable; use `model.configHash` and `schemaVersion` for exact iteration provenance.
+The generated browser payload in `public/data/` is ignored by Git. Download the pinned reference snapshot or build it from local source inputs before using a static host. Railway serves the current `/data/*` payload from Railway Bucket storage, with local files as a fallback. It is not an official Riot ranking, and each public ranking claim should stay tied to the data source manifest, model version, config hash, and coverage window that produced it. While the model is pre-1.0, `model.version` is intentionally stable; use `model.configHash` and `schemaVersion` for exact iteration provenance.
 
 ## Run
 
 ```bash
 pnpm install
+pnpm run data:pull
 pnpm run dev
 ```
+
+`data:pull` downloads a fixed Node reference snapshot for development. It is not a live-data refresh. To calculate current rankings, use `data:download` and `data:crunch` below. See [local data setup](docs/local-data.md).
 
 Useful checks:
 
@@ -58,7 +61,7 @@ The frontend loads static JSON from:
 /data/ranking-summary.json
 ```
 
-Static hosts serve the committed files in `public/data/`. Set `VITE_RANKING_DATA_URL` only when you intentionally want the browser to load an externally hosted manifest.
+Static hosts serve downloaded or generated files in the ignored `public/data/` directory. Set `VITE_RANKING_DATA_URL` only when you intentionally want the browser to load an externally hosted manifest.
 
 Static data can be generated without source inputs for a no-data smoke fixture:
 
@@ -75,29 +78,28 @@ pnpm run data:download
 pnpm run data:crunch
 pnpm run data:team-branding
 pnpm run release:check
-git add data/raw/manifest.json public/data/ranking-summary.json public/data/entities public/data/history public/data/scopes
-git commit -m "Refresh LoL esports ranking data"
-git push
+# Review provenance changes before committing the input manifest.
+git add data/raw/manifest.json
 ```
 
 `data:download` stores raw provider files under `data/raw/` and writes `data/raw/manifest.json`. Raw provider downloads are local inputs and are ignored by Git; the manifest is committed for provenance. By default the downloader fetches Oracle's Elixir CSVs and Leaguepedia ScoreboardGames from 2011-01-01 through today. `data:crunch` reads the local manifest and raw files, writes the full local calculation artifact to `data/derived/ranking-snapshot.full.json`, and writes the deployable client payload to `public/data/ranking-summary.json`, `public/data/entities/*.json`, `public/data/history/**/*.json`, and `public/data/scopes/*.json`.
 
 `data:team-branding` audits every team in the public team directory. It prefers shorthand and logos cached from the LoL Esports schedule feed, fills gaps from Leaguepedia team metadata, downloads logos into `public/team-logos/`, and records the source of each result in `src/data/teamBranding.generated.ts`. Teams without published metadata keep a text mark and an explicit `name-derived` source.
 
-Commit the compact generated `public/data` payload after review when you need static-host fallback files. Railway deployments can instead publish that payload to the private Railway Bucket during refresh. Do not commit raw provider downloads, `data/derived/ranking-snapshot.full.json`, or other full audit artifacts. The full public snapshot files `public/data/ranking-snapshot.json` and `public/data/*.full.json` are intentionally blocked because they can exceed GitHub file limits; the compact manifest and shards are the browser contract. Official LoL Esports ranking snapshots are not part of the local data-source manifest.
+Keep all generated `public/data` files local. A static build includes the payload that you download or generate before `pnpm build`; it does not need a data commit. Railway refreshes publish the payload to the private Railway Bucket. Raw provider downloads, downloaded reference data, full snapshots, and audit artifacts are also ignored. The compact manifest and shards remain the browser contract. Official LoL Esports ranking snapshots are not part of the local data-source manifest.
 
 `data:download` treats Oracle's Elixir as the primary game-level source and Leaguepedia as the backup/gap-fill source. It discovers the public Oracle CSV files from the Oracle Google Drive folder, downloads the CSVs that overlap the requested date range, then downloads Leaguepedia Cargo data for the same range. If Google Drive returns a quota/HTML page instead of a CSV for a file, that file is skipped with a manifest warning instead of being recorded as usable data.
 
 ## Railway Server Deployment
 
-`railway.toml` deploys the app as a Railway web service. The production server serves the built Vite app from `dist/`, serves `/data/*` from local `public/data/` when a file is present, falls back to Railway Bucket storage when configured, and keeps background refresh disabled unless `RANKING_REFRESH_ENABLED=true` is explicitly set. Data companion URLs include a run-version query string so Railway CDN can cache shard/entity/history JSON aggressively without mixing artifacts from different generated runs. The manifest keeps a short edge TTL so new runs are discovered quickly.
+`railway.toml` deploys the app as a Railway web service. The production server serves the built Vite app from `dist/`, serves `/data/*` from Railway Bucket storage when configured and falls back to local `public/data/`, and keeps background refresh disabled unless `RANKING_REFRESH_ENABLED=true` is explicitly set. Data companion URLs include a run-version query string so Railway CDN can cache shard/entity/history JSON aggressively without mixing artifacts from different generated runs. The manifest keeps a short edge TTL so new runs are discovered quickly.
 
 ```bash
 railway link
 railway up
 ```
 
-The Railway `web` service is connected to the `MaximilianMauroner/lol-esports-ranking` GitHub repository on the `main` branch, so Railway's native GitHub autodeploys rebuild and redeploy the service when new commits are pushed to `main`. The Railway build command runs typecheck, lint, tests, and the production build before the service starts.
+The Railway `web` service is connected to the `MaximilianMauroner/lol-esports-ranking` GitHub repository on the `main` branch, so Railway's native GitHub autodeploys rebuild and redeploy the service when new commits are pushed to `main`. The Railway build command downloads the pinned reference snapshot for static fallback and prerendering, then runs typecheck, lint, and the production bundle. Current rankings still come from the bucket. CI runs tests and the incremental gate against the separately cached reference corpus.
 
 This repository also includes `.github/workflows/railway-deploy.yml` as a manual fallback. Railway owns verification and bundling for that deployment, so the workflow does not duplicate the build before running:
 
