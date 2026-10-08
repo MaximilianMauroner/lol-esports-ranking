@@ -96,6 +96,7 @@ function excludeArchiveEntry(relativePath: string, isDirectory: boolean) {
   const name = normalized.slice(normalized.lastIndexOf('/') + 1)
   if (ARCHIVE_DISCOVERY_EXCLUSIONS.has(name)) return true
   if (name === '.env' || name.startsWith('.env.')) return true
+  if (normalized === 'data/reference' || normalized.startsWith('data/reference/')) return true
   if (normalized === 'data/derived' || normalized.startsWith('data/derived/')) return true
   if (normalized.startsWith('data/raw/') && normalized !== 'data/raw/manifest.json') return true
   if (!isDirectory && normalized.startsWith('data/')

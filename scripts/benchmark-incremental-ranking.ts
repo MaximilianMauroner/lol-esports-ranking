@@ -1,3 +1,4 @@
+import { ensureReferencePublicData, referencePublicDataDir } from './reference-public-data.mjs'
 import { createHash } from 'node:crypto'
 import { fork } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -29,6 +30,8 @@ import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
 const refreshModulePath: string = './refresh-data-if-changed.mjs'
 const { refreshDataIfChanged } = await import(refreshModulePath) as { refreshDataIfChanged: RefreshDataIfChanged }
+
+await ensureReferencePublicData()
 
 const corpusMinimums = { matches: 4_477, teams: 102, players: 356 }
 const targets = {
@@ -296,9 +299,9 @@ async function runBenchmarkParent() {
   }
   const teams = await currentTeams()
   const players = await currentPlayers()
-  const checkedInMatches = await currentMatches()
-  if (benchmarkMatchCount > checkedInMatches.length) {
-    throw new Error(`Checked-in match corpus is undersized: ${checkedInMatches.length} < ${benchmarkMatchCount}`)
+  const referenceMatches = await currentMatches()
+  if (benchmarkMatchCount > referenceMatches.length) {
+    throw new Error(`Reference match corpus is undersized: ${referenceMatches.length} < ${benchmarkMatchCount}`)
   }
   const measurements: Array<Awaited<ReturnType<typeof runMeasuredWorker>> & {
     calibrationMs: number
@@ -316,7 +319,7 @@ async function runBenchmarkParent() {
     const lolEsportsPath = join(root, 'lolesports-schedule.json')
     await mkdir(dirname(baselineCsv), { recursive: true })
     await mkdir(dirname(nextCsv), { recursive: true })
-    const baselineMatches = checkedInMatches.slice(0, benchmarkMatchCount)
+    const baselineMatches = referenceMatches.slice(0, benchmarkMatchCount)
     const addedMatch = appendedMatch(baselineMatches)
     await writeFile(baselineCsv, oracleCsv(baselineMatches, teams, players))
     await writeFile(nextCsv, oracleCsv([...baselineMatches, addedMatch], teams, players))
@@ -627,8 +630,8 @@ async function runBenchmarkWorker() {
   const { fixtureShape } = setup
   const output = {
     corpus: {
-      fixtureSource: 'checked-in-sanitized-public-corpus',
-      fixtureReason: 'raw provider files are ignored and unavailable in isolated CI; checked-in canonical pages preserve production match distributions',
+      fixtureSource: 'pinned-sanitized-public-corpus',
+      fixtureReason: 'raw provider files are ignored and unavailable in isolated CI; pinned canonical pages preserve production match distributions',
       referenceMatchCount: currentShape.matchCount,
       benchmarkMatchCount,
       baselineMatchCount,
@@ -1087,9 +1090,9 @@ function semanticContent(value: unknown) {
 }
 
 async function currentCorpusShape() {
-  const summary = JSON.parse(await readFile(resolve('public/data/ranking-summary.json'), 'utf8')) as Record<string, unknown>
-  const directory = JSON.parse(await readFile(resolve('public/data/entities/teams.json'), 'utf8')) as { teams?: unknown[] }
-  const players = JSON.parse(await readFile(resolve('public/data/entities/players.json'), 'utf8')) as { players?: unknown[] }
+  const summary = JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')) as Record<string, unknown>
+  const directory = JSON.parse(await readFile(join(referencePublicDataDir, 'entities/teams.json'), 'utf8')) as { teams?: unknown[] }
+  const players = JSON.parse(await readFile(join(referencePublicDataDir, 'entities/players.json'), 'utf8')) as { players?: unknown[] }
   const coverage = summary.coverage as { matchCount?: number } | undefined
   return {
     matchCount: coverage?.matchCount ?? 4_477,
@@ -1118,19 +1121,19 @@ type BenchmarkMatch = {
 }
 
 async function currentTeams(): Promise<BenchmarkTeam[]> {
-  const directory = JSON.parse(await readFile(resolve('public/data/entities/teams.json'), 'utf8')) as {
+  const directory = JSON.parse(await readFile(join(referencePublicDataDir, 'entities/teams.json'), 'utf8')) as {
     teams?: Array<{ id?: string; teamId?: string; name?: string; league?: string }>
   }
   const teams = (directory.teams ?? []).flatMap((team) => {
     const id = team.teamId ?? team.id
     return id && team.name && team.league ? [{ id, name: team.name, league: team.league }] : []
   })
-  if (teams.length < 102) throw new Error(`Checked-in team directory is undersized: ${teams.length} < 102`)
+  if (teams.length < 102) throw new Error(`Reference team directory is undersized: ${teams.length} < 102`)
   return teams
 }
 
 async function currentPlayers(): Promise<BenchmarkPlayer[]> {
-  const directory = JSON.parse(await readFile(resolve('public/data/entities/players.json'), 'utf8')) as {
+  const directory = JSON.parse(await readFile(join(referencePublicDataDir, 'entities/players.json'), 'utf8')) as {
     players?: Array<{ id?: string; playerId?: string; name?: string; team?: string; role?: string }>
   }
   const players = (directory.players ?? []).flatMap((player) => {
@@ -1139,18 +1142,18 @@ async function currentPlayers(): Promise<BenchmarkPlayer[]> {
       ? [{ id, name: player.name, team: player.team, role: player.role }]
       : []
   })
-  if (players.length < 356) throw new Error(`Checked-in player directory is undersized: ${players.length} < 356`)
+  if (players.length < 356) throw new Error(`Reference player directory is undersized: ${players.length} < 356`)
   return players
 }
 
 async function currentMatches(): Promise<BenchmarkMatch[]> {
-  const catalog = JSON.parse(await readFile(resolve('public/data/matches/all.json'), 'utf8')) as {
+  const catalog = JSON.parse(await readFile(join(referencePublicDataDir, 'matches/all.json'), 'utf8')) as {
     pages?: Array<{ url?: string }>
   }
   const pages = await Promise.all((catalog.pages ?? []).map(async ({ url }) => {
     if (typeof url !== 'string') return []
     const logicalPath = url.replace(/^\/data\//, '').replace(/\?.*$/, '')
-    const page = JSON.parse(await readFile(resolve('public/data', logicalPath), 'utf8')) as { matches?: BenchmarkMatch[] }
+    const page = JSON.parse(await readFile(resolve(referencePublicDataDir, logicalPath), 'utf8')) as { matches?: BenchmarkMatch[] }
     return page.matches ?? []
   }))
   return pages.flat().sort((left, right) => (

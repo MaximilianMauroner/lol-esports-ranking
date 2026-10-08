@@ -1,3 +1,4 @@
+import { referencePublicDataDir, referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -6,7 +7,7 @@ import { createServer, request, type IncomingHttpHeaders } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import test from 'node:test'
 import { canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import {
@@ -101,19 +102,38 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
   const dataDir = join(tempDir, 'data')
   await mkdir(distDir, { recursive: true })
   await mkdir(dataDir, { recursive: true })
-  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
-  await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify({ source: 'bundled' }))
+  await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root"><!--homepage-prerender:start-->app shell<!--homepage-prerender:end--></div>\n')
+  await writeFile(join(distDir, 'sitemap.xml'), '<urlset><url><lastmod>2020-01-01</lastmod></url></urlset>')
+  const seasonKey = `${new Date().getUTCFullYear()}__All__All`
+  await mkdir(join(dataDir, 'scopes'), { recursive: true })
+  await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify({
+    source: 'bundled', generatedAt: '2026-07-10T12:00:00.000Z', model: { version: 'legacy-local-model', configHash: 'legacy-local-config' },
+    defaultSnapshotKey: seasonKey, snapshotIndex: { [seasonKey]: { url: '/data/scopes/current.json' } },
+  }))
+  await writeCrawlerShard(join(dataDir, 'scopes/current.json'), 'Legacy Local Team')
+  let generation = 'fresh'
+  let malformedShard = false
 
   const bucket = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
     if (pathname === '/test-bucket/rankings/active-generation.json') {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ generationId: 'fresh' }))
+      response.end(JSON.stringify({ generationId: generation }))
       return
     }
-    if (pathname === '/test-bucket/rankings/generations/fresh/data/ranking-summary.json') {
+    if (pathname === `/test-bucket/rankings/generations/${generation}/data/ranking-summary.json`) {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ source: 'bucket' }))
+      response.end(JSON.stringify({
+        source: generation === 'fresh' ? 'bucket' : 'new bucket source',
+        generatedAt: generation === 'fresh' ? '2026-07-11T12:00:00.000Z' : '2026-07-12T12:00:00.000Z',
+        model: { version: 'legacy-bucket-model', configHash: 'legacy-bucket-config' },
+        defaultSnapshotKey: seasonKey, snapshotIndex: { [seasonKey]: { url: '/data/scopes/current.json' } },
+      }))
+      return
+    }
+    if (pathname === `/test-bucket/rankings/generations/${generation}/data/scopes/current.json`) {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(malformedShard ? '{"standings":' : JSON.stringify({ standings: [{ team: generation === 'fresh' ? 'Legacy Bucket Team' : 'Promoted Legacy Team', rank: 1, rating: 1700 }], regions: [] }))
       return
     }
     response.statusCode = 404
@@ -133,6 +153,22 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
     const response = await httpRequest(server.port, '/data/ranking-summary.json')
     assert.equal(response.statusCode, 200)
     assert.equal(JSON.parse(response.body).source, 'bucket')
+    const html = (await httpRequest(server.port, '/')).body
+    assert.match(html, /Legacy Bucket Team/)
+    assert.match(html, /legacy-bucket-model/)
+    assert.match(html, /Source: bucket/)
+    assert.doesNotMatch(html, /bundled/)
+    assert.match((await httpRequest(server.port, '/sitemap.xml')).body, /<lastmod>2026-07-11<\/lastmod>/)
+    generation = 'promoted.snapshot-2'
+    assert.match((await httpRequest(server.port, '/')).body, /Promoted Legacy Team/)
+    assert.match((await httpRequest(server.port, '/sitemap.xml')).body, /<lastmod>2026-07-12<\/lastmod>/)
+    malformedShard = true
+    const fallback = (await httpRequest(server.port, '/')).body
+    assert.match(fallback, /Legacy Local Team/)
+    assert.match(fallback, /legacy-local-model/)
+    assert.match(fallback, /Source: bundled/)
+    assert.doesNotMatch(fallback, /Promoted Legacy Team|legacy-bucket-model|new bucket source/)
+    assert.match((await httpRequest(server.port, '/sitemap.xml')).body, /<lastmod>2026-07-10<\/lastmod>/)
   } finally {
     await server.close()
     await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
@@ -752,17 +788,179 @@ test('Railway server injects the latest current-season crawler snapshot on each 
 type TestServer = {
   port: number
   close: () => Promise<void>
+  output: () => string
+}
+
+test('crawler HTML and sitemap follow one verified bucket generation and fall back as a pair', async (context) => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'crawler-bucket-authority-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  const local = crawlerGenerationFixture('G1', 'Local Team', '2026-07-10T12:00:00.000Z')
+  const g2 = crawlerGenerationFixture('G2', 'Bucket Team Two', '2026-07-11T12:00:00.000Z')
+  const g3 = crawlerGenerationFixture('G3', 'Bucket Team Three', '2026-07-12T12:00:00.000Z')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(join(dataDir, 'scopes'), { recursive: true })
+  await writeFile(join(distDir, 'index.html'), '<div id="root"><!--homepage-prerender:start-->old build<!--homepage-prerender:end--></div>')
+  await writeFile(join(distDir, 'sitemap.xml'), '<urlset><url><lastmod>2020-01-01</lastmod></url></urlset>')
+  await writeFile(join(dataDir, 'ranking-summary.json'), JSON.stringify(local.root))
+  await writeFile(join(dataDir, 'scopes/current.json'), JSON.stringify(local.shard))
+  let active = g2
+  let promoteAfterRoot = false
+  const assets = new Map([...g2.assets, ...g3.assets])
+  const reads: string[] = []
+  const bucket = createServer((request, response) => {
+    const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
+    reads.push(path)
+    response.setHeader('Content-Type', 'application/json; charset=utf-8')
+    if (path === '/test-bucket/rankings/active-generation.json') {
+      response.writeHead(200, { ETag: `"active-${active.generationId}"` }).end(active.activeBody)
+      return
+    }
+    const asset = assets.get(path)
+    if (!asset) {
+      response.writeHead(404).end()
+      return
+    }
+    response.setHeader('ETag', asset.etag)
+    if (asset.sha256) response.setHeader('x-amz-meta-sha256', asset.sha256)
+    if (asset.semanticBytes !== undefined) response.setHeader('x-amz-meta-semantic-bytes', String(asset.semanticBytes))
+    if (asset.gzip) {
+      response.setHeader('Content-Encoding', 'gzip')
+      response.setHeader('x-amz-meta-encoding', 'gzip')
+    }
+    response.setHeader('Content-Length', asset.body.length)
+    response.end(asset.body)
+    if (promoteAfterRoot && path === g2.rootPath) {
+      active = g3
+      promoteAfterRoot = false
+    }
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const server = await startRailwayServer(distDir, dataDir, {
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${(bucket.address() as AddressInfo).port}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test', RANKING_BUCKET_SECRET_ACCESS_KEY: 'test', RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+  })
+  try {
+    const first = await httpRequest(server.port, '/')
+    assertCrawlerGeneration(first.body, 'Bucket Team Two', 'G2', 'Jul 11, 2026')
+    assert.match((await httpRequest(server.port, '/sitemap.xml')).body, /<lastmod>2026-07-11<\/lastmod>/)
+    active = g3
+    assertCrawlerGeneration((await httpRequest(server.port, '/')).body, 'Bucket Team Three', 'G3', 'Jul 12, 2026')
+    assert.match((await httpRequest(server.port, '/sitemap.xml')).body, /<lastmod>2026-07-12<\/lastmod>/)
+
+    active = g2
+    promoteAfterRoot = true
+    assertCrawlerGeneration((await httpRequest(server.port, '/')).body, 'Bucket Team Two', 'G2', 'Jul 11, 2026')
+    assert.equal(active.generationId, 'G3')
+    assertCrawlerGeneration((await httpRequest(server.port, '/')).body, 'Bucket Team Three', 'G3', 'Jul 12, 2026')
+
+    for (const failure of ['missing shard', 'corrupt shard', 'digest mismatch', 'missing root']) {
+      const path = failure === 'missing root' ? g3.rootPath : g3.shardPath
+      const original = assets.get(path)!
+      if (failure === 'corrupt shard') assets.set(path, { ...original, body: Buffer.from('not gzip') })
+      else if (failure === 'digest mismatch') assets.set(path, {
+        ...original, body: gzipSync(gunzipSync(original.body).toString('utf8').replace('Bucket Team Three', 'Bucket Team Wrong')),
+      })
+      else assets.delete(path)
+      assertCrawlerGeneration((await httpRequest(server.port, '/')).body, 'Local Team', 'G1', 'Jul 10, 2026')
+      assert.match((await httpRequest(server.port, '/sitemap.xml')).body, /<lastmod>2026-07-10<\/lastmod>/)
+      assets.set(path, original)
+    }
+    const objectReads = reads.filter((path) => path.includes('/objects/sha256/'))
+    assert.ok(objectReads.every((path) => [g2.rootPath, g2.shardPath, g3.rootPath, g3.shardPath].includes(path)))
+  } catch (error) {
+    context.diagnostic(server.output())
+    context.diagnostic(JSON.stringify(reads))
+    throw error
+  } finally {
+    await server.close()
+    bucket.closeAllConnections()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+function assertCrawlerGeneration(html: string, team: string, generation: string, date: string) {
+  assert.ok(html.includes(team), team)
+  assert.ok(html.includes(`Synthetic ${generation} source`))
+  assert.ok(html.includes(`synthetic-model-${generation}`))
+  assert.ok(html.includes(`config-${generation}`))
+  assert.ok(html.includes(date))
+  assert.doesNotMatch(html, /All-time Team|old build/)
+  for (const other of ['G1', 'G2', 'G3'].filter((value) => value !== generation)) {
+    assert.ok(!html.includes(`Synthetic ${other} source`))
+    assert.ok(!html.includes(`synthetic-model-${other}`))
+  }
+}
+
+type CrawlerBucketAsset = { body: Buffer; etag: string; sha256?: string; semanticBytes?: number; gzip?: boolean }
+
+function crawlerGenerationFixture(generationId: string, team: string, generatedAt: string) {
+  const seasonKey = `${new Date().getUTCFullYear()}__All__All`
+  const root = {
+    artifactKind: 'public-ranking-manifest', generatedAt, artifactMeta: { runId: generationId },
+    source: `Synthetic ${generationId} source`, dataMode: 'scheduled-public-data', sources: [{ name: 'Synthetic fixture' }],
+    model: { version: `synthetic-model-${generationId}`, configHash: `config-${generationId}` },
+    coverage: { matchCount: 10 }, defaultSnapshotKey: 'All__All__All',
+    snapshotIndex: { All__All__All: { url: '/data/scopes/all.json' }, [seasonKey]: { url: '/data/scopes/current.json' } },
+  }
+  const shard = { artifactKind: 'public-snapshot-shard', matchCount: 10, standings: [{ team, rank: 1, rating: 1700 }], regions: [] }
+  const rootArtifact = prepareSemanticArtifact(root)
+  const shardArtifact = prepareSemanticArtifact(shard)
+  const allArtifact = prepareSemanticArtifact({ ...shard, standings: [{ team: 'All-time Team', rank: 1, rating: 1700 }] })
+  const entries = [
+    { logicalPath: '/data/ranking-summary.json', digest: rootArtifact.digest, bytes: rootArtifact.bytes },
+    { logicalPath: '/data/scopes/current.json', digest: shardArtifact.digest, bytes: shardArtifact.bytes },
+    { logicalPath: '/data/scopes/all.json', digest: allArtifact.digest, bytes: allArtifact.bytes },
+  ]
+  const manifest = createGenerationManifest({ generationId, rootManifest: root, entries })
+  const manifestBody = Buffer.from(canonicalJsonFor(manifest))
+  const manifestDigest = createHash('sha256').update(manifestBody).digest('hex')
+  const manifestKey = `rankings/generations/${generationId}/manifest.json`
+  const manifestEtag = `"manifest-${generationId}"`
+  const rawDigest = 'f'.repeat(64)
+  const receipt = publicationReceiptBytes(createGenerationPublicationReceipt({
+    generationId, preparedAt: generatedAt, prefix: 'rankings', fencingToken: 1, leaseOwner: 'crawler-fixture', promotionEtag: '"promotion"',
+    provenance: { modelVersion: root.model.version, modelConfigHash: root.model.configHash, source: root.source, dataMode: root.dataMode, sourceProviders: ['Synthetic fixture'] },
+    authorities: { publicManifest: { key: manifestKey, digest: manifestDigest, bytes: manifestBody.length }, rawReceipt: { key: `rankings/raw/objects/sha256/${rawDigest}`, digest: rawDigest, bytes: 1 } },
+    objects: [
+      { key: manifestKey, digest: manifestDigest, bytes: manifestBody.length, outcome: 'uploaded' },
+      ...[rootArtifact, shardArtifact, allArtifact].map((artifact): PublicationObject => ({ key: `rankings/objects/sha256/${artifact.digest}`, digest: artifact.digest, bytes: artifact.compressedBytes, outcome: 'uploaded' })),
+      { key: `rankings/raw/objects/sha256/${rawDigest}`, digest: rawDigest, bytes: 1, outcome: 'uploaded' },
+    ],
+  }))
+  const receiptKey = `rankings/generations/${generationId}/publish.json`
+  const receiptEtag = `"receipt-${generationId}"`
+  const activeBody = JSON.stringify({
+    schemaVersion: 2, generationId, fencingToken: 1, promotedAt: generatedAt,
+    manifestKey, publicManifestSchemaVersion: 2, storageMode: 'content-addressed-gzip-v1',
+    manifestDigest, manifestBytes: manifestBody.length, manifestEtag,
+    publicationSchemaVersion: 1, publicationReceiptKey: receiptKey, publicationReceiptDigest: receipt.digest,
+    publicationReceiptBytes: receipt.bytes, publicationReceiptEtag: receiptEtag,
+  })
+  const rootPath = `/test-bucket/rankings/objects/sha256/${rootArtifact.digest}`
+  const shardPath = `/test-bucket/rankings/objects/sha256/${shardArtifact.digest}`
+  const assets = new Map<string, CrawlerBucketAsset>([
+    [`/test-bucket/${manifestKey}`, { body: manifestBody, etag: manifestEtag, sha256: manifestDigest }],
+    [`/test-bucket/${receiptKey}`, { body: receipt.body, etag: receiptEtag, sha256: receipt.digest, semanticBytes: receipt.bytes }],
+    ...[rootArtifact, shardArtifact, allArtifact].map((artifact): [string, CrawlerBucketAsset] => [
+      `/test-bucket/rankings/objects/sha256/${artifact.digest}`,
+      { body: artifact.compressed, etag: `"${artifact.digest}"`, sha256: artifact.digest, semanticBytes: artifact.bytes, gzip: true },
+    ]),
+  ])
+  return { generationId, root, shard, activeBody, assets, rootPath, shardPath }
 }
 
 async function contentAddressedReaderFixture() {
-  const rootSource: unknown = JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8'))
+  const rootSource: unknown = JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8'))
   const rankingManifest = parsePublicRankingManifest(rootSource)
   const generationId = rankingManifest.artifactMeta?.runId
   if (!generationId) throw new Error('Expected ranking fixture to declare an artifact runId')
   const snapshotKey = rankingManifest.defaultSnapshotKey
   const snapshotEntry = rankingManifest.snapshotIndex[snapshotKey]
   const snapshotPath = new URL(snapshotEntry.url, 'https://fixture.invalid').pathname
-  const shardSource: unknown = JSON.parse(await readFile(join('public', snapshotPath.replace(/^\//, '')), 'utf8'))
+  const shardSource: unknown = JSON.parse(await readFile(join(referencePublicDir, snapshotPath.replace(/^\//, '')), 'utf8'))
   const rootArtifact = prepareSemanticArtifact(rootSource)
   const shardArtifact = prepareSemanticArtifact(shardSource)
   const logicalPaths = rankingManifestLogicalPaths(rankingManifest)
@@ -936,6 +1134,7 @@ async function startRailwayServer(
   return {
     port,
     close: () => stopChild(child),
+    output: () => output,
   }
 }
 

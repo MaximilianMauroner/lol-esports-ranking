@@ -12,7 +12,11 @@ model/config/schema, source coverage, chosen port and process handle. Never
 present fixture or no-data payloads as official rankings.
 
 Check active owners, memory, load, disk and listeners. Use Node 24 and the
-pinned pnpm version. Run `pnpm install --frozen-lockfile`. Start one owned static
+pinned pnpm version. Run `pnpm install --frozen-lockfile` and `pnpm data:pull`
+for the pinned Node reference snapshot, or reuse an existing owned locally built
+payload with recorded provenance. `public/data` is ignored by Git. Downloading the
+reference snapshot is a read-only public GitHub request, not a provider refresh.
+Start one owned static
 instance on an unused loopback port:
 
 ```sh
@@ -21,7 +25,7 @@ pnpm dev --host 127.0.0.1 --port 43129 --strictPort
 
 Require HTTP 200 for `/` and `/data/ranking-summary.json`. Inspect the actual
 manifest before browser actions. Leave `VITE_RANKING_DATA_URL` unset so the
-instance reads its own committed `public/data` tree. Do not run remote refresh,
+instance reads its own downloaded or generated `public/data` tree. Do not run remote refresh,
 bucket cleanup, baseline recapture, provider downloads or deployments.
 `pnpm ranking:baseline` verifies the committed receipt without bucket mutation.
 
@@ -52,12 +56,13 @@ For L6, generate an isolated offline fixture from its captured games and domesti
 evidence. Compare the ledger before and after home-league resolution, select the
 event in both All seasons and its year, expand a series, and reload its deep link.
 Label the fixture as offline verification, preserve source/model provenance, and
-restore the worktree's committed public artifacts after captures.
+restore the saved local public payload after captures.
 
 Before captures, exclude the owned `.agents/artifacts/<run-id>/` directory
 through Git's local exclude file and confirm it with `git check-ignore`. Do not
 assume the repository's singular `.agent/artifacts/` rule covers this path.
-Stop the exact server session, confirm its port closes, and retain redacted
+Save the owned local payload before a journey that replaces it; Git cannot
+restore ignored data. Stop the exact server session, confirm its port closes, and retain redacted
 evidence in that excluded run directory. Static journeys should
 not change provider or bucket state. Remove only owned downloads or captures
 not needed as evidence. Report CI, review, merge and acceptance separately.

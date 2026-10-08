@@ -32,15 +32,16 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "node scripts/run-tests.mjs",
+    "test:release": "RANKING_TEST_PUBLIC_DIR=public node scripts/run-tests.mjs",
     "test:browser": "tsx --tsconfig tsconfig.app.json --test tests/tournamentBrowser.test.ts",
     "benchmark:riot-gpr": "tsx scripts/compare-riot-gpr.ts",
     "benchmark:incremental": "node --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts",
     "benchmark:incremental:smoke": "node --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --smoke",
     "benchmark:player-memory": "node --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --player-memory-profile",
     "benchmark:incremental:gate": "node --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --enforce-targets",
-    "release:check": "pnpm run data:freshness && pnpm run data:crunch && pnpm test && pnpm run typecheck && pnpm run lint && pnpm run benchmark:incremental:gate && pnpm run build",
+    "release:check": "pnpm run data:freshness && pnpm run data:crunch && pnpm run test:release && pnpm run typecheck && pnpm run lint && pnpm run benchmark:incremental:gate && pnpm run build",
     "verify": "pnpm run typecheck && pnpm run lint && pnpm test",
-    "railway:build": "pnpm run typecheck && pnpm run lint && pnpm run bundle",
+    "railway:build": "pnpm run data:pull && pnpm run typecheck && pnpm run lint && pnpm run bundle",
     "preview": "vite preview",
     "railway:start": "node scripts/railway-server.mjs",
     "railway:refresh": "node scripts/run-refresh-worker.mjs",
@@ -53,7 +54,8 @@
     "rollout:implementation-evidence": "node scripts/rollout-implementation-evidence.mjs",
     "rollout:shadow-gate": "node scripts/rollout-shadow-gate.mjs",
     "rollout:gate": "node scripts/validate-rollout-gate.mjs",
-    "ranking:baseline": "node scripts/ranking-restart-baseline.mjs verify"
+    "ranking:baseline": "node scripts/ranking-restart-baseline.mjs verify",
+    "data:pull": "tsx scripts/download-reference-public-data.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1092.0",

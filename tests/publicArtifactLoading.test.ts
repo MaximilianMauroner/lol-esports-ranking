@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { referencePublicDataDir } from '../scripts/reference-public-data.mjs'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schema.ts'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -18,7 +20,7 @@ import {
 import type { PublicRankingManifest, PublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
 
 test('manifest loader deduplicates concurrent bootstrap and hook requests', async () => {
-  const manifestJson = await readFile('public/data/ranking-summary.json', 'utf8')
+  const manifestJson = await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')
   let requests = 0
   const loader = createPublicRankingManifestLoader('/data/ranking-summary.json', async () => {
     requests += 1
@@ -35,7 +37,7 @@ test('manifest loader deduplicates concurrent bootstrap and hook requests', asyn
 })
 
 test('manifest loader retries after a shared request rejects', async () => {
-  const manifestJson = await readFile('public/data/ranking-summary.json', 'utf8')
+  const manifestJson = await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')
   let requests = 0
   const loader = createPublicRankingManifestLoader('/data/ranking-summary.json', async () => {
     requests += 1
@@ -50,10 +52,10 @@ test('manifest loader retries after a shared request rejects', async () => {
 })
 
 test('snapshot loading repairs a cached shard from an older publish', async () => {
-  const manifest = parsePublicRankingManifest(JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8')))
+  const manifest = parsePublicRankingManifest(JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')))
   const key = '2026__All__All'
   const expected = manifest.snapshotIndex[key]
-  const shard = parsePublicRankingShard(JSON.parse(await readFile('public/data/scopes/season-2026.json', 'utf8')))
+  const shard = parsePublicRankingShard(JSON.parse(await readFile(join(referencePublicDataDir, 'scopes/season-2026.json'), 'utf8')))
   const staleShard = { ...shard, matchCount: shard.matchCount - 1 }
   const requests: Array<{ url: string; cache?: string }> = []
   const fetcher: typeof fetch = async (input, init) => {
@@ -143,7 +145,7 @@ test('generation manifest loads semantic artifacts through the manifest loader a
 })
 
 test('semantic identity excludes volatile run metadata and uses deterministic key ordering', async () => {
-  const legacy = JSON.parse(await readFile('public/data/scopes/season-2026.json', 'utf8')) as Record<string, unknown>
+  const legacy = JSON.parse(await readFile(join(referencePublicDataDir, 'scopes/season-2026.json'), 'utf8')) as Record<string, unknown>
   const changedRun = {
     generatedAt: '2099-12-31T23:59:59.000Z',
     artifactMeta: {
@@ -472,8 +474,8 @@ function redirectedErrorResponse(status: number) {
 }
 
 async function generationFixture(): Promise<GenerationFixture> {
-  const legacyManifest = parsePublicRankingManifest(JSON.parse(await readFile('public/data/ranking-summary.json', 'utf8')))
-  const legacyShard = parsePublicRankingShard(JSON.parse(await readFile('public/data/scopes/season-2026.json', 'utf8')))
+  const legacyManifest = parsePublicRankingManifest(JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')))
+  const legacyShard = parsePublicRankingShard(JSON.parse(await readFile(join(referencePublicDataDir, 'scopes/season-2026.json'), 'utf8')))
   const rootSemantic = createPublicSemanticArtifact(legacyManifest)
   const shardSemantic = createPublicSemanticArtifact(legacyShard)
   const rootIdentity = await semanticArtifactIdentity(rootSemantic)

@@ -1,5 +1,5 @@
+import { referencePublicDataDir, referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -29,17 +29,17 @@ import { PUBLIC_ARTIFACT_BUDGETS } from '../src/lib/publicArtifacts/writePlan.ts
 const ratedTeamLeagueSet = new Set<string>(ratedTeamLeagues)
 
 test('browser data artifact stays compact and does not ship the full snapshot', async () => {
-  assert.equal(existsSync('public/data/ranking-snapshot.json'), false)
-  assert.equal(existsSync('public/data/team-history.json'), false)
-  assert.equal(existsSync('public/data/history/team-series.json'), false)
-  assert.equal(existsSync('public/data/ranking-summary.json'), true)
-  assert.ok(statSync('public/data/ranking-summary.json').size < 250_000)
-  assert.ok(statSync('public/data/entities/players.json').size < PUBLIC_ARTIFACT_BUDGETS.playersBytes)
-  assert.equal(existsSync('public/data/matches/index.json'), true)
+  assert.equal(existsSync(join(referencePublicDataDir, 'ranking-snapshot.json')), false)
+  assert.equal(existsSync(join(referencePublicDataDir, 'team-history.json')), false)
+  assert.equal(existsSync(join(referencePublicDataDir, 'history/team-series.json')), false)
+  assert.equal(existsSync(join(referencePublicDataDir, 'ranking-summary.json')), true)
+  assert.ok(statSync(join(referencePublicDataDir, 'ranking-summary.json')).size < 250_000)
+  assert.ok(statSync(join(referencePublicDataDir, 'entities/players.json')).size < PUBLIC_ARTIFACT_BUDGETS.playersBytes)
+  assert.equal(existsSync(join(referencePublicDataDir, 'matches/index.json')), true)
 
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
-  const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
-  const matchHistoryIndex = parsePublicMatchHistoryIndex(await readJson('public/data/matches/index.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
+  const playerDirectory = parsePublicPlayerDirectory(await readJson(join(referencePublicDataDir, 'entities/players.json')))
+  const matchHistoryIndex = parsePublicMatchHistoryIndex(await readJson(join(referencePublicDataDir, 'matches/index.json')))
   const defaultShardEntry = summary.snapshotIndex[summary.defaultSnapshotKey]
   const defaultShard = defaultShardEntry ? parsePublicRankingShard(await readJson(publicPathForDataUrl(defaultShardEntry.url))) : undefined
   const defaultSnapshot = defaultShard
@@ -118,7 +118,7 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
 })
 
 test('generated region scores follow eligible flagship teams in each scope', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const defaultShardEntry = summary.snapshotIndex[summary.defaultSnapshotKey]
   assert.ok(defaultShardEntry)
   const defaultShard = parsePublicRankingShard(await readJson(publicPathForDataUrl(defaultShardEntry.url)))
@@ -145,7 +145,7 @@ test('generated region scores follow eligible flagship teams in each scope', asy
 })
 
 test('generated 2026 records agree with completed archived series across LCS, LCK and LEC', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const entry = summary.snapshotIndex['2026__All__All']
   assert.ok(entry)
   const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
@@ -197,10 +197,10 @@ test('generated archive preserves historical T1 MSI results and the domestic Gen
 })
 
 test('generated 2026 Demacia Cup games are indexed with reconciled source coverage', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const event = '2026 Demacia Cup Global Invitational'
   assert.ok(summary.filterOptions.events.includes(event))
-  const index = parsePublicMatchHistoryIndex(await readJson('public/data/matches/index.json'))
+  const index = parsePublicMatchHistoryIndex(await readJson(join(referencePublicDataDir, 'matches/index.json')))
   const catalog = parsePublicMatchHistoryCatalog(await readJson(publicPathForDataUrl(index.scopeIndex['2026__All__All'].url)))
   const series = catalog.series.filter((entry) => entry.event === event)
   assert.equal(series.length, 15)
@@ -214,7 +214,7 @@ test('generated 2026 Demacia Cup games are indexed with reconciled source covera
 })
 
 test('generated public fixture data does not serialize HTML entities', async () => {
-  const publicDataFiles = await listJsonFiles('public/data')
+  const publicDataFiles = await listJsonFiles(referencePublicDataDir)
   const entityViolations: string[] = []
 
   for (const file of publicDataFiles) {
@@ -232,7 +232,7 @@ test('generated public fixture data does not serialize HTML entities', async () 
 })
 
 test('public summary snapshot index is consistent with generated shards', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const snapshotIndex = summary.snapshotIndex ?? {}
   const defaultSnapshotKey = summary.defaultSnapshotKey
   const indexedShardPaths = new Set<string>()
@@ -263,7 +263,7 @@ test('public summary snapshot index is consistent with generated shards', async 
     )
   }
 
-  const unindexedShardFiles = (await listJsonFiles('public/data/scopes'))
+  const unindexedShardFiles = (await listJsonFiles(join(referencePublicDataDir, 'scopes')))
     .filter((file) => !indexedShardPaths.has(file))
     .map((file) => relative(process.cwd(), file))
 
@@ -271,7 +271,7 @@ test('public summary snapshot index is consistent with generated shards', async 
 })
 
 test('generated public artifacts include season checkpoint scopes', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   for (const seasonCheckpoints of Object.values(summary.filterOptions.checkpoints ?? {})) {
     assert.equal(seasonCheckpoints.length <= 3, true)
     assert.equal(seasonCheckpoints.some((entry) => entry.id === 'split-4'), false)
@@ -288,8 +288,8 @@ test('generated public artifacts include season checkpoint scopes', async () => 
   assert.equal(dataUrlPath(entry.url), snapshotShardUrlPathForKey(key))
 
   const shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(entry.url)))
-  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
-  const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
+  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson(join(referencePublicDataDir, 'history/team-series/index.json')))
+  const regionHistory = parsePublicRegionHistory(await readJson(join(referencePublicDataDir, 'history/region-series.json')))
 
   assert.match(checkpoint.boundaryEvent, /^(MSI 2026|2026 Mid-Season Invitational)$/)
   assert.equal(shard.filter.checkpoint, checkpoint.id)
@@ -299,8 +299,8 @@ test('generated public artifacts include season checkpoint scopes', async () => 
   assert.ok(regionHistory.scopes[key])
 })
 
-test('public manifest data URLs resolve to tracked public files', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+test('public manifest data URLs resolve to downloaded reference files', async () => {
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const urls = new Set<string>()
 
   addLocalDataUrl(summary.fullSnapshotUrl, urls)
@@ -321,18 +321,12 @@ test('public manifest data URLs resolve to tracked public files', async () => {
 
   assert.deepEqual(missingPaths, [], `manifest /data URLs resolve to missing public files:\n${formatViolationList(missingPaths)}`)
 
-  const trackedPaths = gitTrackedPaths(publicPaths)
-  if (!trackedPaths) return
-  const untrackedPaths = publicPaths
-    .map((path) => relative(process.cwd(), path))
-    .filter((path) => !trackedPaths.has(path))
 
-  assert.deepEqual(untrackedPaths, [], `manifest /data URLs resolve to untracked public files:\n${formatViolationList(untrackedPaths)}`)
 })
 
 test('public team history series store is consistent with scope indexes', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
-  const teamHistory = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
+  const teamHistory = parsePublicTeamHistoryIndex(await readJson(join(referencePublicDataDir, 'history/team-series/index.json')))
 
   assert.equal(dataUrlPath(summary.teamHistoryIndexUrl), '/data/history/team-series/index.json')
   assert.equal(Object.prototype.hasOwnProperty.call(summary, 'teamHistoryUrl'), false)
@@ -351,8 +345,8 @@ test('public team history series store is consistent with scope indexes', async 
 })
 
 test('generated histories separate observed matches, current state, and region metric families', async () => {
-  const teamHistory = parsePublicTeamHistoryShard(await readJson('public/data/history/team-series/All__All__All.json'))
-  const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
+  const teamHistory = parsePublicTeamHistoryShard(await readJson(join(referencePublicDataDir, 'history/team-series/All__All__All.json')))
+  const regionHistory = parsePublicRegionHistory(await readJson(join(referencePublicDataDir, 'history/region-series.json')))
   const defaultRegionScope = regionHistory.scopes[regionHistory.defaultScopeKey]
 
   assert.equal(Object.values(teamHistory.series).every((series) => series.points.length >= 2), true)
@@ -364,8 +358,8 @@ test('generated histories separate observed matches, current state, and region m
 })
 
 test('generated confidence and lineups expose evidence limits instead of false precision', async () => {
-  const shard = parsePublicRankingShard(await readJson('public/data/scopes/all.json'))
-  const players = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
+  const shard = parsePublicRankingShard(await readJson(join(referencePublicDataDir, 'scopes/all.json')))
+  const players = parsePublicPlayerDirectory(await readJson(join(referencePublicDataDir, 'entities/players.json')))
   const staleConfidence = shard.standings
     .filter((standing) => standing.eligibility.reasons.includes('stale'))
     .map((standing) => standing.confidence)
@@ -376,7 +370,7 @@ test('generated confidence and lineups expose evidence limits instead of false p
 })
 
 test('public tournament movement index resolves versioned, boundary-correct shards', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const index = parsePublicTournamentMovementIndex(await readJson(publicPathForDataUrl(summary.tournamentMovementIndexUrl)))
   const ids = new Set<string>()
   const indexedPaths = new Set<string>()
@@ -407,17 +401,17 @@ test('public tournament movement index resolves versioned, boundary-correct shar
   assert.equal(shards.get('worlds:2025')?.startDate, '2025-10-14', 'regional finals must not move the Worlds opening boundary')
   assert.equal(shards.get('msi:2025')?.teams.some((team) => team.team === 'GAM Esports'), true)
   assert.equal(shards.get('ewc:2025')?.teams.some((team) => team.team === 'GAM Esports'), true)
-  const unindexedShardFiles = (await listJsonFiles('public/data/history/tournament-moves'))
+  const unindexedShardFiles = (await listJsonFiles(join(referencePublicDataDir, 'history/tournament-moves')))
     .filter((file) => !file.endsWith('/index.json') && !indexedPaths.has(file))
     .map((file) => relative(process.cwd(), file))
   assert.deepEqual(unindexedShardFiles, [], 'generated tournament movement shard files without index entries')
 })
 
 test('generated public artifacts share one model and generated-at provenance spine', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
-  const players = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
-  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
-  const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
+  const players = parsePublicPlayerDirectory(await readJson(join(referencePublicDataDir, 'entities/players.json')))
+  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson(join(referencePublicDataDir, 'history/team-series/index.json')))
+  const regionHistory = parsePublicRegionHistory(await readJson(join(referencePublicDataDir, 'history/region-series.json')))
   const tournamentMovementIndex = parsePublicTournamentMovementIndex(await readJson(publicPathForDataUrl(summary.tournamentMovementIndexUrl)))
   const snapshotIndex = summary.snapshotIndex ?? {}
   const defaultEntry = snapshotIndex[summary.defaultSnapshotKey]
@@ -464,7 +458,7 @@ test('generated public artifacts share one model and generated-at provenance spi
 })
 
 test('generated public source coverage reconciles with default and shard snapshots', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const snapshotIndex = summary.snapshotIndex ?? {}
   const defaultEntry = summary.defaultSnapshotKey ? snapshotIndex[summary.defaultSnapshotKey] : undefined
   const defaultSnapshot = defaultEntry ? parsePublicRankingShard(await readJson(publicPathForDataUrl(defaultEntry.url))) : undefined
@@ -513,9 +507,9 @@ test('generated public source coverage reconciles with default and shard snapsho
 })
 
 test('generated 2026 scope exposes match-level display records and scoped history', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const entry = summary.snapshotIndex?.['2026__All__All']
-  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
+  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson(join(referencePublicDataDir, 'history/team-series/index.json')))
   const teamHistoryEntry = teamHistoryIndex.scopeIndex['2026__All__All']
   const teamHistory = teamHistoryEntry ? parsePublicTeamHistoryShard(await readJson(publicPathForDataUrl(teamHistoryEntry.url))) : undefined
   const scopedTeamIds = Object.keys(teamHistory?.series ?? {})
@@ -552,11 +546,11 @@ test('generated 2026 scope exposes match-level display records and scoped histor
 })
 
 test('generated public artifacts only include the published rated team universe', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
-  const teamDirectory = parsePublicTeamDirectory(await readJson('public/data/entities/teams.json'))
-  const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
-  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson('public/data/history/team-series/index.json'))
-  const regionHistory = parsePublicRegionHistory(await readJson('public/data/history/region-series.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
+  const teamDirectory = parsePublicTeamDirectory(await readJson(join(referencePublicDataDir, 'entities/teams.json')))
+  const playerDirectory = parsePublicPlayerDirectory(await readJson(join(referencePublicDataDir, 'entities/players.json')))
+  const teamHistoryIndex = parsePublicTeamHistoryIndex(await readJson(join(referencePublicDataDir, 'history/team-series/index.json')))
+  const regionHistory = parsePublicRegionHistory(await readJson(join(referencePublicDataDir, 'history/region-series.json')))
   const snapshotIndex = summary.snapshotIndex ?? {}
   const universeParameters = summary.model.parameters as { ratingUniverse?: { ratedTeamLeagues?: readonly string[] } }
   const disallowedSpotlightTeams = new Set(['Vitality Rising Bees', 'Vantex Esports'])
@@ -610,8 +604,8 @@ test('generated public artifacts only include the published rated team universe'
 })
 
 test('generated ranked player directory excludes teams outside the rated universe', async () => {
-  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
-  const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
+  const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
+  const playerDirectory = parsePublicPlayerDirectory(await readJson(join(referencePublicDataDir, 'entities/players.json')))
   const entry = summary.snapshotIndex?.['2026__All__All']
 
   assert.ok(entry)
@@ -625,7 +619,7 @@ test('generated ranked player directory excludes teams outside the rated univers
 })
 
 test('generated ranked player directory requires displayed-team and role samples', async () => {
-  const playerDirectory = parsePublicPlayerDirectory(await readJson('public/data/entities/players.json'))
+  const playerDirectory = parsePublicPlayerDirectory(await readJson(join(referencePublicDataDir, 'entities/players.json')))
   const allRows = [
     ...(playerDirectory.players ?? []),
     ...Object.values(playerDirectory.scopedPlayers ?? {}).flat(),
@@ -659,7 +653,7 @@ async function readJson(file: string): Promise<unknown> {
 }
 
 async function completed2026ArchiveSeries() {
-  const index = parsePublicMatchHistoryIndex(await readJson('public/data/matches/index.json'))
+  const index = parsePublicMatchHistoryIndex(await readJson(join(referencePublicDataDir, 'matches/index.json')))
   const entry = index.scopeIndex['2026__All__All']
   assert.ok(entry)
   const catalog = parsePublicMatchHistoryCatalog(await readJson(publicPathForDataUrl(entry.url)))
@@ -700,7 +694,7 @@ function snapshotKeyFromFilter(filter: SnapshotFilter) {
 function publicPathForDataUrl(url: string) {
   assert.equal(url.startsWith('/data/'), true, `snapshot URL must be rooted under /data: ${url}`)
   assert.equal(/[\\#]/.test(url), false, `snapshot URL must be a clean path: ${url}`)
-  return join('public', ...dataUrlPath(url).slice(1).split('/').map(decodeUrlPathSegment))
+  return join(referencePublicDir, ...dataUrlPath(url).slice(1).split('/').map(decodeUrlPathSegment))
 }
 
 function dataUrlPath(url: string | undefined) {
@@ -717,19 +711,6 @@ function decodeUrlPathSegment(segment: string) {
 
 function addLocalDataUrl(url: string | undefined, urls: Set<string>) {
   if (url?.startsWith('/data/')) urls.add(url)
-}
-
-function gitTrackedPaths(paths: string[]) {
-  const relativePaths = paths.map((path) => relative(process.cwd(), path))
-  try {
-    const output = execFileSync('git', ['ls-files', '-z', '--', ...relativePaths], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-    return new Set(output.split('\0').filter(Boolean))
-  } catch {
-    return undefined
-  }
 }
 
 function assertShardUsesRatedTeamUniverse(shard: ReturnType<typeof parsePublicRankingShard>) {
