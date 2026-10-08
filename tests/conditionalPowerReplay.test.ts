@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay } from '../src/lib/conditionalPowerReplay'
+import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay, hasUniqueConditionalPowerGameAliases } from '../src/lib/conditionalPowerReplay'
 import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerReplayBasis'
 import { legalConditionalScores, publicConditionalPowerPreview } from '../src/lib/conditionalPowerPreview'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
@@ -125,6 +125,88 @@ function threeTeamConditionalPowerFixture() {
   input.basis = prepared.basis
   return input
 }
+
+const gameAliasFields = ['id', 'officialGameId', 'sourceGameId'] as const
+
+test('fresh production pins cannot admit cross-row historical game aliases in any identity namespace', () => {
+  const baseline = threeTeamConditionalPowerFixture()
+  for (const firstField of gameAliasFields) for (const secondField of gameAliasFields) {
+    const input = structuredClone(baseline)
+    for (const match of input.basis.context.authoritativeMatches) {
+      match.officialGameId = `controlled-official:${match.id}`
+      match.sourceGameId = `controlled-source:${match.id}`
+    }
+    const first = input.basis.context.authoritativeMatches.find((match) => match.id === 'prior-gamma-1')!
+    const second = input.basis.context.authoritativeMatches.find((match) => match.id === 'prior-gamma-2')!
+    second[secondField] = first[firstField]!
+    const context = createRatingReplayContext(input.basis.context.authoritativeMatches, input.basis.context.teams)
+    input.basis.context = context
+    input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+    pinControlledConditionalPowerBasis(input.basis)
+    const original = structuredClone(input)
+    assert.equal(input.basis.state.processedMatchCount, context.authoritativeMatches.length)
+    assert.equal(hasUniqueConditionalPowerGameAliases(context.authoritativeMatches), false)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', `${firstField}/${secondField}`)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'duplicate-game-alias', `${firstField}/${secondField}`)
+    assert.deepEqual(input, original)
+  }
+})
+
+test('hypothetical games cannot share a hidden or cross-namespace game alias', () => {
+  for (const firstField of gameAliasFields) for (const secondField of gameAliasFields) {
+    const input = conditionalPowerFixture()
+    for (const game of input.games) {
+      game.officialGameId = `controlled-official:${game.id}`
+      game.sourceGameId = `controlled-source:${game.id}`
+    }
+    const first = input.games[0]!
+    const second = input.games[1]!
+    const priorId = second.id
+    const edge = input.playerEdges.get(priorId)!
+    second[secondField] = first[firstField]!
+    if (secondField === 'id') {
+      input.playerEdges.delete(priorId)
+      input.playerEdges.set(second.id, edge)
+    }
+    const original = structuredClone(input)
+    assert.equal(hasUniqueConditionalPowerGameAliases(input.games), false)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', `${firstField}/${secondField}`)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'duplicate-game-alias', `${firstField}/${secondField}`)
+    assert.deepEqual(input, original)
+  }
+})
+
+test('missing optional IDs, repeated aliases within one row and distinct multi-alias rows preserve previews', () => {
+  const baseline = threeTeamConditionalPowerFixture()
+  const expected = evaluateConditionalPowerReplay(baseline)
+  if (expected.status !== 'ready') throw new Error(expected.detail)
+  for (const aliasMode of ['absent', 'repeated', 'distinct'] as const) {
+    const input = structuredClone(baseline)
+    for (const match of [...input.basis.context.authoritativeMatches, ...input.games]) {
+      if (aliasMode === 'absent') {
+        delete match.officialGameId
+        delete match.sourceGameId
+      } else {
+        match.officialGameId = aliasMode === 'repeated' ? match.id : `controlled-official:${match.id}`
+        match.sourceGameId = aliasMode === 'repeated' ? match.id : `controlled-source:${match.id}`
+      }
+    }
+    const context = createRatingReplayContext(input.basis.context.authoritativeMatches, input.basis.context.teams)
+    input.basis.context = context
+    input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+    pinControlledConditionalPowerBasis(input.basis)
+    const original = structuredClone(input)
+    assert.equal(hasUniqueConditionalPowerGameAliases(context.authoritativeMatches), true, aliasMode)
+    assert.equal(hasUniqueConditionalPowerGameAliases(input.games), true, aliasMode)
+    const result = evaluateConditionalPowerReplay(input)
+    if (result.status !== 'ready') throw new Error(`${aliasMode}: ${result.detail}`)
+    assert.deepEqual(result.teams, expected.teams, aliasMode)
+    assert.deepEqual(result.pinnedInputs, original, aliasMode)
+    assert.deepEqual(input, original)
+  }
+})
 
 test('the full historical roster-basis map matches the producer for third teams and ignores insertion order', () => {
   const input = threeTeamConditionalPowerFixture()

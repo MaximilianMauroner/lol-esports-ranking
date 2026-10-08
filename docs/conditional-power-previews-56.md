@@ -89,6 +89,10 @@ membership evidence returns unavailable; the mutable directory fallback and
 coincident league dates cannot supply that proof. Supplied hypothetical team
 region overrides must match the directory, and every game region must match the
 pinned event region.
+Within both historical and hypothetical inputs, every raw, official and source
+game alias must belong to one record. Repeated aliases within that record are
+valid. Conflicting records return unavailable; the preview cannot drop evidence
+or invent a replacement identity.
 Supplied player edges must obey the current production cap and its zero-adjustment
 rules below minimum coverage or at zero freshness. Explicit zero edges remain
 supported; the preview never scales adjustments by an invented probability or

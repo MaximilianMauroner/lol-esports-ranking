@@ -1,7 +1,7 @@
 import { eventTierConfig } from '../data/rankingConfig'
 import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../types'
 import { unavailablePowerPreview, type PowerPreviewUnavailable } from './conditionalPowerPreview'
-import { conditionalPowerBasisProblem, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
+import { conditionalPowerBasisProblem, hasUniqueConditionalPowerGameAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
 import { createRatingReplayContext, replayRatingDates } from './model'
 import type { PlacementTournamentLifecycle } from './placementResiduals'
 import { decodeRatingCheckpoint, encodeRatingCheckpoint, type RatingCheckpointIdentity } from './ratingCheckpoint'
@@ -39,9 +39,11 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
     }
     if (!isUtcDate(source.processedThroughUtcDate) || !matches.length
       || matches.some((match) => !isUtcDate(match.date) || match.date > source.processedThroughUtcDate)
-      || !matches.some((match) => match.date === source.processedThroughUtcDate)
-      || new Set(matches.map((match) => match.id)).size !== matches.length) {
-      return unavailablePowerPreview('missing-pre-state', 'Supply a nonempty identified historical prefix through a complete real UTC date, with unique game IDs and no future records.')
+      || !matches.some((match) => match.date === source.processedThroughUtcDate)) {
+      return unavailablePowerPreview('missing-pre-state', 'Supply a nonempty identified historical prefix through a complete real UTC date, with no future records.')
+    }
+    if (!hasUniqueConditionalPowerGameAliases(matches)) {
+      return unavailablePowerPreview('duplicate-game-alias', 'Every historical raw, official and source game alias must belong to one record. Conflicting records cannot be dropped or given invented identities.')
     }
     for (const match of matches) {
       if (match.datetimeUtc === undefined) continue

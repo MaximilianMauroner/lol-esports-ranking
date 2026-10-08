@@ -241,3 +241,39 @@ test('detached historical clocks preserve actual game order and match the UTC pr
   assert.deepEqual(actualPreview.teams, expectedPreview.teams)
   assert.deepEqual(source, original)
 })
+
+test('the corpus adapter rejects cross-record game aliases before replay and preserves aliases within a row', () => {
+  const fields = ['id', 'officialGameId', 'sourceGameId'] as const
+  for (const left of fields) for (const right of fields) {
+    const source = sourceFixture()
+    const [first, second] = source.historicalMatches
+    assert.ok(first && second)
+    first.officialGameId = 'official-first'
+    second.officialGameId = 'official-second'
+    first.sourceGameId = 'source-first'
+    second.sourceGameId = 'source-second'
+    first[left] = 'shared-game-alias'
+    second[right] = 'shared-game-alias'
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    assert.equal(result.status, 'unavailable', `${left}/${right}`)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'duplicate-game-alias')
+    assert.deepEqual(source, original)
+  }
+
+  const source = sourceFixture()
+  const control = prepareConditionalPowerReplayBasis(source)
+  if (control.status !== 'ready') throw new Error(control.detail)
+  source.historicalMatches.forEach((match) => {
+    match.officialGameId = match.id
+    match.sourceGameId = match.id
+  })
+  const original = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  const expected = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: control.basis })
+  const result = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: prepared.basis })
+  if (expected.status !== 'ready' || result.status !== 'ready') throw new Error('Aliases within one row must preserve supported previews.')
+  assert.deepEqual(result.teams, expected.teams)
+  assert.deepEqual(source, original)
+})

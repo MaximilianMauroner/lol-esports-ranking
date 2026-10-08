@@ -143,8 +143,11 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
     }
     const matches = context.authoritativeMatches
     if (!Array.isArray(matches) || !matches.length || matches.some((match) => !nonemptyString(match.id) || !nonemptyString(matchIdentity(match)) || !realUtcDate(match.date) || match.date > boundary)
-      || state.processedMatchCount !== matches.length || new Set(matches.map(matchIdentity)).size !== matches.length) {
+      || state.processedMatchCount !== matches.length) {
       return unavailablePowerPreview('missing-pre-state', 'The complete authoritative prefix must match the processed game count and UTC boundary.')
+    }
+    if (!hasUniqueConditionalPowerGameAliases(matches)) {
+      return unavailablePowerPreview('duplicate-game-alias', 'Every historical raw, official and source game alias must belong to one game row. Duplicate evidence cannot establish a replay basis.')
     }
     const historicalClockProblem = historicalTimestampProblem(matches)
     if (historicalClockProblem) return historicalClockProblem
@@ -233,6 +236,19 @@ function explicitLatestHomeLeaguesMatchContext(context: RatingReplayContext) {
 
 function gameIdentityAliases(match: MatchRecord) {
   return [match.id, match.officialGameId, match.sourceGameId].filter(nonemptyString)
+}
+
+/** Preview-internal guard: repeated aliases within one game are valid, but cannot identify another row. */
+export function hasUniqueConditionalPowerGameAliases(matches: readonly MatchRecord[]): boolean {
+  const observedAliases = new Set<string>()
+  for (const match of matches) {
+    const aliases = new Set(gameIdentityAliases(match))
+    for (const alias of aliases) {
+      if (observedAliases.has(alias)) return false
+    }
+    for (const alias of aliases) observedAliases.add(alias)
+  }
+  return true
 }
 
 function seriesIdentityAliases(matches: readonly MatchRecord[]) {
@@ -386,9 +402,11 @@ function scenarioProblem(input: ReplayInput, basis: ConditionalPowerReplayBasis,
   if (games.some((game) => !nonemptyString(game.id) || !nonemptyString(matchIdentity(game)))) {
     return unavailablePowerPreview('missing-game-identity', 'Every hypothetical game requires a nonempty game identity and canonical source identity.')
   }
-  if (games.length !== winsNeeded + input.outcome.loserWins || new Set(games.map((game) => game.id)).size !== games.length
-    || new Set(games.map(matchIdentity)).size !== games.length) {
-    return unavailablePowerPreview('invalid-score', 'Game count and unique game identities must match the selected legal score.')
+  if (games.length !== winsNeeded + input.outcome.loserWins) {
+    return unavailablePowerPreview('invalid-score', 'Game count must match the selected legal score.')
+  }
+  if (!hasUniqueConditionalPowerGameAliases(games)) {
+    return unavailablePowerPreview('duplicate-game-alias', 'Every hypothetical raw, official and source game alias must belong to one game row. A legal score cannot reuse game evidence.')
   }
   if (games.some((game, index) => game.sourceProvider !== 'seed' || game.officialMatchId !== input.series.id
     || game.officialEventId !== basis.event.id || game.event !== basis.event.name || game.league !== basis.event.league
