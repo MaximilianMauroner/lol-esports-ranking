@@ -245,6 +245,45 @@
     },
     {
       "encodedInput": {
+        "$type": "set",
+        "values": [
+          {
+            "$type": "undefined"
+          },
+          "z",
+          "undefined",
+          "a",
+          null
+        ]
+      },
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "encodedInput": {
+        "$type": "map",
+        "entries": [
+          [
+            {
+              "$type": "undefined"
+            },
+            1
+          ],
+          [
+            "z",
+            2
+          ],
+          [
+            "undefined",
+            3
+          ]
+        ]
+      },
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "encodedInput": {
         "nested": {
           "$type": "set",
           "values": [
@@ -434,6 +473,45 @@
       },
       "stableJson": "[10,9,{\"b\":1},{\"a\":2}]",
       "digest": "fnv1a64-bf9ad1f5c79a0e89"
+    },
+    {
+      "encodedInput": {
+        "$type": "set",
+        "values": [
+          {
+            "$type": "undefined"
+          },
+          "z",
+          "undefined",
+          "a",
+          null
+        ]
+      },
+      "stableJson": "[\"a\",null,\"undefined\",\"z\",]",
+      "digest": "fnv1a64-4f579b55ec4e4b39"
+    },
+    {
+      "encodedInput": {
+        "$type": "map",
+        "entries": [
+          [
+            {
+              "$type": "undefined"
+            },
+            1
+          ],
+          [
+            "z",
+            2
+          ],
+          [
+            "undefined",
+            3
+          ]
+        ]
+      },
+      "stableJson": "[[,1],[\"undefined\",3],[\"z\",2]]",
+      "digest": "fnv1a64-df32f81758580b47"
     },
     {
       "encodedInput": {
@@ -1272,6 +1350,51 @@
       "left": "3fe0000000000000",
       "right": "3fb4daeef2a5b835",
       "result": "3fee3e3c1a5ea07e"
+    },
+    {
+      "operation": "log",
+      "left": "bff0000000000000",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "bfe0000000000000",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "8000000000000001",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "fff0000000000000",
+      "result": "7ff4000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "8000000000000000",
+      "result": "fff0000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "0000000000000000",
+      "result": "fff0000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "0000000000000001",
+      "result": "c0874385446d71c3"
+    },
+    {
+      "operation": "log",
+      "left": "7ff0000000000000",
+      "result": "7ff0000000000000"
+    },
+    {
+      "operation": "log",
+      "left": "7ff8000000000000",
+      "result": "7ff8000000000000"
     }
   ],
   "providerTime": [
@@ -1306,6 +1429,24 @@
       "datetimeUtc": "2025-01-11T17:13:25.500Z"
     },
     {
+      "input": "2025-01-11t17:13",
+      "instantMs": 1736615580000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:00.000Z"
+    },
+    {
+      "input": "2025-01-11t17:13:25",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11t17:13:25.123456789",
+      "instantMs": 1736615605123,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.123Z"
+    },
+    {
       "input": "2025-01-11T17:13:25Z",
       "instantMs": 1736615605000,
       "date": "2025-01-11",
@@ -1333,6 +1474,792 @@
       "input": "",
       "instantMs": null,
       "date": "",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60Z",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60.5Z",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31 23:59:60",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31 23:59:60.5",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60.5",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-02-29",
+      "instantMs": 1740787200000,
+      "date": "2025-02-29",
+      "datetimeUtc": "2025-03-01T00:00:00.000Z"
+    },
+    {
+      "input": "2024-02-30 12:34:56",
+      "instantMs": 1709296496000,
+      "date": "2024-02-30",
+      "datetimeUtc": "2024-03-01T12:34:56.000Z"
+    },
+    {
+      "input": "2025-02-31T12:34:56Z",
+      "instantMs": 1741005296000,
+      "date": "2025-02-31",
+      "datetimeUtc": "2025-03-03T12:34:56.000Z"
+    },
+    {
+      "input": "2025-04-31T12:34:56+09:00",
+      "instantMs": 1746070496000,
+      "date": "2025-04-31",
+      "datetimeUtc": "2025-05-01T03:34:56.000Z"
+    },
+    {
+      "input": "2025-02-00T00:00Z",
+      "instantMs": null,
+      "date": "2025-02-00",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-02-32T00:00Z",
+      "instantMs": null,
+      "date": "2025-02-32",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-13-01T00:00Z",
+      "instantMs": null,
+      "date": "2025-13-01",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-12-31 24:00",
+      "instantMs": 1767225600000,
+      "date": "2025-12-31",
+      "datetimeUtc": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "input": "2024-02-30T24:00:00.0000Z",
+      "instantMs": 1709337600000,
+      "date": "2024-02-30",
+      "datetimeUtc": "2024-03-02T00:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11T24:00:00.0001Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 24:00:00.0001",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T24:01Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T24:00:01Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T25:00Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 24:00:00.0001Z",
+      "instantMs": 1736640000000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-12T00:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11 24:00:00.001Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11t24:00:00.0001Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 24:00:00.0009+0900",
+      "instantMs": 1736607600000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T15:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11 24:00:00.001+0900",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 24:00:00.0001+09:00",
+      "instantMs": 1736607600000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T15:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11 24:00:00.001+09:00",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13Z",
+      "instantMs": 1736615580000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:00.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13+0900",
+      "instantMs": 1736583180000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:13:00.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13-09:30",
+      "instantMs": 1736649780000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-12T02:43:00.000Z"
+    },
+    {
+      "input": "2025-01-11t17:13:25z",
+      "instantMs": 1736615605000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11t17:13:25+09:00",
+      "instantMs": 1736583205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11t17:13:25-09:30",
+      "instantMs": 1736649805000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-12T02:43:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25.123456789Z",
+      "instantMs": 1736615605123,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:13:25.123Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+24:00",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:25+09:60",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-1-11T17:13:25Z",
+      "instantMs": null,
+      "date": "2025-1-11T",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-1T17:13:25Z",
+      "instantMs": null,
+      "date": "2025-01-1T",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T7:13:25Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:3:25Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:5Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:25.Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "0000-01-01T00:00:00+01:00",
+      "instantMs": -62167222800000,
+      "date": "0000-01-01",
+      "datetimeUtc": "-000001-12-31T23:00:00.000Z"
+    },
+    {
+      "input": "9999-12-31T24:00Z",
+      "instantMs": 253402300800000,
+      "date": "9999-12-31",
+      "datetimeUtc": "+010000-01-01T00:00:00.000Z"
+    },
+    {
+      "input": "9999-12-31T23:59:59-01:00",
+      "instantMs": 253402304399000,
+      "date": "9999-12-31",
+      "datetimeUtc": "+010000-01-01T00:59:59.000Z"
+    },
+    {
+      "input": "0000-02-03 00:00:00Z",
+      "instantMs": 949536000000,
+      "date": "0000-02-03",
+      "datetimeUtc": "2000-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0000-02-03 00:00:00",
+      "instantMs": -62164368000000,
+      "date": "0000-02-03",
+      "datetimeUtc": "0000-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0000-02-03T00:00:00Z",
+      "instantMs": -62164368000000,
+      "date": "0000-02-03",
+      "datetimeUtc": "0000-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0000-02-03t00:00:00",
+      "instantMs": -62164368000000,
+      "date": "0000-02-03",
+      "datetimeUtc": "0000-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0001-02-03 00:00:00Z",
+      "instantMs": 1041465600000,
+      "date": "0001-02-03",
+      "datetimeUtc": "2003-01-02T00:00:00.000Z"
+    },
+    {
+      "input": "0001-02-03 00:00:00",
+      "instantMs": -62132745600000,
+      "date": "0001-02-03",
+      "datetimeUtc": "0001-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0001-02-03T00:00:00Z",
+      "instantMs": -62132745600000,
+      "date": "0001-02-03",
+      "datetimeUtc": "0001-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0001-02-03t00:00:00",
+      "instantMs": -62132745600000,
+      "date": "0001-02-03",
+      "datetimeUtc": "0001-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0012-02-03 00:00:00Z",
+      "instantMs": 1070323200000,
+      "date": "0012-02-03",
+      "datetimeUtc": "2003-12-02T00:00:00.000Z"
+    },
+    {
+      "input": "0012-02-03 00:00:00",
+      "instantMs": -61785676800000,
+      "date": "0012-02-03",
+      "datetimeUtc": "0012-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0012-02-03T00:00:00Z",
+      "instantMs": -61785676800000,
+      "date": "0012-02-03",
+      "datetimeUtc": "0012-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0012-02-03t00:00:00",
+      "instantMs": -61785676800000,
+      "date": "0012-02-03",
+      "datetimeUtc": "0012-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0013-02-03 00:00:00Z",
+      "instantMs": null,
+      "date": "0013-02-03",
+      "datetimeUtc": null
+    },
+    {
+      "input": "0013-02-03 00:00:00",
+      "instantMs": -61754054400000,
+      "date": "0013-02-03",
+      "datetimeUtc": "0013-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0013-02-03T00:00:00Z",
+      "instantMs": -61754054400000,
+      "date": "0013-02-03",
+      "datetimeUtc": "0013-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0013-02-03t00:00:00",
+      "instantMs": -61754054400000,
+      "date": "0013-02-03",
+      "datetimeUtc": "0013-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0031-02-03 00:00:00Z",
+      "instantMs": null,
+      "date": "0031-02-03",
+      "datetimeUtc": null
+    },
+    {
+      "input": "0031-02-03 00:00:00",
+      "instantMs": -61186060800000,
+      "date": "0031-02-03",
+      "datetimeUtc": "0031-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0031-02-03T00:00:00Z",
+      "instantMs": -61186060800000,
+      "date": "0031-02-03",
+      "datetimeUtc": "0031-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0031-02-03t00:00:00",
+      "instantMs": -61186060800000,
+      "date": "0031-02-03",
+      "datetimeUtc": "0031-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0032-02-03 00:00:00Z",
+      "instantMs": 1959379200000,
+      "date": "0032-02-03",
+      "datetimeUtc": "2032-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0032-02-03 00:00:00",
+      "instantMs": -61154524800000,
+      "date": "0032-02-03",
+      "datetimeUtc": "0032-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0032-02-03T00:00:00Z",
+      "instantMs": -61154524800000,
+      "date": "0032-02-03",
+      "datetimeUtc": "0032-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0032-02-03t00:00:00",
+      "instantMs": -61154524800000,
+      "date": "0032-02-03",
+      "datetimeUtc": "0032-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0049-02-03 00:00:00Z",
+      "instantMs": 2495923200000,
+      "date": "0049-02-03",
+      "datetimeUtc": "2049-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0049-02-03 00:00:00",
+      "instantMs": -60617980800000,
+      "date": "0049-02-03",
+      "datetimeUtc": "0049-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0049-02-03T00:00:00Z",
+      "instantMs": -60617980800000,
+      "date": "0049-02-03",
+      "datetimeUtc": "0049-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0049-02-03t00:00:00",
+      "instantMs": -60617980800000,
+      "date": "0049-02-03",
+      "datetimeUtc": "0049-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0050-02-03 00:00:00Z",
+      "instantMs": -628300800000,
+      "date": "0050-02-03",
+      "datetimeUtc": "1950-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0050-02-03 00:00:00",
+      "instantMs": -60586444800000,
+      "date": "0050-02-03",
+      "datetimeUtc": "0050-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0050-02-03T00:00:00Z",
+      "instantMs": -60586444800000,
+      "date": "0050-02-03",
+      "datetimeUtc": "0050-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0050-02-03t00:00:00",
+      "instantMs": -60586444800000,
+      "date": "0050-02-03",
+      "datetimeUtc": "0050-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0099-02-03 00:00:00Z",
+      "instantMs": 918000000000,
+      "date": "0099-02-03",
+      "datetimeUtc": "1999-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0099-02-03 00:00:00",
+      "instantMs": -59040144000000,
+      "date": "0099-02-03",
+      "datetimeUtc": "0099-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0099-02-03T00:00:00Z",
+      "instantMs": -59040144000000,
+      "date": "0099-02-03",
+      "datetimeUtc": "0099-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0099-02-03t00:00:00",
+      "instantMs": -59040144000000,
+      "date": "0099-02-03",
+      "datetimeUtc": "0099-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0100-02-03 00:00:00Z",
+      "instantMs": -59008608000000,
+      "date": "0100-02-03",
+      "datetimeUtc": "0100-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0100-02-03 00:00:00",
+      "instantMs": -59008608000000,
+      "date": "0100-02-03",
+      "datetimeUtc": "0100-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0100-02-03T00:00:00Z",
+      "instantMs": -59008608000000,
+      "date": "0100-02-03",
+      "datetimeUtc": "0100-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0100-02-03t00:00:00",
+      "instantMs": -59008608000000,
+      "date": "0100-02-03",
+      "datetimeUtc": "0100-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0001-02-03t00:00:00Z",
+      "instantMs": -62132745600000,
+      "date": "0001-02-03",
+      "datetimeUtc": "0001-02-03T00:00:00.000Z"
+    },
+    {
+      "input": "0001-13-03 00:00:00Z",
+      "instantMs": 1042416000000,
+      "date": "0001-13-03",
+      "datetimeUtc": "2003-01-13T00:00:00.000Z"
+    },
+    {
+      "input": "0001-02-00 00:00:00Z",
+      "instantMs": 946771200000,
+      "date": "0001-02-00",
+      "datetimeUtc": "2000-01-02T00:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11 17:13:25+09",
+      "instantMs": 1736583205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+09",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+9",
+      "instantMs": 1736583205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+9",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25-9",
+      "instantMs": 1736648005000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-12T02:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25-9",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+24",
+      "instantMs": 1736529205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-10T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+24",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+99",
+      "instantMs": 1736259205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-07T14:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+99",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+100",
+      "instantMs": 1736612005000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T16:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+100",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+090",
+      "instantMs": 1736610205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T15:43:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+090",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+2400",
+      "instantMs": 1736529205000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-10T17:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+2400",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+0999",
+      "instantMs": 1736577265000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T06:34:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+0999",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+9999",
+      "instantMs": 1736253265000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-07T12:34:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+9999",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+10000",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:25+10000",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+9:30",
+      "instantMs": 1736581405000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T07:43:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+9:30",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+9:3",
+      "instantMs": 1736583025000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T08:10:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+9:3",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+1:001",
+      "instantMs": 1736611945000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T16:12:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+1:001",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+:01",
+      "instantMs": 1736615545000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T17:12:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+:01",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+1:",
+      "instantMs": 1736612005000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T16:13:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+1:",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+09:99",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:25+09:99",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+596523:14",
+      "instantMs": -410868035000,
+      "date": "2025-01-11",
+      "datetimeUtc": "1956-12-24T13:59:25.000Z"
+    },
+    {
+      "input": "2025-01-11T17:13:25+596523:14",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 17:13:25+596523:15",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11T17:13:25+596523:15",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11t17:13:25+09",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "🙂🙂🙂🙂🙂🙂",
+      "instantMs": null,
+      "date": "🙂🙂🙂🙂🙂",
+      "datetimeUtc": null
+    },
+    {
+      "input": "abcdefghi🙂",
+      "instantMs": null,
+      "date": "abcdefghi�",
+      "datetimeUtc": null
+    },
+    {
+      "input": "abcdefgh🙂tail",
+      "instantMs": null,
+      "date": "abcdefgh🙂",
+      "datetimeUtc": null
+    },
+    {
+      "input": "é🙂🙂🙂🙂🙂tail",
+      "instantMs": null,
+      "date": "é🙂🙂🙂🙂�",
       "datetimeUtc": null
     }
   ]
