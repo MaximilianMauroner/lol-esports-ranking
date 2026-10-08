@@ -299,7 +299,7 @@ test('generated public artifacts include season checkpoint scopes', async () => 
   assert.ok(regionHistory.scopes[key])
 })
 
-test('public manifest data URLs resolve to tracked public files', async () => {
+test('public manifest data URLs resolve to downloaded reference files', async () => {
   const summary = parsePublicRankingManifest(await readJson(join(referencePublicDataDir, 'ranking-summary.json')))
   const urls = new Set<string>()
 
