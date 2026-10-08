@@ -244,7 +244,8 @@ function completeRoster(roster: MatchRosterSnapshot | undefined) {
 }
 
 function scenarioProblem(input: ReplayInput, basis: ConditionalPowerReplayBasis, games: MatchRecord[], playerEdges: Map<string, PregamePlayerRatingEdge>): PowerPreviewUnavailable | null {
-  const expectedDate = input.series.startTime!.slice(0, 10)
+  const startTimestamp = Date.parse(input.series.startTime!)
+  const expectedDate = new Date(startTimestamp).toISOString().slice(0, 10)
   const winsNeeded = (input.series.bestOf! + 1) / 2
   const winner = basis.teamNames[input.outcome.winner === 'home' ? 0 : 1]
   if (games.some((game) => !nonemptyString(game.id) || !nonemptyString(matchIdentity(game)))) {
@@ -263,8 +264,9 @@ function scenarioProblem(input: ReplayInput, basis: ConditionalPowerReplayBasis,
     || (game.teamAHomeLeague !== undefined && game.teamAHomeLeague !== basis.context.teams[game.teamA]?.league)
     || (game.teamBHomeLeague !== undefined && game.teamBHomeLeague !== basis.context.teams[game.teamB]?.league)
     || !basis.teamNames.includes(game.winner) || game.gameNumber !== index + 1
-    || !game.datetimeUtc || !Number.isFinite(Date.parse(game.datetimeUtc)) || game.datetimeUtc.slice(0, 10) !== expectedDate
-    || Date.parse(game.datetimeUtc) < Date.parse(input.series.startTime!)
+    || !game.datetimeUtc || !Number.isFinite(Date.parse(game.datetimeUtc))
+    || new Date(Date.parse(game.datetimeUtc)).toISOString().slice(0, 10) !== expectedDate
+    || Date.parse(game.datetimeUtc) < startTimestamp
     || (index > 0 && Date.parse(game.datetimeUtc) <= Date.parse(games[index - 1]!.datetimeUtc!)))) {
     return unavailablePowerPreview('unsupported-scenario', 'Supply one ordered, synthetic, verified-format series after the pinned boundary, with matching event and participant identities.')
   }

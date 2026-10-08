@@ -68,6 +68,9 @@ between those public endpoints, including rounding and clamping. It is not a
 scaled probability, raw internal stable delta, history rank, or promise about a
 future publication. The complete conditional result holds all supplied inputs
 fixed. It does not assert that those future inputs are known for a real match.
+Series and game timestamp offsets are normalized to UTC. All hypothetical games
+must share one future UTC date after the pinned complete boundary; a timestamp's
+local date prefix cannot choose the replay date.
 
 The returned offline result keeps a detached copy of the entire input tuple,
 including pre-state, event/lifecycle context, game assumptions, roster/player
