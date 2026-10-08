@@ -13,6 +13,7 @@ import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } fro
 import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
 import { collectRefreshGarbage, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
 import { rawSourceWorkerCommand } from './raw-source-worker-command.mjs'
+import { providerFetchWorkerCommand } from './provider-fetch-worker-command.mjs'
 import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
@@ -144,8 +145,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     const providerStarted = monotonicNow()
     let providerCommandError
     try {
-      await (options.run ?? runCommand)(process.execPath, [
-        'scripts/download-local-data.mjs',
+      const { command, args: providerArgs } = providerFetchWorkerCommand([
         '--start',
         start,
         '--end',
@@ -155,7 +155,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         '--manifest',
         stagingManifestPath,
         ...extraDownloadArgs,
-      ])
+      ], env)
+      await (options.run ?? runCommand)(command, providerArgs)
     } catch (error) {
       providerCommandError = error
     }
