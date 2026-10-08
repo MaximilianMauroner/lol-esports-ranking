@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { MatchRecord } from '../src/types'
+import { digestCausalValue } from '../src/lib/causalRecompute'
 import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases } from '../src/lib/conditionalPowerReplay'
 import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerReplayBasis'
 import { legalConditionalScores, publicConditionalPowerPreview } from '../src/lib/conditionalPowerPreview'
@@ -8,6 +9,8 @@ import { createRatingReplayContext, materializeRankingModel, replayRatingDates }
 import { eventTrackerKey } from '../src/lib/placementResiduals'
 import { playerModelParameters } from '../src/lib/playerModel'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
+import { encodeRatingCheckpointEnvelope } from '../src/lib/ratingCheckpoint'
+import { buildRatingCheckpointEventContract } from '../src/lib/ratingCheckpointInventory'
 import { rosterBasisByTeam } from '../src/lib/rosters'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { conditionalPowerFixture, pinControlledConditionalPowerBasis } from './fixtures/conditionalPowerFixtures'
@@ -422,7 +425,7 @@ test('direct bases validate historical UTC timestamps without rewriting or re-pi
   assert.deepEqual(input, original)
 })
 
-test('pre-state pins require structured source identities and the exact checkpoint payload digest', () => {
+test('pre-state pins require structured source identities and exact state and context digests', () => {
   const identity = { importerVersion: 'controlled-importer', identityTaxonomyHash: 'controlled-taxonomy', rawLedgerPrefixHash: 'controlled-prefix' }
   const malformed = [
     'controlled-fixture/legacy-string', '{}', '[]', 'null', '42', '"plain-string"',
@@ -449,11 +452,92 @@ test('pre-state pins require structured source identities and the exact checkpoi
     assert.deepEqual(input, original)
   }
   const input = conditionalPowerFixture()
-  input.basis.preStateId = JSON.stringify({ ...identity, payloadDigest: 'fnv1a64-0000000000000000' })
+  input.basis.preStateId = JSON.stringify({ ...identity, payloadDigest: 'fnv1a64-0000000000000000', contextDigest: digestCausalValue(input.basis.context) })
   const original = structuredClone(input)
   const result = evaluateConditionalPowerReplay(input)
   assert.equal(result.status, 'unavailable')
   if (result.status === 'unavailable') assert.equal(result.reason, 'stale-pre-state-pin')
+  assert.deepEqual(input, original)
+})
+
+test('context digests are required and mismatches cannot use a valid state payload pin', () => {
+  for (const contextDigest of [undefined, '', ' \t ', 42, null, 'fnv1a64-0000000000000000']) {
+    const input = conditionalPowerFixture()
+    const state = input.basis.state
+    const envelope = encodeRatingCheckpointEnvelope(state, {
+      importerVersion: 'controlled-fixture/importer', identityTaxonomyHash: 'controlled-fixture/taxonomy', rawLedgerPrefixHash: 'controlled-fixture/prefix',
+    }, { processedThroughUtcDate: state.processedThroughUtcDate!, processedThroughMatchId: state.previousMatch!.id },
+    buildRatingCheckpointEventContract(input.basis.context.authoritativeMatches, input.basis.context.eventWeightContext, input.basis.context.tournamentLifecycles))
+    input.basis.preStateId = JSON.stringify({
+      importerVersion: 'controlled-fixture/importer', identityTaxonomyHash: 'controlled-fixture/taxonomy', rawLedgerPrefixHash: 'controlled-fixture/prefix',
+      payloadDigest: envelope.metadata.payloadDigest, contextDigest,
+    })
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', `${contextDigest}`)
+    if (result.status === 'unavailable') assert.equal(result.reason,
+      typeof contextDigest === 'string' && contextDigest.startsWith('fnv1a64-') ? 'stale-context-pin' : 'invalid-pre-state-pin')
+    assert.deepEqual(input, original)
+  }
+})
+
+test('every replay-context field is pinned and changed inputs fail closed without modifying rating state', () => {
+  type Fixture = ReturnType<typeof conditionalPowerFixture>
+  const cases: Array<{ field: keyof Fixture['basis']['context']; mutate: (input: Fixture) => void }> = [
+    { field: 'authoritativeMatches', mutate: (input) => { input.basis.context.authoritativeMatches[0]!.teamATowers! += 1 } },
+    { field: 'teams', mutate: (input) => { input.basis.context.teams.Alpha!.code = 'CHANGED' } },
+    { field: 'pregamePlayerRatingEdges', mutate: (input) => { input.basis.context.pregamePlayerRatingEdges.get('prior-1')!.teamAAdjustment += 1 } },
+    { field: 'teamRosterBasis', mutate: (input) => { input.basis.context.teamRosterBasis.set('Alpha', 'assumed-continuous') } },
+    { field: 'tournamentLifecycles', mutate: (input) => { input.basis.context.tournamentLifecycles = new Map([['changed-lifecycle', {
+      status: 'ongoing', boundaryDate: '2026-09-15', ratedThroughDate: '2026-09-15', dataLag: false, resultCoverageComplete: true,
+    }]]) } },
+    { field: 'eventWeightContext', mutate: (input) => { input.basis.context.eventWeightContext.worldsEndDateByCalendarYear.set(2026, '2026-09-15') } },
+    { field: 'lastDate', mutate: (input) => { input.basis.context.lastDate = '2026-09-14' } },
+  ]
+  for (const { field, mutate } of cases) {
+    const input = conditionalPowerFixture()
+    // Detach context from any shared state rows and maps before testing caller-only input edits.
+    input.basis.context = structuredClone(input.basis.context)
+    const priorContextDigest = digestCausalValue(input.basis.context)
+    const originalState = structuredClone(input.basis.state)
+    const originalPin = input.basis.preStateId
+    mutate(input)
+    const changed = structuredClone(input)
+    assert.notEqual(digestCausalValue(input.basis.context), priorContextDigest, field)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', field)
+    if (result.status === 'unavailable' && ['authoritativeMatches', 'teams', 'pregamePlayerRatingEdges', 'tournamentLifecycles'].includes(field)) {
+      assert.equal(result.reason, 'stale-context-pin', field)
+    }
+    assert.equal(input.basis.preStateId, originalPin, field)
+    assert.deepEqual(input.basis.state, originalState, field)
+    assert.deepEqual(input, changed, field)
+  }
+})
+
+test('map and object insertion order does not change the pinned context or the preview', () => {
+  const input = threeTeamConditionalPowerFixture()
+  const expected = evaluateConditionalPowerReplay(input)
+  if (expected.status !== 'ready') throw new Error(expected.detail)
+  const context = input.basis.context
+  const teams: typeof context.teams = {}
+  for (const [team, profile] of Object.entries(context.teams).reverse()) {
+    teams[team] = { league: profile.league, region: profile.region, code: profile.code, name: profile.name }
+  }
+  input.basis.context = {
+    tournamentLifecycles: new Map([...context.tournamentLifecycles].reverse()),
+    teamRosterBasis: new Map([...context.teamRosterBasis].reverse()),
+    pregamePlayerRatingEdges: new Map([...context.pregamePlayerRatingEdges].reverse()),
+    teams, lastDate: context.lastDate,
+    eventWeightContext: { worldsEndDateByCalendarYear: new Map([...context.eventWeightContext.worldsEndDateByCalendarYear].reverse()) },
+    authoritativeMatches: context.authoritativeMatches,
+  }
+  assert.equal(digestCausalValue(input.basis.context), digestCausalValue(context))
+  const original = structuredClone(input)
+  const result = evaluateConditionalPowerReplay(input)
+  if (result.status !== 'ready') throw new Error(result.detail)
+  assert.equal(result.provenance.preStateId, expected.provenance.preStateId)
+  assert.deepEqual(result.teams, expected.teams)
   assert.deepEqual(input, original)
 })
 

@@ -1,5 +1,6 @@
 import type { EventTier, MatchRecord, MatchRosterSnapshot, PublishedRatingScale, Region } from '../types'
 import { eventTierConfig } from '../data/rankingConfig'
+import { digestCausalValue } from './causalRecompute'
 import { conditionalOutcomeProblem, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from './conditionalPowerPreview'
 import { eventKFactorForMatch, eventWeightContextForMatches, eventWeightForMatch } from './eventWeighting'
 import { homeLeagueForMatch } from './matchContext'
@@ -19,7 +20,7 @@ import type { TournamentSeries } from './tournamentFeed'
 export type ConditionalPowerReplayBasis = {
   modelVersion: string
   modelConfigHash: string
-  /** JSON corpus identity plus the production checkpoint payload digest for this exact state. */
+  /** JSON corpus identity, production state payload digest and complete replay-context digest. */
   preStateId: string
   ratingScale: PublishedRatingScale
   context: RatingReplayContext
@@ -189,7 +190,10 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
     const eventContract = buildRatingCheckpointEventContract(matches, context.eventWeightContext, context.tournamentLifecycles)
     validateRatingCheckpointEventContract(state, boundary, eventContract)
     const pin = parsedPreStatePin(basis.preStateId)
-    if (!pin) return unavailablePowerPreview('invalid-pre-state-pin', 'The pre-state pin must contain explicit importer, identity taxonomy, raw-prefix identities and a payload digest.')
+    if (!pin) return unavailablePowerPreview('invalid-pre-state-pin', 'The pre-state pin must contain explicit importer, identity taxonomy, raw-prefix identities, production payload digest and complete replay-context digest.')
+    if (digestCausalValue(context) !== pin.contextDigest) {
+      return unavailablePowerPreview('stale-context-pin', 'The supplied replay context differs from its pinned digest. Reconstruct the basis from the changed corpus and context before projecting Power.')
+    }
     const envelope = encodeRatingCheckpointEnvelope(state, pin, {
       processedThroughUtcDate: boundary, processedThroughMatchId: previousMatch.id,
     }, eventContract)
@@ -214,10 +218,11 @@ function parsedPreStatePin(serialized: string) {
     || !('importerVersion' in value) || !nonemptyString(value.importerVersion)
     || !('identityTaxonomyHash' in value) || !nonemptyString(value.identityTaxonomyHash)
     || !('rawLedgerPrefixHash' in value) || !nonemptyString(value.rawLedgerPrefixHash)
-    || !('payloadDigest' in value) || !nonemptyString(value.payloadDigest)) return null
+    || !('payloadDigest' in value) || !nonemptyString(value.payloadDigest)
+    || !('contextDigest' in value) || !nonemptyString(value.contextDigest)) return null
   return {
     importerVersion: value.importerVersion, identityTaxonomyHash: value.identityTaxonomyHash,
-    rawLedgerPrefixHash: value.rawLedgerPrefixHash, payloadDigest: value.payloadDigest,
+    rawLedgerPrefixHash: value.rawLedgerPrefixHash, payloadDigest: value.payloadDigest, contextDigest: value.contextDigest,
   }
 }
 

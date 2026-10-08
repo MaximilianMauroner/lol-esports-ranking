@@ -7,6 +7,7 @@ import type { PregamePlayerRatingEdge } from '../../src/lib/playerModel'
 import type { TournamentSeries } from '../../src/lib/tournamentFeed'
 import { encodeRatingCheckpointEnvelope } from '../../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract } from '../../src/lib/ratingCheckpointInventory'
+import { digestCausalValue } from '../../src/lib/causalRecompute'
 
 const roles: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 function roster(team: string, date: string): MatchRosterSnapshot {
@@ -35,7 +36,7 @@ export function pinControlledConditionalPowerBasis(basis: ConditionalPowerReplay
   const envelope = encodeRatingCheckpointEnvelope(state, identity, {
     processedThroughUtcDate: state.processedThroughUtcDate, processedThroughMatchId: state.previousMatch.id,
   }, buildRatingCheckpointEventContract(basis.context.authoritativeMatches, basis.context.eventWeightContext, basis.context.tournamentLifecycles))
-  basis.preStateId = JSON.stringify({ ...identity, payloadDigest: envelope.metadata.payloadDigest })
+  basis.preStateId = JSON.stringify({ ...identity, payloadDigest: envelope.metadata.payloadDigest, contextDigest: digestCausalValue(basis.context) })
 }
 
 export function conditionalPowerFixture(bestOf: 1 | 3 | 5 = 5, outcome: ConditionalSeriesOutcome = { winner: 'home', loserWins: 0 }, tier: EventTier = 'worlds-playoffs') {

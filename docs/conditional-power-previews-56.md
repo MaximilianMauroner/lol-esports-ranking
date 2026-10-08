@@ -55,6 +55,14 @@ Missing pins, arbitrary labels and finite scoring-state changes under an
 unchanged digest return unavailable. A deliberately changed valid state needs
 a new checkpoint pin. This proves integrity of the pinned inputs; it does not
 certify the producer's source evidence.
+The preview pin also binds the complete `RatingReplayContext` with a separate
+`contextDigest` from the existing canonical causal serializer. This covers the
+authoritative matches, team directory, last UTC date, historical player edges,
+roster bases, event calendar and lifecycle map. Coordinated corpus and directory
+changes cannot retain the same pre-state identity. Object and map insertion order
+do not change this digest; the production-sorted match order stays significant.
+A changed source basis must be rebuilt with a new context and state pin. This is
+an internal preview field, not a production checkpoint schema change.
 No checkpoint file is written. Incomplete historical stats, lineups, profiles,
 format or chronology are rejected before replay. The production canonical series
 resolver must prove a legal decisive final score for every historical series.

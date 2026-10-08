@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { MatchRecord } from '../src/types'
+import { digestCausalValue } from '../src/lib/causalRecompute'
 import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerReplayBasis'
 import { evaluateConditionalPowerReplay } from '../src/lib/conditionalPowerReplay'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
+import { eventTrackerKey } from '../src/lib/placementResiduals'
 import { rosterBasisByTeam } from '../src/lib/rosters'
 import { conditionalPowerFixture } from './fixtures/conditionalPowerFixtures'
 
@@ -32,6 +34,8 @@ test('corpus adapter reconstructs a detached production pre-state and preserves 
   assert.deepEqual(prepared.basis.state, state)
   assert.deepEqual(prepared.provenance.corpusIdentity, source.corpusIdentity)
   assert.ok(prepared.basis.preStateId.includes(prepared.provenance.payloadDigest))
+  assert.ok(prepared.basis.preStateId.includes(prepared.provenance.contextDigest))
+  assert.equal(prepared.provenance.contextDigest, digestCausalValue(prepared.basis.context))
   assert.deepEqual(prepared.provenance.historicalUnavailablePlayerPriorGameIds, ['prior-0'])
   assert.match(prepared.assumptions.join(' '), /1 historical games have unavailable pregame player priors/)
 
@@ -99,6 +103,83 @@ test('adapter-produced checkpoint pins reject a changed rating without caller mu
   if (result.status === 'unavailable') assert.equal(result.reason, 'stale-pre-state-pin')
   assert.deepEqual(input, original)
   assert.equal(input.basis.preStateId, prepared.basis.preStateId)
+  assert.deepEqual(source, originalSource)
+})
+
+test('a production international pre-state rejects synchronized league rewrites and supports an explicitly rebuilt corpus', () => {
+  const source = sourceFixture()
+  const international = source.historicalMatches.at(-1)!
+  Object.assign(international, { event: 'Controlled international context fixture', league: 'International', region: 'International',
+    tier: 'minor-international', phase: 'Quarterfinals', winner: 'Alpha' })
+  source.tournamentLifecycles = new Map([[eventTrackerKey(international), {
+    status: 'ongoing', boundaryDate: international.date, ratedThroughDate: international.date, dataLag: false, resultCoverageComplete: true,
+  }]])
+  const originalSource = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  assert.notEqual(prepared.basis.state.leagueScores.get('LCK'), prepared.basis.state.leagueScores.get('LPL'))
+  assert.equal(prepared.provenance.contextDigest, digestCausalValue(prepared.basis.context))
+  const baselineInput = { ...conditionalPowerFixture(), basis: prepared.basis }
+  for (const game of baselineInput.games) {
+    delete game.teamAHomeLeague
+    delete game.teamBHomeLeague
+  }
+  const baseline = evaluateConditionalPowerReplay(baselineInput)
+  if (baseline.status !== 'ready') throw new Error(baseline.detail)
+
+  const changed = structuredClone(baselineInput)
+  const originalState = structuredClone(changed.basis.state)
+  const originalPin = changed.basis.preStateId
+  const [alphaLeague, betaLeague] = [source.teams.Alpha!.league, source.teams.Beta!.league]
+  changed.basis.context.teams.Alpha!.league = betaLeague
+  changed.basis.context.teams.Beta!.league = alphaLeague
+  for (const game of changed.basis.context.authoritativeMatches) {
+    game.teamAHomeLeague = betaLeague
+    game.teamBHomeLeague = alphaLeague
+  }
+  const originalChanged = structuredClone(changed)
+  const rejected = evaluateConditionalPowerReplay(changed)
+  assert.equal(rejected.status, 'unavailable')
+  if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'stale-context-pin')
+  assert.equal(changed.basis.preStateId, originalPin)
+  assert.deepEqual(changed.basis.state, originalState)
+  assert.deepEqual(changed.games, baselineInput.games)
+  assert.deepEqual(changed.playerEdges, baselineInput.playerEdges)
+  assert.deepEqual(changed, originalChanged)
+
+  const changedSource = structuredClone(source)
+  changedSource.teams.Alpha!.league = betaLeague
+  changedSource.teams.Beta!.league = alphaLeague
+  for (const game of changedSource.historicalMatches) {
+    game.teamAHomeLeague = betaLeague
+    game.teamBHomeLeague = alphaLeague
+  }
+  const originalRebuiltSource = structuredClone(changedSource)
+  const rebuilt = prepareConditionalPowerReplayBasis(changedSource)
+  if (rebuilt.status !== 'ready') throw new Error(rebuilt.detail)
+  assert.notEqual(rebuilt.provenance.contextDigest, prepared.provenance.contextDigest)
+  assert.notEqual(rebuilt.basis.preStateId, originalPin)
+  const input = { ...changed, basis: rebuilt.basis }
+  assert.deepEqual(input.games, baselineInput.games)
+  assert.deepEqual(input.playerEdges, baselineInput.playerEdges)
+  const originalInput = structuredClone(input)
+  const result = evaluateConditionalPowerReplay(input)
+  if (result.status !== 'ready') throw new Error(result.detail)
+  const before = materializeRankingModel({ context: structuredClone(rebuilt.basis.context), state: structuredClone(rebuilt.basis.state) })
+  const context = structuredClone(rebuilt.basis.context)
+  context.authoritativeMatches.push(...structuredClone(input.games))
+  context.lastDate = input.games[0]!.date
+  context.teamRosterBasis = rosterBasisByTeam(context.authoritativeMatches)
+  for (const [id, edge] of input.playerEdges) context.pregamePlayerRatingEdges.set(id, structuredClone(edge))
+  const state = replayRatingDates({ context, state: structuredClone(rebuilt.basis.state), replayMatches: structuredClone(input.games) })
+  const after = materializeRankingModel({ context, state })
+  for (const row of result.teams) {
+    const beforePower = publishedRating(before.standings.find((team) => team.team === row.team)!.rating, source.ratingScale)
+    const afterPower = publishedRating(after.standings.find((team) => team.team === row.team)!.rating, source.ratingScale)
+    assert.deepEqual(row, { team: row.team, before: beforePower, after: afterPower, delta: afterPower - beforePower })
+  }
+  assert.deepEqual(input, originalInput)
+  assert.deepEqual(changedSource, originalRebuiltSource)
   assert.deepEqual(source, originalSource)
 })
 

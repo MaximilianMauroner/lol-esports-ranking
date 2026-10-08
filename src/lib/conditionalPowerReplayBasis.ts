@@ -1,5 +1,6 @@
 import { eventTierConfig } from '../data/rankingConfig'
 import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../types'
+import { digestCausalValue } from './causalRecompute'
 import { unavailablePowerPreview, type PowerPreviewUnavailable } from './conditionalPowerPreview'
 import { conditionalPowerBasisProblem, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
 import { createRatingReplayContext, replayRatingDates } from './model'
@@ -24,6 +25,7 @@ export type PreparedConditionalPowerReplayBasis = PowerPreviewUnavailable | {
     corpusIdentity: RatingCheckpointIdentity
     processedThroughUtcDate: string
     payloadDigest: string
+    contextDigest: string
     historicalUnavailablePlayerPriorGameIds: string[]
   }
   assumptions: string[]
@@ -71,10 +73,11 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
       processedThroughUtcDate: source.processedThroughUtcDate,
       processedThroughMatchId: state.previousMatch!.id,
     }, eventContract), source.corpusIdentity)
+    const contextDigest = digestCausalValue(context)
     const basis: ConditionalPowerReplayBasis = {
       modelVersion: source.modelVersion, modelConfigHash: source.modelConfigHash, ratingScale: source.ratingScale,
       sourceTeamIds: source.sourceTeamIds, teamNames: source.teamNames, event: source.event,
-      preStateId: JSON.stringify({ ...source.corpusIdentity, payloadDigest: checkpoint.metadata.payloadDigest }),
+      preStateId: JSON.stringify({ ...source.corpusIdentity, payloadDigest: checkpoint.metadata.payloadDigest, contextDigest }),
       context, state: checkpoint.state,
     }
     const problem = conditionalPowerBasisProblem(basis)
@@ -86,10 +89,11 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
       status: 'ready', basis,
       provenance: {
         corpusIdentity: source.corpusIdentity, processedThroughUtcDate: source.processedThroughUtcDate,
-        payloadDigest: checkpoint.metadata.payloadDigest, historicalUnavailablePlayerPriorGameIds,
+        payloadDigest: checkpoint.metadata.payloadDigest, contextDigest, historicalUnavailablePlayerPriorGameIds,
       },
       assumptions: [
         'The caller identifies this supplied corpus as the complete immutable historical prefix. This adapter does not certify provider completeness or fetch missing evidence.',
+        'The state and full replay context are pinned to detect later input changes. These digests do not certify the supplied corpus or identities as producer truth.',
         'Historical state and causal player edges are reconstructed with the current production model, including its documented initial priors. No historical state is inferred from published Power.',
         `${historicalUnavailablePlayerPriorGameIds.length} historical games have unavailable pregame player priors in the production replay. Their identities are listed in provenance; future player priors must still be supplied explicitly.`,
         'The supplied tournament lifecycle map is held fixed. Future lineups, patch, sides, timing and statistics remain required by the evaluator.',
