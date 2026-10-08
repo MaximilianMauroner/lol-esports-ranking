@@ -47,11 +47,7 @@ pub fn download(
                 .append_pair("tables", "ScoreboardGames").append_pair("fields", &FIELDS.join(","))
                 .append_pair("where", &format!("DateTime_UTC >= \"{start} 00:00:00\" AND DateTime_UTC <= \"{end} 23:59:59\" AND Team1 IS NOT NULL AND Team2 IS NOT NULL AND WinTeam IS NOT NULL"))
                 .append_pair("order_by", "DateTime_UTC ASC").append_pair("limit", "500").append_pair("offset", &offset.to_string());
-            let response = http.get(
-                url,
-                &[("user-agent", options.text_or("userAgent", USER_AGENT))],
-                &policy,
-            )?;
+            let response = http.get(url, &[("user-agent", USER_AGENT)], &policy)?;
             let rows = csv_rows(&String::from_utf8_lossy(&response.body))?;
             let Some(header) = rows.first() else {
                 return Err("Leaguepedia CargoExport returned an unexpected CSV schema".into());

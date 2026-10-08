@@ -87,3 +87,24 @@ each process's peak RSS and duration. It never prepares in the original raw
 directory. Existing optional legacy compressed-size fields stay readable until
 all active stored receipts have moved to semantic identity. The Node selector
 stays available until the migration's shadow and rollback observation gates pass.
+
+## Provider downloads
+
+`ranking-refresh fetch` accepts the download process flags and writes the provider
+files and local manifest. Set `RANKING_PROVIDER_FETCH_WORKER=rust` to select it
+from the Node refresh parent. `RANKING_REFRESH_BINARY` selects the binary path.
+Node remains the default. The binary runs the HTTP work itself.
+
+The fetch process discovers Oracle CSVs, pages Leaguepedia Cargo results at
+1,200 ms intervals, and pages the LoL Esports reference endpoints at 250 ms
+intervals. Oracle and LoL Esports use five attempts per request; Leaguepedia uses
+seven and checks rate-limit bodies. Retry-After and jittered backoff must fit the
+120-second request budget. Optional provider failures stay in the manifest;
+required failures return a failed exit after writing the manifest.
+
+CI runs the existing downloader failure cases with the native selector and a
+recorded-response comparison against Node. The comparison covers multiple
+Leaguepedia and schedule pages, duplicate events, details, files, manifests and
+request order. Only process wall-clock fields vary between replay runs. Live
+provider validation and completed compiled checks must be recorded before this
+seam is ready. It is not enabled in production by this PR.

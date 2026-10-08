@@ -92,7 +92,10 @@ fn absolute(path: impl AsRef<Path>) -> Result<PathBuf> {
 fn write_json(path: &Path, value: &Value) -> Result<()> {
     std::fs::create_dir_all(path.parent().ok_or("Output path has no parent")?)?;
     // The insertion/number byte contract is shared with raw materialization.
-    std::fs::write(path, format!("{}\n", serde_json::to_string_pretty(value)?))?;
+    std::fs::write(
+        path,
+        format!("{}\n", ranking_contracts::js_pretty_json_value(value)),
+    )?;
     Ok(())
 }
 
