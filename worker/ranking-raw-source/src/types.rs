@@ -30,6 +30,12 @@ fn optional_transport_size<'de, D: serde::Deserializer<'de>>(
     u64::deserialize(deserializer).map(Some)
 }
 
+fn optional_importer_version<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error> {
+    String::deserialize(deserializer).map(Some)
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Coverage {
@@ -209,7 +215,11 @@ pub enum Input {
         receipt: Receipt,
         #[serde(rename = "receiptReference")]
         receipt_reference: Reference,
-        #[serde(rename = "importerVersion")]
+        #[serde(
+            rename = "importerVersion",
+            default,
+            deserialize_with = "optional_importer_version"
+        )]
         importer_version: Option<String>,
         #[serde(rename = "requiredCoverage")]
         required_coverage: Option<Coverage>,
