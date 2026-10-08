@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import test from 'node:test'
 import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib'
+import { createProviderFetchTelemetry, fetchWithRetry } from '../scripts/provider-fetch-retry.mjs'
 
 const binary = process.env.RANKING_RUST_TEST_BINARY
 
@@ -226,6 +227,124 @@ test('native fetch preserves malformed compressed body failures without retries 
   }
 })
 
+test('failure headers are classified without waiting for Oracle or LoL bodies', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'rust-fetch-failure-headers-parity-'))
+  let failureStatus = 404
+  let provider = 'oracle'
+  let requestStatuses: number[] = []
+  const oracleCsv = 'gameid,date,league,side\nheader-retry,2026-01-02,LCK,Blue\nheader-retry,2026-01-02,LCK,Red\n'
+  const server = createServer((_request, response) => {
+    if (requestStatuses.length === 0) {
+      requestStatuses.push(failureStatus)
+      response.writeHead(failureStatus, { 'content-length': '100' })
+      response.flushHeaders() // Leave the promised failure body pending.
+      return
+    }
+    requestStatuses.push(200)
+    response.writeHead(200, { 'content-type': provider === 'oracle' ? 'text/csv' : 'application/json' })
+    response.end(provider === 'oracle' ? oracleCsv : JSON.stringify({
+      data: { schedule: { updated: '2026-01-03T00:00:00Z', pages: { older: null, newer: null }, events: [] } },
+    }))
+  })
+  try {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    assert.ok(address && typeof address === 'object')
+    const base = `http://127.0.0.1:${address.port}`
+    for (const currentProvider of ['oracle', 'lolesports'] as const) {
+      provider = currentProvider
+      for (const status of [404, 429, 503]) {
+        failureStatus = status
+        await context.test(`${provider} HTTP ${status}`, async (scenario) => {
+          requestStatuses = []
+          const telemetry = createProviderFetchTelemetry()
+          const responses: Response[] = []
+          let referenceBody = ''
+          let referenceStatus = ''
+          // The helper establishes header policy directly. Complete-body CLI
+          // replays above cover artifact parity; unread Node bodies can keep a CLI alive.
+          try {
+            const response = await fetchWithRetry(`${base}/${provider === 'oracle' ? 'oracle.csv' : 'getSchedule'}`, {
+              signal: AbortSignal.timeout(8000),
+            }, {
+              telemetry,
+              fetcher: async (input, init) => {
+                const response = await fetch(input, init)
+                responses.push(response)
+                return response
+              },
+            })
+            referenceStatus = response.ok ? 'downloaded' : 'failed'
+            if (response.ok) referenceBody = await response.text()
+            assert.deepEqual(requestStatuses, status === 404 ? [404] : [status, 200])
+            assert.equal(telemetry.requests, status === 404 ? 1 : 2)
+            assert.equal(telemetry.retries.length, status === 404 ? 0 : 1)
+            assert.deepEqual(telemetry.attempts.map(({ status, retryable, reason }) =>
+              ({ status, retryable, reason })), status === 404
+              ? [{ status, retryable: false, reason: undefined }]
+              : [{ status, retryable: true, reason: `http-${status}` }, { status: 200, retryable: false, reason: undefined }])
+          } finally {
+            const cancellations = responses.map((response) => response.body?.cancel().catch(() => {}))
+            server.closeAllConnections()
+            await Promise.all(cancellations)
+          }
+          if (status !== 404) {
+            assert.equal(telemetry.retries[0].reason, `http-${status}`)
+            assert.ok(telemetry.retries[0].delayMs >= 250 && telemetry.retries[0].delayMs <= 750)
+            if (provider === 'oracle') assert.equal(referenceBody, oracleCsv)
+            else {
+              const schedule: { data: { schedule: { events: unknown[] } } } = JSON.parse(referenceBody)
+              assert.deepEqual(schedule.data.schedule.events, [])
+            }
+          }
+          await scenario.test('native CLI matches the header reference', {
+            skip: !binary || process.platform === 'win32',
+          }, async () => {
+            requestStatuses = []
+            const directory = join(root, `${provider}-${status}-rust`)
+            const flags = ['--start', '2026-01-01', '--end', '2026-01-03', '--out-dir', directory,
+              '--oracle', String(provider === 'oracle'), '--oracle-drive', 'false', '--leaguepedia', 'false',
+              '--lolesports', String(provider === 'lolesports'), '--oracle-csv-url', `${base}/oracle.csv`,
+              '--lolesports-base-url', base, '--lolesports-older-pages', '0', '--lolesports-newer-pages', '0',
+              '--lolesports-detail-limit', '0']
+            const result = await invoke('rust', flags, 8000)
+            assert.equal(result.code, 0, result.stderr)
+            assert.deepEqual(requestStatuses, telemetry.attempts.map(({ status }) => status))
+            const manifest: {
+              files: { oracleCsv: string[]; lolEsportsJson: string[] };
+              sources: Record<string, { status: string }>;
+              fetchTelemetry: { requests: number; retryCount: number };
+            } = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'))
+            assert.equal(manifest.sources[provider].status, referenceStatus)
+            assert.deepEqual(manifest.fetchTelemetry, { requests: telemetry.requests, retryCount: telemetry.retries.length })
+            if (status !== 404) {
+              if (provider === 'oracle') assert.equal(await readFile(manifest.files.oracleCsv[0], 'utf8'), referenceBody)
+              else {
+                const schedule: { data: { schedule: { events: unknown[] } } } = JSON.parse(referenceBody)
+                const payload: { events: unknown[]; fetchTelemetry: {
+                  attempts: Array<{ status: number; retryable: boolean; reason?: string }>;
+                  retries: Array<{ reason: string; delayMs: number }>;
+                } } = JSON.parse(await readFile(manifest.files.lolEsportsJson[0], 'utf8'))
+                assert.deepEqual(payload.events, schedule.data.schedule.events)
+                assert.deepEqual(payload.fetchTelemetry.attempts.map(({ status, retryable, reason }) =>
+                  ({ status, retryable, reason })), telemetry.attempts.map(({ status, retryable, reason }) =>
+                  ({ status, retryable, reason })))
+                assert.equal(payload.fetchTelemetry.retries[0].reason, telemetry.retries[0].reason)
+                assert.ok(payload.fetchTelemetry.retries[0].delayMs >= 250 && payload.fetchTelemetry.retries[0].delayMs <= 750)
+              }
+            }
+            server.closeAllConnections()
+          })
+        })
+      }
+    }
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize)
   if (!value || typeof value !== 'object') return value
@@ -233,14 +352,33 @@ function normalize(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['generatedAt', 'fetchedAt', 'startedAtMs', 'finishedAtMs', 'elapsedMs'].includes(key)).map(([key, item]) => [key, normalize(item)]))
 }
 
-async function invoke(worker: 'node' | 'rust', flags: string[]) {
+async function invoke(worker: 'node' | 'rust', flags: string[], timeoutMs?: number) {
+  const processGroup = timeoutMs !== undefined && process.platform !== 'win32'
   const child = spawn(worker === 'rust' ? binary! : process.execPath,
-    worker === 'rust' ? ['fetch', ...flags] : ['scripts/download-local-data.mjs', ...flags], { stdio: ['ignore', 'ignore', 'pipe'] })
+    worker === 'rust' ? ['fetch', ...flags] : ['scripts/download-local-data.mjs', ...flags], {
+      stdio: ['ignore', 'ignore', 'pipe'], detached: processGroup,
+    })
   const errors: Buffer[] = []
   child.stderr.on('data', (value: Buffer) => errors.push(value))
-  const code = await new Promise<number | null>((resolve, reject) => {
-    child.once('error', reject)
-    child.once('exit', resolve)
-  })
-  return { code, stderr: Buffer.concat(errors).toString('utf8') }
+  let timedOut = false
+  const deadline = timeoutMs === undefined ? undefined : setTimeout(() => {
+    timedOut = true
+    try {
+      if (processGroup && child.pid) process.kill(-child.pid, 'SIGKILL')
+      else child.kill('SIGKILL')
+    } catch {
+      child.kill('SIGKILL')
+    }
+  }, timeoutMs)
+  try {
+    const code = await new Promise<number | null>((resolve, reject) => {
+      child.once('error', reject)
+      child.once('close', resolve)
+    })
+    const stderr = Buffer.concat(errors).toString('utf8')
+    assert.equal(timedOut, false, `${worker} provider command exceeded ${timeoutMs}ms: ${stderr}`)
+    return { code, stderr }
+  } finally {
+    clearTimeout(deadline)
+  }
 }

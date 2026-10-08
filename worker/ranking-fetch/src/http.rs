@@ -107,19 +107,26 @@ impl Http {
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("")
                         .to_owned();
-                    // Body consumption follows a received response. It must not become
-                    // a retried network failure or trigger terminal-fetch persistence.
-                    let body = response.bytes();
+                    let status_reason = if status == 429 || (500..=599).contains(&status) {
+                        Some(format!("http-{status}"))
+                    } else {
+                        None
+                    };
+                    // Leaguepedia inspects bodies for rate limits. Other providers
+                    // classify failures from headers even when a body never arrives.
+                    let body = if policy.leaguepedia || (200..=299).contains(&status) {
+                        response.bytes().map(|body| body.to_vec())
+                    } else {
+                        Ok(Vec::new())
+                    };
                     let reason = if policy.leaguepedia
                         && body
                             .as_ref()
                             .is_ok_and(|body| rate_limited.is_match(&String::from_utf8_lossy(body)))
                     {
                         Some("leaguepedia-body-ratelimited".to_owned())
-                    } else if status == 429 || (500..=599).contains(&status) {
-                        Some(format!("http-{status}"))
                     } else {
-                        None
+                        status_reason
                     };
                     let mut entry = json!({"attempt":attempt,"startedAtMs":attempt_start,"finishedAtMs":now_ms(),"status":status,"retryable":reason.is_some()});
                     if let Some(reason) = &reason {
@@ -131,7 +138,7 @@ impl Http {
                             self.terminal_failure = true;
                             return Err(format!("HTTP {status} from {url}").into());
                         }
-                        let body = body.map_err(|_| "terminated")?.to_vec();
+                        let body = body.map_err(|_| "terminated")?;
                         return Ok(Response { body, content_type });
                     };
                     last_error = format!("Provider request exhausted retries: {reason}");
