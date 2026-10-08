@@ -102,9 +102,16 @@ seven and checks rate-limit bodies. Retry-After and jittered backoff must fit th
 120-second request budget. Optional provider failures stay in the manifest;
 required failures return a failed exit after writing the manifest.
 
+Optional failure diagnostics keep the Node child-command text in
+`ranking-fetch/src/lib.rs` so stored source receipts retain the same identity
+while Node is the active reference and rollback worker. Remove this formatter
+with the Node-only provider code after shadow, cutover and the 30-day rollback
+period are complete. Existing stored receipts do not need a rewrite.
+
 CI runs the existing downloader failure cases with the native selector and a
 recorded-response comparison against Node. The comparison covers multiple
 Leaguepedia and schedule pages, duplicate events, details, files, manifests and
-request order. Only process wall-clock fields vary between replay runs. Live
+request order. The comparison excludes process wall-clock fields and retry
+delays whose jitter bounds are checked separately. Live
 provider validation and completed compiled checks must be recorded before this
 seam is ready. It is not enabled in production by this PR.

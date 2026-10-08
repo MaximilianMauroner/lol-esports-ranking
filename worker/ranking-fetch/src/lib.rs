@@ -79,6 +79,17 @@ impl Options {
             .map(|v| v.floor() as u64)
             .unwrap_or(fallback)
     }
+    fn forwarded_text(&self, keys: &[&str], fallback: &str) -> String {
+        keys.iter().find_map(|key| self.0.get(*key)).map_or_else(
+            || fallback.to_owned(),
+            |value| {
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| value.to_string())
+            },
+        )
+    }
 }
 
 fn absolute(path: impl AsRef<Path>) -> Result<PathBuf> {
@@ -169,8 +180,16 @@ pub fn run(args: &[String]) -> Result<()> {
                 files: vec![league_path],
                 failures: vec![],
             },
-            Err(error) => {
-                let message = error.to_string();
+            Err(_) => {
+                let extra =
+                    optional_base_argument(&options, &["leaguepediaBaseUrl", "leaguepediaBase"]);
+                let message = child_failure_message(
+                    "scripts/fetch-leaguepedia.mjs",
+                    &league_path,
+                    start,
+                    end,
+                    extra,
+                );
                 warnings.push(format!(
                     "Leaguepedia backup download was not completed: {message}"
                 ));
@@ -202,8 +221,26 @@ pub fn run(args: &[String]) -> Result<()> {
                 files: vec![lol_path],
                 failures: vec![],
             },
-            Err(error) => {
-                let message = error.to_string();
+            Err(_) => {
+                let mut extra = vec![
+                    "--older-pages".to_owned(),
+                    options.forwarded_text(&["lolesportsOlderPages", "lolesportsOlder"], "4"),
+                    "--newer-pages".to_owned(),
+                    options.forwarded_text(&["lolesportsNewerPages", "lolesportsNewer"], "1"),
+                    "--detail-limit".to_owned(),
+                    options.forwarded_text(&["lolesportsDetailLimit"], "250"),
+                ];
+                extra.extend(optional_base_argument(
+                    &options,
+                    &["lolesportsBaseUrl", "lolesportsBase"],
+                ));
+                let message = child_failure_message(
+                    "scripts/fetch-lolesports-schedule.mjs",
+                    &lol_path,
+                    start,
+                    end,
+                    extra,
+                );
                 warnings.push(format!(
                     "LoL Esports schedule reference was not downloaded: {message}"
                 ));
@@ -243,7 +280,16 @@ pub fn run(args: &[String]) -> Result<()> {
         &league.files,
         &league.failures,
     );
-    let manifest = json!({"schemaVersion":1,"generatedAt":timestamp(),"start":start,"end":end,"files":{"leaguepediaJson":league.files,"oracleCsv":oracle.files,"lolEsportsJson":lol.files},"sources":{"lolesports":lol_source,"oracle":oracle_source,"leaguepedia":league_source},"warnings":warnings,"fetchTelemetry":{"requests":oracle_http.requests+league_http.requests+lol_http.requests,"retryCount":oracle_http.retries.len()+league_http.retries.len()+lol_http.retries.len()}});
+    let mut requests = oracle_http.requests;
+    let mut retry_count = oracle_http.retries.len();
+    // Node can report child telemetry only when the child persisted an artifact.
+    for (http, files) in [(&league_http, &league.files), (&lol_http, &lol.files)] {
+        if !files.is_empty() || http.terminal_failure {
+            requests += http.requests;
+            retry_count += http.retries.len();
+        }
+    }
+    let manifest = json!({"schemaVersion":1,"generatedAt":timestamp(),"start":start,"end":end,"files":{"leaguepediaJson":league.files,"oracleCsv":oracle.files,"lolEsportsJson":lol.files},"sources":{"lolesports":lol_source,"oracle":oracle_source,"leaguepedia":league_source},"warnings":warnings,"fetchTelemetry":{"requests":requests,"retryCount":retry_count}});
     write_json(&manifest_path, &manifest)?;
     if oracle_required && !oracle.failures.is_empty() {
         return Err(format!(
@@ -268,6 +314,38 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     println!("Wrote local data manifest to {}", manifest_path.display());
     Ok(())
+}
+
+fn optional_base_argument(options: &Options, keys: &[&str]) -> Vec<String> {
+    let base = keys.iter().find_map(|key| options.0.get(*key));
+    match base
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => vec!["--base-url".to_owned(), value.to_owned()],
+        None => Vec::new(),
+    }
+}
+
+// Preserve receipt diagnostic identity while the Node provider worker is active.
+fn child_failure_message(
+    script: &str,
+    output: &Path,
+    start: &str,
+    end: &str,
+    extra: Vec<String>,
+) -> String {
+    let mut args = vec![
+        script.to_owned(),
+        "--start".to_owned(),
+        start.to_owned(),
+        "--end".to_owned(),
+        end.to_owned(),
+        "--output".to_owned(),
+        output.to_string_lossy().into_owned(),
+    ];
+    args.extend(extra);
+    format!("node {} exited with 1", args.join(" "))
 }
 
 #[derive(Default)]
