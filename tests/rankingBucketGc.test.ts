@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
-import { gzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { buildRankingBucketInventory, parseGcArgs } from '../scripts/ranking-bucket-gc.mjs'
 import { canonicalJsonFor, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { createGenerationPublicationReceipt, publicationReceiptBytes } from '../scripts/generation-publication.mjs'
@@ -149,6 +149,87 @@ test('retained public, recursive state, current raw, and recent audit roots prot
   assert.ok(inventory.protected.find((entry) => entry.key === graph.ledgerKey)?.reasons.includes('retained-audit-ledger'))
   assert.ok(inventory.protected.find((entry) => entry.key === graph.rawNarrowKey)?.reasons.includes('retained-raw-reference'))
   assert.equal(inventory.protected.filter((entry) => entry.reasons.includes('retained-daily-audit')).length, 2)
+})
+
+test('GC accepts alternate gzip sizes for semantic raw and state references but rejects changed payloads', async () => {
+  const client = gcMemoryS3()
+  seedValidBucket(client)
+  const graph = seedRetainedGraph(client)
+  for (const key of [graph.ledgerKey, graph.rawNarrowKey]) {
+    const object = client.objects.get(key)!
+    const semantic = gunzipSync(object.bytes)
+    const alternate = gzipSync(semantic, { level: 0 })
+    assert.notEqual(alternate.byteLength, object.bytes.byteLength)
+    object.bytes = alternate
+    const valid = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(valid.valid, true, JSON.stringify(valid.errors))
+    assert.ok(valid.protected.some((entry) => entry.key === key))
+
+    const changed = Buffer.from(semantic)
+    changed[10] ^= 1
+    object.bytes = gzipSync(changed, { level: 0 })
+    const corrupt = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(corrupt.valid, false)
+    assert.equal(corrupt.deletionCandidates.length, 0)
+    assert.ok(corrupt.errors.some((error) => error.message?.includes('Referenced object content does not match authority')))
+    object.bytes = alternate
+  }
+})
+
+test('GC enforces legacy reference sizes and measured audit snapshot sizes', async () => {
+  const client = gcMemoryS3()
+  seedValidBucket(client)
+  const graph = seedRetainedGraph(client)
+  const auditKey = 'rankings/audits/days/2026-07-23.json'
+  const audit = client.objects.get(auditKey)!
+  const receipt = JSON.parse(audit.bytes.toString('utf8'))
+  receipt.rawLedger.compressedBytes = client.objects.get(graph.ledgerKey)!.bytes.byteLength
+  audit.bytes = Buffer.from(canonicalJsonFor(receipt))
+  const valid = await buildRankingBucketInventory({ config, client, now })
+  assert.equal(valid.valid, true, JSON.stringify(valid.errors))
+
+  for (const field of ['rawLedger', 'fullSnapshot']) {
+    receipt[field].compressedBytes += 1
+    audit.bytes = Buffer.from(canonicalJsonFor(receipt))
+    const invalid = await buildRankingBucketInventory({ config, client, now })
+    assert.equal(invalid.valid, false)
+    assert.equal(invalid.deletionCandidates.length, 0)
+    assert.ok(invalid.errors.some((error) => error.key === auditKey
+      && error.reason === (field === 'rawLedger' ? 'retained-audit-ledger-corrupt' : 'retained-audit-snapshot-corrupt')))
+    receipt[field].compressedBytes -= 1
+  }
+})
+
+test('GC rejects missing or invalid ContentLength and inconsistent inventory sizes for semantic references', async () => {
+  const client = gcMemoryS3()
+  seedValidBucket(client)
+  const graph = seedRetainedGraph(client)
+  const measuredBytes = client.objects.get(graph.ledgerKey)!.bytes.byteLength
+  for (const contentLength of [undefined, 0, 1.5, Number.MAX_SAFE_INTEGER + 1, measuredBytes + 1]) {
+    const invalid = await buildRankingBucketInventory({ config, now, client: {
+      ...client,
+      async send(command: unknown) {
+        const response = await client.send(command)
+        const { input } = command as { input: { Key?: string } }
+        return input.Key === graph.ledgerKey ? { ...response, ContentLength: contentLength } : response
+      },
+    } })
+    assert.equal(invalid.valid, false)
+    assert.equal(invalid.deletionCandidates.length, 0)
+    assert.ok(invalid.errors.some((error) => error.reason === 'retained-state-ledger-corrupt'))
+  }
+
+  const invalidInventory = await buildRankingBucketInventory({ config, now, client: {
+    ...client,
+    async send(command: unknown) {
+      const response = await client.send(command)
+      return response.Contents ? { ...response, Contents: response.Contents.map((entry) =>
+        entry.Key === graph.ledgerKey ? { ...entry, Size: measuredBytes + 1 } : entry) } : response
+    },
+  } })
+  assert.equal(invalidInventory.valid, false)
+  assert.equal(invalidInventory.deletionCandidates.length, 0)
+  assert.ok(invalidInventory.errors.some((error) => error.reason === 'retained-state-ledger-corrupt'))
 })
 
 test('corrupt retained content and pointer ETag/reference mutations change or invalidate approval', async () => {
