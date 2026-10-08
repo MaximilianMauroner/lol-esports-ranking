@@ -31,6 +31,7 @@ pub fn download(
         .map(str::to_owned)
         .unwrap_or(format!("https://drive.google.com/drive/folders/{DRIVE_ID}"));
     let id_regex = regex::Regex::new(r"/folders/([^/?#]+)")?;
+    let html_title = regex::Regex::new(r"(?i)<title>([^<]+)</title>")?;
     let id = options
         .text("oracleDriveFolderId")
         .map(str::to_owned)
@@ -65,7 +66,7 @@ pub fn download(
             &Policy::default(),
         );
         let html = match discovery {
-            Ok(response) => String::from_utf8_lossy(&response.body).into_owned(),
+            Ok(response) => response.text().into_owned(),
             Err(error) => {
                 let message = error.to_string();
                 failures.push(
@@ -128,9 +129,7 @@ pub fn download(
                 || prefix.starts_with("<!DOCTYPE html")
                 || prefix.starts_with("<html")
             {
-                let title = regex::Regex::new(r"(?i)<title>([^<]+)</title>")?
-                    .captures(prefix)
-                    .map(|v| v[1].to_owned());
+                let title = html_title.captures(prefix).map(|v| v[1].to_owned());
                 return Err(title
                     .map_or_else(
                         || "download returned HTML instead of CSV".to_owned(),
