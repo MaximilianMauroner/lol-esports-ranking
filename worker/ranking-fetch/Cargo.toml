@@ -1,0 +1,14 @@
+[package]
+name = "ranking-fetch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ranking-contracts = { path = "../ranking-contracts" }
+serde_json.workspace = true
+chrono.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+regex = "1.11"
+rand = "0.9"
