@@ -9,7 +9,8 @@ export type RawObjectReference = {
   key: string
   sha256: string
   bytes: number
-  compressedBytes: number
+  /** Legacy transport size. New semantic references omit it. */
+  compressedBytes?: number
   storageEncoding: 'gzip'
 }
 

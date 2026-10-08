@@ -261,7 +261,7 @@ test('audit inspection is paginated, selects newest canonical day, and is read-o
       deltas: [],
     }],
   })
-  const rawReference = rawObjectReferenceFor(raw.prepared)
+  const rawReference = { ...rawObjectReferenceFor(raw.prepared), compressedBytes: raw.prepared.compressedBytes }
   const ledger = prepareStateObject({ kind: 'test-ledger' })
   const ledgerReference = stateObjectReferenceFor(ledger)
   const snapshot = prepareStateObject({ kind: 'test-snapshot' })
@@ -522,7 +522,7 @@ function productionCaptureFixture({ audit = 'absent' }: { audit?: 'absent' | 'pr
         deltas: [],
       }],
     })
-    const rawReference = rawObjectReferenceFor(raw.prepared)
+    const rawReference = { ...rawObjectReferenceFor(raw.prepared), compressedBytes: raw.prepared.compressedBytes }
     putCompressed(objects, `rankings/${rawReference.key}`, raw.prepared)
 
     const ledger = prepareStateObject({ artifactKind: 'canonical-ledger-test', generationId, rows: [] })

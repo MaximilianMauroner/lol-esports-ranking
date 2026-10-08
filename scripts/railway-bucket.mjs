@@ -291,11 +291,8 @@ export async function uploadRankingArtifacts({
     const stateClosure = verifiedState
       ? statePublicationClosure(config, verifiedState, stateManifestAuthority?.publicationObjects)
       : []
-    const rawClosure = verifiedRaw ? rawReferences(verifiedRaw.receipt).map((reference) => ({
-      key: bucketKey(config, reference.key),
-      digest: reference.sha256,
-      bytes: reference.compressedBytes,
-      outcome: 'reused',
+    const rawClosure = verifiedRaw ? verifiedRaw.verifiedObjects.map((object) => ({
+      ...object, outcome: 'reused',
     })) : []
     publicationReceipt = createGenerationPublicationReceipt({
       generationId,
@@ -1245,7 +1242,9 @@ export async function uploadContentAddressedRawSourceGeneration(client, config, 
     reused: [],
     authority: {
       key: bucketKey(config, generation.receiptReference.key),
-      reference: generation.receiptReference,
+      reference: { ...generation.receiptReference,
+        compressedBytes: [...uploaded, ...unchanged].find((entry) => entry.digest === generation.receiptReference.sha256).bytes,
+      },
       receipt: generation.receipt,
     },
   }
@@ -1272,8 +1271,8 @@ async function syncContentAddressedRawObject(client, config, prepared) {
     return { status: 'uploaded', key, bytes: prepared.compressedBytes, contentType: 'application/json; charset=utf-8', digest: prepared.digest }
   } catch (error) {
     if (!isPreconditionError(error)) throw error
-    await readRawObjectBytes(client, config, reference)
-    return { status: 'unchanged', key, bytes: prepared.compressedBytes, contentType: 'application/json; charset=utf-8', digest: prepared.digest }
+    const compressed = await readRawObjectBytes(client, config, reference)
+    return { status: 'unchanged', key, bytes: compressed.byteLength, contentType: 'application/json; charset=utf-8', digest: prepared.digest }
   }
 }
 
@@ -1305,8 +1304,12 @@ async function assertRawSourceGenerationAuthority(client, config, authority) {
     ...receipt.leaguepedia.map((source) => source.object),
     ...receipt.lolesports.map((source) => source.object),
   ]
-  for (const reference of references) await readRawObjectBytes(client, config, reference)
-  return { ...authority, receipt }
+  const verifiedObjects = []
+  for (const reference of references) {
+    const objectBytes = await readRawObjectBytes(client, config, reference)
+    verifiedObjects.push({ key: bucketKey(config, reference.key), digest: reference.sha256, bytes: objectBytes.byteLength })
+  }
+  return { ...authority, reference: { ...authority.reference, compressedBytes: compressed.byteLength }, receipt, verifiedObjects }
 }
 
 async function readRawObjectBytes(client, config, reference) {
@@ -1321,7 +1324,9 @@ async function readRawObjectBytes(client, config, reference) {
   const compressed = await bodyBytes(object.Body)
   if (object.ContentEncoding !== 'gzip' || object.Metadata?.sha256 !== reference.sha256
     || object.Metadata?.['semantic-bytes'] !== String(reference.bytes) || object.Metadata?.encoding !== 'gzip'
-    || Number(object.ContentLength) !== reference.compressedBytes || compressed.byteLength !== reference.compressedBytes) {
+    || !Number.isSafeInteger(Number(object.ContentLength)) || Number(object.ContentLength) <= 0
+    || compressed.byteLength !== Number(object.ContentLength)
+    || (reference.compressedBytes !== undefined && compressed.byteLength !== reference.compressedBytes)) {
     throw new Error(`Referenced raw source object metadata mismatch: ${reference.key}`)
   }
   decodeRawObject(reference, compressed)
@@ -1339,7 +1344,8 @@ async function streamRawObjectToFile(client, config, reference, destinationPath)
   }
   if (object.ContentEncoding !== 'gzip' || object.Metadata?.sha256 !== reference.sha256
     || object.Metadata?.['semantic-bytes'] !== String(reference.bytes) || object.Metadata?.encoding !== 'gzip'
-    || Number(object.ContentLength) !== reference.compressedBytes) {
+    || !Number.isSafeInteger(Number(object.ContentLength)) || Number(object.ContentLength) <= 0
+    || (reference.compressedBytes !== undefined && Number(object.ContentLength) !== reference.compressedBytes)) {
     throw new Error(`Referenced raw source object metadata mismatch: ${reference.key}`)
   }
   const destination = resolve(destinationPath)
@@ -1357,7 +1363,7 @@ async function streamRawObjectToFile(client, config, reference, destinationPath)
   await mkdir(dirname(destination), { recursive: true })
   try {
     await pipeline(body, count, createWriteStream(temporary, { flags: 'wx' }))
-    if (compressedBytes !== reference.compressedBytes) throw new Error(`Referenced raw source object length mismatch: ${reference.key}`)
+    if (compressedBytes !== Number(object.ContentLength)) throw new Error(`Referenced raw source object length mismatch: ${reference.key}`)
     await rename(temporary, destination)
   } catch (error) {
     await rm(temporary, { force: true })
@@ -1676,7 +1682,7 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
       const result = await syncContentAddressedObject(client, config, member)
       if (result.status === 'unchanged') unchanged.push(result)
       else uploaded.push(result)
-      semanticLogicalBytes += member.bytes; compressedLogicalBytes += member.compressedBytes
+      semanticLogicalBytes += member.bytes; compressedLogicalBytes += result.bytes
     }
   }
   if (!rootManifest) throw new Error('Content-addressed publication requires ranking-summary.json')
@@ -1949,14 +1955,13 @@ async function syncContentAddressedObject(client, config, artifact) {
   const existing = await assertReferencedContentAddressedIntegrity(client, config, {
     sha256: artifact.digest,
     bytes: artifact.bytes,
-    compressedBytes: artifact.compressedBytes,
   }, key, { missingIsAbsent: true })
   if (existing && hasImmutablePublicMetadata(existing)) {
     return {
       status: 'unchanged',
       reason: 'content-addressed-object-reused',
       key,
-      bytes: artifact.compressedBytes,
+      bytes: existing.compressed.byteLength,
       semanticBytes: artifact.bytes,
       contentType: 'application/json; charset=utf-8',
       contentEncoding: 'gzip',
@@ -1976,7 +1981,6 @@ async function syncContentAddressedObject(client, config, artifact) {
     const raced = await assertReferencedContentAddressedIntegrity(client, config, {
       sha256: artifact.digest,
       bytes: artifact.bytes,
-      compressedBytes: artifact.compressedBytes,
     }, key)
     if (!hasImmutablePublicMetadata(raced)) {
       return putContentAddressedObject(client, config, key, artifact, expectedMetadata, {
@@ -1987,7 +1991,7 @@ async function syncContentAddressedObject(client, config, artifact) {
       status: 'unchanged',
       reason: 'content-addressed-object-race-reused',
       key,
-      bytes: artifact.compressedBytes,
+      bytes: raced.compressed.byteLength,
       semanticBytes: artifact.bytes,
       contentType: 'application/json; charset=utf-8',
       contentEncoding: 'gzip',
@@ -2048,7 +2052,6 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
     throw error
   }
   if (!Number.isSafeInteger(Number(remote.ContentLength)) || Number(remote.ContentLength) <= 0
-    || (Number.isSafeInteger(identity.compressedBytes) && Number(remote.ContentLength) !== identity.compressedBytes)
     || remote.Metadata?.sha256 !== identity.sha256
     || remote.Metadata?.['semantic-bytes'] !== String(identity.bytes) || remote.Metadata?.encoding !== 'gzip') {
     throw new Error(`Referenced content-addressed object metadata mismatch: ${logicalPath}`)
@@ -2431,11 +2434,12 @@ function stateReferences(manifest) {
 function statePublicationClosure(config, authority, publicationObjects) {
   const expected = [
     { key: authority.key, digest: authority.digest, bytes: authority.bytes },
-    ...stateReferences(authority.manifest).map((reference) => ({
-      key: bucketKey(config, reference.key),
-      digest: reference.sha256,
-      bytes: reference.compressedBytes,
-    })),
+    ...stateReferences(authority.manifest).map((reference) => {
+      const key = bucketKey(config, reference.key)
+      const verified = authority.verifiedObjects?.find((object) => object.key === key && object.digest === reference.sha256)
+      if (!verified) throw new Error(`Incremental state publication object is not verified: ${key}`)
+      return { key, digest: reference.sha256, bytes: verified.compressedBytes }
+    }),
   ]
   if (!Array.isArray(publicationObjects)) {
     throw new Error('Incremental state publication outcomes are required')
@@ -2458,14 +2462,6 @@ function statePublicationClosure(config, authority, publicationObjects) {
     }
     return { ...entry, outcome: reported.outcome }
   })
-}
-
-function rawReferences(receipt) {
-  return [
-    ...receipt.oracle.flatMap((source) => [source.baseline, ...source.deltas]),
-    ...receipt.leaguepedia.map((source) => source.object),
-    ...receipt.lolesports.map((source) => source.object),
-  ]
 }
 
 async function publishGenerationReadinessReceipt(client, config, receipt, leaseAuthority, now) {

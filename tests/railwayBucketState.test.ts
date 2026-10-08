@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
-import { gunzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import {
   acquireBucketLease,
   assertBucketLease,
@@ -24,7 +24,7 @@ import {
   type BucketStorageConfig,
 } from '../scripts/railway-bucket.mjs'
 import { canonicalJsonFor, canonicalPublicLogicalPath, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { createGenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
+import { createGenerationPublicationReceipt, parseGenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 import {
   prepareContentAddressedState,
@@ -555,6 +555,50 @@ test('pre-promotion state model and publication outcomes are exact and exhaustiv
       client,
     }), /state model authority does not match public generation/)
     assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).generationId, undefined)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('public and raw reuse measure alternate gzip sizes in the publication closure', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'alternate-gzip-publication-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, 'gzip-first')
+    const originalRaw = testRawGeneration('gzip-first')
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'gzip-first', fencingToken: 1, rawSourceGeneration: originalRaw, config, client })
+    const altered = new Map<string, Buffer>()
+    for (const [key, object] of client.objects) {
+      if (!key.startsWith('rankings/objects/sha256/') && !key.startsWith('rankings/raw/objects/sha256/')) continue
+      const alternate = gzipSync(gunzipSync(object.bytes!), { level: 0 })
+      assert.notEqual(alternate.byteLength, object.bytes!.byteLength)
+      object.bytes = alternate
+      altered.set(key, alternate)
+    }
+    await writeContentAddressedFixture(publicDir, 'gzip-next')
+    const nextReceipt = prepareRawSourceReceipt({ ...originalRaw.receipt, generationId: 'gzip-next' })
+    const nextRaw = { ...originalRaw, generationId: 'gzip-next', receipt: nextReceipt.receipt,
+      receiptPrepared: nextReceipt.prepared, receiptReference: rawObjectReferenceFor(nextReceipt.prepared),
+    }
+    const published = await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'gzip-next', fencingToken: 2, rawSourceGeneration: nextRaw, config, client })
+    const receipt = parseGenerationPublicationReceipt(published.publicationReceipt)
+    const outcomes = published.unchanged as Array<{ key: string; bytes: number }>
+    for (const outcome of outcomes) {
+      const alternate = altered.get(outcome.key)
+      if (!alternate) continue
+      assert.equal(outcome.bytes, alternate.byteLength)
+      assert.equal(receipt.objects.find((member) => member.key === outcome.key)?.bytes, alternate.byteLength)
+      assert.deepEqual(client.objects.get(outcome.key)!.bytes, alternate)
+    }
+    assert.ok(outcomes.some((entry) => altered.has(entry.key) && entry.key.startsWith('rankings/objects/')))
+    assert.ok(outcomes.some((entry) => altered.has(entry.key) && entry.key.startsWith('rankings/raw/')))
+    const storage = published.storage as { compressedLogicalBytes: number }
+    const publicSizes = receipt.objects.filter((member) => member.key.startsWith('rankings/objects/'))
+      .reduce((sum, member) => sum + member.bytes, 0)
+    assert.equal(storage.compressedLogicalBytes, publicSizes)
+    assert.equal((await readActiveRawSourceAuthority({ config, client })).found, true)
+    assert.equal((await readActiveContentAddressedGeneration({ config, client })).found, true)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

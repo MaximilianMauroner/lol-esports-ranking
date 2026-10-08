@@ -26,7 +26,8 @@ export type StateObjectReference = {
   key: string
   sha256: string
   bytes: number
-  compressedBytes: number
+  /** Legacy transport size. New semantic references omit it. */
+  compressedBytes?: number
   storageEncoding: 'gzip'
 }
 export type PreparedStateObject = {
@@ -65,6 +66,9 @@ export type StateManifestAuthority = {
   }>
 }
 
+export function assertStoredStateObjectIntegrity(client: BucketClient, config: BucketStorageConfig, reference: StateObjectReference): Promise<{
+  key: string; digest: string; compressedBytes: number; compressedSha256: string
+}>
 export function prepareStateObject(value: object): PreparedStateObject
 export function stateObjectReferenceFor(prepared: PreparedStateObject): StateObjectReference
 export function readStoredJsonStateObject(client: BucketClient, config: BucketStorageConfig, reference: StateObjectReference): Promise<Record<string, unknown>>
