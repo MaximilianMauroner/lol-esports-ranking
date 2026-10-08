@@ -161,7 +161,6 @@ export function validateRawSourceAuthorityMetadata(authority, {
   const preparedReceipt = prepareRawObject(receipt)
   if (preparedReceipt.digest !== receiptReference.sha256
     || preparedReceipt.bytes !== receiptReference.bytes
-    || preparedReceipt.compressedBytes !== receiptReference.compressedBytes
     || rawObjectReferenceFor(preparedReceipt).key !== receiptReference.key) {
     throw new Error('Raw source authority receipt reference mismatch')
   }
@@ -225,11 +224,11 @@ function parseAuthorityIdentity(value) {
 }
 
 function parseReceiptReference(value) {
-  assertExactKeys(value, ['key', 'sha256', 'bytes', 'compressedBytes', 'storageEncoding'], 'raw receipt reference')
+  assertExactKeys(value, ['key', 'sha256', 'bytes', 'storageEncoding', ...(Object.hasOwn(value ?? {}, 'compressedBytes') ? ['compressedBytes'] : [])], 'raw receipt reference')
   if (typeof value.key !== 'string' || value.key !== `raw/objects/sha256/${value.sha256}`) throw new Error('Raw receipt reference key is invalid')
   assertDigest(value.sha256, 'raw receipt reference sha256')
   if (!Number.isSafeInteger(value.bytes) || value.bytes <= 0) throw new Error('Raw receipt reference bytes are invalid')
-  if (!Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0) throw new Error('Raw receipt reference compressedBytes are invalid')
+  if (Object.hasOwn(value, 'compressedBytes') && (!Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0)) throw new Error('Raw receipt reference compressedBytes are invalid')
   if (value.storageEncoding !== 'gzip') throw new Error('Raw receipt reference encoding is invalid')
   return { ...value }
 }

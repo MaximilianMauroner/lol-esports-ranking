@@ -35,7 +35,7 @@ export function prepareContentAddressedState({
   assertOptionalSafeId(baseGenerationId, 'baseGenerationId')
   assertOptionalSafeId(baseRunId, 'baseRunId')
   assertDigest(sourceReceiptDigest, 'sourceReceiptDigest')
-  const ledger = parseObjectReference(canonicalLedgerReference, 'canonicalLedgerReference')
+  const ledger = semanticStateReference(parseObjectReference(canonicalLedgerReference, 'canonicalLedgerReference'))
   const parsedCompatibility = parseCompatibility(compatibility, 'compatibility')
   if (!Array.isArray(checkpoints) || checkpoints.length === 0) {
     throw new Error('Invalid incremental state: checkpoints must be a non-empty array')
@@ -47,7 +47,7 @@ export function prepareContentAddressedState({
     const boundary = parseBoundary(checkpoint.boundary, `checkpoints[${index}].boundary`)
     const rawPrefix = parseRawPrefix(checkpoint.rawPrefix, `checkpoints[${index}].rawPrefix`)
     const storedObject = checkpoint.storedObjectReference
-      ? parseObjectReference(checkpoint.storedObjectReference, `checkpoints[${index}].storedObjectReference`)
+      ? semanticStateReference(parseObjectReference(checkpoint.storedObjectReference, `checkpoints[${index}].storedObjectReference`))
       : undefined
     if (!storedObject) {
       assertRecord(checkpoint.ratingCheckpoint, `checkpoints[${index}].ratingCheckpoint`)
@@ -126,8 +126,8 @@ export async function syncContentAddressedStateObject(client, config, prepared) 
   try {
     const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
     assertStateObjectMetadata(remote, prepared, key)
-    await assertRemoteStateObjectBytes(client, config, key, prepared)
-    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-reused')
+    const verified = await assertStoredStateObjectIntegrity(client, config, stateObjectReference(prepared))
+    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-reused', verified.compressedBytes)
   } catch (error) {
     if (!isMissingObjectError(error)) throw error
   }
@@ -148,8 +148,8 @@ export async function syncContentAddressedStateObject(client, config, prepared) 
     if (!isPreconditionError(error)) throw error
     const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
     assertStateObjectMetadata(remote, prepared, key)
-    await assertRemoteStateObjectBytes(client, config, key, prepared)
-    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-race-reused')
+    const verified = await assertStoredStateObjectIntegrity(client, config, stateObjectReference(prepared))
+    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-race-reused', verified.compressedBytes)
   }
 }
 
@@ -398,8 +398,9 @@ export async function readStoredJsonStateObject(client, config, reference) {
   const expectedKey = stateBucketKey(config, expectedReferenceKey)
   const remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: expectedKey }))
   const compressed = await bodyBytes(remote.Body)
-  if (Number(remote.ContentLength) !== parsedReference.compressedBytes
-    || compressed.byteLength !== parsedReference.compressedBytes
+  if (!Number.isSafeInteger(Number(remote.ContentLength)) || Number(remote.ContentLength) <= 0
+    || compressed.byteLength !== Number(remote.ContentLength)
+    || (parsedReference.compressedBytes !== undefined && compressed.byteLength !== parsedReference.compressedBytes)
     || remote.ContentType !== 'application/json; charset=utf-8'
     || remote.ContentEncoding !== 'gzip'
     || remote.Metadata?.sha256 !== parsedReference.sha256
@@ -427,7 +428,7 @@ export async function readStoredJsonStateObject(client, config, reference) {
   }
 }
 
-async function assertStoredStateObjectIntegrity(client, config, reference) {
+export async function assertStoredStateObjectIntegrity(client, config, reference) {
   const parsedReference = parseObjectReference(reference, 'state object reference')
   const expectedReferenceKey = `state/objects/sha256/${parsedReference.sha256}`
   if (parsedReference.key !== expectedReferenceKey) throw new Error('Incremental state object key is not canonical')
@@ -439,7 +440,9 @@ async function assertStoredStateObjectIntegrity(client, config, reference) {
     if (isMissingObjectError(error)) throw new Error(`Incremental state object is missing: ${expectedKey}`, { cause: error })
     throw error
   }
-  if (Number(remote.ContentLength) !== parsedReference.compressedBytes
+  if (!Number.isSafeInteger(Number(remote.ContentLength)) || Number(remote.ContentLength) <= 0
+    || (parsedReference.compressedBytes !== undefined && Number(remote.ContentLength) !== parsedReference.compressedBytes)
+    || remote.ContentType !== 'application/json; charset=utf-8'
     || remote.ContentEncoding !== 'gzip' || remote.Metadata?.sha256 !== parsedReference.sha256
     || remote.Metadata?.['semantic-bytes'] !== String(parsedReference.bytes) || remote.Metadata?.encoding !== 'gzip') {
     throw new Error(`Incremental state object metadata mismatch: ${expectedKey}`)
@@ -467,7 +470,7 @@ async function assertStoredStateObjectIntegrity(client, config, reference) {
   } catch (error) {
     throw new Error(`Incremental state object gzip is corrupt: ${expectedKey}`, { cause: error })
   }
-  if (compressedBytes !== parsedReference.compressedBytes
+  if (compressedBytes !== Number(remote.ContentLength)
     || semanticBytes !== parsedReference.bytes || digest.digest('hex') !== parsedReference.sha256) {
     throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
   }
@@ -563,14 +566,6 @@ async function readStoredStateObject(client, config, candidate) {
   return bundle
 }
 
-async function assertRemoteStateObjectBytes(client, config, key, prepared) {
-  const remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
-  const compressed = await bodyBytes(remote.Body)
-  if (!compressed.equals(prepared.compressed)) {
-    throw new Error(`Content-addressed state object collision or byte mismatch: ${key}`)
-  }
-}
-
 function parseCompatibility(value, label) {
   assertExactKeys(value, [
     'modelVersion', 'modelConfigHash', 'importerVersion', 'taxonomyVersion',
@@ -608,14 +603,14 @@ function parseRawPrefix(value, label) {
 }
 
 function parseObjectReference(value, label) {
-  assertExactKeys(value, ['key', 'sha256', 'bytes', 'compressedBytes', 'storageEncoding'], label)
+  assertExactKeys(value, ['key', 'sha256', 'bytes', 'storageEncoding', ...(Object.hasOwn(value ?? {}, 'compressedBytes') ? ['compressedBytes'] : [])], label)
   assertString(value.key, `${label}.key`)
   if (value.key.startsWith('/') || value.key.includes('\\') || value.key.split('/').some((part) => !part || part === '.' || part === '..')) {
     throw new Error(`Invalid incremental state: ${label}.key is unsafe`)
   }
   assertDigest(value.sha256, `${label}.sha256`)
   if (!Number.isSafeInteger(value.bytes) || value.bytes <= 0
-    || !Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0) {
+    || (Object.hasOwn(value, 'compressedBytes') && (!Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0))) {
     throw new Error(`Invalid incremental state: ${label} byte sizes must be positive integers`)
   }
   if (value.storageEncoding !== 'gzip') throw new Error(`Invalid incremental state: ${label}.storageEncoding must be gzip`)
@@ -653,9 +648,12 @@ function stateObjectReference(prepared) {
     key: `state/objects/sha256/${prepared.digest}`,
     sha256: prepared.digest,
     bytes: prepared.bytes,
-    compressedBytes: prepared.compressedBytes,
     storageEncoding: 'gzip',
   }
+}
+
+function semanticStateReference(value) {
+  return { key: value.key, sha256: value.sha256, bytes: value.bytes, storageEncoding: 'gzip' }
 }
 
 function uniquePreparedObjects(objects) {
@@ -688,7 +686,7 @@ function stateObjectMetadata(prepared) {
 }
 
 function assertStateObjectMetadata(remote, prepared, key) {
-  if (Number(remote.ContentLength) !== prepared.compressedBytes
+  if (!Number.isSafeInteger(Number(remote.ContentLength)) || Number(remote.ContentLength) <= 0
     || remote.ContentType !== 'application/json; charset=utf-8'
     || remote.ContentEncoding !== 'gzip'
     || remote.Metadata?.sha256 !== prepared.digest
@@ -698,12 +696,12 @@ function assertStateObjectMetadata(remote, prepared, key) {
   }
 }
 
-function stateSyncResult(status, key, prepared, reason) {
+function stateSyncResult(status, key, prepared, reason, compressedBytes = prepared.compressedBytes) {
   return {
     status,
     ...(reason ? { reason } : {}),
     key,
-    bytes: prepared.compressedBytes,
+    bytes: compressedBytes,
     semanticBytes: prepared.bytes,
     contentType: 'application/json; charset=utf-8',
     contentEncoding: 'gzip',

@@ -29,6 +29,7 @@ import {
   type RawObjectReference,
   type RawReceiptNarrowSource,
 } from '../scripts/raw-source-storage.mjs'
+import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import { importRankingSourceData } from '../scripts/ranking-source-import.ts'
 
 const IMPORTER_VERSION = 'community-source-import-v1'
@@ -160,6 +161,56 @@ test('raw objects are canonical, deterministic gzip objects and fail closed when
     () => decodeRawObject({ ...reference, sha256: '0'.repeat(64), key: `raw/objects/sha256/${'0'.repeat(64)}` }, left.compressed),
     /semantic digest mismatch/,
   )
+})
+
+test('raw receipt identity ignores compressor sizes while legacy receipts retain their authority', async () => {
+  const baseline = prepareOracleBaseline({
+    csv: oracleCsv([{ gameId: 'game-1', date: '2026-01-01' }]),
+    sourceFileName: ORACLE_FILE, importerVersion: IMPORTER_VERSION,
+  })
+  const chain = prepareOracleMutationChain({ previousSource: baseline.source,
+    nextCsv: oracleCsv([{ gameId: 'game-1', date: '2026-01-01' }, { gameId: 'game-2', date: '2026-01-02' }]),
+  })
+  const narrow = prepareNarrowSourceObject({ provider: 'leaguepedia', sourceFileName: 'events.json',
+    content: '{}', importerVersion: IMPORTER_VERSION,
+  })
+  const alternate = (prepared: PreparedRawObject) => ({ ...rawObjectReferenceFor(prepared),
+    compressedBytes: gzipSync(Buffer.from(canonicalJsonFor(prepared.value)), { level: 0 }).byteLength,
+  })
+  const modern = receiptFor({ source: chain.source, baseline: baseline.reference,
+    deltas: chain.deltas.map((delta) => delta.reference), leaguepedia: [narrowReceipt(narrow)],
+  })
+  const fromLegacyRefs = receiptFor({ source: chain.source, baseline: alternate(baseline.prepared),
+    deltas: chain.deltas.map((delta) => alternate(delta.prepared)),
+    leaguepedia: [{ ...narrowReceipt(narrow), object: alternate(narrow.prepared) }],
+  })
+  assert.deepEqual(fromLegacyRefs, modern)
+  const legacy = { ...modern,
+    oracle: [{ ...modern.oracle[0], baseline: alternate(baseline.prepared), deltas: chain.deltas.map((delta) => alternate(delta.prepared)) }],
+    leaguepedia: [{ ...modern.leaguepedia[0], object: alternate(narrow.prepared) }],
+  }
+  const identity = { importerVersion: legacy.importerVersion, coverage: legacy.coverage,
+    oracle: legacy.oracle, leaguepedia: legacy.leaguepedia, lolesports: legacy.lolesports,
+  }
+  legacy.rawIdentityDigest = createHash('sha256').update(canonicalJsonFor(identity)).digest('hex')
+  legacy.sourceReceiptDigest = createHash('sha256').update(canonicalJsonFor({
+    rawIdentityDigest: legacy.rawIdentityDigest, sourceReceiptInputs: legacy.sourceReceiptInputs,
+  })).digest('hex')
+  assert.deepEqual(parseRawSourceReceipt(legacy), legacy)
+  assert.notEqual(legacy.rawIdentityDigest, modern.rawIdentityDigest)
+  const store = new Map<string, Buffer>()
+  for (const prepared of [baseline.prepared, ...chain.deltas.map((delta) => delta.prepared), narrow.prepared]) {
+    const alternateBytes = gzipSync(Buffer.from(canonicalJsonFor(prepared.value)), { level: 0 })
+    store.set(rawObjectReferenceFor(prepared).key, alternateBytes)
+    assert.notEqual(alternateBytes.byteLength, prepared.compressedBytes)
+    assert.deepEqual(decodeRawObject(rawObjectReferenceFor(prepared), alternateBytes), prepared.value)
+  }
+  const restored = await reconstructRawSourceReceipt(legacy, resolverFor(store))
+  assert.equal(restored.oracle[0].source.digest, chain.source.digest)
+  await assert.rejects(reconstructRawSourceReceipt({ ...legacy, oracle: [{ ...legacy.oracle[0],
+    baseline: { ...legacy.oracle[0].baseline, compressedBytes: 1 },
+  }] }, resolverFor(store)), /identity digest mismatch/)
+  assert.throws(() => decodeRawObject({ ...baseline.reference, compressedBytes: 1 }, store.get(baseline.reference.key)!), /compressed byte length mismatch/)
 })
 
 test('raw object parsing rejects noncanonical or invalid JSON even with matching integrity fields', () => {
@@ -387,7 +438,7 @@ test('schema, compatibility, duplicate, missing, corrupt, and chain errors fail 
 
   await assert.rejects(reconstructRawSourceReceipt(receipt, () => undefined), /missing/)
   const corruptStore = new Map(store)
-  corruptStore.set(baseline.reference.key, Buffer.alloc(baseline.reference.compressedBytes))
+  corruptStore.set(baseline.reference.key, Buffer.alloc(baseline.prepared.compressedBytes))
   await assert.rejects(reconstructRawSourceReceipt(receipt, resolverFor(corruptStore)), /gzip is corrupt|semantic digest mismatch/)
 
   assert.throws(() => parseOracleBaseline({ ...baseline.value, games: [...baseline.value.games, baseline.value.games[0]] }), /duplicate|canonically ordered/)
