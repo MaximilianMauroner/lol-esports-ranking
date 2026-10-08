@@ -47,7 +47,7 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
       return unavailablePowerPreview('incomplete-historical-inputs', 'Historical team profiles, event/format, patch, sides, five-role lineups and performance statistics must be explicit. This adapter cannot reconstruct them from public points.')
     }
     if (resolveCanonicalSeries(matches).some((series) => !completeHistoricalSeries(series))) {
-      return unavailablePowerPreview('incomplete-historical-inputs', 'Every historical series must have a verified consistent format and a legal decisive final score. Ongoing or unknown series cannot establish complete historical coverage.')
+      return unavailablePowerPreview('incomplete-historical-inputs', 'Every historical series must have a verified consistent format and a legal decisive final score within one UTC replay date. Ongoing, unknown or cross-date series cannot establish complete historical coverage.')
     }
     const context = createRatingReplayContext(matches, source.teams, { tournamentLifecycles: source.tournamentLifecycles })
     const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
@@ -89,6 +89,7 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
 function completeHistoricalSeries(series: CanonicalSeries) {
   const winsNeeded = (series.format + 1) / 2
   return series.state === 'completed' && [1, 3, 5].includes(series.format)
+    && new Set(series.games.map((game) => game.date)).size === 1
     && Math.max(series.winsA, series.winsB) === winsNeeded && Math.min(series.winsA, series.winsB) < winsNeeded
     && series.games.every((game) => game.bestOf === series.format)
     && canonicalSeriesOutcomeForTeam(series, series.finalMatch.winner) === 1

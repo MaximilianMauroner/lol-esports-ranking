@@ -120,6 +120,14 @@ test('corpus adapter requires complete legal historical series before production
     const completedOriginal = structuredClone(complete)
     assert.equal(prepareConditionalPowerReplayBasis(complete).status, 'ready', `${bestOfBasis} completed Bo${bestOf}`)
     assert.deepEqual(complete, completedOriginal)
+
+    const crossDate = structuredClone(complete)
+    crossDate.historicalMatches.at(-winsNeeded)!.date = '2026-09-14'
+    const crossDateOriginal = structuredClone(crossDate)
+    const crossDateResult = prepareConditionalPowerReplayBasis(crossDate)
+    assert.equal(crossDateResult.status, 'unavailable', `${bestOfBasis} completed Bo${bestOf} crossing a UTC replay boundary`)
+    if (crossDateResult.status === 'unavailable') assert.equal(crossDateResult.reason, 'incomplete-historical-inputs')
+    assert.deepEqual(crossDate, crossDateOriginal)
   }
 
   const illegal = sourceFixture()

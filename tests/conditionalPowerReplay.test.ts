@@ -4,6 +4,7 @@ import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay } from '..
 import { legalConditionalScores, publicConditionalPowerPreview } from '../src/lib/conditionalPowerPreview'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
 import { eventTrackerKey } from '../src/lib/placementResiduals'
+import { playerModelParameters } from '../src/lib/playerModel'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
 import { rosterBasisByTeam } from '../src/lib/rosters'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
@@ -617,8 +618,59 @@ test('future player priors require explicit valid evidence, coverage and freshne
     edge.teamBEvidenceBasis = 'prior-observed'
     edge.teamACoverage = 0
     edge.teamBFreshnessWeight = 0
+    edge.teamAAdjustment = 0
+    edge.teamBAdjustment = 0
   }
   assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
+})
+
+test('player prior adjustments obey production caps and zero-evidence invariants on both sides', () => {
+  const cap = playerModelParameters.playerPregameEdgeCap
+  const minimumCoverage = playerModelParameters.playerPregameMinCoverage
+  const sides = [
+    ['teamAAdjustment', 'teamACoverage', 'teamAFreshnessWeight'],
+    ['teamBAdjustment', 'teamBCoverage', 'teamBFreshnessWeight'],
+  ] as const
+  const invalid = [
+    { adjustment: cap + 1, coverage: 1, freshness: 1 },
+    { adjustment: -cap - 1, coverage: 1, freshness: 1 },
+    { adjustment: cap, coverage: minimumCoverage - 0.01, freshness: 1 },
+    { adjustment: -cap, coverage: minimumCoverage - 0.01, freshness: 1 },
+    { adjustment: cap, coverage: 1, freshness: 0 },
+    { adjustment: -cap, coverage: 1, freshness: 0 },
+  ]
+  for (const [adjustmentField, coverageField, freshnessField] of sides) for (const values of invalid) {
+    const input = conditionalPowerFixture()
+    const edge = input.playerEdges.get(input.games[0]!.id)!
+    edge[adjustmentField] = values.adjustment
+    edge[coverageField] = values.coverage
+    edge[freshnessField] = values.freshness
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', `${adjustmentField}: ${JSON.stringify(values)}`)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'missing-player-priors')
+    assert.deepEqual(input, original)
+  }
+  const supported = [
+    { adjustment: cap, coverage: minimumCoverage, freshness: 1 },
+    { adjustment: -cap, coverage: minimumCoverage, freshness: 1 },
+    { adjustment: 0, coverage: minimumCoverage - 0.04, freshness: 0.992 },
+    { adjustment: 0, coverage: 1, freshness: 0 },
+  ]
+  for (const values of supported) {
+    const input = conditionalPowerFixture()
+    for (const edge of input.playerEdges.values()) {
+      edge.teamAAdjustment = values.adjustment
+      edge.teamBAdjustment = -values.adjustment
+      edge.teamACoverage = edge.teamBCoverage = values.coverage
+      edge.teamAFreshnessWeight = edge.teamBFreshnessWeight = values.freshness
+    }
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    if (result.status !== 'ready') throw new Error(`${JSON.stringify(values)}: ${result.detail}`)
+    assert.deepEqual(result.pinnedInputs, original)
+    assert.deepEqual(input, original)
+  }
 })
 
 test('production replay errors and cancelled selections have no writes to input maps or provider calls', (t) => {

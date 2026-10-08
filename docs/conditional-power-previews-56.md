@@ -58,7 +58,9 @@ certify the producer's source evidence.
 No checkpoint file is written. Incomplete historical stats, lineups, profiles,
 format or chronology are rejected before replay. The production canonical series
 resolver must prove a legal decisive final score for every historical series.
-Ongoing or unknown historical series are unsupported by this complete-input slice.
+Every historical series must fit one UTC replay date, matching production's
+series grouping at that boundary. Ongoing, unknown or cross-date historical
+series are unsupported by this complete-input slice.
 
 The source producer must identify the supplied prefix as complete, including
 all games on its terminal UTC date. A caller-supplied hash does not certify
@@ -84,6 +86,10 @@ membership evidence returns unavailable; the mutable directory fallback and
 coincident league dates cannot supply that proof. Supplied hypothetical team
 region overrides must match the directory, and every game region must match the
 pinned event region.
+Supplied player edges must obey the current production cap and its zero-adjustment
+rules below minimum coverage or at zero freshness. Explicit zero edges remain
+supported; the preview never scales adjustments by an invented probability or
+coverage formula.
 Series and game timestamp offsets are normalized to UTC. All hypothetical games
 must share one future UTC date after the pinned complete boundary; a timestamp's
 local date prefix cannot choose the replay date.
@@ -129,6 +135,12 @@ Completed lifecycle boundaries after the pinned pre-state are unsupported in
 this slice. Prefix-only event trackers cannot apply a newly completed future
 event's placement evidence. The evaluator rejects that assumption explicitly;
 historical pending placement evidence remains part of the production replay.
+
+Historical canonical series crossing UTC dates are also unsupported. Production
+resolves each date's subset separately, so incomplete subsets have no decisive
+series-result update. The adapter rejects that corpus; removing its games would
+violate the complete-prefix requirement. Broader support needs a separately scoped
+production atomicity change coordinated with #84.
 
 ## Acceptance limits and checks
 

@@ -5,7 +5,7 @@ import { eventKFactorForMatch, eventWeightContextForMatches, eventWeightForMatch
 import { homeLeagueForMatch } from './matchContext'
 import { materializeRankingModel, replayRatingDates, type RatingReplayContext } from './model'
 import { transparentGprModelMetadata } from './modelConfig'
-import type { PregamePlayerRatingEdge } from './playerModel'
+import { playerModelParameters, type PregamePlayerRatingEdge } from './playerModel'
 import { publishedRating } from './publishedRatingArtifacts'
 import { ratingScaleFromUnknown } from './ratingCalculations'
 import { decodeRatingCheckpointValue, encodeRatingCheckpointEnvelope } from './ratingCheckpoint'
@@ -381,6 +381,9 @@ function scenarioProblem(input: ReplayInput, basis: ConditionalPowerReplayBasis,
       || !['prior-observed', 'pregame-confirmed'].includes(edge.teamBEvidenceBasis)
       || ![edge.teamACoverage, edge.teamBCoverage, edge.teamAFreshnessWeight, edge.teamBFreshnessWeight]
         .every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)
-  })) return unavailablePowerPreview('missing-player-priors', 'Every hypothetical game needs explicit available player prior adjustments, evidence, coverage and freshness within their valid ranges.')
+      || [edge.teamAAdjustment, edge.teamBAdjustment].some((value) => Math.abs(value) > playerModelParameters.playerPregameEdgeCap)
+      || ((edge.teamACoverage < playerModelParameters.playerPregameMinCoverage || edge.teamAFreshnessWeight === 0) && edge.teamAAdjustment !== 0)
+      || ((edge.teamBCoverage < playerModelParameters.playerPregameMinCoverage || edge.teamBFreshnessWeight === 0) && edge.teamBAdjustment !== 0)
+  })) return unavailablePowerPreview('missing-player-priors', 'Every hypothetical game needs explicit available player priors within production cap, coverage and freshness limits. Below minimum coverage or at zero freshness, the supplied adjustment must be zero.')
   return null
 }
