@@ -110,6 +110,53 @@ test('offset timestamps use their UTC calendar date and preserve isolated produc
   assert.equal(evaluateConditionalPowerReplay(crossesUtcDate).status, 'unavailable')
 })
 
+test('mixed timestamp offsets preserve decisive-game player priors and pin the original inputs', () => {
+  const utcInput = conditionalPowerFixture(5, { winner: 'home', loserWins: 1 })
+  utcInput.now = Date.parse('2026-09-17T04:00:00Z')
+  utcInput.series.startTime = '2026-09-17T04:30:00Z'
+  for (const [index, game] of utcInput.games.entries()) {
+    game.date = '2026-09-17'
+    game.datetimeUtc = `2026-09-17T04:${35 + index * 5}:00.000Z`
+    game.teamARoster!.observedAt = game.date
+    game.teamBRoster!.observedAt = game.date
+    const edge = utcInput.playerEdges.get(game.id)!
+    edge.teamAAdjustment = [12, 7, 2, -3][index]!
+    edge.teamBAdjustment = [-3, -2, 4, 12][index]!
+  }
+  const before = materializeRankingModel({ context: structuredClone(utcInput.basis.context), state: structuredClone(utcInput.basis.state) })
+  const context = structuredClone(utcInput.basis.context)
+  context.authoritativeMatches.push(...structuredClone(utcInput.games))
+  context.lastDate = utcInput.games[0]!.date
+  context.teamRosterBasis = rosterBasisByTeam(context.authoritativeMatches)
+  for (const [id, edge] of utcInput.playerEdges) context.pregamePlayerRatingEdges.set(id, structuredClone(edge))
+  const state = replayRatingDates({ context, state: structuredClone(utcInput.basis.state), replayMatches: structuredClone(utcInput.games) })
+  assert.equal(state.previousMatch!.id, utcInput.games.at(-1)!.id)
+  assert.equal(state.rosterPriorOffsets.get('Alpha'), -3)
+  assert.equal(state.rosterPriorOffsets.get('Beta'), 12)
+  const after = materializeRankingModel({ context, state })
+  const expectedTeams = utcInput.basis.teamNames.map((team) => {
+    const beforePower = publishedRating(before.standings.find((row) => row.team === team)!.rating, utcInput.basis.ratingScale)
+    const afterPower = publishedRating(after.standings.find((row) => row.team === team)!.rating, utcInput.basis.ratingScale)
+    return { team, before: beforePower, after: afterPower, delta: afterPower - beforePower }
+  })
+  const mixed = structuredClone(utcInput)
+  mixed.series.startTime = '2026-09-16T23:30:00-05:00'
+  const originalTimestamps = [
+    '2026-09-17T06:35:00+02:00', '2026-09-16T23:40:00-05:00',
+    '2026-09-17T04:45:00.000Z', '2026-09-17T04:50:00.000Z',
+  ]
+  for (const [index, game] of mixed.games.entries()) game.datetimeUtc = originalTimestamps[index]!
+  const original = structuredClone(mixed)
+  for (const input of [utcInput, mixed]) {
+    const result = evaluateConditionalPowerReplay(input)
+    if (result.status !== 'ready') throw new Error(result.detail)
+    assert.deepEqual(result.teams, expectedTeams)
+    assert.deepEqual(result.pinnedInputs, input)
+    if (input === mixed) assert.deepEqual(result.pinnedInputs.games!.map((game) => game.datetimeUtc), originalTimestamps)
+  }
+  assert.deepEqual(mixed, original)
+})
+
 test('missing or unsupported inputs fail closed without changing canonical state or caller stores', () => {
   const mutations: Array<(input: ReturnType<typeof conditionalPowerFixture>) => void> = [
     (input) => { input.basis.modelConfigHash = 'other-config' },

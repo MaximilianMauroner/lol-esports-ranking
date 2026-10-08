@@ -71,6 +71,8 @@ export function evaluateConditionalPowerReplay(input: ReplayInput): ConditionalP
     const playerEdges = new Map(structuredClone([...input.playerEdges]))
     const invalid = scenarioProblem(input, basis, games, playerEdges)
     if (invalid) return invalid
+    // Production sorts timestamp strings. Normalize detached rows so their order follows the validated instants.
+    for (const game of games) game.datetimeUtc = new Date(Date.parse(game.datetimeUtc!)).toISOString()
     const before = materializeRankingModel({ context: basis.context, state: structuredClone(basis.state) })
     const context: RatingReplayContext = {
       ...basis.context,
