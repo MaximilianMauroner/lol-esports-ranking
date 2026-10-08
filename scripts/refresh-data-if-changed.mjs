@@ -11,7 +11,8 @@ import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { buildRankingIncrementally, persistIncrementalStateBuild, RANKING_INCREMENTAL_IMPORTER_VERSION, releasePersistedIncrementalInputs } from './incremental-ranking-orchestrator.ts'
 import { finalizeRawSourceGeneration, hydrateFileBackedRawSourceGeneration } from './raw-source-generation.mjs'
 import { isFullAuditEligible, publishFullAuditDayReceipt, stageFullAuditSnapshot } from './full-audit-storage.mjs'
-import { collectRefreshGarbage, rawSourceWorkerExecArgv, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
+import { collectRefreshGarbage, readProcessPeakRssBytes } from './refresh-worker-memory.mjs'
+import { rawSourceWorkerCommand } from './raw-source-worker-command.mjs'
 import {
   authorityIdentityFor,
   prepareRankingSourceAuthorityEvidence,
@@ -1658,12 +1659,8 @@ async function runRawSourceWorker(input, workerDir) {
   const stderr = []
   try {
     await new Promise((resolveRun, rejectRun) => {
-      const child = spawn(process.execPath, [
-        ...rawSourceWorkerExecArgv(process.execArgv),
-        resolve('scripts/raw-source-worker.mjs'),
-        inputPath,
-        outputPath,
-      ], { stdio: ['ignore', 'ignore', 'pipe'] })
+      const { command, args } = rawSourceWorkerCommand(inputPath, outputPath)
+      const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
       child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
       child.on('error', rejectRun)
       child.on('exit', (code) => {
