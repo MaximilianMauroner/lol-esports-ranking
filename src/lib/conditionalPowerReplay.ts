@@ -1,4 +1,5 @@
 import type { EventTier, MatchRecord, MatchRosterSnapshot, PublishedRatingScale } from '../types'
+import { eventTierConfig } from '../data/rankingConfig'
 import { conditionalOutcomeProblem, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from './conditionalPowerPreview'
 import { eventKFactorForMatch, eventWeightContextForMatches, eventWeightForMatch } from './eventWeighting'
 import { homeLeagueForMatch } from './matchContext'
@@ -51,6 +52,10 @@ export type ConditionalPowerReplay = PowerPreviewUnavailable | {
 
 /** Runs only on clones. The caller supplies every hypothetical game input; no statistics are synthesized. */
 export function evaluateConditionalPowerReplay(input: ReplayInput): ConditionalPowerReplay {
+  if (!nonemptyString(input.series.id) || !nonemptyString(input.series.eventId)
+    || input.series.teams.some((team) => !nonemptyString(team.id))) {
+    return unavailablePowerPreview('missing-series-identity', 'Nonempty source series, event and participant identities are required for a conditional replay.')
+  }
   const problem = conditionalOutcomeProblem(input.series, input.outcome, input.now)
   if (problem) return problem
   if (!input.basis) return unavailablePowerPreview('missing-pre-state', 'A pinned internal pre-series state is required; public Power and forecast receipts are insufficient.')
@@ -115,9 +120,13 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
       return unavailablePowerPreview('model-mismatch', 'The pinned model/config must match the production evaluator in this revision.')
     }
     if (!ratingScaleFromUnknown(basis.ratingScale)) return unavailablePowerPreview('missing-scale', 'A valid public rating scale is required.')
+    if (![basis.event.id, basis.event.name, basis.event.league, basis.event.phase].every(nonemptyString)
+      || !Object.hasOwn(eventTierConfig, basis.event.tier)) {
+      return unavailablePowerPreview('missing-event-context', 'A nonempty pinned event identity, name, league, phase and supported event tier are required.')
+    }
     const { context, state } = basis
     const boundary = state.processedThroughUtcDate
-    if (!basis.preStateId || !realUtcDate(boundary) || context.lastDate !== boundary || !completeStateContainers(state)
+    if (!nonemptyString(basis.preStateId) || !realUtcDate(boundary) || context.lastDate !== boundary || !completeStateContainers(state)
       || !(context.pregamePlayerRatingEdges instanceof Map) || !(context.teamRosterBasis instanceof Map)
       || !(context.tournamentLifecycles instanceof Map) || !(context.eventWeightContext.worldsEndDateByCalendarYear instanceof Map)) {
       return unavailablePowerPreview('missing-pre-state', 'A dated, identified complete UTC-boundary state and all replay containers are required.')
@@ -127,7 +136,7 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
       return unavailablePowerPreview('unsupported-future-placement', 'Completed tournament placement boundaries after the pinned pre-state are unsupported. Future placements cannot be silently omitted from a conditional replay.')
     }
     const matches = context.authoritativeMatches
-    if (!Array.isArray(matches) || !matches.length || matches.some((match) => !match.id || !matchIdentity(match) || !realUtcDate(match.date) || match.date > boundary)
+    if (!Array.isArray(matches) || !matches.length || matches.some((match) => !nonemptyString(match.id) || !nonemptyString(matchIdentity(match)) || !realUtcDate(match.date) || match.date > boundary)
       || state.processedMatchCount !== matches.length || new Set(matches.map(matchIdentity)).size !== matches.length) {
       return unavailablePowerPreview('missing-pre-state', 'The complete authoritative prefix must match the processed game count and UTC boundary.')
     }
@@ -143,7 +152,7 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
       [...dates.values()].some((date) => !realUtcDate(date) || date > boundary))) {
       return unavailablePowerPreview('missing-pre-state', 'Every rated entity date must be a real UTC date at or before the pinned boundary.')
     }
-    if (basis.teamNames.length !== 2 || basis.sourceTeamIds.length !== 2 || basis.sourceTeamIds.some((id) => !id)
+    if (basis.teamNames.length !== 2 || basis.sourceTeamIds.length !== 2 || basis.sourceTeamIds.some((id) => !nonemptyString(id))
       || basis.sourceTeamIds[0] === basis.sourceTeamIds[1] || basis.teamNames[0] === basis.teamNames[1]
       || basis.teamNames.some((team) => !hasTeamState(basis, team)) || !coherentHistoryEvidence(basis)) {
       return unavailablePowerPreview('missing-pre-state', 'Participants and historical teams need coherent corpus, history, record and rating context evidence.')
@@ -158,6 +167,10 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
   } catch (error) {
     return unavailablePowerPreview('missing-pre-state', error instanceof Error ? error.message : 'The supplied replay basis is malformed or incomplete.')
   }
+}
+
+function nonemptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 function realUtcDate(date: string | undefined): date is string {
@@ -234,7 +247,11 @@ function scenarioProblem(input: ReplayInput, basis: ConditionalPowerReplayBasis,
   const expectedDate = input.series.startTime!.slice(0, 10)
   const winsNeeded = (input.series.bestOf! + 1) / 2
   const winner = basis.teamNames[input.outcome.winner === 'home' ? 0 : 1]
-  if (games.length !== winsNeeded + input.outcome.loserWins || new Set(games.map((game) => game.id)).size !== games.length) {
+  if (games.some((game) => !nonemptyString(game.id) || !nonemptyString(matchIdentity(game)))) {
+    return unavailablePowerPreview('missing-game-identity', 'Every hypothetical game requires a nonempty game identity and canonical source identity.')
+  }
+  if (games.length !== winsNeeded + input.outcome.loserWins || new Set(games.map((game) => game.id)).size !== games.length
+    || new Set(games.map(matchIdentity)).size !== games.length) {
     return unavailablePowerPreview('invalid-score', 'Game count and unique game identities must match the selected legal score.')
   }
   if (games.some((game, index) => game.sourceProvider !== 'seed' || game.officialMatchId !== input.series.id

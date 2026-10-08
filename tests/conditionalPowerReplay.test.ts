@@ -98,6 +98,65 @@ test('missing or unsupported inputs fail closed without changing canonical state
   assert.equal(evaluateConditionalPowerReplay({ ...input, playerEdges: null }).status, 'unavailable')
 })
 
+test('conditional replay requires identified series, games and pinned event metadata without fallback provenance', () => {
+  type Fixture = ReturnType<typeof conditionalPowerFixture>
+  const cases: Array<{ label: string; reason: string; mutate: (input: Fixture, value: string | undefined) => void }> = [
+    { label: 'series identity', reason: 'missing-series-identity', mutate: (input, value) => {
+      Reflect.set(input.series, 'id', value)
+      for (const game of input.games) game.officialMatchId = value
+    } },
+    { label: 'event identity', reason: 'missing-series-identity', mutate: (input, value) => {
+      Reflect.set(input.series, 'eventId', value)
+      Reflect.set(input.basis.event, 'id', value)
+      for (const game of input.games) game.officialEventId = value
+    } },
+    { label: 'pinned event identity', reason: 'missing-event-context', mutate: (input, value) => { Reflect.set(input.basis.event, 'id', value) } },
+    { label: 'event name', reason: 'missing-event-context', mutate: (input, value) => {
+      Reflect.set(input.basis.event, 'name', value)
+      for (const game of input.games) Reflect.set(game, 'event', value)
+    } },
+    { label: 'event phase', reason: 'missing-event-context', mutate: (input, value) => {
+      Reflect.set(input.basis.event, 'phase', value)
+      for (const game of input.games) Reflect.set(game, 'phase', value)
+    } },
+    { label: 'event league', reason: 'missing-event-context', mutate: (input, value) => {
+      Reflect.set(input.basis.event, 'league', value)
+      for (const game of input.games) Reflect.set(game, 'league', value)
+    } },
+    { label: 'game identity with matching prior key', reason: 'missing-game-identity', mutate: (input, value) => {
+      const game = input.games[0]!
+      const edge = input.playerEdges.get(game.id)!
+      input.playerEdges.delete(game.id)
+      Reflect.set(game, 'id', value)
+      input.playerEdges.set(game.id, edge)
+    } },
+  ]
+  for (const { label, reason, mutate } of cases) for (const value of ['', undefined, ' \t\n ']) {
+    const input = conditionalPowerFixture()
+    mutate(input, value)
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', `${label}: ${value}`)
+    if (result.status === 'unavailable') assert.equal(result.reason, reason, label)
+    assert.deepEqual(input, original)
+  }
+  for (const officialGameId of ['', ' \t\n ']) {
+    const input = conditionalPowerFixture()
+    input.games[0]!.officialGameId = officialGameId
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable')
+    if (result.status === 'unavailable') assert.equal(result.reason, 'missing-game-identity')
+  }
+  for (const tier of ['', undefined, ' \t\n ', 'unsupported-tier', '__proto__']) {
+    const input = conditionalPowerFixture()
+    Reflect.set(input.basis.event, 'tier', tier)
+    for (const game of input.games) Reflect.set(game, 'tier', tier)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable')
+    if (result.status === 'unavailable') assert.equal(result.reason, 'missing-event-context')
+  }
+})
+
 test('incomplete or inconsistent pre-state evidence is unavailable instead of producing a numeric delta', () => {
   const mutations: Array<(input: ReturnType<typeof conditionalPowerFixture>) => void> = [
     (input) => { input.basis.state.processedThroughUtcDate = '2026-02-30'; input.basis.context.lastDate = '2026-02-30' },
