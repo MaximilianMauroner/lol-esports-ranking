@@ -40,10 +40,11 @@ test('Rust raw seam matches Node baseline, mutation partitions, restore and reba
         schemaVersion: 1, generatedAt, start: '2026-01-01', end: '2026-01-05',
         files: { oracleCsv: ['oracle.csv'], leaguepediaJson: ['leaguepedia.json'], lolEsportsJson: ['lolesports.json'] },
         sources: { oracle: { status: 'downloaded', downloadedCount: 1,
-          metadata: { large: 1e20, small: 1e-6, '10': 'ten', '2': 'two', nested: [1e20, 1e-6, {}, []] },
+          metadata: { large: 1e20, small: 1e-6, '10': 'ten', '2': 'two', nested: [1e20, 1e-6, {}, []], literalDecimal: 1, unsafeInteger: 42 },
         } }, warnings: [],
         refreshWindow: { start: '2026-01-01', end: '2026-01-05' }, refreshAttempt: { cause: 'parity' },
-      }))
+      }).replace('"literalDecimal":1', '"literalDecimal":1.0')
+        .replace('"unsafeInteger":42', '"unsafeInteger":9007199254740993'))
       if (cycle === 3 && previousReceipt) {
         // Unique delta references can be carried in inventory-only prepare; exceeding the bound rebaselines.
         previousReceipt = await receiptWithLongChain(previousReceipt)
