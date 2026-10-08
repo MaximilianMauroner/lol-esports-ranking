@@ -5,7 +5,10 @@ mod numeric;
 mod time;
 mod v8_math;
 
-pub use json::{Value, canonical_json, config_hash, js_json, stable_digest, stable_json};
+pub use json::{
+    Value, canonical_json, canonical_json_value, config_hash, js_json, js_pretty_json_value,
+    stable_digest, stable_json,
+};
 pub use numeric::{js_exp, js_log, js_pow, js_round, number_text, to_fixed};
 pub use time::{provider_date, provider_datetime_utc, provider_instant};
 

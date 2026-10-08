@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import fsPromises from 'node:fs/promises'
+import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -17,8 +19,65 @@ import {
 import { ORACLE_BASELINE_KIND, ORACLE_DELTA_KIND, decodeRawObject, parseOracleCsv, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 import { importRankingSourceData } from '../scripts/ranking-source-import'
 import { uploadContentAddressedRawSourceGeneration } from '../scripts/railway-bucket.mjs'
+import { rawSourceWorkerCommand } from '../scripts/raw-source-worker-command.mjs'
 
 const importerVersion = 'community-source-import-v1'
+
+test('parallel provider reads preserve manifest order despite reversed completion', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'raw-generation-read-order-'))
+  const first = join(root, 'z-first.json')
+  const second = join(root, 'a-second.json')
+  const oracle = join(root, 'oracle.csv')
+  const manifestPath = join(root, 'manifest.json')
+  const originalReadFile = fsPromises.readFile
+  try {
+    await writeFile(first, '{"first":true}')
+    await writeFile(second, '{"second":true}')
+    await writeFile(oracle, oracleCsv([game('g1', 'Alpha', 'Beta')]))
+    await writeFile(manifestPath, JSON.stringify({
+      schemaVersion: 1, generatedAt: '2026-01-01T00:00:00.000Z',
+      start: '2026-01-01', end: '2026-01-01',
+      files: { oracleCsv: [oracle], leaguepediaJson: [first, second], lolEsportsJson: [] },
+    }))
+    const manifests: Buffer[] = []
+    const objectOrders: string[][] = []
+    for (let cycle = 0; cycle < 2; cycle++) {
+      let releaseFirst = () => {}
+      const secondFinished = new Promise<void>((resolve) => { releaseFirst = resolve })
+      const completed: string[] = []
+      const readMock = context.mock.method(fsPromises, 'readFile', async (...args: Parameters<typeof originalReadFile>) => {
+        const [path] = args
+        const content = await originalReadFile(...args)
+        if (path === first) await secondFinished
+        if (path === second) setImmediate(releaseFirst)
+        if (path === first || path === second) completed.push(String(path))
+        return content
+      })
+      syncBuiltinESMExports()
+      let prepared: PreparedRawSourceGeneration
+      try {
+        prepared = await prepareRawSourceGeneration({ manifestPath, importerVersion })
+      } finally {
+        readMock.mock.restore()
+        syncBuiltinESMExports()
+      }
+      assert.deepEqual(completed, [second, first])
+      assert.deepEqual(prepared.verifiedSourceFiles.map(({ sourcePath }) => sourcePath), [oracle, first, second])
+      // Receipt identity has a separate filename sort; it must not reorder imports.
+      assert.deepEqual(prepared.receipt.leaguepedia.map(({ sourceFileName }) => sourceFileName), ['a-second.json', 'z-first.json'])
+      objectOrders.push(prepared.objects.map(({ digest }) => digest))
+      const materialized = await materializeVerifiedPreparedRawSourceGeneration(
+        prepared, join(root, `materialized-${cycle}`), '2026-01-01T00:00:00.000Z',
+      )
+      assert.deepEqual(materialized.manifest.files.leaguepediaJson, ['leaguepedia/z-first.json', 'leaguepedia/a-second.json'])
+      manifests.push(await readFile(materialized.manifestPath))
+    }
+    assert.deepEqual(objectOrders[0], objectOrders[1])
+    assert.deepEqual(manifests[0], manifests[1])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('aged Oracle delta chains deterministically re-baseline at the documented bound', async () => {
   const root = await mkdtemp(join(tmpdir(), 'raw-generation-rebaseline-'))
@@ -337,12 +396,8 @@ async function rawWorkerFixture(root: string, name: string, generatedAt = '2026-
 }
 
 async function runRawWorker(inputPath: string, outputPath: string) {
-  const child = spawn(process.execPath, [
-    ...process.execArgv,
-    join(process.cwd(), 'scripts/raw-source-worker.mjs'),
-    inputPath,
-    outputPath,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] })
+  const { command, args } = rawSourceWorkerCommand(inputPath, outputPath)
+  const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
   const stderr: Buffer[] = []
   child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
   const code = await new Promise<number | null>((resolveExit, rejectExit) => {

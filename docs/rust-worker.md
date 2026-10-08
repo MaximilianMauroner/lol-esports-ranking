@@ -48,3 +48,42 @@ CI compares parameters, version, and the independently computed live config
 hash. This dual implementation is permanent while the browser uses TypeScript.
 The Node worker remains necessary until shadow and cutover gates pass; its later
 removal is a separate migration milestone.
+
+## Raw source process
+
+Build the release binary, then opt into the isolated raw preparation and recovery
+process with `RANKING_RAW_SOURCE_WORKER=rust`. `RANKING_REFRESH_BINARY` can select
+a different binary path; the default is `worker/target/release/ranking-refresh`.
+An unknown worker selector fails before launch.
+
+```sh
+cargo +1.98.0 build --manifest-path worker/Cargo.toml --package ranking-refresh --release --locked
+RANKING_RAW_SOURCE_WORKER=rust pnpm data:refresh
+```
+
+The CLI accepts `raw-source <input.json> <output.json>`. Its descriptor contract
+matches the Node child: prepare emits canonical raw objects and receipt metadata;
+restore checks the receipt authority, full object graph and each object's digest,
+then reconstructs the files. It writes a descriptor only after success. Both
+actions report Linux `VmHWM` as `childMaxRssBytes`.
+
+Oracle preparation compares game inventories without loading inherited objects.
+It preserves delta chains and replaces chains longer than 32 deltas with a new
+baseline. Recovery verifies the baseline and all mutations before replacing the
+destination. Reconstructed provider files and the manifest are staged; the
+cross-filesystem fallback publishes the manifest last.
+
+Run the cross-worker checks against isolated copies of raw inputs:
+
+```sh
+RANKING_RUST_TEST_BINARY="$PWD/worker/target/release/ranking-refresh" node --import tsx --test tests/rustRawSourceParity.test.ts
+RANKING_REFRESH_BINARY="$PWD/worker/target/release/ranking-refresh" node --max-old-space-size=2048 --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --raw-seam-parity
+node --max-old-space-size=2048 --import tsx scripts/verify-rust-raw-source.ts data/raw/manifest.json
+```
+
+These checks compare canonical object bytes, receipts, manifests and restored
+files. Gzip transport bytes and timing fields can differ. The verifier prints
+each process's peak RSS and duration. It never prepares in the original raw
+directory. Existing optional legacy compressed-size fields stay readable until
+all active stored receipts have moved to semantic identity. The Node selector
+stays available until the migration's shadow and rollback observation gates pass.

@@ -80,6 +80,18 @@ jobs:
         run: cargo +1.98.0 build --manifest-path worker/Cargo.toml --package ranking-refresh --locked
       - name: Live model config parity
         run: pnpm exec tsx --tsconfig tsconfig.app.json scripts/check-rust-parity.ts
+      - name: Rust raw seam integration
+        env:
+          RANKING_RAW_SOURCE_WORKER: rust
+          RANKING_REFRESH_BINARY: ${{ github.workspace }}/worker/target/debug/ranking-refresh
+          RANKING_RUST_TEST_BINARY: ${{ github.workspace }}/worker/target/debug/ranking-refresh
+        run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/rawSourceGeneration.test.ts tests/rustRawSourceParity.test.ts
+      - name: Raw benchmark corpus parity and memory
+        env:
+          RANKING_REFRESH_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
+        run: |
+          cargo +1.98.0 build --manifest-path worker/Cargo.toml --package ranking-refresh --release --locked
+          node --max-old-space-size=2048 --expose-gc --import tsx scripts/benchmark-incremental-ranking.ts --raw-seam-parity
       - name: Build worker image
         run: docker build -f Dockerfile.refresh -t ranking-refresh .
       - name: Fixture tests in image build environment

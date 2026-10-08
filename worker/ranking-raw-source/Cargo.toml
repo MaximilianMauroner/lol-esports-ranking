@@ -1,5 +1,5 @@
 [package]
-name = "ranking-refresh"
+name = "ranking-raw-source"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,4 +7,5 @@ publish.workspace = true
 
 [dependencies]
 ranking-contracts = { path = "../ranking-contracts" }
-ranking-raw-source = { path = "../ranking-raw-source" }
+serde.workspace = true
+serde_json.workspace = true

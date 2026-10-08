@@ -91,26 +91,32 @@ export async function prepareRawSourceGeneration({
     }
   }
 
-  const prepareNarrow = async (provider, paths) => Promise.all(uniquePaths(paths).map(async (path) => {
-    const prepared = prepareNarrowSourceObject({
-      provider,
-      sourceFileName: basename(path),
-      content: await readFile(path),
-      importerVersion,
+  const prepareNarrow = async (provider, paths) => {
+    const preparedFiles = await Promise.all(uniquePaths(paths).map(async (path) => ({
+      path,
+      prepared: prepareNarrowSourceObject({
+        provider,
+        sourceFileName: basename(path),
+        content: await readFile(path),
+        importerVersion,
+      }),
+    })))
+    // Reads can finish in any order; materialization must preserve manifest order.
+    return preparedFiles.map(({ path, prepared }) => {
+      objects.set(prepared.prepared.digest, prepared.prepared)
+      verifiedSourceFiles.push({
+        provider,
+        sourceFileName: prepared.value.sourceFileName,
+        sourcePath: path,
+        contentSha256: prepared.value.contentSha256,
+      })
+      return {
+        sourceFileName: prepared.value.sourceFileName,
+        contentSha256: prepared.value.contentSha256,
+        object: prepared.reference,
+      }
     })
-    objects.set(prepared.prepared.digest, prepared.prepared)
-    verifiedSourceFiles.push({
-      provider,
-      sourceFileName: prepared.value.sourceFileName,
-      sourcePath: path,
-      contentSha256: prepared.value.contentSha256,
-    })
-    return {
-      sourceFileName: prepared.value.sourceFileName,
-      contentSha256: prepared.value.contentSha256,
-      object: prepared.reference,
-    }
-  }))
+  }
   const leaguepedia = await prepareNarrow('leaguepedia', manifest.files?.leaguepediaJson)
   const lolesports = await prepareNarrow('lolesports', manifest.files?.lolEsportsJson)
   const sourceReceiptInputs = {

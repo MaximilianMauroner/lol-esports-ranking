@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import test from 'node:test'
 import {
   RAW_SOURCE_WORKER_MAX_OLD_SPACE_MB,
@@ -11,6 +12,7 @@ import {
   refreshWorkerArgs,
   refreshWorkerExecArgv,
 } from '../scripts/refresh-worker-memory.mjs'
+import { rawSourceWorkerCommand } from '../scripts/raw-source-worker-command.mjs'
 
 test('refresh worker memory flags are canonical and deduplicate inherited variants', () => {
   assert.equal(REFRESH_WORKER_MAX_OLD_SPACE_MB, 2048)
@@ -48,6 +50,31 @@ test('refresh worker memory flags are canonical and deduplicate inherited varian
     '--expose-gc',
     '--import=tsx',
   ])
+})
+
+test('raw source selector defaults to Node, uses Rust CLI arguments, and rejects unknown workers', () => {
+  const inherited = process.execArgv
+  try {
+    process.execArgv = ['--trace-warnings', '--max_old_space_size', '1024', '--max_semi_space_size=32', '--import', 'tsx']
+    for (const env of [{}, { RANKING_RAW_SOURCE_WORKER: 'node' }]) {
+      assert.deepEqual(rawSourceWorkerCommand('input.json', 'output.json', env), {
+        command: process.execPath,
+        args: ['--trace-warnings', '--max-old-space-size=2048', '--max-semi-space-size=4', '--expose-gc', '--import=tsx',
+          resolve('scripts/raw-source-worker.mjs'), 'input.json', 'output.json'],
+      })
+    }
+  } finally {
+    process.execArgv = inherited
+  }
+  for (const binary of [undefined, '/custom/ranking-refresh']) {
+    assert.deepEqual(rawSourceWorkerCommand('input.json', 'output.json', {
+      RANKING_RAW_SOURCE_WORKER: 'rust', ...(binary ? { RANKING_REFRESH_BINARY: binary } : {}),
+    }), {
+      command: binary ?? resolve('worker/target/release/ranking-refresh'),
+      args: ['raw-source', 'input.json', 'output.json'],
+    })
+  }
+  assert.throws(() => rawSourceWorkerCommand('input.json', 'output.json', { RANKING_RAW_SOURCE_WORKER: 'unknown' }), /Unsupported RANKING_RAW_SOURCE_WORKER/)
 })
 
 test('Linux executable peak excludes the setup parent memory inherited across fork and exec', {
@@ -142,5 +169,5 @@ test('worker, direct, and benchmark entry points share the exact refresh memory 
   assert.match(runner, /refreshWorkerArgs\('scripts\/refresh-data-if-changed\.mjs', process\.argv\.slice\(2\)\)/)
   assert.match(once, /refreshWorkerArgs\('scripts\/refresh-data-if-changed\.mjs'\)/)
   assert.match(benchmark, /execArgv: refreshWorkerExecArgv\(process\.execArgv\)/)
-  assert.match(refreshWrapper, /\.\.\.rawSourceWorkerExecArgv\(process\.execArgv\)/)
+  assert.match(refreshWrapper, /rawSourceWorkerCommand\(inputPath, outputPath, env\)/)
 })
