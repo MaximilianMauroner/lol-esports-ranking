@@ -1,0 +1,13 @@
+[package]
+name = "ranking-contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+sha2.workspace = true
+flate2.workspace = true
+ryu-js.workspace = true
+chrono.workspace = true

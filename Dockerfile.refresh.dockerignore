@@ -1,0 +1,4 @@
+**
+!worker/
+!worker/**
+worker/target/
