@@ -126,8 +126,8 @@ export async function syncContentAddressedStateObject(client, config, prepared) 
   try {
     const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
     assertStateObjectMetadata(remote, prepared, key)
-    const verified = await assertStoredStateObjectIntegrity(client, config, stateObjectReference(prepared))
-    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-reused', verified.compressedBytes)
+    const compressedBytes = await assertStoredPreparedStateObject(client, config, prepared, key)
+    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-reused', compressedBytes)
   } catch (error) {
     if (!isMissingObjectError(error)) throw error
   }
@@ -148,8 +148,8 @@ export async function syncContentAddressedStateObject(client, config, prepared) 
     if (!isPreconditionError(error)) throw error
     const remote = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
     assertStateObjectMetadata(remote, prepared, key)
-    const verified = await assertStoredStateObjectIntegrity(client, config, stateObjectReference(prepared))
-    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-race-reused', verified.compressedBytes)
+    const compressedBytes = await assertStoredPreparedStateObject(client, config, prepared, key)
+    return stateSyncResult('unchanged', key, prepared, 'content-addressed-state-object-race-reused', compressedBytes)
   }
 }
 
@@ -694,6 +694,31 @@ function assertStateObjectMetadata(remote, prepared, key) {
     || remote.Metadata?.encoding !== 'gzip') {
     throw new Error(`Content-addressed state object collision or metadata mismatch: ${key}`)
   }
+}
+
+async function assertStoredPreparedStateObject(client, config, prepared, key) {
+  let remote
+  try {
+    remote = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+  } catch (error) {
+    if (isMissingObjectError(error)) throw new Error(`Incremental state object is missing: ${key}`, { cause: error })
+    throw error
+  }
+  assertStateObjectMetadata(remote, prepared, key)
+  const compressed = await bodyBytes(remote.Body)
+  if (compressed.byteLength !== Number(remote.ContentLength)) {
+    throw new Error(`Incremental state object metadata mismatch: ${key}`)
+  }
+  let canonicalBytes
+  try {
+    canonicalBytes = gunzipSync(compressed)
+  } catch (error) {
+    throw new Error(`Incremental state object gzip is corrupt: ${key}`, { cause: error })
+  }
+  if (!canonicalBytes.equals(prepared.canonicalBytes)) {
+    throw new Error(`Incremental state object semantic digest mismatch: ${key}`)
+  }
+  return compressed.byteLength
 }
 
 function stateSyncResult(status, key, prepared, reason, compressedBytes = prepared.compressedBytes) {
