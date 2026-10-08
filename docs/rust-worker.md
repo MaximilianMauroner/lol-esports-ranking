@@ -28,6 +28,13 @@ ECMAScript special cases. CI runs the golden tests on Linux and inside the
 Debian worker image. Other platforms and Node versions need the same parity
 proof before use.
 
+Provider time parity covers four-digit calendar dates, minute/second clocks and
+explicit numeric zones, including the bounded legacy space-separated forms.
+Zone arithmetic must fit signed 32-bit seconds. Natural-language dates and V8's
+extreme integer-overflow forms are outside this contract. For example, Node can
+turn an offset of `+999999999:59` into an unrelated date through legacy overflow;
+Rust rejects it. Add Node fixtures before an importer needs a new input form.
+
 The browser and worker each own a model configuration. When changing the model,
 update both `src/lib/modelConfig.ts` and
 `worker/ranking-contracts/src/model-config.json`, plus both model version values.
