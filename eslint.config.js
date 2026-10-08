@@ -38,11 +38,16 @@ export default defineConfig([
   },
   {
     // Data order guard: published artifacts, state, and hashes must not depend
-    // on ICU collation or the process locale. Views may sort for display.
-    files: ['src/lib/**/*.{ts,mjs}', 'scripts/**/*.{ts,mjs}'],
+    // on ICU collation (localeCompare, Intl.Collator) or the process locale.
+    // Views may sort for display.
+    files: ['src/lib/**/*.{ts,mjs,js}', 'scripts/**/*.{ts,mjs,js}'],
     rules: {
       'no-restricted-properties': ['error', {
         property: 'localeCompare',
+        message: 'Use compareCodeUnits from src/lib/codeUnitOrder.mjs for locale-independent order.',
+      }, {
+        object: 'Intl',
+        property: 'Collator',
         message: 'Use compareCodeUnits from src/lib/codeUnitOrder.mjs for locale-independent order.',
       }],
     },
