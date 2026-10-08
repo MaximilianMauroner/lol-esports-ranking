@@ -169,5 +169,5 @@ test('worker, direct, and benchmark entry points share the exact refresh memory 
   assert.match(runner, /refreshWorkerArgs\('scripts\/refresh-data-if-changed\.mjs', process\.argv\.slice\(2\)\)/)
   assert.match(once, /refreshWorkerArgs\('scripts\/refresh-data-if-changed\.mjs'\)/)
   assert.match(benchmark, /execArgv: refreshWorkerExecArgv\(process\.execArgv\)/)
-  assert.match(refreshWrapper, /rawSourceWorkerCommand\(inputPath, outputPath\)/)
+  assert.match(refreshWrapper, /rawSourceWorkerCommand\(inputPath, outputPath, env\)/)
 })

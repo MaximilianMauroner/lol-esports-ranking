@@ -98,6 +98,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         client: bucketClient,
         rawWorkerDir,
         readRawAuthority,
+        env,
       })
     : { restored: false, reason: restoreRawEnabled ? 'bucket-disabled' : 'disabled' }
   metrics.recordStage('restore', {
@@ -200,6 +201,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             generatedAt: attemptedAt,
             importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
             readRawAuthority,
+            env,
           })
           metrics.recordStage('raw-recovery-validation', {
             durationMs: monotonicNow() - recoveryValidationStarted,
@@ -472,7 +474,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
         generatedAt: finalManifest.generatedAt ?? new Date().toISOString(),
         objectDir: resolve(rawWorkerDir, 'prepared-objects'),
         ...(activeRaw.found ? { previousReceipt: activeRaw.receipt } : {}),
-      }, rawWorkerDir)
+      }, rawWorkerDir, env)
       rawSourceGeneration = hydrateFileBackedRawSourceGeneration(rawWorker.generation)
       manifestPath = rawWorker.manifestPath
       metrics.recordStage('raw-prepare', {
@@ -1172,6 +1174,7 @@ async function restoreRawFromBucketIfMissing({
   client,
   rawWorkerDir,
   readRawAuthority = readActiveRawSourceAuthority,
+  env,
 }) {
   if (hasUsableLocalRawBaseline) {
     return {
@@ -1192,7 +1195,7 @@ async function restoreRawFromBucketIfMissing({
       destinationDir: rawDir,
       generatedAt: new Date().toISOString(),
       importerVersion: RANKING_INCREMENTAL_IMPORTER_VERSION,
-    }, rawWorkerDir)
+    }, rawWorkerDir, env)
     const identity = authorityIdentityFor({ identity: materialized.identity })
     assertRawRestoreWorkerDescriptor(materialized, identity)
     if (resolve(materialized.manifestPath) !== resolve(manifestPath)) {
@@ -1225,6 +1228,7 @@ async function restoreVerifiedRawRecovery({
   generatedAt,
   importerVersion,
   readRawAuthority = readActiveRawSourceAuthority,
+  env,
 }) {
   const activeRaw = await readRawAuthority({ config, client })
   if (!activeRaw.found) throw new Error(`Verified raw source authority is unavailable: ${activeRaw.reason}`)
@@ -1238,7 +1242,7 @@ async function restoreVerifiedRawRecovery({
     destinationDir: stagingDir,
     generatedAt,
     importerVersion,
-  }, rawWorkerDir)
+  }, rawWorkerDir, env)
   const identity = authorityIdentityFor({ identity: materialized.identity })
   assertRawRestoreWorkerDescriptor(materialized, identity)
   return { identity, materialized }
@@ -1650,7 +1654,7 @@ async function stageRawAuthorityObjectFiles(authority, destinationDir) {
   return objectFiles
 }
 
-async function runRawSourceWorker(input, workerDir) {
+async function runRawSourceWorker(input, workerDir, env) {
   await mkdir(workerDir, { recursive: true })
   const nonce = `${input.action}-${process.pid}-${Date.now()}`
   const inputPath = resolve(workerDir, `${nonce}.input.json`)
@@ -1659,8 +1663,8 @@ async function runRawSourceWorker(input, workerDir) {
   const stderr = []
   try {
     await new Promise((resolveRun, rejectRun) => {
-      const { command, args } = rawSourceWorkerCommand(inputPath, outputPath)
-      const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+      const { command, args } = rawSourceWorkerCommand(inputPath, outputPath, env)
+      const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'], env })
       child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)))
       child.on('error', rejectRun)
       child.on('exit', (code) => {
