@@ -1334,6 +1334,42 @@
       "instantMs": null,
       "date": "",
       "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60Z",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60.5Z",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31 23:59:60",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31 23:59:60.5",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2016-12-31T23:59:60.5",
+      "instantMs": null,
+      "date": "2016-12-31",
+      "datetimeUtc": null
     }
   ]
 }
