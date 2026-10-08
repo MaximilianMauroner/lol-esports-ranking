@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
-import { gunzipSync } from 'node:zlib'
+import { gzipSync } from 'node:zlib'
+import { assertRawSourceObjectsMatch } from '../scripts/verify-rust-raw-source.ts'
 import { hydrateFileBackedRawSourceGeneration, type PreparedRawSourceGeneration } from '../scripts/raw-source-generation.mjs'
 import { type RawSourceReceipt } from '../scripts/raw-source-storage.mjs'
 
@@ -19,6 +21,37 @@ type PreparedOutput = {
     objects: Array<{ digest: string; bytes: number; compressedBytes: number; compressedPath: string; compressedSha256: string }>
   }
 }
+
+test('raw object parity compares unique semantic objects by digest rather than index', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'raw-object-parity-'))
+  try {
+    const nodeObjects = []
+    const rustObjects = []
+    for (const [index, content] of ['first content '.repeat(100), 'second content '.repeat(100)].entries()) {
+      const digest = createHash('sha256').update(content).digest('hex')
+      const nodePath = join(root, `node-${index}.gz`)
+      const rustPath = join(root, `rust-${index}.gz`)
+      await writeFile(nodePath, gzipSync(content, { level: 1 }))
+      await writeFile(rustPath, gzipSync(content, { level: 9 }))
+      nodeObjects.push({ digest, bytes: Buffer.byteLength(content), compressedPath: nodePath })
+      rustObjects.unshift({ digest, bytes: Buffer.byteLength(content), compressedPath: rustPath })
+    }
+    await assertRawSourceObjectsMatch(nodeObjects, rustObjects)
+    await assert.rejects(assertRawSourceObjectsMatch([...nodeObjects, nodeObjects[0]], rustObjects), /Node raw objects contain duplicate digests/)
+    await assert.rejects(assertRawSourceObjectsMatch(nodeObjects, [...rustObjects, rustObjects[0]]), /Rust raw objects contain duplicate digests/)
+    await assert.rejects(assertRawSourceObjectsMatch(nodeObjects, rustObjects.slice(1)), /Raw object count differs/)
+    await assert.rejects(assertRawSourceObjectsMatch(nodeObjects, [rustObjects[0], { ...rustObjects[1], digest: 'unmatched' }]), /Missing Rust raw object/)
+    await assert.rejects(assertRawSourceObjectsMatch(nodeObjects, [rustObjects[0], { ...rustObjects[1], bytes: rustObjects[1].bytes + 1 }]), /Raw object semantic size differs/)
+    const corruptPath = join(root, 'wrong-content.gz')
+    await writeFile(corruptPath, gzipSync('x'.repeat(rustObjects[1].bytes)))
+    await assert.rejects(assertRawSourceObjectsMatch(nodeObjects, [rustObjects[0], { ...rustObjects[1], compressedPath: corruptPath }]), /Raw object contents differ/)
+    const falseSizeNode = nodeObjects.map((object) => ({ ...object, bytes: object.bytes + 1 }))
+    const falseSizeRust = rustObjects.map((object) => ({ ...object, bytes: object.bytes + 1 }))
+    await assert.rejects(assertRawSourceObjectsMatch(falseSizeNode, falseSizeRust), /Node raw object size is invalid/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('Rust raw seam matches Node baseline, mutation partitions, restore and rebaseline', { skip: !binary }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'rust-raw-parity-'))
@@ -66,13 +99,8 @@ test('Rust raw seam matches Node baseline, mutation partitions, restore and reba
       assert.deepEqual(rust.generation.lolesports, node.generation.lolesports)
       assert.equal(rust.generation.rawIdentityDigest, node.generation.rawIdentityDigest)
       assert.equal(rust.generation.sourceReceiptDigest, node.generation.sourceReceiptDigest)
-      assert.deepEqual(rust.generation.objects.map(({ digest, bytes }) => ({ digest, bytes })), node.generation.objects.map(({ digest, bytes }) => ({ digest, bytes })))
-      for (let index = 0; index < node.generation.objects.length; index++) {
-        const nodeBytes = gunzipSync(await readFile(node.generation.objects[index].compressedPath))
-        const rustBytes = gunzipSync(await readFile(rust.generation.objects[index].compressedPath))
-        assert.deepEqual(rustBytes, nodeBytes)
-        stored.set(`raw/objects/sha256/${node.generation.objects[index].digest}`, node.generation.objects[index].compressedPath)
-      }
+      await assertRawSourceObjectsMatch(node.generation.objects, rust.generation.objects)
+      for (const object of node.generation.objects) stored.set(`raw/objects/sha256/${object.digest}`, object.compressedPath)
       assert.deepEqual(await readFile(rust.manifestPath), await readFile(node.manifestPath))
       assert.deepEqual(await readFile(join(resolve(rust.manifestPath, '..'), 'oracles-elixir/oracle.csv')), Buffer.from(csv))
       // No-change cycle and rebaseline cycle both preserve valid descriptors.
