@@ -591,8 +591,9 @@ function assertCompressedMetadata(object, reference, key, observedBytes) {
     || object.Metadata?.sha256 !== reference.sha256
     || object.Metadata?.['semantic-bytes'] !== String(reference.bytes)
     || object.Metadata?.encoding !== 'gzip'
-    || Number(object.ContentLength) !== reference.compressedBytes
-    || observedBytes !== reference.compressedBytes) {
+    || !Number.isSafeInteger(Number(object.ContentLength)) || Number(object.ContentLength) <= 0
+    || observedBytes !== Number(object.ContentLength)
+    || (reference.compressedBytes !== undefined && observedBytes !== reference.compressedBytes)) {
     throw new Error(`Compressed authority metadata mismatch: ${key}`)
   }
 }

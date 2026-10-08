@@ -153,9 +153,12 @@ export async function buildRankingBucketInventory({
     const inventoryObject = objectByKey.get(literal)
     try {
       const stored = await getStored(client, config, literal)
+      const compressedBytes = Number(stored.contentLength)
       if (stored.contentEncoding !== 'gzip' || stored.metadata?.sha256 !== parsed.sha256
         || stored.metadata?.['semantic-bytes'] !== String(parsed.bytes) || stored.metadata?.encoding !== 'gzip'
-        || inventoryObject.bytes !== parsed.compressedBytes || stored.bytes.byteLength !== parsed.compressedBytes) {
+        || !Number.isSafeInteger(compressedBytes) || compressedBytes <= 0
+        || inventoryObject.bytes !== compressedBytes || stored.bytes.byteLength !== compressedBytes
+        || (parsed.compressedBytes !== undefined && compressedBytes !== parsed.compressedBytes)) {
         throw new Error('Referenced object metadata does not match authority')
       }
       const semantic = gunzipSync(stored.bytes)
@@ -641,7 +644,8 @@ function assertStoredPublicManifest(stored, digest) {
 
 function parseObjectReference(value, namespace) {
   if (!value || typeof value !== 'object' || typeof value.key !== 'string' || !/^[a-f0-9]{64}$/.test(value.sha256 ?? '')
-    || !Number.isSafeInteger(value.bytes) || value.bytes <= 0 || !Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0
+    || !Number.isSafeInteger(value.bytes) || value.bytes <= 0
+    || (Object.hasOwn(value, 'compressedBytes') && (!Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0))
     || value.storageEncoding !== 'gzip') throw new Error(`Invalid ${namespace} object reference`)
   const pattern = namespace === 'state' ? /^state\/objects\/sha256\/[a-f0-9]{64}$/
     : namespace === 'raw' ? /^raw\/objects\/sha256\/[a-f0-9]{64}$/

@@ -3,9 +3,10 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { syncBuiltinESMExports } from 'node:module'
 import { Readable } from 'node:stream'
 import test from 'node:test'
-import { gunzipSync } from 'node:zlib'
+import zlib, { gunzipSync, gzipSync } from 'node:zlib'
 import {
   acquireBucketLease,
   assertBucketLease,
@@ -24,7 +25,7 @@ import {
   type BucketStorageConfig,
 } from '../scripts/railway-bucket.mjs'
 import { canonicalJsonFor, canonicalPublicLogicalPath, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { createGenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
+import { createGenerationPublicationReceipt, parseGenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 import {
   prepareContentAddressedState,
@@ -559,6 +560,175 @@ test('pre-promotion state model and publication outcomes are exact and exhaustiv
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('public and raw reuse measure alternate gzip sizes in the publication closure', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'alternate-gzip-publication-'))
+  const publicDir = join(root, 'public')
+  const client = memoryS3()
+  try {
+    await writeContentAddressedFixture(publicDir, 'gzip-first')
+    const originalRaw = testRawGeneration('gzip-first')
+    await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'gzip-first', fencingToken: 1, rawSourceGeneration: originalRaw, config, client })
+    const altered = new Map<string, Buffer>()
+    for (const [key, object] of client.objects) {
+      if (!key.startsWith('rankings/objects/sha256/') && !key.startsWith('rankings/raw/objects/sha256/')) continue
+      const alternate = gzipSync(gunzipSync(object.bytes!), { level: 0 })
+      assert.notEqual(alternate.byteLength, object.bytes!.byteLength)
+      object.bytes = alternate
+      altered.set(key, alternate)
+    }
+    await writeContentAddressedFixture(publicDir, 'gzip-next')
+    const nextReceipt = prepareRawSourceReceipt({ ...originalRaw.receipt, generationId: 'gzip-next' })
+    const nextRaw = { ...originalRaw, generationId: 'gzip-next', receipt: nextReceipt.receipt,
+      receiptPrepared: nextReceipt.prepared, receiptReference: rawObjectReferenceFor(nextReceipt.prepared),
+    }
+    const published = await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: 'gzip-next', fencingToken: 2, rawSourceGeneration: nextRaw, config, client })
+    const receipt = parseGenerationPublicationReceipt(published.publicationReceipt)
+    const outcomes = published.unchanged as Array<{ key: string; bytes: number }>
+    for (const outcome of outcomes) {
+      const alternate = altered.get(outcome.key)
+      if (!alternate) continue
+      assert.equal(outcome.bytes, alternate.byteLength)
+      assert.equal(receipt.objects.find((member) => member.key === outcome.key)?.bytes, alternate.byteLength)
+      assert.deepEqual(client.objects.get(outcome.key)!.bytes, alternate)
+    }
+    assert.ok(outcomes.some((entry) => altered.has(entry.key) && entry.key.startsWith('rankings/objects/')))
+    assert.ok(outcomes.some((entry) => altered.has(entry.key) && entry.key.startsWith('rankings/raw/')))
+    const storage = published.storage as { compressedLogicalBytes: number }
+    const publicSizes = receipt.objects.filter((member) => member.key.startsWith('rankings/objects/'))
+      .reduce((sum, member) => sum + member.bytes, 0)
+    assert.equal(storage.compressedLogicalBytes, publicSizes)
+    assert.equal((await readActiveRawSourceAuthority({ config, client })).found, true)
+    assert.equal((await readActiveContentAddressedGeneration({ config, client })).found, true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('publication reuses only raw and public proofs from this upload and rechecks changed gzip bytes', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'raw-public-publication-proof-'))
+  const publicDir = join(root, 'public')
+  const backing = memoryS3()
+  const generationId = 'raw-public-proof'
+  const raw = testRawGeneration(generationId)
+  const originalBytes = new Map<string, Buffer>()
+  const keyByCompressedHash = new Map<string, string>()
+  const finalInflates = new Map<string, number>()
+  const finalGets = new Map<string, number>()
+  let finalCheck = false
+  const compressedMember = (key: string) => key.startsWith('rankings/objects/sha256/') || key.startsWith('rankings/raw/objects/sha256/')
+  const client = {
+    objects: backing.objects,
+    async send(command: unknown) {
+      const { name, input } = commandDetails(command)
+      const key = String(input.Key)
+      if (finalCheck && name === 'GetObjectCommand' && compressedMember(key)) finalGets.set(key, (finalGets.get(key) ?? 0) + 1)
+      return backing.send(command)
+    },
+  }
+  const originalGunzip = gunzipSync
+  t.mock.method(zlib, 'gunzipSync', (bytes: Parameters<typeof gunzipSync>[0], options?: Parameters<typeof gunzipSync>[1]) => {
+    if (finalCheck && Buffer.isBuffer(bytes)) {
+      const key = keyByCompressedHash.get(createHash('sha256').update(bytes).digest('hex'))
+      if (key) finalInflates.set(key, (finalInflates.get(key) ?? 0) + 1)
+    }
+    return originalGunzip(bytes, options)
+  })
+  syncBuiltinESMExports()
+  try {
+    for (const [fencingToken, mode] of [[1, 'uploaded'], [2, 'reused'], [3, 'changed']] as const) {
+      const nextId = `${generationId}-${fencingToken}`
+      await writeContentAddressedFixture(publicDir, nextId)
+      const nextReceipt = prepareRawSourceReceipt({ ...raw.receipt, generationId: nextId })
+      const nextRaw = { ...raw, generationId: nextId, receipt: nextReceipt.receipt,
+        receiptPrepared: nextReceipt.prepared, receiptReference: rawObjectReferenceFor(nextReceipt.prepared) }
+      const patch = mode === 'reused' ? {
+        previousManifest: JSON.parse(backing.objects.get(`rankings/generations/${generationId}-1/manifest.json`)!.body),
+        changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: JSON.parse(await readFile(join(publicDir, 'ranking-summary.json'), 'utf8')) }],
+        onVerifiedStored: () => { throw new Error('Caller must not replace the internal stored-byte proof collector') },
+      } : undefined
+      finalCheck = false
+      finalGets.clear()
+      finalInflates.clear()
+      const changedKeys = new Set<string>()
+      if (mode === 'changed') {
+        for (const [key, bytes] of originalBytes) {
+          const alternate = Buffer.from(bytes)
+          alternate[4] ^= 1 // Equal-length gzip MTIME change preserves the semantic value.
+          assert.deepEqual(originalGunzip(alternate), originalGunzip(bytes))
+          backing.objects.get(key)!.bytes = alternate
+          changedKeys.add(key)
+        }
+      }
+      const published = await uploadRankingArtifacts({ publicDataDir: publicDir, generationId: nextId, fencingToken,
+        rawSourceGeneration: nextRaw, publicArtifactPatch: patch, config, client,
+        beforePromotionWrite: () => {
+          for (const [key, object] of backing.objects) {
+            if (!compressedMember(key)) continue
+            assert.ok(object.bytes)
+            if (!originalBytes.has(key)) originalBytes.set(key, Buffer.from(object.bytes))
+            // Record the final bytes for observing semantic fallback. Current-upload
+            // proofs saw the alternate bytes, so an earlier upload's proof is unsafe.
+            if (changedKeys.has(key)) object.bytes = originalBytes.get(key)!
+            keyByCompressedHash.set(createHash('sha256').update(object.bytes).digest('hex'), key)
+          }
+          finalCheck = true
+        },
+      })
+      const receipt = parseGenerationPublicationReceipt(published.publicationReceipt)
+      const members = receipt.objects.filter((member) => compressedMember(member.key))
+      assert.deepEqual([...finalGets.keys()].sort(), members.map((member) => member.key).sort())
+      assert.ok([...finalGets.values()].every((count) => count === 1))
+      const expectedInflates = mode === 'uploaded' ? members.filter((member) => member.key.startsWith('rankings/objects/'))
+        : mode === 'changed' ? members.filter((member) => changedKeys.has(member.key)) : []
+      assert.deepEqual([...finalInflates.keys()].sort(), expectedInflates.map((member) => member.key).sort())
+      assert.ok([...finalInflates.values()].every((count) => count === 1))
+      const rawReceiptKey = `rankings/${nextRaw.receiptReference.key}`
+      const receiptMember = receipt.objects.find((member) => member.key === rawReceiptKey)
+      assert.deepEqual(receiptMember, { key: rawReceiptKey, digest: nextRaw.receiptReference.sha256,
+        bytes: backing.objects.get(rawReceiptKey)!.bytes!.byteLength, outcome: 'uploaded' })
+    }
+  } finally {
+    t.mock.restoreAll()
+    syncBuiltinESMExports()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+for (const namespace of ['objects', 'raw/objects'] as const) {
+  test(`publication rejects ${namespace} corruption after stored validation despite caller-supplied proofs`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'publication-proof-corruption-'))
+    const publicDir = join(root, 'public')
+    const client = memoryS3()
+    const generationId = 'corrupt-raw-public-proof'
+    const raw = testRawGeneration(generationId)
+    const callerProofs = new Map<string, { key: string; digest: string; compressedBytes: number; compressedSha256: string }>()
+    try {
+      await writeContentAddressedFixture(publicDir, generationId)
+      await uploadRankingArtifacts({ publicDataDir: publicDir, generationId, fencingToken: 1, rawSourceGeneration: raw, config, client })
+      const target = [...client.objects].find(([key]) => key.startsWith(`rankings/${namespace}/sha256/`))
+      assert.ok(target)
+      const [key, stored] = target
+      assert.ok(stored.bytes)
+      const corruption = Buffer.alloc(stored.bytes.byteLength)
+      assert.ok(stored.metadata)
+      callerProofs.set(key, { key, digest: stored.metadata.sha256, compressedBytes: corruption.byteLength,
+        compressedSha256: createHash('sha256').update(corruption).digest('hex') })
+      const nextId = `${generationId}-next`
+      await writeContentAddressedFixture(publicDir, nextId)
+      const nextReceipt = prepareRawSourceReceipt({ ...raw.receipt, generationId: nextId })
+      const nextRaw = { ...raw, generationId: nextId, receipt: nextReceipt.receipt,
+        receiptPrepared: nextReceipt.prepared, receiptReference: rawObjectReferenceFor(nextReceipt.prepared) }
+      await assert.rejects(uploadRankingArtifacts({ publicDataDir: publicDir, generationId: nextId, fencingToken: 2,
+        rawSourceGeneration: nextRaw, config, client, verifiedObjects: callerProofs,
+        beforePromotionWrite: () => { stored.bytes = corruption },
+      }), /publication object gzip is corrupt/)
+      assert.equal(JSON.parse(client.objects.get('rankings/active-generation.json')!.body).fencingToken, 1)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+}
 
 test('content-addressed generation reuses unchanged objects, uploads only changed content, and remains reader-compatible', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-content-addressed-'))
