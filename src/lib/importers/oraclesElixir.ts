@@ -6,6 +6,7 @@ import {
   resolveHomeLeagueForCompetition,
 } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 type CsvRecord = Record<string, string>
 
@@ -59,7 +60,7 @@ export function importOraclesElixirCsv(
   }
 
   return {
-    matches: matches.sort((a, b) => a.date.localeCompare(b.date)),
+    matches: matches.sort((a, b) => compareCodeUnits(a.date, b.date)),
     teams,
     source: {
       name: "Oracle's Elixir CSV",

@@ -9,6 +9,7 @@ import {
   type CausalInputRow,
   type CausalPrefixSummary,
 } from './causalRecompute'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export const dssRosterEraModelParameters = {
   retainedSynergyWeights: {
@@ -416,13 +417,9 @@ function rosterEraCausalInputs(
   ]
 }
 
-function compareCodeUnits(left: string, right: string) {
-  return left < right ? -1 : left > right ? 1 : 0
-}
-
 export function dssRosterEraSignature(roster: MatchRosterSnapshot, coachId?: string) {
   const players = roster.players
-    .toSorted((left, right) => roleOrder(left.role) - roleOrder(right.role) || left.id.localeCompare(right.id))
+    .toSorted((left, right) => roleOrder(left.role) - roleOrder(right.role) || compareCodeUnits(left.id, right.id))
     .map((player) => `${player.role}:${player.id}`)
     .join('|')
   return `${roster.completeness}|${players}|coach:${coachId ?? ''}`

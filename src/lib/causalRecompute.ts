@@ -1,3 +1,5 @@
+import { compareCodeUnits } from './codeUnitOrder.mjs'
+
 export const CAUSAL_PREFIX_SCHEMA_VERSION = 2 as const
 
 export type CausalSurfaceId =
@@ -301,10 +303,6 @@ function minimumDate(left?: string, right?: string) {
   if (!left) return right
   if (!right) return left
   return compareCodeUnits(left, right) <= 0 ? left : right
-}
-
-function compareCodeUnits(left: string, right: string) {
-  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

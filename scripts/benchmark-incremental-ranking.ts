@@ -24,6 +24,7 @@ import {
   passesIncrementalSafetyPeak,
 } from './incremental-benchmark-assertions.ts'
 import { runCalibrationWorkload } from './benchmark-calibration.ts'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
 const refreshModulePath: string = './refresh-data-if-changed.mjs'
@@ -1153,9 +1154,9 @@ async function currentMatches(): Promise<BenchmarkMatch[]> {
     return page.matches ?? []
   }))
   return pages.flat().sort((left, right) => (
-    left.date.localeCompare(right.date)
-    || (left.datetimeUtc ?? '').localeCompare(right.datetimeUtc ?? '')
-    || left.id.localeCompare(right.id)
+    compareCodeUnits(left.date, right.date)
+    || compareCodeUnits(left.datetimeUtc ?? '', right.datetimeUtc ?? '')
+    || compareCodeUnits(left.id, right.id)
   ))
 }
 

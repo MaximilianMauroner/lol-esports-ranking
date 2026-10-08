@@ -1,3 +1,4 @@
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 /** Offline replay of complete, observed Worlds 2022 group results. No draw or match is generated. */
 export const WORLDS_2022_GROUP_RULES = {
   id: 'worlds-2022-groups-observed-v1',
@@ -106,7 +107,7 @@ export function replayWorlds2022Group(input: {
   if (pairCounts.size !== 6 || [...pairCounts.values()].some((count) => count !== 2)) {
     return unsupported('incomplete-group', 'Every pair must have exactly two observed games')
   }
-  const ranked = [...standings.values()].sort((a, b) => b.wins - a.wins || a.id.localeCompare(b.id))
+  const ranked = [...standings.values()].sort((a, b) => b.wins - a.wins || compareCodeUnits(a.id, b.id))
   if (ranked[1].wins === ranked[2].wins) {
     return unsupported('tiebreaker-rules-unavailable', 'A tie crosses the knockout qualification line; the cited primer does not specify its resolution')
   }

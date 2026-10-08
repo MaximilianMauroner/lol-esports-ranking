@@ -3,6 +3,7 @@ import type { TeamHistorySeries } from './snapshot'
 import { isMatchChartPointDetail, type ChartAttributionEntry, type ChartModelDetail, type ChartPoint, type ChartPointDetail } from './chartPoints'
 import { groupEntriesByDate } from './timelineCompaction'
 import { POWER_COMPONENT_LABELS } from './ratingComponentLabels'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 type TeamHistoryPoint = TeamHistorySeries['points'][number]
 type TeamHistoryContext = NonNullable<TeamHistoryPoint[3]>
@@ -99,7 +100,7 @@ export function deriveDailyRankSeries(history: Record<string, TeamHistorySeries>
       if (update.detail) dayDetails.set(update.key, update.detail)
     }
     const rankedKeys = [...ratings.entries()]
-      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .sort((left, right) => right[1] - left[1] || compareCodeUnits(left[0], right[0]))
       .map(([key]) => key)
     const t = Date.parse(day)
     for (let index = 0; index < rankedKeys.length; index += 1) {

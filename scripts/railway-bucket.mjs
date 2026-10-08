@@ -24,6 +24,7 @@ import {
 import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { assertStateManifestAuthority, parseIncrementalStateManifest, readStoredJsonStateObject } from './incremental-state-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 export const PRESIGNED_URL_EXPIRY_SECONDS = 3600
 const IMMUTABLE_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable'
@@ -1646,7 +1647,7 @@ export async function uploadDirectory(client, config, dir, destinationPrefix, pu
 
 export async function uploadContentAddressedPublicArtifacts(client, config, dir, generationId) {
   const root = resolve(dir)
-  const files = (await listFiles(root)).sort((left, right) => relative(root, left).localeCompare(relative(root, right)))
+  const files = (await listFiles(root)).sort((left, right) => compareCodeUnits(relative(root, left), relative(root, right)))
   const entries = [], uploaded = [], unchanged = []
   const seen = new Set(), paths = new Set()
   let semanticLogicalBytes = 0, compressedLogicalBytes = 0

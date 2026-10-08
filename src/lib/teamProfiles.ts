@@ -7,13 +7,14 @@ import {
 } from '../data/competitionTaxonomy'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../data/teamIdentity'
 import type { MatchRecord, Region, TeamProfile } from '../types'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export { isCompetitionOnlyLeague, isUnknownLeague } from '../data/competitionTaxonomy'
 
 /** Fill tournament placeholders from domestic evidence available before the game. */
 export function resolveCompetitionHomeLeagues(matches: MatchRecord[]) {
   const observed = new Map<string, { league: string; region: Region }>()
-  return [...matches].sort((left, right) => (left.datetimeUtc ?? left.date).localeCompare(right.datetimeUtc ?? right.date)).map((match) => {
+  return [...matches].sort((left, right) => compareCodeUnits(left.datetimeUtc ?? left.date, right.datetimeUtc ?? right.date)).map((match) => {
     const resolved = { ...match }
     for (const side of ['A', 'B'] as const) {
       const team = canonicalTeamNameFor(match[`team${side}`])
@@ -132,7 +133,7 @@ function bestObservedLeague(observations: Map<string, LeagueObservation> | undef
 }
 
 function compareLeagueObservation(left: LeagueObservation, right: LeagueObservation) {
-  return right.lastObserved.localeCompare(left.lastObserved)
+  return compareCodeUnits(right.lastObserved, left.lastObserved)
     || right.count - left.count
     || leagueProfileScore(right.league) - leagueProfileScore(left.league)
 }

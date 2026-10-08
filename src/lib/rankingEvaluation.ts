@@ -1,4 +1,5 @@
 import { binaryMetricContract, binaryPredictionLoss } from './binaryPredictionMetrics'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type EvaluationRow = {
   id: string
@@ -59,7 +60,7 @@ export function readEvaluationExport(input: unknown): EvaluationExport {
   return { schemaVersion: 1, target: data.target, modelVersion: string(data.modelVersion),
     modelConfigHash: string(data.modelConfigHash), sourceIdentity: string(data.sourceIdentity),
     temporalPolicy: data.temporalPolicy, metricContract: binaryMetricContract,
-    rows: rows.toSorted((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)) }
+    rows: rows.toSorted((a, b) => compareCodeUnits(a.date, b.date) || compareCodeUnits(a.id, b.id)) }
 }
 
 export function summarizeEvaluation(rows: readonly EvaluationRow[]) {

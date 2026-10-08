@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { createProviderFetchTelemetry, fetchWithRetry, snapshotProviderFetchTelemetry } from './provider-fetch-retry.mjs'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 const publicPersistedApiKey = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
 const defaultPersistedBaseUrl = 'https://esports-api.lolesports.com/persisted/gw'
@@ -170,7 +171,7 @@ function uniqueEvents(values) {
     const key = id || `${event?.startTime ?? 'unknown'}:${event?.league?.slug ?? 'unknown'}:${event?.blockName ?? 'unknown'}`
     if (!eventsById.has(key)) eventsById.set(key, event)
   }
-  return Array.from(eventsById.values()).sort((left, right) => String(left?.startTime ?? '').localeCompare(String(right?.startTime ?? '')))
+  return Array.from(eventsById.values()).sort((left, right) => compareCodeUnits(String(left?.startTime ?? ''), String(right?.startTime ?? '')))
 }
 
 function eventWithinRange(event, startDate, endDate) {

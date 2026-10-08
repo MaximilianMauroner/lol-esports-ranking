@@ -1,4 +1,5 @@
 import { isForecastLedger, type ForecastReceipt } from './tournamentForecast'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type SyntheticSeriesOutcome = {
   matchId: string
@@ -80,7 +81,7 @@ export function replayOfflineSeriesCohort(input: {
     } else outcomes.set(outcome.matchId, outcome)
   }
   const receipts = Object.values(input.ledger.receipts)
-  for (const [matchId, outcome] of [...outcomes].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [matchId, outcome] of [...outcomes].sort(([a], [b]) => compareCodeUnits(a, b))) {
     const exclude = (reason: CohortExclusion) => result.exclusions.push({ matchId, reason })
     if (conflicts.has(matchId)) { exclude('conflicting-outcomes'); continue }
     if (!matchId?.trim() || !outcome.eventId?.trim() || !Array.isArray(outcome.teamIds)
@@ -119,7 +120,7 @@ export function replayOfflineSeriesCohort(input: {
   for (const matchId of futureMatchIds) {
     if (!outcomes.has(matchId)) result.exclusions.push({ matchId, reason: 'outcome-after-cutoff' })
   }
-  result.exclusions.sort((a, b) => a.matchId.localeCompare(b.matchId))
+  result.exclusions.sort((a, b) => compareCodeUnits(a.matchId, b.matchId))
   return result
 }
 
@@ -129,7 +130,7 @@ function time(value: string | null): value is string {
 
 function compareReceipts(a: ForecastReceipt, b: ForecastReceipt) {
   return Date.parse(b.publishedAt) - Date.parse(a.publishedAt)
-    || b.forecastRevision.localeCompare(a.forecastRevision) || b.receiptKey.localeCompare(a.receiptKey)
+    || compareCodeUnits(b.forecastRevision, a.forecastRevision) || compareCodeUnits(b.receiptKey, a.receiptKey)
 }
 
 function signature(outcome: SyntheticSeriesOutcome) {

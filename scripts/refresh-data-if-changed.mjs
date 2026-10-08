@@ -17,6 +17,7 @@ import {
   prepareRankingSourceAuthorityEvidence,
 } from './ranking-source-authority.mjs'
 import { materializePublicArtifactPatch } from './public-artifact-materialization.mjs'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',
@@ -1090,7 +1091,7 @@ export async function createSourceFingerprint(manifest) {
     }
   }
 
-  files.sort((left, right) => `${left.kind}:${left.name}`.localeCompare(`${right.kind}:${right.name}`))
+  files.sort((left, right) => compareCodeUnits(`${left.kind}:${left.name}`, `${right.kind}:${right.name}`))
 
   const content = {
     schemaVersion: manifest?.schemaVersion,

@@ -23,6 +23,7 @@ import {
   parseGenerationPublicationReceipt,
   readLegacyNativeGenerationPublishReceipt,
 } from './generation-publication.mjs'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000
@@ -139,7 +140,7 @@ export async function buildRankingBucketInventory({
   const retainedGenerationIds = new Set(pointerAuthorities.map((authority) => authority.generationId))
   for (const root of generations.filter((entry) => new Date(entry.lastModified) >= generationCutoffDate)) retainedGenerationIds.add(root.generationId)
   for (const root of [...generations]
-    .sort((left, right) => right.lastModified.localeCompare(left.lastModified) || left.generationId.localeCompare(right.generationId))
+    .sort((left, right) => compareCodeUnits(right.lastModified, left.lastModified) || compareCodeUnits(left.generationId, right.generationId))
     .slice(0, policy.retainNewestGenerationCount)) retainedGenerationIds.add(root.generationId)
 
   const visitedState = new Map()
@@ -354,7 +355,7 @@ export async function buildRankingBucketInventory({
   }
 
   errors.sort(compareKeyReason)
-  missingReferences.sort((left, right) => left.fromKey.localeCompare(right.fromKey) || left.referencedKey.localeCompare(right.referencedKey) || left.reason.localeCompare(right.reason))
+  missingReferences.sort((left, right) => compareCodeUnits(left.fromKey, right.fromKey) || compareCodeUnits(left.referencedKey, right.referencedKey) || compareCodeUnits(left.reason, right.reason))
   const valid = errors.length === 0 && missingReferences.length === 0
   const deletionCandidates = []
   const danglingReferences = []
@@ -692,11 +693,11 @@ function sha256(value) {
 }
 
 function compareKey(left, right) {
-  return left.key.localeCompare(right.key)
+  return compareCodeUnits(left.key, right.key)
 }
 
 function compareKeyReason(left, right) {
-  return String(left.key ?? '').localeCompare(String(right.key ?? '')) || String(left.reason ?? '').localeCompare(String(right.reason ?? ''))
+  return compareCodeUnits(String(left.key ?? ''), String(right.key ?? '')) || compareCodeUnits(String(left.reason ?? ''), String(right.reason ?? ''))
 }
 
 async function bodyBytes(body) {

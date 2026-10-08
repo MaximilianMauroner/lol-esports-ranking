@@ -37,6 +37,24 @@ export default defineConfig([
     },
   },
   {
+    // Data order guard: published artifacts, state, and hashes must not depend
+    // on ICU collation (localeCompare, Intl.Collator) or the process locale.
+    // Views may sort for display.
+    files: ['src/lib/**/*.{ts,mts,mjs,js}', 'scripts/**/*.{ts,mts,mjs,js}'],
+    // Declaration files need the TypeScript parser, which this block does not set.
+    ignores: ['**/*.d.mts'],
+    rules: {
+      'no-restricted-properties': ['error', {
+        property: 'localeCompare',
+        message: 'Use compareCodeUnits from src/lib/codeUnitOrder.mjs for locale-independent order.',
+      }, {
+        object: 'Intl',
+        property: 'Collator',
+        message: 'Use compareCodeUnits from src/lib/codeUnitOrder.mjs for locale-independent order.',
+      }],
+    },
+  },
+  {
     files: ['src/components/ui/**/*.{ts,tsx}'],
     rules: {
       'react-refresh/only-export-components': 'off',

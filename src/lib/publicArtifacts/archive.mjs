@@ -1,4 +1,6 @@
 // Shared storage format. No provider or model calculations belong here.
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
+
 export const ARCHIVE_FORMAT_VERSION = 1
 export const ARCHIVE_PAGE_BYTES = 512_000
 export const ARCHIVE_MAX_DEPTH = 24
@@ -21,7 +23,7 @@ function partition(value, store, depth, path = '') {
   if (byteSize(value) <= TARGET_BYTES) return { kind: 'inline', value }
   if (!value || typeof value !== 'object') throw new Error('Public archive indivisible value exceeds page budget')
   const array = Array.isArray(value)
-  const groups = array ? atomicGroups(value) : Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map((entry) => ({ year: yearOf(entry[1], entry[0]), values: [entry] }))
+  const groups = array ? atomicGroups(value) : Object.entries(value).sort(([a], [b]) => compareCodeUnits(a, b)).map((entry) => ({ year: yearOf(entry[1], entry[0]), values: [entry] }))
   const parts = []
   let pending = [], pendingYear, pendingBytes = 0
   const flush = () => {

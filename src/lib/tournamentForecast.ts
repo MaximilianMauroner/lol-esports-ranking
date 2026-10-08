@@ -4,6 +4,7 @@ import { ratingScaleFromUnknown } from './ratingCalculations'
 import { estimatePublicMatchup, type PublicMatchupSideAssumption } from './publicMatchup'
 import { DEFAULT_BLUE_SIDE_RATING_EDGE, seriesSwingStateProbability } from './matchupMath'
 import { normalizeStatus, type TournamentSeries } from './tournamentFeed'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 /** An explicit, reviewed crosswalk. Source names and display codes are never join keys. */
 export type TournamentTeamIdentityMap = {
@@ -239,7 +240,7 @@ export function pinPreMatchReceipt(ledger: ForecastLedger, series: TournamentSer
     && sameSeriesBasis(receipt, series)
     && Date.parse(receipt.publishedAt) < Math.min(Date.parse(receipt.scheduledStartAt), Date.parse(firstStartedObservedAt)))
     .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)
-      || b.forecastRevision.localeCompare(a.forecastRevision) || b.receiptKey.localeCompare(a.receiptKey))
+      || compareCodeUnits(b.forecastRevision, a.forecastRevision) || compareCodeUnits(b.receiptKey, a.receiptKey))
   return eligible[0] ? { ...ledger, pinned: { ...ledger.pinned, [series.id]: eligible[0].receiptKey } } : ledger
 }
 

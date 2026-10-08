@@ -2,7 +2,6 @@ import type { MatchRecord } from '../../types'
 import {
   CANONICAL_MATCH_LEDGER_SCHEMA_VERSION,
   assertUtcDate,
-  compareCodeUnits,
   stableDigest,
   type CanonicalMatchLedger,
   type CanonicalMatchLedgerContext,
@@ -10,6 +9,7 @@ import {
   type RankingChangeClassification,
   type RankingCompatibility,
 } from './types'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 export function canonicalMatchLedgerKey(match: MatchRecord) {
   const identity = match.officialGameId

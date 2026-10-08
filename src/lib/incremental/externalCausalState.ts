@@ -11,7 +11,8 @@ import {
 import type { EventWeightContext } from '../eventWeighting'
 import type { PlacementTournamentLifecycle } from '../placementResiduals'
 import { buildRatingCheckpointEventContract, type RatingCheckpointEventContract } from '../ratingCheckpointInventory'
-import { compareCodeUnits, stableDigest } from './types'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
+import { stableDigest } from './types'
 
 export const REQUIRED_EXTERNAL_CAUSAL_SURFACES = [
   'sourced-player',

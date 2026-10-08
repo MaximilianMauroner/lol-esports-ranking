@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { extname, resolve } from 'node:path'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 const args = parseArgs(process.argv.slice(2))
 const root = process.cwd()
@@ -64,7 +65,7 @@ const sourceAliases = {
 }
 
 const teamDirectory = JSON.parse(await readFile(teamDirectoryPath, 'utf8'))
-const teams = [...teamDirectory.teams].sort((left, right) => left.name.localeCompare(right.name))
+const teams = [...teamDirectory.teams].sort((left, right) => compareCodeUnits(left.name, right.name))
 const officialTeams = await loadOfficialTeams(manifestPath)
 const leaguepediaTeams = await loadLeaguepediaTeams()
 const candidates = teams.map((team) => resolveBranding(team, officialTeams, leaguepediaTeams))

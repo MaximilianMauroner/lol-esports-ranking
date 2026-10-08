@@ -1,4 +1,4 @@
-import { compareCodeUnits } from './types'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 export type SemanticArtifactIdentity = {
   digest: string

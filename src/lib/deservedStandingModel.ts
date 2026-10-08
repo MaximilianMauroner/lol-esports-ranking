@@ -17,6 +17,7 @@ import {
   type CausalPrefixSummary,
 } from './causalRecompute'
 import { eventWeightContextForMatches } from './eventWeighting'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type DeservedStandingModelOptions = DssSeriesLedgerOptions & {
   baseScoreFor?: (team: string, entries: DssSeriesLedgerEntry[]) => number | undefined
@@ -77,7 +78,7 @@ export function buildDeservedStandingModel(
   const entriesByTeam = groupBy(ledgerEntries, (entry) => entry.team)
   const teams = Array.from(entriesByTeam.entries())
     .map(([team, entries]) => teamSummaryFor(team, entries, options))
-    .sort((left, right) => right.dss - left.dss || right.winsAboveExpectation - left.winsAboveExpectation || left.team.localeCompare(right.team))
+    .sort((left, right) => right.dss - left.dss || right.winsAboveExpectation - left.winsAboveExpectation || compareCodeUnits(left.team, right.team))
     .map((team, index) => ({ ...team, rank: index + 1 }))
 
   return {

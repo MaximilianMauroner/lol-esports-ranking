@@ -38,6 +38,7 @@ import type {
 } from '../snapshot'
 import type { WalkForwardMetrics } from '../predictionModel'
 import { playerPerformanceMetricKeys, playerPerformancePolicy } from '../playerPerformance'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'
 
@@ -1037,7 +1038,7 @@ function tournamentAppearancesForMatches(matches: TeamMatchGroup[]): PublicTourn
     })
   }
 
-  return [...appearances.values()].sort((left, right) => right.lastDate.localeCompare(left.lastDate) || left.family.localeCompare(right.family))
+  return [...appearances.values()].sort((left, right) => compareCodeUnits(right.lastDate, left.lastDate) || compareCodeUnits(left.family, right.family))
 }
 
 type TeamMatchGroup = {

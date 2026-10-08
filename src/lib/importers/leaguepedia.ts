@@ -7,6 +7,7 @@ import {
   resolveHomeLeagueForCompetition,
 } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor, cleanDisplayName, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 export type LeaguepediaSnapshot = {
   source?: string
@@ -79,7 +80,7 @@ export function importLeaguepediaSnapshot(
   }
 
   return {
-    matches: matches.sort((a, b) => a.date.localeCompare(b.date)),
+    matches: matches.sort((a, b) => compareCodeUnits(a.date, b.date)),
     teams,
     source: {
       name: 'Leaguepedia Cargo ScoreboardGames',

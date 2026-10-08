@@ -3,6 +3,7 @@ import { eventTierRank, inferEventTier } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor } from '../../data/teamIdentity'
 import { tournamentFamilyForEvent } from '../internationalTournaments'
 import type { LolEsportsReferenceEvent } from './lolEsports'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 type SeenMatch = { source: MatchRecord; retained: MatchRecord }
 
@@ -77,7 +78,7 @@ export function mergeCommunityMatchSources({
 
   const reconciled = reconcileSharedSeriesGames(merged)
   enrichWithLolEsportsReferences(reconciled, lolEsportsReferences)
-  return reconciled.sort((a, b) => a.date.localeCompare(b.date))
+  return reconciled.sort((a, b) => compareCodeUnits(a.date, b.date))
 }
 
 function registerMatchKeys(seen: Map<string, SeenMatch>, seenByRetained: Map<MatchRecord, SeenMatch>, match: MatchRecord, retained: MatchRecord) {

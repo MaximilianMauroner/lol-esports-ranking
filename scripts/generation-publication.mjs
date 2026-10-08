@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 export const GENERATION_PUBLICATION_SCHEMA_VERSION = 1
 export const GENERATION_PUBLICATION_STATUS = 'ready'
@@ -228,7 +229,7 @@ export function createGenerationPublicationReceipt({
     fencing: { token: fencingToken, owner: leaseOwner, promotionEtag },
     provenance,
     authorities,
-    objects: [...objects].sort((left, right) => left.key.localeCompare(right.key)),
+    objects: [...objects].sort((left, right) => compareCodeUnits(left.key, right.key)),
   }
   return parseGenerationPublicationReceipt(receipt, { generationId, prefix })
 }
@@ -326,7 +327,7 @@ export function deduplicatePublicationOutcomes(entries) {
     const current = byKey.get(entry.key)
     if (!current || priority[entry.outcome] > priority[current.outcome]) byKey.set(entry.key, entry)
   }
-  return [...byKey.values()].sort((left, right) => left.key.localeCompare(right.key))
+  return [...byKey.values()].sort((left, right) => compareCodeUnits(left.key, right.key))
 }
 
 function parseAuthority(value, label, prefix) {

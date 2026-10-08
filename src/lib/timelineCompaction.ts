@@ -1,4 +1,5 @@
 import type { SeriesFormatBasis, SeriesFormatConfidence, SeriesState } from '../types'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type TimelineResult = 'W' | 'L'
 
@@ -94,7 +95,7 @@ export function groupEntriesByDate<T>(
     byDate.set(date, dateEntries)
   }
   return [...byDate.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCodeUnits(left, right))
     .map(([date, dateEntries]) => ({ date, entries: dateEntries }))
 }
 

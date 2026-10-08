@@ -1,4 +1,5 @@
 import type { MatchRecord, MatchRosterSnapshot, Role, RosterBasis } from '../types'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 const rosterRoleShares: Record<Role, number> = {
   Top: 0.18,
@@ -105,9 +106,9 @@ export function rosterFingerprint(roster?: MatchRosterSnapshot) {
 }
 
 function compareMatchesByDateAndId(left: MatchRecord, right: MatchRecord) {
-  return left.date.localeCompare(right.date)
-    || (left.datetimeUtc ?? '').localeCompare(right.datetimeUtc ?? '')
-    || left.id.localeCompare(right.id)
+  return compareCodeUnits(left.date, right.date)
+    || compareCodeUnits(left.datetimeUtc ?? '', right.datetimeUtc ?? '')
+    || compareCodeUnits(left.id, right.id)
 }
 
 function recordRosterKnowledge(

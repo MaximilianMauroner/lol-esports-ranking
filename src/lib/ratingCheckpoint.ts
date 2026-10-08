@@ -5,6 +5,7 @@ import {
   type RatingCheckpointEventContract,
 } from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export const RATING_CHECKPOINT_SCHEMA_VERSION = 4 as const
 
@@ -107,7 +108,7 @@ export function selectSafeCheckpoint({
   }
   const eligible = candidates
     .filter((candidate) => candidate.processedThroughUtcDate < changedUtcDate)
-    .toSorted((left, right) => right.processedThroughUtcDate.localeCompare(left.processedThroughUtcDate))
+    .toSorted((left, right) => compareCodeUnits(right.processedThroughUtcDate, left.processedThroughUtcDate))
   const rejectedCandidateIds: string[] = []
   let requiredEarlierThan = changedUtcDate
 
@@ -630,10 +631,6 @@ function assertBoundary(date: string) {
 
 function checkpointMatchIdentity(match: NonNullable<RatingRunState['previousMatch']>) {
   return match.officialGameId ?? match.sourceGameId ?? match.id
-}
-
-function compareCodeUnits(left: string, right: string) {
-  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function assertIdentity(identity: RatingCheckpointIdentity) {

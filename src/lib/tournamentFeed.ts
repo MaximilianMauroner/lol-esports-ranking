@@ -1,3 +1,4 @@
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 /** A schedule reference feed. It never supplies scored ranking inputs. */
 export const TOURNAMENT_FEED_VERSION = 1
 
@@ -179,13 +180,13 @@ export function normalizeTournamentFeed(input: {
     })
   }
   if (missingIdentity) warnings.push(`${missingIdentity} allowed series lack a source tournament ID or valid start time and were withheld.`)
-  for (const event of grouped.values()) event.series.sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? '') || a.id.localeCompare(b.id))
+  for (const event of grouped.values()) event.series.sort((a, b) => compareCodeUnits(a.startTime ?? '', b.startTime ?? '') || compareCodeUnits(a.id, b.id))
   return {
     version: TOURNAMENT_FEED_VERSION,
     source: 'lolesports-persisted-site-api', unsupportedApi: true,
     fetchedAt: input.fetchedAt, sourceUpdatedAt: null,
     coverage: { start: input.coverageStart, end: input.coverageEnd, complete: input.coverageComplete && !conflicts.size && !missingMatchId && !missingIdentity, warnings },
-    events: [...grouped.values()].sort((a, b) => (a.series[0]?.startTime ?? '').localeCompare(b.series[0]?.startTime ?? '') || a.id.localeCompare(b.id)),
+    events: [...grouped.values()].sort((a, b) => compareCodeUnits(a.series[0]?.startTime ?? '', b.series[0]?.startTime ?? '') || compareCodeUnits(a.id, b.id)),
   }
 }
 

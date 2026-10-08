@@ -7,7 +7,7 @@ import { buildCanonicalMatchLedger, canonicalMatchLedgerKey, classifyRankingChan
 import { buildExternalCausalBundle, reconcileExternalCausalBundle, REQUIRED_EXTERNAL_CAUSAL_SURFACES, type ExternalCausalBundle, type ExternalCausalSurfaceInput } from '../src/lib/incremental/externalCausalState'
 import { replayRankingState } from '../src/lib/incremental/replayOrchestrator'
 import { compareSemanticArtifactMaps, type SemanticArtifactMap } from '../src/lib/incremental/semanticParity'
-import { compareCodeUnits, stableDigest, stableJson, type CanonicalMatchLedger, type RankingChangeClassification } from '../src/lib/incremental/types'
+import { stableDigest, stableJson, type CanonicalMatchLedger, type RankingChangeClassification } from '../src/lib/incremental/types'
 import { createRatingEventContext, createRatingReplayContext, replayRatingDates, transparentGprModelMetadata } from '../src/lib/model'
 import { RATING_CHECKPOINT_SCHEMA_VERSION, encodeRatingCheckpointEnvelope, selectSafeCheckpoint } from '../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract, reconcileRatingCheckpointEvents } from '../src/lib/ratingCheckpointInventory'
@@ -32,6 +32,7 @@ import {
 } from './incremental-state-storage.mjs'
 import type { BucketClient, BucketStorageConfig } from './railway-bucket.mjs'
 import { collectRefreshGarbage } from './refresh-worker-memory.mjs'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 export const RANKING_INCREMENTAL_IMPORTER_VERSION = 'community-source-import-v1'
 
@@ -959,7 +960,7 @@ function buildTerminalState(
     ledger,
     compatibility: stateCompatibility(sourceData),
     sourceReceiptDigest: resolvedSourceReceiptDigest(sourceReceiptDigest, ledger),
-    checkpoints: [...byBoundary.values()].sort((left, right) => left.boundary.date.localeCompare(right.boundary.date) || left.boundary.matchId.localeCompare(right.boundary.matchId)),
+    checkpoints: [...byBoundary.values()].sort((left, right) => compareCodeUnits(left.boundary.date, right.boundary.date) || compareCodeUnits(left.boundary.matchId, right.boundary.matchId)),
   }
 }
 
@@ -1209,10 +1210,10 @@ function dependencyInventory(
               ...(typeof entry.startUtcDate === 'string' ? { startUtcDate: entry.startUtcDate } : {}),
               ...(typeof entry.endUtcDate === 'string' ? { endUtcDate: entry.endUtcDate } : {}),
             }]
-          }).sort((left, right) => matchPageNumber(left.path) - matchPageNumber(right.path) || left.path.localeCompare(right.path))
+          }).sort((left, right) => matchPageNumber(left.path) - matchPageNumber(right.path) || compareCodeUnits(left.path, right.path))
         : artifactPaths
           .filter((path) => path.startsWith(pagePrefix))
-          .sort((left, right) => matchPageNumber(left) - matchPageNumber(right) || left.localeCompare(right))
+          .sort((left, right) => matchPageNumber(left) - matchPageNumber(right) || compareCodeUnits(left, right))
           .map((path) => ({ path, seriesIds: [] })),
     }]
   })
