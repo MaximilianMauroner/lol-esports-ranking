@@ -1,4 +1,5 @@
 import { WORLDS_2025_SWISS_RULES, type ObservationEvidence, type ObservedSwissMatch, type SwissReplayResult } from './worldsObservedRules'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export const WORLDS_2025_KNOCKOUT_RULES = {
   id: 'worlds-2025-knockout-observed-v1',
@@ -148,7 +149,7 @@ export function replayWorlds2025Knockout(input: {
     },
     slots: [...input.slots],
     completedRounds,
-    teams: [...stage.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    teams: [...stage.values()].sort((a, b) => compareCodeUnits(a.id, b.id)),
     championId: completedRounds === 3 ? field[0] : null,
     forecast: { status: 'unsupported', reason: 'draw-procedure-or-model-unavailable' },
   }

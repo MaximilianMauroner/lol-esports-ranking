@@ -4,6 +4,7 @@ import { walkForwardSegmentKeys } from './predictionContext'
 import { hasPredictionVariant, predictionVariantProbability } from './predictionVariants'
 import { neutralWinProbability, type NeutralWinProbability } from './winProbability'
 import type { MatchRecord, PregamePrediction, TeamProfile, TeamStanding, WalkForwardSegmentKey } from '../types'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type CurrentNeutralPrediction = NeutralWinProbability & {
   modelVersion: string
@@ -181,7 +182,7 @@ function calibrationBuckets(predictions: PregamePrediction[]) {
       meanPredicted: roundMetric(mean(values.predicted)),
       observedWinRate: roundMetric(mean(values.outcomes)),
     }))
-    .sort((left, right) => left.bucket.localeCompare(right.bucket))
+    .sort((left, right) => compareCodeUnits(left.bucket, right.bucket))
 }
 
 function segmentSummaries(predictions: PregamePrediction[]): WalkForwardMetricSummary[] {

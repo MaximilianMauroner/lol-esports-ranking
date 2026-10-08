@@ -14,6 +14,7 @@ import { playerModelParameters } from './playerModel'
 import { publishedFeatureWeight, shadowFeatureWeight, type PredictionFeaturePolicy } from './predictionFeaturePolicy'
 import { walkForwardSegmentKeys } from './predictionContext'
 import { defaultRosterContinuityConfig } from './rosters'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export const initialTeamRating = 1500
 export const initialLeagueRating = 1500
@@ -76,7 +77,7 @@ export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'entity-local-composable-half-life-regression-v1'
 export const ratingUpdateRecencyWeight = 1
 export const leagueExpectedScoreSource = 'pregame-neutral-series-team-power'
-export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-clock-corroboration-feasible-series-player-performance-home-league-v22'
+export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-clock-corroboration-feasible-series-player-performance-home-league-code-unit-order-v23'
 export const lineupEvidencePolicy = 'prior-observed-series-evidence-with-90-day-half-life-v1'
 export const partialLineupPolicy = 'role-weighted-known-player-evidence-v1'
 export const substituteEraPolicy = 'three-series-or-twenty-percent-split-share-v1'
@@ -292,7 +293,7 @@ function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
   if (value && typeof value === 'object') {
     return `{${Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCodeUnits(left, right))
       .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
       .join(',')}}`
   }

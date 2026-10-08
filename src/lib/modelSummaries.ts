@@ -1,5 +1,6 @@
 import { effectiveLeagueRating, leagueConnectivity, leagueTierFor } from '../data/leagueTiers'
 import type { EventSummary, LeagueStrength, MatchRecord, Region, SeasonSummary, TeamHistoryPoint, TeamProfile, TeamStanding } from '../types'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export function buildLeagueStrengths(
   teams: Record<string, TeamProfile>,
@@ -110,7 +111,7 @@ export function buildEventSummaries(matches: MatchRecord[], histories: Map<strin
         sourceBreakdown: eventSourceBreakdown(eventMatches),
       }
     })
-    .sort((a, b) => b.startDate.localeCompare(a.startDate))
+    .sort((a, b) => compareCodeUnits(b.startDate, a.startDate))
 }
 
 export function buildSeasonSummaries(matches: MatchRecord[], standings: TeamStanding[]): SeasonSummary[] {
@@ -147,7 +148,7 @@ function eventSourceBreakdown(matches: MatchRecord[]) {
   }
   return Array.from(byProvider.entries())
     .map(([provider, matchCount]) => ({ provider, matchCount }))
-    .sort((left, right) => left.provider.localeCompare(right.provider))
+    .sort((left, right) => compareCodeUnits(left.provider, right.provider))
 }
 
 function maxBy<T>(items: T[], score: (item: T) => number) {

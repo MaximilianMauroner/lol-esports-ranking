@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 export type LolEsportsScheduleSnapshot = {
   source?: string
   fetchedAt?: string
@@ -86,7 +87,7 @@ export function importLolEsportsScheduleSnapshot(
   const events = uniqueEventsByMatchId(scheduleEvents(snapshot)
     .map((event) => normalizeEvent(event, detailsByMatchId))
     .filter((event): event is LolEsportsReferenceEvent => Boolean(event)))
-    .sort((left, right) => (left.startTime ?? '').localeCompare(right.startTime ?? '') || left.matchId.localeCompare(right.matchId))
+    .sort((left, right) => compareCodeUnits(left.startTime ?? '', right.startTime ?? '') || compareCodeUnits(left.matchId, right.matchId))
 
   return {
     events,

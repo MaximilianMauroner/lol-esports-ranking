@@ -4,6 +4,7 @@ import type {
   PublicTournamentMovementIndexEntry,
   PublicTournamentMovementShard,
 } from './publicArtifacts/schema'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type InternationalTournamentFamilyId = 'first-stand' | 'msi' | 'worlds' | 'ewc'
 export type TournamentInstanceId = `${InternationalTournamentFamilyId}:${string}`
@@ -206,7 +207,7 @@ export function deriveTournamentInstances({
         resultCoverageComplete,
       }]
     })
-    .sort((left, right) => right.startDate.localeCompare(left.startDate) || left.label.localeCompare(right.label))
+    .sort((left, right) => compareCodeUnits(right.startDate, left.startDate) || compareCodeUnits(left.label, right.label))
 }
 
 export function completedOfficialMatchIds(matches: readonly TournamentRatedMatchReference[]) {
@@ -390,7 +391,7 @@ export function canonicalScheduleReferences<T extends TournamentScheduleReferenc
       continue
     }
     const current = latestByMatchId.get(reference.matchId)
-    if (!current || (reference.retrievedAt ?? '').localeCompare(current.retrievedAt ?? '') > 0) {
+    if (!current || compareCodeUnits(reference.retrievedAt ?? '', current.retrievedAt ?? '') > 0) {
       latestByMatchId.set(reference.matchId, reference)
     }
   }

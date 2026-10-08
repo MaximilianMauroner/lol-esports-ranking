@@ -1,7 +1,8 @@
 import type { MatchRecord } from '../../types'
 import type { SnapshotFilter } from '../snapshot'
 import { changedSemanticArtifactPaths, type SemanticArtifactMap } from './semanticParity'
-import { compareCodeUnits, type RankingChangeKind } from './types'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
+import { type RankingChangeKind } from './types'
 
 export type ArtifactScopeDependency = {
   key: string

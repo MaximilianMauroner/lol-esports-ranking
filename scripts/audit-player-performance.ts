@@ -6,6 +6,7 @@ import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { sourcePipelineVersion, transparentGprModelMetadata } from '../src/lib/modelConfig.ts'
 import { createPlayerPerformanceAccumulator, playerPerformanceMetricKeys, playerPerformancePolicy, recordPlayerPerformance, type PlayerPerformanceAccumulator } from '../src/lib/playerPerformance.ts'
 import type { MatchRecord } from '../src/types.ts'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 /** Coverage is counted before ranking eligibility, not inferred from header presence. */
 export function auditPlayerPerformance(matches: readonly MatchRecord[]) {
@@ -26,7 +27,7 @@ export function auditPlayerPerformance(matches: readonly MatchRecord[]) {
     }
     groups.set(key, group)
   }
-  return [...groups.values()].sort((a, b) => a.season - b.season || a.league.localeCompare(b.league)).map((group) => ({
+  return [...groups.values()].sort((a, b) => a.season - b.season || compareCodeUnits(a.league, b.league)).map((group) => ({
     season: group.season,
     league: group.league,
     gameCount: group.games,

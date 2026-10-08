@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 void (async () => {
   const [rootArg, manifestArg, outputArg, scoreStart = '2025-01-01'] = process.argv.slice(2)
@@ -33,7 +34,7 @@ void (async () => {
     resultCoverageComplete: instance.resultCoverageComplete,
   }]))
   const model = modelModule.buildRankingModel(matches, source.teams, { tournamentLifecycles: lifecycles })
-  const scoredMatches = matches.filter((match) => match.date >= scoreStart).toSorted((a, b) => a.id.localeCompare(b.id))
+  const scoredMatches = matches.filter((match) => match.date >= scoreStart).toSorted((a, b) => compareCodeUnits(a.id, b.id))
   const sourceIdentity = createHash('sha256').update(JSON.stringify(scoredMatches)).digest('hex')
   const data = evaluationModule.buildEvaluationData(matches, model.predictions, { sourceIdentity, scoreStart })
   await writeFile(resolve(outputArg), `${JSON.stringify({ ...data,

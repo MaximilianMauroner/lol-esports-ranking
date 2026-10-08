@@ -31,6 +31,7 @@ import {
   type CausalInputRow,
   type CausalPrefixSummary,
 } from './causalRecompute'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type DeservedStandingRegionSeedExpectationContext = {
   entry: DssSeriesLedgerEntry
@@ -174,7 +175,7 @@ export function buildDeservedStandingRegionModel(
         || right.internationalWinsAboveExpectation - left.internationalWinsAboveExpectation
         || right.depthScore - left.depthScore
         || right.topTeamDss - left.topTeamDss
-        || left.region.localeCompare(right.region)
+        || compareCodeUnits(left.region, right.region)
     })
     .map((region, index) => ({ ...region, rank: index + 1 }))
 

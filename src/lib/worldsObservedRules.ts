@@ -1,3 +1,4 @@
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 /** Offline replay of observed Worlds Swiss results. No draw or match is generated here. */
 export const WORLDS_2025_SWISS_RULES = {
   id: 'worlds-2025-swiss-observed-v1',
@@ -159,7 +160,7 @@ export function replayWorldsSwiss(input: {
     standings: values.map(({ opponentsSet, ...team }) => ({
       ...team,
       opponents: [...opponentsSet].sort(),
-    })).sort((a, b) => a.id.localeCompare(b.id)),
+    })).sort((a, b) => compareCodeUnits(a.id, b.id)),
     forecast: { status: 'unsupported', reason: 'draw-procedure-or-model-unavailable' },
   }
 }

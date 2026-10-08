@@ -10,6 +10,7 @@ import type {
 import { deriveSpicyTakeConfidence, deriveTierLabels, type RankingTierLabel, type SpicyTakeConfidence } from './rankingFlair'
 import type { DataCoverage, DataSourceInfo, ModelInfo } from './snapshot'
 import type { RatingComponents, Region, Role } from '../types'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type TeamReceiptPlayer = {
   id: string
@@ -265,7 +266,7 @@ function sharePayloadFor(
 function playersForReceipt(standing: PublicTeamStanding, players: readonly CompactPlayer[]): TeamReceiptPlayer[] {
   return players
     .filter((player) => player.team === standing.team || player.teamCode === standing.code)
-    .sort((a, b) => roleOrder[a.role] - roleOrder[b.role] || a.rank - b.rank || b.rating - a.rating || a.name.localeCompare(b.name))
+    .sort((a, b) => roleOrder[a.role] - roleOrder[b.role] || a.rank - b.rank || b.rating - a.rating || compareCodeUnits(a.name, b.name))
     .map((player) => ({
       id: player.id,
       name: player.name,

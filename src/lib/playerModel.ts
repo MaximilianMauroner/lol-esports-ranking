@@ -35,6 +35,7 @@ import {
   type CausalInputRow,
   type CausalPrefixSummary,
 } from './causalRecompute'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 const initialPlayerRating = 100
 const sourcedPlayerKFactor = 8
@@ -176,7 +177,7 @@ function buildStaticRosterPlayerModel(
   const forms = new Map<string, string[]>()
   const histories = new Map<string, PlayerStanding['history']>()
   const finalShares = new Map<string, PlayerShare>()
-  const sortedMatches = matches.toSorted((a, b) => a.date.localeCompare(b.date))
+  const sortedMatches = matches.toSorted((a, b) => compareCodeUnits(a.date, b.date))
 
   for (const roster of Object.values(rosters)) {
     for (const player of roster) {
@@ -266,9 +267,9 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
   const latestRosterByTeam = new Map<string, { team: string; roster: MatchRosterSnapshot }>()
   const leagueRatings = leagueRatingsFor(context.leagueStrengths)
   const sortedMatches = matches.toSorted((a, b) =>
-    a.date.localeCompare(b.date)
-    || (a.datetimeUtc ?? '').localeCompare(b.datetimeUtc ?? '')
-    || a.id.localeCompare(b.id),
+    compareCodeUnits(a.date, b.date)
+    || compareCodeUnits(a.datetimeUtc ?? '', b.datetimeUtc ?? '')
+    || compareCodeUnits(a.id, b.id),
   )
   const residualControlModel = buildIndividualResidualControlModel(sortedMatches, context, leagueRatings)
   const retainedHistorySeries = context.historySeriesLimit
@@ -343,7 +344,7 @@ function assignPlayerRanks(players: PlayerStanding[]) {
     .toSorted((left, right) =>
       (right.individualResidual?.score ?? -Infinity) - (left.individualResidual?.score ?? -Infinity)
       || right.games - left.games
-      || left.name.localeCompare(right.name),
+      || compareCodeUnits(left.name, right.name),
     )
   const residualRanks = new Map(residualSorted.map((player, index) => [player.id, index + 1]))
 
@@ -818,8 +819,8 @@ function appearanceSummaryFor(
   const teamHistory = Array.from(appearance.teamGames.values())
     .sort((left, right) =>
       right.games - left.games
-      || (right.latestObservedAt ?? '').localeCompare(left.latestObservedAt ?? '')
-      || left.team.localeCompare(right.team),
+      || compareCodeUnits(right.latestObservedAt ?? '', left.latestObservedAt ?? '')
+      || compareCodeUnits(left.team, right.team),
     )
   const roleHistory = Array.from(appearance.roleGames.entries())
     .map(([role, games]) => ({ role, games }))

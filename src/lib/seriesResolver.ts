@@ -7,6 +7,7 @@ import type {
   SeriesState,
 } from '../types'
 import { normalizedBestOf } from './matchFormat'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type CanonicalSeries = {
   id: string
@@ -53,9 +54,9 @@ export function canonicalSeriesOutcomeForTeam(series: CanonicalSeries, team: str
 }
 
 export function compareCanonicalSeries(left: CanonicalSeries, right: CanonicalSeries) {
-  return left.date.localeCompare(right.date)
-    || (left.startTime ?? '').localeCompare(right.startTime ?? '')
-    || left.id.localeCompare(right.id)
+  return compareCodeUnits(left.date, right.date)
+    || compareCodeUnits(left.startTime ?? '', right.startTime ?? '')
+    || compareCodeUnits(left.id, right.id)
 }
 
 function buildCanonicalSeries(id: string, inputGames: MatchRecord[]): CanonicalSeries {
@@ -67,7 +68,7 @@ function buildCanonicalSeries(id: string, inputGames: MatchRecord[]): CanonicalS
   const teams = [...new Set(games.flatMap((match) => [
     canonicalTeamNameFor(match.teamA),
     canonicalTeamNameFor(match.teamB),
-  ]))].sort((left, right) => left.localeCompare(right))
+  ]))].sort((left, right) => compareCodeUnits(left, right))
   const [teamA, teamB] = teams
   if (!teamA || !teamB || teams.length !== 2) {
     throw new Error(`Canonical series ${id} must contain exactly two teams`)
@@ -100,14 +101,14 @@ function canonicalSeriesId(match: MatchRecord) {
   if (match.officialMatchId) return joinKey('official-match', match.officialMatchId)
   if (match.sourceMatchId) {
     const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
-      .sort((left, right) => left.localeCompare(right))
+      .sort((left, right) => compareCodeUnits(left, right))
     return joinKey('source-match', match.date, sourceSeriesId(match.sourceMatchId), ...teams)
   }
   const sourceGameSeriesId = sourceGameSeriesIdFor(match)
   if (sourceGameSeriesId) return joinKey('source-game-series', provider, sourceGameSeriesId)
 
   const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
-    .sort((left, right) => left.localeCompare(right))
+    .sort((left, right) => compareCodeUnits(left, right))
   const fallbackBase = joinKey('fallback', match.date, provider, match.event, match.phase, ...teams)
   if (normalizedBestOf(match.bestOf) === 1 && match.bestOfBasis !== 'fallback') {
     return joinKey(fallbackBase, match.id)
@@ -177,11 +178,11 @@ function seriesState(format: SeriesFormat, winsA: number, winsB: number, games: 
 }
 
 function compareSeriesGames(left: MatchRecord, right: MatchRecord) {
-  return (left.datetimeUtc ?? '9999').localeCompare(right.datetimeUtc ?? '9999')
+  return compareCodeUnits(left.datetimeUtc ?? '9999', right.datetimeUtc ?? '9999')
     || gameNumberFor(left) - gameNumberFor(right)
-    || (left.officialGameId ?? '').localeCompare(right.officialGameId ?? '')
-    || (left.sourceGameId ?? '').localeCompare(right.sourceGameId ?? '')
-    || left.id.localeCompare(right.id)
+    || compareCodeUnits(left.officialGameId ?? '', right.officialGameId ?? '')
+    || compareCodeUnits(left.sourceGameId ?? '', right.sourceGameId ?? '')
+    || compareCodeUnits(left.id, right.id)
 }
 
 function earliestStartTime(games: MatchRecord[]) {

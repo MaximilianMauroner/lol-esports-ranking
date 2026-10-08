@@ -4,6 +4,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { canonicalJsonFor, NonCanonicalJsonError, parseCanonicalJson } from './public-artifact-storage.mjs'
 import { replaceDirectory } from './replace-directory.ts'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 export const RAW_SOURCE_STORAGE_MODE = 'content-addressed-raw-gzip-v2'
 export const ORACLE_GAME_INVENTORY_DIGEST_SCHEME = 'oracle-game-inventory-v1'
@@ -577,7 +578,7 @@ function parseOracleReceiptSources(value, importerVersion) {
     })
     return { sourceFileName: entry.sourceFileName, headerDigest: entry.headerDigest, digestScheme: entry.digestScheme, effectiveOracleDigest, gameInventory, baseline, deltas }
   })
-  parsed.sort((left, right) => left.sourceFileName.localeCompare(right.sourceFileName))
+  parsed.sort((left, right) => compareCodeUnits(left.sourceFileName, right.sourceFileName))
   return parsed
 }
 
@@ -592,7 +593,7 @@ function parseNarrowReceiptSources(value, provider) {
     seen.add(entry.sourceFileName)
     return { sourceFileName: entry.sourceFileName, contentSha256: entry.contentSha256, object: parseRawObjectReference(entry.object, `raw receipt ${provider} source ${index} object`) }
   })
-  parsed.sort((left, right) => left.sourceFileName.localeCompare(right.sourceFileName))
+  parsed.sort((left, right) => compareCodeUnits(left.sourceFileName, right.sourceFileName))
   return parsed
 }
 
@@ -728,9 +729,9 @@ function rawMutationFor(entry) {
   return { operation: entry.operation, gameId: entry.gameId, expectedPreviousDigest: entry.expectedPreviousDigest }
 }
 function partitionKeyFor(partition) { return `${partition.utcDate}\u0000${partition.league}` }
-function compareGames(left, right) { return left.sourceOrder - right.sourceOrder || left.gameId.localeCompare(right.gameId) }
-function compareMutations(left, right) { return left.gameId.localeCompare(right.gameId) || left.operation.localeCompare(right.operation) }
-function comparePartitionedMutations(left, right) { return partitionKeyFor(left.partition).localeCompare(partitionKeyFor(right.partition)) || compareMutations(left, right) }
+function compareGames(left, right) { return left.sourceOrder - right.sourceOrder || compareCodeUnits(left.gameId, right.gameId) }
+function compareMutations(left, right) { return compareCodeUnits(left.gameId, right.gameId) || compareCodeUnits(left.operation, right.operation) }
+function comparePartitionedMutations(left, right) { return compareCodeUnits(partitionKeyFor(left.partition), partitionKeyFor(right.partition)) || compareMutations(left, right) }
 
 function groupBy(values, keyFor) {
   const groups = new Map()

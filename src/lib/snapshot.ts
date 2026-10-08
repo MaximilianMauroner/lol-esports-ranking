@@ -111,6 +111,7 @@ import type {
   PublicMatchHistorySeriesRef,
   SameTeamTopFiveClusteringDiagnostic,
 } from './publicArtifacts/schema'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type { CompactPlayer, CompactPlayerRating, PlayerRatingProof } from './publicArtifacts/schema'
 export { snapshotKey } from './publicArtifacts/schema'
@@ -420,7 +421,7 @@ export function createTournamentMovementArtifacts(
           participantCount: shard.participantCount,
           url: tournamentMovementUrlForId(shard.id),
         }))
-        .sort((left, right) => right.startDate.localeCompare(left.startDate) || left.label.localeCompare(right.label)),
+        .sort((left, right) => compareCodeUnits(right.startDate, left.startDate) || compareCodeUnits(left.label, right.label)),
     },
     shards,
   }
@@ -569,7 +570,7 @@ function rankRegionHistoryRows(latestByLeague: Map<string, LeagueStrengthHistory
       }
     })
     .filter((row) => row.flagshipLeagues.length > 0 && Number.isFinite(row.score))
-    .sort((left, right) => right.score - left.score || left.region.localeCompare(right.region))
+    .sort((left, right) => right.score - left.score || compareCodeUnits(left.region, right.region))
 
   return new Map(rows.map((row, index) => [row.region, { ...row, rank: index + 1 }]))
 }
@@ -656,7 +657,7 @@ function buildRegionPowerHistorySeries(
         const contributors = (candidateTeamsByRegion.get(region.region) ?? [])
           .map((team) => ({ team, rating: latestRatings.get(team) }))
           .filter((entry): entry is { team: string; rating: number } => typeof entry.rating === 'number' && Number.isFinite(entry.rating))
-          .sort((left, right) => right.rating - left.rating || left.team.localeCompare(right.team))
+          .sort((left, right) => right.rating - left.rating || compareCodeUnits(left.team, right.team))
           .slice(0, 3)
         const score = contributors.length > 0
           ? Number((contributors.reduce((total, entry) => total + entry.rating, 0) / contributors.length).toFixed(1))
@@ -664,7 +665,7 @@ function buildRegionPowerHistorySeries(
         return { region: region.region, contributors, score }
       })
       .filter((row): row is { region: string; contributors: Array<{ team: string; rating: number }>; score: number } => typeof row.score === 'number')
-      .sort((left, right) => right.score - left.score || left.region.localeCompare(right.region))
+      .sort((left, right) => right.score - left.score || compareCodeUnits(left.region, right.region))
 
     rows.forEach((row, index) => {
       if (!touchedRegions.has(row.region)) return
@@ -697,7 +698,7 @@ function buildTeamHistorySeries(
     const points = groupTeamHistoryPointsIntoMatches(validHistory)
       .filter(isResolvedTeamHistoryMatchGroup)
       .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext))
-      .sort((left, right) => left[0].localeCompare(right[0]))
+      .sort((left, right) => compareCodeUnits(left[0], right[0]))
     if (points.length < minimumPointsPerSeries) {
       omittedSeriesCount += 1
       continue
@@ -1171,7 +1172,7 @@ function createTournamentMovementShards({
         )
           .filter(isResolvedTeamHistoryMatchGroup)
           .map((group) => compactTeamHistoryMatchPoint(group, true))
-          .sort((left, right) => left[0].localeCompare(right[0]))
+          .sort((left, right) => compareCodeUnits(left[0], right[0]))
         const endpointKind: NonNullable<PublicTeamHistoryPointContext['kind']> = instance.status === 'completed'
           ? 'tournament-end'
           : instance.status === 'ongoing'
@@ -1207,7 +1208,7 @@ function createTournamentMovementShards({
           points,
         }]
       })
-      .sort((left, right) => left.endRank - right.endRank || right.endRating - left.endRating || left.team.localeCompare(right.team))
+      .sort((left, right) => left.endRank - right.endRank || right.endRating - left.endRating || compareCodeUnits(left.team, right.team))
 
     const shard: PublicTournamentMovementShard = {
       artifactKind: 'tournament-movement',
@@ -1654,11 +1655,11 @@ export function createMatchHistoryArtifacts(
           },
         }
       }))
-      .sort((left, right) => (right.datetimeUtc ?? right.date).localeCompare(left.datetimeUtc ?? left.date) || right.gameNumber - left.gameNumber || right.id.localeCompare(left.id))
+      .sort((left, right) => compareCodeUnits(right.datetimeUtc ?? right.date, left.datetimeUtc ?? left.date) || right.gameNumber - left.gameNumber || compareCodeUnits(right.id, left.id))
     const gamesBySeries = new Map<string, PublicMatchHistoryEntry[]>()
     for (const entry of entries) gamesBySeries.set(entry.seriesId, [...(gamesBySeries.get(entry.seriesId) ?? []), entry])
     const series = [...gamesBySeries.entries()].map(([id, inputGames]) => {
-      const games = inputGames.toSorted((left, right) => left.gameNumber - right.gameNumber || left.id.localeCompare(right.id))
+      const games = inputGames.toSorted((left, right) => left.gameNumber - right.gameNumber || compareCodeUnits(left.id, right.id))
       const summary = games.findLast((game) => game.impact.unit === 'series-applied') ?? games.at(-1)
       if (!summary) throw new Error(`Cannot publish empty match history series ${id}`)
       return { id, games, summary }
@@ -1774,9 +1775,8 @@ function compareMatchHistorySeriesChronologically(
   left: { id: string; summary: PublicMatchHistoryEntry },
   right: { id: string; summary: PublicMatchHistoryEntry },
 ) {
-  return (left.summary.datetimeUtc ?? `${left.summary.date}T00:00:00.000Z`)
-    .localeCompare(right.summary.datetimeUtc ?? `${right.summary.date}T00:00:00.000Z`)
-    || left.id.localeCompare(right.id)
+  return compareCodeUnits(left.summary.datetimeUtc ?? `${left.summary.date}T00:00:00.000Z`, right.summary.datetimeUtc ?? `${right.summary.date}T00:00:00.000Z`)
+    || compareCodeUnits(left.id, right.id)
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -1885,7 +1885,7 @@ export function createTeamDirectory(data: StaticRankingData): TeamDirectory {
       },
       ...teamLineageFor(team.name),
     }))
-    .sort((left, right) => left.name.localeCompare(right.name))
+    .sort((left, right) => compareCodeUnits(left.name, right.name))
 
   return {
     artifactKind: 'team-directory',
@@ -2021,7 +2021,7 @@ function currentLineupsForPlayers(players: CompactPlayer[], generatedAt: string)
       .toSorted((left, right) => ROLE_ORDER.indexOf(left.role) - ROLE_ORDER.indexOf(right.role)
         || (right.teamShare ?? 0) - (left.teamShare ?? 0)
         || right.games - left.games
-        || left.name.localeCompare(right.name))
+        || compareCodeUnits(left.name, right.name))
     const starters: CompactPlayer[] = []
     const occupiedRoles = new Set<Role>()
     for (const player of observedPlayers) {
@@ -2074,7 +2074,7 @@ function assignCompactPlayerResidualRanks(players: CompactPlayer[]): CompactPlay
       .toSorted((left, right) =>
         (right.individualResidual?.score ?? -Infinity) - (left.individualResidual?.score ?? -Infinity)
         || right.games - left.games
-        || left.name.localeCompare(right.name),
+        || compareCodeUnits(left.name, right.name),
       )
       .map((player, index) => [player.id, index + 1]),
   )
@@ -2144,7 +2144,7 @@ function sameTeamTopFiveClustering(players: CompactPlayer[], scope: string): Sam
         count: team.players.length,
       }))
       .filter((team) => team.count > 1)
-      .toSorted((left, right) => right.count - left.count || left.team.localeCompare(right.team)),
+      .toSorted((left, right) => right.count - left.count || compareCodeUnits(left.team, right.team)),
   }
 }
 
@@ -2407,7 +2407,7 @@ function duplicateTeamCodesFor(teams: Record<string, TeamProfile>) {
       teamNames: entries.map((team) => team.name).sort(),
       teamIds: entries.map((team) => teamIdFor({ team: team.name, region: team.region, code: team.code })).sort(),
     }))
-    .sort((left, right) => left.code.localeCompare(right.code))
+    .sort((left, right) => compareCodeUnits(left.code, right.code))
 }
 
 function unresolvedTeamLineagesFor(teams: Record<string, TeamProfile>) {
@@ -2446,11 +2446,11 @@ function unresolvedLeagueSummariesFor(matches: MatchRecord[], teams: Record<stri
       matchTouches: summary.matchTouches,
       sampleTeams: summary.teams
         .slice()
-        .sort((left, right) => (matchTouches.get(right.name) ?? 0) - (matchTouches.get(left.name) ?? 0) || left.name.localeCompare(right.name))
+        .sort((left, right) => (matchTouches.get(right.name) ?? 0) - (matchTouches.get(left.name) ?? 0) || compareCodeUnits(left.name, right.name))
         .slice(0, 5)
         .map((team) => team.name),
     }))
-    .sort((left, right) => right.teamCount - left.teamCount || right.matchTouches - left.matchTouches || left.league.localeCompare(right.league))
+    .sort((left, right) => right.teamCount - left.teamCount || right.matchTouches - left.matchTouches || compareCodeUnits(left.league, right.league))
     .slice(0, 12)
 }
 
@@ -2460,7 +2460,7 @@ function countBy<T>(items: T[], keyFor: (item: T) => string) {
     const key = keyFor(item)
     counts[key] = (counts[key] ?? 0) + 1
   }
-  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)))
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => compareCodeUnits(left, right)))
 }
 
 function coverageFor(matches: MatchRecord[]): DataCoverage {
@@ -2497,7 +2497,7 @@ function sourceBreakdown(matches: MatchRecord[]): SnapshotSourceBreakdown[] {
       matchCount: providerMatches.length,
       completeness: Array.from(new Set(providerMatches.map((match) => match.dataCompleteness).filter((value): value is string => Boolean(value)))).sort(),
     }))
-    .sort((left, right) => left.provider.localeCompare(right.provider))
+    .sort((left, right) => compareCodeUnits(left.provider, right.provider))
 }
 
 export function leagueHistoryForFilter(
@@ -2519,7 +2519,7 @@ function leagueHistoryKeysForMatches(
   filter: SnapshotFilter,
 ) {
   const keys = new Set<string>()
-  const sortedMatches = matches.toSorted((left, right) => left.date.localeCompare(right.date))
+  const sortedMatches = matches.toSorted((left, right) => compareCodeUnits(left.date, right.date))
 
   for (const dateGroup of groupEntriesByDate(sortedMatches, (match) => match.date)) {
     for (const seriesGroup of groupTimelineEntriesByKey(dateGroup.entries, rankingSeriesKeyForMatch)) {
@@ -2571,7 +2571,7 @@ function leagueHistoryPointKey(point: Pick<LeagueStrengthHistoryPoint, 'date' | 
 function rankingSeriesKeyForMatch(match: MatchRecord) {
   const provider = match.sourceProvider ?? 'unknown'
   if (match.sourceMatchId) return timelineGroupKey(['source-match', provider, sourceSeriesId(match.sourceMatchId)])
-  const [left, right] = [match.teamA, match.teamB].sort((a, b) => a.localeCompare(b))
+  const [left, right] = [match.teamA, match.teamB].sort((a, b) => compareCodeUnits(a, b))
   return timelineGroupKey(['inferred-series', match.date, provider, match.event, left, right])
 }
 
@@ -2671,7 +2671,7 @@ function rollingMovementForScope({
     }
     const rankPoints: Array<[string, number]> = [
       ...(baselineRank === undefined ? [] : [[startDate, baselineRank] as [string, number]]),
-      ...[...historicalRanks.entries()].sort(([left], [right]) => left.localeCompare(right)),
+      ...[...historicalRanks.entries()].sort(([left], [right]) => compareCodeUnits(left, right)),
     ]
     if (rankPoints.at(-1)?.[0] === endDate) rankPoints[rankPoints.length - 1] = [endDate, currentRank]
     else rankPoints.push([endDate, currentRank])
@@ -2734,7 +2734,7 @@ function rollingRankMap(ranking: RollingRankingState, teamUniverse: ReadonlySet<
   return new Map(
     [...ranking.teams]
       .filter(([team]) => teamUniverse.has(team))
-      .sort(([leftTeam, left], [rightTeam, right]) => Number(right.eligible) - Number(left.eligible) || right.rating - left.rating || leftTeam.localeCompare(rightTeam))
+      .sort(([leftTeam, left], [rightTeam, right]) => Number(right.eligible) - Number(left.eligible) || right.rating - left.rating || compareCodeUnits(leftTeam, rightTeam))
       .map(([team], index) => [team, index + 1]),
   )
 }
@@ -2768,7 +2768,7 @@ function rollingUpsetWin(
         ratingDelta: Math.round(group.entries.reduce((sum, point) => sum + point.delta, 0)),
       }]
     })
-    .sort((left, right) => left.expectedWinProbability - right.expectedWinProbability || right.date.localeCompare(left.date))[0]
+    .sort((left, right) => left.expectedWinProbability - right.expectedWinProbability || compareCodeUnits(right.date, left.date))[0]
 }
 
 function shiftUtcDate(date: string, days: number) {
@@ -2826,7 +2826,7 @@ function buildSnapshotFilters(
   return Array.from(filters.values()).sort((left, right) => {
     if (snapshotKey(left) === snapshotKey({ season: 'All', event: 'All', region: 'All' })) return -1
     if (snapshotKey(right) === snapshotKey({ season: 'All', event: 'All', region: 'All' })) return 1
-    return snapshotKey(left).localeCompare(snapshotKey(right))
+    return compareCodeUnits(snapshotKey(left), snapshotKey(right))
   })
 }
 
@@ -3158,9 +3158,9 @@ function observeScopedTeamProfile(
 
 function bestScopedTeamProfile(observations: Map<string, ScopedTeamProfileObservation>) {
   return Array.from(observations.values()).sort((left, right) =>
-    right.lastObserved.localeCompare(left.lastObserved)
+    compareCodeUnits(right.lastObserved, left.lastObserved)
     || right.count - left.count
-    || right.league.localeCompare(left.league),
+    || compareCodeUnits(right.league, left.league),
   )[0]
 }
 

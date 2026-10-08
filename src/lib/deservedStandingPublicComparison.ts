@@ -11,6 +11,7 @@ import { type RegionDeservedStandingComparison, type RegionStrength } from './re
 import { dssRosterValidity, type DssReferenceStrengthContext, type DssSeriesLedgerEntry } from './deservedStanding'
 import { buildDeservedStandingModel, type DeservedStandingTeamSummary } from './deservedStandingModel'
 import { buildDeservedStandingRegionModel, type DeservedStandingRegionSummary } from './deservedStandingRegions'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type ComputedTeamStanding = TeamStanding & {
   deservedStanding?: PublicDeservedStandingComparison
@@ -191,7 +192,7 @@ function retainedPlayerShare(previousRoster: MatchRosterSnapshot, currentRoster:
 }
 
 function compareMatchesByDateAndId(left: MatchRecord, right: MatchRecord) {
-  return left.date.localeCompare(right.date) || left.id.localeCompare(right.id)
+  return compareCodeUnits(left.date, right.date) || compareCodeUnits(left.id, right.id)
 }
 
 function deservedStandingEligibilityFor(standing: TeamStanding): DeservedStandingEligibilityLabel {

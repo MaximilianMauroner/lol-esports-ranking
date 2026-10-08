@@ -58,6 +58,7 @@ import {
   splitBreakMinimumGapDays,
   splitBreakTeamRetention,
 } from './modelConfig'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export { buildPlayerModel } from './playerModel'
 export { factorLabel, transparentGprModelMetadata } from './modelConfig'
@@ -501,10 +502,10 @@ export function materializeRankingModel({
 }
 
 function compareReplayMatches(left: MatchRecord, right: MatchRecord) {
-  return left.date.localeCompare(right.date)
-    || (left.datetimeUtc ?? '').localeCompare(right.datetimeUtc ?? '')
+  return compareCodeUnits(left.date, right.date)
+    || compareCodeUnits(left.datetimeUtc ?? '', right.datetimeUtc ?? '')
     || (left.gameNumber ?? 0) - (right.gameNumber ?? 0)
-    || replayMatchIdentity(left).localeCompare(replayMatchIdentity(right))
+    || compareCodeUnits(replayMatchIdentity(left), replayMatchIdentity(right))
 }
 
 function replayMatchIdentity(match: MatchRecord) {
@@ -537,7 +538,7 @@ function compareStandingsByRating(
 ) {
   return Number(b.eligibility.eligible) - Number(a.eligibility.eligible)
     || ratingFor(b) - ratingFor(a)
-    || a.team.localeCompare(b.team)
+    || compareCodeUnits(a.team, b.team)
 }
 
 function strongestFactor(factors: FactorBreakdown): keyof FactorBreakdown {
@@ -589,7 +590,7 @@ export function makeDirectHeadToHeadContextAdjustments({
       if (!teamProfile || !opponentProfile) continue
       if (teamProfile.league !== opponentProfile.league) continue
 
-      const pairKey = [team, opponent].sort((a, b) => a.localeCompare(b)).join('\u0000')
+      const pairKey = [team, opponent].sort((a, b) => compareCodeUnits(a, b)).join('\u0000')
       const current = latestSeriesByPair.get(pairKey)
       if (!current || point.date > current.date) {
         latestSeriesByPair.set(pairKey, { winner: team, loser: opponent, date: point.date })

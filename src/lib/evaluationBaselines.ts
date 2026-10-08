@@ -2,6 +2,7 @@ import { eventTierConfig } from '../data/rankingConfig'
 import type { MatchRecord } from '../types'
 import { groupEvaluationBy } from './rankingEvaluation'
 import { canonicalSeriesForMatches } from './seriesResolver'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 type Rating = { rating: number; deviation: number; lastDate: string }
 const q = Math.log(10) / 400
@@ -14,7 +15,7 @@ export function evaluationBaselineProbabilities(matches: readonly MatchRecord[])
   const records = new Map<string, { wins: number; games: number }>()
   const series = canonicalSeriesForMatches(matches)
   const probabilities = new Map<string, { elo: number; glicko: number; winRate: number; coinFlip: number }>()
-  const sorted = [...matches].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+  const sorted = [...matches].sort((a, b) => compareCodeUnits(a.date, b.date) || compareCodeUnits(a.id, b.id))
   for (const [date, day] of groupEvaluationBy(sorted, (match) => match.date)) {
     const eloDeltas = new Map<string, number>()
     const evidence = new Map<string, Array<{ opponent: Rating; outcome: number }>>()

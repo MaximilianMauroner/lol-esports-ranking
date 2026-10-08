@@ -8,6 +8,7 @@ import {
   type CausalInputRow,
   type CausalPrefixSummary,
 } from './causalRecompute'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type DssPlayerResumeSeriesPlayer = {
   id: string
@@ -77,7 +78,7 @@ export function buildDssPlayerResumeLedgers(
       currentSplitId,
       uncertaintyFor,
     }))
-    .sort((left, right) => right.careerResumeCredit - left.careerResumeCredit || left.playerId.localeCompare(right.playerId))
+    .sort((left, right) => right.careerResumeCredit - left.careerResumeCredit || compareCodeUnits(left.playerId, right.playerId))
 
   return {
     ledgers,
@@ -231,7 +232,7 @@ function latestSplitId(entries: DssPlayerResumeCreditEntry[], currentSeason: num
   if (currentSeason === undefined) return undefined
   const latestEntry = entries
     .filter((entry) => entry.season === currentSeason && entry.splitId)
-    .sort((left, right) => right.date.localeCompare(left.date))[0]
+    .sort((left, right) => compareCodeUnits(right.date, left.date))[0]
   return latestEntry?.splitId
 }
 

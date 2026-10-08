@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import { bucketConfigFromEnv, createBucketClient, readBucketJson, safeObjectPath, writeBucketJson } from './railway-bucket.mjs'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 export const ROLLOUT_EVIDENCE_KIND = 'ranking-rollout-run-evidence'
 export const ROLLOUT_EVIDENCE_CLASSES = ['live', 'production-like-fixture']
@@ -300,7 +301,7 @@ export function aggregateRolloutEvidence(values) {
     }
     byRun.set(evidence.runId, evidence)
   }
-  const runs = [...byRun.values()].sort((left, right) => executionDate(left).localeCompare(executionDate(right)) || left.runId.localeCompare(right.runId))
+  const runs = [...byRun.values()].sort((left, right) => compareCodeUnits(executionDate(left), executionDate(right)) || compareCodeUnits(left.runId, right.runId))
   const live = runs.filter((run) => run.evidenceClass === 'live')
   const changed = live.filter((run) => ROLLOUT_CHANGED_SCENARIOS.includes(run.scenario))
   const unchanged = live.filter((run) => run.scenario === 'unchanged')

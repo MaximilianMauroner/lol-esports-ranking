@@ -1,4 +1,5 @@
 import type { MatchRecord, TeamProfile } from '../../types'
+import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 export const CANONICAL_MATCH_LEDGER_SCHEMA_VERSION = 2 as const
 
@@ -94,10 +95,6 @@ export function stableJson(value: unknown): string {
     .sort(compareCodeUnits)
     .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
     .join(',')}}`
-}
-
-export function compareCodeUnits(left: string, right: string) {
-  return left < right ? -1 : left > right ? 1 : 0
 }
 
 export function assertUtcDate(date: string) {

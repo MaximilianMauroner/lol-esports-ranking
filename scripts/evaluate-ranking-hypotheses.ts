@@ -14,6 +14,7 @@ import { fitHierarchicalLeagues } from './lib/hierarchical-leagues'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
 import { ablatedBoardRating, boardLayerNames } from './lib/public-board-ablation'
 import { latentTeamBandSimulation, leagueRecoverySimulation } from './lib/ranking-simulations'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 const [manifestArg, predictionsArg, outputArg] = process.argv.slice(2)
 if (!manifestArg || !predictionsArg || !outputArg) throw new Error('Usage: evaluate-ranking-hypotheses <manifest> <predictions> <output>')
@@ -24,7 +25,7 @@ for (const file of ['scripts/evaluate-ranking-hypotheses.ts', 'scripts/lib/publi
   policyHash.update(file).update(await readFile(file))
 }
 const policyIdentity = policyHash.digest('hex')
-const sourceIdentity = createHash('sha256').update(JSON.stringify(source.matches.filter((match) => match.date >= '2025-01-01').toSorted((a, b) => a.id.localeCompare(b.id)))).digest('hex')
+const sourceIdentity = createHash('sha256').update(JSON.stringify(source.matches.filter((match) => match.date >= '2025-01-01').toSorted((a, b) => compareCodeUnits(a.id, b.id)))).digest('hex')
 if (data.modelConfigHash !== transparentGprModelMetadata.configHash) throw new Error('Hypothesis model differs from prediction export')
 if (sourceIdentity !== data.sourceIdentity) throw new Error('Hypothesis source differs from prediction export')
 const rowById = new Map(data.rows.map((row) => [row.id, row]))
@@ -93,7 +94,7 @@ for (const cutoff of cutoffs) {
     }
   }
   const ranks = Object.fromEntries(layerNames.map((layer) => {
-    const ordered = model.standings.toSorted((a, b) => boardRating(b, layer) - boardRating(a, layer) || a.team.localeCompare(b.team))
+    const ordered = model.standings.toSorted((a, b) => boardRating(b, layer) - boardRating(a, layer) || compareCodeUnits(a.team, b.team))
     return [layer, ordered.map((standing, index) => ({ team: standing.team, rank: index + 1, score: boardRating(standing, layer) }))]
   }))
   cutReports.push({ cutoff, through, games: forward.length, sourceMembership: 'explicit-prior-match-only', ranks,
@@ -112,7 +113,7 @@ await writeFile(outputArg, `${JSON.stringify({ status: 'exploratory; fixed prior
 
 function priorTeams(matches: MatchRecord[], profiles: Record<string, TeamProfile>) {
   const result: Record<string, TeamProfile> = {}
-  for (const match of matches.toSorted((a, b) => a.date.localeCompare(b.date))) for (const side of ['A', 'B'] as const) {
+  for (const match of matches.toSorted((a, b) => compareCodeUnits(a.date, b.date))) for (const side of ['A', 'B'] as const) {
     const team = side === 'A' ? match.teamA : match.teamB
     result[team] = { name: team, code: profiles[team]?.code ?? team.slice(0, 3), region: side === 'A' ? match.teamARegion ?? match.region : match.teamBRegion ?? match.region,
       league: evaluationHomeLeague(match, side) }

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 
 /**
  * Fixed CPU workload that measures how fast the current runner executes the
@@ -52,7 +53,7 @@ export function runCalibrationWorkload() {
     hashes.push(createHash('sha256').update(page).digest('hex'))
     hashes.push(createHash('sha256').update(gzipSync(page, { level: 6 })).digest('hex'))
   }
-  const ranked = [...ratings].sort((left, right) => right[1].rating - left[1].rating || left[0].localeCompare(right[0]))
+  const ranked = [...ratings].sort((left, right) => right[1].rating - left[1].rating || compareCodeUnits(left[0], right[0]))
   return createHash('sha256').update(hashes.join('')).update(canonicalJson(ranked.slice(0, 20))).digest('hex')
 }
 

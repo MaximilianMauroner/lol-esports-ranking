@@ -1,4 +1,5 @@
 import type { PublicRollingUpsetWin, PublicRollingWindow, PublicTeamStanding } from './publicArtifacts/schema'
+import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type RankingTierLabel = 'S' | 'A' | 'B' | 'C'
 
@@ -293,7 +294,7 @@ function bandForTier(label: RankingTierLabel, leaderScore: number): RankingTierB
 }
 
 function standingsByRank(standings: readonly PublicTeamStanding[]) {
-  return [...standings].sort((a, b) => a.rank - b.rank || b.rating - a.rating || a.team.localeCompare(b.team))
+  return [...standings].sort((a, b) => a.rank - b.rank || b.rating - a.rating || compareCodeUnits(a.team, b.team))
 }
 
 function movementPick(standing: PublicTeamStanding): RankingMovementPick {
@@ -311,13 +312,13 @@ function movementPick(standing: PublicTeamStanding): RankingMovementPick {
 function compareRisers(a: PublicTeamStanding, b: PublicTeamStanding) {
   return (b.rollingMovement?.ratingDelta ?? 0) - (a.rollingMovement?.ratingDelta ?? 0)
     || (b.rollingMovement?.rankMovement ?? 0) - (a.rollingMovement?.rankMovement ?? 0)
-    || a.rank - b.rank || a.team.localeCompare(b.team)
+    || a.rank - b.rank || compareCodeUnits(a.team, b.team)
 }
 
 function compareFallers(a: PublicTeamStanding, b: PublicTeamStanding) {
   return (a.rollingMovement?.ratingDelta ?? 0) - (b.rollingMovement?.ratingDelta ?? 0)
     || (a.rollingMovement?.rankMovement ?? 0) - (b.rollingMovement?.rankMovement ?? 0)
-    || a.rank - b.rank || a.team.localeCompare(b.team)
+    || a.rank - b.rank || compareCodeUnits(a.team, b.team)
 }
 
 function teamLookup(standings: readonly PublicTeamStanding[]) {
@@ -353,7 +354,7 @@ function upsetCandidate(
 }
 
 function compareUpsets(a: RankingUpsetHeadline, b: RankingUpsetHeadline) {
-  return a.expectedWinProbability - b.expectedWinProbability || b.date.localeCompare(a.date) || a.winner.localeCompare(b.winner)
+  return a.expectedWinProbability - b.expectedWinProbability || compareCodeUnits(b.date, a.date) || compareCodeUnits(a.winner, b.winner)
 }
 
 function clampScore(value: number) {
