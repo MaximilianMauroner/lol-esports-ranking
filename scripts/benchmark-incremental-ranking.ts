@@ -1,3 +1,4 @@
+import { diagnosticsEnabled, diagnosticBegin, diagnosticEnd, diagnosticChild, diagnosticFiles, firstDiagnosticRepetition, diagnosticProfile, diagnosticStopProfile } from './benchmark-diagnostics.mjs'
 import { ensureReferencePublicData, referencePublicDataDir } from './reference-public-data.mjs'
 import { createHash } from 'node:crypto'
 import { fork } from 'node:child_process'
@@ -44,6 +45,7 @@ const targets = {
 }
 const config = { enabled: true, bucket: 'benchmark', endpoint: 'https://example.invalid', region: 'auto', accessKeyId: 'x', secretAccessKey: 'y', prefix: 'rankings' }
 let root = process.env.RANKING_BENCHMARK_ROOT ?? ''
+const processSpan = diagnosticBegin('benchmark.mode')
 
 if (process.argv.includes('--raw-profile-baseline')) {
   if (!root) throw new Error('Raw profile baseline requires RANKING_BENCHMARK_ROOT')
@@ -73,6 +75,8 @@ if (process.argv.includes('--raw-profile-baseline')) {
     await rm(root, { recursive: true, force: true })
   }
 }
+
+diagnosticEnd(processSpan)
 
 async function runPlayerMemoryProfileParent() {
   const matches = await currentMatches()
@@ -214,6 +218,7 @@ async function runPlainChild(mode: string) {
   const child = fork(fileURLToPath(import.meta.url), [mode], {
     cwd: process.cwd(), env: { ...process.env, RANKING_BENCHMARK_ROOT: root }, execArgv: process.execArgv, silent: true,
   })
+  diagnosticChild(child)
   const stderr: Buffer[] = []
   child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
   const exitCode = await new Promise<number | null>((resolveExit, rejectExit) => {
@@ -231,6 +236,7 @@ async function runMeasuredRawProfileChild() {
 }
 
 async function measureForkedChild(child: ReturnType<typeof fork>, label: string) {
+  diagnosticChild(child)
   let measuring = false
   let sampledPeakRssBytes = 0
   let sampledPeakAtMs = 0
@@ -264,6 +270,7 @@ async function measureForkedChild(child: ReturnType<typeof fork>, label: string)
   })
   const timer = setInterval(sample, 10)
   const stdout: Buffer[] = []
+  diagnosticChild(child)
   const stderr: Buffer[] = []
   child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk))
   child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
@@ -304,6 +311,7 @@ type FixtureShape = {
 }
 
 async function runBenchmarkParent() {
+  const corpusSpan = diagnosticBegin('parent.corpus-load')
   const parentRoot = root
   const currentShape = await currentCorpusShape()
   const benchmarkMatchCount = positiveInteger(process.env.RANKING_BENCHMARK_MATCH_COUNT) ?? currentShape.matchCount
@@ -321,6 +329,7 @@ async function runBenchmarkParent() {
   if (benchmarkMatchCount > referenceMatches.length) {
     throw new Error(`Reference match corpus is undersized: ${referenceMatches.length} < ${benchmarkMatchCount}`)
   }
+  diagnosticEnd(corpusSpan, { matches: benchmarkMatchCount, teams: teams.length, players: players.length })
   const measurements: Array<Awaited<ReturnType<typeof runMeasuredWorker>> & {
     calibrationMs: number
     verifierSampledPeakRssBytes: number
@@ -328,6 +337,7 @@ async function runBenchmarkParent() {
   }> = []
   for (let repeat = 0; repeat < repeats; repeat += 1) {
     root = join(parentRoot, `isolated-${repeat + 1}`)
+    const fixturesSpan = diagnosticBegin('parent.fixtures', { repetition: repeat + 1 })
     await mkdir(root, { recursive: true })
     const baselineCsv = join(root, 'provider-baseline', 'oracle-current.csv')
     const nextCsv = join(root, 'provider-next', 'oracle-current.csv')
@@ -355,7 +365,11 @@ async function runBenchmarkParent() {
       await writeManifest(historyManifest, [historyCsv], '2026-07-22T00:00:00.000Z', leaguepediaPath, lolEsportsPath, coverageStart, addedMatch.date)
       rawHistoryManifests.push(historyManifest)
     }
+    diagnosticEnd(fixturesSpan)
+    if (diagnosticsEnabled) diagnosticFiles([baselineCsv, nextCsv, baselineManifest, nextManifest, leaguepediaPath, lolEsportsPath, ...rawHistoryManifests, ...[4, 3, 2, 1].map((depth) => join(root, `provider-history-${depth}`, 'oracle-current.csv'))], root)
+    const importSpan = diagnosticBegin('parent.fixture-import')
     const fixtureShape = await assertSingleImportedAppend(baselineManifest, nextManifest)
+    diagnosticEnd(importSpan)
     if (process.argv.includes('--enforce-targets')) {
       assertGateScale('rated baseline matches', fixtureShape.ratedBaselineMatchCount, corpusMinimums.matches)
       if (fixtureShape.ratedBaselineMatchCount !== benchmarkMatchCount) {
@@ -369,9 +383,15 @@ async function runBenchmarkParent() {
     await writeFile(join(root, 'benchmark-setup.json'), JSON.stringify({
       currentShape, benchmarkMatchCount, baselineGenerationId, baselineMatchCount, baselineRawDeltaCount, nextEnd: addedMatch.date, fixtureShape,
     } satisfies BenchmarkSetup))
+    const calibrationSpan = diagnosticBegin('parent.calibration-process')
     const calibrationMs = await runCalibrationProcess()
+    diagnosticEnd(calibrationSpan)
+    const measurementSpan = diagnosticBegin('parent.refresh-process')
     const measurement = await runMeasuredWorker()
+    diagnosticEnd(measurementSpan)
+    const verificationSpan = diagnosticBegin('parent.verifier-process')
     const verification = await runBenchmarkVerifierProcess()
+    diagnosticEnd(verificationSpan)
     measurements.push({
       ...measurement,
       calibrationMs,
@@ -557,8 +577,10 @@ async function runBenchmarkWorker() {
   client.resetIo()
   globalThis.gc?.()
   process.send?.({ type: 'measurement-start' })
+  const cpuProfile = firstDiagnosticRepetition(root) ? await diagnosticProfile('cpu', 'refresh-cpu') : undefined
   const cpuStarted = process.cpuUsage()
   const started = performance.now()
+  const refreshSpan = diagnosticBegin('worker.measured-refresh')
   const refreshResult = await refreshDataIfChanged([
     '--raw-dir', rawDir,
     '--manifest', materializedManifest,
@@ -587,11 +609,13 @@ async function runBenchmarkWorker() {
     monotonicNow: () => performance.now(),
     run: async (_command: string, args: string[]) => stageProviderManifest(nextManifest, args),
   })
+  diagnosticEnd(refreshSpan)
   const computeMs = performance.now() - started
   const cpu = process.cpuUsage(cpuStarted)
   const productionRss = process.memoryUsage().rss
   const mainMaxRssBytes = readProcessPeakRssBytes()
   process.send?.({ type: 'measurement-stop' })
+  if (cpuProfile) await diagnosticStopProfile(cpuProfile)
   const measuredStorageCommands = { ...client.io }
   const incrementalMetrics = refreshResult.incrementalMetrics
   if (!isIncrementalMetrics(incrementalMetrics) || incrementalMetrics.fullSnapshotWritten
@@ -703,17 +727,23 @@ async function runBenchmarkVerifier() {
   const started = performance.now()
   const client = await fileBackedS3()
   const materializedManifest = join(root, 'production-refresh', 'raw', 'manifest.json')
+  const restoreSpan = diagnosticBegin('verifier.restore-and-import')
   const [restored, nextSource] = await Promise.all([
     restoreFromStorage(client),
     importRankingSourceData({ manifestPath: materializedManifest }),
   ])
+  diagnosticEnd(restoreSpan)
   const activeArtifactReferences = restored.publicManifest.artifacts
   if (!restored.loadArtifacts || !activeArtifactReferences || typeof activeArtifactReferences !== 'object'
     || Array.isArray(activeArtifactReferences)) {
     throw new Error('Benchmark verifier restored authority is missing lazy public artifacts')
   }
+  const hydrateSpan = diagnosticBegin('verifier.hydrate-all')
   const incrementalValues = await restored.loadArtifacts(Object.keys(activeArtifactReferences))
+  diagnosticEnd(hydrateSpan, { logicalPaths: Object.keys(incrementalValues).length })
+  const digestSpan = diagnosticBegin('verifier.incremental-semantic')
   const incrementalSemantic = semanticMapFromValues(incrementalValues)
+  diagnosticEnd(digestSpan)
   const generatedAt = typeof restored.publicManifest.generatedAt === 'string'
     ? restored.publicManifest.generatedAt
     : '2026-07-22T00:00:00.000Z'
@@ -724,10 +754,15 @@ async function runBenchmarkVerifier() {
       return activeSource?.retrievedAt ? { ...source, retrievedAt: activeSource.retrievedAt } : source
     })
   }
+  const fullProfile = firstDiagnosticRepetition(root) ? await diagnosticProfile('allocation', 'verifier-full') : undefined
+  const fullSpan = diagnosticBegin('verifier.full-build')
   const full = await run('full', nextSource, generatedAt, {
     mode: 'gated', cause: 'daily-audit', enabled: false,
     sourceReceiptDigest: restored.stateManifest.sourceReceiptDigest,
   })
+  diagnosticEnd(fullSpan)
+  if (fullProfile) await diagnosticStopProfile(fullProfile)
+  const paritySpan = diagnosticBegin('verifier.semantic-and-parity')
   if (full.action === 'no-change') throw new Error('Benchmark clean full build did not materialize')
   const fullSemantic = semanticMap(full)
   const differingPaths = semanticDiff(incrementalSemantic, fullSemantic)
@@ -753,6 +788,7 @@ async function runBenchmarkVerifier() {
     verifierMs: Math.round(performance.now() - started),
     verifierMaxRssBytes: readProcessPeakRssBytes(),
   })}\n`)
+  diagnosticEnd(paritySpan)
 }
 
 async function runMeasuredWorker() {
@@ -795,6 +831,7 @@ async function runMeasuredWorker() {
   })
   const timer = setInterval(sample, 10)
   const stdout: Buffer[] = []
+  diagnosticChild(child)
   const stderr: Buffer[] = []
   child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk))
   child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
@@ -859,6 +896,7 @@ async function runBenchmarkVerifierProcess() {
     execArgv: process.execArgv,
     silent: true,
   })
+  diagnosticChild(child)
   let sampledPeakRssBytes = 0
   let sampleCount = 0
   const sample = () => {
@@ -875,6 +913,7 @@ async function runBenchmarkVerifierProcess() {
   sample()
   const timer = setInterval(sample, 10)
   const stdout: Buffer[] = []
+  diagnosticChild(child)
   const stderr: Buffer[] = []
   child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk))
   child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
@@ -967,14 +1006,17 @@ async function seedBaseline(
   manifestPath: string,
   historyManifestPaths: string[],
 ) {
+  const seedSpan = diagnosticBegin('parent.seed-baseline')
   let previousAuthority: ActiveRawSourceAuthority | undefined
   for (const [index, historyManifestPath] of historyManifestPaths.entries()) {
+    const historySpan = diagnosticBegin('parent.raw-history', { index })
     const history = finalizeRawSourceGeneration(await prepareRawSourceGeneration({
       manifestPath: historyManifestPath,
       importerVersion: 'community-source-import-v1',
       previousAuthority,
     }), `raw_history_${index}`)
     await uploadContentAddressedRawSourceGeneration(client, config, history)
+    diagnosticEnd(historySpan)
     previousAuthority = {
       receipt: history.receipt,
       objectResolver: async (reference) => {
@@ -983,15 +1025,23 @@ async function seedBaseline(
       },
     }
   }
+  const rawSpan = diagnosticBegin('parent.raw-baseline-prepare')
   const rawGeneration = await prepareRawSourceGeneration({
     manifestPath,
     importerVersion: 'community-source-import-v1',
     previousAuthority,
   })
+  diagnosticEnd(rawSpan)
+  const sourceSpan = diagnosticBegin('parent.baseline-source-import')
   const source = await importRankingSourceData({ manifestPath })
+  diagnosticEnd(sourceSpan)
+  const baselineProfile = firstDiagnosticRepetition(root) ? await diagnosticProfile('allocation', 'parent-full') : undefined
+  const baselineSpan = diagnosticBegin('parent.full-baseline')
   const baseline = await run('baseline', source, '2026-07-21T00:00:00.000Z', {
     mode: 'gated', cause: 'daily-audit', enabled: true, sourceReceiptDigest: rawGeneration.sourceReceiptDigest,
   })
+  diagnosticEnd(baselineSpan)
+  if (baselineProfile) await diagnosticStopProfile(baselineProfile)
   if (baseline.action === 'no-change' || !baseline.build) throw new Error('Benchmark baseline did not materialize')
   const generationId = generationIdFor(baseline)
   const finalizedRaw = finalizeRawSourceGeneration(rawGeneration, generationId)
@@ -1007,6 +1057,7 @@ async function seedBaseline(
     now: () => new Date('2026-07-21T00:00:01.000Z'),
     stateManifestAuthority: state.authority, rawSourceGeneration: finalizedRaw, config, client,
   })
+  diagnosticEnd(seedSpan, { matches: source.matches.length })
   return { generationId, matchCount: source.matches.length, rawDeltaCount: finalizedRaw.receipt.oracle.reduce((sum, entry) => sum + entry.deltas.length, 0) }
 }
 

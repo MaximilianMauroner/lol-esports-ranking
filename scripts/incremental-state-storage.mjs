@@ -1,3 +1,4 @@
+import { diagnosticBegin, diagnosticEnd } from './benchmark-diagnostics.mjs'
 import { createHash } from 'node:crypto'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -104,11 +105,13 @@ export function prepareContentAddressedState({
 }
 
 export function prepareStateObject(value) {
+  const prepareSpan = diagnosticBegin('state.canonical-gzip')
   assertRecord(value, 'state object')
   const canonicalJson = canonicalJsonFor(value)
   const canonicalBytes = Buffer.from(canonicalJson, 'utf8')
   const digest = createHash('sha256').update(canonicalBytes).digest('hex')
   const compressed = gzipSync(canonicalBytes, { level: 9, mtime: 0 })
+  diagnosticEnd(prepareSpan, { canonicalBytes: canonicalBytes.byteLength, compressedBytes: compressed.byteLength })
   return {
     value,
     canonicalJson,
@@ -392,6 +395,7 @@ async function readStatePublicationReceipt(client, config, active) {
 }
 
 export async function readStoredJsonStateObject(client, config, reference) {
+  const readSpan = diagnosticBegin('state.restore-json')
   const parsedReference = parseObjectReference(reference, 'state object reference')
   const expectedReferenceKey = `state/objects/sha256/${parsedReference.sha256}`
   if (parsedReference.key !== expectedReferenceKey) throw new Error('Incremental state object key is not canonical')
@@ -419,7 +423,9 @@ export async function readStoredJsonStateObject(client, config, reference) {
     throw new Error(`Incremental state object semantic digest mismatch: ${expectedKey}`)
   }
   try {
-    return parseCanonicalJson(canonicalBytes.toString('utf8'))
+    const parsed = parseCanonicalJson(canonicalBytes.toString('utf8'))
+    diagnosticEnd(readSpan, { canonicalBytes: canonicalBytes.byteLength, compressedBytes: compressed.byteLength })
+    return parsed
   } catch (error) {
     if (error instanceof NonCanonicalJsonError) {
       error.message = `Incremental state object is not canonical JSON: ${expectedKey}`

@@ -1,3 +1,4 @@
+import { diagnosticBegin, diagnosticEnd } from './benchmark-diagnostics.mjs'
 import { createHash } from 'node:crypto'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -182,6 +183,7 @@ export async function persistIncrementalStateBuild({
   client: BucketClient
   config: BucketStorageConfig
 }) {
+  const persistSpan = diagnosticBegin('state.persist', { checkpoints: state.checkpoints.length })
   const ledgerPrepared = prepareStateObject(state.ledger)
   const ledgerSync = await syncContentAddressedStateObject(client, config, ledgerPrepared)
   const prepared = prepareContentAddressedState({
@@ -216,6 +218,7 @@ export async function persistIncrementalStateBuild({
     })
     reportedKeys.add(key)
   }
+  diagnosticEnd(persistSpan, { ledgerBytes: ledgerPrepared.bytes, ledgerCompressedBytes: ledgerPrepared.compressedBytes, newObjects: prepared.objects.length })
   return {
     authority: { ...manifest.authority, publicationObjects },
     uploadedBytes: [ledgerSync, ...objectResults, manifest.result]
@@ -273,7 +276,9 @@ export async function buildRankingIncrementally({
   const comparisonMode = mode === 'shadow' || auditComparison
   const forceFull = !enabled || cause === 'manual-force'
   if (forceFull) {
+    const fullSnapshotSpan = diagnosticBegin('build.full-snapshot')
     const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, env, silent })
+    diagnosticEnd(fullSnapshotSpan)
     const state = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
     return {
       action: 'publish-full', sourceData, build: full, state,
@@ -346,6 +351,7 @@ export async function buildRankingIncrementally({
     const prefixForDate = createRawPrefixReader(ledger)
     const replay = await selectReplay(restored, sourceData, prefixForDate, classification, generatedAt)
     releaseRestoredReplayPayloads(restored)
+    const replaySpan = diagnosticBegin('build.replay-terminal-state')
     const {
       replayModel,
       state,
@@ -360,6 +366,7 @@ export async function buildRankingIncrementally({
       comparisonMode,
       sourceReceiptDigest,
     )
+    diagnosticEnd(replaySpan, { replayedMatches: replayedMatchCount })
     replay.checkpointState = undefined
     if (mode === 'gated' && !comparisonMode) memoryCollections.afterReplayState = collectRefreshGarbage()
     const dependencyArtifacts = restored.loadArtifacts
@@ -385,6 +392,7 @@ export async function buildRankingIncrementally({
       : restored.artifacts
     if (!previousArtifacts) throw new Error('verified-active-artifacts-missing')
     candidateDir = `${publicDataDir}.incremental-${process.pid}-${Date.now()}`
+    const candidateSpan = diagnosticBegin('build.scoped-snapshot')
     const candidate = await buildSnapshot({
       output,
       publicDataDir: candidateDir,
@@ -403,6 +411,7 @@ export async function buildRankingIncrementally({
       env,
       silent,
     })
+    diagnosticEnd(candidateSpan, { logicalWrites: candidate.publicPlan.writes.length })
     const validScopeKeys = publishedScopeKeys(candidate.publicPlan.manifest)
     const validTournamentIds = new Set(deriveTournamentInstances({
       matches: sourceData.matches,
@@ -501,7 +510,9 @@ export async function buildRankingIncrementally({
         changedKeys: classification.changedKeys,
       } : {}),
     })
+    const fallbackSpan = diagnosticBegin('build.fallback-full-snapshot')
     const full = await buildSnapshot({ output, publicDataDir, reconciliationOutput, sourceData, generatedAt, importedMatchCount, env, silent })
+    diagnosticEnd(fallbackSpan)
     const state = buildStateFromFullReplay(sourceData, ledger, generatedAt, sourceReceiptDigest)
     const metrics = baseMetrics(classification?.kind ?? 'full-invalidation', ledger, {
       fullSnapshotWritten: true,
@@ -870,6 +881,7 @@ function buildStateFromFullReplay(
   generatedAt = new Date().toISOString(),
   sourceReceiptDigest?: string,
 ): IncrementalStateBuild {
+  const checkpointSpan = diagnosticBegin('build.full-checkpoints', { matches: sourceData.matches.length })
   const lifecycles = tournamentLifecyclesFor(sourceData, generatedAt)
   const context = createRatingReplayContext(sourceData.matches, sourceData.teams, { tournamentLifecycles: lifecycles })
   const terminalDates = new Set<string>()
@@ -895,6 +907,7 @@ function buildStateFromFullReplay(
       }
     }
   }
+  diagnosticEnd(checkpointSpan, { checkpoints: checkpoints.length })
   if (!state || checkpoints.length === 0) throw new Error('Cannot bootstrap incremental checkpoints without rated matches')
   return {
     ledger, compatibility: stateCompatibility(sourceData),

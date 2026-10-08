@@ -1,3 +1,4 @@
+import { diagnosticBegin, diagnosticEnd } from './benchmark-diagnostics.mjs'
 import { createHash } from 'node:crypto'
 import { hydrateArchive, ARCHIVE_PAGE_BYTES } from '../src/lib/publicArtifacts/archive.mjs'
 import { createReadStream, createWriteStream } from 'node:fs'
@@ -1752,6 +1753,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   }
   if (!actualPaths.includes('/data/ranking-summary.json')) throw new Error('Public artifact patch removed the root manifest')
 
+  const inheritedSpan = diagnosticBegin('public.inherited-integrity')
   const uniqueReused = new Map()
   for (const entry of entriesByPath.values()) uniqueReused.set(entry.digest, entry)
   const uploaded = []
@@ -1786,6 +1788,8 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       })
     }
   }
+  diagnosticEnd(inheritedSpan, { objects: uniqueReused.size })
+  const hydrateSpan = diagnosticBegin('public.inherited-hydration')
   for (const entry of uniqueReused.values()) {
     const content = JSON.parse(gunzipSync(entry.verified.compressed).toString('utf8')).content
     await hydrateArchive(content, async (reference) => {
@@ -1798,6 +1802,8 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       return JSON.parse(gunzipSync(child.compressed).toString('utf8')).content
     })
   }
+  diagnosticEnd(hydrateSpan)
+  const changedSpan = diagnosticBegin('public.changed-prepare-sync')
   const uniqueChanged = new Map()
   let compressedLogicalBytes = 0
   for (const artifact of changedByPath.values()) {
@@ -1826,6 +1832,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       bytes: prepared.bytes,
     })
   }
+  diagnosticEnd(changedSpan, { changedPaths: changedByPath.size })
   const manifest = createGenerationManifest({
     generationId,
     rootManifest: root.value,
