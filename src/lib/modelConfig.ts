@@ -262,7 +262,7 @@ export const transparentGprModelParameters = {
 export const transparentGprModelMetadata = {
   name: 'Transparent Power Index',
   version: transparentGprModelVersion,
-  configHash: stableHash(transparentGprModelParameters),
+  configHash: configHashFor(transparentGprModelParameters),
   ratingScale: publishedRatingScale,
   parameters: transparentGprModelParameters,
 } as const
@@ -279,7 +279,8 @@ export function factorLabel(key: keyof FactorBreakdown) {
   return factorLabels[key]
 }
 
-function stableHash(value: unknown) {
+/** FNV-1a 32 over UTF-16 code units of key-sorted JSON; the published model config hash. */
+export function configHashFor(value: unknown) {
   const input = stableStringify(value)
   let hash = 0x811c9dc5
   for (let index = 0; index < input.length; index += 1) {
