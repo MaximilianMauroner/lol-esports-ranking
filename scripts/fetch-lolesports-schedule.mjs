@@ -125,7 +125,12 @@ async function persistedJson(url) {
     },
   }, { telemetry: fetchTelemetry, onFailure: writeFailureTelemetry })
   if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
-  return response.json()
+  try {
+    return await response.json()
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error('Invalid JSON response', { cause: error })
+    throw error
+  }
 }
 
 async function writeFailureTelemetry(telemetry) {
