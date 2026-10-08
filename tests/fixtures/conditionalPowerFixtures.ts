@@ -5,6 +5,8 @@ import type { ConditionalPowerReplayBasis } from '../../src/lib/conditionalPower
 import type { ConditionalSeriesOutcome } from '../../src/lib/conditionalPowerPreview'
 import type { PregamePlayerRatingEdge } from '../../src/lib/playerModel'
 import type { TournamentSeries } from '../../src/lib/tournamentFeed'
+import { encodeRatingCheckpointEnvelope } from '../../src/lib/ratingCheckpoint'
+import { buildRatingCheckpointEventContract } from '../../src/lib/ratingCheckpointInventory'
 
 const roles: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 function roster(team: string, date: string): MatchRosterSnapshot {
@@ -25,6 +27,17 @@ function game(id: string, date: string, winner: string): MatchRecord {
   }
 }
 
+/** Re-pins only deliberate, valid synthetic state changes made by a test. No artifact is written. */
+export function pinControlledConditionalPowerBasis(basis: ConditionalPowerReplayBasis) {
+  const identity = { importerVersion: 'controlled-fixture/importer', identityTaxonomyHash: 'controlled-fixture/taxonomy', rawLedgerPrefixHash: 'controlled-fixture/prefix' }
+  const state = basis.state
+  if (!state.processedThroughUtcDate || !state.previousMatch) throw new Error('A controlled fixture needs a complete replay boundary before pinning')
+  const envelope = encodeRatingCheckpointEnvelope(state, identity, {
+    processedThroughUtcDate: state.processedThroughUtcDate, processedThroughMatchId: state.previousMatch.id,
+  }, buildRatingCheckpointEventContract(basis.context.authoritativeMatches, basis.context.eventWeightContext, basis.context.tournamentLifecycles))
+  basis.preStateId = JSON.stringify({ ...identity, payloadDigest: envelope.metadata.payloadDigest })
+}
+
 export function conditionalPowerFixture(bestOf: 1 | 3 | 5 = 5, outcome: ConditionalSeriesOutcome = { winner: 'home', loserWins: 0 }, tier: EventTier = 'worlds-playoffs') {
   const history = Array.from({ length: 6 }, (_, index) => game(`prior-${index}`, `2026-09-${String(10 + index).padStart(2, '0')}`, index % 2 ? 'Beta' : 'Alpha'))
   const context = createRatingReplayContext(history, {
@@ -41,10 +54,11 @@ export function conditionalPowerFixture(bestOf: 1 | 3 | 5 = 5, outcome: Conditio
   state.momentums.set('Beta', -4)
   const basis: ConditionalPowerReplayBasis = {
     modelVersion: transparentGprModelMetadata.version, modelConfigHash: transparentGprModelMetadata.configHash,
-    preStateId: 'controlled-fixture/utc-2026-09-15', ratingScale: structuredClone(transparentGprModelMetadata.ratingScale),
+    preStateId: '', ratingScale: structuredClone(transparentGprModelMetadata.ratingScale),
     context, state, sourceTeamIds: ['fixture-alpha', 'fixture-beta'], teamNames: ['Alpha', 'Beta'],
     event: { id: 'worlds:2026:controlled', name: 'Controlled Worlds fixture', league: 'Worlds', phase: 'Quarterfinals', tier, region: 'LCK' },
   }
+  pinControlledConditionalPowerBasis(basis)
   const series: TournamentSeries = {
     id: 'controlled-series', eventId: basis.event.id, startTime: '2026-09-16T12:00:00.000Z', stage: 'Quarterfinals',
     status: 'upcoming', sourceState: 'unstarted', bestOf, vodUrls: [],

@@ -80,6 +80,27 @@ test('corpus adapter rejects absent, incomplete or future historical evidence wi
   }
 })
 
+test('adapter-produced checkpoint pins reject a changed rating without caller mutation', () => {
+  const source = sourceFixture()
+  const originalSource = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  const control = { ...conditionalPowerFixture(), basis: prepared.basis }
+  assert.equal(evaluateConditionalPowerReplay(control).status, 'ready')
+
+  const input = { ...conditionalPowerFixture(), basis: structuredClone(prepared.basis) }
+  const previous = input.basis.state.ratings.get('Alpha')
+  assert.ok(previous !== undefined && Number.isFinite(previous))
+  input.basis.state.ratings.set('Alpha', previous + 100)
+  const original = structuredClone(input)
+  const result = evaluateConditionalPowerReplay(input)
+  assert.equal(result.status, 'unavailable')
+  if (result.status === 'unavailable') assert.equal(result.reason, 'stale-pre-state-pin')
+  assert.deepEqual(input, original)
+  assert.equal(input.basis.preStateId, prepared.basis.preStateId)
+  assert.deepEqual(source, originalSource)
+})
+
 test('corpus adapter requires complete legal historical series before production replay', () => {
   for (const bestOf of [3, 5]) for (const bestOfBasis of ['official', 'provider'] as const) {
     const incomplete = sourceFixture()

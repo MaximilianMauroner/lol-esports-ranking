@@ -7,7 +7,7 @@ import { eventTrackerKey } from '../src/lib/placementResiduals'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
 import { rosterBasisByTeam } from '../src/lib/rosters'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver'
-import { conditionalPowerFixture } from './fixtures/conditionalPowerFixtures'
+import { conditionalPowerFixture, pinControlledConditionalPowerBasis } from './fixtures/conditionalPowerFixtures'
 
 test('conditional public points equal isolated production replay for every legal winner/score, event weight and compressed scale', () => {
   for (const bestOf of [1, 3, 5] as const) for (const winner of ['home', 'away'] as const) for (const loserWins of legalConditionalScores(bestOf)) {
@@ -49,12 +49,75 @@ test('preview clamps both public endpoints before subtracting, and invalidates c
   if (preview.status !== 'ready') throw new Error(preview.detail)
   assert.equal(preview.teams[0]!.delta, 0)
   input.basis.state.ratings.set('Alpha', 1300)
-  input.basis.preStateId = 'controlled-fixture/revised-state'
+  assert.equal(evaluateConditionalPowerReplay(input).status, 'unavailable')
+  pinControlledConditionalPowerBasis(input.basis)
   const updated = evaluateConditionalPowerReplay(input)
   if (updated.status !== 'ready') throw new Error(updated.detail)
   assert.notDeepEqual(updated.teams, preview.teams)
   assert.equal(updated.provenance.preStateId, input.basis.preStateId)
   assert.equal(preview.pinnedInputs.basis!.state.ratings.get('Alpha'), 1950)
+})
+
+test('finite state edits require a new payload pin before a conditional replay can run', () => {
+  const mutations: Array<(input: ReturnType<typeof conditionalPowerFixture>) => void> = [
+    (input) => { input.basis.state.ratings.set('Alpha', 1800) },
+    (input) => { input.basis.state.leagueScores.set('LCK', 1650) },
+    (input) => { input.basis.state.uncertainties.set('Alpha', 90) },
+    (input) => { input.basis.state.momentums.set('Alpha', 75) },
+    (input) => { input.basis.state.rosterPriorOffsets.set('Alpha', 3) },
+    (input) => { input.basis.state.executionRatings.set('Alpha', 1800) },
+  ]
+  for (const mutate of mutations) {
+    const input = conditionalPowerFixture()
+    const originalPin = input.basis.preStateId
+    mutate(input)
+    const changed = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable')
+    if (result.status === 'unavailable') assert.equal(result.reason, 'stale-pre-state-pin')
+    assert.deepEqual(input, changed)
+    pinControlledConditionalPowerBasis(input.basis)
+    assert.notEqual(input.basis.preStateId, originalPin)
+    const repinned = evaluateConditionalPowerReplay(input)
+    if (repinned.status !== 'ready') throw new Error(repinned.detail)
+    assert.equal(repinned.provenance.preStateId, input.basis.preStateId)
+    assert.deepEqual(repinned.pinnedInputs, input)
+  }
+})
+
+test('pre-state pins require structured source identities and the exact checkpoint payload digest', () => {
+  const identity = { importerVersion: 'controlled-importer', identityTaxonomyHash: 'controlled-taxonomy', rawLedgerPrefixHash: 'controlled-prefix' }
+  const malformed = [
+    'controlled-fixture/legacy-string', '{}', '[]', 'null', '42', '"plain-string"',
+    JSON.stringify({ ...identity, importerVersion: 42, payloadDigest: 'some-digest' }),
+    JSON.stringify({ ...identity, identityTaxonomyHash: ' \t ', payloadDigest: 'some-digest' }),
+    JSON.stringify({ ...identity, rawLedgerPrefixHash: null, payloadDigest: 'some-digest' }),
+    JSON.stringify({ ...identity, payloadDigest: '' }),
+    JSON.stringify({ ...identity, payloadDigest: 42 }),
+  ]
+  for (const pin of malformed) {
+    const input = conditionalPowerFixture()
+    input.basis.preStateId = pin
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', pin)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'invalid-pre-state-pin')
+    assert.deepEqual(input, original)
+  }
+  for (const pin of [undefined, '', ' \t ']) {
+    const input = conditionalPowerFixture()
+    Reflect.set(input.basis, 'preStateId', pin)
+    const original = structuredClone(input)
+    assert.equal(evaluateConditionalPowerReplay(input).status, 'unavailable')
+    assert.deepEqual(input, original)
+  }
+  const input = conditionalPowerFixture()
+  input.basis.preStateId = JSON.stringify({ ...identity, payloadDigest: 'fnv1a64-0000000000000000' })
+  const original = structuredClone(input)
+  const result = evaluateConditionalPowerReplay(input)
+  assert.equal(result.status, 'unavailable')
+  if (result.status === 'unavailable') assert.equal(result.reason, 'stale-pre-state-pin')
+  assert.deepEqual(input, original)
 })
 
 test('offset timestamps use their UTC calendar date and preserve isolated production parity', () => {
@@ -298,6 +361,20 @@ test('hypothetical game and series identities cannot alias the historical prefix
       mutate: (input) => renameSeries(input, resolveCanonicalSeries([input.basis.context.authoritativeMatches[0]!])[0]!.id) },
     { label: 'scenario source series alias', reason: 'reused-series-identity', seedHistory: (game) => { game.sourceMatchId = 'historical-source-series' },
       mutate: (input) => { input.games[0]!.sourceMatchId = 'historical-source-series' } },
+    { label: 'different source-match suffix hidden by future official ID', reason: 'reused-series-identity',
+      seedHistory: (game) => { game.sourceMatchId = 'historical-source-series_game1' },
+      mutate: (input) => { input.games[0]!.sourceMatchId = 'historical-source-series_game2' } },
+    { label: 'different source-match suffix hidden by both official IDs', reason: 'reused-series-identity',
+      seedHistory: (game) => { game.sourceMatchId = 'historical-source-series_game1'; game.officialMatchId = 'higher-priority-history-series' },
+      mutate: (input) => { input.games[0]!.sourceMatchId = 'historical-source-series_game2' } },
+    { label: 'different source-game suffix hidden by source-match IDs', reason: 'reused-series-identity',
+      seedHistory: (game) => { game.sourceGameId = 'historical-source-series_game1'; game.sourceMatchId = 'higher-priority-history-series_game1' },
+      mutate: (input) => { input.games[0]!.sourceGameId = 'historical-source-series_game2'; input.games[0]!.sourceMatchId = 'distinct-future-source-series_game2' } },
+    { label: 'different source-game suffix hidden by official and source-match IDs', reason: 'reused-series-identity',
+      seedHistory: (game) => {
+        game.sourceGameId = 'historical-source-series_game1'; game.sourceMatchId = 'higher-priority-history-series_game1'; game.officialMatchId = 'historical-official-series'
+      },
+      mutate: (input) => { input.games[0]!.sourceGameId = 'historical-source-series_game2'; input.games[0]!.sourceMatchId = 'distinct-future-source-series_game2' } },
   ]
   for (const { label, reason, seedHistory, mutate } of cases) {
     const input = conditionalPowerFixture()
@@ -306,6 +383,7 @@ test('hypothetical game and series identities cannot alias the historical prefix
       const context = createRatingReplayContext(input.basis.context.authoritativeMatches, structuredClone(input.basis.context.teams))
       input.basis.context = context
       input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+      pinControlledConditionalPowerBasis(input.basis)
     }
     assert.equal(evaluateConditionalPowerReplay(input).status, 'ready', `control: ${label}`)
     mutate(input)
@@ -416,6 +494,7 @@ test('pre-state event trackers must prove the same corpus and lifecycle as the r
   }))
   input.basis.context = createRatingReplayContext(matches, structuredClone(input.basis.context.teams))
   input.basis.state = replayRatingDates({ context: input.basis.context, replayMatches: matches })
+  pinControlledConditionalPowerBasis(input.basis)
   assert.equal(evaluateConditionalPowerReplay(input).status, 'ready')
   const [eventId, tracker] = input.basis.state.eventTrackers.entries().next().value!
   const mutations: Array<(scenario: typeof input) => void> = [
@@ -461,6 +540,7 @@ test('completed future placement boundaries are unsupported while historical pen
   }]]) })
   historical.basis.context = context
   historical.basis.state = replayRatingDates({ context, replayMatches: matches })
+  pinControlledConditionalPowerBasis(historical.basis)
   assert.equal(historical.basis.state.eventTrackers.get(historicalEventId)!.applied, false)
   const originalHistorical = structuredClone(historical)
   const beforeState = structuredClone(historical.basis.state)

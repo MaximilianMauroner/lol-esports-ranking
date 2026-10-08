@@ -49,6 +49,12 @@ edges with `createRatingReplayContext`, replays the complete prefix with
 `replayRatingDates`, and uses the production checkpoint encoder/decoder to
 validate state shape and pin the payload digest. Importer version, identity
 taxonomy hash and raw prefix hash are included in the pre-state identity.
+Every evaluation must parse that structured identity and verify the state's
+payload digest through the production checkpoint schema before projection.
+Missing pins, arbitrary labels and finite scoring-state changes under an
+unchanged digest return unavailable. A deliberately changed valid state needs
+a new checkpoint pin. This proves integrity of the pinned inputs; it does not
+certify the producer's source evidence.
 No checkpoint file is written. Incomplete historical stats, lineups, profiles,
 format or chronology are rejected before replay. The production canonical series
 resolver must prove a legal decisive final score for every historical series.

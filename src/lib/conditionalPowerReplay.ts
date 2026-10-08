@@ -8,6 +8,7 @@ import { transparentGprModelMetadata } from './modelConfig'
 import type { PregamePlayerRatingEdge } from './playerModel'
 import { publishedRating } from './publishedRatingArtifacts'
 import { ratingScaleFromUnknown } from './ratingCalculations'
+import { decodeRatingCheckpointValue, encodeRatingCheckpointEnvelope } from './ratingCheckpoint'
 import { buildRatingCheckpointEventContract, ratingCheckpointInventory, validateRatingCheckpointEventContract } from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
 import { rosterBasisByTeam } from './rosters'
@@ -18,6 +19,7 @@ import type { TournamentSeries } from './tournamentFeed'
 export type ConditionalPowerReplayBasis = {
   modelVersion: string
   modelConfigHash: string
+  /** JSON corpus identity plus the production checkpoint payload digest for this exact state. */
   preStateId: string
   ratingScale: PublishedRatingScale
   context: RatingReplayContext
@@ -169,7 +171,17 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
       !== JSON.stringify([...expectedEventContext.worldsEndDateByCalendarYear].sort())) {
       return unavailablePowerPreview('missing-pre-state', 'The pinned event weighting context must match its authoritative corpus.')
     }
-    validateRatingCheckpointEventContract(state, boundary, buildRatingCheckpointEventContract(matches, context.eventWeightContext, context.tournamentLifecycles))
+    const eventContract = buildRatingCheckpointEventContract(matches, context.eventWeightContext, context.tournamentLifecycles)
+    validateRatingCheckpointEventContract(state, boundary, eventContract)
+    const pin = parsedPreStatePin(basis.preStateId)
+    if (!pin) return unavailablePowerPreview('invalid-pre-state-pin', 'The pre-state pin must contain explicit importer, identity taxonomy, raw-prefix identities and a payload digest.')
+    const envelope = encodeRatingCheckpointEnvelope(state, pin, {
+      processedThroughUtcDate: boundary, processedThroughMatchId: previousMatch.id,
+    }, eventContract)
+    if (envelope.metadata.payloadDigest !== pin.payloadDigest) {
+      return unavailablePowerPreview('stale-pre-state-pin', 'The supplied rating state differs from the payload digest in its pinned pre-state identity.')
+    }
+    decodeRatingCheckpointValue(envelope, pin)
     return null
   } catch (error) {
     return unavailablePowerPreview('missing-pre-state', error instanceof Error ? error.message : 'The supplied replay basis is malformed or incomplete.')
@@ -178,6 +190,20 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
 
 function nonemptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function parsedPreStatePin(serialized: string) {
+  let value: unknown
+  try { value = JSON.parse(serialized) } catch { return null }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)
+    || !('importerVersion' in value) || !nonemptyString(value.importerVersion)
+    || !('identityTaxonomyHash' in value) || !nonemptyString(value.identityTaxonomyHash)
+    || !('rawLedgerPrefixHash' in value) || !nonemptyString(value.rawLedgerPrefixHash)
+    || !('payloadDigest' in value) || !nonemptyString(value.payloadDigest)) return null
+  return {
+    importerVersion: value.importerVersion, identityTaxonomyHash: value.identityTaxonomyHash,
+    rawLedgerPrefixHash: value.rawLedgerPrefixHash, payloadDigest: value.payloadDigest,
+  }
 }
 
 const supportedRegions = new Set<Region>(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL', 'VCS', 'PCS', 'International'])
@@ -202,7 +228,19 @@ function gameIdentityAliases(match: MatchRecord) {
 
 function seriesIdentityAliases(matches: readonly MatchRecord[]) {
   const aliases = matches.flatMap((match) => [match.officialMatchId, match.sourceMatchId].filter(nonemptyString))
-  for (const series of resolveCanonicalSeries(matches)) {
+  // Each supplied identity remains an alias even when a higher-priority identity wins canonical resolution.
+  const sourceMatchViews = matches.filter((match) => nonemptyString(match.sourceMatchId)).map((match) => {
+    const view = { ...match }
+    delete view.officialMatchId
+    return view
+  })
+  const sourceGameViews = matches.filter((match) => nonemptyString(match.sourceGameId)).map((match) => {
+    const view = { ...match }
+    delete view.officialMatchId
+    delete view.sourceMatchId
+    return view
+  })
+  for (const series of [matches, sourceMatchViews, sourceGameViews].flatMap((view) => resolveCanonicalSeries(view))) {
     aliases.push(series.id)
     // Use the source-series identity already normalized by the production resolver.
     const [kind, , sourceSeriesId] = series.id.split('\u0000')
