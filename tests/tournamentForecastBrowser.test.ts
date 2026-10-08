@@ -85,6 +85,8 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
     await page.getByText(/Forecast unavailable: No reviewed source-to-ranking team ID map is published/).first().waitFor()
     await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
+    await page.getByText('Conditional Power preview', { exact: true }).first().click()
+    await page.getByText(/Power delta unavailable: No reviewed source-to-ranking/).waitFor()
     identityStatus = 200
     await page.clock.fastForward(65_000)
     await page.getByText('Current model estimate · not archived').waitFor()
@@ -93,11 +95,34 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     assert.match(await page.locator('body').innerText(), /Only decisive Bo1, Bo3 and Bo5 are supported/)
     assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
     assert.match(await page.locator('body').innerText(), new RegExp(`Power data through ${ratingDate}`))
+    // A new model basis resets the hypothetical selection instead of keeping a stale preview.
+    await page.getByText('Conditional Power preview', { exact: true }).first().click()
+    await page.getByText(/Current Power \(snapshot\): T1/).waitFor()
+    const preview = page.locator('details').filter({ has: page.getByText('Conditional Power preview', { exact: true }) }).first()
+    const originalStores = JSON.stringify({ forecastBasis, ledger, feed })
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 800 })
+      await preview.getByLabel('Winner', { exact: true }).selectOption('away')
+      await preview.getByLabel('Series score (winner first)').selectOption('2')
+      await preview.getByRole('status').filter({ hasText: 'Gen.G wins 3–2.' }).waitFor()
+      await preview.getByLabel('Winner', { exact: true }).focus()
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Tab')
+      await page.keyboard.press('Home')
+      await preview.getByRole('status').filter({ hasText: 'T1 wins 3–0.' }).waitFor()
+      assert.match(await preview.innerText(), /internal pre-series state or verified event weighting/)
+      assert.match(await preview.innerText(), /Future lineups, patch, game order and performance inputs are also unavailable/)
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Preview overflow at ${width}px`)
+    }
+    assert.equal(JSON.stringify({ forecastBasis, ledger, feed }), originalStores)
+    await preview.getByLabel('Winner', { exact: true }).selectOption('away')
     const firstProvenance = await page.getByText(/Power data through/).first().innerText()
     servedManifestJson = JSON.stringify({ ...manifest, generatedAt: afterMinutes(10) })
     await page.clock.fastForward(10 * 60_000 + 5_000)
     await page.waitForFunction((previous) => [...document.querySelectorAll('span')].some((element) =>
       element.textContent?.startsWith('Power data through') && element.textContent !== previous), firstProvenance)
+    await page.getByText('Conditional Power preview', { exact: true }).first().click()
+    assert.equal(await page.getByLabel('Winner', { exact: true }).inputValue(), 'home')
 
     ledgerStatus = 200
     const created = createPreMatchReceipt({ series: upcoming, basis: forecastBasis, forecastRevision: 'fixture-rev-1',
@@ -112,6 +137,10 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     await page.getByText('Published pre-match forecast').waitFor()
     assert.match(await page.locator('body').innerText(), /Score-conditioned series odds:/)
     assert.match(await page.locator('body').innerText(), /frozen pre-series model, not in-game telemetry/)
+    const liveSection = page.locator('section[aria-label="live"]')
+    await liveSection.getByText('Conditional Power preview', { exact: true }).click()
+    assert.match(await liveSection.innerText(), /Pre-series Power previews close when the source reports play/)
+    assert.equal(await liveSection.getByLabel('Winner', { exact: true }).count(), 0)
     ledgerStatus = 503
     feed = { ...feed, fetchedAt: afterMinutes(21) }
     await page.clock.fastForward(60_000)
@@ -124,6 +153,8 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     await page.getByText('T1 3–1 Gen.G').waitFor()
     await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor({ state: 'hidden' })
     assert.match(await page.locator('section[aria-label="results"]').innerText(), /Published pre-match forecast/)
+    await page.locator('section[aria-label="results"]').getByText('Conditional Power preview', { exact: true }).click()
+    assert.match(await page.locator('section[aria-label="results"]').innerText(), /Actual rating impact belongs to the rating evidence ledger/)
     for (const width of [320, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: 800 })
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)

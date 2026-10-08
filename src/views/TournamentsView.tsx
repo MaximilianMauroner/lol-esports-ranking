@@ -7,6 +7,7 @@ import { LoadingState } from '../components/ui/loading'
 import { currentHashQuery, hashParam } from '../lib/urlState'
 import { loadTournamentForecastArtifacts, loadTournamentForecastLedger } from '../lib/tournamentForecastArtifacts'
 import { emptyForecastLedger, forecastTournamentSeries, pinnedForecast, scoreConditionedSeriesOdds, type ForecastBasis, type ForecastLedger, type ForecastReceipt, type TournamentForecast } from '../lib/tournamentForecast'
+import { ConditionalPowerPreview } from '../components/ConditionalPowerPreview'
 import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
 
 type FeedHealth = { checkedAt: string; complete: boolean; warnings: string[] }
@@ -163,6 +164,7 @@ function SeriesCard({ series, timezone, now, forecasts }: { series: TournamentSe
           <a href="#matches" className="underline">Rating evidence ledger</a>
         </> : <span>Forecast unavailable: {forecast.detail}</span>}
       </div> : null}
+      {forecasts ? <ConditionalPowerPreview key={JSON.stringify([series, forecast])} series={series} forecast={forecast} now={now} /> : null}
       {series.vodUrls.map((url) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="underline">Watch VOD</a>)}
     </CardContent>
   </Card>
