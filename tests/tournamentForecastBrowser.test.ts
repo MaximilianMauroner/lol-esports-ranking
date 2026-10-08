@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { referencePublicDataDir, referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -19,11 +21,11 @@ function series(startTime: string, bestOf = 5): TournamentSeries {
 }
 
 test('synthetic tournament card keeps published pre-match odds through live and finished states', { timeout: 60_000 }, async () => {
-  const manifestJson = await readFile('public/data/ranking-summary.json', 'utf8')
+  const manifestJson = await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')
   const manifest = parsePublicRankingManifest(JSON.parse(manifestJson))
   const shardUrl = manifest.snapshotIndex[manifest.defaultSnapshotKey]?.url
   assert.ok(shardUrl?.startsWith('/data/'))
-  const shard = parsePublicRankingShard(JSON.parse(await readFile(`public${new URL(shardUrl, 'http://fixture').pathname}`, 'utf8')))
+  const shard = parsePublicRankingShard(JSON.parse(await readFile(join(referencePublicDir, new URL(shardUrl, 'http://fixture').pathname.slice(1)), 'utf8')))
   const ratingDate = manifest.coverage.latestMatchDate!
   const at = new Date(Math.max(Date.parse(manifest.generatedAt), Date.parse(ratingDate)) + 86_400_000).toISOString()
   const afterMinutes = (minutes: number) => new Date(Date.parse(at) + minutes * 60_000).toISOString()
@@ -62,7 +64,7 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     })
   } }
   const server = await createServer({
-    logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin],
+    publicDir: referencePublicDir, logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin],
     define: {
       'import.meta.env.VITE_TOURNAMENT_HUB_ENABLED': JSON.stringify('1'),
       'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1'),

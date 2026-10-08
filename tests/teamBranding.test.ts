@@ -1,13 +1,14 @@
+import { referencePublicDataDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { access, readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { teamBranding } from '../src/data/teamBranding.generated.ts'
 import { withAuditedTeamCodes } from '../src/data/teamBranding.ts'
 import { teamCodeFor } from '../src/data/teamIdentity.ts'
 
 test('every published team has audited branding metadata', async () => {
-  const directory = JSON.parse(await readFile(resolve('public/data/entities/teams.json'), 'utf8')) as {
+  const directory = JSON.parse(await readFile(resolve(join(referencePublicDataDir, 'entities/teams.json')), 'utf8')) as {
     teams: Array<{ name: string }>
   }
 
