@@ -42,6 +42,8 @@ These byte contracts are not in the M0 fixtures. Each milestone adds them before
 - M5: Oracle player-id FNV-32 after `trim`, `toLowerCase`, and `\s+` collapse (`src/lib/importers/oraclesElixir.ts`). JS `\s` and `trim` include U+FEFF; Rust `char::is_whitespace` does not.
 - M6a: source fingerprint `stableJson` in `scripts/refresh-data-if-changed.mjs`. It writes `{a: undefined}` as the text `{"a":undefined}`.
 
+M1 note: the cross-language CI job must compute the model config hash from the live parameters in both workers and compare them on every change. The fixture pins only the hash algorithm on samples, because a frozen copy of the live parameters would fail on every model change (Codex suggested it in #86; declined for that reason).
+
 M1 note: `parseProviderInstant` falls back to V8 `Date.parse` for forms that do not match the zone-less pattern. The Rust port must copy that fallback for the forms it accepts, or reject them.
 
 ## Railway environment
