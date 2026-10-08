@@ -26,6 +26,7 @@ import {
 } from './incremental-benchmark-assertions.ts'
 import { runCalibrationWorkload } from './benchmark-calibration.ts'
 import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { verifyRustRawSource } from './verify-rust-raw-source.ts'
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
 const refreshModulePath: string = './refresh-data-if-changed.mjs'
@@ -64,7 +65,8 @@ if (process.argv.includes('--raw-profile-baseline')) {
 } else {
   root = await mkdtemp(join(tmpdir(), 'incremental-ranking-benchmark-'))
   try {
-    if (process.argv.includes('--raw-prepare-profile')) await runRawPrepareProfileParent()
+    if (process.argv.includes('--raw-seam-parity')) await runRawSeamParity()
+    else if (process.argv.includes('--raw-prepare-profile')) await runRawPrepareProfileParent()
     else if (process.argv.includes('--player-memory-profile')) await runPlayerMemoryProfileParent()
     else await runBenchmarkParent()
   } finally {
@@ -156,6 +158,22 @@ async function runRawPrepareProfileParent() {
     sampledPeakAtMs: measured.sampledPeakAtMs,
     sampleCount: measured.sampleCount,
   })}\n`)
+}
+
+async function runRawSeamParity() {
+  const matches = await currentMatches()
+  const teams = await currentTeams()
+  const players = await currentPlayers()
+  const csvPath = join(root, 'raw-seam.csv')
+  const manifestPath = join(root, 'raw-seam-manifest.json')
+  const leaguepediaPath = join(root, 'raw-seam-leaguepedia.json')
+  const lolEsportsPath = join(root, 'raw-seam-lolesports.json')
+  await writeFile(csvPath, oracleCsv(matches, teams, players))
+  await writeFile(leaguepediaPath, `${JSON.stringify(leaguepediaFixture(matches[0]!))}\n`)
+  await writeFile(lolEsportsPath, `${JSON.stringify(lolEsportsFixture(matches[0]!))}\n`)
+  await writeManifest(manifestPath, [csvPath], '2026-10-08T00:00:00.000Z', leaguepediaPath, lolEsportsPath, matches[0]!.date, matches.at(-1)!.date)
+  const binary = resolve(process.env.RANKING_REFRESH_BINARY ?? 'worker/target/release/ranking-refresh')
+  process.stdout.write(`${JSON.stringify({ corpus: { matches: matches.length, teams: teams.length, players: players.length }, ...await verifyRustRawSource(manifestPath, binary) })}\n`)
 }
 
 async function runRawProfileBaseline() {
