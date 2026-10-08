@@ -1,4 +1,4 @@
-const NAIVE_TIMESTAMP = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/
+const NAIVE_TIMESTAMP = /^(\d{4}-\d{2}-\d{2})[ Tt](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/
 
 /**
  * Oracle's Elixir and Leaguepedia publish UTC timestamps without a zone, such
