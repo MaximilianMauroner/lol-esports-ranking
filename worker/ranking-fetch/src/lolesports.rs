@@ -40,7 +40,8 @@ pub fn download(
         if let Some((key, value)) = key {
             set_query_parameter(&mut url, key, value);
         }
-        http.get(url, &headers, &Policy::default())?.json()
+        let response = http.get(url, &headers, &Policy::default())?;
+        response.json().map_err(|_| "Invalid JSON response".into())
     };
     let result = (|| -> Result<Value> {
         let initial = fetch(http, "getSchedule", None)?;

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +14,68 @@ const { refreshDataIfChanged }: {
 } = await import(refreshScriptPath)
 
 const event = '2026 Demacia Cup Global Invitational'
+
+test('dedicated provider children run with an empty PATH and retain failure diagnostics', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'provider-empty-path-'))
+  let fail = false
+  const requests: string[] = []
+  const server = createServer((request, response) => {
+    const url = new URL(request.url ?? '/', 'http://fixture.invalid')
+    requests.push(url.pathname)
+    if (fail) response.writeHead(404, { connection: 'close' }).end('missing provider')
+    else if (url.pathname === '/cargo') response.writeHead(200, { 'content-type': 'text/csv', connection: 'close' }).end('OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold\n')
+    else response.writeHead(200, { 'content-type': 'application/json', connection: 'close' }).end(JSON.stringify({ data: { schedule: { pages: {}, events: [] } } }))
+  })
+  try {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    assert.ok(address && typeof address !== 'string')
+    const base = `http://127.0.0.1:${address.port}`
+    for (const provider of ['both', 'leaguepedia', 'lolesports'] as const) {
+      for (const required of provider === 'both' ? [false] : [false, true]) {
+        fail = provider !== 'both'
+        const output = join(directory, `${provider}-${required}`)
+        const flags = ['--start', '2026-01-01', '--end', '2026-01-01', '--out-dir', output,
+          '--oracle', 'false', '--leaguepedia-base-url', `${base}/cargo`, '--lolesports-base-url', base,
+          '--lolesports-older-pages', '0', '--lolesports-newer-pages', '0', '--lolesports-detail-limit', '0',
+          ...(provider === 'leaguepedia' ? ['--lolesports', 'false'] : []),
+          ...(provider === 'lolesports' ? ['--leaguepedia', 'false'] : []),
+          ...(required ? [`--${provider}-required`, 'true'] : [])]
+        const child = spawn(process.execPath, ['scripts/download-local-data.mjs', ...flags], {
+          env: { ...process.env, PATH: '' }, stdio: ['ignore', 'ignore', 'pipe'],
+        })
+        const stderr: Buffer[] = []
+        child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
+        const code = await new Promise<number | null>((resolve, reject) => {
+          child.once('error', reject)
+          child.once('close', resolve)
+        })
+        const diagnostics = Buffer.concat(stderr).toString('utf8')
+        const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'))
+        if (provider === 'both') {
+          assert.equal(code, 0, diagnostics)
+          assert.equal(manifest.sources.leaguepedia.status, 'downloaded', diagnostics)
+          assert.equal(manifest.sources.lolesports.status, 'downloaded', diagnostics)
+          assert.equal(manifest.files.leaguepediaJson.length, 1)
+          assert.equal(manifest.files.lolEsportsJson.length, 1)
+        } else {
+          if (required) assert.ok(code !== null && code > 0, diagnostics)
+          else assert.equal(code, 0, diagnostics)
+          assert.equal(manifest.sources[provider].status, 'failed')
+          const script = provider === 'leaguepedia' ? 'fetch-leaguepedia' : 'fetch-lolesports-schedule'
+          assert.ok(manifest.sources[provider].failures[0].error.startsWith(`node scripts/${script}.mjs `))
+          assert.match(manifest.sources[provider].failures[0].error, / exited with 1$/)
+          assert.match(diagnostics, /HTTP 404/)
+        }
+      }
+    }
+    assert.deepEqual(requests, ['/cargo', '/getSchedule', '/cargo', '/cargo', '/getSchedule', '/getSchedule'])
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    await rm(directory, { recursive: true, force: true })
+  }
+})
 
 test('scheduled date-window downloads retain a new tournament across refreshes without manual inputs', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'automatic-tournament-'))
@@ -45,7 +108,7 @@ test('scheduled date-window downloads retain a new tournament across refreshes w
       await refreshDataIfChanged(['--raw-dir', rawDir, '--manifest', manifestPath,
         '--staging-dir', join(directory, 'staging'), '--lookback-days', '3', '--end', end, '--skip-crunch',
         '--oracle', 'false', '--lolesports', 'false', '--leaguepedia-base-url', baseUrl,
-      ], { env: { RANKING_BUCKET_RESTORE_RAW: 'false', RANKING_BUCKET_UPLOAD_ENABLED: 'false', RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01' } })
+      ], { env: { PATH: '', RANKING_BUCKET_RESTORE_RAW: 'false', RANKING_BUCKET_UPLOAD_ENABLED: 'false', RANKING_REFRESH_BOOTSTRAP_START: '2025-01-01' } })
       const source = await importRankingSourceData({ manifestPath })
       const cup = source.matches.filter((game) => game.event === event)
       assert.equal(cup.length, expectedGames)
