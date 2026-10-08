@@ -79,6 +79,9 @@ between those public endpoints, including rounding and clamping. It is not a
 scaled probability, raw internal stable delta, history rank, or promise about a
 future publication. The complete conditional result holds all supplied inputs
 fixed. It does not assert that those future inputs are known for a real match.
+The complete historical roster-basis map must match the production derivation
+from the supplied corpus, including teams outside the selected series. Missing,
+extra or changed entries return unavailable before the baseline projection.
 Hypothetical raw/canonical game and series identities must be distinct from the
 historical prefix. Each historical team's latest date must contain explicit,
 consistent home-league source fields matching its profile. Absent or conflicting
@@ -141,6 +144,12 @@ resolves each date's subset separately, so incomplete subsets have no decisive
 series-result update. The adapter rejects that corpus; removing its games would
 violate the complete-prefix requirement. Broader support needs a separately scoped
 production atomicity change coordinated with #84.
+
+Each historical canonical series must have one event name, league, phase, region
+and tier across its games. Production uses the final game's scoring context, so
+conflicting rows cannot establish a consistent pre-state. Supplied official event
+IDs must agree. Historical records with all IDs absent or with one compatible
+supplied ID remain supported.
 
 ## Acceptance limits and checks
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { conditionalPowerBasisProblem, evaluateConditionalPowerReplay } from '../src/lib/conditionalPowerReplay'
+import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerReplayBasis'
 import { legalConditionalScores, publicConditionalPowerPreview } from '../src/lib/conditionalPowerPreview'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
 import { eventTrackerKey } from '../src/lib/placementResiduals'
@@ -84,6 +85,86 @@ test('finite state edits require a new payload pin before a conditional replay c
     assert.equal(repinned.provenance.preStateId, input.basis.preStateId)
     assert.deepEqual(repinned.pinnedInputs, input)
   }
+})
+
+test('the full historical roster-basis map matches the producer for third teams and ignores insertion order', () => {
+  const input = conditionalPowerFixture()
+  const matches = structuredClone(input.basis.context.authoritativeMatches)
+  for (const gameNumber of [1, 2]) {
+    const game = structuredClone(matches[0]!)
+    game.id = `prior-gamma-${gameNumber}`
+    game.date = '2026-09-14'
+    game.datetimeUtc = `2026-09-14T0${4 + gameNumber}:00:00.000Z`
+    game.officialMatchId = 'historical-gamma-series'
+    game.bestOf = 3
+    game.gameNumber = gameNumber
+    game.event = 'Controlled Gamma fixture'
+    game.league = 'International'
+    game.region = 'International'
+    game.tier = 'minor-international'
+    game.phase = 'Quarterfinals'
+    game.teamA = 'Gamma'
+    game.teamAHomeLeague = 'LEC'
+    game.teamB = 'Alpha'
+    game.teamBHomeLeague = 'LCK'
+    game.winner = 'Gamma'
+    game.teamARoster!.observedAt = game.date
+    game.teamARoster!.players = game.teamARoster!.players.map((player) => ({ ...player, id: `fixture-Gamma-${player.role}` }))
+    game.teamBRoster = structuredClone(matches[0]!.teamARoster)
+    game.teamBRoster!.observedAt = game.date
+    matches.push(game)
+  }
+  const teams = { ...structuredClone(input.basis.context.teams), Gamma: { name: 'Gamma', code: 'GAM', region: 'LEC' as const, league: 'LEC' } }
+  const prepared = prepareConditionalPowerReplayBasis({
+    modelVersion: input.basis.modelVersion, modelConfigHash: input.basis.modelConfigHash, ratingScale: input.basis.ratingScale,
+    sourceTeamIds: input.basis.sourceTeamIds, teamNames: input.basis.teamNames, event: input.basis.event,
+    historicalMatches: matches, teams, tournamentLifecycles: new Map(), processedThroughUtcDate: '2026-09-15',
+    corpusIdentity: { importerVersion: 'three-team-fixture/importer', identityTaxonomyHash: 'three-team-fixture/taxonomy', rawLedgerPrefixHash: 'three-team-fixture/prefix' },
+  })
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  input.basis = prepared.basis
+  assert.equal(input.basis.context.teamRosterBasis.size, 3)
+  assert.equal(input.basis.context.teamRosterBasis.get('Gamma'), 'sourced')
+  const original = structuredClone(input)
+  const baseline = evaluateConditionalPowerReplay(input)
+  if (baseline.status !== 'ready') throw new Error(baseline.detail)
+  assert.deepEqual(input, original)
+  const mutations: Array<(scenario: typeof input) => void> = [
+    (scenario) => { scenario.basis.context.teamRosterBasis.delete('Gamma') },
+    (scenario) => { scenario.basis.context.teamRosterBasis.set('Gamma', 'assumed-continuous') },
+    (scenario) => { scenario.basis.context.teamRosterBasis.set('Extra team', 'sourced') },
+    (scenario) => { scenario.basis.context.teamRosterBasis.delete('Gamma'); scenario.basis.context.teamRosterBasis.set('Extra team', 'sourced') },
+  ]
+  for (const mutate of mutations) {
+    const scenario = structuredClone(input)
+    mutate(scenario)
+    const changed = structuredClone(scenario)
+    const result = evaluateConditionalPowerReplay(scenario)
+    assert.equal(result.status, 'unavailable')
+    if (result.status === 'unavailable') assert.equal(result.reason, 'roster-basis-mismatch')
+    assert.equal(scenario.basis.preStateId, original.basis.preStateId)
+    assert.deepEqual(scenario, changed)
+  }
+  const reversed = structuredClone(input)
+  reversed.basis.context.teamRosterBasis = new Map([...reversed.basis.context.teamRosterBasis].reverse())
+  const reverseResult = evaluateConditionalPowerReplay(reversed)
+  if (reverseResult.status !== 'ready') throw new Error(reverseResult.detail)
+  assert.deepEqual(reverseResult.teams, baseline.teams)
+
+  // An observed partial third-team roster retains the production classification instead of becoming sourced.
+  const partial = structuredClone(input)
+  for (const game of partial.basis.context.authoritativeMatches) if (game.teamA === 'Gamma') {
+    game.teamARoster!.completeness = 'partial'
+    game.teamARoster!.players = game.teamARoster!.players.slice(0, 4)
+  }
+  const context = createRatingReplayContext(partial.basis.context.authoritativeMatches, partial.basis.context.teams)
+  partial.basis.context = context
+  partial.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+  pinControlledConditionalPowerBasis(partial.basis)
+  assert.equal(context.teamRosterBasis.get('Gamma'), 'assumed-continuous')
+  const originalPartial = structuredClone(partial)
+  assert.equal(evaluateConditionalPowerReplay(partial).status, 'ready')
+  assert.deepEqual(partial, originalPartial)
 })
 
 test('pre-state pins require structured source identities and the exact checkpoint payload digest', () => {

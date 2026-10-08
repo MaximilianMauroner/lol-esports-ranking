@@ -146,6 +146,11 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
       || state.processedMatchCount !== matches.length || new Set(matches.map(matchIdentity)).size !== matches.length) {
       return unavailablePowerPreview('missing-pre-state', 'The complete authoritative prefix must match the processed game count and UTC boundary.')
     }
+    const expectedRosterBasis = rosterBasisByTeam(matches)
+    if (context.teamRosterBasis.size !== expectedRosterBasis.size
+      || [...expectedRosterBasis].some(([team, rosterBasis]) => context.teamRosterBasis.get(team) !== rosterBasis)) {
+      return unavailablePowerPreview('roster-basis-mismatch', 'The complete historical roster-basis map must match its authoritative corpus, including every team and sourced or unsourced value.')
+    }
     if (!explicitLatestHomeLeaguesMatchContext(context)) {
       return unavailablePowerPreview('missing-home-league-context', 'Every historical team needs an explicit, unambiguous home league on its latest UTC date that matches the team directory.')
     }

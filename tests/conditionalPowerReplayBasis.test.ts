@@ -140,3 +140,48 @@ test('corpus adapter requires complete legal historical series before production
   assert.equal(result.status, 'unavailable', 'The series continued after Alpha had already won.')
   assert.deepEqual(illegal, original)
 })
+
+test('corpus adapter rejects conflicting historical series scoring metadata and preserves optional event IDs', () => {
+  const conflicts: Array<(source: ReturnType<typeof sourceFixture>) => void> = [
+    (source) => { source.historicalMatches.at(-1)!.event = 'Different event' },
+    (source) => { source.historicalMatches.at(-1)!.league = 'Worlds' },
+    (source) => { source.historicalMatches.at(-1)!.phase = 'Playoffs' },
+    (source) => { source.historicalMatches.at(-1)!.region = 'International' },
+    (source) => { source.historicalMatches.at(-1)!.tier = 'worlds-playoffs' },
+    (source) => {
+      source.historicalMatches.at(-2)!.officialEventId = 'event-one'
+      source.historicalMatches.at(-1)!.officialEventId = 'event-two'
+    },
+  ]
+  for (const bestOf of [3, 5]) for (const bestOfBasis of ['official', 'provider'] as const) {
+    const source = sourceFixture()
+    const winsNeeded = (bestOf + 1) / 2
+    const games = source.historicalMatches.slice(-winsNeeded)
+    games.forEach((game, index) => Object.assign(game, {
+      date: source.processedThroughUtcDate, bestOf, bestOfBasis, officialMatchId: 'historical-series',
+      gameNumber: index + 1, winner: 'Alpha',
+    }))
+    const original = structuredClone(source)
+    assert.equal(prepareConditionalPowerReplayBasis(source).status, 'ready', 'Absent optional event IDs remain supported.')
+    assert.deepEqual(source, original)
+
+    for (const mutate of conflicts) {
+      const conflicting = structuredClone(source)
+      mutate(conflicting)
+      const before = structuredClone(conflicting)
+      const rejected = prepareConditionalPowerReplayBasis(conflicting)
+      assert.equal(rejected.status, 'unavailable', `${bestOfBasis} Bo${bestOf}: ${mutate}`)
+      if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'incomplete-historical-inputs')
+      assert.deepEqual(conflicting, before)
+    }
+
+    games.at(-1)!.officialEventId = 'historical-event'
+    const partiallyIdentified = structuredClone(source)
+    assert.equal(prepareConditionalPowerReplayBasis(source).status, 'ready', 'One supplied compatible ID remains supported.')
+    assert.deepEqual(source, partiallyIdentified)
+    games.forEach((game) => { game.officialEventId = 'historical-event' })
+    const fullyIdentified = structuredClone(source)
+    assert.equal(prepareConditionalPowerReplayBasis(source).status, 'ready', 'Matching supplied IDs remain supported.')
+    assert.deepEqual(source, fullyIdentified)
+  }
+})
