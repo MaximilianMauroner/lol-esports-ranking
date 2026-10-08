@@ -183,7 +183,7 @@ pub fn provider_datetime_utc(value: &str) -> Option<String> {
 }
 
 pub fn provider_date(value: &str) -> String {
-    let prefix = value.chars().take(10).collect::<String>();
+    let prefix = String::from_utf16_lossy(&value.encode_utf16().take(10).collect::<Vec<_>>());
     if prefix.len() == 10
         && prefix.as_bytes().iter().enumerate().all(|(i, v)| {
             if i == 4 || i == 7 {

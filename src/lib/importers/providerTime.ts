@@ -15,7 +15,7 @@ export function providerDate(value: string) {
   const sourceDate = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
   if (sourceDate) return sourceDate
   const parsed = parseProviderInstant(value)
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : value.slice(0, 10)
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : value.slice(0, 10).replace(/[\uD800-\uDFFF]/gu, '\ufffd')
 }
 
 export function providerDatetimeUtc(value: string) {

@@ -121,6 +121,9 @@ const MATH_INPUT: Array<['exp' | 'log' | 'pow', number, number?]> = [
   ...Array.from({ length: 32 }, (): ['log', number] => ['log', 0.01 + (5000 - 0.01) * randomUnit()]),
   ...Array.from({ length: 32 }, (): ['log', number] => ['log', 1e-6 + (1 - 1e-6) * randomUnit()]),
   ['pow', 10, -0.4375], ['pow', 10, 0.0625], ['pow', 2, -1.5], ['pow', 0.5, 37 / 454.1791071114875],
+  // Explicit log domain and nonfinite boundaries, including signed zero.
+  ['log', -1], ['log', -0.5], ['log', -Number.MIN_VALUE], ['log', Number.NEGATIVE_INFINITY],
+  ['log', -0], ['log', 0], ['log', Number.MIN_VALUE], ['log', Number.POSITIVE_INFINITY], ['log', Number.NaN],
 ]
 
 const PROVIDER_TIME_INPUT = [
@@ -153,6 +156,7 @@ const PROVIDER_TIME_INPUT = [
     `2025-01-11 17:13:25${zone}`, `2025-01-11T17:13:25${zone}`,
   ]),
   '2025-01-11t17:13:25+09',
+  '🙂🙂🙂🙂🙂🙂', 'abcdefghi🙂', 'abcdefgh🙂tail', 'é🙂🙂🙂🙂🙂tail',
 ]
 
 function applyMath(operation: 'exp' | 'log' | 'pow', left: number, right?: number) {
