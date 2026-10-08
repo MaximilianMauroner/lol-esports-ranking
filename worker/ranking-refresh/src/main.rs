@@ -4,6 +4,15 @@ fn main() {
         println!("{}", ranking_contracts::model::metadata());
         return;
     }
-    eprintln!("usage: ranking-refresh contracts (Node remains the default refresh worker)");
+    if let [command, input, output] = args.as_slice()
+        && command == "raw-source"
+    {
+        if let Err(error) = ranking_raw_source::run(input, output) {
+            eprintln!("raw-source: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    eprintln!("usage: ranking-refresh contracts | raw-source <input.json> <output.json>");
     std::process::exit(2);
 }
