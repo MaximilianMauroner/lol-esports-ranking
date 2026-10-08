@@ -39,7 +39,6 @@ export function rawObjectReferenceFor(prepared) {
     key: `raw/objects/sha256/${prepared.digest}`,
     sha256: prepared.digest,
     bytes: prepared.bytes,
-    compressedBytes: prepared.compressedBytes,
     storageEncoding: 'gzip',
   }
 }
@@ -47,7 +46,7 @@ export function rawObjectReferenceFor(prepared) {
 export function decodeRawObject(reference, compressed) {
   const parsedReference = parseRawObjectReference(reference, 'raw object reference')
   const bytes = Buffer.from(compressed ?? [])
-  if (bytes.byteLength !== parsedReference.compressedBytes) throw new Error('Raw object compressed byte length mismatch')
+  if (parsedReference.compressedBytes !== undefined && bytes.byteLength !== parsedReference.compressedBytes) throw new Error('Raw object compressed byte length mismatch')
   let canonicalBytes
   try { canonicalBytes = gunzipSync(bytes) } catch (error) {
     throw new Error('Raw object gzip is corrupt', { cause: error })
@@ -320,9 +319,16 @@ export function prepareRawSourceReceipt({ generationId, importerVersion, coverag
   assertNonEmptyString(importerVersion, 'raw receipt importerVersion')
   const parsedCoverage = parseCoverage(coverage)
   assertRecord(sourceReceiptInputs, 'sourceReceiptInputs')
-  const parsedOracle = parseOracleReceiptSources(oracle, importerVersion)
+  // Keep stored receipts byte-stable when parsing, but omit legacy transport sizes in new identities.
+  const parsedOracle = parseOracleReceiptSources(oracle, importerVersion).map((source) => ({
+    ...source,
+    baseline: semanticRawReference(source.baseline),
+    deltas: source.deltas.map(semanticRawReference),
+  }))
   const parsedLeaguepedia = parseNarrowReceiptSources(leaguepedia, 'leaguepedia')
+    .map((source) => ({ ...source, object: semanticRawReference(source.object) }))
   const parsedLolEsports = parseNarrowReceiptSources(lolesports, 'lolesports')
+    .map((source) => ({ ...source, object: semanticRawReference(source.object) }))
   const identity = { importerVersion, coverage: parsedCoverage, oracle: parsedOracle, leaguepedia: parsedLeaguepedia, lolesports: parsedLolEsports }
   const rawIdentityDigest = sha256(Buffer.from(canonicalJsonFor(identity)))
   const sourceReceiptDigest = sha256(Buffer.from(canonicalJsonFor({ rawIdentityDigest, sourceReceiptInputs })))
@@ -598,12 +604,16 @@ function parseNarrowReceiptSources(value, provider) {
 }
 
 function parseRawObjectReference(value, label) {
-  assertExactKeys(value, ['key', 'sha256', 'bytes', 'compressedBytes', 'storageEncoding'], label)
+  assertExactKeys(value, ['key', 'sha256', 'bytes', 'storageEncoding', ...(Object.hasOwn(value ?? {}, 'compressedBytes') ? ['compressedBytes'] : [])], label)
   assertDigest(value.sha256, `${label} sha256`)
   if (value.key !== `raw/objects/sha256/${value.sha256}`) throw new Error(`${label} key is not canonical`)
-  if (!Number.isSafeInteger(value.bytes) || value.bytes <= 0 || !Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0) throw new Error(`${label} byte lengths are invalid`)
+  if (!Number.isSafeInteger(value.bytes) || value.bytes <= 0 || (Object.hasOwn(value, 'compressedBytes') && (!Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0))) throw new Error(`${label} byte lengths are invalid`)
   if (value.storageEncoding !== 'gzip') throw new Error(`${label} storageEncoding must be gzip`)
-  return { key: value.key, sha256: value.sha256, bytes: value.bytes, compressedBytes: value.compressedBytes, storageEncoding: 'gzip' }
+  return { ...semanticRawReference(value), ...(value.compressedBytes !== undefined ? { compressedBytes: value.compressedBytes } : {}) }
+}
+
+function semanticRawReference(value) {
+  return { key: value.key, sha256: value.sha256, bytes: value.bytes, storageEncoding: 'gzip' }
 }
 
 function parsePartition(value, label) {

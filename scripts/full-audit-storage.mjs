@@ -337,7 +337,9 @@ async function verifyRawReceiptObject(client, config, reference, expected) {
   const compressed = await bodyBytes(object.Body)
   if (object.ContentEncoding !== 'gzip' || object.Metadata?.sha256 !== reference.sha256
     || object.Metadata?.['semantic-bytes'] !== String(reference.bytes) || object.Metadata?.encoding !== 'gzip'
-    || Number(object.ContentLength) !== reference.compressedBytes || compressed.byteLength !== reference.compressedBytes) {
+    || !Number.isSafeInteger(Number(object.ContentLength)) || Number(object.ContentLength) <= 0
+    || compressed.byteLength !== Number(object.ContentLength)
+    || (reference.compressedBytes !== undefined && compressed.byteLength !== reference.compressedBytes)) {
     throw new Error('Full audit raw receipt metadata mismatch')
   }
   const parsed = parseRawSourceReceipt(decodeRawObject(reference, compressed))
@@ -363,6 +365,7 @@ function parseModel(value) {
 
 function parseFullAuditObjectReference(value) {
   const parsed = parseReference(value, 'full audit object')
+  if (parsed.compressedBytes === undefined) throw new Error('Full audit object transport size is missing')
   if (parsed.key !== `audits/objects/sha256/${parsed.sha256}`) throw new Error('Full audit object key is not canonical')
   return parsed
 }
@@ -380,12 +383,14 @@ function parseStateReference(value, label) {
 }
 
 function parseReference(value, label) {
-  assertExactKeys(value, ['key', 'sha256', 'bytes', 'compressedBytes', 'storageEncoding'], label)
+  assertExactKeys(value, ['key', 'sha256', 'bytes', 'storageEncoding', ...(Object.hasOwn(value ?? {}, 'compressedBytes') ? ['compressedBytes'] : [])], label)
   if (typeof value.key !== 'string' || !/^[a-f0-9]{64}$/.test(value.sha256 ?? '')
     || !Number.isSafeInteger(value.bytes) || value.bytes <= 0
-    || !Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0
+    || (Object.hasOwn(value, 'compressedBytes') && (!Number.isSafeInteger(value.compressedBytes) || value.compressedBytes <= 0))
     || value.storageEncoding !== 'gzip') throw new Error(`Invalid ${label}`)
-  return { key: value.key, sha256: value.sha256, bytes: value.bytes, compressedBytes: value.compressedBytes, storageEncoding: 'gzip' }
+  return { key: value.key, sha256: value.sha256, bytes: value.bytes, storageEncoding: 'gzip',
+    ...(value.compressedBytes !== undefined ? { compressedBytes: value.compressedBytes } : {}),
+  }
 }
 
 function assertExactKeys(value, keys, label) {

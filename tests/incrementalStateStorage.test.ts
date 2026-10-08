@@ -9,6 +9,7 @@ import test from 'node:test'
 import zlib, { gunzipSync, gzipSync } from 'node:zlib'
 import {
   assertStateManifestAuthority,
+  parseIncrementalStateManifest,
   prepareContentAddressedState,
   prepareStateObject,
   stateObjectReferenceFor,
@@ -418,7 +419,7 @@ test('state objects conditionally create, reuse identical bytes, and reject coll
   await assert.rejects(syncContentAddressedStateObject(client, config, object), /collision or metadata mismatch/)
 })
 
-test('a conditional-create race reuses only byte-identical state objects', async () => {
+test('a conditional-create race reuses verified state objects', async () => {
   const backing = memoryS3()
   const object = preparedState('object-race').objects[0]
   let headMisses = 0
@@ -439,6 +440,61 @@ test('a conditional-create race reuses only byte-identical state objects', async
   ])
   assert.deepEqual([first.status, second.status].sort(), ['unchanged', 'uploaded'])
   assert.equal([first, second].find((entry) => entry.status === 'unchanged')?.reason, 'content-addressed-state-object-race-reused')
+})
+
+test('state reuse accepts alternate gzip sizes and rejects forged semantic payloads', async () => {
+  for (const race of [false, true]) {
+    const backing = memoryS3()
+    const prepared = prepareStateObject({ value: 'compressible-data'.repeat(100) })
+    const uploaded = await syncContentAddressedStateObject(backing, config, prepared)
+    const stored = backing.objects.get(uploaded.key)!
+    const alternate = gzipSync(prepared.canonicalBytes, { level: 0 })
+    assert.notEqual(alternate.byteLength, prepared.compressedBytes)
+    stored.bytes = alternate
+    let headMissed = false
+    const client = {
+      async send(command: unknown) {
+        if (race && !headMissed && commandDetails(command).name === 'HeadObjectCommand') {
+          headMissed = true
+          throw Object.assign(new Error('missing'), { name: 'NotFound' })
+        }
+        return backing.send(command)
+      },
+    }
+    const result = await syncContentAddressedStateObject(client, config, prepared)
+    assert.equal(result.status, 'unchanged')
+    assert.equal(result.bytes, alternate.byteLength)
+    assert.deepEqual(await readStoredJsonStateObject(backing, config, stateObjectReferenceFor(prepared)), prepared.value)
+    await assert.rejects(readStoredJsonStateObject(backing, config, {
+      ...stateObjectReferenceFor(prepared), compressedBytes: prepared.compressedBytes,
+    }), /metadata mismatch/)
+    stored.bytes = gzipSync(Buffer.from(canonicalJsonFor({ value: 'forged-payload' })), { level: 0 })
+    await assert.rejects(syncContentAddressedStateObject(client, config, prepared), /semantic digest mismatch/)
+  }
+})
+
+test('new state identities normalize reused legacy references and stored manifests remain byte-stable', async () => {
+  const original = preparedState('legacy-state')
+  const legacy = { ...original.manifest,
+    canonicalLedger: { ...original.manifest.canonicalLedger, compressedBytes: original.objects[0].compressedBytes },
+    checkpoints: original.manifest.checkpoints.map((candidate, index) => ({ ...candidate,
+      object: { ...candidate.object, compressedBytes: original.objects[index + 1].compressedBytes },
+    })),
+  }
+  assert.deepEqual(parseIncrementalStateManifest(legacy), legacy)
+  const prepareWithLengths = (size: number) => prepareContentAddressedState({
+    ...stateInput('normalized'),
+    canonicalLedgerReference: { ...legacy.canonicalLedger, compressedBytes: size },
+    checkpoints: legacy.checkpoints.map((candidate) => ({ boundary: candidate.boundary, rawPrefix: candidate.rawPrefix,
+      storedObjectReference: { ...candidate.object, compressedBytes: size },
+    })),
+  })
+  assert.equal(prepareWithLengths(1).manifestPrepared.digest, prepareWithLengths(100).manifestPrepared.digest)
+  const client = memoryS3()
+  await syncAllStateObjects(client, original.objects)
+  const written = await writeIncrementalStateManifest(client, config, { manifest: legacy })
+  const verified = await assertStateManifestAuthority(client, config, written.authority)
+  assert.deepEqual(verified.manifest, legacy)
 })
 
 test('state manifests are immutable and identical retries reuse the original object', async () => {

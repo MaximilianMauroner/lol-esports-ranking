@@ -96,3 +96,14 @@ After removing volatile fields (timestamps, run ids, config hash, pipeline versi
 `baseline`: CI verify and gate on the `main`-equivalent head, see Baseline.
 `fixtures-stable`: `pnpm run fixtures:parity` twice, and once with `TZ=Asia/Seoul`, gave byte-identical files.
 `railway-env` stays false: the time zone is verified and `LANG` no longer matters, but the Node version is unknown.
+
+## Evidence for prerequisite B
+
+- New raw and state references omit gzip length. New preparation normalizes reused legacy references; parsing stored receipts/manifests preserves their original transport fields and digests.
+- Public, raw, and state reuse checks validate stored semantic bytes, gzip integrity, storage metadata, and actual transport length. Reuse metrics and publication membership use measured stored sizes.
+- Stored modes remain raw v2 and state v1, with an optional legacy transport field. No rewrite of stored authorities is required. Compatibility remains until active, rollback, audit, and recovery references to the old format are retired. See `docs/storage-identity.md`.
+- Full-audit and restart-baseline readers accept the new nested references. Audit snapshot descriptors keep measured gzip size because they describe the stored transport artifact.
+- Initial guarded affected suite: 103/107 passed; four restart-baseline fixtures relied on gzip size from the semantic constructor. Fixtures and baseline transport verification were corrected. Guard: 3 GiB memory cap, zero swap; peak 949 MiB.
+- Final validation and PR review results will be recorded on the prerequisite PR.
+
+- Final affected suite: 111/111 passed, including alternate gzip sizes and measured closure, legacy authority reads, corrupt payload rejection, conditional-create races, and the >40 MB archive. Typecheck and lint passed. Guarded run: sampled peak about 946 MiB, zero swap. Full suite and CI gates pending.

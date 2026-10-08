@@ -20,6 +20,7 @@ import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { buildStaticSnapshot, writeReconciliationOutput } from './build-static-snapshot.ts'
 import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
 import {
+  assertStoredStateObjectIntegrity,
   prepareContentAddressedState,
   prepareStateObject,
   stateObjectReferenceFor,
@@ -205,10 +206,11 @@ export async function persistIncrementalStateBuild({
   for (const checkpoint of prepared.manifest.checkpoints) {
     const key = statePublicationKey(config, checkpoint.object.key)
     if (reportedKeys.has(key)) continue
+    const verified = await assertStoredStateObjectIntegrity(client, config, checkpoint.object)
     publicationObjects.push({
       key,
       digest: checkpoint.object.sha256,
-      bytes: checkpoint.object.compressedBytes,
+      bytes: verified.compressedBytes,
       outcome: 'reused',
     })
     reportedKeys.add(key)
@@ -219,7 +221,7 @@ export async function persistIncrementalStateBuild({
       .filter((entry) => entry.status === 'uploaded').reduce((sum, entry) => sum + Number(entry.bytes), 0),
     objectCount: 2 + objectResults.length,
     ledgerBytes: ledgerPrepared.bytes,
-    ledgerCompressedBytes: ledgerPrepared.compressedBytes,
+    ledgerCompressedBytes: ledgerSync.bytes,
     checkpointCount: state.checkpoints.length,
   }
 }
