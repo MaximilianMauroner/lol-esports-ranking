@@ -17,10 +17,6 @@ pub fn provider_instant(value: &str) -> Option<i64> {
         return None;
     }
     let (clock, offset) = parse_zone(&value[11..], separator == b' ')?;
-    // Only the uppercase provider grammar assigns UTC to timestamps without a zone.
-    if separator == b't' && offset.is_none() {
-        return None;
-    }
     let legacy = separator == b' ' && offset.is_some();
     let date = calendar_date(year, month, day, legacy)?;
     let (hour, minute, second, millis) = parse_clock(clock, legacy)?;
