@@ -138,10 +138,12 @@ export async function uploadRankingArtifacts({
     requireEtag: Boolean(leaseAuthority.etag),
   })
   let stageStarted = monotonicNow()
+  const verifiedObjects = new Map()
+  const recordVerifiedObject = (proof) => verifiedObjects.set(proof.key, proof)
   const publicSync = generationalPublication
     ? publicArtifactPatch
-      ? await uploadContentAddressedPublicArtifactPatch(client, config, { generationId, ...publicArtifactPatch })
-      : await uploadContentAddressedPublicArtifacts(client, config, publicDataDir, generationId)
+      ? await uploadContentAddressedPublicArtifactPatch(client, config, { generationId, ...publicArtifactPatch }, recordVerifiedObject)
+      : await uploadContentAddressedPublicArtifacts(client, config, publicDataDir, generationId, recordVerifiedObject)
     : { uploaded: await uploadDirectory(client, config, publicDataDir, dataPrefix, 'ranking-summary.json'), unchanged: [], reused: [] }
   uploads.push(...publicSync.uploaded)
   unchanged.push(...publicSync.unchanged)
@@ -257,7 +259,7 @@ export async function uploadRankingArtifacts({
         ? assertRawSourceGenerationAuthority(client, config, rawAuthority)
         : undefined,
     ])
-    const verifiedStateObjects = new Map((verifiedState?.verifiedObjects ?? []).map((proof) => [proof.key, proof]))
+    for (const proof of [...(verifiedState?.verifiedObjects ?? []), ...(verifiedRaw?.verifiedObjects ?? [])]) recordVerifiedObject(proof)
     if (verifiedState && verifiedState.manifest.generationId !== generationId) {
       throw new Error('Incremental state generation does not match public generation')
     }
@@ -291,9 +293,7 @@ export async function uploadRankingArtifacts({
     const stateClosure = verifiedState
       ? statePublicationClosure(config, verifiedState, stateManifestAuthority?.publicationObjects)
       : []
-    const rawClosure = verifiedRaw ? verifiedRaw.verifiedObjects.map((object) => ({
-      ...object, outcome: 'reused',
-    })) : []
+    const rawClosure = verifiedRaw ? verifiedRaw.verifiedObjects.map((object) => publicationObject(object, 'reused')) : []
     publicationReceipt = createGenerationPublicationReceipt({
       generationId,
       preparedAt: promotedAt,
@@ -337,7 +337,7 @@ export async function uploadRankingArtifacts({
     )
     await assertGenerationReadinessAuthority(client, config, receiptAuthority, publicationReceipt)
     await beforePromotionWrite?.()
-    for (const member of publicationReceipt.objects) await assertPublicationMember(client, config, member, verifiedStateObjects)
+    for (const member of publicationReceipt.objects) await assertPublicationMember(client, config, member, verifiedObjects)
     const finalLease = await assertBucketLease(leaseAuthority.key, leaseAuthority, {
       config,
       client,
@@ -1094,7 +1094,7 @@ export async function readActiveGenerationPublication({
   return { found: true, receipt }
 }
 
-async function assertPublicationMember(client, config, member, verifiedStateObjects) {
+async function assertPublicationMember(client, config, member, verifiedObjects) {
   const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: member.key }))
   const stored = await bodyBytes(object.Body)
   if (Number(object.ContentLength) !== member.bytes || stored.byteLength !== member.bytes
@@ -1102,7 +1102,7 @@ async function assertPublicationMember(client, config, member, verifiedStateObje
     throw new Error(`Generation publication object authority mismatch: ${member.key}`)
   }
   const relative = relativeBucketKeyAny(config, member.key)
-  const proof = verifiedStateObjects?.get(member.key)
+  const proof = verifiedObjects?.get(member.key)
   if (proof?.digest === member.digest && proof.compressedBytes === member.bytes
     && createHash('sha256').update(stored).digest('hex') === proof.compressedSha256) return
   let semantic = stored
@@ -1304,10 +1304,12 @@ async function assertRawSourceGenerationAuthority(client, config, authority) {
     ...receipt.leaguepedia.map((source) => source.object),
     ...receipt.lolesports.map((source) => source.object),
   ]
-  const verifiedObjects = []
+  const verifiedObjects = [{ key: authority.key, digest: authority.reference.sha256, bytes: compressed.byteLength,
+    compressedBytes: compressed.byteLength, compressedSha256: createHash('sha256').update(compressed).digest('hex') }]
   for (const reference of references) {
     const objectBytes = await readRawObjectBytes(client, config, reference)
-    verifiedObjects.push({ key: bucketKey(config, reference.key), digest: reference.sha256, bytes: objectBytes.byteLength })
+    verifiedObjects.push({ key: bucketKey(config, reference.key), digest: reference.sha256, bytes: objectBytes.byteLength,
+      compressedBytes: objectBytes.byteLength, compressedSha256: createHash('sha256').update(objectBytes).digest('hex') })
   }
   return { ...authority, reference: { ...authority.reference, compressedBytes: compressed.byteLength }, receipt, verifiedObjects }
 }
@@ -1651,7 +1653,7 @@ export async function uploadDirectory(client, config, dir, destinationPrefix, pu
   return uploads
 }
 
-export async function uploadContentAddressedPublicArtifacts(client, config, dir, generationId) {
+export async function uploadContentAddressedPublicArtifacts(client, config, dir, generationId, onVerifiedStored) {
   const root = resolve(dir)
   const files = (await listFiles(root)).sort((left, right) => compareCodeUnits(relative(root, left), relative(root, right)))
   const entries = [], uploaded = [], unchanged = []
@@ -1679,7 +1681,7 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
     for (const member of [...(artifact.children ?? []), artifact]) {
       if (seen.has(member.digest)) continue
       seen.add(member.digest)
-      const result = await syncContentAddressedObject(client, config, member)
+      const result = await syncContentAddressedObject(client, config, member, onVerifiedStored)
       if (result.status === 'unchanged') unchanged.push(result)
       else uploaded.push(result)
       semanticLogicalBytes += member.bytes; compressedLogicalBytes += result.bytes
@@ -1687,7 +1689,7 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
   }
   if (!rootManifest) throw new Error('Content-addressed publication requires ranking-summary.json')
   const manifest = createGenerationManifest({ generationId, rootManifest, entries })
-  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
+  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest, onVerifiedStored)
   for (const result of manifestSync.directoryResults ?? []) {
     if (!seen.has(result.digest)) {
       seen.add(result.digest)
@@ -1715,7 +1717,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   changedArtifacts,
   removedLogicalPaths = [],
   expectedLogicalPaths,
-}) {
+}, onVerifiedStored) {
   if (previousManifest?.storageMode !== CONTENT_ADDRESSED_STORAGE_MODE || !previousManifest?.artifacts) {
     throw new Error('Content-addressed artifact patch requires a compatible previous generation manifest')
   }
@@ -1760,7 +1762,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       logicalPath: entry.logicalPath,
       sha256: entry.digest,
       bytes: entry.bytes,
-    }, entry.logicalPath)
+    }, entry.logicalPath, { onVerifiedStored })
     entry.verified = verified
     if (!hasImmutablePublicMetadata(verified)) {
       uploaded.push(await putContentAddressedObject(client, config, bucketKey(config, `objects/sha256/${entry.digest}`), {
@@ -1787,7 +1789,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   for (const entry of uniqueReused.values()) {
     const content = JSON.parse(gunzipSync(entry.verified.compressed).toString('utf8')).content
     await hydrateArchive(content, async (reference) => {
-      const child = await assertReferencedContentAddressedIntegrity(client, config, reference, entry.logicalPath)
+      const child = await assertReferencedContentAddressedIntegrity(client, config, reference, entry.logicalPath, { onVerifiedStored })
       if (!hasImmutablePublicMetadata(child)) uploaded.push(await putContentAddressedObject(client, config,
         bucketKey(config, `objects/sha256/${reference.sha256}`), { digest: reference.sha256, bytes: reference.bytes,
           compressed: child.compressed, compressedBytes: child.compressed.byteLength }, publicContentAddressedMetadata(reference.sha256, reference.bytes)))
@@ -1808,11 +1810,11 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       }
     } else {
       for (const child of prepared.children ?? []) {
-        const childResult = await syncContentAddressedObject(client, config, child)
+        const childResult = await syncContentAddressedObject(client, config, child, onVerifiedStored)
         if (childResult.status === 'unchanged') unchanged.push(childResult)
         else uploaded.push(childResult)
       }
-      const result = await syncContentAddressedObject(client, config, prepared)
+      const result = await syncContentAddressedObject(client, config, prepared, onVerifiedStored)
       if (result.status === 'unchanged') unchanged.push(result)
       else uploaded.push(result)
     }
@@ -1829,7 +1831,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
     rootManifest: root.value,
     entries: [...entriesByPath.values()],
   })
-  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest)
+  const manifestSync = await syncGenerationManifest(client, config, generationId, manifest, onVerifiedStored)
   for (const result of manifestSync.directoryResults ?? []) {
     if (result.status === 'unchanged') unchanged.push(result)
     else uploaded.push(result)
@@ -1858,7 +1860,7 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   }
 }
 
-async function syncGenerationManifest(client, config, generationId, manifest) {
+async function syncGenerationManifest(client, config, generationId, manifest, onVerifiedStored) {
   const relativeKey = `generations/${safeObjectPath(generationId)}/manifest.json`
   const key = bucketKey(config, relativeKey)
   const directoryResults = []
@@ -1868,7 +1870,7 @@ async function syncGenerationManifest(client, config, generationId, manifest) {
       return [path, Object.fromEntries(Object.entries(entry).filter(([key]) => key !== 'generationId'))]
     }))
     const directory = prepareSemanticArtifact({ artifactKind: 'public-artifact-directory', formatVersion: 1, artifacts })
-    for (const child of [...(directory.children ?? []), directory]) directoryResults.push(await syncContentAddressedObject(client, config, child))
+    for (const child of [...(directory.children ?? []), directory]) directoryResults.push(await syncContentAddressedObject(client, config, child, onVerifiedStored))
     storedManifest = { ...manifest, artifacts: { [manifest.rootArtifact]: manifest.artifacts[manifest.rootArtifact] },
       artifactDirectory: { sha256: directory.digest, bytes: directory.bytes, encoding: 'gzip' } }
   }
@@ -1948,14 +1950,14 @@ async function assertGenerationManifestAuthority(client, config, authority) {
   if (!matches) throw new Error('Generation manifest changed before active pointer promotion')
 }
 
-async function syncContentAddressedObject(client, config, artifact) {
+async function syncContentAddressedObject(client, config, artifact, onVerifiedStored) {
   const relativeKey = `objects/sha256/${artifact.digest}`
   const key = bucketKey(config, relativeKey)
   const expectedMetadata = publicContentAddressedMetadata(artifact.digest, artifact.bytes)
   const existing = await assertReferencedContentAddressedIntegrity(client, config, {
     sha256: artifact.digest,
     bytes: artifact.bytes,
-  }, key, { missingIsAbsent: true })
+  }, key, { missingIsAbsent: true, onVerifiedStored })
   if (existing && hasImmutablePublicMetadata(existing)) {
     return {
       status: 'unchanged',
@@ -1981,7 +1983,7 @@ async function syncContentAddressedObject(client, config, artifact) {
     const raced = await assertReferencedContentAddressedIntegrity(client, config, {
       sha256: artifact.digest,
       bytes: artifact.bytes,
-    }, key)
+    }, key, { onVerifiedStored })
     if (!hasImmutablePublicMetadata(raced)) {
       return putContentAddressedObject(client, config, key, artifact, expectedMetadata, {
         reason: 'content-addressed-object-metadata-upgraded',
@@ -2038,7 +2040,7 @@ function publicContentAddressedMetadata(digest, bytes) {
   return { sha256: digest, 'semantic-bytes': String(bytes), encoding: 'gzip' }
 }
 
-async function assertReferencedContentAddressedIntegrity(client, config, identity, logicalPath, { missingIsAbsent = false } = {}) {
+async function assertReferencedContentAddressedIntegrity(client, config, identity, logicalPath, { missingIsAbsent = false, onVerifiedStored } = {}) {
   if (!/^[a-f0-9]{64}$/.test(identity?.sha256 ?? '') || !Number.isSafeInteger(identity?.bytes) || identity.bytes <= 0) {
     throw new Error(`Invalid content-addressed object identity for ${logicalPath}`)
   }
@@ -2060,10 +2062,12 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
   let semanticBytes = 0
   const compressedChunks = []
   const digest = createHash('sha256')
+  const compressedDigest = onVerifiedStored ? createHash('sha256') : undefined
   const countCompressed = new Transform({
     transform(chunk, _encoding, callback) {
       compressedBytes += chunk.length
       compressedChunks.push(Buffer.from(chunk))
+      compressedDigest?.update(chunk)
       callback(null, chunk)
     },
   })
@@ -2083,6 +2087,7 @@ async function assertReferencedContentAddressedIntegrity(client, config, identit
     || semanticBytes !== identity.bytes || digest.digest('hex') !== identity.sha256) {
     throw new Error(`Referenced content-addressed object digest mismatch: ${logicalPath}`)
   }
+  onVerifiedStored?.({ key, digest: identity.sha256, compressedBytes, compressedSha256: compressedDigest.digest('hex') })
   return {
     compressed: Buffer.concat(compressedChunks),
     contentType: remote.ContentType,
