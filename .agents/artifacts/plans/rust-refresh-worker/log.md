@@ -7,7 +7,7 @@ Issue: #84
 
 - [ ] M0 prerequisite A: code-unit order for data, model config bump (#85)
 - [ ] M0 golden fixtures exporter and UTC provider timestamps (stacked on #85)
-- [ ] Before M4: digest-based reuse checks for state, raw, and public objects (moved from M0, see decisions)
+- [ ] M0 prerequisite B: digest-based identity for stored objects (before M1)
 - [ ] Start of M5: mini full-generation fixture (moved from M0, see decisions)
 - [ ] M1 Rust contracts crate
 - [ ] M2 Raw source worker
@@ -28,9 +28,21 @@ Issue: #84
 - 2026-10-08, agent: apply code-unit order to all of `src/lib/**` and `scripts/**`, guarded by ESLint `no-restricted-properties`. Views and components keep `localeCompare` for display. Reason: a directory rule is easy to enforce; a list of worker-graph files would drift.
 - 2026-10-08, agent: bump `sourcePipelineVersion` to `...-code-unit-order-v23`. Reason: ordering feeds series identity and replay tie-breaks; the bump changes the config hash (`fnv1a-2a9cb549` to `fnv1a-5eebb6ce`) and invalidates incremental state once.
 
-- 2026-10-08, agent: move the digest-based reuse checks from M0 to just before M4. Reason: `compressedBytes` is part of the stored reference formats in seven modules (state, raw, public, full audit, restart baseline, bucket GC, source authority), so the change is a stored-format design, not a check. Nothing needs it until Rust writes to a bucket that Node also wrote (M4).
+- 2026-10-08, review: the digest-based identity change (reuse checks and reference format, decision 2) stays in M0, before M1. Reason: raw receipt references include `compressedBytes` (`parseRawObjectReference`, `scripts/raw-source-storage.mjs:601-606`). These lengths feed the receipt's canonical bytes, its `rawIdentityDigest`, and its key. Without the change, M2 key parity needs Node's exact zlib output: for a 1.6 MB Leaguepedia file at level 9, Node's zlib `1.3.2.1-motley` gives 127,153 bytes and system zlib 1.3 gives 127,522. Gzip bytes are therefore intentionally not a fixture.
 - 2026-10-08, agent: move the mini full-generation fixture to the start of M5. Reason: only M5 consumes it, and the model can change before then; freezing it now would only cause churn.
 - 2026-10-08, agent: parse zone-less provider timestamps as UTC in code (`src/lib/importers/providerTime.ts`). Reason: published `datetimeUtc` depended on the process time zone. Production is UTC (see Railway environment), and all 39,330 distinct local raw timestamps parse identically, so published output does not change and no config bump is needed.
+
+## Deferred contracts
+
+These byte contracts are not in the M0 fixtures. Each milestone adds them before it ports the code.
+
+- M5: `$checkpointType` encoding and `digestCanonical` (`src/lib/ratingCheckpoint.ts`).
+- M5: `$causal` encoding (`src/lib/causalRecompute.ts`).
+- M5: checkpoint inventory `stableJson` and `fnv1a64` (`src/lib/ratingCheckpointInventory.ts`).
+- M5: Oracle player-id FNV-32 after `trim`, `toLowerCase`, and `\s+` collapse (`src/lib/importers/oraclesElixir.ts`). JS `\s` and `trim` include U+FEFF; Rust `char::is_whitespace` does not.
+- M6a: source fingerprint `stableJson` in `scripts/refresh-data-if-changed.mjs`. It writes `{a: undefined}` as the text `{"a":undefined}`.
+
+M1 note: `parseProviderInstant` falls back to V8 `Date.parse` for forms that do not match the zone-less pattern. The Rust port must copy that fallback for the forms it accepts, or reject them.
 
 ## Railway environment
 
@@ -69,7 +81,7 @@ After removing volatile fields (timestamps, run ids, config hash, pipeline versi
   {"id": "railway-env", "check": "Railway Node version, TZ, and LANG are recorded with their source", "proof": "Log entry naming the source", "passes": false},
   {"id": "fixtures-stable", "check": "Fixture export is deterministic", "proof": "Two exporter runs produce identical files (diff is empty)", "passes": true},
   {"id": "rust-contracts", "check": "Rust matches every golden fixture", "proof": "cargo test passes in CI; a changed fixture byte makes it fail", "passes": false},
-  {"id": "raw-worker-parity", "check": "Rust raw source worker output equals Node's", "proof": "Equal prepared object keys and bytes on the benchmark corpus and data/raw; both peak memory values in the log", "passes": false},
+  {"id": "raw-worker-parity", "check": "Rust raw source worker output equals Node's", "proof": "Equal prepared object keys, digests and canonical bytes on the benchmark corpus and data/raw; both peak memory values in the log", "passes": false},
   {"id": "fetch-parity", "check": "Rust fetch output equals Node's on recorded responses", "proof": "Test comparing staging files and manifest passes", "passes": false},
   {"id": "bucket-parity", "check": "Rust bucket writes equal Node's and respect the lease", "proof": "MinIO object set comparison passes; lease-change test blocks promotion", "passes": false},
   {"id": "model-parity", "check": "Full and incremental Rust builds equal Node's digests", "proof": "Benchmark spawn mode reports zero differing paths, equal state digests, equal reconciliation", "passes": false},
