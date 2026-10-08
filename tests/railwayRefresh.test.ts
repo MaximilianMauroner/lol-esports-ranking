@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
@@ -18,7 +19,7 @@ import {
   type PreparedRawObject,
 } from '../scripts/raw-source-storage.mjs'
 
-type RefreshRun = (command: string, commandArgs: string[]) => Promise<void>
+type RefreshRun = (command: string, commandArgs: string[], options?: { env: Record<string, string | undefined> }) => Promise<void>
 type RefreshResult = {
   changed: boolean
   fingerprint?: string
@@ -219,6 +220,61 @@ test('rolling refresh requires a Leaguepedia file covering the bootstrap start',
     sources: { leaguepedia: { status: 'skipped' } },
     files: { leaguepediaJson: [] },
   }, '2025-01-01'), true)
+})
+
+test('provider subprocess uses scoped environment instead of ambient Oracle URL', { skip: process.platform === 'win32' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-provider-env-'))
+  const rawDir = join(root, 'raw')
+  const manifestPath = join(rawDir, 'manifest.json')
+  const scopedBinary = join(root, 'provider-cli.mjs')
+  const requests: string[] = []
+  const csv = 'gameid,date,league,side\nscoped-provider,2026-01-02,LCK,Blue\nscoped-provider,2026-01-02,LCK,Red\n'
+  const previousEnv = { ORACLES_ELIXIR_CSV_URL: process.env.ORACLES_ELIXIR_CSV_URL,
+    RANKING_PROVIDER_FETCH_WORKER: process.env.RANKING_PROVIDER_FETCH_WORKER,
+    RANKING_REFRESH_BINARY: process.env.RANKING_REFRESH_BINARY }
+  const server = createServer((request, response) => {
+    requests.push(request.url ?? '')
+    response.writeHead(200, { 'content-type': 'text/csv', connection: 'close' })
+    response.end(request.url === '/scoped.csv' ? csv : csv.replaceAll('scoped-provider', 'ambient-provider'))
+  })
+  try {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    assert.ok(address && typeof address === 'object')
+    const base = `http://127.0.0.1:${address.port}`
+    process.env.ORACLES_ELIXIR_CSV_URL = `${base}/ambient.csv`
+    process.env.RANKING_PROVIDER_FETCH_WORKER = 'node'
+    process.env.RANKING_REFRESH_BINARY = join(root, 'ambient-missing-binary')
+    // Exercise the actual default subprocess runner using the Rust CLI argument
+    // shape, while the Node provider supplies the real recorded download behavior.
+    await writeFile(scopedBinary, `#!${process.execPath}
+import assert from 'node:assert/strict'
+assert.equal(process.argv[2], 'fetch')
+process.argv = [process.execPath, ${JSON.stringify(resolve('scripts/download-local-data.mjs'))}, ...process.argv.slice(3)]
+await import(${JSON.stringify(pathToFileURL(resolve('scripts/download-local-data.mjs')).href)})
+`, { mode: 0o700 })
+    const result = await refreshDataIfChanged([
+      '--raw-dir', rawDir, '--manifest', manifestPath, '--staging-dir', join(root, 'staging'),
+      '--start', '2026-01-01', '--end', '2026-01-03', '--skip-crunch',
+      '--oracle-drive', 'false', '--leaguepedia', 'false', '--lolesports', 'false',
+    ], {
+      env: { ...isolatedRefreshEnv, RANKING_PROVIDER_FETCH_WORKER: 'rust', RANKING_REFRESH_BINARY: scopedBinary,
+        ORACLES_ELIXIR_CSV_URL: `${base}/scoped.csv` },
+    })
+    assert.equal(result.changed, true)
+    assert.deepEqual(requests, ['/scoped.csv'])
+    const manifest: { files: { oracleCsv: string[] } } = JSON.parse(await readFile(manifestPath, 'utf8'))
+    assert.equal(manifest.files.oracleCsv.length, 1)
+    assert.equal(await readFile(manifest.files.oracleCsv[0], 'utf8'), csv)
+  } finally {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('source fingerprint separates provider health noise from ranking content', async () => {
