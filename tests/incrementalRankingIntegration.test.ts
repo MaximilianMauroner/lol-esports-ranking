@@ -667,12 +667,25 @@ test('a correction can be promoted and followed by an append without losing pred
   }
 })
 
-test('replay lazily loads only the newest eligible predecessor checkpoint', async () => {
+test('replay lazily loads the newest eligible checkpoint and rejects same-date prefix mismatches', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-lazy-checkpoint-'))
   try {
     const baseline = await run(root, 'lazy-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
     const restored = restoreFrom(baseline)
     const stored = restored.checkpoints
+    const latest = restored.stateManifest.checkpoints.at(-1)!
+    const badCount = {
+      ...latest,
+      boundary: { ...latest.boundary, matchId: `${latest.boundary.matchId}-bad-count` },
+      rawPrefix: { ...latest.rawPrefix, matchCount: latest.rawPrefix.matchCount + 1 },
+    }
+    const badDigest = {
+      ...latest,
+      boundary: { ...latest.boundary, matchId: `${latest.boundary.matchId}-bad-digest` },
+      rawPrefix: { ...latest.rawPrefix, digest: '0'.repeat(64) },
+    }
+    // Both invalid-first and valid-first comparisons share the same cached date.
+    restored.stateManifest.checkpoints = [...restored.stateManifest.checkpoints.slice(0, -1), badCount, latest, badDigest]
     const requested: string[][] = []
     restored.checkpoints = []
     restored.loadCheckpoints = async (candidates = restored.stateManifest.checkpoints) => {
@@ -685,7 +698,11 @@ test('replay lazily loads only the newest eligible predecessor checkpoint', asyn
     })
     assert.equal(appended.action, 'publish-incremental', appended.metrics.fallbackReason)
     assert.equal(requested.length, 1)
-    assert.equal(requested[0]?.length, 1)
+    assert.deepEqual(requested[0], [`${latest.boundary.date}/${latest.boundary.matchId}`])
+    assert.equal(appended.metrics.selectedBoundary, latest.boundary.date)
+    if (appended.action !== 'publish-incremental') throw new Error('Expected an incremental append')
+    assert.ok(appended.state.checkpoints.some(({ boundary }) => boundary.matchId === latest.boundary.matchId))
+    assert.ok(appended.state.checkpoints.every(({ boundary }) => boundary.matchId !== badCount.boundary.matchId && boundary.matchId !== badDigest.boundary.matchId))
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }

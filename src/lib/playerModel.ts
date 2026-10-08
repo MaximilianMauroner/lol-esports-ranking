@@ -383,7 +383,6 @@ export function buildPregamePlayerRatingEdges(
 
   for (const series of resolveCanonicalSeries(matches)) {
     const preSeriesRatings = new Map(state.ratings)
-    const preSeriesGames = new Map(state.games)
     const firstMatch = series.games[0]!
     const teamARoster = lastObservedRosterByTeam.get(firstMatch.teamA)
     const teamBRoster = lastObservedRosterByTeam.get(firstMatch.teamB)
@@ -392,7 +391,7 @@ export function buildPregamePlayerRatingEdges(
         ...playerEdgeForRoster(
           teamARoster,
           preSeriesRatings,
-          preSeriesGames,
+          state.games,
           leagueForSide(firstMatch, 'A', resolvedContext),
           leagueRatings,
           firstMatch.date,
@@ -403,7 +402,7 @@ export function buildPregamePlayerRatingEdges(
         ...playerEdgeForRoster(
           teamBRoster,
           preSeriesRatings,
-          preSeriesGames,
+          state.games,
           leagueForSide(firstMatch, 'B', resolvedContext),
           leagueRatings,
           firstMatch.date,
