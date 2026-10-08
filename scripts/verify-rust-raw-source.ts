@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -56,13 +57,7 @@ export async function verifyRustRawSource(manifestPath: string, binary: string) 
     }
     const [node, rust] = outputs
     assert.deepEqual(rust.generation.receipt, node.generation.receipt)
-    const identities = ({ generation }: PrepareOutput) => generation.objects.map(({ digest, bytes }) => ({ digest, bytes }))
-    assert.deepEqual(identities(rust), identities(node))
-    for (let index = 0; index < node.generation.objects.length; index++) {
-      const actual = gunzipSync(await readFile(rust.generation.objects[index].compressedPath))
-      const expected = gunzipSync(await readFile(node.generation.objects[index].compressedPath))
-      assert.deepEqual(actual, expected)
-    }
+    await assertRawSourceObjectsMatch(node.generation.objects, rust.generation.objects)
     assert.deepEqual(await readFile(rust.manifestPath), await readFile(node.manifestPath))
     const authority = hydrateFileBackedRawSourceGeneration(node.generation)
     // Restore both from Node transport bytes, proving cross-worker storage compatibility.
@@ -83,6 +78,27 @@ export async function verifyRustRawSource(manifestPath: string, binary: string) 
     return { parity: true, differingObjects: 0, objectCount: node.generation.objects.length, gameCount: authority.receipt.oracle.reduce((sum, source) => sum + source.gameInventory.length, 0), measured }
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+}
+
+type RawObjectFile = Pick<PrepareOutput['generation']['objects'][number], 'digest' | 'bytes' | 'compressedPath'>
+
+export async function assertRawSourceObjectsMatch(nodeObjects: RawObjectFile[], rustObjects: RawObjectFile[]) {
+  const nodeByDigest = new Map(nodeObjects.map((object) => [object.digest, object]))
+  const rustByDigest = new Map(rustObjects.map((object) => [object.digest, object]))
+  assert.equal(nodeByDigest.size, nodeObjects.length, 'Node raw objects contain duplicate digests')
+  assert.equal(rustByDigest.size, rustObjects.length, 'Rust raw objects contain duplicate digests')
+  assert.equal(rustByDigest.size, nodeByDigest.size, 'Raw object count differs')
+  for (const [digest, nodeObject] of nodeByDigest) {
+    const rustObject = rustByDigest.get(digest)
+    assert.ok(rustObject, `Missing Rust raw object ${digest}`)
+    assert.equal(rustObject.bytes, nodeObject.bytes, `Raw object semantic size differs for ${digest}`)
+    const expected = gunzipSync(await readFile(nodeObject.compressedPath))
+    const actual = gunzipSync(await readFile(rustObject.compressedPath))
+    assert.equal(expected.length, nodeObject.bytes, `Node raw object size is invalid for ${digest}`)
+    assert.equal(actual.length, rustObject.bytes, `Rust raw object size is invalid for ${digest}`)
+    assert.deepEqual(actual, expected, `Raw object contents differ for ${digest}`)
+    assert.equal(createHash('sha256').update(expected).digest('hex'), digest, `Raw object digest is invalid for ${digest}`)
   }
 }
 
