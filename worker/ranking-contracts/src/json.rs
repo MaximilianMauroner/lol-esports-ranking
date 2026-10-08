@@ -149,7 +149,12 @@ fn serialize(value: &Value, mode: Mode) -> Result<String> {
                 return Ok("{}".into());
             }
             let mut values = values.clone();
-            values.sort_by(|left, right| compare_code_units(&js_string(left), &js_string(right)));
+            values.sort_by(|left, right| match (left, right) {
+                (Value::Undefined, Value::Undefined) => std::cmp::Ordering::Equal,
+                (Value::Undefined, _) => std::cmp::Ordering::Greater,
+                (_, Value::Undefined) => std::cmp::Ordering::Less,
+                _ => compare_code_units(&js_string(left), &js_string(right)),
+            });
             serialize(&Value::Array(values), mode)
         }
     }
