@@ -13,7 +13,7 @@ import { decodeRatingCheckpointValue, encodeRatingCheckpointEnvelope } from './r
 import { buildRatingCheckpointEventContract, ratingCheckpointInventory, validateRatingCheckpointEventContract } from './ratingCheckpointInventory'
 import type { RatingRunState } from './ratingRunState'
 import { rosterBasisByTeam, rosterFingerprint } from './rosters'
-import { resolveCanonicalSeries } from './seriesResolver'
+import { canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from './seriesResolver'
 import type { TournamentSeries } from './tournamentFeed'
 
 /** Internal, offline inputs. This is not a new public artifact or a publication API. */
@@ -155,6 +155,9 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
     if (!hasUniqueConditionalPowerSeriesAliases(matches)) {
       return unavailablePowerPreview('duplicate-series-alias', 'Every historical official, source and production-normalized series alias must belong to one canonical series. Duplicate series evidence cannot establish a replay basis.')
     }
+    if (!hasCompleteConditionalPowerHistoricalSeries(matches)) {
+      return unavailablePowerPreview('incomplete-historical-inputs', 'Every historical series must have coherent scoring metadata and supplied event IDs, official or provider format evidence, and a legal decisive final score within one UTC replay date.')
+    }
     const expectedRosterBasis = rosterBasisByTeam(matches)
     if (context.teamRosterBasis.size !== expectedRosterBasis.size
       || [...expectedRosterBasis].some(([team, rosterBasis]) => context.teamRosterBasis.get(team) !== rosterBasis)) {
@@ -293,6 +296,23 @@ export function hasUniqueConditionalPowerSeriesAliases(matches: readonly MatchRe
     for (const alias of aliases) observedAliases.add(alias)
   }
   return true
+}
+
+/** Preview-internal series support shared by reconstructed and directly supplied historical bases. */
+export function hasCompleteConditionalPowerHistoricalSeries(matches: readonly MatchRecord[]): boolean {
+  return resolveCanonicalSeries(matches).every((series) => {
+    const winsNeeded = (series.format + 1) / 2
+    const final = series.finalMatch
+    const suppliedEventIds = series.games.map((game) => game.officialEventId).filter((id) => id !== undefined)
+    return series.state === 'completed' && [1, 3, 5].includes(series.format)
+      && new Set(series.games.map((game) => game.date)).size === 1
+      && new Set(suppliedEventIds).size <= 1
+      && Math.max(series.winsA, series.winsB) === winsNeeded && Math.min(series.winsA, series.winsB) < winsNeeded
+      && series.games.every((game) => game.bestOf === series.format && ['official', 'provider'].includes(game.bestOfBasis ?? '')
+        && game.event === final.event && game.league === final.league && game.phase === final.phase
+        && game.region === final.region && game.tier === final.tier)
+      && canonicalSeriesOutcomeForTeam(series, final.winner) === 1
+  })
 }
 
 function reusedReplayIdentityProblem(seriesId: string, historical: readonly MatchRecord[], games: readonly MatchRecord[]): PowerPreviewUnavailable | null {

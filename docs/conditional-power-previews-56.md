@@ -64,11 +64,14 @@ do not change this digest; the production-sorted match order stays significant.
 A changed source basis must be rebuilt with a new context and state pin. This is
 an internal preview field, not a production checkpoint schema change.
 No checkpoint file is written. Incomplete historical stats, lineups, profiles,
-format or chronology are rejected before replay. The production canonical series
-resolver must prove a legal decisive final score for every historical series.
-Every historical series must fit one UTC replay date, matching production's
-series grouping at that boundary. Ongoing, unknown or cross-date historical
-series are unsupported by this complete-input slice.
+format or chronology are rejected before replay. Both the adapter and directly
+supplied bases use the same historical series guard. The production canonical
+resolver must prove a legal decisive final score for every historical series,
+with official or provider format evidence for every game. Every historical
+series must fit one UTC replay date, matching production's grouping at that
+boundary. Ongoing, unknown or cross-date historical series are unsupported by
+this complete-input slice. Fresh state and context pins prove input integrity;
+they do not replace these completeness checks.
 
 The source producer must identify the supplied prefix as complete, including
 all games on its terminal UTC date. A caller-supplied hash does not certify

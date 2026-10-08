@@ -545,6 +545,93 @@ test('map and object insertion order does not change the pinned context or the p
   assert.deepEqual(input, original)
 })
 
+test('direct historical bases reject unsupported series after genuine replay and valid state and context pins', () => {
+  const cases: Array<{ label: string; mutate: (matches: MatchRecord[]) => void }> = [
+    { label: 'incomplete Bo3', mutate: (matches) => { matches.pop() } },
+    { label: 'incomplete Bo5', mutate: (matches) => { for (const game of matches.slice(-2)) game.bestOf = 5 } },
+    { label: 'tied unfinished score', mutate: (matches) => { matches.at(-1)!.winner = 'Beta' } },
+    { label: 'unsupported Bo2', mutate: (matches) => { for (const game of matches.slice(-2)) game.bestOf = 2 } },
+    { label: 'score above the winning threshold', mutate: (matches) => {
+      const extra = structuredClone(matches.at(-1)!)
+      Object.assign(extra, { id: 'direct-history-extra', gameNumber: 3 })
+      matches.push(extra)
+    } },
+    { label: 'continued after the decisive result', mutate: (matches) => {
+      const extra = structuredClone(matches.at(-1)!)
+      Object.assign(extra, { id: 'direct-history-extra', gameNumber: 3, winner: 'Beta' })
+      matches.push(extra)
+    } },
+    { label: 'series crosses UTC dates', mutate: (matches) => { matches.at(-2)!.date = '2026-09-14' } },
+    { label: 'conflicting event', mutate: (matches) => { matches.at(-1)!.event = 'Different historical event' } },
+    { label: 'conflicting league', mutate: (matches) => { matches.at(-1)!.league = 'Worlds' } },
+    { label: 'conflicting phase', mutate: (matches) => { matches.at(-1)!.phase = 'Playoffs' } },
+    { label: 'conflicting region', mutate: (matches) => { matches.at(-1)!.region = 'International' } },
+    { label: 'conflicting tier', mutate: (matches) => { matches.at(-1)!.tier = 'worlds-playoffs' } },
+    { label: 'conflicting supplied event IDs', mutate: (matches) => {
+      matches.at(-2)!.officialEventId = 'historical-event-one'; matches.at(-1)!.officialEventId = 'historical-event-two'
+    } },
+    { label: 'conflicting game formats', mutate: (matches) => { matches.at(-2)!.bestOf = 1 } },
+    { label: 'fallback format evidence', mutate: (matches) => { for (const game of matches.slice(-2)) game.bestOfBasis = 'fallback' } },
+    { label: 'missing format evidence', mutate: (matches) => { for (const game of matches.slice(-2)) delete game.bestOfBasis } },
+    { label: 'one unverified game in an otherwise official series', mutate: (matches) => { matches.at(-2)!.bestOfBasis = 'fallback' } },
+  ]
+  for (const { label, mutate } of cases) {
+    const input = conditionalPowerFixture()
+    const matches = structuredClone(input.basis.context.authoritativeMatches)
+    matches.slice(-2).forEach((game, index) => Object.assign(game, {
+      date: '2026-09-15', bestOf: 3, bestOfBasis: 'official', officialMatchId: 'direct-history-series', gameNumber: index + 1, winner: 'Alpha',
+    }))
+    mutate(matches)
+    const context = createRatingReplayContext(matches, input.basis.context.teams)
+    input.basis.context = context
+    input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+    pinControlledConditionalPowerBasis(input.basis)
+    const state = input.basis.state
+    const envelope = encodeRatingCheckpointEnvelope(state, {
+      importerVersion: 'controlled-fixture/importer', identityTaxonomyHash: 'controlled-fixture/taxonomy', rawLedgerPrefixHash: 'controlled-fixture/prefix',
+    }, { processedThroughUtcDate: state.processedThroughUtcDate!, processedThroughMatchId: state.previousMatch!.id },
+    buildRatingCheckpointEventContract(context.authoritativeMatches, context.eventWeightContext, context.tournamentLifecycles))
+    assert.ok(input.basis.preStateId.includes(envelope.metadata.payloadDigest), label)
+    assert.ok(input.basis.preStateId.includes(digestCausalValue(context)), label)
+    assert.equal(state.processedMatchCount, matches.length, label)
+    if (label === 'incomplete Bo3') {
+      const points = state.histories.get('Alpha')!.filter((point) => point.source.officialMatchId === 'direct-history-series')
+      assert.equal(points.length, 1)
+      assert.equal(points.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic').length, 0)
+    }
+    const original = structuredClone(input)
+    const result = evaluateConditionalPowerReplay(input)
+    assert.equal(result.status, 'unavailable', label)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'incomplete-historical-inputs', label)
+    assert.deepEqual(input, original, label)
+  }
+})
+
+test('direct historical bases support completed official and provider series with compatible optional event IDs', () => {
+  for (const bestOf of [1, 3, 5] as const) for (const bestOfBasis of ['official', 'provider'] as const) {
+    for (const eventIdMode of ['absent', 'one', 'all'] as const) {
+      const input = conditionalPowerFixture()
+      const matches = structuredClone(input.basis.context.authoritativeMatches)
+      const games = matches.slice(-(bestOf + 1) / 2)
+      games.forEach((game, index) => Object.assign(game, {
+        date: '2026-09-15', bestOf, bestOfBasis, officialMatchId: 'direct-history-series', gameNumber: index + 1, winner: 'Alpha',
+      }))
+      if (eventIdMode === 'one') games.at(-1)!.officialEventId = 'compatible-historical-event'
+      if (eventIdMode === 'all') for (const game of games) game.officialEventId = 'compatible-historical-event'
+      const context = createRatingReplayContext(matches, input.basis.context.teams)
+      input.basis.context = context
+      input.basis.state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+      pinControlledConditionalPowerBasis(input.basis)
+      const original = structuredClone(input)
+      const result = evaluateConditionalPowerReplay(input)
+      if (result.status !== 'ready') throw new Error(`${bestOfBasis} Bo${bestOf}/${eventIdMode}: ${result.detail}`)
+      const points = input.basis.state.histories.get('Alpha')!.filter((point) => point.source.officialMatchId === 'direct-history-series')
+      assert.equal(points.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic').length, 1)
+      assert.deepEqual(input, original)
+    }
+  }
+})
+
 test('offset timestamps use their UTC calendar date and preserve isolated production parity', () => {
   const utcInput = conditionalPowerFixture()
   utcInput.now = Date.parse('2026-09-17T04:00:00Z')
@@ -954,7 +1041,7 @@ test('completed future placement boundaries are unsupported while historical pen
 
   const historical = conditionalPowerFixture()
   const matches = historical.basis.context.authoritativeMatches.map((match, index) => index < 3 ? match : {
-    ...match, event: 'Controlled historical Worlds', league: 'Worlds', tier: 'worlds-playoffs' as const, phase: 'Finals',
+    ...match, date: '2026-09-15', event: 'Controlled historical Worlds', league: 'Worlds', tier: 'worlds-playoffs' as const, phase: 'Finals',
     bestOf: 5, bestOfBasis: 'official' as const, officialMatchId: 'historical-worlds-final', gameNumber: index - 2,
     winner: 'Alpha',
   })

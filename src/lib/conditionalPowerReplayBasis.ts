@@ -2,12 +2,11 @@ import { eventTierConfig } from '../data/rankingConfig'
 import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../types'
 import { digestCausalValue } from './causalRecompute'
 import { unavailablePowerPreview, type PowerPreviewUnavailable } from './conditionalPowerPreview'
-import { conditionalPowerBasisProblem, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
+import { conditionalPowerBasisProblem, hasCompleteConditionalPowerHistoricalSeries, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
 import { createRatingReplayContext, replayRatingDates } from './model'
 import type { PlacementTournamentLifecycle } from './placementResiduals'
 import { decodeRatingCheckpoint, encodeRatingCheckpoint, type RatingCheckpointIdentity } from './ratingCheckpoint'
 import { buildRatingCheckpointEventContract } from './ratingCheckpointInventory'
-import { canonicalSeriesOutcomeForTeam, resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
 
 type BasisSource = Omit<ConditionalPowerReplayBasis, 'context' | 'state' | 'preStateId'> & {
   /** The producer must identify the complete immutable prefix, including its terminal UTC date. */
@@ -59,7 +58,7 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
     if (matches.some((match) => !completeHistoricalGame(match, source.teams))) {
       return unavailablePowerPreview('incomplete-historical-inputs', 'Historical team profiles, event/format, patch, sides, five-role lineups and performance statistics must be explicit. This adapter cannot reconstruct them from public points.')
     }
-    if (resolveCanonicalSeries(matches).some((series) => !completeHistoricalSeries(series))) {
+    if (!hasCompleteConditionalPowerHistoricalSeries(matches)) {
       return unavailablePowerPreview('incomplete-historical-inputs', 'Every historical series must have consistent event scoring metadata and supplied event IDs, a verified format and a legal decisive final score within one UTC replay date. Conflicting, ongoing, unknown or cross-date series cannot establish complete historical coverage.')
     }
     if (!hasUniqueConditionalPowerSeriesAliases(matches)) {
@@ -102,19 +101,6 @@ export function prepareConditionalPowerReplayBasis(input: BasisSource): Prepared
   } catch (error) {
     return unavailablePowerPreview('basis-rejected', error instanceof Error ? error.message : 'The production replay could not prepare this historical basis.')
   }
-}
-
-function completeHistoricalSeries(series: CanonicalSeries) {
-  const winsNeeded = (series.format + 1) / 2
-  const final = series.finalMatch
-  const suppliedEventIds = series.games.map((game) => game.officialEventId).filter((id) => id !== undefined)
-  return series.state === 'completed' && [1, 3, 5].includes(series.format)
-    && new Set(series.games.map((game) => game.date)).size === 1
-    && new Set(suppliedEventIds).size <= 1
-    && Math.max(series.winsA, series.winsB) === winsNeeded && Math.min(series.winsA, series.winsB) < winsNeeded
-    && series.games.every((game) => game.bestOf === series.format && game.event === final.event
-      && game.league === final.league && game.phase === final.phase && game.region === final.region && game.tier === final.tier)
-    && canonicalSeriesOutcomeForTeam(series, series.finalMatch.winner) === 1
 }
 
 function isUtcDate(date: string) {
