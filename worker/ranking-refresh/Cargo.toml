@@ -1,0 +1,10 @@
+[package]
+name = "ranking-refresh"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ranking-contracts = { path = "../ranking-contracts" }
+serde_json.workspace = true

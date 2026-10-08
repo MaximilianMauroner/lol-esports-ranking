@@ -109,3 +109,13 @@ After removing volatile fields (timestamps, run ids, config hash, pipeline versi
 - Final affected suite: 111/111 passed, including alternate gzip sizes and measured closure, legacy authority reads, corrupt payload rejection, conditional-create races, and the >40 MB archive. Typecheck and lint passed. Guarded run: sampled peak about 946 MiB, zero swap. Full suite and CI gates pending.
 
 - Full suite on first #88 head: 918/925 passed; seven bucket inventory tests exposed a missed semantic-reference reader. Finder, verifier, parent, and Codex bot confirmed the same P2. Published before repair. The two-file inventory repair passed 18/18 tests under the guard and six focused tests independently; declared legacy, publication, and audit transport measurements remain strict.
+
+## M1 Rust contracts
+
+- Added Cargo workspace `worker/`, the contracts crate and `ranking-refresh contracts`.
+- Local Rust 1.98.0: formatting, Clippy with warnings denied, seven contract tests, CLI build and live Node/Rust model parity passed. Changed one golden number-text byte: the contract assertion failed; restored the fixture and all tests passed again.
+- V8-compatible `exp`/`log` retain the pinned Node 24.21.0 evaluation order. Node 24 enables `use_std_math_pow`, so `pow` uses the native math library plus V8's ECMAScript special cases. No tolerance or model formula changes. License notices retained.
+- Gzip roundtrip, concatenated members, corrupt checksum and truncated member checks passed. Gzip transport bytes may differ after #88; semantic digest fixtures are exact.
+- Build path: separate `Dockerfile.refresh`, pinned Rust builder, Debian runtime. Railway can use this Dockerfile for the later shadow service. No service or cron command has changed. Docker is absent locally; image build, clean-target container fixtures and image live-config parity are CI checks.
+- Local Rust checks used Fleet's 3 GiB memory cap, zero swap and one compiler job, sampled peak 494,477,312 bytes. The initial linker failure was Fleet's `cc` shim; explicit `/usr/bin/gcc` fixed the local invocation without changing project configuration.
+- Node verify and unchanged benchmark gate are running. CI and independent PR review remain pending. Model configuration remains duplicated permanently while the browser uses TypeScript; documented in `docs/rust-worker.md`.
