@@ -123,12 +123,20 @@ pub fn download(
                 &Policy::default(),
             )?;
             let prefix = String::from_utf8_lossy(&response.body[..response.body.len().min(256)]);
-            let prefix = prefix.trim_start();
+            let prefix = prefix.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
             if response.content_type.contains("text/html")
                 || prefix.starts_with("<!DOCTYPE html")
                 || prefix.starts_with("<html")
             {
-                return Err("download returned HTML instead of CSV".into());
+                let title = regex::Regex::new(r"(?i)<title>([^<]+)</title>")?
+                    .captures(prefix)
+                    .map(|v| v[1].to_owned());
+                return Err(title
+                    .map_or_else(
+                        || "download returned HTML instead of CSV".to_owned(),
+                        |title| format!("download returned HTML ({title})"),
+                    )
+                    .into());
             }
             if !prefix.contains(',') {
                 return Err("download did not look like CSV".into());
