@@ -85,7 +85,7 @@ jobs:
       - name: Fixture tests in image build environment
         run: |
           docker run --rm -v "$PWD:/app" -v /app/worker/target -w /app rust:1.98-slim-bookworm \
-            cargo test --manifest-path worker/Cargo.toml --workspace --locked
+            cargo +1.98.0 test --manifest-path worker/Cargo.toml --workspace --locked
       - name: Image model config parity
         run: |
           printf '#!/bin/sh\nexec docker run --rm ranking-refresh "$@"\n' > /tmp/ranking-refresh-image
