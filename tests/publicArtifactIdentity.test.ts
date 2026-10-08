@@ -1,7 +1,9 @@
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schema.ts'
+import { referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
 import {
@@ -284,7 +286,7 @@ function rootLogicalUrls(manifest: PublicRankingManifest) {
 }
 
 async function readPublicArtifact(url: string) {
-  return JSON.parse(await readFile(`public${pathFor(url)}`, 'utf8')) as unknown
+  return JSON.parse(await readFile(join(referencePublicDir, pathFor(url).slice(1)), 'utf8')) as unknown
 }
 
 function pathFor(url: string) {
