@@ -26,7 +26,7 @@ pub fn provider_instant(value: &str) -> Option<i64> {
     if separator == b't' && offset.is_none() {
         return None;
     }
-    let (hour, minute, second, millis) = parse_clock(clock)?;
+    let (hour, minute, second, millis) = parse_clock(clock, separator == b' ' && offset.is_some())?;
     let instant = date
         .and_hms_milli_opt(hour % 24, minute, second, millis)?
         .checked_add_signed(Duration::days(i64::from(hour == 24)))?
@@ -62,7 +62,7 @@ fn parse_zone(value: &str) -> Option<(&str, Option<i32>)> {
     ))
 }
 
-fn parse_clock(value: &str) -> Option<(u32, u32, u32, u32)> {
+fn parse_clock(value: &str, truncate_midnight_fraction: bool) -> Option<(u32, u32, u32, u32)> {
     let (clock, fraction) = match value.split_once('.') {
         Some((clock, fraction))
             if clock.len() == 8
@@ -87,11 +87,21 @@ fn parse_clock(value: &str) -> Option<(u32, u32, u32, u32)> {
         return None;
     };
     // Seconds 60 are invalid in Node. Hour 24 is valid only at exact midnight.
+    // Its legacy space-plus-zone parser truncates sub-milliseconds before this check.
     if hour > 24
         || minute > 59
         || second > 59
         || (hour == 24
-            && (minute != 0 || second != 0 || fraction.bytes().any(|digit| digit != b'0')))
+            && (minute != 0
+                || second != 0
+                || fraction
+                    .bytes()
+                    .take(if truncate_midnight_fraction {
+                        3
+                    } else {
+                        fraction.len()
+                    })
+                    .any(|digit| digit != b'0')))
     {
         return None;
     }

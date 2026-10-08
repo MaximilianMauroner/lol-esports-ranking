@@ -1534,6 +1534,48 @@
       "datetimeUtc": null
     },
     {
+      "input": "2025-01-11 24:00:00.0001Z",
+      "instantMs": 1736640000000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-12T00:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11 24:00:00.001Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11t24:00:00.0001Z",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 24:00:00.0009+0900",
+      "instantMs": 1736607600000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T15:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11 24:00:00.001+0900",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
+      "input": "2025-01-11 24:00:00.0001+09:00",
+      "instantMs": 1736607600000,
+      "date": "2025-01-11",
+      "datetimeUtc": "2025-01-11T15:00:00.000Z"
+    },
+    {
+      "input": "2025-01-11 24:00:00.001+09:00",
+      "instantMs": null,
+      "date": "2025-01-11",
+      "datetimeUtc": null
+    },
+    {
       "input": "2025-01-11T17:13Z",
       "instantMs": 1736615580000,
       "date": "2025-01-11",
