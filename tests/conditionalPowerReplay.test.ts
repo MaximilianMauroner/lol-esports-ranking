@@ -491,7 +491,11 @@ test('every replay-context field is pinned and changed inputs fail closed withou
     { field: 'tournamentLifecycles', mutate: (input) => { input.basis.context.tournamentLifecycles = new Map([['changed-lifecycle', {
       status: 'ongoing', boundaryDate: '2026-09-15', ratedThroughDate: '2026-09-15', dataLag: false, resultCoverageComplete: true,
     }]]) } },
-    { field: 'eventWeightContext', mutate: (input) => { input.basis.context.eventWeightContext.worldsEndDateByCalendarYear.set(2026, '2026-09-15') } },
+    { field: 'eventWeightContext', mutate: (input) => {
+      const calendar = new Map(input.basis.context.eventWeightContext.worldsEndDateByCalendarYear)
+      calendar.set(2026, '2026-09-15')
+      input.basis.context.eventWeightContext.worldsEndDateByCalendarYear = calendar
+    } },
     { field: 'lastDate', mutate: (input) => { input.basis.context.lastDate = '2026-09-14' } },
   ]
   for (const { field, mutate } of cases) {
