@@ -98,6 +98,21 @@ jobs:
           RANKING_REFRESH_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
           RANKING_RUST_TEST_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
         run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/downloadLocalData.test.ts tests/rustProviderFetchParity.test.ts
+      - name: Native storage against isolated MinIO
+        env:
+          RANKING_STORAGE_TEST_ENDPOINT: http://127.0.0.1:9000
+          RANKING_RUST_TEST_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
+        run: |
+          docker run -d --rm --name ranking-storage-test -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER=minio-test -e MINIO_ROOT_PASSWORD=minio-test-password \
+            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          trap 'docker stop ranking-storage-test' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/ready; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:9000/minio/health/ready
+          pnpm exec tsx --tsconfig tsconfig.app.json --test tests/rustStorageMinio.test.ts
       - name: Build worker image
         run: docker build -f Dockerfile.refresh -t ranking-refresh .
       - name: Fixture tests in image build environment
