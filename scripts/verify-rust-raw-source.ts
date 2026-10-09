@@ -31,7 +31,7 @@ export async function verifyRustRawSource(manifestPath: string, binary: string) 
   try {
     const source: RawManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const manifest = manifestWithResolvedFiles(source, dirname(resolve(manifestPath)))
-    const inputFiles = []
+    const inputFiles: Array<{ group: string; name: string; bytes: number; sha256: string }> = []
     for (const [group, paths] of Object.entries(manifest.files)) {
       const names = paths.map((path: string) => basename(path))
       assert.equal(new Set(names).size, names.length, `Cannot flatten duplicate ${group} filenames in the isolated verifier`)
@@ -52,8 +52,9 @@ export async function verifyRustRawSource(manifestPath: string, binary: string) 
           const relative = `${folder}/${basename(path)}`
           await copyFile(path, join(rawDir, relative))
           const expected = inputFiles.find((file) => file.group === group && file.name === basename(path))
+          assert.ok(expected, 'Staged input has no recorded identity')
           assert.deepEqual(await fileIdentity(join(rawDir, relative)),
-            { bytes: expected!.bytes, sha256: expected!.sha256 }, 'Input changed during isolated staging')
+            { bytes: expected.bytes, sha256: expected.sha256 }, 'Input changed during isolated staging')
           files[group].push(relative)
         }
       }

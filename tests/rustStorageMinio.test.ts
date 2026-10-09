@@ -6,8 +6,8 @@ import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
-import { CreateBucketCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3'
-import { acquireBucketLease, createBucketClient, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
+import { CreateBucketCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { acquireBucketLease, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
 import { prepareStateObject, syncContentAddressedStateObject } from '../scripts/incremental-state-storage.mjs'
 
 const endpoint = process.env.RANKING_STORAGE_TEST_ENDPOINT
@@ -21,7 +21,8 @@ test('native storage matches Node immutable bytes and shares MinIO lease fencing
   const root = await mkdtemp(join(tmpdir(), 'rust-storage-'))
   const config = { enabled: true as const, endpoint: endpoint!, bucket: `parity-${Date.now()}`, region: 'us-east-1',
     accessKeyId: 'minio-test', secretAccessKey: 'minio-test-password', prefix: 'node', forcePathStyle: true }
-  const client = createBucketClient(config)!
+  const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: true,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
   const now = new Date('2026-10-09T00:00:00.000Z')
   const nativeConfig = { ...config, prefix: 'rust' }
   const invoke = async (input: object, prefix = 'rust') => {
@@ -83,6 +84,7 @@ test('native storage matches Node immutable bytes and shares MinIO lease fencing
     assert.deepEqual(await get('node/active-generation.json'), await get('rust/active-generation.json'))
     const renewAt = new Date(now.getTime() + 1_000)
     const nodeRenewed = await renewBucketLease(key, nodeLease, { ttlMs: 60_000, now: renewAt, config, client })
+    assert.equal(nodeRenewed.renewed, true)
     const authority = { lease: rustLease.lease, etag: rustLease.etag, promotionEtag: rustLease.promotionEtag }
     const rustRenewed = await invoke({ action: 'renew-lease', key, authority, ttlMs: 60_000, now: renewAt.toISOString() })
     assert.deepEqual(rustRenewed, nodeRenewed)
