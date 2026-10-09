@@ -41,12 +41,13 @@ export async function publishTournamentFeedBucket(input: {
   const changed = prior.stateDigest !== stateDigest
   if (changed) {
     const body = Buffer.from(canonicalJsonFor(feed) + '\n')
-    sha256 = digest(body)
+    const contentDigest = digest(body)
+    sha256 = contentDigest
     bytes = body.length
     objectKey = `feed/objects/sha256/${sha256}`
     try {
       await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/${objectKey}`,
-        Body: body, ContentType: JSON_TYPE, Metadata: { sha256, bytes: String(bytes) }, IfNoneMatch: '*' }))
+        Body: body, ContentType: JSON_TYPE, Metadata: { sha256: contentDigest, bytes: String(body.length) }, IfNoneMatch: '*' }))
     } catch (error) {
       if (!isConflict(error)) throw error
     }
