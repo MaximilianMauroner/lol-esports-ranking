@@ -1,0 +1,419 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import type { MatchRecord } from '../src/types'
+import { digestCausalValue } from '../src/lib/causalRecompute'
+import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerReplayBasis'
+import { evaluateConditionalPowerReplay } from '../src/lib/conditionalPowerReplay'
+import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
+import { publishedRating } from '../src/lib/publishedRatingArtifacts'
+import { eventTrackerKey } from '../src/lib/placementResiduals'
+import { rosterBasisByTeam } from '../src/lib/rosters'
+import { conditionalPowerFixture } from './fixtures/conditionalPowerFixtures'
+
+function sourceFixture() {
+  const input = conditionalPowerFixture()
+  return {
+    modelVersion: input.basis.modelVersion, modelConfigHash: input.basis.modelConfigHash,
+    ratingScale: input.basis.ratingScale, sourceTeamIds: input.basis.sourceTeamIds,
+    teamNames: input.basis.teamNames, event: input.basis.event,
+    corpusIdentity: { importerVersion: 'controlled-importer', identityTaxonomyHash: 'controlled-taxonomy', rawLedgerPrefixHash: 'controlled-prefix' },
+    processedThroughUtcDate: input.basis.state.processedThroughUtcDate!,
+    historicalMatches: input.basis.context.authoritativeMatches, teams: input.basis.context.teams,
+    tournamentLifecycles: input.basis.context.tournamentLifecycles,
+  }
+}
+
+test('corpus adapter reconstructs a detached production pre-state and preserves isolated replay parity', (t) => {
+  t.mock.method(globalThis, 'fetch', () => { throw new Error('unexpected provider access') })
+  const source = sourceFixture()
+  const original = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  const context = createRatingReplayContext(structuredClone(source.historicalMatches), structuredClone(source.teams), { tournamentLifecycles: structuredClone(source.tournamentLifecycles) })
+  const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+  assert.deepEqual(prepared.basis.state, state)
+  assert.deepEqual(prepared.provenance.corpusIdentity, source.corpusIdentity)
+  assert.ok(prepared.basis.preStateId.includes(prepared.provenance.payloadDigest))
+  assert.ok(prepared.basis.preStateId.includes(prepared.provenance.contextDigest))
+  assert.equal(prepared.provenance.contextDigest, digestCausalValue(prepared.basis.context))
+  assert.deepEqual(prepared.provenance.historicalUnavailablePlayerPriorGameIds, ['prior-0'])
+  assert.match(prepared.assumptions.join(' '), /1 historical games have unavailable pregame player priors/)
+
+  const input = { ...conditionalPowerFixture(), basis: prepared.basis }
+  const result = evaluateConditionalPowerReplay(input)
+  if (result.status !== 'ready') throw new Error(result.detail)
+  const before = materializeRankingModel({ context, state: structuredClone(state) })
+  const futureContext = {
+    ...context, authoritativeMatches: [...context.authoritativeMatches, ...input.games], lastDate: input.games[0]!.date,
+    pregamePlayerRatingEdges: new Map([...context.pregamePlayerRatingEdges, ...input.playerEdges]),
+    teamRosterBasis: rosterBasisByTeam([...context.authoritativeMatches, ...input.games]),
+  }
+  const after = materializeRankingModel({ context: futureContext, state: replayRatingDates({ context: futureContext, state: structuredClone(state), replayMatches: input.games }) })
+  for (const row of result.teams) {
+    const beforePower = publishedRating(before.standings.find((team) => team.team === row.team)!.rating, source.ratingScale)
+    const afterPower = publishedRating(after.standings.find((team) => team.team === row.team)!.rating, source.ratingScale)
+    assert.deepEqual(row, { team: row.team, before: beforePower, after: afterPower, delta: afterPower - beforePower })
+  }
+  prepared.basis.state.ratings.set('Alpha', 0)
+  prepared.basis.context.authoritativeMatches[0]!.winner = 'Beta'
+  prepared.provenance.corpusIdentity.rawLedgerPrefixHash = 'changed-copy'
+  assert.deepEqual(source, original)
+})
+
+test('corpus adapter rejects absent, incomplete or future historical evidence without writes', () => {
+  const mutations: Array<(source: ReturnType<typeof sourceFixture>) => void> = [
+    (source) => { source.historicalMatches = [] },
+    (source) => { source.processedThroughUtcDate = '2026-02-30' },
+    (source) => { source.processedThroughUtcDate = '2026-09-14' },
+    (source) => { source.historicalMatches.push(structuredClone(source.historicalMatches[0]!)) },
+    (source) => { source.historicalMatches[0]!.teamATowers = undefined },
+    (source) => { source.historicalMatches[0]!.teamARoster = undefined },
+    (source) => { source.historicalMatches[0]!.teamARoster!.observedAt = 'not-a-date' },
+    (source) => { source.historicalMatches[0]!.teamARoster!.observedAt = '2026-09-16' },
+    (source) => { source.historicalMatches[0]!.teamBRoster = structuredClone(source.historicalMatches[0]!.teamARoster) },
+    (source) => { delete source.teams.Alpha },
+    (source) => { source.corpusIdentity.rawLedgerPrefixHash = '' },
+    (source) => { source.modelConfigHash = 'different-config' },
+    (source) => { Reflect.deleteProperty(source, 'tournamentLifecycles') },
+  ]
+  for (const mutate of mutations) {
+    const source = sourceFixture()
+    mutate(source)
+    const original = structuredClone(source)
+    assert.equal(prepareConditionalPowerReplayBasis(source).status, 'unavailable')
+    assert.deepEqual(source, original)
+  }
+})
+
+test('adapter-produced checkpoint pins reject a changed rating without caller mutation', () => {
+  const source = sourceFixture()
+  const originalSource = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  const control = { ...conditionalPowerFixture(), basis: prepared.basis }
+  assert.equal(evaluateConditionalPowerReplay(control).status, 'ready')
+
+  const input = { ...conditionalPowerFixture(), basis: structuredClone(prepared.basis) }
+  const previous = input.basis.state.ratings.get('Alpha')
+  assert.ok(previous !== undefined && Number.isFinite(previous))
+  input.basis.state.ratings.set('Alpha', previous + 100)
+  const original = structuredClone(input)
+  const result = evaluateConditionalPowerReplay(input)
+  assert.equal(result.status, 'unavailable')
+  if (result.status === 'unavailable') assert.equal(result.reason, 'stale-pre-state-pin')
+  assert.deepEqual(input, original)
+  assert.equal(input.basis.preStateId, prepared.basis.preStateId)
+  assert.deepEqual(source, originalSource)
+})
+
+test('a production international pre-state rejects synchronized league rewrites and supports an explicitly rebuilt corpus', () => {
+  const source = sourceFixture()
+  const international = source.historicalMatches.at(-1)!
+  Object.assign(international, { event: 'Controlled international context fixture', league: 'International', region: 'International',
+    tier: 'minor-international', phase: 'Quarterfinals', winner: 'Alpha' })
+  source.tournamentLifecycles = new Map([[eventTrackerKey(international), {
+    status: 'ongoing', boundaryDate: international.date, ratedThroughDate: international.date, dataLag: false, resultCoverageComplete: true,
+  }]])
+  const originalSource = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  assert.notEqual(prepared.basis.state.leagueScores.get('LCK'), prepared.basis.state.leagueScores.get('LPL'))
+  assert.equal(prepared.provenance.contextDigest, digestCausalValue(prepared.basis.context))
+  const baselineInput = { ...conditionalPowerFixture(), basis: prepared.basis }
+  for (const game of baselineInput.games) {
+    delete game.teamAHomeLeague
+    delete game.teamBHomeLeague
+  }
+  const baseline = evaluateConditionalPowerReplay(baselineInput)
+  if (baseline.status !== 'ready') throw new Error(baseline.detail)
+
+  const changed = structuredClone(baselineInput)
+  const originalState = structuredClone(changed.basis.state)
+  const originalPin = changed.basis.preStateId
+  const [alphaLeague, betaLeague] = [source.teams.Alpha!.league, source.teams.Beta!.league]
+  changed.basis.context.teams.Alpha!.league = betaLeague
+  changed.basis.context.teams.Beta!.league = alphaLeague
+  for (const game of changed.basis.context.authoritativeMatches) {
+    game.teamAHomeLeague = betaLeague
+    game.teamBHomeLeague = alphaLeague
+  }
+  const originalChanged = structuredClone(changed)
+  const rejected = evaluateConditionalPowerReplay(changed)
+  assert.equal(rejected.status, 'unavailable')
+  if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'stale-context-pin')
+  assert.equal(changed.basis.preStateId, originalPin)
+  assert.deepEqual(changed.basis.state, originalState)
+  assert.deepEqual(changed.games, baselineInput.games)
+  assert.deepEqual(changed.playerEdges, baselineInput.playerEdges)
+  assert.deepEqual(changed, originalChanged)
+
+  const changedSource = structuredClone(source)
+  changedSource.teams.Alpha!.league = betaLeague
+  changedSource.teams.Beta!.league = alphaLeague
+  for (const game of changedSource.historicalMatches) {
+    game.teamAHomeLeague = betaLeague
+    game.teamBHomeLeague = alphaLeague
+  }
+  const originalRebuiltSource = structuredClone(changedSource)
+  const rebuilt = prepareConditionalPowerReplayBasis(changedSource)
+  if (rebuilt.status !== 'ready') throw new Error(rebuilt.detail)
+  assert.notEqual(rebuilt.provenance.contextDigest, prepared.provenance.contextDigest)
+  assert.notEqual(rebuilt.basis.preStateId, originalPin)
+  const input = { ...changed, basis: rebuilt.basis }
+  assert.deepEqual(input.games, baselineInput.games)
+  assert.deepEqual(input.playerEdges, baselineInput.playerEdges)
+  const originalInput = structuredClone(input)
+  const result = evaluateConditionalPowerReplay(input)
+  if (result.status !== 'ready') throw new Error(result.detail)
+  const before = materializeRankingModel({ context: structuredClone(rebuilt.basis.context), state: structuredClone(rebuilt.basis.state) })
+  const context = structuredClone(rebuilt.basis.context)
+  context.authoritativeMatches.push(...structuredClone(input.games))
+  context.lastDate = input.games[0]!.date
+  context.teamRosterBasis = rosterBasisByTeam(context.authoritativeMatches)
+  for (const [id, edge] of input.playerEdges) context.pregamePlayerRatingEdges.set(id, structuredClone(edge))
+  const state = replayRatingDates({ context, state: structuredClone(rebuilt.basis.state), replayMatches: structuredClone(input.games) })
+  const after = materializeRankingModel({ context, state })
+  for (const row of result.teams) {
+    const beforePower = publishedRating(before.standings.find((team) => team.team === row.team)!.rating, source.ratingScale)
+    const afterPower = publishedRating(after.standings.find((team) => team.team === row.team)!.rating, source.ratingScale)
+    assert.deepEqual(row, { team: row.team, before: beforePower, after: afterPower, delta: afterPower - beforePower })
+  }
+  assert.deepEqual(input, originalInput)
+  assert.deepEqual(changedSource, originalRebuiltSource)
+  assert.deepEqual(source, originalSource)
+})
+
+test('corpus adapter requires complete legal historical series before production replay', () => {
+  for (const bestOf of [3, 5]) for (const bestOfBasis of ['official', 'provider'] as const) {
+    const incomplete = sourceFixture()
+    Object.assign(incomplete.historicalMatches.at(-1)!, { bestOf, bestOfBasis, officialMatchId: 'historical-series', gameNumber: 1 })
+    const original = structuredClone(incomplete)
+    const rejected = prepareConditionalPowerReplayBasis(incomplete)
+    assert.equal(rejected.status, 'unavailable', `${bestOfBasis} Bo${bestOf}`)
+    if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'incomplete-historical-inputs')
+    assert.deepEqual(incomplete, original)
+
+    const complete = sourceFixture()
+    const winsNeeded = (bestOf + 1) / 2
+    complete.historicalMatches.slice(-winsNeeded).forEach((game, index) => Object.assign(game, {
+      date: complete.processedThroughUtcDate, bestOf, bestOfBasis, officialMatchId: 'historical-series',
+      gameNumber: index + 1, winner: 'Alpha',
+    }))
+    const completedOriginal = structuredClone(complete)
+    assert.equal(prepareConditionalPowerReplayBasis(complete).status, 'ready', `${bestOfBasis} completed Bo${bestOf}`)
+    assert.deepEqual(complete, completedOriginal)
+
+    const crossDate = structuredClone(complete)
+    crossDate.historicalMatches.at(-winsNeeded)!.date = '2026-09-14'
+    const crossDateOriginal = structuredClone(crossDate)
+    const crossDateResult = prepareConditionalPowerReplayBasis(crossDate)
+    assert.equal(crossDateResult.status, 'unavailable', `${bestOfBasis} completed Bo${bestOf} crossing a UTC replay boundary`)
+    if (crossDateResult.status === 'unavailable') assert.equal(crossDateResult.reason, 'incomplete-historical-inputs')
+    assert.deepEqual(crossDate, crossDateOriginal)
+  }
+
+  const illegal = sourceFixture()
+  illegal.historicalMatches.slice(-3).forEach((game, index) => Object.assign(game, {
+    date: illegal.processedThroughUtcDate, bestOf: 3, officialMatchId: 'historical-series', gameNumber: index + 1,
+    winner: index < 2 ? 'Alpha' : 'Beta',
+  }))
+  const original = structuredClone(illegal)
+  const result = prepareConditionalPowerReplayBasis(illegal)
+  assert.equal(result.status, 'unavailable', 'The series continued after Alpha had already won.')
+  assert.deepEqual(illegal, original)
+})
+
+test('corpus adapter rejects conflicting historical series scoring metadata and preserves optional event IDs', () => {
+  const conflicts: Array<(source: ReturnType<typeof sourceFixture>) => void> = [
+    (source) => { source.historicalMatches.at(-1)!.event = 'Different event' },
+    (source) => { source.historicalMatches.at(-1)!.league = 'Worlds' },
+    (source) => { source.historicalMatches.at(-1)!.phase = 'Playoffs' },
+    (source) => { source.historicalMatches.at(-1)!.region = 'International' },
+    (source) => { source.historicalMatches.at(-1)!.tier = 'worlds-playoffs' },
+    (source) => {
+      source.historicalMatches.at(-2)!.officialEventId = 'event-one'
+      source.historicalMatches.at(-1)!.officialEventId = 'event-two'
+    },
+  ]
+  for (const bestOf of [3, 5]) for (const bestOfBasis of ['official', 'provider'] as const) {
+    const source = sourceFixture()
+    const winsNeeded = (bestOf + 1) / 2
+    const games = source.historicalMatches.slice(-winsNeeded)
+    games.forEach((game, index) => Object.assign(game, {
+      date: source.processedThroughUtcDate, bestOf, bestOfBasis, officialMatchId: 'historical-series',
+      gameNumber: index + 1, winner: 'Alpha',
+    }))
+    const original = structuredClone(source)
+    assert.equal(prepareConditionalPowerReplayBasis(source).status, 'ready', 'Absent optional event IDs remain supported.')
+    assert.deepEqual(source, original)
+
+    for (const mutate of conflicts) {
+      const conflicting = structuredClone(source)
+      mutate(conflicting)
+      const before = structuredClone(conflicting)
+      const rejected = prepareConditionalPowerReplayBasis(conflicting)
+      assert.equal(rejected.status, 'unavailable', `${bestOfBasis} Bo${bestOf}: ${mutate}`)
+      if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'incomplete-historical-inputs')
+      assert.deepEqual(conflicting, before)
+    }
+
+    games.at(-1)!.officialEventId = 'historical-event'
+    const partiallyIdentified = structuredClone(source)
+    assert.equal(prepareConditionalPowerReplayBasis(source).status, 'ready', 'One supplied compatible ID remains supported.')
+    assert.deepEqual(source, partiallyIdentified)
+    games.forEach((game) => { game.officialEventId = 'historical-event' })
+    const fullyIdentified = structuredClone(source)
+    assert.equal(prepareConditionalPowerReplayBasis(source).status, 'ready', 'Matching supplied IDs remain supported.')
+    assert.deepEqual(source, fullyIdentified)
+  }
+})
+
+test('optional historical timestamps must be valid and match their UTC date without changing the source', () => {
+  for (const datetimeUtc of ['', 'not-a-timestamp', '2026-09-17T12:00:00Z', '2026-09-15T23:30:00-05:00']) {
+    const source = sourceFixture()
+    source.historicalMatches.at(-1)!.datetimeUtc = datetimeUtc
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    assert.equal(result.status, 'unavailable', datetimeUtc)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'incomplete-historical-inputs')
+    assert.deepEqual(source, original)
+  }
+  for (const datetimeUtc of [undefined, '2026-09-15T12:00:00Z', '2026-09-15T07:00:00-05:00']) {
+    const source = sourceFixture()
+    const last = source.historicalMatches.at(-1)!
+    last.datetimeUtc = datetimeUtc
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    if (result.status !== 'ready') throw new Error(result.detail)
+    assert.equal(result.basis.context.authoritativeMatches.find((match) => match.id === last.id)!.datetimeUtc,
+      datetimeUtc === undefined ? undefined : '2026-09-15T12:00:00.000Z')
+    assert.equal(evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: result.basis }).status, 'ready')
+    assert.deepEqual(source, original)
+  }
+})
+
+test('detached historical clocks preserve actual game order and match the UTC production replay', () => {
+  const source = sourceFixture()
+  const games = source.historicalMatches.slice(-2)
+  games.forEach((game, index) => Object.assign(game, {
+    date: source.processedThroughUtcDate, bestOf: 3, bestOfBasis: 'official',
+    officialMatchId: 'historical-time-series', gameNumber: index + 1, winner: 'Alpha',
+  }))
+  games[0]!.datetimeUtc = '2026-09-15T06:40:00Z'
+  games[1]!.datetimeUtc = '2026-09-15T01:50:00-05:00'
+  const original = structuredClone(source)
+  const result = prepareConditionalPowerReplayBasis(source)
+  if (result.status !== 'ready') throw new Error(result.detail)
+  assert.deepEqual(result.basis.context.authoritativeMatches.slice(-2).map((match) => match.id), games.map((match) => match.id))
+  assert.equal(result.basis.state.previousMatch!.id, games[1]!.id)
+
+  const reference = structuredClone(source)
+  reference.historicalMatches.at(-2)!.datetimeUtc = '2026-09-15T06:40:00.000Z'
+  reference.historicalMatches.at(-1)!.datetimeUtc = '2026-09-15T06:50:00.000Z'
+  const context = createRatingReplayContext(reference.historicalMatches, reference.teams, { tournamentLifecycles: reference.tournamentLifecycles })
+  const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches })
+  assert.deepEqual(result.basis.state, state)
+  assert.deepEqual(result.basis.context.pregamePlayerRatingEdges, context.pregamePlayerRatingEdges)
+  const expected = prepareConditionalPowerReplayBasis(reference)
+  if (expected.status !== 'ready') throw new Error(expected.detail)
+  assert.equal(result.basis.preStateId, expected.basis.preStateId)
+  const actualPreview = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: result.basis })
+  const expectedPreview = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: expected.basis })
+  if (actualPreview.status !== 'ready' || expectedPreview.status !== 'ready') throw new Error('The normalized historical controls must support a complete preview.')
+  assert.deepEqual(actualPreview.teams, expectedPreview.teams)
+  assert.deepEqual(source, original)
+})
+
+test('the corpus adapter rejects cross-record game aliases before replay and preserves aliases within a row', () => {
+  const fields = ['id', 'officialGameId', 'sourceGameId'] as const
+  for (const left of fields) for (const right of fields) {
+    const source = sourceFixture()
+    const [first, second] = source.historicalMatches
+    assert.ok(first && second)
+    first.officialGameId = 'official-first'
+    second.officialGameId = 'official-second'
+    first.sourceGameId = 'source-first'
+    second.sourceGameId = 'source-second'
+    first[left] = 'shared-game-alias'
+    second[right] = 'shared-game-alias'
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    assert.equal(result.status, 'unavailable', `${left}/${right}`)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'duplicate-game-alias')
+    assert.deepEqual(source, original)
+  }
+
+  const source = sourceFixture()
+  const control = prepareConditionalPowerReplayBasis(source)
+  if (control.status !== 'ready') throw new Error(control.detail)
+  source.historicalMatches.forEach((match) => {
+    match.officialGameId = match.id
+    match.sourceGameId = match.id
+  })
+  const original = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  const expected = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: control.basis })
+  const result = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: prepared.basis })
+  if (expected.status !== 'ready' || result.status !== 'ready') throw new Error('Aliases within one row must preserve supported previews.')
+  assert.deepEqual(result.teams, expected.teams)
+  assert.deepEqual(source, original)
+})
+
+test('the corpus adapter rejects duplicate historical series aliases even when every game identity is unique', () => {
+  const cases: Array<{ label: string; mutate: (first: MatchRecord, second: MatchRecord) => void }> = [
+    { label: 'repeated raw source match ID', mutate: (first, second) => { first.sourceMatchId = second.sourceMatchId = 'duplicate-source-match' } },
+    { label: 'different suffixes with one production-normalized source match root', mutate: (first, second) => {
+      first.sourceMatchId = 'duplicate-source-match_game1'; second.sourceMatchId = 'duplicate-source-match_game2'
+    } },
+    { label: 'source game root hidden by official and source match IDs', mutate: (first, second) => {
+      first.sourceMatchId = 'higher-priority-first'; second.sourceMatchId = 'higher-priority-second'
+      first.sourceGameId = 'duplicate-source-game_game1'; second.sourceGameId = 'duplicate-source-game_game2'
+    } },
+    { label: 'official ID reused as a normalized source match root', mutate: (first, second) => { second.sourceMatchId = `${first.officialMatchId}_game1` } },
+    { label: 'official ID reused as a normalized source game root', mutate: (first, second) => { second.sourceGameId = `${first.officialMatchId}_game2` } },
+    { label: 'source match and source game aliases normalize to one root', mutate: (first, second) => {
+      first.sourceMatchId = 'duplicate-cross-source_game1'; second.sourceGameId = 'duplicate-cross-source_game2'
+    } },
+  ]
+  for (const { label, mutate } of cases) {
+    const source = sourceFixture()
+    const first = source.historicalMatches[0]!
+    const second = source.historicalMatches[1]!
+    first.officialMatchId = 'adapter-historical-first'
+    second.officialMatchId = 'adapter-historical-second'
+    mutate(first, second)
+    const original = structuredClone(source)
+    const result = prepareConditionalPowerReplayBasis(source)
+    assert.equal(result.status, 'unavailable', label)
+    if (result.status === 'unavailable') assert.equal(result.reason, 'duplicate-series-alias', label)
+    assert.deepEqual(source, original, label)
+  }
+})
+
+test('the corpus adapter accepts repeated raw and normalized aliases owned by one completed series', () => {
+  const source = sourceFixture()
+  const games = source.historicalMatches.slice(-2)
+  for (const [index, game] of games.entries()) Object.assign(game, {
+    date: source.processedThroughUtcDate, officialMatchId: 'adapter-within-series',
+    bestOf: 3, bestOfBasis: 'official', gameNumber: index + 1, winner: 'Alpha',
+  })
+  const control = prepareConditionalPowerReplayBasis(source)
+  if (control.status !== 'ready') throw new Error(control.detail)
+  const expected = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: control.basis })
+  if (expected.status !== 'ready') throw new Error(expected.detail)
+  for (const mode of ['raw', 'normalized'] as const) {
+    const candidate = structuredClone(source)
+    for (const game of candidate.historicalMatches.slice(-2)) {
+      game.sourceMatchId = mode === 'raw' ? game.officialMatchId : `${game.officialMatchId}_game${game.gameNumber}`
+      game.sourceGameId = `${game.officialMatchId}_game${game.gameNumber}`
+    }
+    const original = structuredClone(candidate)
+    const prepared = prepareConditionalPowerReplayBasis(candidate)
+    if (prepared.status !== 'ready') throw new Error(`${mode}: ${prepared.detail}`)
+    const result = evaluateConditionalPowerReplay({ ...conditionalPowerFixture(), basis: prepared.basis })
+    if (result.status !== 'ready') throw new Error(`${mode}: ${result.detail}`)
+    assert.deepEqual(result.teams, expected.teams, mode)
+    assert.deepEqual(candidate, original, mode)
+  }
+})

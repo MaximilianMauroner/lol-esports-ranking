@@ -6,6 +6,8 @@ import {
   type ForecastBasis, type ForecastLedger, type ForecastReceipt, type ForecastUnavailable,
 } from '../src/lib/tournamentForecast'
 import type { TournamentSeries } from '../src/lib/tournamentFeed'
+import { createConditionalPowerResultReceipt } from '../src/lib/conditionalPowerResultReceiptBuilder'
+import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../src/lib/conditionalPowerResultReceipts'
 
 /** Offline-only receipt store. Nothing calls this from the collector or production worker. */
 export async function publishPreMatchReceiptOffline(root: string, input: {
@@ -83,3 +85,37 @@ async function files(path: string) {
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error }
 }
 function digest(value: string) { return createHash('sha256').update(value).digest('hex') }
+
+/** Explicit offline companion to the forecast producer. It never activates a production writer. */
+export async function publishConditionalPowerResultOffline(root: string, input: Parameters<typeof createConditionalPowerResultReceipt>[0]) {
+  const result = createConditionalPowerResultReceipt(input)
+  if (result.status !== 'ready') return result
+  const receipt = result.receipt
+  const directory = join(root, 'power-preview-receipts')
+  await mkdir(directory, { recursive: true })
+  const key = JSON.stringify([receipt.matchId, receipt.snapshotId, receipt.eventStateVersion, receipt.preStateId])
+  await writeOnce(join(directory, `${digest(key)}.json`), receipt)
+  return result
+}
+
+export async function readConditionalPowerResultsOffline(root: string): Promise<ConditionalPowerResultLedger> {
+  const receipts: ConditionalPowerResultLedger['receipts'] = []
+  for (const file of await files(join(root, 'power-preview-receipts'))) {
+    const value: unknown = JSON.parse(await readFile(join(root, 'power-preview-receipts', file), 'utf8'))
+    const candidate = { version: 1, receipts: [value] }
+    if (!isConditionalPowerResultLedger(candidate)) throw new Error(`Invalid offline Power component receipt: ${file}`)
+    const receipt = candidate.receipts[0]!
+    const key = JSON.stringify([receipt.matchId, receipt.snapshotId, receipt.eventStateVersion, receipt.preStateId])
+    if (file !== `${digest(key)}.json`) throw new Error(`Power component receipt identity mismatch: ${file}`)
+    receipts.push(receipt)
+  }
+  const ledger: ConditionalPowerResultLedger = { version: 1, receipts }
+  if (!isConditionalPowerResultLedger(ledger)) throw new Error('Ambiguous offline Power component receipts')
+  return ledger
+}
+
+/** Assemble the optional static companion. The caller owns delivery; this does not publish it. */
+export function conditionalPowerResultArtifact(ledger: ConditionalPowerResultLedger) {
+  if (!isConditionalPowerResultLedger(ledger)) throw new Error('Invalid Power component ledger')
+  return { relativePath: 'forecasts/power-previews.json', contents: JSON.stringify(ledger) + '\n' }
+}

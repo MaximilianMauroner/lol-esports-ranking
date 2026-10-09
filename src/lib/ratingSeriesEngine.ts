@@ -1,4 +1,4 @@
-import { effectiveLeagueRating, leaguePriorFor, leagueTierFor } from '../data/leagueTiers'
+import { effectiveLeagueRating, leaguePriorFor } from '../data/leagueTiers'
 import type {
   FactorBreakdown,
   LeagueStrengthHistoryPoint,
@@ -37,8 +37,6 @@ import {
   ratingFromComponents,
   recencyWeight,
   roundedRatingUpdateLedger,
-  rosterVolatilityMultiplier,
-  uncertaintyKMultiplier,
 } from './ratingCalculations'
 import type { RatingRunState } from './ratingRunState'
 import { makeRankMap } from './ratingRunState'
@@ -46,8 +44,8 @@ import { applyRosterContinuityForSeries, roundedContinuity } from './rosterConti
 import { recordSideAdjustmentSample, sideAdjustmentFor } from './sideAdjustments'
 import { resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
 import { neutralWinProbability } from './winProbability'
+import { calculateSeriesResultUpdate, seriesStrengthSignal } from './seriesResultUpdate'
 import {
-  domesticStableTransferWeightsByTier,
   initialTeamRating,
   latentStrengthResultBudgetShares,
   maximumUncertainty,
@@ -358,41 +356,24 @@ function processRatingSeries({
   const seriesCurrentPowerRatingB = seriesPowerRatingB + seriesRosterPriorOffsetB + seriesMomentumB
   const seriesUncertaintyA = batch.uncertainties.get(series.teamA) ?? maximumUncertainty
   const seriesUncertaintyB = batch.uncertainties.get(series.teamB) ?? maximumUncertainty
-  const seriesExpected = neutralWinProbability(
-    { team: series.teamA, rating: seriesCurrentPowerRatingA, uncertainty: seriesUncertaintyA },
-    { team: series.teamB, rating: seriesCurrentPowerRatingB, uncertainty: seriesUncertaintyB },
-    series.bestOf,
-  )
-  const expectedOutcomeA = seriesExpected.teamAExpectedSeriesPoints
-  const expectedOutcomeB = seriesExpected.teamBExpectedSeriesPoints
-  const eventK = eventKFactorForMatch(finalMatch, state.eventWeightContext)
-  const hasLeagueSignal = seriesLeagueA !== seriesLeagueB
-    && seriesLeagueA !== 'Unknown'
-    && seriesLeagueB !== 'Unknown'
-    && isInternationalMatch(finalMatch)
-  const leagueSignalShare = hasLeagueSignal ? latentStrengthResultBudgetShares.leagueAnchor : 0
-  const teamStableShare = (1 - leagueSignalShare) * latentStrengthResultBudgetShares.teamStable
-  const teamFormShare = (1 - leagueSignalShare) * latentStrengthResultBudgetShares.teamForm
-  const seriesResidualA = series.observedOutcomeA - expectedOutcomeA
-  const seriesResidualB = series.observedOutcomeB - expectedOutcomeB
-  const seriesResultEvidenceA = eventK * series.strengthSignal * ratingUpdateRecencyWeight * seriesResidualA
-  const seriesResultEvidenceB = -seriesResultEvidenceA
-  const uncertaintyMultiplierA = uncertaintyKMultiplier(seriesUncertaintyA)
-  const uncertaintyMultiplierB = uncertaintyKMultiplier(seriesUncertaintyB)
-  const rosterMultiplierA = rosterVolatilityMultiplier(state.currentRosterContinuity.get(series.teamA))
-  const rosterMultiplierB = rosterVolatilityMultiplier(state.currentRosterContinuity.get(series.teamB))
-  const stableTransferWeightA = teamStableTransferWeightForSeries(finalMatch, seriesLeagueA, seriesLeagueB)
-  const stableTransferWeightB = teamStableTransferWeightForSeries(finalMatch, seriesLeagueB, seriesLeagueA)
-  const appliedTeamStableShareA = teamStableShare
-  const appliedTeamStableShareB = teamStableShare
-  const baseStableDeltaA = seriesResultEvidenceA * teamStableShare
-  const baseStableDeltaB = seriesResultEvidenceB * teamStableShare
-  const baseFormDeltaA = seriesResultEvidenceA * teamFormShare
-  const baseFormDeltaB = seriesResultEvidenceB * teamFormShare
-  const baseLeagueDeltaA = seriesResultEvidenceA * leagueSignalShare
-  const baseLeagueDeltaB = seriesResultEvidenceB * leagueSignalShare
-  const seriesDeltaA = Math.round(baseStableDeltaA * uncertaintyMultiplierA * rosterMultiplierA * stableTransferWeightA)
-  const seriesDeltaB = Math.round(baseStableDeltaB * uncertaintyMultiplierB * rosterMultiplierB * stableTransferWeightB)
+  const {
+    expectedOutcomeA, expectedOutcomeB, leagueSignalShare, teamFormShare,
+    seriesResidualA, seriesResidualB, seriesResultEvidenceA, seriesResultEvidenceB,
+    uncertaintyMultiplierA, uncertaintyMultiplierB, rosterMultiplierA, rosterMultiplierB,
+    stableTransferWeightA, stableTransferWeightB, appliedTeamStableShareA, appliedTeamStableShareB,
+    baseStableDeltaA, baseStableDeltaB, baseFormDeltaA, baseFormDeltaB, baseLeagueDeltaA, baseLeagueDeltaB,
+    seriesDeltaA, seriesDeltaB,
+  } = calculateSeriesResultUpdate({
+    teams: [
+      { team: series.teamA, league: seriesLeagueA, currentPowerRating: seriesCurrentPowerRatingA,
+        uncertainty: seriesUncertaintyA, rosterContinuity: state.currentRosterContinuity.get(series.teamA) },
+      { team: series.teamB, league: seriesLeagueB, currentPowerRating: seriesCurrentPowerRatingB,
+        uncertainty: seriesUncertaintyB, rosterContinuity: state.currentRosterContinuity.get(series.teamB) },
+    ],
+    bestOf: series.bestOf, observedOutcomeA: series.observedOutcomeA, observedOutcomeB: series.observedOutcomeB,
+    strengthSignal: series.strengthSignal, eventK: eventKFactorForMatch(finalMatch, state.eventWeightContext),
+    international: isInternationalMatch(finalMatch),
+  })
   const seriesDeltaByTeam = new Map([[series.teamA, seriesDeltaA], [series.teamB, seriesDeltaB]])
   const seriesResidualByTeam = new Map([[series.teamA, seriesResidualA], [series.teamB, seriesResidualB]])
   const seriesEvidenceByTeam = new Map([[series.teamA, seriesResultEvidenceA], [series.teamB, seriesResultEvidenceB]])
@@ -942,24 +923,6 @@ function ratingSeriesGroupsForDate(matches: MatchRecord[]): RatingSeriesGroup[] 
     strengthSignal: seriesStrengthSignal(series.games.length, series.format, series.winsA, series.winsB),
     state: series.state,
   }))
-}
-
-function seriesStrengthSignal(games: number, bestOf: CanonicalSeries['format'], winsA: number, winsB: number) {
-  const requiredWins = Math.max(winsA, winsB)
-  const winsNeeded = Math.floor(bestOf / 2) + 1
-  if (requiredWins < winsNeeded) return 1
-
-  const unusedGames = Math.max(0, bestOf - games)
-  const decisivenessBonus = bestOf > 1 ? Math.min(0.18, unusedGames * 0.06) : 0
-  return 1 + decisivenessBonus
-}
-
-function teamStableTransferWeightForSeries(match: MatchRecord, league: string, opponentLeague: string) {
-  if (league !== opponentLeague && isInternationalMatch(match)) return 1
-  const tier = leagueTierFor(league).tier
-  if (league === opponentLeague) return domesticStableTransferWeightsByTier[tier]
-  const opponentTier = leagueTierFor(opponentLeague).tier
-  return Math.min(domesticStableTransferWeightsByTier[tier], domesticStableTransferWeightsByTier[opponentTier])
 }
 
 function updateRecord(team: string, won: boolean, state: RatingRunState) {

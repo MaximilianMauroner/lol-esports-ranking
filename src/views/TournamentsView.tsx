@@ -7,6 +7,8 @@ import { LoadingState } from '../components/ui/loading'
 import { currentHashQuery, hashParam } from '../lib/urlState'
 import { loadTournamentForecastArtifacts, loadTournamentForecastLedger } from '../lib/tournamentForecastArtifacts'
 import { emptyForecastLedger, forecastTournamentSeries, pinnedForecast, scoreConditionedSeriesOdds, type ForecastBasis, type ForecastLedger, type ForecastReceipt, type TournamentForecast } from '../lib/tournamentForecast'
+import { ConditionalPowerPreview } from '../components/ConditionalPowerPreview'
+import type { ConditionalPowerResultLedger } from '../lib/conditionalPowerResultReceipts'
 import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
 
 type FeedHealth = { checkedAt: string; complete: boolean; warnings: string[] }
@@ -14,7 +16,7 @@ type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed
 const REFRESH_MS = 60_000
 const STALE_MS = 3 * REFRESH_MS
 const FORECASTS_ENABLED = import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED === '1'
-type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; reason?: string; ledgerWarning?: string }
+type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; powerPreviews?: ConditionalPowerResultLedger | null; reason?: string; ledgerWarning?: string }
 
 export function TournamentsView() {
   const [state, setState] = useState<FeedState>({ status: 'loading' })
@@ -163,6 +165,7 @@ function SeriesCard({ series, timezone, now, forecasts }: { series: TournamentSe
           <a href="#matches" className="underline">Rating evidence ledger</a>
         </> : <span>Forecast unavailable: {forecast.detail}</span>}
       </div> : null}
+      {forecasts ? <ConditionalPowerPreview key={JSON.stringify([series, forecast, forecasts.powerPreviews])} series={series} forecast={forecast} now={now} basis={forecasts.basis} powerPreviews={forecasts.powerPreviews} /> : null}
       {series.vodUrls.map((url) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="underline">Watch VOD</a>)}
     </CardContent>
   </Card>

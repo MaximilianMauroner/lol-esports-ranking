@@ -3,6 +3,8 @@ import {
   preseasonEventWeightMultiplier,
 } from '../data/rankingConfig'
 import type { MatchRecord } from '../types'
+
+type EventScoringMatch = Pick<MatchRecord, 'date' | 'tier' | 'event' | 'phase' | 'league'>
 import { isDemaciaCupEvent } from '../data/competitionTaxonomy'
 import { resolveCanonicalSeries } from './seriesResolver'
 
@@ -33,7 +35,7 @@ export function eventWeightContextForMatches(matches: readonly MatchRecord[]): E
 }
 
 export function eventWeightMultiplierForMatch(
-  match: MatchRecord,
+  match: EventScoringMatch,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
   if (isDemaciaCupEvent(`${match.league} ${match.event}`)) return 1
@@ -41,27 +43,27 @@ export function eventWeightMultiplierForMatch(
 }
 
 export function eventKFactorForMatch(
-  match: MatchRecord,
+  match: EventScoringMatch,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
   return eventTierConfig[powerEvidenceTierForMatch(match)].kFactor * eventWeightMultiplierForMatch(match, context)
 }
 
 export function eventWeightForMatch(
-  match: MatchRecord,
+  match: EventScoringMatch,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
   return eventTierConfig[powerEvidenceTierForMatch(match)].weight * eventWeightMultiplierForMatch(match, context)
 }
 
-function powerEvidenceTierForMatch(match: MatchRecord) {
+function powerEvidenceTierForMatch(match: EventScoringMatch) {
   return match.tier === 'msi-play-in' && /\b(?:fst|first stand)\b/i.test(`${match.league} ${match.event}`)
     ? 'msi-bracket'
     : match.tier
 }
 
 export function isPostWorldsPreseasonMatch(
-  match: MatchRecord,
+  match: EventScoringMatch,
   context: EventWeightContext = emptyEventWeightContext,
 ) {
   if (isWorldsMatch(match)) return false
@@ -73,7 +75,7 @@ export function isPostWorldsPreseasonMatch(
   return match.date > worldsEndDate && match.date < `${year + 1}-01-01`
 }
 
-function isWorldsMatch(match: MatchRecord) {
+function isWorldsMatch(match: EventScoringMatch) {
   if (match.tier === 'qualifier' || /\b(?:regional finals?|qualifiers?|road to)\b/i.test(`${match.event} ${match.phase}`)) return false
   if (match.tier === 'worlds-playoffs' || match.tier === 'worlds-main') return true
   return /\b(?:wlds?|worlds|world championship)\b/i.test(`${match.league} ${match.event}`)
