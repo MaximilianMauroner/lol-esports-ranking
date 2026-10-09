@@ -41,6 +41,12 @@ impl Bucket {
         }
         Ok(Self {
             client: Client::builder()
+                // Other workspace crates enable reqwest decoders. S3 identity
+                // checks need the original object bytes and encoding headers.
+                .no_gzip()
+                .no_brotli()
+                .no_deflate()
+                .no_zstd()
                 .timeout(Duration::from_secs(120))
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
