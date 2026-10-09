@@ -71,10 +71,27 @@ Passed: two canonical digest checks compare exact hashes with the existing
 serializer, including UTF-16 key order, Map/Set, sparse arrays, number text,
 flush boundaries and mutations. `git diff --check` passes.
 
+Hosted #94 run 37997888569 passed typecheck, lint, 1,051 unit/integration tests
+and all three browser suites. Fourteen opt-in native tests were skipped.
+The production-shaped benchmark preserved exact parity, zero differing paths,
+one-match replay and its compute/upload targets, but failed the unchanged
+734,003,200-byte RSS safety limit: first-repetition peak was 742,895,616 bytes.
+The next repetitions were 596,500,480 and 600,629,248 bytes. Bundle was skipped.
+This is a real failing gate and is not waived.
+
+That measured worker uses the `pending-match` gated path. The changed state
+comparison runs only in shadow/daily-audit branches, so the measured failure
+does not isolate that helper as its cause. Earlier #90 CI peaked at
+631,705,600 bytes; the runner executions are not a controlled A/B comparison.
+The retained stages locate the higher first-run memory in replay/player/state
+work. An admitted diagnostic run is needed to explain it. The separate full
+verifier peaked at 2,015,375,360 bytes and is explicitly outside the incremental
+production RSS gate; it must not explain the measured-worker failure.
+
 Blocked: frozen dependency installation returned admission 75 while another
 project owned `fleet-build.service`. The enforced slot is 3 GiB with zero build
-swap. No owner was stopped and no build was run outside the guard. Full affected
-integration, typecheck, lint, unchanged benchmark gate and bundle remain required.
+swap. No owner was stopped and no build was run outside the guard. Real-input
+reproduction, the unchanged benchmark gate and bundle remain required.
 No nesting or branching metric is configured in the current ESLint rules.
 
 Owner: this refresh thread for source verification and isolated reproduction;

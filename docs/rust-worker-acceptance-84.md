@@ -18,8 +18,23 @@ must remain read-only. No successful real-corpus run is claimed here.
 Compilation, frozen install and corpus execution are blocked locally by another
 project's ownership of `fleet-build.service`. Admission returned 75; no command
 was moved outside Fleet's 3 GiB/zero-swap controls. Rust 1.98.0 is available;
-workspace formatting and the offline lockfile update pass. The new MinIO CI
-proof must run before native storage acceptance is claimed.
+workspace formatting and the offline lockfile update pass.
+
+Hosted run 37999800531 compiled the native layer, passed Clippy, Rust fixture
+tests, model/config parity, ten raw-seam tests and 32 provider replay/failure
+tests. The controlled 5,333-match corpus had zero differing objects. Node/native
+prepare peak RSS was 418,656,256 / 311,906,304 bytes, and restore peak RSS was
+295,510,016 / 252,702,720 bytes. Preparation took 1772 / 1361 ms; restore took
+1032 / 787 ms. This is controlled pinned/synthetic provider input, not the two
+real Oracle CSVs or current live-provider acceptance.
+
+The MinIO step failed before server startup because the published Docker image
+was inaccessible. CI now builds the same official release's source at pinned
+commit `0d7408fc9969caf07de6a8c3a84f9fbb10a6739e` with Go 1.24.2 and binds the
+owned test process to loopback. Only that process is stopped. The storage proof
+remains pending; no MinIO acceptance is claimed from the failed image pull.
+Review also found and repaired shared reqwest response-decoding features, which
+would have rejected valid stored gzip objects on reuse.
 
 The next M4 layer supplies native immutable raw/state object writes and shared
 lease CAS. Tests compare Node/native bytes and metadata, alternative gzip

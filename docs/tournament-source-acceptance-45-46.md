@@ -87,6 +87,12 @@ before-play delivery is established. The collaborative browser showed the
 working ranking board with Rankings/Regions/Matches navigation. That is web
 health evidence, not tournament acceptance.
 
+The separate #47 owner reports an optional Worlds companion at
+`/tournament-data/worlds/<encoded event ID>.json`, bound to the selected event
+content key. That work owns its engine/UI and has no active producer or source
+publication. This feed/forecast layer does not create, serve or certify that
+companion, and cannot count its synthetic UI checks as #45/#46 source acceptance.
+
 `observeForecastDelivery` fetches an independently served ledger with no redirect
 or token-bearing URL, records exact response/receipt hashes and local completion
 time, and requires an identical immutable receipt before its scheduled start.
@@ -94,6 +100,9 @@ The origin Date header cannot backdate that observation. The offline receipt
 store persists the observation through its existing write-once, fsync path.
 Synthetic tests cover missing/changed receipts, late observation, HTTP failure,
 URL restrictions and an 8 MiB body budget. Those tests still need hosted execution.
+Independent source execution with a transport shim passed all three new feed
+tests and the new delivery cases. This does not supply AWS/MinIO, typecheck or
+browser acceptance.
 
 Every observation and receipt retains `evaluationEligible: false`. Scheduled
 start is not proof of actual first play. An approved source, independently
