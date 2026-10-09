@@ -88,6 +88,14 @@ work. An admitted diagnostic run is needed to explain it. The separate full
 verifier peaked at 2,015,375,360 bytes and is explicitly outside the incremental
 production RSS gate; it must not explain the measured-worker failure.
 
+Later [PR #95 run 38000404426](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/38000404426)
+passed the same unchanged incremental gate and bundle, with the #94 repair in
+its stack and Node still selected. Its three peaks were 596,459,520,
+582,643,712 and 635,723,776 bytes, with exact parity and zero differing paths or
+identities. Maximum normalized compute was 6.2643 and upload was 1,527,742 bytes.
+This adds evidence of variation between runner executions. It does not isolate
+the cause, replace #94's failing required check, or reproduce the daily audit.
+
 Blocked: frozen dependency installation returned admission 75 while another
 project owned `fleet-build.service`. The enforced slot is 3 GiB with zero build
 swap. No owner was stopped and no build was run outside the guard. Real-input

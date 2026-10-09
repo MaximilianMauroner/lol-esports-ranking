@@ -28,13 +28,32 @@ prepare peak RSS was 418,656,256 / 311,906,304 bytes, and restore peak RSS was
 1032 / 787 ms. This is controlled pinned/synthetic provider input, not the two
 real Oracle CSVs or current live-provider acceptance.
 
-The MinIO step failed before server startup because the published Docker image
-was inaccessible. CI now builds the same official release's source at pinned
-commit `0d7408fc9969caf07de6a8c3a84f9fbb10a6739e` with Go 1.24.2 and binds the
-owned test process to loopback. Only that process is stopped. The storage proof
-remains pending; no MinIO acceptance is claimed from the failed image pull.
-Review also found and repaired shared reqwest response-decoding features, which
-would have rejected valid stored gzip objects on reuse.
+Hosted [run 38000404426](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/38000404426)
+passed both required jobs on PR #95. It built the official MinIO release's source
+at pinned commit `0d7408fc9969caf07de6a8c3a84f9fbb10a6739e` with Go 1.24.2 and
+bound the owned test process to loopback. The MinIO test passed without skips:
+Node/native immutable bytes and metadata match, valid alternative gzip is reused,
+corrupt collisions remain untouched, shared lease acquisition/renewal matches,
+and stale native authority cannot renew or release after a Node host takes over.
+Native release permits Node reacquisition with a higher fencing token. This also
+verifies the repair that disables shared reqwest response-decoding features.
+The earlier inaccessible image pull supplied no storage acceptance evidence.
+
+The same run passed Clippy, Rust fixtures, raw/provider integration, worker-image
+build and image model/config parity. The controlled 5,333-match raw corpus again
+had zero differing objects. Node/native prepare peak RSS was
+419,794,944 / 311,762,944 bytes; restore peak RSS was
+293,191,680 / 252,416,000 bytes. Preparation took 1012 / 803 ms and restore took
+590 / 489 ms. These remain pinned/synthetic inputs. They do not clear real-input
+M2 or current provider M3 acceptance.
+
+Typecheck, lint, 1,052 unit/integration tests, all three browser suites, the
+unchanged three-repeat incremental benchmark and the bundle passed. Fifteen
+opt-in native tests were skipped in the main job; the MinIO test ran separately
+in the Rust job. Maximum incremental peak RSS was 635,723,776 bytes, normalized
+compute was 6.2643 against a 6.5 limit, and upload was 1,527,742 bytes against a
+2 MiB limit. Exact parity and zero differing paths/identities passed. This does
+not supersede PR #94's failed run or certify the daily-audit allocation repair.
 
 The next M4 layer supplies native immutable raw/state object writes and shared
 lease CAS. Tests compare Node/native bytes and metadata, alternative gzip
