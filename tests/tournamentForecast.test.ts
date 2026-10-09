@@ -3,7 +3,8 @@ import test from 'node:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { publishPreMatchReceiptOffline, pinPreMatchReceiptOffline, readForecastLedgerOffline } from '../scripts/tournament-forecast-receipts'
+import { publishPreMatchReceiptOffline, pinPreMatchReceiptOffline, readForecastLedgerOffline, recordForecastDeliveryOffline } from '../scripts/tournament-forecast-receipts'
+import { observeForecastDelivery } from '../scripts/tournament-forecast-delivery'
 import { publishedRatingScale } from '../src/lib/modelConfig'
 import { estimatePublicMatchup } from '../src/lib/publicMatchup'
 import { loadTournamentForecastLedger } from '../src/lib/tournamentForecastArtifacts'
@@ -270,4 +271,31 @@ test('offline store writes each receipt and pin once without overwriting a revis
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('public delivery observer proves exact pre-schedule bytes without certifying actual play', async () => {
+  const expected = receipt()
+  assert.equal(expected.status, 'ready')
+  const ledger = appendForecastReceipt(emptyForecastLedger, expected)
+  const clock = new Date('2026-09-27T12:30:00.000Z')
+  const input = { ledgerUrl: 'https://example.invalid/tournament-data/forecasts/ledger.json', receipt: expected,
+    now: () => clock, fetcher: async () => new Response(JSON.stringify(ledger), { headers: { etag: '"fixture-ledger"', date: before } }) }
+  const evidence = await observeForecastDelivery(input)
+  assert.equal(evidence.observedAt, clock.toISOString(), 'The origin Date header cannot backdate delivery')
+  assert.equal(evidence.evaluationEligible, false)
+  assert.equal(evidence.certification, 'pending-source-approval-and-actual-play-evidence')
+  assert.equal(evidence.etag, '"fixture-ledger"')
+  assert.equal(evidence.matchId, expected.matchId)
+  const root = await mkdtemp(join(tmpdir(), 'forecast-delivery-'))
+  try {
+    assert.deepEqual(await recordForecastDeliveryOffline(root, input), evidence)
+    assert.deepEqual(await recordForecastDeliveryOffline(root, input), evidence, 'Same observation remains write-once')
+  } finally { await rm(root, { recursive: true, force: true }) }
+  await assert.rejects(observeForecastDelivery({ ...input, now: () => new Date(start) }), /not observed before/)
+  await assert.rejects(observeForecastDelivery({ ...input, fetcher: async () => new Response('{}', { status: 404 }) }), /HTTP 404/)
+  await assert.rejects(observeForecastDelivery({ ...input, fetcher: async () => new Response(JSON.stringify(emptyForecastLedger)) }), /not publicly delivered/)
+  const altered = { ...expected, teams: expected.teams.map((team, index) => ({ ...team, rating: team.rating + index + 1 })) }
+  await assert.rejects(observeForecastDelivery({ ...input, fetcher: async () => new Response(JSON.stringify({ ...ledger, receipts: { [expected.receiptKey]: altered } })) }), /not publicly delivered/)
+  await assert.rejects(observeForecastDelivery({ ...input, ledgerUrl: 'https://example.invalid/ledger?token=secret' }), /public HTTPS URL/)
+  await assert.rejects(observeForecastDelivery({ ...input, fetcher: async () => new Response(' '.repeat(8 * 1024 * 1024 + 1)) }), /exceeds observation budget/)
 })

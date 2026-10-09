@@ -8,6 +8,7 @@ import {
 import type { TournamentSeries } from '../src/lib/tournamentFeed'
 import { createConditionalPowerResultReceipt } from '../src/lib/conditionalPowerResultReceiptBuilder'
 import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../src/lib/conditionalPowerResultReceipts'
+import { observeForecastDelivery } from './tournament-forecast-delivery'
 
 /** Offline-only receipt store. Nothing calls this from the collector or production worker. */
 export async function publishPreMatchReceiptOffline(root: string, input: {
@@ -118,4 +119,14 @@ export async function readConditionalPowerResultsOffline(root: string): Promise<
 export function conditionalPowerResultArtifact(ledger: ConditionalPowerResultLedger) {
   if (!isConditionalPowerResultLedger(ledger)) throw new Error('Invalid Power component ledger')
   return { relativePath: 'forecasts/power-previews.json', contents: JSON.stringify(ledger) + '\n' }
+}
+
+/** Keep independently fetched public bytes as immutable local audit evidence. */
+export async function recordForecastDeliveryOffline(root: string, input: Parameters<typeof observeForecastDelivery>[0]) {
+  const observation = await observeForecastDelivery(input)
+  const directory = join(root, 'deliveries')
+  await mkdir(directory, { recursive: true })
+  const key = JSON.stringify([observation.receiptKey, observation.bodySha256, observation.observedAt])
+  await writeOnce(join(directory, `${digest(key)}.json`), observation)
+  return observation
 }
