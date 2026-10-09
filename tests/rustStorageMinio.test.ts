@@ -100,6 +100,16 @@ test('native storage matches Node immutable bytes and shares MinIO lease fencing
       { renewed: false, reason: 'lease-changed' })
     assert.deepEqual(await invoke({ action: 'release-lease', key, authority: renewedAuthority, now: later.toISOString() }),
       { released: false, reason: 'lease-changed' })
+    const takeoverReleaseAt = new Date(later.getTime() + 1_000)
+    const nativeReleased = await invoke({ action: 'release-lease', key,
+      authority: { lease: takeover.lease, etag: takeover.etag, promotionEtag: takeover.promotionEtag },
+      now: takeoverReleaseAt.toISOString() })
+    assert.equal(nativeReleased.released, true)
+    const releasedPointer = JSON.parse((await get('rust/active-generation.json')).bytes.toString())
+    assert.equal(releasedPointer.leaseReleasedAt, takeoverReleaseAt.toISOString())
+    const successor = await acquireBucketLease(key, { owner: 'host-c', now: takeoverReleaseAt, config: nativeConfig, client })
+    assert.equal(successor.acquired, true, 'A Node host can acquire after native release')
+    assert.ok(successor.lease!.fencingToken > takeover.lease!.fencingToken)
     const releaseAt = new Date(renewAt.getTime() + 1_000)
     const nodeReleased = await releaseBucketLease(key, nodeRenewed, { now: releaseAt, config, client })
     assert.equal(nodeReleased.released, true)
