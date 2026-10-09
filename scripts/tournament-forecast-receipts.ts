@@ -121,7 +121,7 @@ export function conditionalPowerResultArtifact(ledger: ConditionalPowerResultLed
   return { relativePath: 'forecasts/power-previews.json', contents: JSON.stringify(ledger) + '\n' }
 }
 
-/** Keep independently fetched public bytes as immutable local audit evidence. */
+/** Keep independently observed delivery hashes and times as immutable local evidence. */
 export async function recordForecastDeliveryOffline(root: string, input: Parameters<typeof observeForecastDelivery>[0]) {
   const observation = await observeForecastDelivery(input)
   const directory = join(root, 'deliveries')
