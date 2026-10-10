@@ -3,6 +3,7 @@ mod json;
 pub mod model;
 mod numeric;
 mod time;
+mod utf16_json;
 mod v8_math;
 
 pub use json::{
@@ -11,6 +12,7 @@ pub use json::{
 };
 pub use numeric::{js_exp, js_log, js_pow, js_round, number_text, to_fixed};
 pub use time::{provider_date, provider_datetime_utc, provider_instant};
+pub use utf16_json::{Utf16Json, Utf16String, parse_canonical_utf16_json};
 
 use flate2::{Compression, GzBuilder, bufread::GzDecoder};
 use sha2::{Digest, Sha256};

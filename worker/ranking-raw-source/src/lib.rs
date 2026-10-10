@@ -3,7 +3,11 @@ mod oracle;
 mod types;
 mod validate;
 
-use ranking_contracts::{canonical_json_value, gunzip, gzip, js_pretty_json_value, sha256};
+use ranking_contracts::{
+    Utf16Json, Utf16String, canonical_json_value, gunzip, gzip, js_pretty_json_value,
+    parse_canonical_utf16_json, sha256,
+};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -435,8 +439,25 @@ fn read_object(reference: &Reference, objects: &BTreeMap<String, String>) -> Res
     decode_object(reference, &compressed)
 }
 
-/// The shared semantic decoder used by recovery and bucket graph verification.
+/// The recovery decoder retains the existing typed Unicode-scalar schema.
 pub fn decode_object(reference: &Reference, compressed: &[u8]) -> Result<Value> {
+    let bytes = semantic_object_bytes(reference, compressed)?;
+    let value: Value = serde_json::from_slice(&bytes)?;
+    ensure(
+        canonical_json_value(&value).as_bytes() == bytes,
+        "Raw object is not canonical JSON",
+    )?;
+    Ok(value)
+}
+
+/// Bucket graph verification accepts all Node-valid UTF-16 JSON without changing
+/// any stored bytes or reconstructing the provider schema of child objects.
+pub fn decode_lossless_object(reference: &Reference, compressed: &[u8]) -> Result<Utf16Json> {
+    let bytes = semantic_object_bytes(reference, compressed)?;
+    Ok(parse_canonical_utf16_json(&bytes)?)
+}
+
+fn semantic_object_bytes(reference: &Reference, compressed: &[u8]) -> Result<Vec<u8>> {
     validate::reference(reference)?;
     if let Some(size) = reference.compressed_bytes {
         ensure(
@@ -449,23 +470,18 @@ pub fn decode_object(reference: &Reference, compressed: &[u8]) -> Result<Value> 
         bytes.len() as u64 == reference.bytes && sha256(&bytes) == reference.sha256,
         "Raw semantic digest mismatch",
     )?;
-    let value: Value = serde_json::from_slice(&bytes)?;
-    ensure(
-        canonical_json_value(&value).as_bytes() == bytes,
-        "Raw object is not canonical JSON",
-    )?;
-    Ok(value)
+    Ok(bytes)
 }
 
 pub struct ReceiptGraph {
-    pub receipt: Value,
+    pub receipt: String,
     pub references: Vec<Reference>,
 }
 
 /// Parses the existing receipt contract and enumerates its complete object graph.
 /// This does not replay Oracle chains or write recovered provider files.
-pub fn receipt_graph(value: Value) -> Result<ReceiptGraph> {
-    let mut receipt: Receipt = serde_json::from_value(value)?;
+pub fn receipt_graph(value: Utf16Json) -> Result<ReceiptGraph> {
+    let mut receipt = Receipt::<Utf16String, Utf16Json>::deserialize(value)?;
     validate::receipt(&mut receipt)?;
     let references = receipt
         .oracle
@@ -481,7 +497,7 @@ pub fn receipt_graph(value: Value) -> Result<ReceiptGraph> {
         .cloned()
         .collect();
     Ok(ReceiptGraph {
-        receipt: serde_json::to_value(receipt)?,
+        receipt: validate::receipt_json(&receipt),
         references,
     })
 }
@@ -609,4 +625,53 @@ fn restore(
         fs::remove_dir(&next)?;
     }
     result
+}
+
+#[cfg(test)]
+mod lossless_graph_tests {
+    use super::*;
+
+    // Node prepareRawSourceReceipt/canonicalJsonFor golden. Every unconstrained
+    // receipt string category uses unpaired UTF-16; both digests are Node's.
+    const NODE_RECEIPT: &str = concat!(
+        r#"{"artifactKind":"raw-source-generation-receipt","coverage":{"end":"2026-01-01","start":"2026-01-01"},"generationId":"utf16-golden","importerVersion":"worker-\ud800","leaguepedia":[{"contentSha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","object":{"bytes":1,"key":"raw/objects/sha256/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","storageEncoding":"gzip"},"sourceFileName":"provider-\ud800.json"}],"lolesports":[],"oracle":[{"baseline":{"bytes":1,"key":"raw/objects/sha256/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","storageEncoding":"gzip"},"deltas":[],"digestScheme":"oracle-game-inventory-v1","effectiveOracleDigest":"b6a1bf7d83836bb968437f9358d9d07647fc577ca4c907fae971b44ed74ee357","gameInventory":[{"date":"2026-01-01","digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","gameId":"game-\ud800","league":"league-\udc00","sourceOrder":0}],"headerDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sourceFileName":"oracle-\udc00.csv"}],"rawIdentityDigest":"377373f082b6b227e70daa30c35c7e9e6b2e28d1e56d70977efab0128a825eb1","schemaVersion":1,"sourceReceiptDigest":"b996f7d22bd2cc067dcb85a410d70340aaf3b447a94f32068ed7a2b73d8c6e6b","sourceReceiptInputs":{"nested":{"key\udc00":"\\ud800"},"warning":"\ud800"},"storageMode":"content-addressed-raw-gzip-v2"}"#,
+    );
+
+    #[test]
+    fn node_utf16_receipt_retains_full_authority_and_graph() {
+        let compressed = gzip(NODE_RECEIPT.as_bytes()).unwrap();
+        let reference = Reference {
+            key: format!("raw/objects/sha256/{}", sha256(NODE_RECEIPT.as_bytes())),
+            sha256: sha256(NODE_RECEIPT.as_bytes()),
+            bytes: NODE_RECEIPT.len() as u64,
+            storage_encoding: "gzip".into(),
+            compressed_bytes: Some(compressed.len() as u64),
+        };
+        let value = decode_lossless_object(&reference, &compressed).unwrap();
+        let graph = receipt_graph(value).unwrap();
+        assert_eq!(graph.receipt, NODE_RECEIPT);
+        assert_eq!(graph.references.len(), 2);
+        assert_eq!(graph.references[0], graph.references[1]);
+
+        // Lossless decoding still rejects a wrong transport size and authority.
+        let mut invalid = reference.clone();
+        invalid.compressed_bytes = Some(compressed.len() as u64 + 1);
+        assert!(decode_lossless_object(&invalid, &compressed).is_err());
+        invalid = reference;
+        invalid.bytes += 1;
+        assert!(decode_lossless_object(&invalid, &compressed).is_err());
+    }
+
+    #[test]
+    fn utf16_receipt_strings_do_not_bypass_identity_checks() {
+        for text in [
+            NODE_RECEIPT.replace(r#""warning":"\ud800""#, r#""warning":"\udc00""#),
+            NODE_RECEIPT.replace("game-\\ud800", "game-\\udc00"),
+            NODE_RECEIPT.replace("provider-\\ud800.json", "other-\\ud800.json"),
+            NODE_RECEIPT.replace("worker-\\ud800", "worker-\\udc00"),
+        ] {
+            let value = parse_canonical_utf16_json(text.as_bytes()).unwrap();
+            assert!(receipt_graph(value).is_err());
+        }
+    }
 }

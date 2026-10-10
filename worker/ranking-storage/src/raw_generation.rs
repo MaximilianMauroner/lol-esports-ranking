@@ -1,13 +1,13 @@
 use super::s3;
-use ranking_contracts::{Result, sha256};
-use ranking_raw_source::{Reference, decode_object, receipt_graph, validate_reference};
+use ranking_contracts::{Result, Utf16Json, canonical_json_value, sha256};
+use ranking_raw_source::{Reference, decode_lossless_object, receipt_graph, validate_reference};
 use reqwest::Method;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 /// Validates the raw graph that Node checks before publication readiness.
 /// The receipt determines membership; a declared publication list is insufficient.
-pub(super) fn verify(bucket: &s3::Bucket, mut reference: Reference) -> Result<Value> {
+pub(super) fn verify(bucket: &s3::Bucket, mut reference: Reference) -> Result<String> {
     let (value, receipt_proof) = read(bucket, &reference)?;
     let graph = receipt_graph(value).map_err(|_| "Raw source receipt is invalid")?;
     reference.compressed_bytes = receipt_proof["compressedBytes"].as_u64();
@@ -16,15 +16,18 @@ pub(super) fn verify(bucket: &s3::Bucket, mut reference: Reference) -> Result<Va
         let (_, proof) = read(bucket, &child)?;
         verified_objects.push(proof);
     }
-    Ok(json!({
-        "key": full_key(bucket, &reference.key),
-        "reference": reference,
-        "receipt": graph.receipt,
-        "verifiedObjects": verified_objects,
-    }))
+    // The result is a descriptor, not a hashed identity object. Embed the already
+    // validated canonical receipt directly without adding a parsing-depth limit.
+    let key = canonical_json_value(&json!(full_key(bucket, &reference.key)));
+    let reference = canonical_json_value(&json!(reference));
+    let proofs = canonical_json_value(&json!(verified_objects));
+    Ok(format!(
+        "{{\"key\":{key},\"receipt\":{},\"reference\":{reference},\"verifiedObjects\":{proofs}}}",
+        graph.receipt,
+    ))
 }
 
-fn read(bucket: &s3::Bucket, reference: &Reference) -> Result<(Value, Value)> {
+fn read(bucket: &s3::Bucket, reference: &Reference) -> Result<(Utf16Json, Value)> {
     // Validate the canonical namespace before issuing any bucket request.
     validate_reference(reference).map_err(|_| "Invalid raw object reference")?;
     let object = bucket.request(Method::GET, &reference.key, BTreeMap::new(), vec![])?;
@@ -44,7 +47,7 @@ fn read(bucket: &s3::Bucket, reference: &Reference) -> Result<(Value, Value)> {
     {
         return Err("Raw source graph object metadata mismatch".into());
     }
-    let value = decode_object(reference, &object.body)
+    let value = decode_lossless_object(reference, &object.body)
         .map_err(|_| "Raw source graph object semantic integrity mismatch")?;
     let proof = json!({
         "key": full_key(bucket, &reference.key),

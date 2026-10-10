@@ -368,6 +368,44 @@ test('native raw graph verifier matches Node before publication against MinIO', 
         await put(prepared)
       }
     })
+    await t.test('Node-valid UTF-16 receipt strings and keys retain their exact stored identities', async () => {
+      for (const warning of ['diagnostic \ud800', 'diagnostic \udc00', '\ud800\ud800\udc00\udc00', 'literal \\ud800 and 🙂']) {
+        const sourceReceiptInputs = { warnings: [warning], nested: { ['key\ud800']: warning, ['key\udc00']: ['🙂', warning] } }
+        const changed = prepareRawSourceReceipt({ ...receiptInputs, sourceReceiptInputs })
+        await put(changed.prepared)
+        const ref = rawObjectReferenceFor(changed.prepared)
+        const expected = await node(ref)
+        assert.deepEqual(await rust(ref), expected)
+        assert.deepEqual(expected.receipt.sourceReceiptInputs, sourceReceiptInputs)
+      }
+      // Uppercase Unicode escapes are valid JSON but differ from Node's canonical bytes.
+      const changed = prepareRawSourceReceipt({ ...receiptInputs, sourceReceiptInputs: { warning: '\ud800' } })
+      const noncanonical = Buffer.from(canonicalJsonFor(changed.receipt).replace('\\ud800', '\\uD800'))
+      assert.notDeepEqual(noncanonical, Buffer.from(canonicalJsonFor(changed.receipt)))
+      const digest = createHash('sha256').update(noncanonical).digest('hex')
+      await put({ ...changed.prepared, digest, bytes: noncanonical.length }, gzipSync(noncanonical))
+      await rejected({ key: `raw/objects/sha256/${digest}`, sha256: digest, bytes: noncanonical.length, storageEncoding: 'gzip' })
+    })
+    await t.test('an accepted nested receipt remains valid when embedded in the verification result', async () => {
+      let nested: { n: unknown } | string = 'leaf'
+      for (let depth = 0; depth < 125; depth += 1) nested = { n: nested }
+      const changed = prepareRawSourceReceipt({ ...receiptInputs, sourceReceiptInputs: { nested } })
+      await put(changed.prepared)
+      const ref = rawObjectReferenceFor(changed.prepared)
+      assert.deepEqual(await rust(ref), await node(ref))
+    })
+    await t.test('Node-valid UTF-16 raw child strings are checked without rewriting content', async () => {
+      const child = prepareNarrowSourceObject({ provider: 'leaguepedia', sourceFileName: 'provider-\ud800.json',
+        content: 'provider \ud800 and \udc00', importerVersion })
+      await put(child.prepared)
+      const changed = prepareRawSourceReceipt({ ...receiptInputs,
+        leaguepedia: [{ sourceFileName: child.value.sourceFileName, contentSha256: child.value.contentSha256, object: child.reference }] })
+      await put(changed.prepared)
+      const ref = rawObjectReferenceFor(changed.prepared)
+      assert.deepEqual(await rust(ref), await node(ref))
+      const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/${child.reference.key}` }))
+      assert.deepEqual(Buffer.from(await stored.Body!.transformToByteArray()), child.prepared.compressed)
+    })
     await t.test('missing members fail even when the receipt object remains intact', async () => {
       for (const prepared of objects.slice(0, -1)) {
         await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/raw/objects/sha256/${prepared.digest}` }))
@@ -400,6 +438,13 @@ test('native raw graph verifier matches Node before publication against MinIO', 
       await rejected(rawObjectReferenceFor(changed.prepared))
       for (const patch of [{ rawIdentityDigest: '0'.repeat(64) }, { sourceReceiptDigest: '0'.repeat(64) }, { unexpected: true }]) {
         const invalid = prepareRawObject({ ...receipt.receipt, ...patch })
+        await put(invalid)
+        await rejected(rawObjectReferenceFor(invalid))
+      }
+    })
+    await t.test('receipt records reject array replacements despite valid object hashes', async () => {
+      for (const coverage of [['2026-01-01', '2026-01-02'], ['2026-01-01', '2026-01-02', true]]) {
+        const invalid = prepareRawObject({ ...receipt.receipt, coverage })
         await put(invalid)
         await rejected(rawObjectReferenceFor(invalid))
       }

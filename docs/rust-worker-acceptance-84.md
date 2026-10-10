@@ -66,8 +66,11 @@ Compare its complete result and scalar transport proofs with Node's current
 pre-promotion raw authority check. Include baselines, deltas, both narrow
 providers, alternative gzip bytes, optional legacy lengths, missing members,
 metadata/semantic corruption, noncanonical JSON and contradictory receipt
-identity. Failures must leave no success descriptor, repaired object or changed
-active pointer. Compiled current-source execution is required; implemented
+identity. Include Node-valid unpaired UTF-16 strings and keys in receipt inputs
+and child content, exact code-unit key ordering and canonical escape spelling.
+Existing prepare/restore parity must remain intact; its earlier scalar-string
+limitation is a separate acceptance boundary. Failures must leave no success
+descriptor, repaired object or changed active pointer. Compiled current-source execution is required; implemented
 tests and conditional skips do not establish acceptance. This raw membership
 layer does not replay mutation chains or complete public/state graph validation,
 readiness/audit writes or promotion.

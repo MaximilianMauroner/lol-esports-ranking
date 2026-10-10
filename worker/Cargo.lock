@@ -868,6 +868,7 @@ dependencies = [
  "chrono",
  "flate2",
  "ryu-js",
+ "serde",
  "serde_json",
  "sha2",
 ]

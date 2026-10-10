@@ -75,7 +75,10 @@ pub fn run(input_path: &str, output_path: &str) -> Result<()> {
     let bucket = s3::Bucket::from_env()?;
     let result = match input {
         Input::VerifyPublication => publication::verify(&bucket)?,
-        Input::VerifyRawGeneration { reference } => raw_generation::verify(&bucket, reference)?,
+        Input::VerifyRawGeneration { reference } => {
+            return fs::write(output_path, raw_generation::verify(&bucket, reference)?)
+                .map_err(|error| error.to_string());
+        }
         Input::SyncObject {
             namespace,
             compressed_path,

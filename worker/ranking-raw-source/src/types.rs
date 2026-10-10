@@ -45,11 +45,11 @@ pub struct Coverage {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct InventoryGame {
-    pub game_id: String,
+pub struct InventoryGame<S = String> {
+    pub game_id: S,
     pub digest: String,
     pub date: String,
-    pub league: String,
+    pub league: S,
     pub source_order: u64,
 }
 
@@ -79,39 +79,39 @@ impl Game {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct OracleReceipt {
-    pub source_file_name: String,
+pub struct OracleReceipt<S = String> {
+    pub source_file_name: S,
     pub header_digest: String,
     pub digest_scheme: String,
     pub effective_oracle_digest: String,
-    pub game_inventory: Vec<InventoryGame>,
+    pub game_inventory: Vec<InventoryGame<S>>,
     pub baseline: Reference,
     pub deltas: Vec<Reference>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct NarrowReceipt {
-    pub source_file_name: String,
+pub struct NarrowReceipt<S = String> {
+    pub source_file_name: S,
     pub content_sha256: String,
     pub object: Reference,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Receipt {
+pub struct Receipt<S = String, V = Value> {
     pub artifact_kind: String,
     pub schema_version: u32,
     pub storage_mode: String,
     pub generation_id: String,
-    pub importer_version: String,
+    pub importer_version: S,
     pub coverage: Coverage,
     pub raw_identity_digest: String,
-    pub source_receipt_inputs: Value,
+    pub source_receipt_inputs: V,
     pub source_receipt_digest: String,
-    pub oracle: Vec<OracleReceipt>,
-    pub leaguepedia: Vec<NarrowReceipt>,
-    pub lolesports: Vec<NarrowReceipt>,
+    pub oracle: Vec<OracleReceipt<S>>,
+    pub leaguepedia: Vec<NarrowReceipt<S>>,
+    pub lolesports: Vec<NarrowReceipt<S>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

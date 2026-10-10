@@ -200,6 +200,14 @@ promote a pointer. The Node parent still owns those calls. Compiled MinIO and
 affected raw prepare/restore checks must pass before this layer's acceptance is
 claimed. No provider request or production write is part of verification.
 
+Raw graph verification preserves escaped unpaired UTF-16 surrogates in stored
+JSON strings and keys, including nested source-receipt inputs and child content.
+The shared lossless codec sorts keys by UTF-16 units and checks exact Node
+canonical bytes. It does not replace characters or rewrite stored objects.
+This is a permanent stored-input contract. The older prepare/restore path still
+uses Unicode scalar strings; this graph action does not certify that path for
+inputs containing unpaired surrogates.
+
 Optional stored `compressedBytes` fields stay readable under the existing raw
 storage removal condition. Semantic references and this graph integrity path
 remain required while raw receipt authorities are stored.
