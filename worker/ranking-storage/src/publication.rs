@@ -505,7 +505,7 @@ fn receipt_iso(value: &str) -> bool {
         return false;
     }
     let instant = (year, month, day, hour, minute, second, millisecond);
-    instant >= (-271_821, 4, 20, 0, 0, 0, 0) && instant <= (275_760, 9, 13, 0, 0, 0, 0)
+    ((-271_821, 4, 20, 0, 0, 0, 0)..=(275_760, 9, 13, 0, 0, 0, 0)).contains(&instant)
 }
 
 fn decimal_digits(bytes: &[u8]) -> Option<i64> {
