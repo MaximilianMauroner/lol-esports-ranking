@@ -1,6 +1,6 @@
 use crate::{Result, digest, ensure, types::*, validate};
 use ranking_contracts::compare_code_units;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 pub struct Source {
@@ -16,10 +16,36 @@ impl Source {
     pub fn inventory(&self) -> Vec<InventoryGame> {
         self.games.iter().map(Game::inventory).collect()
     }
-    pub fn baseline(&self) -> serde_json::Value {
-        json!({"artifactKind":BASELINE_KIND,"schemaVersion":1,"importerVersion":self.importer,
+    pub fn into_baseline(self) -> Value {
+        let mut baseline = json!({"artifactKind":BASELINE_KIND,"schemaVersion":1,"importerVersion":self.importer,
             "sourceFileName":self.name,"header":self.header,"headerDigest":self.header_digest,
-            "oracleDigest":self.digest,"games":self.games})
+            "oracleDigest":self.digest});
+        // Serializing borrowed games would clone every CSV cell. Move the row
+        // tree instead, so canonical encoding retains only one full baseline.
+        let games = self
+            .games
+            .into_iter()
+            .map(|game| {
+                let rows = Value::Array(
+                    game.rows
+                        .into_iter()
+                        .map(|row| Value::Array(row.into_iter().map(Value::String).collect()))
+                        .collect(),
+                );
+                let mut value = json!({"gameId":game.game_id,"date":game.date,
+                "league":game.league,"sourceOrder":game.source_order,"digest":game.digest});
+                value
+                    .as_object_mut()
+                    .expect("game object")
+                    .insert("rows".into(), rows);
+                value
+            })
+            .collect();
+        baseline
+            .as_object_mut()
+            .expect("baseline object")
+            .insert("games".into(), Value::Array(games));
+        baseline
     }
 }
 

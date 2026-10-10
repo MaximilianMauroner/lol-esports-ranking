@@ -53,5 +53,11 @@ manifest keeps its ordering, compatibility, semantic identity and stored layout;
 full graph verification still precedes promotion. This is a permanent memory
 requirement, not a compatibility mode. The eager preparation API remains used
 by existing plan/fixture callers. No stored data is rewritten or new schema is
-introduced. Full-corpus recovery and the current compute cause require another
-admitted capture; this observation cannot fill missing historical attribution.
+introduced. Current captures, bounded profiles and check outcomes belong in
+ignored `.agents/artifacts/refresh-live-20261009/` and the linked issue/PR updates.
+A baseline setup completion, incremental worker exit or partial verifier result
+cannot substitute for the complete three-repeat gate. Record log byte caps and
+timeouts explicitly; do not fabricate a terminal receipt after cancellation.
+Publication-member hashing/decompression/buffer work is visible in the bounded
+first-worker sample. A hotspot does not establish the historical production or
+CI failure cause without controlled supporting evidence.

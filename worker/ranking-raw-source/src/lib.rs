@@ -225,15 +225,23 @@ fn prepare(
                 .ok_or("Invalid Oracle filename")?;
             let bytes = std::fs::read(&path)?;
             let text = String::from_utf8_lossy(&bytes);
+            let hash = sha256(text.as_bytes());
             let source = oracle::parse_csv(&text, name, importer)?;
+            drop(text);
+            drop(bytes);
+            let header_digest = source.header_digest.clone();
+            let effective_oracle_digest = source.digest.clone();
+            let game_inventory = source.inventory();
             let prior = previous
                 .as_ref()
                 .and_then(|r| r.oracle.iter().find(|r| r.source_file_name == name));
             let (baseline, deltas) = if let Some(prior) = prior {
                 let chain = oracle::mutation_chain(prior, &source)?;
                 if prior.deltas.len() + chain.len() > 32 {
-                    (store.store(&source.baseline())?, Vec::new())
+                    drop(chain);
+                    (store.store(&source.into_baseline())?, Vec::new())
                 } else {
+                    drop(source);
                     let mut references = prior.deltas.clone();
                     for delta in chain {
                         references.push(store.store(&serde_json::to_value(delta)?)?);
@@ -241,14 +249,14 @@ fn prepare(
                     (prior.baseline.clone(), references)
                 }
             } else {
-                (store.store(&source.baseline())?, Vec::new())
+                (store.store(&source.into_baseline())?, Vec::new())
             };
             oracle.push(OracleReceipt {
                 source_file_name: name.into(),
-                header_digest: source.header_digest.clone(),
+                header_digest,
                 digest_scheme: INVENTORY_SCHEME.into(),
-                effective_oracle_digest: source.digest.clone(),
-                game_inventory: source.inventory(),
+                effective_oracle_digest,
+                game_inventory,
                 baseline,
                 deltas,
             });
@@ -256,7 +264,7 @@ fn prepare(
                 provider: "oracle",
                 name: name.into(),
                 path: path.clone(),
-                hash: sha256(text.as_bytes()),
+                hash,
             });
         }
         let mut narrow_groups = Vec::new();
