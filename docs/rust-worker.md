@@ -131,7 +131,7 @@ seam is ready. It is not enabled in production by this PR.
 and state object writes and the existing active-pointer lease protocol.
 Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease`,
 `release-lease`, `verify-publication`, `verify-raw-generation` and
-`verify-state-generation`. The process uses the existing bucket environment names and
+`verify-state-generation` and `verify-public-artifact`. The process uses the existing bucket environment names and
 SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
 and credentials/transport URLs do not appear in failure diagnostics.
 
@@ -253,6 +253,32 @@ unpaired UTF-16 strings, dates/order/schema errors, legacy gzip sizes, opaque
 member contents, fresh missing/mutated members and complete gzip CRC checks.
 They compare the unchanged active pointer and bucket inventory. These are
 synthetic storage acceptance, not real-input memory or ranking-model parity.
+
+`verify-public-artifact` accepts scalar `sha256` and `bytes` for an existing
+public object. It returns hydrated `content` and ordered transport
+`verifiedObjects`. Each root and archive child gets a fresh prefix-bound GET
+with gzip metadata, transport length and semantic size/SHA validation. The
+shared decoder uses a fixed 64 KiB buffer and checks header CRC, payload CRC,
+ISIZE, concatenation and Node's zero-padding end marker. Hydration still needs
+memory for the requested content; bounded inflation is not a full-view memory
+acceptance claim.
+
+The reader follows archive format version 1 with the existing 512,000-byte
+child budget and depth 24. It checks record uniqueness, reference ranges,
+counts, list/map child types and original kind. It reads all parts, without
+year or record projection. Public JSON decoding keeps whitespace, duplicate
+keys and unpaired UTF-16 strings; raw/state canonical parsing stays strict.
+The current public decoder retains a 128-level JSON bound and finite number
+parsing. Node's broader JSON.parse acceptance is a remaining native input gate,
+so this layer must not be selected by the parent until that boundary and
+compiled differential acceptance are complete.
+
+This action writes only its local success descriptor. It grants no generation
+authority, readiness or promotion permission. Full public manifest/directory
+validation, agreement with raw/state authorities, readiness/audit writes and
+final lease/ETag CAS remain M4 work. Archive format compatibility is permanent
+while stored public archive nodes are referenced. No rewrite or new reader for
+existing objects is required.
 
 The real raw-source verifier now records source coverage, filenames, SHA-256 and
 byte counts along with both workers' prepare/restore memory and duration. It

@@ -302,9 +302,20 @@ fn read_member(bucket: &s3::Bucket, reference: &Reference) -> Result<Value> {
 }
 
 fn semantic_identity(compressed: &[u8], limit: u64) -> Result<(u64, String)> {
+    let mut digest = Sha256::new();
+    let bytes = decode_gzip(compressed, limit, |chunk| digest.update(chunk))?;
+    Ok((bytes, format!("{:x}", digest.finalize())))
+}
+
+/// Validated transport decoding shared with public archive reads. The consumer
+/// chooses whether semantic bytes need a tree or only an integrity digest.
+pub(super) fn decode_gzip(
+    compressed: &[u8],
+    limit: u64,
+    mut consume: impl FnMut(&[u8]),
+) -> Result<u64> {
     let mut remaining = compressed;
     let mut bytes = 0;
-    let mut digest = Sha256::new();
     let mut buffer = [0; 65_536];
     loop {
         let mut member = DeflateDecoder::new(gzip_payload(remaining)?);
@@ -320,7 +331,7 @@ fn semantic_identity(compressed: &[u8], limit: u64) -> Result<(u64, String)> {
             if bytes > limit {
                 return Err("State member semantic size mismatch".into());
             }
-            digest.update(&buffer[..size]);
+            consume(&buffer[..size]);
             crc.update(&buffer[..size]);
         }
         // Gzip ISIZE is the decoded size modulo 2^32 for this member.
@@ -340,7 +351,7 @@ fn semantic_identity(compressed: &[u8], limit: u64) -> Result<(u64, String)> {
             break;
         }
     }
-    Ok((bytes, format!("{:x}", digest.finalize())))
+    Ok(bytes)
 }
 
 fn gzip_payload(compressed: &[u8]) -> Result<&[u8]> {
