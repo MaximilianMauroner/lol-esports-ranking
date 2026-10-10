@@ -156,6 +156,11 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     await page.reload()
     await page.getByText('Worlds 2022 · Group A · Observed results', { exact: true }).waitFor()
     assert.match(await page.locator('body').innerText(), /Current ratings are not used/)
+    controls.historicalConflict = true
+    await page.reload()
+    await page.getByText(/Historical group replay.*schedule/).waitFor()
+    assert.equal(await page.getByText('Worlds 2022 · Group A · Observed results', { exact: true }).count(), 0)
+    controls.historicalConflict = false
     controls.stage = 'historical-tie'
     await page.reload()
     await page.getByText(/Historical group replay unavailable: A tie crosses/).waitFor()

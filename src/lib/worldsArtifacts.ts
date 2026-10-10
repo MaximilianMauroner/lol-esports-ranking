@@ -1,4 +1,4 @@
-import { normalizeStatus, type TournamentEvent } from './tournamentFeed'
+import { normalizeStatus, type TournamentEvent, type TournamentSeries } from './tournamentFeed'
 import type { Worlds2026EventInput } from './worldsSimulation'
 import type { Worlds2026PlayInInput, PlayInEntrant } from './worlds2026PlayIn'
 import type { Worlds2026KnockoutInput } from './worlds2026Knockout'
@@ -9,6 +9,7 @@ import type { replayWorlds2022Group } from './worlds2022ObservedGroups'
 
 export type HistoricalWorldsInput = {
   format: 'worlds-2022-group'; eventId: string; stateVersion: string; asOf: string
+  /** Each regular Bo1 game's ID reuses its canonical schedule series ID. */
   group: Parameters<typeof replayWorlds2022Group>[0]
 }
 export type WorldsJourneyInput = Worlds2026EventInput | HistoricalWorldsInput
@@ -41,6 +42,7 @@ export async function loadWorldsArtifact(event: TournamentEvent, fixtureFeed: bo
   const season = body.state.format === 'worlds-2026' ? '2026' : '2022'
   if (event.season !== season || !context.asOf.startsWith(season)) throw new Error('Worlds rules, event season and as-of year disagree.')
   if (body.state.format === 'worlds-2026') validateScheduleResults(event, body.state)
+  else validateHistoricalScheduleResults(event, body.state)
   return body
 }
 
@@ -48,15 +50,7 @@ export async function loadWorldsArtifact(event: TournamentEvent, fixtureFeed: bo
 function validateScheduleResults(event: TournamentEvent, state: Worlds2026EventInput) {
   const results = [...state.playIn.results, ...(state.swiss?.rounds.flatMap((round) => round.results) ?? []), ...(state.knockout?.results ?? [])]
   for (const series of event.series) {
-    if (series.status === 'cancelled' || normalizeStatus(series.sourceState) === 'cancelled') {
-      throw new Error('Worlds advancement is unavailable because cancelled-series replacement, withdrawal and forfeit semantics are unsupported. The schedule remains available.')
-    }
-    if (series.status === 'unknown' && /^(?:complete|completed)$/i.test(series.sourceState)) {
-      throw new Error('Worlds advancement is unavailable while a terminal source series lacks a confirmed result. The schedule remains available.')
-    }
-    if (series.status === 'live' || (series.status !== 'completed' && series.teams.some((team) => (team.gameWins ?? 0) > 0 || team.outcome))) {
-      throw new Error('Worlds advancement is unavailable while a series has live or unresolved played-game evidence. Live game conditioning is not supported; the schedule remains available.')
-    }
+    validateScheduleState(series, 'Worlds advancement')
     const observed = results.find((result) => result.matchId === series.id)
     if (observed && series.status !== 'completed') {
       throw new Error(`Worlds state reports result ${series.id} before the schedule confirms its completion. The schedule remains available.`)
@@ -76,6 +70,50 @@ function validateScheduleResults(event: TournamentEvent, state: Worlds2026EventI
         throw new Error(`Worlds state contradicts the confirmed schedule score, winner or format for ${series.id}.`)
       }
     }
+  }
+}
+
+function validateHistoricalScheduleResults(event: TournamentEvent, state: HistoricalWorldsInput) {
+  const entrantIds = new Set(state.group.entrants.map((team) => team.id))
+  for (const series of event.series) {
+    const game = state.group.games.find((game) => game.id === series.id)
+    const groupPair = series.teams.length === 2 && series.teams.every((team) => team.id && entrantIds.has(team.id))
+    // Exact IDs take priority over scope filtering. Known other formats are outside this group replay.
+    if (!game && (!groupPair || (series.bestOf !== null && Number.isInteger(series.bestOf) && series.bestOf > 1))) continue
+    validateScheduleState(series, 'Historical group replay')
+    if (series.bestOf !== 1) throw new Error(`Historical group replay cannot reconcile schedule series ${series.id} without a known Bo1 format.`)
+    if (series.status !== 'completed') throw new Error(`Historical group replay requires confirmed completion of schedule series ${series.id}.`)
+    if (!game) throw new Error(`Historical group replay must retain schedule result ${series.id} by its canonical series ID.`)
+    if (series.teams.length !== 2 || new Set(series.teams.map((team) => team.id)).size !== 2
+      || series.teams.some((team) => !team.id || ![game.teamAId, game.teamBId].includes(team.id))) {
+      throw new Error(`Historical group replay contradicts the schedule participants for ${series.id}.`)
+    }
+    const [home, away] = series.teams
+    const confirmedScore = home.gameWins === 1 && away.gameWins === 0 || home.gameWins === 0 && away.gameWins === 1
+    const outcomes = series.teams.map((team) => team.outcome?.toLowerCase())
+    const confirmedOutcomes = outcomes.includes('win') && outcomes.includes('loss')
+    if (!confirmedScore && !confirmedOutcomes) {
+      throw new Error(`Historical group replay requires a confirmed schedule winner for ${series.id}.`)
+    }
+    for (const team of series.teams) {
+      const won = team.id === game.winnerId
+      const outcome = team.outcome?.toLowerCase()
+      if ((team.gameWins !== null && team.gameWins !== (won ? 1 : 0)) || (outcome === 'win' && !won) || (outcome === 'loss' && won)) {
+        throw new Error(`Historical group replay contradicts the schedule score or winner for ${series.id}.`)
+      }
+    }
+  }
+}
+
+function validateScheduleState(series: TournamentSeries, label: string) {
+  if (series.status === 'cancelled' || normalizeStatus(series.sourceState) === 'cancelled') {
+    throw new Error(`${label} is unavailable because cancelled-series replacement, withdrawal and forfeit semantics are unsupported. The schedule remains available.`)
+  }
+  if (series.status === 'unknown' && /^(?:complete|completed)$/i.test(series.sourceState)) {
+    throw new Error(`${label} is unavailable while a terminal source series lacks a confirmed result. The schedule remains available.`)
+  }
+  if (series.status === 'live' || (series.status !== 'completed' && series.teams.some((team) => (team.gameWins ?? 0) > 0 || team.outcome))) {
+    throw new Error(`${label} is unavailable while a series has live or unresolved played-game evidence. Live game conditioning is not supported; the schedule remains available.`)
   }
 }
 

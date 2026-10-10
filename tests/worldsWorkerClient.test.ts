@@ -2,10 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { startWorldsWorker } from '../src/lib/worldsWorkerClient'
 import type { WorldsWorkerMessage } from '../src/lib/worldsSimulationWorker'
-import { worldsBasis, worldsFixture } from './fixtures/worldsFixtures'
-import { isWorldsArtifact, loadWorldsArtifact, worldsFeedEventKey } from '../src/lib/worldsArtifacts'
+import { historicalWorldsFixture, worldsBasis, worldsFixture } from './fixtures/worldsFixtures'
+import { isWorldsArtifact, loadWorldsArtifact, worldsFeedEventKey, type HistoricalWorldsInput, type WorldsArtifact } from '../src/lib/worldsArtifacts'
 import { worldsArtifact, worldsEvent } from './fixtures/worldsFixtures'
-import { groupTournamentSeries, normalizeStatus, normalizeTournamentFeed } from '../src/lib/tournamentFeed'
+import { groupTournamentSeries, normalizeStatus, normalizeTournamentFeed, type TournamentEvent, type TournamentSeries } from '../src/lib/tournamentFeed'
+
+function historicalEvent(state: HistoricalWorldsInput): TournamentEvent {
+  const game = state.group.games[0]
+  return { ...worldsEvent(), id: state.eventId, season: '2022', label: 'Synthetic Worlds 2022 group',
+    series: [{ id: game.id, eventId: state.eventId, startTime: null, stage: 'Group A', status: 'completed', sourceState: 'completed', bestOf: 1, vodUrls: [],
+      teams: [game.teamAId, game.teamBId].map((id) => ({ id, name: id, code: null, gameWins: id === game.winnerId ? 1 : 0, outcome: id === game.winnerId ? 'win' : 'loss' })) }] }
+}
 
 test('cancel invalidates saved old handlers before terminating the owned worker', () => {
   const received: WorldsWorkerMessage[] = []
@@ -170,5 +177,77 @@ test('a coherent companion cannot complete a scheduled match that the feed still
     // Earlier results may legitimately fall outside the bounded schedule window.
     event.series = []
     await loadWorldsArtifact(event, true, new AbortController().signal)
+  } finally { globalThis.fetch = fetchBefore }
+})
+
+test('historical canonical game IDs reconcile schedule participants, orientation, completion, format and winner evidence', async () => {
+  const state = historicalWorldsFixture()
+  const event = historicalEvent(state)
+  const original = structuredClone(event.series[0])
+  const fetchBefore = globalThis.fetch
+  globalThis.fetch = async () => {
+    const artifact: WorldsArtifact = { version: 1, eventId: event.id, feedEventKey: worldsFeedEventKey(event), dataMode: 'synthetic-fixture', state }
+    return new Response(JSON.stringify(artifact), { status: 200 })
+  }
+  try {
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    event.series[0].teams.reverse()
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    event.series = [structuredClone(original)]
+    event.series[0].teams.forEach((team) => { team.outcome = null })
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    event.series = [structuredClone(original)]
+    event.series[0].teams.forEach((team) => { team.gameWins = null })
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    const conflicts: Array<(series: TournamentSeries) => void> = [
+      (series) => { series.teams[0].gameWins = 0; series.teams[1].gameWins = 1; series.teams[0].outcome = 'loss'; series.teams[1].outcome = 'win' },
+      (series) => { series.teams[0].outcome = 'loss' },
+      (series) => { series.teams[1].id = 'past-gamma' },
+      (series) => { series.teams[0].id = 'other-group'; series.bestOf = 5 },
+      (series) => { series.bestOf = 5 },
+      (series) => { series.bestOf = null },
+      (series) => { for (const team of series.teams) { team.gameWins = null; team.outcome = null } },
+      (series) => { series.teams[1].gameWins = null; for (const team of series.teams) team.outcome = null },
+      (series) => { series.teams[1].outcome = null; for (const team of series.teams) team.gameWins = null },
+    ]
+    for (const change of conflicts) {
+      event.series = [structuredClone(original)]
+      change(event.series[0])
+      await assert.rejects(loadWorldsArtifact(event, true, new AbortController().signal), /Historical group replay.*schedule/)
+    }
+    for (const sourceState of ['unstarted', 'postponed', 'completed', 'inProgress', 'cancelled']) {
+      event.series = [structuredClone(original)]
+      const series = event.series[0]
+      series.sourceState = sourceState; series.status = sourceState === 'completed' ? 'unknown' : normalizeStatus(sourceState)
+      for (const team of series.teams) { team.gameWins = null; team.outcome = null }
+      await assert.rejects(loadWorldsArtifact(event, true, new AbortController().signal), /Historical group replay.*schedule/)
+    }
+  } finally { globalThis.fetch = fetchBefore }
+})
+
+test('historical reconciliation preserves bounded windows and unrelated stages but never maps the two group legs by pair', async () => {
+  const state = historicalWorldsFixture()
+  const event = historicalEvent(state)
+  const original = structuredClone(event.series[0])
+  const fetchBefore = globalThis.fetch
+  globalThis.fetch = async () => {
+    const artifact: WorldsArtifact = { version: 1, eventId: event.id, feedEventKey: worldsFeedEventKey(event), dataMode: 'synthetic-fixture', state }
+    return new Response(JSON.stringify(artifact), { status: 200 })
+  }
+  try {
+    event.series[0].id = 'unlinked-third-leg'
+    await assert.rejects(loadWorldsArtifact(event, true, new AbortController().signal), /must retain schedule result.*canonical series ID/)
+    event.series[0].bestOf = null
+    await assert.rejects(loadWorldsArtifact(event, true, new AbortController().signal), /schedule series.*known Bo1 format/)
+    event.series[0].bestOf = 0
+    await assert.rejects(loadWorldsArtifact(event, true, new AbortController().signal), /schedule series.*known Bo1 format/)
+    event.series[0].bestOf = 5; event.series[0].stage = 'Knockout'
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    event.series[0] = { ...structuredClone(original), id: 'other-group-game', status: 'live', sourceState: 'inProgress' }
+    event.series[0].teams.forEach((team, index) => { team.id = `other-group-${index}` })
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    event.series = []
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    assert.equal(state.group.games.length, 12, 'Observations outside the bounded schedule window remain retained.')
   } finally { globalThis.fetch = fetchBefore }
 })

@@ -73,6 +73,19 @@ cancellation; the schedule and existing match cards remain available.
 There is no companion producer, collector, bucket write or source activation
 in this change; the source owner must provide a reviewed coherent companion.
 
+Historical group companions also reconcile their observations with the schedule.
+Each 2022 group game `id` reuses the canonical Bo1 schedule `series.id`. Shared
+IDs must agree on participants, confirmed completion, format, scores and winner,
+even when the schedule row would otherwise look unrelated to the selected group.
+An in-window Bo1 row between two selected group entrants requires its exact
+retained game ID. Unknown formats between those entrants leave replay unavailable
+because their group/stage routing is uncertain. Unmatched known multi-game stages
+and other groups remain outside this one-group replay. Earlier observations
+outside the bounded feed window remain valid. No leg is inferred from a team
+pair: the double round robin contains two games for each pair. The companion's
+source owner must retain canonical IDs; conflicting or absent links keep the
+schedule available with a precise replay-unavailable reason.
+
 Synthetic companions cannot attach to a source schedule, and synthetic evidence
 cannot claim `source-observation` mode. The fifteen direct entrants require a
 nonempty `directEntrantEvidence` provenance reference even before Swiss begins. Tags remain caller assertions, not source
@@ -250,6 +263,15 @@ data and explicit synthetic labels. It tests contract assertions rather than
 official source acceptance. The repair's runtime and required-check status is
 tracked on PR #97 and issue #47. Earlier local checks above remain evidence for
 unchanged code, not for the new browser paths.
+
+A later review reproduced conflicting historical participants and winners because
+the historical loader skipped schedule reconciliation. The historical contract
+now checks canonical Bo1 IDs and confirmed outcomes within the selected group's
+scope. Focused tests cover reversed orientation, missing IDs, conflicting or
+unconfirmed results, unknown formats and bounded-window/unrelated-stage handling.
+The browser fixture now serves twelve matching historical schedule rows and checks
+that a contradictory schedule winner removes the observed replay. These are
+synthetic source-coherence cases; current-head runtime status remains on the PR.
 
 Local redacted evidence is retained in the Git-excluded
 `.agents/artifacts/worlds-simulation-20261009/` directory. The two unrelated

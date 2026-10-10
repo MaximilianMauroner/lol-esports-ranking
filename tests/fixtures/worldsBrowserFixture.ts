@@ -4,10 +4,11 @@ import { createStaticRankingData } from '../../src/lib/snapshot'
 import { createPublicArtifactWritePlan } from '../../src/lib/publicArtifacts/writePlan'
 import { emptyForecastLedger, type ForecastBasis } from '../../src/lib/tournamentForecast'
 import type { MatchRecord, TeamProfile } from '../../src/types'
+import type { TournamentEvent } from '../../src/lib/tournamentFeed'
 import { worldsFixture, worldsEvent, worldsFeed, worldsArtifact, historicalWorldsFixture } from './worldsFixtures'
 import { worldsFeedEventKey, type WorldsArtifact } from '../../src/lib/worldsArtifacts'
 
-export type WorldsFixtureControls = { stage: 'play-in' | 'swiss-5' | 'knockout' | 'completed' | 'historical' | 'historical-tie'; corrupt: boolean; missingModel: boolean; live: boolean; revision: number; companionDelayMs: number; holdWorker: boolean; fictionalSourceAssertions: boolean }
+export type WorldsFixtureControls = { stage: 'play-in' | 'swiss-5' | 'knockout' | 'completed' | 'historical' | 'historical-tie'; corrupt: boolean; missingModel: boolean; live: boolean; revision: number; companionDelayMs: number; holdWorker: boolean; fictionalSourceAssertions: boolean; historicalConflict: boolean }
 
 /** Entirely local artifacts. No public/data replacement, external request or producer activation. */
 export async function createWorldsFixtureServer(port = 0) {
@@ -28,7 +29,7 @@ export async function createWorldsFixtureServer(port = 0) {
       if (!row) throw new Error(`Missing fixture rating ${id}`)
       return { sourceTeamId: id, teamId: row.teamId }
     }) }
-  const controls: WorldsFixtureControls = { stage: 'swiss-5', corrupt: false, missingModel: false, live: false, revision: 0, companionDelayMs: 0, holdWorker: false, fictionalSourceAssertions: false }
+  const controls: WorldsFixtureControls = { stage: 'swiss-5', corrupt: false, missingModel: false, live: false, revision: 0, companionDelayMs: 0, holdWorker: false, fictionalSourceAssertions: false, historicalConflict: false }
   type Progress = { completed: number; total: number }
   const heldWorkers = new Map<ServerResponse, Progress>()
   const gateWaiters = new Set<(progress: Progress) => void>()
@@ -54,7 +55,15 @@ export async function createWorldsFixtureServer(port = 0) {
     if (controls.stage === 'historical' || controls.stage === 'historical-tie') {
       const state = historicalWorldsFixture()
       if (controls.stage === 'historical-tie') state.group.games.find((game) => game.id === 'past-1-2-1')!.winnerId = 'past-gamma'
-      const event = { ...worldsEvent(), id: state.eventId, season: '2022', label: 'Worlds 2022 · synthetic observed group', series: [] }
+      const event: TournamentEvent = { ...worldsEvent(), id: state.eventId, season: '2022', label: 'Worlds 2022 · synthetic observed group',
+        series: state.group.games.map((game) => ({ id: game.id, eventId: state.eventId, startTime: null, stage: `Group ${state.group.groupId}`,
+          status: 'completed', sourceState: 'completed', bestOf: 1, vodUrls: [],
+          teams: [game.teamAId, game.teamBId].map((id) => ({ id, name: `Fixture ${id}`, code: id,
+            gameWins: id === game.winnerId ? 1 : 0, outcome: id === game.winnerId ? 'win' : 'loss' })) })) }
+      if (controls.historicalConflict) for (const team of event.series[0].teams) {
+        team.gameWins = team.gameWins === 1 ? 0 : 1
+        team.outcome = team.outcome === 'win' ? 'loss' : 'win'
+      }
       const artifact: WorldsArtifact = { version: 1, eventId: event.id, feedEventKey: worldsFeedEventKey(event), dataMode: 'synthetic-fixture', state }
       return { event, artifact }
     }
