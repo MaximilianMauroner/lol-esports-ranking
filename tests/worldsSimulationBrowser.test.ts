@@ -30,6 +30,38 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
       await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).focus()
       assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).evaluate((element) => element === document.activeElement), true)
     }
+    // An unchanged feed key retains the panel. A rejected companion must invalidate its old baseline.
+    const feedBeforeFailure = await (await page.request.get(`${base}/tournament-data/feed.json`)).json()
+    controls.corrupt = true
+    const feedAfterFailure = await (await page.request.get(`${base}/tournament-data/feed.json`)).json()
+    assert.deepEqual(feedAfterFailure.events, feedBeforeFailure.events)
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await page.getByText(/Worlds state does not match this schedule revision/).waitFor()
+    assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).count(), 0)
+    assert.equal(await page.getByRole('button', { name: 'Run simulation', exact: true }).count(), 0)
+    await page.waitForTimeout(1000)
+    await page.getByText(/Worlds state does not match this schedule revision/).waitFor()
+    controls.corrupt = false
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await page.getByText('Computation complete.', { exact: true }).waitFor()
+    assert.equal(await page.locator('table').first().locator('tbody tr').count(), 19)
+
+    // A same-key reload must stop an active worker before the companion request can time out.
+    await page.reload()
+    await page.getByText(/^Sampling ·/).waitFor()
+    controls.companionDelayMs = 11_000
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await page.getByText('Loading reviewed Worlds state.', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).count(), 0)
+    assert.equal(await page.getByRole('button', { name: 'Cancel simulation', exact: true }).count(), 0)
+    await page.getByText(/Worlds state request timed out/).waitFor({ timeout: 15_000 })
+    await page.waitForTimeout(1500)
+    await page.getByText(/Worlds state request timed out/).waitFor()
+    assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).count(), 0)
+    assert.equal(await page.getByRole('button', { name: 'Run simulation', exact: true }).count(), 0)
+    controls.companionDelayMs = 0
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await page.getByText('Computation complete.', { exact: true }).waitFor()
     // A fresh page has no baseline cache. Main-thread marks continue while its worker runs.
     await page.reload()
     await page.getByRole('button', { name: 'Cancel simulation', exact: true }).waitFor()

@@ -119,6 +119,7 @@ function isKnockout(value: unknown): value is Worlds2026KnockoutInput {
 }
 function isWorlds2026Input(value: unknown): value is Worlds2026EventInput {
   return record(value) && value.format === 'worlds-2026' && Array.isArray(value.directEntrants) && value.directEntrants.every(swissEntrant)
+    && evidence(value.directEntrantEvidence) && Boolean(value.directEntrantEvidence.reference.trim())
     && isPlayIn(value.playIn) && (value.swiss === null || isSwiss(value.swiss)) && (value.knockout === null || isKnockout(value.knockout))
 }
 function isHistoricalInput(value: unknown): value is HistoricalWorldsInput {
@@ -132,7 +133,7 @@ function isHistoricalInput(value: unknown): value is HistoricalWorldsInput {
 
 function stateEvidence(state: WorldsJourneyInput): ObservationEvidence[] {
   if (state.format === 'worlds-2022-group') return [state.group.entrantEvidence!, state.group.gameEvidence!]
-  const observations = [state.playIn.evidence.entrants, state.playIn.evidence.draw, state.playIn.evidence.results,
+  const observations = [state.directEntrantEvidence, state.playIn.evidence.entrants, state.playIn.evidence.draw, state.playIn.evidence.results,
     state.swiss?.evidence.entrants, state.swiss?.evidence.results, state.knockout?.evidence.qualifiers, state.knockout?.evidence.draw, state.knockout?.evidence.results]
   for (const round of state.swiss?.rounds ?? []) observations.push(round.drawEvidence, ...round.rematchWaivers.map((waiver) => waiver.evidence))
   return observations.filter((entry): entry is ObservationEvidence => entry !== undefined)

@@ -58,3 +58,29 @@ test('a matching content key cannot hide omitted or conflicting source results, 
     await assert.rejects(loadWorldsArtifact(event, true, new AbortController().signal), /Live game conditioning is not supported/)
   } finally { globalThis.fetch = fetchBefore }
 })
+
+test('pre-Swiss companions require direct qualifier provenance and cannot label synthetic direct evidence as sourced', async () => {
+  const state = worldsFixture('play-in')
+  const event = worldsEvent(state)
+  // Schedule membership is not proof of qualification, and schedules can precede populated matches.
+  event.series = []
+  const sourceEvidence = { kind: 'source-observation', reference: 'Retained entrant/draw observations and canonical identities' } as const
+  state.playIn.evidence = { entrants: sourceEvidence, draw: sourceEvidence, results: sourceEvidence }
+  const artifact = { ...worldsArtifact(state, event), dataMode: 'source-observation' as const }
+  const fetchBefore = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify(artifact), { status: 200 })
+  try {
+    await assert.rejects(loadWorldsArtifact(event, false, new AbortController().signal), /Synthetic evidence cannot/)
+    for (const reference of [undefined, '', '   ']) {
+      if (reference === undefined) Reflect.deleteProperty(state, 'directEntrantEvidence')
+      else state.directEntrantEvidence = { ...sourceEvidence, reference }
+      assert.equal(isWorldsArtifact(artifact), false)
+      await assert.rejects(loadWorldsArtifact(event, false, new AbortController().signal), /schema is unsupported or incomplete/)
+    }
+    state.directEntrantEvidence = sourceEvidence
+    assert.equal(isWorldsArtifact(artifact), true)
+    const loaded = await loadWorldsArtifact(event, false, new AbortController().signal)
+    assert.equal(loaded.state.format, 'worlds-2026')
+    assert.deepEqual(loaded.state.directEntrantEvidence, sourceEvidence)
+  } finally { globalThis.fetch = fetchBefore }
+})

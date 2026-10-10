@@ -2,13 +2,14 @@ import { compareCodeUnits } from './codeUnitOrder.mjs'
 import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast'
 import { forecastWorlds2026PlayIn, replayWorlds2026PlayIn, WORLDS_2026_PLAY_IN_RULES, type Worlds2026PlayInInput } from './worlds2026PlayIn'
 import { forecastWorlds2026Knockout, replayWorlds2026Knockout, WORLDS_2026_KNOCKOUT_RULES, type Worlds2026KnockoutInput } from './worlds2026Knockout'
-import { applySwissWinner, replayWorlds2026Swiss, validWorldsTime, WORLDS_2026_SWISS_RULES, worldsUnavailable,
+import { applySwissWinner, replayWorlds2026Swiss, validWorldsEvidence, validWorldsTime, WORLDS_2026_SWISS_RULES, worldsUnavailable,
   type SwissReplay, type Worlds2026SwissEntrant, type Worlds2026SwissInput, type WorldsUnavailable } from './worlds2026Swiss'
-import type { SwissTeamStanding } from './worldsObservedRules'
+import type { ObservationEvidence, SwissTeamStanding } from './worldsObservedRules'
 
 export type Worlds2026EventInput = {
   format: 'worlds-2026'
   directEntrants: Worlds2026SwissEntrant[]
+  directEntrantEvidence: ObservationEvidence
   playIn: Worlds2026PlayInInput
   swiss: Worlds2026SwissInput | null
   knockout: Worlds2026KnockoutInput | null
@@ -175,6 +176,9 @@ function initialReport(input: Worlds2026EventInput, basis: ForecastBasis | null,
   }
 }
 function validateEventContext(input: Worlds2026EventInput): WorldsUnavailable | null {
+  if (!validWorldsEvidence(input.directEntrantEvidence)) {
+    return worldsUnavailable('evidence-missing', 'The fifteen direct entrants require tagged observation evidence with a nonempty reference.')
+  }
   const seeds: readonly string[] = WORLDS_2026_SWISS_RULES.pools.flat().filter((seed) => seed !== 'PLAYIN')
   const allIds = [...input.directEntrants, ...input.playIn.entrants].map((team) => team.id)
   if (input.directEntrants.length !== 15 || new Set(allIds).size !== 19 || new Set(input.directEntrants.map((team) => team.seed)).size !== 15

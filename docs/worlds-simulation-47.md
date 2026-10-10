@@ -54,7 +54,7 @@ Unfinished series scores are rejected; no live game-state conditioning is claime
 The UI reads an optional version-1 companion at
 `/tournament-data/worlds/<URL-encoded event ID>.json`. Its types and structural
 parser are in `worldsArtifacts.ts`. It pins event ID, information cutoff, state
-revision, per-stage evidence and the selected feed event's content key. Feed
+revision, direct-entrant and per-stage evidence and the selected feed event's content key. Feed
 corrections invalidate the companion and mounted worker. Missing or incoherent
 companions leave the schedule useful with a specific unavailable explanation.
 The 2026 result `matchId` reuses the shared schedule `series.id`. A matching
@@ -66,7 +66,8 @@ There is no companion producer, collector, bucket write or source activation
 in this change; the source owner must provide a reviewed coherent companion.
 
 Synthetic companions cannot attach to a source schedule, and synthetic evidence
-cannot claim `source-observation` mode. Tags remain caller assertions, not source
+cannot claim `source-observation` mode. The fifteen direct entrants require a
+nonempty `directEntrantEvidence` provenance reference even before Swiss begins. Tags remain caller assertions, not source
 authentication or permission to publish. Real entrants/draws/results require
 licensed retained observations and reviewed canonical identity mappings under #45/#46.
 
@@ -98,7 +99,11 @@ sampling error.
 Sampling is bounded to 10,000 trials and yields approximately every 16 ms in a
 dedicated worker. Cancellation terminates that worker, including synchronous
 setup. Its handlers are invalidated first, so queued old progress, results and
-errors cannot publish. Event/model changes and navigation run the same cleanup.
+errors cannot publish. Event/model changes, same-key schedule refreshes and navigation run the same
+cleanup. A refresh clears the previous artifact and probabilities before loading
+its companion. Rejected or timed-out companions cannot retain a rerunnable
+baseline, and an old worker cannot replace that unavailable state. Run simulation
+revalidates the companion before starting a new worker.
 Four completed baselines are cached by the full state, basis and options. No
 100,000-trial option is enabled without its own benchmark and acceptance evidence.
 The UI uses shadcn cards, controls and tables; only finite text progress is shown.
@@ -174,6 +179,26 @@ after the first attempt found no matching browser executable.
   and independent review. Current hosted CI and review evidence belong to the
   implementation PR and its reviewed head. Fixture acceptance does not establish
   official/live product acceptance.
+
+### PR review repairs (10 October)
+
+Two independent GPT-6.1 Sol agents reviewed the full diff, regressions, dead code
+and redundant tests. Review identified two P2 defects: same-key companion refresh
+retained the old forecast/worker, and direct qualifiers lacked required provenance
+before Swiss. The lifecycle now has one request/worker owner; refresh invalidates
+both and clears the baseline. The input, parser and source-label checks require
+`directEntrantEvidence`. No compatibility path was added: this new companion
+contract has no activated producer or stored published consumers.
+
+Both repairs passed independent source verification. The affected engine/client
+suite passed 15 tests with zero failures or skips, and affected lint passed.
+The expanded browser regression covers valid-to-incoherent same-key refresh,
+active sampling-to-request timeout, persistent unavailable state and recovery.
+Its local run is pending: the Fleet helper returned admission exit 75 while a
+foreign build owned the slot. No product test was launched on those admissions.
+Hosted checks on the repair revision must establish runtime regression and
+current type/build results before technical merge readiness. Earlier local
+checks above remain evidence for unchanged code, not for the new browser path.
 
 Local redacted evidence is retained in the Git-excluded
 `.agents/artifacts/worlds-simulation-20261009/` directory. The two unrelated

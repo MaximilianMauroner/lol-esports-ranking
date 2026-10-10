@@ -70,6 +70,23 @@ test('pre-event retains all 19 international entrants, exact Play-In odds and pr
   assert.equal((await runWorldsSimulation(missingRegion, basis, options)).status, 'unsupported')
 })
 
+test('direct qualification requires its own evidence before marking reached Swiss, even before a Swiss draw', async () => {
+  for (const reference of [undefined, '', '   ']) {
+    const input = worldsFixture('play-in')
+    if (reference === undefined) Reflect.deleteProperty(input, 'directEntrantEvidence')
+    else input.directEntrantEvidence = { ...worldsEvidence, reference }
+    const result = await runWorldsSimulation(input, null, options)
+    assert.equal(result.status, 'unsupported')
+    assert.equal(result.reason, 'evidence-missing')
+    assert.match(result.detail, /fifteen direct entrants/)
+  }
+  const input = worldsFixture('play-in')
+  input.directEntrantEvidence = { kind: 'source-observation', reference: 'Retained direct qualifier observations and canonical identities' }
+  const result = report(await runWorldsSimulation(input, null, options))
+  assert.equal(result.teams.filter((team) => team.deterministicStages.swiss && team.stages.swiss === 1).length, 15)
+  assert.deepEqual(result.pinnedState.directEntrantEvidence, input.directEntrantEvidence)
+})
+
 test('final observed Swiss draw composes with random knockout and fixed bracket; seed pins counts and frozen inputs', async () => {
   const input = worldsFixture(); const basis = worldsBasis(); const before = JSON.stringify({ input, basis })
   const progress: number[] = []

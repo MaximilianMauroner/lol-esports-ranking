@@ -51,7 +51,7 @@ export function worldsFixture(stage: 'play-in' | 'swiss-5' | 'knockout' | 'compl
   const knockout = { ...context, rulesId: WORLDS_2026_KNOCKOUT_RULES.id, qualifiers, slots: knockoutPairs.slice(0, 4).flat(),
     evidence: { qualifiers: worldsEvidence, draw: worldsEvidence, results: worldsEvidence },
     results: stage === 'completed' ? knockoutPairs.map((teamIds, slot) => ({ slot, matchId: `knockout-${slot}`, teamIds, gameWins: [3, 0] as [number, number], observedAt: worldsAsOf })) : [] }
-  return { format: 'worlds-2026', directEntrants: structuredClone(directEntrants), playIn, swiss: stage === 'play-in' ? null : swiss,
+  return { format: 'worlds-2026', directEntrants: structuredClone(directEntrants), directEntrantEvidence: worldsEvidence, playIn, swiss: stage === 'play-in' ? null : swiss,
     knockout: stage === 'knockout' || stage === 'completed' ? knockout : null }
 }
 function standing(id: string): PublicTeamStanding {

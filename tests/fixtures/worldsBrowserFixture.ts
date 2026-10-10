@@ -6,7 +6,7 @@ import type { MatchRecord, TeamProfile } from '../../src/types'
 import { worldsFixture, worldsEvent, worldsFeed, worldsArtifact, historicalWorldsFixture } from './worldsFixtures'
 import { worldsFeedEventKey, type WorldsArtifact } from '../../src/lib/worldsArtifacts'
 
-export type WorldsFixtureControls = { stage: 'play-in' | 'swiss-5' | 'knockout' | 'completed' | 'historical' | 'historical-tie'; corrupt: boolean; missingModel: boolean; live: boolean; revision: number }
+export type WorldsFixtureControls = { stage: 'play-in' | 'swiss-5' | 'knockout' | 'completed' | 'historical' | 'historical-tie'; corrupt: boolean; missingModel: boolean; live: boolean; revision: number; companionDelayMs: number }
 
 /** Entirely local artifacts. No public/data replacement, external request or producer activation. */
 export async function createWorldsFixtureServer(port = 0) {
@@ -27,7 +27,7 @@ export async function createWorldsFixtureServer(port = 0) {
       if (!row) throw new Error(`Missing fixture rating ${id}`)
       return { sourceTeamId: id, teamId: row.teamId }
     }) }
-  const controls: WorldsFixtureControls = { stage: 'swiss-5', corrupt: false, missingModel: false, live: false, revision: 0 }
+  const controls: WorldsFixtureControls = { stage: 'swiss-5', corrupt: false, missingModel: false, live: false, revision: 0, companionDelayMs: 0 }
   const artifactBodies = new Map(plan.writes.map((write) => [`/data/${write.relativePath}`, write.contents]))
   function current() {
     if (controls.stage === 'historical' || controls.stage === 'historical-tie') {
@@ -66,7 +66,11 @@ export async function createWorldsFixtureServer(port = 0) {
             : path === '/tournament-data/forecasts/ledger.json' ? emptyForecastLedger
               : path === `/tournament-data/worlds/${encodeURIComponent(event.id)}.json` ? artifact : null
       response.statusCode = body ? 200 : 404
-      response.setHeader('content-type', 'application/json'); response.end(JSON.stringify(body))
+      response.setHeader('content-type', 'application/json')
+      if (path === `/tournament-data/worlds/${encodeURIComponent(event.id)}.json` && controls.companionDelayMs > 0) {
+        const timer = setTimeout(() => response.end(JSON.stringify(body)), controls.companionDelayMs)
+        response.on('close', () => clearTimeout(timer))
+      } else response.end(JSON.stringify(body))
     })
   } }
   const server = await createServer({ publicDir: false, logLevel: 'silent', server: { host: '127.0.0.1', port, strictPort: true }, plugins: [plugin],

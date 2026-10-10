@@ -27,27 +27,21 @@ export function WorldsTournamentPanel({ event, basis, fixtureFeed }: { event: To
   useEffect(() => {
     const controller = new AbortController()
     let active = true
-    const timeout = window.setTimeout(() => {
-      controller.abort()
-      if (active) { setMode('error'); setDetail('Worlds state request timed out. The schedule remains available.') }
-    }, 10_000)
-    void loadWorldsArtifact(event, fixtureFeed, controller.signal).then((loaded) => {
-      window.clearTimeout(timeout)
-      if (active && !controller.signal.aborted) setArtifact((previous) => JSON.stringify(previous) === JSON.stringify(loaded) ? previous : loaded)
-    }).catch((error: unknown) => {
-      window.clearTimeout(timeout)
-      if (!active || controller.signal.aborted) return
-      setMode('error'); setDetail(error instanceof Error ? error.message : String(error))
-    })
-    return () => { active = false; controller.abort(); window.clearTimeout(timeout) }
-  }, [event, fixtureFeed])
-
-  useEffect(() => {
-    if (!artifact) return
+    let timeout: number | undefined
+    // A refreshed companion and its worker share one lifetime, even for unchanged feed keys.
     const timer = window.setTimeout(() => {
-      setMode('running'); setProgress(0); setDetail('Computing from the pinned event state.')
-      try {
-        stop.current = startWorldsWorker(artifact.state, basis, OPTIONS, (message) => {
+      setArtifact(null); setDisplay(null); setHistorical(null)
+      setMode('loading'); setProgress(0); setDetail('Loading reviewed Worlds state.')
+      timeout = window.setTimeout(() => {
+        controller.abort()
+        if (active) { setMode('error'); setDetail('Worlds state request timed out. The schedule remains available.') }
+      }, 10_000)
+      void loadWorldsArtifact(event, fixtureFeed, controller.signal).then((loaded) => {
+        window.clearTimeout(timeout)
+        if (!active || controller.signal.aborted) return
+        setArtifact(loaded); setMode('running'); setDetail('Computing from the pinned event state.')
+        stop.current = startWorldsWorker(loaded.state, basis, OPTIONS, (message) => {
+          if (!active || controller.signal.aborted) return
           if (message.type === 'progress') { setProgress(message.completed); return }
           if (message.type === 'state' || message.type === 'result') setDisplay(message.result)
           if (message.type === 'state') return
@@ -56,10 +50,17 @@ export function WorldsTournamentPanel({ event, basis, fixtureFeed }: { event: To
           if (message.type === 'error') setDetail(message.detail)
           stop.current?.(); stop.current = null
         })
-      } catch (error) { setMode('error'); setDetail(error instanceof Error ? error.message : String(error)) }
+      }).catch((error: unknown) => {
+        window.clearTimeout(timeout)
+        if (!active || controller.signal.aborted) return
+        setMode('error'); setDetail(error instanceof Error ? error.message : String(error))
+      })
     }, 0)
-    return () => { window.clearTimeout(timer); stop.current?.(); stop.current = null }
-  }, [artifact, basis, run])
+    return () => {
+      active = false; controller.abort(); window.clearTimeout(timer); window.clearTimeout(timeout)
+      stop.current?.(); stop.current = null
+    }
+  }, [event, fixtureFeed, basis, run])
 
   const names = new Map(event.series.flatMap((series) => series.teams.filter((team) => team.id).map((team) => [team.id!, team.name ?? team.id!])))
   const name = (id: string) => names.get(id) ?? id
