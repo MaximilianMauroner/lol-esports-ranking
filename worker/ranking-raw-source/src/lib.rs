@@ -10,7 +10,9 @@ use std::{
     path::{Path, PathBuf},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
+pub use types::Reference;
 use types::*;
+pub use validate::reference as validate_reference;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -430,13 +432,19 @@ fn read_object(reference: &Reference, objects: &BTreeMap<String, String>) -> Res
     validate::reference(reference)?;
     let path = objects.get(&reference.key).ok_or("Missing raw object")?;
     let compressed = std::fs::read(path)?;
+    decode_object(reference, &compressed)
+}
+
+/// The shared semantic decoder used by recovery and bucket graph verification.
+pub fn decode_object(reference: &Reference, compressed: &[u8]) -> Result<Value> {
+    validate::reference(reference)?;
     if let Some(size) = reference.compressed_bytes {
         ensure(
             compressed.len() as u64 == size,
             "Legacy compressed length mismatch",
         )?;
     }
-    let bytes = gunzip(&compressed)?;
+    let bytes = gunzip(compressed)?;
     ensure(
         bytes.len() as u64 == reference.bytes && sha256(&bytes) == reference.sha256,
         "Raw semantic digest mismatch",
@@ -447,6 +455,35 @@ fn read_object(reference: &Reference, objects: &BTreeMap<String, String>) -> Res
         "Raw object is not canonical JSON",
     )?;
     Ok(value)
+}
+
+pub struct ReceiptGraph {
+    pub receipt: Value,
+    pub references: Vec<Reference>,
+}
+
+/// Parses the existing receipt contract and enumerates its complete object graph.
+/// This does not replay Oracle chains or write recovered provider files.
+pub fn receipt_graph(value: Value) -> Result<ReceiptGraph> {
+    let mut receipt: Receipt = serde_json::from_value(value)?;
+    validate::receipt(&mut receipt)?;
+    let references = receipt
+        .oracle
+        .iter()
+        .flat_map(|source| std::iter::once(&source.baseline).chain(&source.deltas))
+        .chain(
+            receipt
+                .leaguepedia
+                .iter()
+                .chain(&receipt.lolesports)
+                .map(|source| &source.object),
+        )
+        .cloned()
+        .collect();
+    Ok(ReceiptGraph {
+        receipt: serde_json::to_value(receipt)?,
+        references,
+    })
 }
 
 fn restore(

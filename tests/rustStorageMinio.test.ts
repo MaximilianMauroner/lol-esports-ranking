@@ -8,10 +8,11 @@ import { promisify } from 'node:util'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { acquireBucketLease, readActiveGenerationPublication, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
+import { acquireBucketLease, assertRawSourceGenerationAuthority, readActiveGenerationPublication, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
 import { prepareStateObject, syncContentAddressedStateObject } from '../scripts/incremental-state-storage.mjs'
 import { createGenerationPublicationReceipt, type GenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
+import { oracleGameInventory, prepareNarrowSourceObject, prepareOracleBaseline, prepareOracleMutationChain, prepareRawObject, prepareRawSourceReceipt, rawObjectReferenceFor, type PreparedRawObject, type RawObjectReference } from '../scripts/raw-source-storage.mjs'
 
 const endpoint = process.env.RANKING_STORAGE_TEST_ENDPOINT
 const binary = process.env.RANKING_RUST_TEST_BINARY
@@ -291,6 +292,124 @@ test('native publication reader matches Node against MinIO for authority and dec
       assert.equal(after.ETag, before.ETag)
       assert.deepEqual(await after.Body!.transformToByteArray(), await before.Body!.transformToByteArray())
     })
+  } finally {
+    client.destroy()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('native raw graph verifier matches Node before publication against MinIO', { skip: !endpoint || !binary }, async (t) => {
+  const url = new URL(endpoint!)
+  assert.equal(url.protocol, 'http:')
+  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
+  const root = await mkdtemp(join(tmpdir(), 'rust-raw-graph-'))
+  const config = { enabled: true as const, endpoint: endpoint!, bucket: `raw-graph-${Date.now()}`, region: 'us-east-1',
+    accessKeyId: 'minio-test', secretAccessKey: 'minio-test-password', prefix: 'isolated', forcePathStyle: true }
+  const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: true,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
+  const importerVersion = 'raw-graph-test'
+  const csv = (notes: string) => `gameid,date,league,side,notes\na,2026-01-01,LCS,Blue,${notes}\na,2026-01-01,LCS,Red,${notes}\n`
+  const baseline = prepareOracleBaseline({ csv: csv('before'), sourceFileName: 'oracle.csv', importerVersion })
+  const chain = prepareOracleMutationChain({ previousSource: baseline.source, nextCsv: csv('after') })
+  const narrow = (provider: 'leaguepedia' | 'lolesports') => prepareNarrowSourceObject({ provider,
+    sourceFileName: `${provider}.json`, content: JSON.stringify({ provider, evidence: 'isolated fixture' }), importerVersion })
+  const leaguepedia = narrow('leaguepedia')
+  const lolesports = narrow('lolesports')
+  const receiptInputs = {
+    generationId: 'raw-graph-test', importerVersion, coverage: { start: '2026-01-01', end: '2026-01-02' },
+    sourceReceiptInputs: { generatedAt: '2026-01-02T00:00:00.000Z', warnings: ['synthetic contract evidence'] },
+    oracle: [{ sourceFileName: baseline.source.sourceFileName, headerDigest: baseline.source.headerDigest,
+      digestScheme: 'oracle-game-inventory-v1' as const, effectiveOracleDigest: chain.source.digest,
+      gameInventory: oracleGameInventory(chain.source), baseline: baseline.reference, deltas: chain.deltas.map((delta) => delta.reference) }],
+    leaguepedia: [{ sourceFileName: leaguepedia.value.sourceFileName, contentSha256: leaguepedia.value.contentSha256, object: leaguepedia.reference }],
+    lolesports: [{ sourceFileName: lolesports.value.sourceFileName, contentSha256: lolesports.value.contentSha256, object: lolesports.reference }],
+  }
+  const receipt = prepareRawSourceReceipt(receiptInputs)
+  const reference = rawObjectReferenceFor(receipt.prepared)
+  const objects = [baseline.prepared, ...chain.deltas.map((delta) => delta.prepared), leaguepedia.prepared, lolesports.prepared, receipt.prepared]
+  const put = async (prepared: PreparedRawObject, body = prepared.compressed, metadata = {
+    sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip',
+  }) => client.send(new PutObjectCommand({ Bucket: config.bucket,
+    Key: `${config.prefix}/raw/objects/sha256/${prepared.digest}`, Body: body,
+    ContentType: 'application/json; charset=utf-8', ContentEncoding: 'gzip', Metadata: metadata }))
+  const authority = (ref: RawObjectReference) => ({ key: `${config.prefix}/${ref.key}`, reference: ref })
+  const node = (ref = reference) => assertRawSourceGenerationAuthority(client, config, authority(ref))
+  const rust = (ref = reference) => invokeStorage(root, config, { action: 'verify-raw-generation', reference: ref })
+  const rejected = async (ref = reference) => {
+    await assert.rejects(node(ref))
+    await assert.rejects(rust(ref))
+    await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' })
+  }
+  const activeKey = `${config.prefix}/active-generation.json`
+  const activeBytes = Buffer.from('{"generationId":"previous-generation","fencingToken":17}')
+  try {
+    await client.send(new CreateBucketCommand({ Bucket: config.bucket }))
+    await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: activeKey, Body: activeBytes }))
+    for (const prepared of objects) await put(prepared)
+    await t.test('receipt determines every baseline, delta and provider member with exact proof parity', async () => {
+      const expected = await node()
+      assert.deepEqual(await rust(), expected)
+      assert.deepEqual(expected.verifiedObjects.map((object) => object.key), [reference,
+        baseline.reference, ...chain.deltas.map((delta) => delta.reference), leaguepedia.reference, lolesports.reference]
+        .map((ref) => `${config.prefix}/${ref.key}`))
+      const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket }))
+      assert.equal(listed.Contents?.length, objects.length + 1, 'Verification creates no readiness or audit object')
+    })
+    await t.test('alternative gzip transports and optional legacy sizes retain semantic identity', async () => {
+      for (const prepared of [receipt.prepared, baseline.prepared]) {
+        const alternate = gzipSync(Buffer.from(canonicalJsonFor(prepared.value)), { level: 1 })
+        await put(prepared, alternate)
+        assert.deepEqual(await rust(), await node())
+        if (prepared === receipt.prepared) {
+          const legacy = { ...reference, compressedBytes: alternate.length }
+          assert.deepEqual(await rust(legacy), await node(legacy))
+          await rejected({ ...legacy, compressedBytes: alternate.length + 1 })
+        }
+        await put(prepared)
+      }
+    })
+    await t.test('missing members fail even when the receipt object remains intact', async () => {
+      for (const prepared of objects.slice(0, -1)) {
+        await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/raw/objects/sha256/${prepared.digest}` }))
+        await rejected()
+        await put(prepared)
+      }
+    })
+    await t.test('metadata, gzip and semantic corruption fail without repairing stored bytes', async () => {
+      for (const prepared of [receipt.prepared, baseline.prepared, leaguepedia.prepared]) {
+        await put(prepared, prepared.compressed, { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes + 1), encoding: 'gzip' })
+        await rejected()
+        for (const bytes of [Buffer.from('bad gzip'), gzipSync(Buffer.from('{}'))]) {
+          await put(prepared, bytes)
+          await rejected()
+          const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/raw/objects/sha256/${prepared.digest}` }))
+          assert.deepEqual(Buffer.from(await stored.Body!.transformToByteArray()), bytes)
+        }
+        await put(prepared)
+      }
+    })
+    await t.test('canonical JSON and receipt identity are checked independently of valid content hashes', async () => {
+      const noncanonical = Buffer.from(` ${canonicalJsonFor(baseline.value)}`)
+      const digest = createHash('sha256').update(noncanonical).digest('hex')
+      const invalidReference: RawObjectReference = { key: `raw/objects/sha256/${digest}`, sha256: digest,
+        bytes: noncanonical.length, storageEncoding: 'gzip' }
+      await put({ ...baseline.prepared, digest, bytes: noncanonical.length }, gzipSync(noncanonical))
+      const changed = prepareRawSourceReceipt({ ...receiptInputs,
+        oracle: receiptInputs.oracle.map((entry) => ({ ...entry, baseline: invalidReference })) })
+      await put(changed.prepared)
+      await rejected(rawObjectReferenceFor(changed.prepared))
+      for (const patch of [{ rawIdentityDigest: '0'.repeat(64) }, { sourceReceiptDigest: '0'.repeat(64) }, { unexpected: true }]) {
+        const invalid = prepareRawObject({ ...receipt.receipt, ...patch })
+        await put(invalid)
+        await rejected(rawObjectReferenceFor(invalid))
+      }
+    })
+    await t.test('noncanonical reference namespace and wrong receipt digest fail', async () => {
+      await rejected({ ...reference, key: `state/objects/sha256/${reference.sha256}` })
+      await rejected({ ...reference, sha256: '0'.repeat(64) })
+    })
+    const active = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
+    assert.deepEqual(Buffer.from(await active.Body!.transformToByteArray()), activeBytes, 'Graph checks never mutate the active generation')
   } finally {
     client.destroy()
     await rm(root, { recursive: true, force: true })
