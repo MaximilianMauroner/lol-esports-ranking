@@ -2,7 +2,7 @@ import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from
 import type { TournamentSeries } from './tournamentFeed'
 import type { ObservationEvidence } from './worldsObservedRules'
 
-/** Riot v1.0, §§4.1.1, 4.1.4.2, 4.2.1 and 4.3.1. This module has no feed or UI caller. */
+/** Riot v1.0, §§4.1.1, 4.1.4.2, 4.2.1 and 4.3.1. Used by the read-only Worlds composition. */
 export const WORLDS_2026_PLAY_IN_RULES = {
   id: 'worlds-2026-play-in-v1',
   source: 'https://cdn.sanity.io/files/dsfx7636/news_live/faa5ce974e58615911fbee931c6123e2785a8b46.pdf',

@@ -1,6 +1,6 @@
 # Offline 2026 Worlds knockout odds (#47)
 
-This slice replays partial or complete observed knockout series and enumerates remaining winner paths. It starts from eight observed Swiss qualifiers and a known draw. It does not implement the Swiss handoff, sample a draw, or complete #47. No UI, collector, receipt, server or deployment path calls it. Test identities and ratings are synthetic.
+This module replays partial or complete observed knockout series and enumerates remaining winner paths. It starts from eight observed Swiss qualifiers and a known draw. The [Worlds composition and hub journey](worlds-simulation-47.md) now validates its Swiss handoff and calls it from the UI worker. The composition can sample the unrestricted knockout draw separately. No collector, receipt producer or deployment path calls it. Test identities and ratings are synthetic; #47 remains open.
 
 ## Primary rules checked on 2 October 2026
 
@@ -33,6 +33,6 @@ A team can already have reached a stage with probability one. Its deterministic 
 
 Focused check: `pnpm exec tsx --tsconfig tsconfig.app.json --test tests/worlds2026Knockout.test.ts`. Run typecheck, lint, existing observed-bracket and provider regressions. Hosted Checks runs the full suite, production-shaped benchmark and bundle. No browser acceptance is claimed for a module without a UI caller.
 
-Later PRs own certified Swiss draw sampling, full-event handoff, worker/cancellation/UI and historical tiebreaker support. The UI release switches are operator controls. Viewers should use the page and forecasts normally when released; they should not configure environment flags.
+The composition now owns the supported handoff, worker/cancellation/UI. Future Swiss draw sampling and historical tiebreaker support remain explicit gates in its audit. The UI release switches are operator controls. Viewers should use the page and forecasts normally when released; they should not configure environment flags.
 
 GO authorizes implementation and PRs, not merging or deployment. A merge to main must be treated as Railway production deployment and needs Max's authorization. This slice changes no flags. Max still owns provider rights, licensed observations, historical rules/as-of snapshots and release approval. Before an authorized merge, confirm the three production tournament flags are unset as specified in the reviewed rollout plan.
