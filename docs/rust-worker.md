@@ -130,7 +130,7 @@ seam is ready. It is not enabled in production by this PR.
 `ranking-refresh storage <input.json> <output.json>` adds native immutable raw
 and state object writes and the existing active-pointer lease protocol.
 Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease`,
-`release-lease` and `verify-publication`. The process uses the existing bucket environment names and
+`release-lease`, `verify-publication` and `verify-raw-generation`. The process uses the existing bucket environment names and
 SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
 and credentials/transport URLs do not appear in failure diagnostics.
 
@@ -182,6 +182,35 @@ The MinIO differential cases compare the complete reader result with Node and
 exercise stale receipt/pointer bindings, malformed membership, prefix escapes,
 alternate gzip transport, semantic corruption and missing members. They also
 check that failed verification leaves no success descriptor or changed pointer.
+
+`verify-raw-generation` accepts the existing relative raw receipt `reference`.
+It fetches and decodes that receipt, validates the existing raw identity/source
+receipt contract, then fetches every Oracle baseline/delta and Leaguepedia/
+LoL Esports object referenced by the receipt. Each GET checks transport length,
+gzip metadata, optional legacy compressed size, canonical JSON and semantic
+digest/size. It keeps only scalar transport proofs after each member. The
+result matches Node's raw authority verification: `key`, normalized `reference`,
+parsed `receipt` and `verifiedObjects`.
+
+This action verifies raw graph membership independently of a publication
+receipt's declared list. It reuses the raw process's decoder and receipt parser;
+there is no second raw contract. It does not reconstruct Oracle mutation chains,
+prove public/checkpoint graph membership, stage readiness/audit receipts or
+promote a pointer. The Node parent still owns those calls. Compiled MinIO and
+affected raw prepare/restore checks must pass before this layer's acceptance is
+claimed. No provider request or production write is part of verification.
+
+Raw graph verification preserves escaped unpaired UTF-16 surrogates in stored
+JSON strings and keys, including nested source-receipt inputs and child content.
+The shared lossless codec sorts keys by UTF-16 units and checks exact Node
+canonical bytes. It does not replace characters or rewrite stored objects.
+This is a permanent stored-input contract. The older prepare/restore path still
+uses Unicode scalar strings; this graph action does not certify that path for
+inputs containing unpaired surrogates.
+
+Optional stored `compressedBytes` fields stay readable under the existing raw
+storage removal condition. Semantic references and this graph integrity path
+remain required while raw receipt authorities are stored.
 
 The real raw-source verifier now records source coverage, filenames, SHA-256 and
 byte counts along with both workers' prepare/restore memory and duration. It

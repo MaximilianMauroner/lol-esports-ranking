@@ -1,4 +1,5 @@
 mod publication;
+mod raw_generation;
 mod s3;
 
 use ranking_contracts::{Result, canonical_json_value, gunzip, js_pretty_json_value, sha256};
@@ -14,6 +15,9 @@ const JSON_TYPE: &str = "application/json; charset=utf-8";
 #[serde(tag = "action", rename_all = "kebab-case", deny_unknown_fields)]
 enum Input {
     VerifyPublication,
+    VerifyRawGeneration {
+        reference: ranking_raw_source::Reference,
+    },
     SyncObject {
         namespace: String,
         #[serde(rename = "compressedPath")]
@@ -71,6 +75,10 @@ pub fn run(input_path: &str, output_path: &str) -> Result<()> {
     let bucket = s3::Bucket::from_env()?;
     let result = match input {
         Input::VerifyPublication => publication::verify(&bucket)?,
+        Input::VerifyRawGeneration { reference } => {
+            return fs::write(output_path, raw_generation::verify(&bucket, reference)?)
+                .map_err(|error| error.to_string());
+        }
         Input::SyncObject {
             namespace,
             compressed_path,

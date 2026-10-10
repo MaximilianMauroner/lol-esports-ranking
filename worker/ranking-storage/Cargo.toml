@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 ranking-contracts = { path = "../ranking-contracts" }
+ranking-raw-source = { path = "../ranking-raw-source" }
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true

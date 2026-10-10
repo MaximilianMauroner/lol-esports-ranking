@@ -1317,7 +1317,7 @@ function verifiedFileBackedRawBody(prepared) {
   return createReadStream(prepared.compressedPath).pipe(verify)
 }
 
-async function assertRawSourceGenerationAuthority(client, config, authority) {
+export async function assertRawSourceGenerationAuthority(client, config, authority) {
   const compressed = await readRawObjectBytes(client, config, authority.reference)
   const receipt = parseRawSourceReceipt(decodeRawObject(authority.reference, compressed))
   const references = [

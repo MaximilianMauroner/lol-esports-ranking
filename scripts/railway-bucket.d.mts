@@ -60,6 +60,15 @@ export function readActiveRawSourceAuthority(options?: { config?: unknown; clien
       receiptReference: import('./raw-source-storage.mjs').RawObjectReference
     })
 >
+export function assertRawSourceGenerationAuthority(client: BucketClient, config: BucketStorageConfig, authority: {
+  key: string
+  reference: import('./raw-source-storage.mjs').RawObjectReference
+}): Promise<{
+  key: string
+  reference: import('./raw-source-storage.mjs').RawObjectReference & { compressedBytes: number }
+  receipt: import('./raw-source-storage.mjs').RawSourceReceipt
+  verifiedObjects: Array<{ key: string; digest: string; bytes: number; compressedBytes: number; compressedSha256: string }>
+}>
 export function writeBucketJson(relativeKey: string, value: unknown, options?: {
   ifMatch?: string
   ifNoneMatch?: string

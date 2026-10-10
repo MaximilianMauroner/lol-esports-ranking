@@ -60,6 +60,21 @@ Record compiled current-source execution with zero skips before claiming that
 layer's MinIO acceptance. A missing local MinIO/Go binary or conditional skip is
 a blocked local check; the required hosted MinIO job supplies separate evidence.
 
+The native `verify-raw-generation` layer enumerates membership from the raw
+receipt and checks each referenced object through the existing raw decoder.
+Compare its complete result and scalar transport proofs with Node's current
+pre-promotion raw authority check. Include baselines, deltas, both narrow
+providers, alternative gzip bytes, optional legacy lengths, missing members,
+metadata/semantic corruption, noncanonical JSON and contradictory receipt
+identity. Include Node-valid unpaired UTF-16 strings and keys in receipt inputs
+and child content, exact code-unit key ordering and canonical escape spelling.
+Existing prepare/restore parity must remain intact; its earlier scalar-string
+limitation is a separate acceptance boundary. Failures must leave no success
+descriptor, repaired object or changed active pointer. Compiled current-source execution is required; implemented
+tests and conditional skips do not establish acceptance. This raw membership
+layer does not replay mutation chains or complete public/state graph validation,
+readiness/audit writes or promotion.
+
 ## M5: the ranking model
 
 Port import/model/player/replay/projection and the explicitly deferred state

@@ -868,6 +868,7 @@ dependencies = [
  "chrono",
  "flate2",
  "ryu-js",
+ "serde",
  "serde_json",
  "sha2",
 ]
@@ -911,6 +912,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "ranking-contracts",
+ "ranking-raw-source",
  "reqwest",
  "ring",
  "serde",
