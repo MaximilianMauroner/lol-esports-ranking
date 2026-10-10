@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
-import { assertRawSourceObjectsMatch } from '../scripts/verify-rust-raw-source.ts'
+import { assertRawSourceObjectsMatch, verifyRustRawSource } from '../scripts/verify-rust-raw-source.ts'
 import { hydrateFileBackedRawSourceGeneration, type PreparedRawSourceGeneration } from '../scripts/raw-source-generation.mjs'
 import { type RawSourceReceipt } from '../scripts/raw-source-storage.mjs'
 
@@ -21,6 +21,24 @@ type PreparedOutput = {
     objects: Array<{ digest: string; bytes: number; compressedBytes: number; compressedPath: string; compressedSha256: string }>
   }
 }
+
+test('isolated raw verifier refuses input filename collisions before starting either worker', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'raw-input-collision-'))
+  try {
+    for (const directory of ['first', 'second']) {
+      await mkdir(join(root, directory))
+      await writeFile(join(root, directory, 'same.json'), JSON.stringify({ directory }))
+    }
+    const manifest = join(root, 'manifest.json')
+    await writeFile(manifest, JSON.stringify({ start: '2026-01-01', end: '2026-01-02',
+      files: { leaguepediaJson: ['first/same.json', 'second/same.json'] } }))
+    await assert.rejects(verifyRustRawSource(manifest, '/nonexistent-must-not-start'), /Cannot flatten duplicate leaguepediaJson filenames/)
+    assert.deepEqual(JSON.parse(await readFile(join(root, 'first/same.json'), 'utf8')), { directory: 'first' })
+    assert.deepEqual(JSON.parse(await readFile(join(root, 'second/same.json'), 'utf8')), { directory: 'second' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('raw object parity compares unique semantic objects by digest rather than index', async () => {
   const root = await mkdtemp(join(tmpdir(), 'raw-object-parity-'))

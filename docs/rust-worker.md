@@ -119,3 +119,43 @@ request order. The comparison excludes process wall-clock fields and retry
 delays whose jitter bounds are checked separately. Live
 provider validation and completed compiled checks must be recorded before this
 seam is ready. It is not enabled in production by this PR.
+
+## Native storage primitives (M4 in progress)
+
+`ranking-refresh storage <input.json> <output.json>` adds native immutable raw
+and state object writes and the existing active-pointer lease protocol.
+Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease` and
+`release-lease`. The process uses the existing bucket environment names and
+SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
+and credentials/transport URLs do not appear in failure diagnostics.
+
+`sync-object` accepts a prepared gzip file, semantic SHA-256 and byte count.
+It validates canonical uncompressed JSON before `If-None-Match: *` writes.
+A collision requires a fresh GET, matching metadata and exact uncompressed
+bytes. Gzip transport differences remain valid. Existing corruption is rejected
+and never overwritten. Lease acquisition, renewal and release compare the same
+`active-generation.json` ETag used by Node. A takeover changes the fencing token;
+the old owner cannot renew or release the new authority.
+
+This storage layer awaits compiled isolated acceptance. It is not yet selected
+by the Node parent. Generation manifests, exhaustive raw/state/public graph
+verification, publication receipts, promotion and audit receipts still use Node.
+M4 is incomplete until those paths are ported and the lease-change-during-
+promotion check passes against MinIO. There is no Rust ranking model, replay,
+projection or parent job yet. M5/M6 and production cutover remain pending.
+
+CI's isolated MinIO check uses loopback-only test credentials and compares Node
+and native object sets, bytes, metadata and lease pointer bytes. It also checks
+semantic reuse with different gzip bytes, corruption, cross-host takeover and
+stale renewal/release. A skipped local test does not supply MinIO evidence.
+
+The real raw-source verifier now records source coverage, filenames, SHA-256 and
+byte counts along with both workers' prepare/restore memory and duration. It
+checks copied input identities and rejects duplicate flattened filenames before
+starting workers. That guard prevents equal outputs from silently proving parity
+on an incomplete input corpus. Original raw inputs remain untouched.
+
+See [migration acceptance](rust-worker-acceptance-84.md) for current evidence and
+remaining gates. The native CLI is additive; no compatibility reader or stored
+reference changes. Existing legacy transport references and Node rollback paths
+retain the removal conditions stated above.

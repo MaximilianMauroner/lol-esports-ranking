@@ -9,3 +9,4 @@ publish.workspace = true
 ranking-contracts = { path = "../ranking-contracts" }
 ranking-raw-source = { path = "../ranking-raw-source" }
 ranking-fetch = { path = "../ranking-fetch" }
+ranking-storage = { path = "../ranking-storage" }
