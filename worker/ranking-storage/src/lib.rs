@@ -1,6 +1,7 @@
 mod publication;
 mod raw_generation;
 mod s3;
+mod state_generation;
 
 use ranking_contracts::{Result, canonical_json_value, gunzip, js_pretty_json_value, sha256};
 use reqwest::Method;
@@ -17,6 +18,11 @@ enum Input {
     VerifyPublication,
     VerifyRawGeneration {
         reference: ranking_raw_source::Reference,
+    },
+    VerifyStateGeneration {
+        authority: state_generation::Authority,
+        #[serde(rename = "expectedManifestJson")]
+        expected_manifest_json: Option<String>,
     },
     SyncObject {
         namespace: String,
@@ -78,6 +84,16 @@ pub fn run(input_path: &str, output_path: &str) -> Result<()> {
         Input::VerifyRawGeneration { reference } => {
             return fs::write(output_path, raw_generation::verify(&bucket, reference)?)
                 .map_err(|error| error.to_string());
+        }
+        Input::VerifyStateGeneration {
+            authority,
+            expected_manifest_json,
+        } => {
+            return fs::write(
+                output_path,
+                state_generation::verify(&bucket, authority, expected_manifest_json.as_deref())?,
+            )
+            .map_err(|error| error.to_string());
         }
         Input::SyncObject {
             namespace,

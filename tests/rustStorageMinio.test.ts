@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { gzipSync } from 'node:zlib'
+import { crc32, gzipSync } from 'node:zlib'
 import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { acquireBucketLease, assertRawSourceGenerationAuthority, readActiveGenerationPublication, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
-import { prepareStateObject, syncContentAddressedStateObject } from '../scripts/incremental-state-storage.mjs'
+import { assertStateManifestAuthority, parseIncrementalStateManifest, prepareStateObject, stateObjectReferenceFor, syncContentAddressedStateObject, type IncrementalStateManifest } from '../scripts/incremental-state-storage.mjs'
 import { createGenerationPublicationReceipt, type GenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import { oracleGameInventory, prepareNarrowSourceObject, prepareOracleBaseline, prepareOracleMutationChain, prepareRawObject, prepareRawSourceReceipt, rawObjectReferenceFor, type PreparedRawObject, type RawObjectReference } from '../scripts/raw-source-storage.mjs'
@@ -455,6 +455,218 @@ test('native raw graph verifier matches Node before publication against MinIO', 
     })
     const active = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
     assert.deepEqual(Buffer.from(await active.Body!.transformToByteArray()), activeBytes, 'Graph checks never mutate the active generation')
+  } finally {
+    client.destroy()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('native state authority verifier matches Node integrity against MinIO', { skip: !endpoint || !binary }, async (t) => {
+  const url = new URL(endpoint!)
+  assert.equal(url.protocol, 'http:')
+  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname), 'Only an owned loopback MinIO test server is permitted')
+  const root = await mkdtemp(join(tmpdir(), 'rust-state-'))
+  const config = { enabled: true as const, endpoint: endpoint!, bucket: `state-${Date.now()}`, region: 'us-east-1',
+    accessKeyId: 'minio-test', secretAccessKey: 'minio-test-password', prefix: 'nested/rankings', forcePathStyle: true }
+  const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: true,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
+  const ledger = prepareStateObject({ matches: ['pinned synthetic ledger'] })
+  const checkpoint = prepareStateObject({ modelEncoding: 'deferred', 'diagnostic\ud800': '\udc00' })
+  const objects = [ledger, checkpoint]
+  const manifest: IncrementalStateManifest = {
+    artifactKind: 'incremental-state-generation-manifest', schemaVersion: 1,
+    storageMode: 'content-addressed-state-gzip-v1', generationId: 'state-1', runId: 'run-1',
+    baseGenerationId: null, baseRunId: null, canonicalLedger: stateObjectReferenceFor(ledger),
+    sourceReceiptDigest: 'a'.repeat(64), compatibility: {
+      modelVersion: 'model\ud800', modelConfigHash: 'stored-label', importerVersion: 'importer', taxonomyVersion: 'taxonomy',
+      ratingCheckpointSchemaVersion: 1, causalPrefixSchemaVersion: 1, publicArtifactSchemaVersion: 1,
+    }, checkpoints: [
+      { boundary: { date: '0000-02-29', matchId: '\ud800' }, rawPrefix: { matchCount: 0, digest: 'b'.repeat(64) }, object: stateObjectReferenceFor(checkpoint) },
+      { boundary: { date: '0000-02-29', matchId: '😀' }, rawPrefix: { matchCount: 1, digest: 'c'.repeat(64) }, object: stateObjectReferenceFor(checkpoint) },
+      { boundary: { date: '9999-12-31', matchId: '\udc00' }, rawPrefix: { matchCount: 2, digest: 'd'.repeat(64) }, object: stateObjectReferenceFor(checkpoint) },
+    ],
+  }
+  const putMember = (prepared: typeof ledger, body = prepared.compressed, patch: Partial<PutObjectCommand['input']> = {}) =>
+    client.send(new PutObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/state/objects/sha256/${prepared.digest}`,
+      Body: body, ContentType: 'application/json; charset=utf-8', ContentEncoding: 'gzip',
+      Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' }, ...patch }))
+  const putManifest = async (value: unknown = manifest, body = Buffer.from(canonicalJsonFor(value)), patch: Partial<PutObjectCommand['input']> = {}) => {
+    const key = patch.Key ?? `${config.prefix}/state/generations/state-1.json`
+    const digest = createHash('sha256').update(body).digest('hex')
+    const response = await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body,
+      ContentType: 'application/json; charset=utf-8', Metadata: { sha256: digest, 'semantic-bytes': String(body.length) }, ...patch }))
+    return { key, etag: response.ETag!, bytes: body.length, digest }
+  }
+  const node = (authority: Awaited<ReturnType<typeof putManifest>>, value?: IncrementalStateManifest) =>
+    assertStateManifestAuthority(client, config, { ...authority, ...(value ? { manifest: value } : {}) })
+  const rust = (authority: Awaited<ReturnType<typeof putManifest>>, value?: IncrementalStateManifest) =>
+    invokeStorage(root, config, { action: 'verify-state-generation', authority, ...(value ? { expectedManifestJson: canonicalJsonFor(value) } : {}) })
+  const reject = async (authority: Awaited<ReturnType<typeof putManifest>>, value?: IncrementalStateManifest) => {
+    await assert.rejects(node(authority, value))
+    await assert.rejects(rust(authority, value))
+    await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' }, 'Failure cannot leave a success descriptor')
+  }
+  const compare = async (authority: Awaited<ReturnType<typeof putManifest>>, value?: IncrementalStateManifest) => {
+    assert.deepEqual(await rust(authority, value), await node(authority, value))
+  }
+  try {
+    await client.send(new CreateBucketCommand({ Bucket: config.bucket }))
+    for (const prepared of objects) await putMember(prepared)
+    const activeKey = `${config.prefix}/active-generation.json`
+    const activeBytes = Buffer.from('{"unrelatedAuthority":"must remain unchanged"}')
+    await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: activeKey, Body: activeBytes }))
+    await t.test('canonical authority, nested prefix, nullable bases and UTF-16 boundaries', async () => {
+      await compare(await putManifest(), manifest)
+      const based = { ...manifest, baseGenerationId: 'base-1', baseRunId: 'prior-run' }
+      await compare(await putManifest(based), based)
+      const emptyPrefix = { ...config, prefix: '' }
+      const authority = await putManifest(manifest, undefined, { Key: 'state/generations/state-1.json' })
+      for (const prepared of objects) await putMember(prepared, undefined, { Key: `state/objects/sha256/${prepared.digest}` })
+      assert.deepEqual(await invokeStorage(root, emptyPrefix, { action: 'verify-state-generation', authority }),
+        await assertStateManifestAuthority(client, emptyPrefix, authority))
+    })
+    await t.test('alternate gzip and optional legacy transport sizes retain exact proofs', async () => {
+      const alternative = gzipSync(checkpoint.canonicalBytes, { level: 1 })
+      await putMember(checkpoint, alternative)
+      const legacy = { ...manifest, checkpoints: manifest.checkpoints.map((candidate) => ({ ...candidate,
+        object: { ...candidate.object, compressedBytes: alternative.length } })) }
+      await compare(await putManifest(legacy), legacy)
+      const wrongSize = { ...legacy, checkpoints: legacy.checkpoints.map((candidate) => ({ ...candidate,
+        object: { ...candidate.object, compressedBytes: alternative.length + 1 } })) }
+      await reject(await putManifest(wrongSize))
+      await putMember(checkpoint)
+    })
+    await t.test('member integrity does not tighten the deferred JSON/model contract', async () => {
+      for (const body of [Buffer.from('not JSON\n'), Buffer.from('{ "noncanonical": true }\n'), Buffer.from([0xff, 0xfe, 0])]) {
+        const digest = createHash('sha256').update(body).digest('hex')
+        const compressed = gzipSync(body)
+        const reference = { key: `state/objects/sha256/${digest}`, sha256: digest, bytes: body.length, storageEncoding: 'gzip' as const }
+        await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/${reference.key}`, Body: compressed,
+          ContentType: 'application/json; charset=utf-8', ContentEncoding: 'gzip',
+          Metadata: { sha256: digest, 'semantic-bytes': String(body.length), encoding: 'gzip' } }))
+        const deferred = { ...manifest, canonicalLedger: reference }
+        await compare(await putManifest(deferred), deferred)
+      }
+    })
+    await t.test('authority binding, canonical bytes and expected manifest cannot drift', async () => {
+      const authority = await putManifest()
+      for (const patch of [{ etag: '"stale"' }, { digest: '0'.repeat(64) }, { bytes: authority.bytes + 1 },
+        { bytes: 0 }, { bytes: Number.MAX_SAFE_INTEGER + 1 }, { key: `other/state/generations/state-1.json` }]) {
+        await reject({ ...authority, ...patch })
+      }
+      await reject(authority, { ...manifest, runId: 'changed-run' })
+      await reject(await putManifest({ ...manifest, generationId: 'different-generation' }))
+      await reject(await putManifest(manifest, Buffer.from(`${canonicalJsonFor(manifest)}\n`)))
+      const metadataPatches: Partial<PutObjectCommand['input']>[] = [
+        { ContentType: 'application/json' }, { Metadata: { sha256: authority.digest } },
+        { Metadata: { sha256: '0'.repeat(64), 'semantic-bytes': String(authority.bytes) } },
+      ]
+      for (const patch of metadataPatches) {
+        await reject(await putManifest(manifest, undefined, patch))
+      }
+      await putManifest()
+    })
+    await t.test('authority descriptor rejects positional input and incomplete objects', async () => {
+      const authority = await putManifest()
+      for (const invalid of [
+        [authority.key, authority.etag, authority.bytes, authority.digest],
+        { key: authority.key, etag: authority.etag, bytes: authority.bytes },
+        { ...authority, unexpected: true },
+      ]) {
+        await assert.rejects(invokeStorage(root, config, { action: 'verify-state-generation', authority: invalid }))
+        await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' })
+      }
+      await compare(authority)
+    })
+    await t.test('schema, safe counts, exact dates and ordered unique checkpoints', async () => {
+      const missingBase = Object.fromEntries(Object.entries(manifest).filter(([key]) => key !== 'baseGenerationId'))
+      const checkpoint = manifest.checkpoints[0]
+      const invalid: unknown[] = [
+        missingBase, Object.values(manifest), { ...manifest, extra: true }, { ...manifest, schemaVersion: 2 },
+        { ...manifest, baseRunId: 'unsafe/../id' }, { ...manifest, checkpoints: [] },
+        { ...manifest, compatibility: { ...manifest.compatibility, modelConfigHash: '' } },
+        { ...manifest, compatibility: { ...manifest.compatibility, publicArtifactSchemaVersion: Number.MAX_SAFE_INTEGER + 1 } },
+        { ...manifest, checkpoints: [checkpoint, checkpoint] }, { ...manifest, checkpoints: [...manifest.checkpoints].reverse() },
+        ...['2023-02-29', '2024-04-31', '2026-1-01'].map((date) => ({ ...manifest, checkpoints: [{ ...checkpoint, boundary: { date, matchId: 'x' } }] })),
+        ...[-1, 1.5, Number.MAX_SAFE_INTEGER + 1].map((matchCount) => ({ ...manifest, checkpoints: [{ ...checkpoint, rawPrefix: { ...checkpoint.rawPrefix, matchCount } }] })),
+        { ...manifest, canonicalLedger: { ...manifest.canonicalLedger, compressedBytes: null } },
+        { ...manifest, canonicalLedger: { ...manifest.canonicalLedger, bytes: 0 } },
+        { ...manifest, canonicalLedger: { ...manifest.canonicalLedger, key: 'state/../escape' } },
+        { ...manifest, checkpoints: [{ ...checkpoint, object: Object.values(checkpoint.object) }] },
+      ]
+      for (const value of invalid) {
+        assert.throws(() => parseIncrementalStateManifest(value))
+        await reject(await putManifest(value))
+      }
+    })
+    await t.test('fresh reads reject missing or mutated ledger and checkpoint members', async () => {
+      const authority = await putManifest()
+      for (const prepared of objects) {
+        await compare(authority)
+        await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/state/objects/sha256/${prepared.digest}` }))
+        await reject(authority)
+        await putMember(prepared, Buffer.from('bad gzip'))
+        await reject(authority)
+        await putMember(prepared, gzipSync(Buffer.from('{}')))
+        await reject(authority)
+        await putMember(prepared, undefined, { ContentType: 'application/json' })
+        await reject(authority)
+        await putMember(prepared, undefined, { Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes) } })
+        await reject(authority)
+        await putMember(prepared)
+        await compare(authority)
+      }
+    })
+    await t.test('complete gzip members retain Node concatenation/padding and CRC failures', async () => {
+      const split = Math.floor(ledger.canonicalBytes.length / 2)
+      const concatenated = Buffer.concat([gzipSync(ledger.canonicalBytes.subarray(0, split)), gzipSync(ledger.canonicalBytes.subarray(split))])
+      for (const suffix of [Buffer.alloc(0), Buffer.alloc(8), Buffer.from([0, 0, 255, 1])]) {
+        await putMember(ledger, Buffer.concat([concatenated, suffix]))
+        await compare(await putManifest())
+      }
+      for (const offset of [8, 4]) {
+        const corrupt = Buffer.from(ledger.compressed)
+        corrupt[corrupt.length - offset] ^= 1
+        await putMember(ledger, Buffer.concat([corrupt, Buffer.alloc(8)]))
+        await reject(await putManifest())
+      }
+      for (const body of [ledger.compressed.subarray(0, -1), Buffer.concat([ledger.compressed, Buffer.from([1, 2, 3])])]) {
+        await putMember(ledger, body)
+        await reject(await putManifest())
+      }
+      await putMember(ledger)
+    })
+    await t.test('Node-valid long filename/comment and checked optional gzip headers', async () => {
+      const long = Buffer.concat([Buffer.alloc(65_536, 97), Buffer.from([0])])
+      const optional = (flags: number, fields: Buffer, checksum = false) => {
+        const fixed = Buffer.from(ledger.compressed.subarray(0, 10))
+        fixed[3] = flags | (checksum ? 2 : 0)
+        const header = Buffer.concat([fixed, fields])
+        const crc = Buffer.alloc(checksum ? 2 : 0)
+        if (checksum) crc.writeUInt16LE(crc32(header) & 0xffff)
+        return Buffer.concat([header, crc, ledger.compressed.subarray(10)])
+      }
+      for (const body of [optional(8, long), optional(16, long),
+        optional(8 | 16 | 4, Buffer.concat([Buffer.from([3, 0, 1, 2, 3]), long, long]), true)]) {
+        await putMember(ledger, body)
+        await compare(await putManifest())
+      }
+      const badChecksum = optional(8, Buffer.from('name\0'), true)
+      badChecksum[15] ^= 1
+      for (const body of [badChecksum, optional(8, Buffer.alloc(0)).subarray(0, 10),
+        optional(4, Buffer.from([255, 255])), optional(0xe0, Buffer.alloc(0))]) {
+        await putMember(ledger, body)
+        await reject(await putManifest())
+      }
+      await putMember(ledger)
+    })
+    const active = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
+    assert.deepEqual(Buffer.from(await active.Body!.transformToByteArray()), activeBytes, 'State graph verification cannot change the active authority')
+    const authority = await putManifest()
+    const inventory = () => client.send(new ListObjectsV2Command({ Bucket: config.bucket }))
+    const before = (await inventory()).Contents
+    await compare(authority)
+    assert.deepEqual((await inventory()).Contents, before, 'Successful verification writes no bucket object')
   } finally {
     client.destroy()
     await rm(root, { recursive: true, force: true })

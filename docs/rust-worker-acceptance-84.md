@@ -75,6 +75,20 @@ tests and conditional skips do not establish acceptance. This raw membership
 layer does not replay mutation chains or complete public/state graph validation,
 readiness/audit writes or promotion.
 
+The native `verify-state-generation` layer must match Node's complete
+`assertStateManifestAuthority` result with object verification enabled. Its
+internal descriptor uses a full authority key and optional canonical
+`expectedManifestJson` string; stored state contracts do not change. Verify
+manifest ETag/metadata/length/SHA, generation-key binding, exact schema, nullable
+bases, safe counts, exact UTC dates and UTF-16 checkpoint order. Preserve
+nonempty compatibility strings and optional legacy transport lengths.
+Each fresh member read must check gzip transport and semantic identity with
+bounded inflation, including concatenated members and CRC failures. Node's
+member integrity authority does not require JSON/model decoding; keep that
+separate M5 gate. Require compiled MinIO equality and failure cases with zero
+skips, no success descriptor on failure and unchanged pointer/object inventory.
+Real-input memory evidence remains separate from these synthetic storage cases.
+
 ## M5: the ranking model
 
 Port import/model/player/replay/projection and the explicitly deferred state
