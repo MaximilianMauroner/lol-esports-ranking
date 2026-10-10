@@ -59,7 +59,9 @@ corrections invalidate the companion and mounted worker. Missing or incoherent
 companions leave the schedule useful with a specific unavailable explanation.
 The 2026 result `matchId` reuses the shared schedule `series.id`. A matching
 content key does not override a missing result or a conflicting team, winner,
-score or best-of. Live and unresolved played-game evidence blocks advancement
+score or best-of. Shared schedule/companion result IDs are validated in both
+directions: a companion cannot mark an upcoming or postponed schedule series
+as completed. Observations outside the bounded schedule window remain supported. Live and unresolved played-game evidence blocks advancement
 forecasts until game-state conditioning is supported; it is not treated as an
 unstarted series. A source `complete`/`completed` series whose normalized result
 is unresolved also keeps advancement unavailable until its result is confirmed.
@@ -82,7 +84,9 @@ matchups call `forecastTournamentSeries`; ratings, uncertainty, roster and
 model/config never update after hypothetical wins. Snapshot data cutoff must
 precede publication, which must precede the event cutoff. Every remaining active
 team must have valid model input before any sampled aggregate is returned.
-Eliminated teams' ratings are unnecessary. Side/pick rights and draft decisions
+Eliminated teams' ratings are unnecessary. Reports pin model metadata only when
+a successful forecast consumes it. Completed reports and reports based only on observations
+do not claim a current model just because one was loaded by the UI. Side/pick rights and draft decisions
 remain disclosed model limits, rather than invented advantages.
 
 The downloaded run contains the supplied state/evidence, source/rule digest,
@@ -189,11 +193,14 @@ after the first attempt found no matching browser executable.
 ### PR review repairs (10 October)
 
 Two independent GPT-6.1 Sol agents reviewed the full diff, regressions, dead code
-and redundant tests. Review identified three P2 defects: same-key companion
+and redundant tests. Review identified five P2 defects: same-key companion
 refresh retained the old forecast/worker, direct qualifiers lacked required
 provenance before Swiss, and terminal source series with unresolved scores were
-sampled as unplayed. Adjacent source-cancellation handling has the same last
-root cause and now has an explicit unsupported boundary.
+sampled as unplayed, companion results could override uncompleted schedule
+rows, and completed reports recorded an unused current model. Source-cancellation
+handling shares the terminal-state root cause and has an explicit unsupported
+boundary. Shared result IDs now require completion in both directions. Model
+metadata is recorded only after successful forecast consumption.
 The lifecycle now has one request/worker owner; refresh invalidates
 both and clears the baseline. The input, parser and source-label checks require
 `directEntrantEvidence`. No compatibility path was added: this new companion
@@ -202,13 +209,18 @@ contract has no activated producer or stored published consumers.
 The refresh and provenance repairs passed independent source verification.
 The affected engine/client suite passed 15 tests with zero failures or skips.
 Independent terminal/cancellation loader and feed checks passed 29 tests with
-zero failures or skips. Affected lint passed after each repair.
+zero failures or skips. Later reverse-coherence and consumed-model repairs passed
+41 independent simulation/loader/feed checks, with zero failures or skips.
+Affected lint passed after each repair. The browser journey also checks that a
+completed event displays no unused current model provenance.
 The expanded browser regression covers valid-to-incoherent same-key refresh,
 active sampling-to-request timeout, persistent unavailable state and recovery.
 Its local run is pending: the Fleet helper returned admission exit 75 while a
 foreign build owned the slot. No product test was launched on those admissions.
-Hosted checks on the repair revision must establish runtime regression and
-current type/build results before technical merge readiness. Earlier local
+The expanded refresh lifecycle browser regression passed through hosted Verify
+on the earlier repair; its guards and test remained unchanged. The final
+consumed-model change and added completed-view assertion require current browser
+integration and type/build checks before technical merge readiness. Earlier local
 checks above remain evidence for unchanged code, not for the new browser path.
 
 Local redacted evidence is retained in the Git-excluded

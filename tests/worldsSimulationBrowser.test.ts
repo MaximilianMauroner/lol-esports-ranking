@@ -89,6 +89,10 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     const champion = page.locator('table').first().getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Fixture LCK1 · LCK1', exact: true }) })
     assert.match(await champion.innerText(), /Reached champion/)
     assert.match(await champion.innerText(), /100.0%/)
+    await page.getByText('Simulation basis and precision', { exact: true }).click()
+    const completedPanel = page.locator('[aria-label="Worlds simulation"]')
+    await completedPanel.getByText('No historical or current model snapshot is assumed.', { exact: true }).waitFor()
+    assert.equal(await completedPanel.getByText(/^Snapshot .* · Model /).count(), 0)
     controls.stage = 'swiss-5'; controls.revision++
     await page.reload()
     await page.getByRole('button', { name: 'Cancel simulation', exact: true }).waitFor()

@@ -148,3 +148,27 @@ test('cancelled series block unsupported advancement while postponed, delayed an
     }
   } finally { globalThis.fetch = fetchBefore }
 })
+
+test('a coherent companion cannot complete a scheduled match that the feed still marks unresolved', async () => {
+  const state = worldsFixture()
+  const observed = state.playIn.results[0]
+  const event = worldsEvent(state)
+  event.series = [{ id: observed.matchId, eventId: event.id, startTime: null, stage: 'Play-In', status: 'upcoming', sourceState: 'unstarted', bestOf: 5,
+    teams: observed.teamIds.map((id) => ({ id, name: id, code: id, gameWins: null, outcome: null })), vodUrls: [] }]
+  const series = event.series[0]
+  const fetchBefore = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify(worldsArtifact(state, event)), { status: 200 })
+  try {
+    for (const sourceState of ['unstarted', 'postponed', 'delayed', 'unknown']) {
+      series.sourceState = sourceState; series.status = normalizeStatus(sourceState)
+      await assert.rejects(loadWorldsArtifact(event, true, new AbortController().signal), /before the schedule confirms its completion/)
+      assert.equal(groupTournamentSeries(event.series).upcoming[0].id, observed.matchId)
+    }
+    series.sourceState = 'completed'; series.status = 'completed'
+    series.teams.forEach((team, slot) => { team.gameWins = observed.gameWins[slot] })
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+    // Earlier results may legitimately fall outside the bounded schedule window.
+    event.series = []
+    await loadWorldsArtifact(event, true, new AbortController().signal)
+  } finally { globalThis.fetch = fetchBefore }
+})

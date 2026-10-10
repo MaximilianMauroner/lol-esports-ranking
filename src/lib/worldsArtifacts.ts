@@ -57,8 +57,11 @@ function validateScheduleResults(event: TournamentEvent, state: Worlds2026EventI
     if (series.status === 'live' || (series.status !== 'completed' && series.teams.some((team) => (team.gameWins ?? 0) > 0 || team.outcome))) {
       throw new Error('Worlds advancement is unavailable while a series has live or unresolved played-game evidence. Live game conditioning is not supported; the schedule remains available.')
     }
-    if (series.status !== 'completed') continue
     const observed = results.find((result) => result.matchId === series.id)
+    if (observed && series.status !== 'completed') {
+      throw new Error(`Worlds state reports result ${series.id} before the schedule confirms its completion. The schedule remains available.`)
+    }
+    if (series.status !== 'completed') continue
     if (!observed || series.teams.length !== 2 || new Set(series.teams.map((team) => team.id)).size !== 2
       || series.teams.some((team) => !team.id || !observed.teamIds.includes(team.id))) {
       throw new Error(`Worlds state must retain confirmed schedule result ${series.id} with the same match and team IDs.`)

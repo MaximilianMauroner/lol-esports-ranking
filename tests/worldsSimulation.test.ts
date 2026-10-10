@@ -60,6 +60,7 @@ test('pre-event retains all 19 international entrants, exact Play-In odds and pr
   const input = worldsFixture('play-in'); const basis = worldsBasis()
   const result = report(await runWorldsSimulation(input, basis, options))
   assert.equal(result.teams.length, 19)
+  assert.equal(result.model?.snapshotId, basis.snapshotId)
   assert.ok(result.unavailable.some((detail) => detail === WORLDS_2026_SWISS_RULES.drawUnavailable))
   assert.ok(result.teams.every((team) => team.stages.knockout === null))
   close(result.teams.reduce((sum, team) => sum + team.stages.swiss!, 0), 16)
@@ -96,6 +97,7 @@ test('final observed Swiss draw composes with random knockout and fixed bracket;
   assert.deepEqual(first.teams, second.teams)
   assert.equal(JSON.stringify({ input, basis }), before)
   assert.equal(first.method, 'seeded-monte-carlo'); assert.equal(first.trials, 10_000); assert.equal(first.unavailable.length, 0)
+  assert.equal(first.model?.snapshotId, basis.snapshotId)
   assert.equal(progress.at(-1), options.trials)
   conservation(first)
   // Independently: three fair 2–2 matches yield P(knockout)=1/2 for each team.
@@ -112,6 +114,7 @@ test('known knockout agrees with exact enumeration; completed event uses no pres
   const input = worldsFixture('knockout'); const basis = worldsBasis()
   const result = report(await runWorldsSimulation(input, basis, options))
   const reference = forecastWorlds2026Knockout(input.knockout!, basis)
+  assert.equal(result.model?.snapshotId, basis.snapshotId)
   assert.equal(reference.status, 'supported')
   for (const row of reference.teams) close(result.teams.find((team) => team.id === row.id)!.stages.champion!, row.championProbability)
   conservation(result)
@@ -119,6 +122,16 @@ test('known knockout agrees with exact enumeration; completed event uses no pres
   conservation(complete)
   assert.equal(complete.teams.find((team) => team.id === 'LCK1')!.stages.champion, 1)
   assert.equal(complete.method, 'exact-enumeration'); assert.equal(complete.hypotheticalMatchups.length, 0)
+  assert.equal(complete.model, null)
+  const futureInvalidBasis = worldsBasis()
+  futureInvalidBasis.ratingPublishedAt = '2027-01-01T00:00:00Z'
+  futureInvalidBasis.snapshot.standings[0].rating = Number.NaN
+  for (const unusedBasis of [basis, futureInvalidBasis]) {
+    const observed = report(await runWorldsSimulation(worldsFixture('completed'), unusedBasis, options))
+    assert.deepEqual(observed.teams, complete.teams)
+    assert.equal(observed.model, null, 'A supplied but unused model cannot become the basis of observed results.')
+    assert.equal(observed.hypotheticalMatchups.length, 0)
+  }
   const bad = worldsFixture('knockout'); bad.knockout!.qualifiers[0].id = 'CBLOL2'
   assert.equal((await runWorldsSimulation(bad, basis, options)).status, 'unsupported')
 })
@@ -160,6 +173,7 @@ test('unsupported model never yields partial totals; future basis, missing activ
     const basis = worldsBasis(); change(basis)
     const result = report(await runWorldsSimulation(input, basis, options))
     assert.ok(result.unavailable.length); assert.equal(result.counts.length, 0)
+    assert.equal(result.model, null, 'A rejected forecast has no consumed model basis.')
     assert.equal(result.teams.find((team) => team.id === 'CBLOL1')!.stages.champion, null)
   }
   for (const invalid of [{ seed: -1, trials: 1 }, { seed: 1, trials: 100_000 }, { seed: 1.5, trials: 100 }]) assert.equal((await runWorldsSimulation(input, worldsBasis(), invalid)).status, 'unsupported')

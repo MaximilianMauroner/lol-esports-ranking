@@ -61,7 +61,7 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
   if (playIn.status === 'unsupported') return playIn
   const contextError = validateEventContext(input)
   if (contextError) return contextError
-  const report = initialReport(input, basis, options)
+  const report = initialReport(input, options)
   for (const team of playIn.teams) {
     const row = report.teams.find((row) => row.id === team.id)!
     row.state = team.status === 'active' ? 'Play-In active' : team.status === 'qualified' ? 'Reached Swiss' : `Eliminated · ${team.finish}th`
@@ -77,6 +77,7 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
       const forecast = forecastWorlds2026PlayIn(input.playIn, basis)
       if (forecast.status === 'supported') {
         report.method = 'exact-enumeration'
+        report.model = modelMetadata(basis)
         report.hypotheticalMatchups.push(...forecast.hypotheticalMatchups)
         for (const odds of forecast.teams) {
           const row = report.teams.find((row) => row.id === odds.id)!
@@ -124,6 +125,7 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
       if (forecast.status === 'unsupported') report.unavailable.push(`Knockout forecast: ${forecast.detail}`)
       else {
         report.method = 'exact-enumeration'
+        if (basis && forecast.hypotheticalMatchups.length) report.model = modelMetadata(basis)
         report.hypotheticalMatchups.push(...forecast.hypotheticalMatchups)
         for (const odds of forecast.teams) {
           const row = report.teams.find((row) => row.id === odds.id)!
@@ -147,10 +149,11 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
   }
   const sampled = await sampleSwissToKnockout(report, swiss, basis, options, hooks)
   if (sampled) report.unavailable.push(sampled.detail)
+  else report.model = modelMetadata(basis)
   return finishReport(report, started)
 }
 
-function initialReport(input: Worlds2026EventInput, basis: ForecastBasis | null, options: SimulationOptions): WorldsReport {
+function initialReport(input: Worlds2026EventInput, options: SimulationOptions): WorldsReport {
   const field = [...input.directEntrants, ...input.playIn.entrants]
   return {
     pinnedState: structuredClone(input),
@@ -164,9 +167,7 @@ function initialReport(input: Worlds2026EventInput, basis: ForecastBasis | null,
       finishes: Object.fromEntries(WORLD_FINISHES.map((finish) => [finish, null])) as Record<WorldFinish, number | null> })),
     matches: [], unavailable: [], method: 'observed-state', engineVersion: 'worlds-2026-composition-v1',
     trials: 0, seed: options.seed, elapsedMs: 0, counts: [], hypotheticalMatchups: [],
-    model: basis ? { snapshotId: basis.snapshotId, version: basis.model.version, configHash: basis.model.configHash,
-      dataAsOf: basis.ratingDataAsOf, publishedAt: basis.ratingPublishedAt, identityRevision: basis.identityMap.revision,
-      parameters: structuredClone(basis.model.parameters), ratingScale: structuredClone(basis.model.ratingScale), dataMode: basis.dataMode } : null,
+    model: null,
     assumptions: [
       'Conditional on the supplied observations. Evidence tags are caller assertions, not official-source certification.',
       'Frozen Power, uncertainty, roster and model/config; independent neutral games from the existing shared probability provider. Side/pick and draft choices are not modeled.',
@@ -174,6 +175,11 @@ function initialReport(input: Worlds2026EventInput, basis: ForecastBasis | null,
       'Future Swiss draws are unavailable until the sequential displacement/look-ahead and waiver procedure is established. No uniform legal Swiss matching is used.',
     ],
   }
+}
+function modelMetadata(basis: ForecastBasis) {
+  return { snapshotId: basis.snapshotId, version: basis.model.version, configHash: basis.model.configHash,
+    dataAsOf: basis.ratingDataAsOf, publishedAt: basis.ratingPublishedAt, identityRevision: basis.identityMap.revision,
+    parameters: structuredClone(basis.model.parameters), ratingScale: structuredClone(basis.model.ratingScale), dataMode: basis.dataMode }
 }
 function validateEventContext(input: Worlds2026EventInput): WorldsUnavailable | null {
   if (!validWorldsEvidence(input.directEntrantEvidence)) {
