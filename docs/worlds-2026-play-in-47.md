@@ -1,6 +1,6 @@
 # Offline 2026 Worlds Play-In (#47)
 
-This slice implements only the observed four-slot Play-In bracket and its conditional remaining-match odds. No collector, UI, server, receipt writer or production artifact imports it. The tests use synthetic team IDs and model snapshots. It does not complete #47 or certify live following.
+This module implements the observed four-slot Play-In bracket and its conditional remaining-match odds. The [Worlds composition and hub journey](worlds-simulation-47.md) now calls it. No collector, receipt writer or production artifact producer imports it. The tests use synthetic team IDs and model snapshots. It does not complete #47 or certify live following.
 
 ## Primary rules checked on 2 October 2026
 
@@ -34,6 +34,6 @@ Each team's Swiss/17th/18th/19th finish probabilities sum to one. Across the com
 
 Focused check: `pnpm exec tsx --tsconfig tsconfig.app.json --test tests/worlds2026PlayIn.test.ts`. Also run typecheck, lint, affected #46/observed-state regressions, and required hosted Checks. Serialize installs/builds/full suites with `/tmp/t3-heavy-tests-20260926.lock`; run one worker.
 
-Later #47 PRs own certified Swiss sampling, exact observed knockout odds, Monte Carlo/worker/UI and the 2022 tiebreaker/handoff. Max supplies provider-rights decisions, licensed observations, historical rules/snapshots and independent receipt-delivery evidence. The known synthetic Hub first-load timeout remains an activation stability follow-up under #45.
+The composition now supplies exact observed knockout odds and supported late-Swiss Monte Carlo/worker/UI. Certified future Swiss sampling and the 2022 tiebreaker/handoff remain gates in the linked audit. Max supplies provider-rights decisions, licensed observations, historical rules/snapshots and independent receipt-delivery evidence. The known synthetic Hub first-load timeout remains an activation stability follow-up under #45.
 
 A merge to main must be treated as a Railway production deployment. This GO authorizes implementation and PRs only. Before any separately authorized merge, Max must confirm production `VITE_TOURNAMENT_HUB_ENABLED`, `VITE_TOURNAMENT_FORECASTS_ENABLED` and `TOURNAMENT_COLLECTOR_ENABLED` are unset. This slice changes no deployment settings or shared UI/server files.

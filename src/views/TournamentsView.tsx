@@ -8,6 +8,8 @@ import { currentHashQuery, hashParam } from '../lib/urlState'
 import { loadTournamentForecastArtifacts, loadTournamentForecastLedger } from '../lib/tournamentForecastArtifacts'
 import { emptyForecastLedger, forecastTournamentSeries, pinnedForecast, scoreConditionedSeriesOdds, type ForecastBasis, type ForecastLedger, type ForecastReceipt, type TournamentForecast } from '../lib/tournamentForecast'
 import { ConditionalPowerPreview } from '../components/ConditionalPowerPreview'
+import { WorldsTournamentPanel } from '../components/WorldsTournamentPanel'
+import { worldsFeedEventKey } from '../lib/worldsArtifacts'
 import type { ConditionalPowerResultLedger } from '../lib/conditionalPowerResultReceipts'
 import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
 
@@ -119,10 +121,14 @@ export function TournamentsView() {
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
         <Alert variant="warning" role="status">Coverage {state.feed.coverage.complete ? 'has warnings' : 'is incomplete'} for {state.feed.coverage.start.slice(0, 10)} to {state.feed.coverage.end.slice(0, 10)}. {state.feed.coverage.warnings.join(' ')}</Alert>
       ) : null}
-      <p className="text-sm text-muted-foreground">Source: LoL Esports public site schedule reference (unsupported API). Series results here are source reported and are separate from scored rankings. {FORECASTS_ENABLED ? 'Match estimates use a separately dated Power snapshot; advancement rules are not verified.' : 'Forecast unavailable: rules not verified.'}</p>
+      <p className="text-sm text-muted-foreground">Source: LoL Esports public site schedule reference (unsupported API). Series results here are source reported and are separate from scored rankings. {FORECASTS_ENABLED ? 'Match estimates use a separately dated Power snapshot. Worlds advancement requires a coherent, reviewed per-season state companion.' : 'Forecast unavailable: rules not verified.'}</p>
       {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : (
         <>
           <h2 className="text-lg font-semibold">{selected.label}</h2>
+          {FORECASTS_ENABLED && selected.competition === 'worlds' ? <WorldsTournamentPanel
+            key={JSON.stringify([worldsFeedEventKey(selected), forecastArtifacts.basis?.snapshotId, forecastArtifacts.basis?.model.version,
+              forecastArtifacts.basis?.model.configHash, forecastArtifacts.basis?.ratingDataAsOf, forecastArtifacts.basis?.ratingPublishedAt, forecastArtifacts.basis?.identityMap.revision])}
+            event={selected} basis={forecastArtifacts.basis} fixtureFeed={state.feed.dataMode === 'synthetic-fixture'} /> : null}
           {(['live', 'upcoming', 'results', 'unresolved'] as const).map((group) => <section key={group} aria-label={group} className="grid gap-3">
             <h3 className="text-base font-semibold capitalize">{group === 'unresolved' ? 'Unresolved results' : group}</h3>
             {grouped[group].length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{grouped[group].map((series) => <SeriesCard key={series.id} series={series} timezone={timezone} now={now} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />)}</div> : <p className="text-sm text-muted-foreground">No {group} series in this schedule window.</p>}
