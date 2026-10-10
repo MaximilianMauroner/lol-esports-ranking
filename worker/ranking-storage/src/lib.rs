@@ -1,3 +1,4 @@
+mod publication;
 mod s3;
 
 use ranking_contracts::{Result, canonical_json_value, gunzip, js_pretty_json_value, sha256};
@@ -12,6 +13,7 @@ const JSON_TYPE: &str = "application/json; charset=utf-8";
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case", deny_unknown_fields)]
 enum Input {
+    VerifyPublication,
     SyncObject {
         namespace: String,
         #[serde(rename = "compressedPath")]
@@ -68,6 +70,7 @@ pub fn run(input_path: &str, output_path: &str) -> Result<()> {
         .map_err(|_| "Invalid storage descriptor")?;
     let bucket = s3::Bucket::from_env()?;
     let result = match input {
+        Input::VerifyPublication => publication::verify(&bucket)?,
         Input::SyncObject {
             namespace,
             compressed_path,

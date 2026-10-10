@@ -49,6 +49,17 @@ both workers against MinIO. Preserve previous-generation rollback references
 and all stored compatibility readers. Generation graph/promotion remain
 Node-owned until the native implementation passes these gates.
 
+The native `verify-publication` action advances the existing receipt-bound
+reader. Its differential MinIO cases must compare valid results and reject
+malformed or corrupt authority/closure cases with no pointer writes. This is
+declared-closure validation, not a complete graph/promotion acceptance gate.
+Include Node-readable pointer numeric coercions, canonical expanded receipt
+years and both TimeClip endpoints. Gzip cases must cover validated zero padding,
+concatenation, corrupt CRC/size, truncated members and nonzero trailing junk.
+Record compiled current-source execution with zero skips before claiming that
+layer's MinIO acceptance. A missing local MinIO/Go binary or conditional skip is
+a blocked local check; the required hosted MinIO job supplies separate evidence.
+
 ## M5: the ranking model
 
 Port import/model/player/replay/projection and the explicitly deferred state

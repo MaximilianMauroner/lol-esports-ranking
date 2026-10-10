@@ -168,20 +168,6 @@ fn borrowed_json_matches_node_canonical_bytes() {
 }
 
 #[test]
-fn gzip_checks_all_members_and_checksums() {
-    let mut joined = gzip(b"first").unwrap();
-    joined.extend(gzip(b"second").unwrap());
-    assert_eq!(gunzip(&joined).unwrap(), b"firstsecond");
-    let mut corrupt = gzip(b"payload").unwrap();
-    let checksum = corrupt.len() - 8;
-    corrupt[checksum] ^= 1;
-    assert!(gunzip(&corrupt).is_err());
-    let mut truncated = gzip(b"payload").unwrap();
-    truncated.pop();
-    assert!(gunzip(&truncated).is_err());
-}
-
-#[test]
 fn node_order_and_provider_time_contracts() {
     let fixtures = fixtures();
     let mut strings = fixtures["codeUnitOrder"]["input"]

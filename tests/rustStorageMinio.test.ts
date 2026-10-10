@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
-import { CreateBucketCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { acquireBucketLease, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
+import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { acquireBucketLease, readActiveGenerationPublication, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
 import { prepareStateObject, syncContentAddressedStateObject } from '../scripts/incremental-state-storage.mjs'
+import { createGenerationPublicationReceipt, type GenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
+import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 
 const endpoint = process.env.RANKING_STORAGE_TEST_ENDPOINT
 const binary = process.env.RANKING_RUST_TEST_BINARY
@@ -25,19 +28,7 @@ test('native storage matches Node immutable bytes and shares MinIO lease fencing
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
   const now = new Date('2026-10-09T00:00:00.000Z')
   const nativeConfig = { ...config, prefix: 'rust' }
-  const invoke = async (input: object, prefix = 'rust') => {
-    const inputPath = join(root, 'input.json')
-    const outputPath = join(root, 'output.json')
-    await writeFile(inputPath, JSON.stringify(input), { mode: 0o600 })
-    await rm(outputPath, { force: true })
-    await runFile(resolve(binary!), ['storage', inputPath, outputPath], { env: {
-      ...process.env, RANKING_BUCKET_ENDPOINT: endpoint!, RANKING_BUCKET_NAME: config.bucket,
-      RANKING_BUCKET_REGION: config.region, RANKING_BUCKET_PREFIX: prefix,
-      RANKING_BUCKET_ACCESS_KEY_ID: config.accessKeyId, RANKING_BUCKET_SECRET_ACCESS_KEY: config.secretAccessKey,
-      RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
-    } })
-    return JSON.parse(await readFile(outputPath, 'utf8'))
-  }
+  const invoke = (input: object, prefix = 'rust') => invokeStorage(root, { ...config, prefix }, input)
   try {
     await client.send(new CreateBucketCommand({ Bucket: config.bucket }))
     const prepared = prepareStateObject({ '😀': 1, z: [0, 1e-7, { rating: 1_234.5 }], a: 'captured input contract' })
@@ -121,3 +112,203 @@ test('native storage matches Node immutable bytes and shares MinIO lease fencing
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('native publication reader matches Node against MinIO for authority and declared closure failures', { skip: !endpoint || !binary }, async (t) => {
+  const url = new URL(endpoint!)
+  assert.equal(url.protocol, 'http:')
+  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
+  const root = await mkdtemp(join(tmpdir(), 'rust-publication-'))
+  const config = { enabled: true as const, endpoint: endpoint!, bucket: `publication-${Date.now()}`, region: 'us-east-1',
+    accessKeyId: 'minio-test', secretAccessKey: 'minio-test-password', prefix: 'isolated', forcePathStyle: true }
+  const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: true,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
+  const readNode = () => readActiveGenerationPublication({ config, client })
+  const readRust = () => invokeStorage(root, config, { action: 'verify-publication' })
+  const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+  const put = async (key: string, body: Buffer, digest = hash(body), compressed = false) => {
+    const result = await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body,
+      ContentType: 'application/json; charset=utf-8', ...(compressed ? { ContentEncoding: 'gzip' } : {}),
+      Metadata: { sha256: digest, 'semantic-bytes': String(body.length) } }))
+    return { reference: { key, digest, bytes: body.length }, etag: result.ETag }
+  }
+  const activeKey = `${config.prefix}/active-generation.json`
+  const generationId = 'declared-closure-fixture'
+  try {
+    await client.send(new CreateBucketCommand({ Bucket: config.bucket }))
+    await t.test('missing and supported legacy pointers keep the Node compatibility result', async () => {
+      assert.deepEqual(await readRust(), await readNode())
+      for (const value of [{ generationId }, { generationId, publicManifestSchemaVersion: 2, previousGeneration: {} }]) {
+        await put(activeKey, Buffer.from(JSON.stringify(value)))
+        assert.deepEqual(await readRust(), await readNode())
+      }
+    })
+    const manifestBytes = Buffer.from(canonicalJsonFor({ fixture: 'manifest' }))
+    const manifest = await put(`${config.prefix}/generations/${generationId}/manifest.json`, manifestBytes)
+    const state = await put(`${config.prefix}/state/generations/${generationId}.json`, Buffer.from('{"fixture":"state"}'))
+    const compressed = await Promise.all(['raw/objects', 'state/objects', 'objects'].map(async (namespace) => {
+      const semantic = Buffer.from(canonicalJsonFor({ fixture: namespace }))
+      const digest = hash(semantic)
+      const body = gzipSync(semantic)
+      const stored = await put(`${config.prefix}/${namespace}/sha256/${digest}`, body, digest, true)
+      return { ...stored, body, semantic }
+    }))
+    const receipt = createGenerationPublicationReceipt({ generationId, prefix: config.prefix,
+      preparedAt: '2026-10-10T00:00:00.000Z', fencingToken: 1, leaseOwner: 'test-host', promotionEtag: '"test-lease"',
+      provenance: { modelVersion: 'fixture', modelConfigHash: 'fixture', source: 'isolated-test', dataMode: 'fixture', sourceProviders: ['test'] },
+      authorities: { publicManifest: manifest.reference, rawReceipt: compressed[0].reference, stateManifest: state.reference },
+      objects: [manifest, state, ...compressed].map(({ reference }) => ({ ...reference, outcome: 'uploaded' as const })),
+    })
+    const pointer = { generationId, fencingToken: 1, manifestKey: manifest.reference.key,
+      manifestDigest: manifest.reference.digest, manifestBytes: manifest.reference.bytes,
+      rawReceiptKey: compressed[0].reference.key, rawReceiptDigest: compressed[0].reference.digest,
+      stateManifestKey: state.reference.key, stateManifestDigest: state.reference.digest, publicationSchemaVersion: 1 }
+    const publish = async (value: unknown = receipt, patch: Record<string, unknown> = {}, body?: Buffer) => {
+      const stored = await put(`${config.prefix}/generations/${generationId}/publish.json`, body ?? Buffer.from(canonicalJsonFor(value)))
+      await put(activeKey, Buffer.from(JSON.stringify({ ...pointer,
+        publicationReceiptKey: stored.reference.key, publicationReceiptDigest: stored.reference.digest,
+        publicationReceiptBytes: stored.reference.bytes, publicationReceiptEtag: stored.etag, ...patch })))
+    }
+    const rejected = async () => {
+      await assert.rejects(readNode())
+      await assert.rejects(readRust())
+      await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' }, 'No successful descriptor survives failure')
+    }
+    await t.test('canonical receipt and every public/raw/state member produce exact reader parity', async () => {
+      await publish()
+      assert.deepEqual(await readRust(), await readNode())
+      // Receipt parsing follows JavaScript numeric values, not JSON integer spelling.
+      await publish(receipt, {}, Buffer.from(canonicalJsonFor(receipt).replace('"schemaVersion":1', '"schemaVersion":1.0')))
+      assert.deepEqual(await readRust(), await readNode())
+    })
+    await t.test('pointer fencing follows Node Number coercion without weakening safe receipt tokens', async () => {
+      for (const fencingToken of [1, '1', true, [1], ['1'], [['1']], ' +1.0e0 ', '\uFEFF1\u00A0', '0x1', '0o1', '0b1', '.1e1']) {
+        await publish(receipt, { fencingToken })
+        assert.deepEqual(await readRust(), await readNode(), JSON.stringify(fencingToken))
+      }
+      const safeToken = Number.MAX_SAFE_INTEGER
+      const maximumReceipt = { ...receipt, fencing: { ...receipt.fencing, token: safeToken } }
+      for (const fencingToken of [safeToken, String(safeToken), [String(safeToken)], '0x1fffffffffffff']) {
+        await publish(maximumReceipt, { fencingToken })
+        assert.deepEqual(await readRust(), await readNode(), JSON.stringify(fencingToken))
+      }
+      for (const fencingToken of [2, '2', false, null, [], [null], [true], [1, 0], {}, '1_0', '+0x1', '\u00851', 'Infinity', '1e999']) {
+        await publish(receipt, { fencingToken })
+        await rejected()
+      }
+    })
+    await t.test('receipt canonical ISO accepts expanded years through both TimeClip endpoints', async () => {
+      for (const preparedAt of ['0000-02-29T00:00:00.000Z', '2024-02-29T23:59:59.999Z', '9999-12-31T23:59:59.999Z',
+        '+010000-01-01T00:00:00.000Z', '-000001-01-01T00:00:00.000Z',
+        '-271821-04-20T00:00:00.000Z', '+275760-09-13T00:00:00.000Z']) {
+        await publish({ ...receipt, preparedAt })
+        assert.deepEqual(await readRust(), await readNode(), preparedAt)
+      }
+      for (const preparedAt of ['2023-02-29T00:00:00.000Z', '2024-04-31T00:00:00.000Z',
+        '2024-02-29T23:59:60.000Z', '2024-02-29T24:00:00.000Z', '2024-02-29T00:00:00Z',
+        '2024-02-29T00:00:00.000+00:00', '+009999-01-01T00:00:00.000Z', '-000000-01-01T00:00:00.000Z',
+        '-271821-04-19T23:59:59.999Z', '+275760-09-13T00:00:00.001Z']) {
+        await publish({ ...receipt, preparedAt })
+        await rejected()
+      }
+    })
+    await t.test('equivalent alternative gzip transport remains valid with its declared size', async () => {
+      const original = compressed[0]
+      const alternate = gzipSync(original.semantic, { level: 1 })
+      await put(original.reference.key, alternate, original.reference.digest, true)
+      const reference = { ...original.reference, bytes: alternate.length }
+      await publish({ ...receipt, authorities: { ...receipt.authorities, rawReceipt: reference },
+        objects: receipt.objects.map((object) => object.key === reference.key ? { ...object, bytes: alternate.length } : object) })
+      assert.deepEqual(await readRust(), await readNode())
+      await put(original.reference.key, original.body, original.reference.digest, true)
+    })
+    await t.test('complete gzip members accept Node padding and concatenation across public/raw/state', async () => {
+      for (const original of compressed) {
+        const split = Math.floor(original.semantic.length / 2)
+        const concatenated = Buffer.concat([gzipSync(original.semantic.subarray(0, split)), gzipSync(original.semantic.subarray(split))])
+        for (const body of [Buffer.concat([original.body, Buffer.alloc(8)]), Buffer.concat([original.body, Buffer.from([0, 0, 255, 1])]),
+          concatenated, Buffer.concat([concatenated, Buffer.from([0, 255])])]) {
+          const reference = { ...original.reference, bytes: body.length }
+          await put(reference.key, body, reference.digest, true)
+          await publish({ ...receipt,
+            authorities: { ...receipt.authorities,
+              ...(reference.key === receipt.authorities.rawReceipt.key ? { rawReceipt: reference } : {}) },
+            objects: receipt.objects.map((object) => object.key === reference.key ? { ...object, bytes: reference.bytes } : object) })
+          assert.deepEqual(await readRust(), await readNode(), reference.key)
+        }
+        await put(original.reference.key, original.body, original.reference.digest, true)
+      }
+    })
+    await t.test('padding never conceals an invalid gzip footer or an incomplete member', async () => {
+      const original = compressed[0]
+      const crc = Buffer.from(original.body)
+      crc[crc.length - 8] ^= 1
+      const size = Buffer.from(original.body)
+      size[size.length - 4] ^= 1
+      for (const body of [Buffer.concat([crc, Buffer.alloc(8)]), Buffer.concat([size, Buffer.alloc(8)]),
+        original.body.subarray(0, original.body.length - 1), Buffer.concat([original.body, Buffer.from([1, 2, 3])])]) {
+        const reference = { ...original.reference, bytes: body.length }
+        await put(reference.key, body, reference.digest, true)
+        await publish({ ...receipt, authorities: { ...receipt.authorities, rawReceipt: reference },
+          objects: receipt.objects.map((object) => object.key === reference.key ? { ...object, bytes: reference.bytes } : object) })
+        await rejected()
+      }
+      await put(original.reference.key, original.body, original.reference.digest, true)
+    })
+    const mutations: Array<[string, (value: GenerationPublicationReceipt) => unknown]> = [
+      ['duplicate membership', (value) => ({ ...value, objects: [...value.objects, value.objects[0]] })],
+      ['mutable namespace', (value) => ({ ...value, objects: [...value.objects, { ...value.objects[0], key: `${config.prefix}/raw/manifest.json` }] })],
+      ['outside prefix', (value) => ({ ...value, objects: [...value.objects, { ...value.objects[0], key: 'foreign/objects/sha256/' + value.objects[0].digest }] })],
+      ['missing authority member', (value) => ({ ...value, objects: value.objects.filter((object) => object.key !== manifest.reference.key) })],
+      ['unknown receipt field', (value) => ({ ...value, unverified: true })],
+      ['unsafe byte count', (value) => ({ ...value, objects: value.objects.map((object, index) => index === 0 ? { ...object, bytes: Number.MAX_SAFE_INTEGER + 1 } : object) })],
+      ['unsafe receipt fencing token', (value) => ({ ...value, fencing: { ...value.fencing, token: Number.MAX_SAFE_INTEGER + 1 } })],
+      ['duplicate provenance provider', (value) => ({ ...value, provenance: { ...value.provenance, sourceProviders: ['test', 'test'] } })],
+    ]
+    for (const [name, mutate] of mutations) {
+      await t.test(name, async () => { await publish(mutate(receipt)); await rejected() })
+    }
+    for (const patch of [{ publicationReceiptEtag: '"stale"' }, { manifestDigest: '0'.repeat(64) },
+      { stateManifestDigest: '0'.repeat(64) }, { fencingToken: 2 }, { publicationSchemaVersion: 2 }]) {
+      await t.test(`pointer rejects ${Object.keys(patch)[0]}`, async () => { await publish(receipt, patch); await rejected() })
+    }
+    await t.test('same-length manifest mutation with unchanged metadata fails semantic digest', async () => {
+      await publish()
+      const mutated = Buffer.from(canonicalJsonFor({ fixture: 'mutated!' }))
+      assert.equal(mutated.length, manifestBytes.length)
+      await put(manifest.reference.key, mutated, manifest.reference.digest)
+      await rejected()
+      await put(manifest.reference.key, manifestBytes)
+    })
+    await t.test('corrupt gzip and missing members reject without changing active authority', async () => {
+      await publish()
+      const original = compressed[0]
+      const before = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
+      await put(original.reference.key, Buffer.alloc(original.body.length, 35), original.reference.digest, true)
+      await rejected()
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: original.reference.key }))
+      await rejected()
+      const after = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
+      assert.equal(after.ETag, before.ETag)
+      assert.deepEqual(await after.Body!.transformToByteArray(), await before.Body!.transformToByteArray())
+    })
+  } finally {
+    client.destroy()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+async function invokeStorage(root: string, config: {
+  endpoint: string; bucket: string; region: string; prefix: string; accessKeyId: string; secretAccessKey: string
+}, input: object) {
+  const inputPath = join(root, 'input.json')
+  const outputPath = join(root, 'output.json')
+  await writeFile(inputPath, JSON.stringify(input), { mode: 0o600 })
+  await rm(outputPath, { force: true })
+  await runFile(resolve(binary!), ['storage', inputPath, outputPath], { env: {
+    ...process.env, RANKING_BUCKET_ENDPOINT: config.endpoint, RANKING_BUCKET_NAME: config.bucket,
+    RANKING_BUCKET_REGION: config.region, RANKING_BUCKET_PREFIX: config.prefix,
+    RANKING_BUCKET_ACCESS_KEY_ID: config.accessKeyId, RANKING_BUCKET_SECRET_ACCESS_KEY: config.secretAccessKey,
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+  } })
+  return JSON.parse(await readFile(outputPath, 'utf8'))
+}
