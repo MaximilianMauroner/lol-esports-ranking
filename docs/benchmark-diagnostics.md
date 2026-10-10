@@ -36,3 +36,28 @@ Inspector profile:
 ```sh
 node --expose-gc --import tsx --test tests/diagnosticProfileLifecycle.test.mjs
 ```
+
+## Recorded baseline failure and repair
+
+The 10 October capture on the reviewed stack ends with status 134 during
+baseline setup, before any calibration/incremental measurement. A matching
+parent process stamp, arguments, GC PID and phase markers distinguish it from
+verifier work. The allocation profile captures large retained checkpoint
+encodings; persistence then retains successive approximately 49 MB canonical
+checkpoint bodies. Group memory stays below 3 GiB and build swap stays zero.
+The instrumented capture is incomplete and supplies no passing gate receipt.
+
+Sequential checkpoint persistence now uses the same checkpoint encoder and
+immutable writer, retaining references rather than all prepared bodies. The
+manifest keeps its ordering, compatibility, semantic identity and stored layout;
+full graph verification still precedes promotion. This is a permanent memory
+requirement, not a compatibility mode. The eager preparation API remains used
+by existing plan/fixture callers. No stored data is rewritten or new schema is
+introduced. Current captures, bounded profiles and check outcomes belong in
+ignored `.agents/artifacts/refresh-live-20261009/` and the linked issue/PR updates.
+A baseline setup completion, incremental worker exit or partial verifier result
+cannot substitute for the complete three-repeat gate. Record log byte caps and
+timeouts explicitly; do not fabricate a terminal receipt after cancellation.
+Publication-member hashing/decompression/buffer work is visible in the bounded
+first-worker sample. A hotspot does not establish the historical production or
+CI failure cause without controlled supporting evidence.

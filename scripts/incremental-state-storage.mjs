@@ -44,42 +44,9 @@ export function prepareContentAddressedState({
 
   const objects = []
   const candidates = checkpoints.map((checkpoint, index) => {
-    assertRecord(checkpoint, `checkpoints[${index}]`)
-    const boundary = parseBoundary(checkpoint.boundary, `checkpoints[${index}].boundary`)
-    const rawPrefix = parseRawPrefix(checkpoint.rawPrefix, `checkpoints[${index}].rawPrefix`)
-    const storedObject = checkpoint.storedObjectReference
-      ? semanticStateReference(parseObjectReference(checkpoint.storedObjectReference, `checkpoints[${index}].storedObjectReference`))
-      : undefined
-    if (!storedObject) {
-      assertRecord(checkpoint.ratingCheckpoint, `checkpoints[${index}].ratingCheckpoint`)
-      assertExactKeys(checkpoint.causalSummaries, CAUSAL_SUMMARY_KEYS, `checkpoints[${index}].causalSummaries`)
-      for (const key of CAUSAL_SUMMARY_KEYS) {
-        assertRecord(checkpoint.causalSummaries[key], `checkpoints[${index}].causalSummaries.${key}`)
-      }
-    }
-    const checkpointCompatibility = parseCompatibility(
-      checkpoint.compatibility ?? parsedCompatibility,
-      `checkpoints[${index}].compatibility`,
-    )
-    if (canonicalJsonFor(checkpointCompatibility) !== canonicalJsonFor(parsedCompatibility)) {
-      throw new Error(`Invalid incremental state: checkpoints[${index}] compatibility differs from manifest compatibility`)
-    }
-    const bundle = storedObject ? undefined : {
-      artifactKind: INCREMENTAL_STATE_CHECKPOINT_KIND,
-      schemaVersion: 1,
-      boundary,
-      rawPrefix,
-      compatibility: checkpointCompatibility,
-      ratingCheckpoint: checkpoint.ratingCheckpoint,
-      causalSummaries: checkpoint.causalSummaries,
-    }
-    const prepared = storedObject ? undefined : prepareStateObject(bundle)
+    const { candidate, prepared } = prepareStateCheckpoint(checkpoint, parsedCompatibility, index)
     if (prepared) objects.push(prepared)
-    return {
-      boundary,
-      rawPrefix,
-      object: storedObject ?? stateObjectReference(prepared),
-    }
+    return candidate
   })
   assertOrderedUniqueCandidates(candidates)
 
@@ -102,6 +69,40 @@ export function prepareContentAddressedState({
     manifestPrepared,
     objects: uniquePreparedObjects(objects),
   }
+}
+
+export function prepareStateCheckpoint(checkpoint, compatibility, index = 0) {
+  const parsedCompatibility = parseCompatibility(compatibility, 'compatibility')
+  assertRecord(checkpoint, `checkpoints[${index}]`)
+  const boundary = parseBoundary(checkpoint.boundary, `checkpoints[${index}].boundary`)
+  const rawPrefix = parseRawPrefix(checkpoint.rawPrefix, `checkpoints[${index}].rawPrefix`)
+  const storedObject = checkpoint.storedObjectReference
+    ? semanticStateReference(parseObjectReference(checkpoint.storedObjectReference, `checkpoints[${index}].storedObjectReference`))
+    : undefined
+  if (!storedObject) {
+    assertRecord(checkpoint.ratingCheckpoint, `checkpoints[${index}].ratingCheckpoint`)
+    assertExactKeys(checkpoint.causalSummaries, CAUSAL_SUMMARY_KEYS, `checkpoints[${index}].causalSummaries`)
+    for (const key of CAUSAL_SUMMARY_KEYS) {
+      assertRecord(checkpoint.causalSummaries[key], `checkpoints[${index}].causalSummaries.${key}`)
+    }
+  }
+  const checkpointCompatibility = parseCompatibility(
+    checkpoint.compatibility ?? parsedCompatibility,
+    `checkpoints[${index}].compatibility`,
+  )
+  if (canonicalJsonFor(checkpointCompatibility) !== canonicalJsonFor(parsedCompatibility)) {
+    throw new Error(`Invalid incremental state: checkpoints[${index}] compatibility differs from manifest compatibility`)
+  }
+  const prepared = storedObject ? undefined : prepareStateObject({
+    artifactKind: INCREMENTAL_STATE_CHECKPOINT_KIND,
+    schemaVersion: 1,
+    boundary,
+    rawPrefix,
+    compatibility: checkpointCompatibility,
+    ratingCheckpoint: checkpoint.ratingCheckpoint,
+    causalSummaries: checkpoint.causalSummaries,
+  })
+  return { candidate: { boundary, rawPrefix, object: storedObject ?? stateObjectReference(prepared) }, prepared }
 }
 
 export function prepareStateObject(value) {

@@ -73,7 +73,12 @@ actions report Linux `VmHWM` as `childMaxRssBytes`.
 
 Oracle preparation compares game inventories without loading inherited objects.
 It preserves delta chains and replaces chains longer than 32 deltas with a new
-baseline. Recovery verifies the baseline and all mutations before replacing the
+baseline. Full baseline preparation moves existing row strings into its JSON
+tree after releasing the CSV buffer. It does not keep a second complete row
+tree beside canonical serialization. Discarded delta chains are released before
+rebaseline; retained delta serialization releases the original source first.
+These are permanent resource requirements, with no new stored format or reader.
+Recovery verifies the baseline and all mutations before replacing the
 destination. Reconstructed provider files and the manifest are staged; the
 cross-filesystem fallback publishes the manifest last.
 
@@ -137,8 +142,8 @@ and never overwritten. Lease acquisition, renewal and release compare the same
 `active-generation.json` ETag used by Node. A takeover changes the fencing token;
 the old owner cannot renew or release the new authority.
 
-This storage layer awaits compiled isolated acceptance. It is not yet selected
-by the Node parent. Generation manifests, exhaustive raw/state/public graph
+The primitive layer has compiled loopback MinIO acceptance recorded in #84.
+It is not yet selected by the Node parent. Generation manifests, exhaustive raw/state/public graph
 verification, publication receipts, promotion and audit receipts still use Node.
 M4 is incomplete until those paths are ported and the lease-change-during-
 promotion check passes against MinIO. There is no Rust ranking model, replay,

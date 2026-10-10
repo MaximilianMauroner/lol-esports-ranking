@@ -23,6 +23,7 @@ import { importRankingSourceData, type RankingSourceImport } from './ranking-sou
 import {
   assertStoredStateObjectIntegrity,
   prepareContentAddressedState,
+  prepareStateCheckpoint,
   prepareStateObject,
   stateObjectReferenceFor,
   syncContentAddressedStateObject,
@@ -187,15 +188,26 @@ export async function persistIncrementalStateBuild({
   const persistSpan = diagnosticBegin('state.persist', { checkpoints: state.checkpoints.length })
   const ledgerPrepared = prepareStateObject(state.ledger)
   const ledgerSync = await syncContentAddressedStateObject(client, config, ledgerPrepared)
+  const checkpoints = []
+  const objectResults = []
+  // Retain only references between writes, not every checkpoint's canonical
+  // string and buffer alongside the already encoded replay state.
+  for (const [index, checkpoint] of state.checkpoints.entries()) {
+    const { candidate, prepared: object } = prepareStateCheckpoint(checkpoint, state.compatibility, index)
+    if (object) objectResults.push(await syncContentAddressedStateObject(client, config, object))
+    checkpoints.push({
+      boundary: candidate.boundary,
+      rawPrefix: candidate.rawPrefix,
+      storedObjectReference: candidate.object,
+    })
+  }
   const prepared = prepareContentAddressedState({
     generationId, runId, baseGenerationId, baseRunId,
     canonicalLedgerReference: stateObjectReferenceFor(ledgerPrepared),
     sourceReceiptDigest: state.sourceReceiptDigest,
     compatibility: state.compatibility,
-    checkpoints: state.checkpoints,
+    checkpoints,
   })
-  const objectResults = []
-  for (const object of prepared.objects) objectResults.push(await syncContentAddressedStateObject(client, config, object))
   // Promotion validates the ledger and every checkpoint body before activation,
   // so avoid repeating that exhaustive audit while writing the immutable manifest.
   const manifest = await writeIncrementalStateManifest(client, config, prepared, { verifyObjects: false })
@@ -219,7 +231,7 @@ export async function persistIncrementalStateBuild({
     })
     reportedKeys.add(key)
   }
-  diagnosticEnd(persistSpan, { ledgerBytes: ledgerPrepared.bytes, ledgerCompressedBytes: ledgerPrepared.compressedBytes, newObjects: prepared.objects.length })
+  diagnosticEnd(persistSpan, { ledgerBytes: ledgerPrepared.bytes, ledgerCompressedBytes: ledgerPrepared.compressedBytes, newObjects: objectResults.length })
   return {
     authority: { ...manifest.authority, publicationObjects },
     uploadedBytes: [ledgerSync, ...objectResults, manifest.result]

@@ -1,69 +1,83 @@
-# Rust worker acceptance, 9 October 2026
+# Rust worker acceptance gates
 
-This work continues the merged M0-M3 contracts. Node remains the default. A
-model/config hash check does not certify a Rust ranking model.
+[Issue #84](https://github.com/MaximilianMauroner/lol-esports-ranking/issues/84)
+records current evidence and decisions. Run reports, source identities and
+resource receipts belong in ignored `.agents/artifacts/refresh-live-20261009/`.
+[The worker guide](rust-worker.md) describes commands and compatibility.
+Node remains the default. Model/config hash parity is not a Rust ranking model.
 
-## Current evidence
+## M2: real raw preparation and recovery
 
-The existing local real input manifest names two Oracle CSVs (about 122 MiB),
-eight Leaguepedia files and five LoL Esports reference files, covering
-2025-01-01 through 2026-10-06. These are previously captured community/reference
-inputs, not new live-feed approval or official ranking data.
+Build the current binary under Fleet admission. Run `verify-rust-raw-source.ts`
+on isolated copies of retained raw input. Record coverage, filenames, byte counts
+and SHA-256 for every input, plus the binary identity. Reject duplicate flattened
+filenames and changed input during staging. Keep the original manifest and raw
+files read-only.
 
-The verifier is prepared to copy these files into isolated owned staging,
-record every input hash and compare Node/native preparation and cross-worker
-recovery. It will report each child's peak RSS and duration. The original files
-must remain read-only. No successful real-corpus run is claimed here.
+Require equal Node/Rust receipts, exact canonical object bytes and manifests,
+zero differing objects, and equal restored files from Node transport objects.
+Record each process's peak RSS and duration. Gzip transport bytes can differ
+under the existing semantic storage identity contract. The separate controlled
+raw benchmark remains useful but cannot substitute for real-input acceptance.
 
-Compilation, frozen install and corpus execution are blocked locally by another
-project's ownership of `fleet-build.service`. Admission returned 75; no command
-was moved outside Fleet's 3 GiB/zero-swap controls. Rust 1.98.0 is available;
-workspace formatting and the offline lockfile update pass. The new MinIO CI
-proof must run before native storage acceptance is claimed.
+## M3: provider acceptance
 
-The next M4 layer supplies native immutable raw/state object writes and shared
-lease CAS. Tests compare Node/native bytes and metadata, alternative gzip
-reuse, collision rejection and stale authority after a second host takes over.
-Generation graph verification and fenced promotion are still Node-owned and
-are not claimed ported. Rust never replaces the configured Railway command in
-this change.
+Use a bounded permitted read-only probe into owned temporary storage. Record
+endpoints, request/retry counts, elapsed time, coverage, warnings, failures and
+response identities. Compare both workers against the same recorded response;
+two independently changing live responses cannot certify exact parity.
+Keep required/optional failure, pagination, body decoding, rate-limit and retry
+budgets intact. An unavailable provider is a remaining source gate.
 
-## Historical heap evidence
+Do not start tournament polling or redistribution while #45's source-use gate
+is unverified. Previously successful HTTP responses and synthetic fixtures do
+not establish current provider availability or approved live-feed usage.
 
-The earlier local #90 V8 abort was near 1570 MiB below the 3 GiB cgroup cap.
-Existing retained process membership/start stamps omit the failing PID's
-arguments, parent and application phase. They cannot distinguish setup from the
-parity verifier. This historical attribution remains unresolved.
+## M4: bucket storage and publication
 
-Current read-only production logs establish a separate Node daily-audit failure
-after full snapshot serialization and before publication. See
-[refresh health](refresh-health-80.md). The streamed state comparison repair
-removes a known large temporary allocation but does not reconstruct the older
-failure or certify production recovery. #93's future diagnostics remain intact.
+The additive native CLI supplies immutable raw/state object writes and shared
+lease CAS. Its MinIO acceptance must run with no skips against an owned loopback
+service and pinned release. Compare Node/native object bytes and metadata,
+alternative gzip reuse, corruption rejection without overwrite, cross-host
+lease acquisition/renewal, stale-owner rejection, release and higher-token
+reacquisition. These primitive checks do not certify generation promotion.
 
-## Remaining gates and owners
+Complete public/raw/state generation writes, exhaustive graph validation,
+publication/audit receipts and final lease/ETag promotion. Reject missing or
+mutated members, changed authority during publication and final-CAS races in
+both workers against MinIO. Preserve previous-generation rollback references
+and all stored compatibility readers. Generation graph/promotion remain
+Node-owned until the native implementation passes these gates.
 
-1. This thread: rebuild the current binary under admission controls; run isolated
-   real-input M2 preparation/recovery and record hashes, zero differing objects,
-   peak RSS and durations. Run the existing raw benchmark corpus separately.
-2. Source/refresh owner: bounded read-only M3 provider acceptance into a temporary
-   directory, with requests, retries, failures and coverage recorded. Previously
-   recorded HTTP responses do not prove current provider availability. Do not
-   start the tournament collector while #45 source-use rights are unverified.
-3. This thread: complete M4 raw/state/public generation writes, exhaustive graph
-   validation, receipts and final lease/ETag promotion. MinIO evidence must reject
-   a lease change during publication in both workers.
-4. This thread: M5 import/model/player/replay/projection and deferred state
-   encodings, mini-generation fixture, full and one-match incremental parity with
-   zero differing paths/state/reconciliation. No tolerances or gate changes.
-5. This thread and release owner: M6 native parent, separate shadow prefix,
-   read-only reuse of Node raw receipts and refusal of writes outside shadow.
-   Measure storage/runtime and cost first. Max has approved 14 days around $1;
-   ask only if the estimate exceeds $5. No provider requests in shadow.
-6. Release owner: a clean 14-day observation and normal release gates before
-   cutover. Preserve Node for the 30-day rollback period and verify seven days
-   of production runs after cutover. No clean shadow or cutover is established.
+## M5: the ranking model
 
-The issue remains open. A local resource gate prevents execution, not independent
-source work on #45/#46. No production service, variable, prefix or database was
-changed, and no production credentials are used by local/CI storage tests.
+Port import/model/player/replay/projection and the explicitly deferred state
+encodings. Require a mini-generation fixture, full replay and one-match
+incremental parity with zero differing public/state/reconciliation paths.
+Keep code-unit ordering, binary64 semantics, model version/config and source
+provenance exact. No tolerances, invented inputs or weakened checks.
+Rust and TypeScript model copies with cross-language CI are already authorized;
+the dual model is permanent while the browser uses TypeScript.
+
+## M6: parent, shadow and cutover
+
+Implement the native parent, separate shadow prefix, read-only reuse of Node raw
+receipts and refusal of writes outside shadow. Shadow makes no extra provider
+requests. Measure storage/runtime and cost before starting the service.
+
+Max approved 14 days around $1, with a stop-and-ask gate only if the estimate
+exceeds $5. That authorization does not certify readiness or a clean observation
+period. A clean 14-day shadow and normal release gates precede cutover. Preserve
+Node for 30 days of rollback and verify seven days of production runs after
+cutover. No merge, contract CI or synthetic run establishes these observations.
+
+## Diagnosis and owners
+
+Keep historical V8 evidence separate from current controlled reproductions.
+#93's future receipts cannot establish an earlier missing allocation phase.
+See [refresh recovery](refresh-health-80.md) for the diagnosis and release gates.
+
+This thread owns source/parity/resource verification and native migration.
+Source owners supply permitted current provider evidence. The release owner
+owns shadow/service activation and production observations within the recorded
+approval. Keep #84 open until the remaining migration and observation gates pass.

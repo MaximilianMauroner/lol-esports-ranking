@@ -142,7 +142,7 @@ for (const { name, text, canonical } of [
   })
 }
 
-test('persisted state reports stored checkpoint objects as reused publication members', async () => {
+test('mixed checkpoint persistence preserves immutable bytes, reused members and caller state', async () => {
   const client = memoryS3()
   const storedCheckpoint = prepareStateObject({
     artifactKind: 'incremental-state-checkpoint-bundle',
@@ -164,21 +164,40 @@ test('persisted state reports stored checkpoint objects as reused publication me
     rows: [],
     digest: 'c'.repeat(64),
   }
+  const state = {
+    ledger,
+    compatibility,
+    sourceReceiptDigest: 'b'.repeat(64),
+    checkpoints: [{
+      boundary: { date: '2026-01-01', matchId: 'match-1' },
+      rawPrefix: { matchCount: 1, digest: 'd'.repeat(64) },
+      storedObjectReference: stateObjectReferenceFor(storedCheckpoint),
+    }, checkpoint('match-2', 2), checkpoint('match-3', 3)],
+  }
+  const generationId = 'mixed_checkpoint_generation'
+  const before = structuredClone(state)
+  const expected = prepareContentAddressedState({
+    generationId,
+    canonicalLedgerReference: stateObjectReferenceFor(prepareStateObject(ledger)),
+    ...state,
+  })
   const persisted = await persistIncrementalStateBuild({
-    state: {
-      ledger,
-      compatibility,
-      sourceReceiptDigest: 'b'.repeat(64),
-      checkpoints: [{
-        boundary: { date: '2026-01-01', matchId: 'match-1' },
-        rawPrefix: { matchCount: 1, digest: 'd'.repeat(64) },
-        storedObjectReference: stateObjectReferenceFor(storedCheckpoint),
-      }],
-    },
-    generationId: 'reused_checkpoint_generation',
+    state,
+    generationId,
     client,
     config,
   })
+  assert.deepEqual(state, before)
+  assert.deepEqual(persisted.authority.manifest, expected.manifest)
+  const storedManifest = client.objects.get(persisted.authority.key)
+  assert.ok(storedManifest)
+  assert.deepEqual(storedManifest.bytes, expected.manifestPrepared.canonicalBytes)
+  for (const object of expected.objects) {
+    const stored = client.objects.get(`${config.prefix}/state/objects/sha256/${object.digest}`)
+    assert.ok(stored)
+    assert.deepEqual(stored.bytes, object.compressed)
+    assert.equal(stored.metadata.sha256, object.digest)
+  }
   assert.deepEqual(
     persisted.authority.publicationObjects?.filter((entry) => entry.outcome === 'reused'),
     [{
@@ -188,6 +207,10 @@ test('persisted state reports stored checkpoint objects as reused publication me
       outcome: 'reused',
     }],
   )
+  const retried = await persistIncrementalStateBuild({ state, generationId, client, config })
+  assert.equal(retried.uploadedBytes, 0)
+  assert.deepEqual(retried.authority.manifest, persisted.authority.manifest)
+  assert.deepEqual(state, before)
 })
 
 test('one active CAS binds public, state, and raw receipt authorities', async () => {
