@@ -685,7 +685,7 @@ test('native public archive reader matches Node content and fresh transport proo
   type Identity = { sha256: string; bytes: number }
   const hash = (body: Buffer) => createHash('sha256').update(body).digest('hex')
   const keyFor = (identity: Identity) => `${config.prefix ? `${config.prefix}/` : ''}objects/sha256/${identity.sha256}`
-  const putBytes = async (semantic: Buffer, compressed = gzipSync(semantic)) => {
+  const putBytes = async (semantic: Buffer, compressed: Buffer = gzipSync(semantic)) => {
     const identity = { sha256: hash(semantic), bytes: semantic.length }
     await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: keyFor(identity), Body: compressed,
       ContentType: 'application/json; charset=utf-8', ContentEncoding: 'gzip',
@@ -746,6 +746,35 @@ test('native public archive reader matches Node content and fresh transport proo
         Buffer.from([0xff]), Buffer.from('"}}')])
       await compare(await putBytes(lossy))
     })
+    await t.test('JSON.parse nesting beyond 128 levels, numeric overflow and invalid grammar', async () => {
+      const envelope = (content: string) => Buffer.from(`{"artifactKind":"public-semantic-artifact","schemaVersion":1,"content":${content}}`)
+      for (const depth of [140, 500]) {
+        const nested = `${'['.repeat(depth)}0${']'.repeat(depth)}`
+        await compare(await putBytes(envelope(`{"nested":${nested}}`)))
+        const inlineTree = `{"kind":"inline","value":{"nested":${nested}}}`
+        await compare(await putBytes(envelope(`{"artifactKind":"public-archive-node","formatVersion":1,"tree":${inlineTree}}`)))
+      }
+      await compare(await putBytes(envelope('{"positive":1e400,"negative":-1e400,"values":[1e400,-1E+400,1e-400]}')))
+      // Overflow keeps Number semantics during validation: Infinity === Infinity.
+      const tree = (artifactKind: string) => `{"kind":"inline","value":{"artifactKind":${artifactKind}}}`
+      const archive = (artifactKind: string, originalKind: string) => putBytes(envelope(
+        `{"artifactKind":"public-artifact-archive","formatVersion":1,"tree":${tree(artifactKind)},"originalKind":${originalKind}}`))
+      await compare(await archive('1e400', '2e400'))
+      await compare(await archive('-1e400', '-1e999'))
+      await reject(await archive('1e400', '-1e400'))
+      await reject(await archive('1e400', 'null'))
+      const child = await putBytes(envelope('{"artifactKind":"public-archive-node","formatVersion":1,"tree":{"kind":"inline","value":{"a":1e400}}}'))
+      const part = { ...child, encoding: 'gzip', count: 1 }
+      await compare(await putContent(node({ kind: 'map', parts: [part] })))
+      for (const field of ['"count":1e400', '"bytes":1e400', '"year":1e400', '"startUtcDate":1e400,"endUtcDate":"2026-01-01"']) {
+        const reference = `${JSON.stringify(part).slice(0, -1)},${field}}`
+        await reject(await putBytes(envelope(`{"artifactKind":"public-archive-node","formatVersion":1,"tree":{"kind":"map","parts":[${reference}]}}`)))
+      }
+      for (const content of ['{"a":1,}', '{"a":[1,]}', '{"a":01}', '{"a":1.}', '{"a":.5}', '{"a":+1}', '{"a":NaN}', '{"a":Infinity}',
+        '{"a":-}', '{"a":1e}', '{"a":"\\x"}', '{"a" 1}', '{1:2}', `{"a":${'['.repeat(200)}}`, '{"a":1} x']) {
+        await reject(await putBytes(envelope(content)))
+      }
+    })
     await t.test('validated alternate, long-header and concatenated gzip transport', async () => {
       const semantic = Buffer.from(canonicalJsonFor({ artifactKind: 'public-semantic-artifact', schemaVersion: 1, content: { fixture: 'transport' } }))
       const gzip = gzipSync(semantic)
@@ -773,6 +802,16 @@ test('native public archive reader matches Node content and fresh transport proo
         path: '/captured', keyStart: 'a', keyEnd: '\ud800', year: 2026, startUtcDate: ['2026-01-01'], endUtcDate: '2026-01-02' }] }))
       await compare(identity)
       await compare(await putContent(node({ kind: 'inline' })))
+    })
+    await t.test('missing inline values remain own keys when map children merge', async () => {
+      const part = async (tree: unknown) => ({ ...await putContent(node(tree)), encoding: 'gzip', count: 1 })
+      const missing = await part({ kind: 'record', entries: [['k', { kind: 'inline' }]] })
+      const present = await part(inline({ k: 1 }))
+      const other = await part(inline({ other: 1 }))
+      for (const parts of [[missing, present], [present, missing], [missing, missing]]) {
+        await reject(await putContent(node({ kind: 'map', parts })))
+      }
+      await compare(await putContent(node({ kind: 'map', parts: [missing, other] })))
     })
     await t.test('archive schema, count, type, duplicate-key and depth failures', async () => {
       const child = await putContent(node(inline(['one', 'two'])))

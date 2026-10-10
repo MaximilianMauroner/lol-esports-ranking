@@ -130,9 +130,9 @@ seam is ready. It is not enabled in production by this PR.
 `ranking-refresh storage <input.json> <output.json>` adds native immutable raw
 and state object writes and the existing active-pointer lease protocol.
 Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease`,
-`release-lease`, `verify-publication`, `verify-raw-generation` and
-`verify-state-generation` and `verify-public-artifact`. The process uses the existing bucket environment names and
-SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
+`release-lease`, `verify-publication`, `verify-raw-generation`,
+`verify-state-generation` and `verify-public-artifact`. The process uses the
+existing bucket environment names and SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
 and credentials/transport URLs do not appear in failure diagnostics.
 
 `sync-object` accepts a prepared gzip file, semantic SHA-256 and byte count.
@@ -264,14 +264,26 @@ memory for the requested content; bounded inflation is not a full-view memory
 acceptance claim.
 
 The reader follows archive format version 1 with the existing 512,000-byte
-child budget and depth 24. It checks record uniqueness, reference ranges,
-counts, list/map child types and original kind. It reads all parts, without
-year or record projection. Public JSON decoding keeps whitespace, duplicate
-keys and unpaired UTF-16 strings; raw/state canonical parsing stays strict.
-The current public decoder retains a 128-level JSON bound and finite number
-parsing. Node's broader JSON.parse acceptance is a remaining native input gate,
-so this layer must not be selected by the parent until that boundary and
-compiled differential acceptance are complete.
+child budget and depth 24. It checks every record entry shape and key before
+child reads, then reference ranges, counts, list/map child types and original
+kind. It reads all parts, without year or record projection. A record entry
+whose inline node has no value stays an own undefined property, as in Node.
+A map merge therefore rejects the same key from another child. Only the final
+JSON omits the property.
+
+Public envelopes use a separate parser with JSON.parse semantics: whitespace,
+escapes, last duplicate key wins and unpaired UTF-16 strings. Numbers are
+binary64. Overflow becomes positive or negative infinity for validation,
+coercion and equality, and the output writes it as null. Parsing, output,
+String coercion and drop use explicit stacks. Nesting has no fixed limit; the
+stored object size and available memory bound it. Raw/state canonical parsing
+keeps its strict grammar, finite numbers and 128-level bound.
+
+Node's JSON.parse also has no fixed nesting limit, but recursive Node code is
+limited by its call stack. Its String coercion and canonical serializer can
+fail on deeply nested values, while the native reader uses explicit stacks.
+The differential cases test 500 levels; deeper input is not a Node parity
+claim. Parent selection still requires compiled differential acceptance.
 
 This action writes only its local success descriptor. It grants no generation
 authority, readiness or promotion permission. Full public manifest/directory

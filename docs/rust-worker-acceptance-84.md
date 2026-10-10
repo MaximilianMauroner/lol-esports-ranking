@@ -95,9 +95,12 @@ with Node, including producer-generated multi-level archives, UTF-16 keys,
 noncanonical public envelopes, duplicate JSON properties, optional range/year
 fields, alternate/long gzip headers and failed child reads. Check archive
 count/type/depth boundaries, unchanged pointer/inventory and no success
-descriptor on failure. The staged public JSON parser's finite-number and
-128-level input bounds remain compatibility work against Node JSON.parse;
-documenting them does not complete acceptance or authorize parent selection.
+descriptor on failure. Include public nesting beyond 128 levels, positive and
+negative numeric overflow in content and validated fields, invalid public
+grammar and undefined record keys in map merges in both orders. Nesting deeper
+than Node's stack-dependent limits is outside the parity claim. Implemented
+cases do not complete acceptance or authorize parent selection without compiled
+current-source execution.
 
 ## M5: the ranking model
 

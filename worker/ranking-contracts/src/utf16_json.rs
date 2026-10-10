@@ -187,24 +187,9 @@ impl Utf16Json {
 /// Parse canonical Node JSON with the existing 128-level input bound. String and
 /// number tokens use serde_json's established grammar; containers stay local.
 pub fn parse_canonical_utf16_json(bytes: &[u8]) -> Result<Utf16Json> {
-    parse_utf16(bytes, true)
-}
-
-/// Lossless public JSON decoding. Canonical raw/state readers retain their
-/// stricter parser; public envelopes allow whitespace, escapes and duplicate keys.
-pub fn parse_utf16_json(bytes: &[u8]) -> Result<Utf16Json> {
-    parse_utf16(bytes, false)
-}
-
-fn parse_utf16(bytes: &[u8], canonical: bool) -> Result<Utf16Json> {
     std::str::from_utf8(bytes).map_err(|_| "Invalid canonical JSON UTF-8")?;
-    let mut parser = Parser {
-        bytes,
-        offset: 0,
-        canonical,
-    };
+    let mut parser = Parser { bytes, offset: 0 };
     let value = parser.value(0)?;
-    parser.whitespace();
     if parser.offset != bytes.len() {
         return Err("JSON is not canonical".into());
     }
@@ -214,24 +199,10 @@ fn parse_utf16(bytes: &[u8], canonical: bool) -> Result<Utf16Json> {
 struct Parser<'a> {
     bytes: &'a [u8],
     offset: usize,
-    canonical: bool,
 }
 
 impl Parser<'_> {
-    fn whitespace(&mut self) {
-        if !self.canonical {
-            while self
-                .bytes
-                .get(self.offset)
-                .is_some_and(|byte| b" \t\r\n".contains(byte))
-            {
-                self.offset += 1;
-            }
-        }
-    }
-
     fn value(&mut self, depth: usize) -> Result<Utf16Json> {
-        self.whitespace();
         if depth >= 128 {
             return Err("JSON recursion limit exceeded".into());
         }
@@ -256,7 +227,6 @@ impl Parser<'_> {
     }
 
     fn take(&mut self, byte: u8) -> bool {
-        self.whitespace();
         if self.bytes.get(self.offset) == Some(&byte) {
             self.offset += 1;
             true
@@ -274,7 +244,6 @@ impl Parser<'_> {
     }
 
     fn string(&mut self) -> Result<Utf16String> {
-        self.whitespace();
         let start = self.offset;
         self.expect(b'"')?;
         while let Some(byte) = self.bytes.get(self.offset) {
@@ -288,7 +257,7 @@ impl Parser<'_> {
                 let token = &self.bytes[start..self.offset];
                 let string: Utf16String =
                     serde_json::from_slice(token).map_err(|error| error.to_string())?;
-                if self.canonical && string.json().as_bytes() != token {
+                if string.json().as_bytes() != token {
                     return Err("JSON string is not canonical".into());
                 }
                 return Ok(string);
@@ -302,15 +271,13 @@ impl Parser<'_> {
         while self
             .bytes
             .get(self.offset)
-            .is_some_and(|byte| !b",]} \t\r\n".contains(byte))
+            .is_some_and(|byte| !b",]}".contains(byte))
         {
             self.offset += 1;
         }
         let token = &self.bytes[start..self.offset];
         let number: Number = serde_json::from_slice(token).map_err(|error| error.to_string())?;
-        if self.canonical
-            && number_text(number.as_f64().ok_or("Invalid JSON number")?).as_bytes() != token
-        {
+        if number_text(number.as_f64().ok_or("Invalid JSON number")?).as_bytes() != token {
             return Err("JSON number is not canonical".into());
         }
         Ok(Utf16Json::Number(number))
@@ -337,7 +304,7 @@ impl Parser<'_> {
         if !self.take(b'}') {
             loop {
                 let key = self.string()?;
-                if self.canonical && entries.last().is_some_and(|(previous, _)| previous >= &key) {
+                if entries.last().is_some_and(|(previous, _)| previous >= &key) {
                     return Err("JSON keys are not unique and canonical".into());
                 }
                 self.expect(b':')?;
@@ -545,28 +512,6 @@ impl<'de> Deserialize<'de> for Utf16Json {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn public_json_keeps_noncanonical_utf16_and_duplicate_keys() {
-        let text = " { \"z\" : 1.0, \"\\ud800\" : \"\\uDFFF\", \"z\" : 2e0 } \n";
-        let parsed = parse_utf16_json(text.as_bytes()).unwrap();
-        let Utf16Json::Object(entries) = parsed else {
-            panic!("expected object")
-        };
-        assert_eq!(entries.len(), 3);
-        assert_eq!(entries[1].0.code_units().collect::<Vec<_>>(), vec![0xd800]);
-        assert!(parse_canonical_utf16_json(text.as_bytes()).is_err());
-        for invalid in [
-            "{\"a\":1,}",
-            "[1,]",
-            "01",
-            "true false",
-            "\"unclosed",
-            "[1 2]",
-        ] {
-            assert!(parse_utf16_json(invalid.as_bytes()).is_err(), "{invalid}");
-        }
-    }
 
     #[test]
     fn unpaired_code_units_and_keys_are_lossless() {
