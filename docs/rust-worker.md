@@ -129,8 +129,8 @@ seam is ready. It is not enabled in production by this PR.
 
 `ranking-refresh storage <input.json> <output.json>` adds native immutable raw
 and state object writes and the existing active-pointer lease protocol.
-Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease` and
-`release-lease`. The process uses the existing bucket environment names and
+Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease`,
+`release-lease` and `verify-publication`. The process uses the existing bucket environment names and
 SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
 and credentials/transport URLs do not appear in failure diagnostics.
 
@@ -153,6 +153,27 @@ CI's isolated MinIO check uses loopback-only test credentials and compares Node
 and native object sets, bytes, metadata and lease pointer bytes. It also checks
 semantic reuse with different gzip bytes, corruption, cross-host takeover and
 stale renewal/release. A skipped local test does not supply MinIO evidence.
+
+`verify-publication` is read-only. It reads `active-generation.json`, verifies
+its receipt key/digest/length/ETag binding, parses the existing readiness schema,
+checks pointer and receipt authorities, then freshly fetches every declared
+immutable member and checks length, metadata SHA and semantic SHA. Public,
+raw and state content objects are inflated one at a time. It returns the same
+`found`/`receipt` result as Node's publication reader. Supported legacy pointers
+return `legacy-publication-without-receipt-binding`; no stored reference or
+compatibility reader changes.
+
+This checks the receipt's declared closure. It does not independently prove that
+all public archive, raw-source and checkpoint references are represented. That
+generation graph validation, readiness writes and final lease/ETag promotion
+remain required before M4 is complete. The action is not selected by the Node
+parent and grants no promotion authority. The native reader is a permanent
+storage integrity path while receipt-bound generations remain stored.
+
+The MinIO differential cases compare the complete reader result with Node and
+exercise stale receipt/pointer bindings, malformed membership, prefix escapes,
+alternate gzip transport, semantic corruption and missing members. They also
+check that failed verification leaves no success descriptor or changed pointer.
 
 The real raw-source verifier now records source coverage, filenames, SHA-256 and
 byte counts along with both workers' prepare/restore memory and duration. It
