@@ -130,7 +130,8 @@ seam is ready. It is not enabled in production by this PR.
 `ranking-refresh storage <input.json> <output.json>` adds native immutable raw
 and state object writes and the existing active-pointer lease protocol.
 Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease`,
-`release-lease`, `verify-publication` and `verify-raw-generation`. The process uses the existing bucket environment names and
+`release-lease`, `verify-publication`, `verify-raw-generation` and
+`verify-state-generation`. The process uses the existing bucket environment names and
 SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
 and credentials/transport URLs do not appear in failure diagnostics.
 
@@ -211,6 +212,39 @@ inputs containing unpaired surrogates.
 Optional stored `compressedBytes` fields stay readable under the existing raw
 storage removal condition. Semantic references and this graph integrity path
 remain required while raw receipt authorities are stored.
+
+`verify-state-generation` is a GET-only state authority reader. Its descriptor
+accepts `authority: { key, etag, bytes, digest }` with the existing full bucket
+key. An optional `expectedManifestJson` carries the canonical Node manifest
+bytes for the supplied-manifest comparison. This string seam preserves all
+UTF-16 strings without changing the ordinary descriptor parser. The result
+matches `assertStateManifestAuthority` with object verification enabled:
+`manifest`, `key`, `etag`, `bytes`, `digest` and ordered `verifiedObjects`.
+
+The manifest GET binds metadata, ETag, length, SHA-256, canonical bytes and
+generation key. The existing exact schema, nullable base IDs, positive safe
+versions, raw-prefix identity, UTC dates and UTF-16 checkpoint ordering remain.
+The compatibility parser requires a nonempty `modelConfigHash` string, as Node
+does; it does not introduce a digest rule for existing stored manifests.
+Each fresh ledger/checkpoint GET checks gzip metadata, optional legacy transport
+size, compressed SHA and uncompressed semantic size/SHA. Inflation uses a fixed
+64 KiB buffer and retains no semantic member tree. Member integrity deliberately
+does not parse canonical JSON or model/replay contents: Node's authority check
+does not certify those deferred M5 encodings either.
+
+This internal action adds no selector, active-pointer read, model execution,
+readiness/audit write or promotion. Public graph traversal, agreement between
+the three generation authorities and final lease/ETag CAS remain M4 gates.
+Node remains the default parent. Existing state references require this integrity
+path permanently; remove optional legacy `compressedBytes` support only after
+all active stored state manifests have moved to semantic references. No stored
+object rewrite or production access is needed.
+
+The MinIO differential cases cover full-result equality, prefix handling,
+unpaired UTF-16 strings, dates/order/schema errors, legacy gzip sizes, opaque
+member contents, fresh missing/mutated members and complete gzip CRC checks.
+They compare the unchanged active pointer and bucket inventory. These are
+synthetic storage acceptance, not real-input memory or ranking-model parity.
 
 The real raw-source verifier now records source coverage, filenames, SHA-256 and
 byte counts along with both workers' prepare/restore memory and duration. It

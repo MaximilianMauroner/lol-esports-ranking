@@ -911,12 +911,14 @@ name = "ranking-storage"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "flate2",
  "ranking-contracts",
  "ranking-raw-source",
  "reqwest",
  "ring",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

@@ -11,5 +11,7 @@ ranking-raw-source = { path = "../ranking-raw-source" }
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
+flate2.workspace = true
+sha2.workspace = true
 ring = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
