@@ -15,10 +15,10 @@ record every input hash and compare Node/native preparation and cross-worker
 recovery. It will report each child's peak RSS and duration. The original files
 must remain read-only. No successful real-corpus run is claimed here.
 
-Compilation, frozen install and corpus execution are blocked locally by another
-project's ownership of `fleet-build.service`. Admission returned 75; no command
-was moved outside Fleet's 3 GiB/zero-swap controls. Rust 1.98.0 is available;
-workspace formatting and the offline lockfile update pass.
+Owned frozen Node installation passed on 10 October. Native compilation and
+real-corpus execution remain pending shared Fleet admission. No command was
+moved outside its 3 GiB/zero-swap controls. Rust 1.98.0 is available; workspace
+formatting and the offline lockfile update pass.
 
 Hosted run 37999800531 compiled the native layer, passed Clippy, Rust fixture
 tests, model/config parity, ten raw-seam tests and 32 provider replay/failure
@@ -71,6 +71,13 @@ identify the parent, with a 1,811,939,328-byte V8 heap limit. Group peak was
 2,113,863,680 bytes and swap was zero. Retained checkpoint encodings and eager
 canonical body preparation are measured contributors. Sequential persistence
 has passed the 63 storage tests; full-corpus recovery remains unverified.
+
+The follow-up typecheck/integration and full-corpus capture did not launch. Its
+five-minute admission window ended at 09:59:51 UTC with exit 75 under Auto
+Cron's owned slot. No resource process remains queued by this thread. Tanko's
+separate bounded Rust rerun is waiting; that owner will report normal release
+before this thread requests the next guarded capture. Neither waiting nor
+publishing the tested source repair counts as completed acceptance.
 
 This current local attribution does not recover the missing evidence for the
 older #90 abort. It supplies no incremental CPU profile, real-input M2/M3

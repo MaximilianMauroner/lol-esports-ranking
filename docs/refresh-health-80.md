@@ -138,10 +138,21 @@ identities. Maximum normalized compute was 6.2643 and upload was 1,527,742 bytes
 This adds evidence of variation between runner executions. It does not isolate
 the cause, replace #94's failing required check, or reproduce the daily audit.
 
-Blocked: frozen dependency installation returned admission 75 while another
-project owned `fleet-build.service`. The enforced slot is 3 GiB with zero build
-swap. No owner was stopped and no build was run outside the guard. Real-input
-reproduction, the unchanged benchmark gate and bundle remain required.
+Current combined #94 CI also fails compute: run 38038885071 reports normalized
+ratios 6.499275, 6.402536 and 6.559420 against strict `<6.5`. Memory, upload and
+exact parity pass; bundle is skipped. #96 fails the same compute gate twice on
+its unchanged source tree. The local setup allocation finding above supplies
+no incremental CPU profile and does not explain these compute failures.
+
+Owned frozen dependency installation has now passed. The sequential repair's
+guarded typecheck/integration and bounded full-corpus capture did not launch:
+the five-minute admission window ended at 09:59:51 UTC on 10 October with exit
+75 while Auto Cron owned `fleet-build.service`. No resource waiter from this
+thread remains. The slot uses 3 GiB with zero build swap. No foreign process was
+stopped and no check ran outside the guard. Full-corpus recovery, real-input
+daily-audit reproduction, the unchanged benchmark gate and bundle remain
+required. The repair is reviewable with 63 passed storage tests, changed-file
+lint and independent source review; those checks do not certify recovery.
 No nesting or branching metric is configured in the current ESLint rules.
 
 Owner: this refresh thread for source verification and isolated reproduction;
