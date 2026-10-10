@@ -23,6 +23,7 @@ import { importRankingSourceData, type RankingSourceImport } from './ranking-sou
 import {
   assertStoredStateObjectIntegrity,
   prepareContentAddressedState,
+  prepareStateCheckpoint,
   prepareStateObject,
   stateObjectReferenceFor,
   syncContentAddressedStateObject,
@@ -35,6 +36,7 @@ import {
 import type { BucketClient, BucketStorageConfig } from './railway-bucket.mjs'
 import { collectRefreshGarbage } from './refresh-worker-memory.mjs'
 import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { stableJsonSha256 } from './stable-json-digest.ts'
 
 export const RANKING_INCREMENTAL_IMPORTER_VERSION = 'community-source-import-v1'
 
@@ -186,15 +188,26 @@ export async function persistIncrementalStateBuild({
   const persistSpan = diagnosticBegin('state.persist', { checkpoints: state.checkpoints.length })
   const ledgerPrepared = prepareStateObject(state.ledger)
   const ledgerSync = await syncContentAddressedStateObject(client, config, ledgerPrepared)
+  const checkpoints = []
+  const objectResults = []
+  // Retain only references between writes, not every checkpoint's canonical
+  // string and buffer alongside the already encoded replay state.
+  for (const [index, checkpoint] of state.checkpoints.entries()) {
+    const { candidate, prepared: object } = prepareStateCheckpoint(checkpoint, state.compatibility, index)
+    if (object) objectResults.push(await syncContentAddressedStateObject(client, config, object))
+    checkpoints.push({
+      boundary: candidate.boundary,
+      rawPrefix: candidate.rawPrefix,
+      storedObjectReference: candidate.object,
+    })
+  }
   const prepared = prepareContentAddressedState({
     generationId, runId, baseGenerationId, baseRunId,
     canonicalLedgerReference: stateObjectReferenceFor(ledgerPrepared),
     sourceReceiptDigest: state.sourceReceiptDigest,
     compatibility: state.compatibility,
-    checkpoints: state.checkpoints,
+    checkpoints,
   })
-  const objectResults = []
-  for (const object of prepared.objects) objectResults.push(await syncContentAddressedStateObject(client, config, object))
   // Promotion validates the ledger and every checkpoint body before activation,
   // so avoid repeating that exhaustive audit while writing the immutable manifest.
   const manifest = await writeIncrementalStateManifest(client, config, prepared, { verifyObjects: false })
@@ -218,7 +231,7 @@ export async function persistIncrementalStateBuild({
     })
     reportedKeys.add(key)
   }
-  diagnosticEnd(persistSpan, { ledgerBytes: ledgerPrepared.bytes, ledgerCompressedBytes: ledgerPrepared.compressedBytes, newObjects: prepared.objects.length })
+  diagnosticEnd(persistSpan, { ledgerBytes: ledgerPrepared.bytes, ledgerCompressedBytes: ledgerPrepared.compressedBytes, newObjects: objectResults.length })
   return {
     authority: { ...manifest.authority, publicationObjects },
     uploadedBytes: [ledgerSync, ...objectResults, manifest.result]
@@ -1548,20 +1561,22 @@ async function stateFromRestoredAudit(restored: RestoredIncrementalAuthority, le
 function compareIncrementalState(expected: IncrementalStateBuild, actual: IncrementalStateBuild) {
   const expectedProjection = comparableIncrementalState(expected)
   const actualProjection = comparableIncrementalState(actual)
-  const expectedJson = stableJson(expectedProjection)
-  const actualJson = stableJson(actualProjection)
+  const expectedDigest = stableJsonSha256(expectedProjection)
+  const actualDigest = stableJsonSha256(actualProjection)
+  const expectedCheckpointDigests = expected.checkpoints.map(stableJsonSha256)
+  const actualCheckpointDigests = actual.checkpoints.map(stableJsonSha256)
   return {
-    equal: expectedJson === actualJson,
+    equal: expectedDigest === actualDigest,
     sourceReceiptEqual: expected.sourceReceiptDigest === actual.sourceReceiptDigest,
     expectedSourceReceiptDigest: expected.sourceReceiptDigest,
     actualSourceReceiptDigest: actual.sourceReceiptDigest,
     checkpointEqual: expected.checkpoints.length === actual.checkpoints.length
-      && expected.checkpoints.every((checkpoint, index) => stableJson(checkpoint) === stableJson(actual.checkpoints[index])),
-    expectedDigest: sha256(expectedJson),
-    actualDigest: sha256(actualJson),
-    expectedCheckpointDigests: expected.checkpoints.map((checkpoint) => sha256(stableJson(checkpoint))),
-    actualCheckpointDigests: actual.checkpoints.map((checkpoint) => sha256(stableJson(checkpoint))),
-    mismatchPaths: firstMismatchPaths(expectedProjection, actualProjection),
+      && expectedCheckpointDigests.every((digest, index) => digest === actualCheckpointDigests[index]),
+    expectedDigest,
+    actualDigest,
+    expectedCheckpointDigests,
+    actualCheckpointDigests,
+    mismatchPaths: expectedDigest === actualDigest ? [] : firstMismatchPaths(expectedProjection, actualProjection),
   }
 }
 
@@ -1574,7 +1589,7 @@ function comparableIncrementalState(state: IncrementalStateBuild) {
 }
 
 function firstMismatchPaths(expected: unknown, actual: unknown, path = '$', found: string[] = []): string[] {
-  if (found.length >= 20 || stableJson(expected) === stableJson(actual)) return found
+  if (found.length >= 20 || expected === actual || stableJsonSha256(expected) === stableJsonSha256(actual)) return found
   if (!expected || !actual || typeof expected !== 'object' || typeof actual !== 'object') {
     found.push(path)
     return found

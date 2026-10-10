@@ -72,6 +72,11 @@ export function assertStoredStateObjectIntegrity(client: BucketClient, config: B
 export function prepareStateObject(value: object): PreparedStateObject
 export function stateObjectReferenceFor(prepared: PreparedStateObject): StateObjectReference
 export function readStoredJsonStateObject(client: BucketClient, config: BucketStorageConfig, reference: StateObjectReference): Promise<Record<string, unknown>>
+export function prepareStateCheckpoint(
+  checkpoint: Parameters<typeof prepareContentAddressedState>[0]['checkpoints'][number],
+  compatibility: StateCompatibility,
+  index?: number,
+): { candidate: IncrementalStateManifest['checkpoints'][number]; prepared?: PreparedStateObject }
 export function prepareContentAddressedState(options: {
   generationId: string
   runId?: string

@@ -20,8 +20,17 @@ fn main() {
         }
         return;
     }
+    if let [command, input, output] = args.as_slice()
+        && command == "storage"
+    {
+        if let Err(error) = ranking_storage::run(input, output) {
+            eprintln!("storage: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     eprintln!(
-        "usage: ranking-refresh contracts | raw-source <input.json> <output.json> | fetch [flags]"
+        "usage: ranking-refresh contracts | raw-source <input.json> <output.json> | storage <input.json> <output.json> | fetch [flags]"
     );
     std::process::exit(2);
 }

@@ -31,6 +31,7 @@ export const PRESIGNED_URL_EXPIRY_SECONDS = 3600
 const IMMUTABLE_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable'
 const PUBLIC_JSON_CONTENT_TYPE = 'application/json; charset=utf-8'
 const verifiedRootServingCache = new WeakMap()
+const verifiedPublicationClosureCache = new WeakMap()
 
 export function bucketConfigFromEnv(env = process.env) {
   const bucket = env.RANKING_BUCKET_NAME ?? env.S3_BUCKET ?? env.BUCKET
@@ -1090,7 +1091,23 @@ export async function readActiveGenerationPublication({
     throw new Error('Active generation pointer and publication receipt authorities differ')
   }
   if (verifyClosure) {
-    for (const member of receipt.objects) await assertPublicationMember(client, config, member)
+    const binding = {
+      bucket: config.bucket,
+      prefix: config.prefix ?? '',
+      key: expectedKey,
+      digest,
+      bytes: bytes.byteLength,
+      etag: object.ETag,
+    }
+    const cached = verifiedPublicationClosureCache.get(client)
+    const matching = cached && Object.entries(binding).every(([key, value]) => cached[key] === value)
+    // Keep this read's proofs separate from concurrent reads of another receipt.
+    const scope = { ...binding, verifiedObjects: new Map(matching ? cached.verifiedObjects : undefined) }
+    for (const member of receipt.objects) {
+      const proof = await assertPublicationMember(client, binding, member, scope.verifiedObjects)
+      scope.verifiedObjects.set(proof.key, proof)
+    }
+    verifiedPublicationClosureCache.set(client, scope)
   }
   return { found: true, receipt }
 }
@@ -1103,9 +1120,10 @@ async function assertPublicationMember(client, config, member, verifiedObjects) 
     throw new Error(`Generation publication object authority mismatch: ${member.key}`)
   }
   const relative = relativeBucketKeyAny(config, member.key)
+  const compressedSha256 = createHash('sha256').update(stored).digest('hex')
   const proof = verifiedObjects?.get(member.key)
   if (proof?.digest === member.digest && proof.compressedBytes === member.bytes
-    && createHash('sha256').update(stored).digest('hex') === proof.compressedSha256) return
+    && compressedSha256 === proof.compressedSha256) return proof
   let semantic = stored
   if (/^(?:objects|state\/objects|raw\/objects)\/sha256\//.test(relative)) {
     try {
@@ -1114,9 +1132,11 @@ async function assertPublicationMember(client, config, member, verifiedObjects) 
       throw new Error(`Generation publication object gzip is corrupt: ${member.key}`, { cause: error })
     }
   }
-  if (createHash('sha256').update(semantic).digest('hex') !== member.digest) {
+  const semanticSha256 = semantic === stored ? compressedSha256 : createHash('sha256').update(semantic).digest('hex')
+  if (semanticSha256 !== member.digest) {
     throw new Error(`Generation publication object digest mismatch: ${member.key}`)
   }
+  return { key: member.key, digest: member.digest, compressedBytes: member.bytes, compressedSha256 }
 }
 
 function relativeBucketKeyAny(config, key) {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
+import { createReadStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -30,6 +31,14 @@ export async function verifyRustRawSource(manifestPath: string, binary: string) 
   try {
     const source: RawManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
     const manifest = manifestWithResolvedFiles(source, dirname(resolve(manifestPath)))
+    const inputFiles: Array<{ group: string; name: string; bytes: number; sha256: string }> = []
+    for (const [group, paths] of Object.entries(manifest.files)) {
+      const names = paths.map((path: string) => basename(path))
+      assert.equal(new Set(names).size, names.length, `Cannot flatten duplicate ${group} filenames in the isolated verifier`)
+      for (const [index, path] of paths.entries()) {
+        inputFiles.push({ group, name: names[index], ...await fileIdentity(path) })
+      }
+    }
     const outputs: PrepareOutput[] = []
     const measured: Array<{ worker: 'node' | 'rust'; preparePeakRssBytes: number; prepareMs: number; restorePeakRssBytes?: number; restoreMs?: number }> = []
     for (const worker of ['node', 'rust'] as const) {
@@ -42,6 +51,10 @@ export async function verifyRustRawSource(manifestPath: string, binary: string) 
         for (const path of manifest.files[group] ?? []) {
           const relative = `${folder}/${basename(path)}`
           await copyFile(path, join(rawDir, relative))
+          const expected = inputFiles.find((file) => file.group === group && file.name === basename(path))
+          assert.ok(expected, 'Staged input has no recorded identity')
+          assert.deepEqual(await fileIdentity(join(rawDir, relative)),
+            { bytes: expected.bytes, sha256: expected.sha256 }, 'Input changed during isolated staging')
           files[group].push(relative)
         }
       }
@@ -75,10 +88,22 @@ export async function verifyRustRawSource(manifestPath: string, binary: string) 
     for (const relative of ['manifest.json', ...Object.values(restored.files).flat()]) {
       assert.deepEqual(await readFile(join(root, 'restore-rust/raw', relative)), await readFile(join(root, 'restore-node/raw', relative)))
     }
-    return { parity: true, differingObjects: 0, objectCount: node.generation.objects.length, gameCount: authority.receipt.oracle.reduce((sum, source) => sum + source.gameInventory.length, 0), measured }
+    return { parity: true, differingObjects: 0,
+      input: { coverage: { start: source.start, end: source.end }, files: inputFiles },
+      objectCount: node.generation.objects.length, gameCount: authority.receipt.oracle.reduce((sum, source) => sum + source.gameInventory.length, 0), measured }
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+}
+
+async function fileIdentity(path: string) {
+  const hash = createHash('sha256')
+  let bytes = 0
+  for await (const chunk of createReadStream(path)) {
+    hash.update(chunk)
+    bytes += chunk.length
+  }
+  return { bytes, sha256: hash.digest('hex') }
 }
 
 type RawObjectFile = Pick<PrepareOutput['generation']['objects'][number], 'digest' | 'bytes' | 'compressedPath'>

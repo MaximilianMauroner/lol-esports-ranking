@@ -1,5 +1,5 @@
 [workspace]
-members = ["ranking-contracts", "ranking-raw-source", "ranking-fetch", "ranking-refresh"]
+members = ["ranking-contracts", "ranking-raw-source", "ranking-fetch", "ranking-storage", "ranking-refresh"]
 resolver = "3"
 
 [workspace.package]

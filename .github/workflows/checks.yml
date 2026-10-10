@@ -98,6 +98,30 @@ jobs:
           RANKING_REFRESH_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
           RANKING_RUST_TEST_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
         run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/downloadLocalData.test.ts tests/rustProviderFetchParity.test.ts
+      - name: Set up Go for isolated storage acceptance
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.24.2'
+          cache: false
+      - name: Native storage against isolated MinIO
+        env:
+          RANKING_STORAGE_TEST_ENDPOINT: http://127.0.0.1:9000
+          RANKING_RUST_TEST_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
+        run: |
+          # Official RELEASE.2025-04-22T22-12-26Z source. Published images are unavailable.
+          go install github.com/minio/minio@0d7408fc9969caf07de6a8c3a84f9fbb10a6739e
+          storage_root=$(mktemp -d)
+          MINIO_ROOT_USER=minio-test MINIO_ROOT_PASSWORD=minio-test-password \
+            "$HOME/go/bin/minio" server "$storage_root" --address 127.0.0.1:9000 \
+            --console-address 127.0.0.1:9001 > "$storage_root/server.log" 2>&1 &
+          storage_pid=$!
+          trap 'kill "$storage_pid"; wait "$storage_pid" || true; rm -rf "$storage_root"' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/ready; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:9000/minio/health/ready
+          pnpm exec tsx --tsconfig tsconfig.app.json --test tests/rustStorageMinio.test.ts
       - name: Build worker image
         run: docker build -f Dockerfile.refresh -t ranking-refresh .
       - name: Fixture tests in image build environment

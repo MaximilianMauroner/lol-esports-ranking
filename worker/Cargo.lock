@@ -902,6 +902,19 @@ dependencies = [
  "ranking-contracts",
  "ranking-fetch",
  "ranking-raw-source",
+ "ranking-storage",
+]
+
+[[package]]
+name = "ranking-storage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ranking-contracts",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
