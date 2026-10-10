@@ -13,6 +13,7 @@ import {
   assertBucketLease,
   getBucketObject,
   readActiveContentAddressedGeneration,
+  readActiveGenerationPublication,
   readActiveRawSourceAuthority,
   readPreviousGenerationAuthorities,
   readBucketJson,
@@ -26,7 +27,7 @@ import {
   type BucketStorageConfig,
 } from '../scripts/railway-bucket.mjs'
 import { canonicalJsonFor, canonicalPublicLogicalPath, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { createGenerationPublicationReceipt, parseGenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
+import { createGenerationPublicationReceipt, parseGenerationPublicationReceipt, publicationReceiptBytes } from '../scripts/generation-publication.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
 import {
   prepareContentAddressedState,
@@ -693,6 +694,202 @@ test('publication reuses only raw and public proofs from this upload and recheck
     t.mock.restoreAll()
     syncBuiltinESMExports()
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('active publication proof reuse keeps fresh transport checks and isolated receipt scopes', async (t) => {
+  let inflates = 0
+  const gets: Array<{ bucket: string; key: string }> = []
+  const originalGunzip = gunzipSync
+  t.mock.method(zlib, 'gunzipSync', (bytes: Parameters<typeof gunzipSync>[0], options?: Parameters<typeof gunzipSync>[1]) => {
+    inflates += 1
+    return originalGunzip(bytes, options)
+  })
+  syncBuiltinESMExports()
+  const observedClient = (backing: ReturnType<typeof memoryS3>) => ({
+    async send(command: unknown) {
+      const { name, input } = commandDetails(command)
+      if (name === 'GetObjectCommand') gets.push({ bucket: String(input.Bucket), key: String(input.Key) })
+      return backing.send(command)
+    },
+  })
+  const read = async (
+    fixture: ReturnType<typeof publicationClosureFixture>,
+    client: BucketClient,
+    storageConfig = config,
+    verifyClosure = true,
+  ) => {
+    inflates = 0
+    gets.length = 0
+    const result = await readActiveGenerationPublication({ config: storageConfig, client, active: fixture.active, verifyClosure })
+    assert.equal(result.found, true)
+    assert.deepEqual(gets.map(({ key }) => key).sort(),
+      [fixture.active.publicationReceiptKey, ...(verifyClosure ? fixture.receipt.objects.map(({ key }) => key) : [])].sort())
+    return { result, inflates }
+  }
+  try {
+    await t.test('repeated reads fetch every member but only changed gzip bytes inflate again', async () => {
+      const backing = memoryS3()
+      const fixture = publicationClosureFixture(backing)
+      const client = observedClient(backing)
+      assert.equal((await read(fixture, client)).inflates, fixture.compressedKeys.length)
+      const repeated = await read(fixture, client)
+      assert.equal(repeated.inflates, 0)
+      assert.ok(repeated.result.found)
+      repeated.result.receipt.objects[0].digest = '0'.repeat(64)
+      assert.equal((await read(fixture, client)).inflates, 0)
+      const target = backing.objects.get(fixture.compressedKeys[0])!
+      assert.ok(target.bytes)
+      const alternate = Buffer.from(target.bytes)
+      alternate[4] ^= 1 // Equal-length MTIME change preserves the gzip payload.
+      target.bytes = alternate
+      assert.equal((await read(fixture, client)).inflates, 1)
+      assert.equal((await read(fixture, client)).inflates, 0)
+    })
+
+    for (const mode of ['crc', 'semantic', 'metadata', 'length', 'missing'] as const) {
+      await t.test(`warmed reads reject ${mode} corruption`, async () => {
+        const backing = memoryS3()
+        const fixture = publicationClosureFixture(backing)
+        const client = observedClient(backing)
+        await read(fixture, client)
+        const key = fixture.compressedKeys[0]
+        const target = backing.objects.get(key)!
+        assert.ok(target.bytes && target.metadata)
+        const original = Buffer.from(target.bytes)
+        if (mode === 'crc') {
+          target.bytes = Buffer.from(original)
+          target.bytes[target.bytes.length - 8] ^= 1
+        } else if (mode === 'semantic') {
+          target.bytes = gzipSync(Buffer.from('{"fixture":"bad"}'))
+          assert.equal(target.bytes.byteLength, original.byteLength)
+        } else if (mode === 'metadata') target.metadata.sha256 = '0'.repeat(64)
+        else if (mode === 'length') target.bytes = Buffer.concat([original, Buffer.from([0])])
+        else backing.objects.delete(key)
+        const expected = mode === 'crc' ? /publication object gzip is corrupt/
+          : mode === 'semantic' ? /publication object digest mismatch/
+            : mode === 'missing' ? /missing/ : /publication object authority mismatch/
+        await assert.rejects(read(fixture, client), expected)
+      })
+    }
+
+    await t.test('a changed response length is rejected even when the body and hash match', async () => {
+      const backing = memoryS3()
+      const fixture = publicationClosureFixture(backing)
+      const observed = observedClient(backing)
+      let wrongLength = false
+      const client = { async send(command: unknown) {
+        const response = await observed.send(command)
+        const { name, input } = commandDetails(command)
+        return 'ContentLength' in response && wrongLength && name === 'GetObjectCommand' && input.Key === fixture.compressedKeys[0]
+          ? { ...response, ContentLength: Number(response.ContentLength) + 1 } : response
+      } }
+      await read(fixture, client)
+      wrongLength = true
+      await assert.rejects(read(fixture, client), /publication object authority mismatch/)
+    })
+
+    await t.test('unverified or invalid receipts and failed closures do not warm proofs', async () => {
+      const backing = memoryS3()
+      const fixture = publicationClosureFixture(backing)
+      const client = observedClient(backing)
+      assert.equal((await read(fixture, client, config, false)).inflates, 0)
+      const invalid = { ...fixture, active: { ...fixture.active, fencingToken: 2 } }
+      await assert.rejects(read(invalid, client), /pointer and publication receipt authorities differ/)
+      const lastKey = fixture.compressedKeys.at(-1)!
+      const target = backing.objects.get(lastKey)!
+      assert.ok(target.bytes)
+      const original = target.bytes
+      target.bytes = Buffer.alloc(original.byteLength)
+      await assert.rejects(read(fixture, client), /publication object gzip is corrupt/)
+      target.bytes = original
+      assert.equal((await read(fixture, client)).inflates, fixture.compressedKeys.length)
+      assert.equal((await read(fixture, client)).inflates, 0)
+    })
+
+    await t.test('new clients, buckets, prefixes and receipt bindings start cold and replace the sole retained scope', async () => {
+      const backing = memoryS3()
+      const fixture = publicationClosureFixture(backing)
+      const client = observedClient(backing)
+      const coldInflates = fixture.compressedKeys.length
+      await read(fixture, client)
+      assert.equal((await read(fixture, observedClient(backing))).inflates, coldInflates)
+      assert.equal((await read(fixture, client, { ...config, bucket: 'another-bucket' })).inflates, coldInflates)
+      assert.equal((await read(fixture, client)).inflates, coldInflates)
+      const otherPrefix = publicationClosureFixture(backing, 'closure', 'other-prefix')
+      assert.equal((await read(otherPrefix, client, { ...config, prefix: 'other-prefix' })).inflates, coldInflates)
+      assert.equal((await read(fixture, client)).inflates, coldInflates)
+      const receiptObject = backing.objects.get(fixture.active.publicationReceiptKey)!
+      receiptObject.etag = '"changed-receipt"'
+      fixture.active.publicationReceiptEtag = receiptObject.etag
+      assert.equal((await read(fixture, client)).inflates, coldInflates)
+      fixture.receipt.fencing.owner = 'different-longer-owner'
+      const changed = publicationReceiptBytes(fixture.receipt)
+      receiptObject.bytes = changed.body
+      receiptObject.metadata = { sha256: changed.digest, 'semantic-bytes': String(changed.bytes) }
+      fixture.active.publicationReceiptDigest = changed.digest
+      fixture.active.publicationReceiptBytes = changed.bytes
+      assert.equal((await read(fixture, client)).inflates, coldInflates)
+      const nextReceipt = publicationClosureFixture(backing, 'closure-next')
+      assert.equal((await read(nextReceipt, client)).inflates, coldInflates)
+      assert.equal((await read(fixture, client)).inflates, coldInflates)
+    })
+
+    await t.test('concurrent distinct receipts cannot replace another read\'s operation-local proofs', async () => {
+      const firstBacking = memoryS3()
+      const secondBacking = memoryS3()
+      const first = publicationClosureFixture(firstBacking)
+      const second = publicationClosureFixture(secondBacking)
+      for (const key of second.compressedKeys) {
+        const object = secondBacking.objects.get(key)!
+        assert.ok(object.bytes)
+        object.bytes = Buffer.from(object.bytes)
+        object.bytes[4] ^= 1
+      }
+      const firstConfig = { ...config, bucket: 'bucket-a' }
+      const secondConfig = { ...config, bucket: 'bucket-b' }
+      let pauseFirst = false
+      let release = () => {}
+      let entered = () => {}
+      const blocked = new Promise<void>((resolve) => { release = resolve })
+      const reached = new Promise<void>((resolve) => { entered = resolve })
+      const firstClient = observedClient(firstBacking)
+      const secondClient = observedClient(secondBacking)
+      const client = { async send(command: unknown) {
+        const { input } = commandDetails(command)
+        if (pauseFirst && input.Bucket === firstConfig.bucket && input.Key === first.active.manifestKey) {
+          pauseFirst = false
+          entered()
+          await blocked
+        }
+        return input.Bucket === firstConfig.bucket ? firstClient.send(command) : secondClient.send(command)
+      } }
+      await read(first, client, firstConfig)
+      inflates = 0
+      gets.length = 0
+      pauseFirst = true
+      const firstRead = readActiveGenerationPublication({ config: firstConfig, client, active: first.active })
+      try {
+        await reached
+        const secondRead = await readActiveGenerationPublication({ config: secondConfig, client, active: second.active })
+        release()
+        assert.equal(secondRead.found, true)
+        assert.equal((await firstRead).found, true)
+        assert.equal(inflates, second.compressedKeys.length)
+        for (const bucket of [firstConfig.bucket, secondConfig.bucket]) {
+          assert.deepEqual(gets.filter((entry) => entry.bucket === bucket).map(({ key }) => key).sort(),
+            [first.active.publicationReceiptKey, ...first.receipt.objects.map(({ key }) => key)].sort())
+        }
+        assert.equal((await read(first, client, firstConfig)).inflates, 0)
+        assert.equal((await read(second, client, secondConfig)).inflates, second.compressedKeys.length)
+      } finally {
+        release()
+        await firstRead
+      }
+    })
+  } finally {
+    t.mock.restoreAll()
+    syncBuiltinESMExports()
   }
 })
 
@@ -1756,6 +1953,46 @@ async function testStateAuthority(
     outcome: entry.status === 'uploaded' ? 'uploaded' as const : 'unchanged' as const,
   }))
   return { ...manifest.authority, publicationObjects }
+}
+
+function publicationClosureFixture(client: ReturnType<typeof memoryS3>, generationId = 'closure', prefix = 'rankings') {
+  const store = (key: string, semantic: Buffer, compressed = false) => {
+    const bytes = compressed ? gzipSync(semantic) : semantic
+    const digest = createHash('sha256').update(semantic).digest('hex')
+    client.objects.set(key, {
+      body: bytes.toString('utf8'), bytes, etag: '"fixture"',
+      contentType: 'application/json; charset=utf-8',
+      ...(compressed ? { contentEncoding: 'gzip' } : {}),
+      metadata: { sha256: digest, 'semantic-bytes': String(semantic.byteLength) },
+    })
+    return { key, digest, bytes: bytes.byteLength }
+  }
+  const publicManifest = store(`${prefix}/generations/${generationId}/manifest.json`, Buffer.from('{"fixture":"manifest"}'))
+  const compressed = ['raw/objects', 'objects', 'state/objects'].map((namespace) => {
+    const semantic = Buffer.from(JSON.stringify({ fixture: namespace === 'raw/objects' ? 'raw' : namespace }))
+    const digest = createHash('sha256').update(semantic).digest('hex')
+    return store(`${prefix}/${namespace}/sha256/${digest}`, semantic, true)
+  })
+  const receipt = createGenerationPublicationReceipt({
+    generationId, prefix, preparedAt: '2026-07-23T00:00:00.000Z',
+    fencingToken: 1, leaseOwner: 'fixture', promotionEtag: '"promotion"',
+    provenance: { modelVersion: 'fixture', modelConfigHash: 'fixture', source: 'test', dataMode: 'test', sourceProviders: ['test'] },
+    authorities: { publicManifest, rawReceipt: compressed[0] },
+    objects: [publicManifest, ...compressed].map((entry) => ({ ...entry, outcome: 'uploaded' as const })),
+  })
+  const publication = publicationReceiptBytes(receipt)
+  const receiptKey = `${prefix}/generations/${generationId}/publish.json`
+  store(receiptKey, publication.body)
+  return {
+    receipt,
+    compressedKeys: compressed.map(({ key }) => key),
+    active: {
+      generationId, fencingToken: 1, manifestKey: publicManifest.key,
+      publicationSchemaVersion: 1, publicationReceiptKey: receiptKey,
+      publicationReceiptDigest: publication.digest, publicationReceiptBytes: publication.bytes,
+      publicationReceiptEtag: '"fixture"',
+    },
+  }
 }
 
 function memoryS3() {

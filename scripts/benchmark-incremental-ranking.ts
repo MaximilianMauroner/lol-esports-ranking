@@ -560,7 +560,8 @@ async function runBenchmarkWorker() {
   const nextCsv = join(root, 'provider-next', 'oracle-current.csv')
   const nextManifest = join(root, 'next-manifest.json')
   const client = await fileBackedS3()
-  const priorRawAuthority = await readActiveRawSourceAuthority({ config, client })
+  // Untimed preflight must not warm the measured client's publication proofs.
+  const priorRawAuthority = await readActiveRawSourceAuthority({ config, client: await fileBackedS3() })
   if (!priorRawAuthority.found) throw new Error(`Benchmark prior raw authority did not restore: ${priorRawAuthority.reason}`)
   const priorOracleBaselineKeys = priorRawAuthority.receipt.oracle.map((entry) => entry.baseline.key)
   const refreshRoot = join(root, 'production-refresh')

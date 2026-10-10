@@ -44,6 +44,18 @@ memory requirement. The eager preparation API remains for active plan/fixture
 callers; remove it only after those callers migrate. Existing legacy references
 remain readable under the storage migration's removal conditions.
 
+Repeated active-publication reads retain only scalar transport proofs for one
+validated bucket, prefix and receipt binding per client. Every read fetches each
+member again and checks its metadata, length and compressed SHA-256. Only an
+exact previously validated transport hash skips gzip inflation and semantic
+hashing. Changed bytes require full validation before replacing the proof.
+Failed closure reads and reads without closure verification do not warm the
+cache. Concurrent reads keep separate proof scopes; caller receipt objects and
+buffers are never retained. Final promotion uses only its current upload's
+proofs. This private cache changes no stored format or compatibility contract.
+Untimed benchmark preflight uses a separate client so measured refresh starts
+with a cold publication cache.
+
 These repairs remove measured temporary allocations. They do not prove the
 exact allocation that killed an earlier production process. A later diagnostic
 receipt cannot recover missing historical PID arguments, parent or phase.
