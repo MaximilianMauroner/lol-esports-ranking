@@ -127,10 +127,10 @@ export type KnockoutForecastResult = Unsupported | {
 }
 
 /** Enumerates at most 128 winner paths. Observed winners and bracket links stay fixed. */
-export function forecastWorlds2026Knockout(input: Worlds2026KnockoutInput, basis: ForecastBasis): KnockoutForecastResult {
+export function forecastWorlds2026Knockout(input: Worlds2026KnockoutInput, basis: ForecastBasis | null): KnockoutForecastResult {
   const state = replayWorlds2026Knockout(input)
   if (state.status === 'unsupported') return state
-  if (!state.resolvedMatches[6] && (!validTime(basis.ratingDataAsOf) || !validTime(basis.ratingPublishedAt)
+  if (!state.resolvedMatches[6] && (!basis || !validTime(basis.ratingDataAsOf) || !validTime(basis.ratingPublishedAt)
     || Date.parse(basis.ratingDataAsOf) > Date.parse(basis.ratingPublishedAt)
     || Date.parse(basis.ratingPublishedAt) > Date.parse(input.asOf))) {
     return unsupported('model-unavailable', 'The frozen snapshot must satisfy data cutoff ≤ publication ≤ event-state cutoff.')
@@ -165,6 +165,7 @@ export function forecastWorlds2026Knockout(input: Worlds2026KnockoutInput, basis
     const key = JSON.stringify([slot, pair])
     let forecast = matchups.get(key)
     if (!forecast) {
+      if (!basis) return unsupported('model-unavailable', 'A frozen snapshot is required for unresolved matches.')
       const result = forecastTournamentSeries({
         id: `hypothetical:${JSON.stringify([input.stateVersion, slot, pair])}`, eventId: input.eventId,
         startTime: null, stage: definition.stage, status: 'upcoming', sourceState: 'unstarted', bestOf: 5, vodUrls: [],
