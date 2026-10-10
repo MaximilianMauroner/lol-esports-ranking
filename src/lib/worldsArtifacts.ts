@@ -1,4 +1,4 @@
-import type { TournamentEvent } from './tournamentFeed'
+import { normalizeStatus, type TournamentEvent } from './tournamentFeed'
 import type { Worlds2026EventInput } from './worldsSimulation'
 import type { Worlds2026PlayInInput, PlayInEntrant } from './worlds2026PlayIn'
 import type { Worlds2026KnockoutInput } from './worlds2026Knockout'
@@ -48,6 +48,12 @@ export async function loadWorldsArtifact(event: TournamentEvent, fixtureFeed: bo
 function validateScheduleResults(event: TournamentEvent, state: Worlds2026EventInput) {
   const results = [...state.playIn.results, ...(state.swiss?.rounds.flatMap((round) => round.results) ?? []), ...(state.knockout?.results ?? [])]
   for (const series of event.series) {
+    if (series.status === 'cancelled' || normalizeStatus(series.sourceState) === 'cancelled') {
+      throw new Error('Worlds advancement is unavailable because cancelled-series replacement, withdrawal and forfeit semantics are unsupported. The schedule remains available.')
+    }
+    if (series.status === 'unknown' && /^(?:complete|completed)$/i.test(series.sourceState)) {
+      throw new Error('Worlds advancement is unavailable while a terminal source series lacks a confirmed result. The schedule remains available.')
+    }
     if (series.status === 'live' || (series.status !== 'completed' && series.teams.some((team) => (team.gameWins ?? 0) > 0 || team.outcome))) {
       throw new Error('Worlds advancement is unavailable while a series has live or unresolved played-game evidence. Live game conditioning is not supported; the schedule remains available.')
     }

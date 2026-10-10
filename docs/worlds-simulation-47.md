@@ -61,7 +61,13 @@ The 2026 result `matchId` reuses the shared schedule `series.id`. A matching
 content key does not override a missing result or a conflicting team, winner,
 score or best-of. Live and unresolved played-game evidence blocks advancement
 forecasts until game-state conditioning is supported; it is not treated as an
-unstarted series. The schedule and existing match cards remain available.
+unstarted series. A source `complete`/`completed` series whose normalized result
+is unresolved also keeps advancement unavailable until its result is confirmed.
+Cancelled source series keep advancement unavailable because this contract cannot
+link a cancellation to a replacement, withdrawal, forfeit or adjudicated
+advancement. Legitimate cancelled duplicates or replacement schedules remain
+unsupported until retained linking evidence exists. Postponement does not imply
+cancellation; the schedule and existing match cards remain available.
 There is no companion producer, collector, bucket write or source activation
 in this change; the source owner must provide a reviewed coherent companion.
 
@@ -183,15 +189,20 @@ after the first attempt found no matching browser executable.
 ### PR review repairs (10 October)
 
 Two independent GPT-6.1 Sol agents reviewed the full diff, regressions, dead code
-and redundant tests. Review identified two P2 defects: same-key companion refresh
-retained the old forecast/worker, and direct qualifiers lacked required provenance
-before Swiss. The lifecycle now has one request/worker owner; refresh invalidates
+and redundant tests. Review identified three P2 defects: same-key companion
+refresh retained the old forecast/worker, direct qualifiers lacked required
+provenance before Swiss, and terminal source series with unresolved scores were
+sampled as unplayed. Adjacent source-cancellation handling has the same last
+root cause and now has an explicit unsupported boundary.
+The lifecycle now has one request/worker owner; refresh invalidates
 both and clears the baseline. The input, parser and source-label checks require
 `directEntrantEvidence`. No compatibility path was added: this new companion
 contract has no activated producer or stored published consumers.
 
-Both repairs passed independent source verification. The affected engine/client
-suite passed 15 tests with zero failures or skips, and affected lint passed.
+The refresh and provenance repairs passed independent source verification.
+The affected engine/client suite passed 15 tests with zero failures or skips.
+Independent terminal/cancellation loader and feed checks passed 29 tests with
+zero failures or skips. Affected lint passed after each repair.
 The expanded browser regression covers valid-to-incoherent same-key refresh,
 active sampling-to-request timeout, persistent unavailable state and recovery.
 Its local run is pending: the Fleet helper returned admission exit 75 while a
