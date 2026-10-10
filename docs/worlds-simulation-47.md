@@ -88,6 +88,10 @@ Eliminated teams' ratings are unnecessary. Reports pin model metadata only when
 a successful forecast consumes it. Completed reports and reports based only on observations
 do not claim a current model just because one was loaded by the UI. Side/pick rights and draft decisions
 remain disclosed model limits, rather than invented advantages.
+Sample or unavailable model data is disclosed beside the advancement table when
+the report actually consumes it, even if the supplied tournament state uses
+source-observation tags. Completed observed outcomes do not inherit warnings or
+provenance from an unused model basis.
 
 The downloaded run contains the supplied state/evidence, source/rule digest,
 engine version, uint32 seed, snapshot/model/config/identity metadata, model
@@ -220,8 +224,32 @@ foreign build owned the slot. No product test was launched on those admissions.
 The expanded refresh lifecycle browser regression passed through hosted Verify
 on the earlier repair; its guards and test remained unchanged. The final
 consumed-model change and added completed-view assertion require current browser
-integration and type/build checks before technical merge readiness. Earlier local
-checks above remain evidence for unchanged code, not for the new browser path.
+integration before technical merge readiness. Hosted Verify on that revision
+passed typecheck, lint and 1,067 non-browser tests, with fourteen conditional
+native skips; Rust contracts/model parity also passed. The Worlds browser test
+failed while waiting for transient sampling text after reload. The preceding
+revision failed at the same wait. These failures are recorded separately from
+the earlier passed journey and cannot be waived by that evidence.
+
+Independent review traced the sampling wait to a missing synchronization
+boundary: computation can finish before the browser sees the intermediate text.
+The fixture repair uses a local gate inside the real worker's yield hook and
+forces its first-trial yield only through test-server transforms. It asserts
+positive progress below the trial total before refresh, cancellation and
+navigation. It does not substitute progress or probability results, change
+production scheduling, or increase the production trial limit. Normal completion
+remains ungated. Held requests are released or cleaned up with worker/server
+shutdown. This fixture instrumentation establishes an in-flight lifecycle; its
+latencies do not measure unrestricted simulation throughput.
+
+Another confirmed disclosure finding required a visible warning when sourced
+state consumes sample model inputs. The warning uses the report's consumed
+model data mode and leaves completed observations model-free. The fixture's
+source-tag scenario uses fictional provenance references, synthetic feed/model
+data and explicit synthetic labels. It tests contract assertions rather than
+official source acceptance. The repair's runtime and required-check status is
+tracked on PR #97 and issue #47. Earlier local checks above remain evidence for
+unchanged code, not for the new browser paths.
 
 Local redacted evidence is retained in the Git-excluded
 `.agents/artifacts/worlds-simulation-20261009/` directory. The two unrelated

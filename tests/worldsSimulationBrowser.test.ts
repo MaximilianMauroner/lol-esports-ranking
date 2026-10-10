@@ -5,7 +5,7 @@ import { chromium } from 'playwright-core'
 import { createWorldsFixtureServer } from './fixtures/worldsBrowserFixture'
 
 test('Worlds fixture journey computes off-thread, cancels, navigates and invalidates stale state', { timeout: 60_000 }, async () => {
-  const { server, controls } = await createWorldsFixtureServer()
+  const { server, controls, workerGate } = await createWorldsFixtureServer()
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
     await server.listen()
@@ -15,6 +15,12 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     const path = chromium.executablePath()
     browser = await chromium.launch(existsSync(path) ? { headless: true } : { headless: true, channel: 'chrome' })
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    async function waitForSampling() {
+      const progress = await workerGate.waitForHeld()
+      assert.ok(progress.completed > 0 && progress.completed < progress.total, `Gate must hold real unfinished sampling: ${JSON.stringify(progress)}`)
+      await page.getByText(/^Sampling ·/).waitFor()
+      await page.getByRole('button', { name: 'Cancel simulation', exact: true }).waitFor()
+    }
     const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message))
     await page.goto(`${base}/#tournaments`)
     await page.getByText('Current stage: Swiss · round 5', { exact: true }).waitFor()
@@ -47,8 +53,9 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     assert.equal(await page.locator('table').first().locator('tbody tr').count(), 19)
 
     // A same-key reload must stop an active worker before the companion request can time out.
+    controls.holdWorker = true
     await page.reload()
-    await page.getByText(/^Sampling ·/).waitFor()
+    await waitForSampling()
     controls.companionDelayMs = 11_000
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await page.getByText('Loading reviewed Worlds state.', { exact: true }).waitFor()
@@ -59,12 +66,15 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     await page.getByText(/Worlds state request timed out/).waitFor()
     assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).count(), 0)
     assert.equal(await page.getByRole('button', { name: 'Run simulation', exact: true }).count(), 0)
+    assert.equal(workerGate.held.length, 0)
+    workerGate.release()
     controls.companionDelayMs = 0
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await page.getByText('Computation complete.', { exact: true }).waitFor()
     // A fresh page has no baseline cache. Main-thread marks continue while its worker runs.
+    controls.holdWorker = true
     await page.reload()
-    await page.getByRole('button', { name: 'Cancel simulation', exact: true }).waitFor()
+    await waitForSampling()
     // A string avoids tsx's named-function helper inside the isolated browser realm.
     const cancellation: number = await page.evaluate(`(() => {
       const start = performance.now();
@@ -78,9 +88,9 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     console.log(`Synthetic browser cancellation acknowledgement: ${cancellation.toFixed(1)} ms`)
     await page.waitForTimeout(1000)
     await page.getByText('Simulation cancelled. Observed state remains available.', { exact: true }).waitFor()
+    assert.equal(workerGate.held.length, 0)
     await page.getByRole('button', { name: 'Run simulation', exact: true }).click()
-    await page.getByRole('button', { name: 'Cancel simulation', exact: true }).waitFor()
-    await page.getByText(/^Sampling ·/).waitFor()
+    await waitForSampling()
     // Correct the source while the restarted worker is active. Its result cannot replace the new state.
     controls.stage = 'completed'
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
@@ -93,10 +103,29 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     const completedPanel = page.locator('[aria-label="Worlds simulation"]')
     await completedPanel.getByText('No historical or current model snapshot is assumed.', { exact: true }).waitFor()
     assert.equal(await completedPanel.getByText(/^Snapshot .* · Model /).count(), 0)
-    controls.stage = 'swiss-5'; controls.revision++
+    assert.equal(workerGate.held.length, 0)
+    workerGate.release()
+
+    // Source assertion tags do not turn the retained synthetic rating model into official inputs.
+    controls.fictionalSourceAssertions = true; controls.stage = 'swiss-5'
     await page.reload()
-    await page.getByRole('button', { name: 'Cancel simulation', exact: true }).waitFor()
-    await page.getByText(/^Sampling ·/).waitFor()
+    await page.getByText('Computation complete.', { exact: true }).waitFor()
+    await page.getByText(/^Sample model inputs\./).waitFor()
+    assert.equal(await page.getByText(/^Synthetic Worlds state and model evidence\./).count(), 0)
+    assert.equal(await page.locator('details').filter({ has: page.getByText('Simulation basis and precision', { exact: true }) }).getAttribute('open'), null)
+    controls.stage = 'completed'
+    await page.reload()
+    await page.getByText('Current stage: Completed', { exact: true }).waitFor()
+    await page.getByText('Computation complete.', { exact: true }).waitFor()
+    assert.equal(await page.getByText(/^Sample model inputs\./).count(), 0)
+    await page.getByText('Simulation basis and precision', { exact: true }).click()
+    await page.getByText('No historical or current model snapshot is assumed.', { exact: true }).waitFor()
+    assert.equal(await page.locator('[aria-label="Worlds simulation"]').getByText(/^Snapshot .* · Model /).count(), 0)
+    controls.fictionalSourceAssertions = false
+    controls.stage = 'swiss-5'; controls.revision++
+    controls.holdWorker = true
+    await page.reload()
+    await waitForSampling()
     const navigationStart = performance.now()
     await page.getByRole('link', { name: 'Matches', exact: true }).click()
     await page.waitForURL(/#matches/)
@@ -105,6 +134,8 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     console.log(`Synthetic browser navigation during simulation: ${navigationMs.toFixed(1)} ms`)
     await page.waitForTimeout(1000)
     assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).count(), 0)
+    assert.equal(workerGate.held.length, 0)
+    workerGate.release()
     controls.corrupt = true
     await page.goto(`${base}/#tournaments`)
     await page.getByText(/Worlds state does not match this schedule revision/).waitFor()

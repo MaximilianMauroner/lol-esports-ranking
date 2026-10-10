@@ -68,6 +68,8 @@ export function WorldsTournamentPanel({ event, basis, fixtureFeed }: { event: To
     <CardHeader><CardTitle>Worlds advancement</CardTitle></CardHeader>
     <CardContent className="grid min-w-0 gap-3">
       {artifact?.dataMode === 'synthetic-fixture' ? <Alert variant="warning">Synthetic Worlds state and model evidence. These probabilities are fixture estimates, not official forecasts.</Alert> : null}
+      {display?.status === 'supported' && display.report.model && display.report.model.dataMode !== 'scheduled-public-data'
+        ? <Alert variant="warning">Sample model inputs. These probabilities use seeded or unavailable sample data and are not official forecasts.</Alert> : null}
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm text-muted-foreground" role="status">{mode === 'running' ? progress ? `Sampling · ${progress.toLocaleString()} / ${OPTIONS.trials.toLocaleString()} trials` : 'Computing remaining stages.' : mode === 'cancelled' ? 'Simulation cancelled. Observed state remains available.' : mode === 'loading' ? detail : mode === 'done' ? 'Computation complete.' : `Forecast unavailable: ${detail}`}</p>
         {mode === 'running' ? <Button variant="outline" size="sm" onClick={() => { stop.current?.(); stop.current = null; setMode('cancelled') }}>Cancel simulation</Button> : artifact ? <Button variant="outline" size="sm" onClick={() => setRun((value) => value + 1)}>Run simulation</Button> : null}
