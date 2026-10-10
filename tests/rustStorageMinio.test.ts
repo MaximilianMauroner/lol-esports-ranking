@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { gzipSync } from 'node:zlib'
+import { crc32, gzipSync } from 'node:zlib'
 import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { acquireBucketLease, assertRawSourceGenerationAuthority, readActiveGenerationPublication, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
 import { assertStateManifestAuthority, parseIncrementalStateManifest, prepareStateObject, stateObjectReferenceFor, syncContentAddressedStateObject, type IncrementalStateManifest } from '../scripts/incremental-state-storage.mjs'
@@ -557,11 +557,26 @@ test('native state authority verifier matches Node integrity against MinIO', { s
       await reject(authority, { ...manifest, runId: 'changed-run' })
       await reject(await putManifest({ ...manifest, generationId: 'different-generation' }))
       await reject(await putManifest(manifest, Buffer.from(`${canonicalJsonFor(manifest)}\n`)))
-      for (const patch of [{ ContentType: 'application/json' }, { Metadata: { sha256: authority.digest } },
-        { Metadata: { sha256: '0'.repeat(64), 'semantic-bytes': String(authority.bytes) } }]) {
+      const metadataPatches: Partial<PutObjectCommand['input']>[] = [
+        { ContentType: 'application/json' }, { Metadata: { sha256: authority.digest } },
+        { Metadata: { sha256: '0'.repeat(64), 'semantic-bytes': String(authority.bytes) } },
+      ]
+      for (const patch of metadataPatches) {
         await reject(await putManifest(manifest, undefined, patch))
       }
       await putManifest()
+    })
+    await t.test('authority descriptor rejects positional input and incomplete objects', async () => {
+      const authority = await putManifest()
+      for (const invalid of [
+        [authority.key, authority.etag, authority.bytes, authority.digest],
+        { key: authority.key, etag: authority.etag, bytes: authority.bytes },
+        { ...authority, unexpected: true },
+      ]) {
+        await assert.rejects(invokeStorage(root, config, { action: 'verify-state-generation', authority: invalid }))
+        await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' })
+      }
+      await compare(authority)
     })
     await t.test('schema, safe counts, exact dates and ordered unique checkpoints', async () => {
       const missingBase = Object.fromEntries(Object.entries(manifest).filter(([key]) => key !== 'baseGenerationId'))
@@ -609,10 +624,40 @@ test('native state authority verifier matches Node integrity against MinIO', { s
         await putMember(ledger, Buffer.concat([concatenated, suffix]))
         await compare(await putManifest())
       }
-      const corrupt = Buffer.from(ledger.compressed)
-      corrupt[corrupt.length - 8] ^= 1
-      await putMember(ledger, Buffer.concat([corrupt, Buffer.alloc(8)]))
-      await reject(await putManifest())
+      for (const offset of [8, 4]) {
+        const corrupt = Buffer.from(ledger.compressed)
+        corrupt[corrupt.length - offset] ^= 1
+        await putMember(ledger, Buffer.concat([corrupt, Buffer.alloc(8)]))
+        await reject(await putManifest())
+      }
+      for (const body of [ledger.compressed.subarray(0, -1), Buffer.concat([ledger.compressed, Buffer.from([1, 2, 3])])]) {
+        await putMember(ledger, body)
+        await reject(await putManifest())
+      }
+      await putMember(ledger)
+    })
+    await t.test('Node-valid long filename/comment and checked optional gzip headers', async () => {
+      const long = Buffer.concat([Buffer.alloc(65_536, 97), Buffer.from([0])])
+      const optional = (flags: number, fields: Buffer, checksum = false) => {
+        const fixed = Buffer.from(ledger.compressed.subarray(0, 10))
+        fixed[3] = flags | (checksum ? 2 : 0)
+        const header = Buffer.concat([fixed, fields])
+        const crc = Buffer.alloc(checksum ? 2 : 0)
+        if (checksum) crc.writeUInt16LE(crc32(header) & 0xffff)
+        return Buffer.concat([header, crc, ledger.compressed.subarray(10)])
+      }
+      for (const body of [optional(8, long), optional(16, long),
+        optional(8 | 16 | 4, Buffer.concat([Buffer.from([3, 0, 1, 2, 3]), long, long]), true)]) {
+        await putMember(ledger, body)
+        await compare(await putManifest())
+      }
+      const badChecksum = optional(8, Buffer.from('name\0'), true)
+      badChecksum[15] ^= 1
+      for (const body of [badChecksum, optional(8, Buffer.alloc(0)).subarray(0, 10),
+        optional(4, Buffer.from([255, 255])), optional(0xe0, Buffer.alloc(0))]) {
+        await putMember(ledger, body)
+        await reject(await putManifest())
+      }
       await putMember(ledger)
     })
     const active = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))

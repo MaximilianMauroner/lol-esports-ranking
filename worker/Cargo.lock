@@ -911,6 +911,7 @@ name = "ranking-storage"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "crc32fast",
  "flate2",
  "ranking-contracts",
  "ranking-raw-source",

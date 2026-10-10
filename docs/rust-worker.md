@@ -232,6 +232,14 @@ size, compressed SHA and uncompressed semantic size/SHA. Inflation uses a fixed
 does not parse canonical JSON or model/replay contents: Node's authority check
 does not certify those deferred M5 encodings either.
 
+The state reader scans optional gzip filename/comment fields without a new
+length limit. It checks optional header CRC, deflate payload CRC and member
+size before accepting concatenation or zero padding. Other native gzip readers
+still use the library's 65,535-byte filename/comment limit; this action does not
+certify those paths for longer Node-valid headers. That remains a separate
+native stored-input acceptance boundary, alongside raw prepare/restore's
+unpaired-surrogate limitation.
+
 This internal action adds no selector, active-pointer read, model execution,
 readiness/audit write or promotion. Public graph traversal, agreement between
 the three generation authorities and final lease/ETag CAS remain M4 gates.
