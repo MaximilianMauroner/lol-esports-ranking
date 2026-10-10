@@ -8,6 +8,7 @@ const browserJourneys = [
   'tests/rankingArchiveBrowser.test.ts',
   'tests/tournamentBrowser.test.ts',
   'tests/tournamentForecastBrowser.test.ts',
+  'tests/worldsSimulationBrowser.test.ts',
 ]
 const browserSet = new Set(browserJourneys)
 const otherTests = [...globSync('tests/**/*.test.ts'), ...globSync('tests/**/*.test.mjs')].filter((path) => !browserSet.has(path)).sort()
