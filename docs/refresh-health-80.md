@@ -1,8 +1,50 @@
-# Refresh health investigation, 9 October 2026
+# Refresh health investigation, 9–10 October 2026
 
 Read-only checks at about 22:10 UTC distinguish the web service from the scheduled
 refresh. Both use the #90 main revision. No deployment, retry, settings change,
 production database read or bucket write was made.
+
+## Read-only refresh on 10 October
+
+At about 09:25 UTC, GitHub deployment 6955355437 has additional failures at
+00:16:34 and 06:16:12 UTC, still with empty descriptions. Railway web deployment
+214b422e-9784-4b94-bdf7-ae43d4a5eefa remains SUCCESS on #90. The actual public
+origin, `https://lol.lab4code.com`, returns 200 from `/api/live` with that revision
+and 200 from `/api/ready` with app ready and local data.
+
+The latest ranking-refresh deployment, ce88568d-09b1-459c-a8d5-c58cc15bd2bd,
+is CRASHED on the same revision. Its daily audit starts at 06:04:18.567 and
+fails after 707,059 ms. It writes the full 80-snapshot artifact at 06:15:21;
+V8 then reports ineffective mark-compacts and heap exhaustion, followed by
+SIGABRT. No completed persistence or promotion stage is recorded. The broad
+parent `provider-fetch` label still does not attribute this allocation to HTTP.
+The six-hour cron and gated mode remain configured. The daily-audit selector
+is unset (enabled default), and all Rust selectors remain unset (Node default).
+This confirms enabled ingestion and a failed audit, not successful freshness.
+
+## Isolated allocation evidence on 10 October
+
+After a frozen owned install passed, the unchanged bounded diagnostic capture
+reproduced a separate local failure on the current review stack. The recorded
+parent PID, start stamp, arguments and numeric GC record identify baseline
+setup. Its 1,811,939,328-byte V8 heap limit is below the 3 GiB group cap. The
+capture exits 134 during `state.persist` / `state.canonical-gzip`, before
+calibration, the incremental worker or verifier. Group peak is
+2,113,863,680 bytes with zero swap. No cgroup OOM or timeout is recorded.
+
+Full checkpoint encoding retains about 1.306 GB of heap before persistence.
+The allocation sample is dominated by `encodeCanonical` in rating checkpoint
+encoding. Persistence prepares two checkpoint canonical bodies of 48,600,502
+and 49,283,035 bytes, then aborts during the next preparation. The eager plan
+retains all prepared strings/buffers alongside the encoded checkpoints.
+
+The follow-up repair prepares and synchronizes one checkpoint at a time, keeps
+only its semantic reference between writes, then builds the same ordered
+manifest. Caller state, gzip/semantic identity, collision checks, publication
+accounting and exhaustive pre-promotion integrity remain enforced. All 63
+storage tests and changed-file lint pass; full-corpus recovery is still pending.
+The captured failure does not reconstruct the historical #90 abort or attribute
+the production failure. It also does not explain the separate CI compute gate.
 
 ## Serving and failed work
 

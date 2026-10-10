@@ -62,6 +62,21 @@ Generation graph verification and fenced promotion are still Node-owned and
 are not claimed ported. Rust never replaces the configured Railway command in
 this change.
 
+## Current local diagnostic evidence
+
+Owned frozen Node installation passed on 10 October. The bounded capture then
+exited 134 during full baseline checkpoint persistence, before calibration,
+incremental measurement or verifier. Process stamps/arguments and the GC PID
+identify the parent, with a 1,811,939,328-byte V8 heap limit. Group peak was
+2,113,863,680 bytes and swap was zero. Retained checkpoint encodings and eager
+canonical body preparation are measured contributors. Sequential persistence
+has passed the 63 storage tests; full-corpus recovery remains unverified.
+
+This current local attribution does not recover the missing evidence for the
+older #90 abort. It supplies no incremental CPU profile, real-input M2/M3
+acceptance or clean shadow. Both #94 and #96 currently fail the unchanged
+compute gate; their memory/upload/parity results do not waive that gate.
+
 ## Historical heap evidence
 
 The earlier local #90 V8 abort was near 1570 MiB below the 3 GiB cgroup cap.
