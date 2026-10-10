@@ -170,6 +170,14 @@ remain required before M4 is complete. The action is not selected by the Node
 parent and grants no promotion authority. The native reader is a permanent
 storage integrity path while receipt-bound generations remain stored.
 
+Pointer fencing retains Node's `Number` coercion; receipt tokens remain positive
+safe integers. Receipt dates retain canonical four-digit and signed six-digit
+ISO spelling through both JavaScript TimeClip endpoints. Provider and lease
+timestamp contracts remain separate. Gzip decoding validates complete members
+and their CRC/size before accepting concatenation or Node's zero-padding end
+marker. These are permanent stored-input compatibility requirements. Existing
+stored references need no migration.
+
 The MinIO differential cases compare the complete reader result with Node and
 exercise stale receipt/pointer bindings, malformed membership, prefix escapes,
 alternate gzip transport, semantic corruption and missing members. They also

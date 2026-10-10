@@ -180,6 +180,37 @@ test('native publication reader matches Node against MinIO for authority and dec
       await publish(receipt, {}, Buffer.from(canonicalJsonFor(receipt).replace('"schemaVersion":1', '"schemaVersion":1.0')))
       assert.deepEqual(await readRust(), await readNode())
     })
+    await t.test('pointer fencing follows Node Number coercion without weakening safe receipt tokens', async () => {
+      for (const fencingToken of [1, '1', true, [1], ['1'], [['1']], ' +1.0e0 ', '\uFEFF1\u00A0', '0x1', '0o1', '0b1', '.1e1']) {
+        await publish(receipt, { fencingToken })
+        assert.deepEqual(await readRust(), await readNode(), JSON.stringify(fencingToken))
+      }
+      const safeToken = Number.MAX_SAFE_INTEGER
+      const maximumReceipt = { ...receipt, fencing: { ...receipt.fencing, token: safeToken } }
+      for (const fencingToken of [safeToken, String(safeToken), [String(safeToken)], '0x1fffffffffffff']) {
+        await publish(maximumReceipt, { fencingToken })
+        assert.deepEqual(await readRust(), await readNode(), JSON.stringify(fencingToken))
+      }
+      for (const fencingToken of [2, '2', false, null, [], [null], [true], [1, 0], {}, '1_0', '+0x1', '\u00851', 'Infinity', '1e999']) {
+        await publish(receipt, { fencingToken })
+        await rejected()
+      }
+    })
+    await t.test('receipt canonical ISO accepts expanded years through both TimeClip endpoints', async () => {
+      for (const preparedAt of ['0000-02-29T00:00:00.000Z', '2024-02-29T23:59:59.999Z', '9999-12-31T23:59:59.999Z',
+        '+010000-01-01T00:00:00.000Z', '-000001-01-01T00:00:00.000Z',
+        '-271821-04-20T00:00:00.000Z', '+275760-09-13T00:00:00.000Z']) {
+        await publish({ ...receipt, preparedAt })
+        assert.deepEqual(await readRust(), await readNode(), preparedAt)
+      }
+      for (const preparedAt of ['2023-02-29T00:00:00.000Z', '2024-04-31T00:00:00.000Z',
+        '2024-02-29T23:59:60.000Z', '2024-02-29T24:00:00.000Z', '2024-02-29T00:00:00Z',
+        '2024-02-29T00:00:00.000+00:00', '+009999-01-01T00:00:00.000Z', '-000000-01-01T00:00:00.000Z',
+        '-271821-04-19T23:59:59.999Z', '+275760-09-13T00:00:00.001Z']) {
+        await publish({ ...receipt, preparedAt })
+        await rejected()
+      }
+    })
     await t.test('equivalent alternative gzip transport remains valid with its declared size', async () => {
       const original = compressed[0]
       const alternate = gzipSync(original.semantic, { level: 1 })
@@ -190,6 +221,39 @@ test('native publication reader matches Node against MinIO for authority and dec
       assert.deepEqual(await readRust(), await readNode())
       await put(original.reference.key, original.body, original.reference.digest, true)
     })
+    await t.test('complete gzip members accept Node padding and concatenation across public/raw/state', async () => {
+      for (const original of compressed) {
+        const split = Math.floor(original.semantic.length / 2)
+        const concatenated = Buffer.concat([gzipSync(original.semantic.subarray(0, split)), gzipSync(original.semantic.subarray(split))])
+        for (const body of [Buffer.concat([original.body, Buffer.alloc(8)]), Buffer.concat([original.body, Buffer.from([0, 0, 255, 1])]),
+          concatenated, Buffer.concat([concatenated, Buffer.from([0, 255])])]) {
+          const reference = { ...original.reference, bytes: body.length }
+          await put(reference.key, body, reference.digest, true)
+          await publish({ ...receipt,
+            authorities: { ...receipt.authorities,
+              ...(reference.key === receipt.authorities.rawReceipt.key ? { rawReceipt: reference } : {}) },
+            objects: receipt.objects.map((object) => object.key === reference.key ? { ...object, bytes: reference.bytes } : object) })
+          assert.deepEqual(await readRust(), await readNode(), reference.key)
+        }
+        await put(original.reference.key, original.body, original.reference.digest, true)
+      }
+    })
+    await t.test('padding never conceals an invalid gzip footer or an incomplete member', async () => {
+      const original = compressed[0]
+      const crc = Buffer.from(original.body)
+      crc[crc.length - 8] ^= 1
+      const size = Buffer.from(original.body)
+      size[size.length - 4] ^= 1
+      for (const body of [Buffer.concat([crc, Buffer.alloc(8)]), Buffer.concat([size, Buffer.alloc(8)]),
+        original.body.subarray(0, original.body.length - 1), Buffer.concat([original.body, Buffer.from([1, 2, 3])])]) {
+        const reference = { ...original.reference, bytes: body.length }
+        await put(reference.key, body, reference.digest, true)
+        await publish({ ...receipt, authorities: { ...receipt.authorities, rawReceipt: reference },
+          objects: receipt.objects.map((object) => object.key === reference.key ? { ...object, bytes: reference.bytes } : object) })
+        await rejected()
+      }
+      await put(original.reference.key, original.body, original.reference.digest, true)
+    })
     const mutations: Array<[string, (value: GenerationPublicationReceipt) => unknown]> = [
       ['duplicate membership', (value) => ({ ...value, objects: [...value.objects, value.objects[0]] })],
       ['mutable namespace', (value) => ({ ...value, objects: [...value.objects, { ...value.objects[0], key: `${config.prefix}/raw/manifest.json` }] })],
@@ -197,6 +261,7 @@ test('native publication reader matches Node against MinIO for authority and dec
       ['missing authority member', (value) => ({ ...value, objects: value.objects.filter((object) => object.key !== manifest.reference.key) })],
       ['unknown receipt field', (value) => ({ ...value, unverified: true })],
       ['unsafe byte count', (value) => ({ ...value, objects: value.objects.map((object, index) => index === 0 ? { ...object, bytes: Number.MAX_SAFE_INTEGER + 1 } : object) })],
+      ['unsafe receipt fencing token', (value) => ({ ...value, fencing: { ...value.fencing, token: Number.MAX_SAFE_INTEGER + 1 } })],
       ['duplicate provenance provider', (value) => ({ ...value, provenance: { ...value.provenance, sourceProviders: ['test', 'test'] } })],
     ]
     for (const [name, mutate] of mutations) {

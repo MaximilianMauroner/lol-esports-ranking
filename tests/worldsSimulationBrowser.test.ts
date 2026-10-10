@@ -41,8 +41,32 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     controls.corrupt = true
     const feedAfterFailure = await (await page.request.get(`${base}/tournament-data/feed.json`)).json()
     assert.deepEqual(feedAfterFailure.events, feedBeforeFailure.events)
-    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
-    await page.getByText(/Worlds state does not match this schedule revision/).waitFor()
+    const refreshRequests: string[] = []
+    const recordRefreshRequest = (request: { url(): string }) => {
+      const path = new URL(request.url()).pathname
+      if (path.startsWith('/tournament-data/')) refreshRequests.push(path)
+    }
+    page.on('request', recordRefreshRequest)
+    try {
+      // Check the actual refresh response before judging the retained panel's rejection.
+      const [refreshedFeed, refreshedCompanion] = await Promise.all([
+        page.waitForResponse((response) => new URL(response.url()).pathname === '/tournament-data/feed.json'),
+        page.waitForResponse((response) => new URL(response.url()).pathname === `/tournament-data/worlds/${encodeURIComponent(feedBeforeFailure.events[0].id)}.json`),
+        page.getByRole('button', { name: 'Refresh', exact: true }).click(),
+      ])
+      assert.equal(refreshedFeed.status(), 200)
+      assert.equal(refreshedCompanion.status(), 200)
+      assert.deepEqual((await refreshedFeed.json()).events, feedBeforeFailure.events)
+      assert.equal((await refreshedCompanion.json()).feedEventKey, 'stale-fixture-revision')
+      await page.getByText(/Worlds state does not match this schedule revision/).waitFor()
+    } catch (error) {
+      console.error('Same-key Worlds refresh diagnostics:', JSON.stringify({
+        requests: refreshRequests, pageErrors: errors, url: page.url(), body: await page.locator('body').innerText(),
+      }))
+      throw error
+    } finally {
+      page.off('request', recordRefreshRequest)
+    }
     assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).count(), 0)
     assert.equal(await page.getByRole('button', { name: 'Run simulation', exact: true }).count(), 0)
     await page.waitForTimeout(1000)
