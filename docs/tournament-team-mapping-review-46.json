@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "source": "lolesports-persisted-site-api",
+  "revision": "retained-capture-review-20261009",
+  "activation": "offline-review-only",
+  "sourceApproval": "unverified",
+  "rankingDirectory": {
+    "sha256": "1bc7d1bfb807a577df5fd60cbab94b25bc69d692b4f1a8118d31b2f2b427403d",
+    "bytes": 26313
+  },
+  "mappings": [
+    {
+      "sourceTeamId": "98767991853197861",
+      "teamId": "team:t1:t1",
+      "sourceName": "T1",
+      "rankingName": "T1",
+      "rankingRegion": "LCK",
+      "observedCompetitions": [
+        "lck",
+        "msi"
+      ],
+      "captureDigests": [
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611",
+        "f180c0342b9561ed784680f393f958f44f7979decfcff2100cf5142bfc7c27d4"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    },
+    {
+      "sourceTeamId": "98767991926151025",
+      "teamId": "team:g2:g2-esports",
+      "sourceName": "G2 Esports",
+      "rankingName": "G2 Esports",
+      "rankingRegion": "LEC",
+      "observedCompetitions": [
+        "lec",
+        "msi"
+      ],
+      "captureDigests": [
+        "07f0fdc7d9abb398f49a4d489fc23b985038e580d12186e7fd59a41a455fe58e",
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "b97e83c6a0dbd07534333dda4f8a285ee432e9fc3498a817791151c2f231e152",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611",
+        "f180c0342b9561ed784680f393f958f44f7979decfcff2100cf5142bfc7c27d4"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    },
+    {
+      "sourceTeamId": "98926509892121852",
+      "teamId": "team:fly:flyquest",
+      "sourceName": "FlyQuest",
+      "rankingName": "FlyQuest",
+      "rankingRegion": "LCS",
+      "observedCompetitions": [
+        "lcs"
+      ],
+      "captureDigests": [
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "b97e83c6a0dbd07534333dda4f8a285ee432e9fc3498a817791151c2f231e152",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    },
+    {
+      "sourceTeamId": "99566404856367466",
+      "teamId": "team:al:anyone-s-legend",
+      "sourceName": "Anyone's Legend",
+      "rankingName": "Anyone's Legend",
+      "rankingRegion": "LPL",
+      "observedCompetitions": [
+        "lpl"
+      ],
+      "captureDigests": [
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "b97e83c6a0dbd07534333dda4f8a285ee432e9fc3498a817791151c2f231e152",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    },
+    {
+      "sourceTeamId": "100205573496804586",
+      "teamId": "team:hle:hanwha-life-esports",
+      "sourceName": "Hanwha Life Esports",
+      "rankingName": "Hanwha Life Esports",
+      "rankingRegion": "LCK",
+      "observedCompetitions": [
+        "lck",
+        "msi"
+      ],
+      "captureDigests": [
+        "07f0fdc7d9abb398f49a4d489fc23b985038e580d12186e7fd59a41a455fe58e",
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611",
+        "f180c0342b9561ed784680f393f958f44f7979decfcff2100cf5142bfc7c27d4"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    },
+    {
+      "sourceTeamId": "100725845018863243",
+      "teamId": "team:dk:dplus-kia",
+      "sourceName": "Dplus KIA",
+      "rankingName": "Dplus KIA",
+      "rankingRegion": "LCK",
+      "observedCompetitions": [
+        "lck"
+      ],
+      "captureDigests": [
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    },
+    {
+      "sourceTeamId": "100725845022060229",
+      "teamId": "team:bfx:bnk-fearx",
+      "sourceName": "BNK FEARX",
+      "rankingName": "BNK FEARX",
+      "rankingRegion": "LCK",
+      "observedCompetitions": [
+        "lck"
+      ],
+      "captureDigests": [
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    },
+    {
+      "sourceTeamId": "111692118851466302",
+      "teamId": "team:kc:karmine-corp",
+      "sourceName": "Karmine Corp",
+      "rankingName": "Karmine Corp",
+      "rankingRegion": "LEC",
+      "observedCompetitions": [
+        "lec",
+        "msi"
+      ],
+      "captureDigests": [
+        "55f02549c6b343f61b33bd994ec9a4a7d36eee4599a3ad286ff3373d98e3b069",
+        "b97e83c6a0dbd07534333dda4f8a285ee432e9fc3498a817791151c2f231e152",
+        "e509db179939a31a0995fd8c8263eddd1f469f4d73ba83ad5b32dce26aa63611"
+      ],
+      "reviewBasis": "Stable explicit source ID in retained detail records; same organization and domestic competition as the separately digested ranking directory. Runtime joins use IDs only."
+    }
+  ],
+  "reviewer": "gpt-6.1-sol, Codex in T3 Code",
+  "reviewedAt": "2026-10-09",
+  "limitations": [
+    "Eight stable identities only, not all participants. Independent PR review remains required.",
+    "No accepted live source or current Worlds participants are claimed.",
+    "Unreviewed aliases and organizational changes remain unmapped.",
+    "This documentation is not loaded by the collector, UI, or forecast producer."
+  ]
+}
