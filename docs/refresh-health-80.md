@@ -44,12 +44,20 @@ state remains rejected. A content or reference-size change fails parity.
 Diagnostic paths now identify the differing
 semantic reference, rather than temporary inline/reference fields.
 
-Safe legacy keys and legacy compressed byte counts remain readable and do not
-change semantic equality. Fresh stored reads still verify transport, semantic
-identity, boundary and compatibility, and exhaustive graph verification precedes
-promotion. The comparator does not certify an unfetched body or replace those
-checks. No stored object or model version changes. This is a permanent semantic
-comparison rule while retained references and inline builds coexist.
+Object keys and compressed byte counts do not change semantic equality. Stored
+readers still require the canonical `state/objects/sha256/<digest>` key and verify
+transport, semantic identity, boundary and compatibility. A legacy compressed
+byte count, when present, must match the fetched gzip bytes. Exhaustive graph
+verification still precedes promotion. The comparator does not certify an
+unfetched body or make a different key readable. No stored object or model
+version changes. This is a permanent semantic comparison rule while retained
+references and inline builds coexist.
+
+Representation equality does not remove real checkpoint drift. Appending a later
+UTC date changes the corpus recency horizon. Full replay recalculates historical
+factor sums against that date, while retained immutable checkpoints keep their
+earlier values. Different content hashes fail parity even when public artifacts
+agree. The diagnosed full fallback remains ineligible for a clean daily audit.
 
 Checkpoint persistence prepares and synchronizes one checkpoint at a time.
 Only semantic references and scalar write results survive between writes.

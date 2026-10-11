@@ -464,7 +464,50 @@ test('year rollover, legacy page migration, and storage-year corrections publish
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
-test('shadow publishes full authority and missing/context-invalid checkpoints or parity mismatch diagnose and fall back fully', async () => {
+test('same-horizon replay compares retained checkpoint references with identical full inline content', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-checkpoint-representation-'))
+  try {
+    const baseline = await run(root, 'representation-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(baseline)
+    const sameHorizonMatches = [...baseMatches(), match('m4b', '2026-01-04', 'Event B', { datetimeUtc: '2026-01-04T18:00:00.000Z' })]
+    // The last date and earlier prefixes stay fixed; only the terminal whole
+    // date is replayed. This isolates storage shape from real recency drift.
+    assert.equal(sameHorizonMatches.at(-1)?.date, baseMatches().at(-1)?.date)
+    const candidate = await run(root, 'representation-candidate', fixtureSource(sameHorizonMatches), {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored,
+    })
+    assert.equal(candidate.action, 'publish-incremental', candidate.metrics.fallbackReason)
+    if (candidate.action !== 'publish-incremental') throw new Error('incremental representation candidate required')
+    assert.deepEqual(candidate.state.checkpoints.map((checkpoint) => checkpoint.boundary.matchId), ['m0', 'm2'])
+    assert.ok(candidate.state.checkpoints.every((checkpoint) => checkpoint.storedObjectReference && !checkpoint.ratingCheckpoint))
+
+    const shadow = await run(root, 'representation-shadow', fixtureSource(sameHorizonMatches), {
+      mode: 'shadow', cause: 'pending-match', enabled: true, restored,
+    })
+    assert.equal(shadow.action, 'publish-full')
+    if (shadow.action !== 'publish-full') throw new Error('full representation comparison required')
+    const report = shadow.metrics.stateParityReport
+    assert.equal(shadow.metrics.semanticParityReport?.equal, true)
+    assert.equal(shadow.metrics.parity, true, JSON.stringify(report))
+    assert.equal(shadow.metrics.stateParity, true, JSON.stringify(report))
+    assert.equal(report?.checkpointEqual, true, JSON.stringify(report))
+    assert.deepEqual(report?.expectedCheckpointDigests, report?.actualCheckpointDigests)
+    assert.equal(shadow.diagnostic, undefined)
+    assert.deepEqual(shadow.state.checkpoints.map((checkpoint) => checkpoint.boundary.matchId), ['m0', 'm2', 'm4b'])
+    assert.ok(shadow.state.checkpoints.every((checkpoint) => checkpoint.ratingCheckpoint && !checkpoint.storedObjectReference))
+    for (const retained of candidate.state.checkpoints) {
+      const inline = shadow.state.checkpoints.find((checkpoint) => checkpoint.boundary.matchId === retained.boundary.matchId)
+      assert.ok(inline)
+      const { candidate: persistedInline } = prepareStateCheckpoint(inline, shadow.state.compatibility)
+      assert.equal(persistedInline.object.sha256, retained.storedObjectReference?.sha256)
+      assert.equal(persistedInline.object.bytes, retained.storedObjectReference?.bytes)
+    }
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('shadow publishes full authority and real checkpoint drift or invalid candidates diagnose and fall back fully', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-fallbacks-'))
   try {
     const baseline = await run(root, 'fallback-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
@@ -478,11 +521,20 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     }
     const shadow = await run(root, 'shadow', appended, { mode: 'shadow', cause: 'pending-match', enabled: true, restored, buildSnapshot: captureCandidate })
     assert.equal(shadow.action, 'publish-full')
-    assert.equal(shadow.metrics.parity, true)
+    assert.equal(shadow.metrics.parity, false, JSON.stringify(shadow.metrics.stateParityReport))
     assert.equal(shadow.metrics.semanticParityReport?.equal, true)
-    assert.equal(shadow.metrics.stateParity, true)
-    assert.equal(shadow.metrics.stateParityReport?.checkpointEqual, true)
-    assert.equal(shadow.diagnostic, undefined)
+    assert.equal(shadow.metrics.stateParity, false)
+    assert.equal(shadow.metrics.stateParityReport?.checkpointEqual, false)
+    assert.ok(shadow.metrics.stateParityReport?.mismatchPaths.includes('$.checkpoints.0.object.sha256'))
+    assert.notEqual(shadow.metrics.stateParityReport?.expectedCheckpointDigests[0], shadow.metrics.stateParityReport?.actualCheckpointDigests[0])
+    assert.equal(shadow.diagnostic?.kind, 'shadow-parity')
+    assert.equal(shadow.diagnostic?.reason, 'checkpoint-state-parity-mismatch')
+    if (shadow.action !== 'publish-full') throw new Error('full checkpoint drift fallback required')
+    // January 5 moves the recency horizon. Retained December 31 bytes were
+    // encoded against January 4, so full replay must produce a different hash.
+    assert.deepEqual(shadow.state.checkpoints[0].boundary, restored.stateManifest.checkpoints[0].boundary)
+    const { candidate: rebasedCheckpoint } = prepareStateCheckpoint(shadow.state.checkpoints[0], shadow.state.compatibility)
+    assert.notEqual(rebasedCheckpoint.object.sha256, restored.stateManifest.checkpoints[0].object.sha256)
     assert.ok(candidateWrites.length > 0)
     assertArtifactByteMetrics(shadow, candidateWrites.map((write) => write.value))
     const shadowFull = await run(root, 'shadow-authority', appended, { mode: 'gated', cause: 'daily-audit', enabled: false })
@@ -490,10 +542,15 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
 
     const audit = await run(root, 'appended-daily-audit', appended, { mode: 'gated', cause: 'daily-audit', enabled: true, restored })
     assert.equal(audit.action, 'publish-full')
-    assert.equal(audit.metrics.parity, true)
-    assert.equal(audit.metrics.stateParity, true)
-    assert.equal(audit.metrics.stateParityReport?.checkpointEqual, true)
-    assert.equal(audit.diagnostic, undefined)
+    assert.equal(audit.metrics.semanticParityReport?.equal, true)
+    assert.equal(audit.metrics.parity, false, JSON.stringify(audit.metrics.stateParityReport))
+    assert.equal(audit.metrics.stateParity, false)
+    assert.equal(audit.metrics.stateParityReport?.checkpointEqual, false)
+    assert.ok(audit.metrics.stateParityReport?.mismatchPaths.includes('$.checkpoints.0.object.sha256'))
+    assert.equal(audit.diagnostic?.reason, 'checkpoint-state-parity-mismatch')
+    const auditOutcome = normalizedOutcomeForBuild(audit)
+    assert.equal(auditOutcome.outcome, 'parity-failure')
+    assert.equal(auditOutcome.contract.auditEligibility, 'ineligible')
 
     const missing = await run(root, 'missing', appended, {
       mode: 'gated', cause: 'pending-match', enabled: true,
