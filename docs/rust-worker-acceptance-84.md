@@ -89,6 +89,19 @@ separate M5 gate. Require compiled MinIO equality and failure cases with zero
 skips, no success descriptor on failure and unchanged pointer/object inventory.
 Real-input memory evidence remains separate from these synthetic storage cases.
 
+Before finishing M4, require current-source compiled acceptance for native
+public archive reads. Compare hydrated content and every fresh transport proof
+with Node, including producer-generated multi-level archives, UTF-16 keys,
+noncanonical public envelopes, duplicate JSON properties, optional range/year
+fields, alternate/long gzip headers and failed child reads. Check archive
+count/type/depth boundaries, unchanged pointer/inventory and no success
+descriptor on failure. Include public nesting beyond 128 levels, positive and
+negative numeric overflow in content and validated fields, invalid public
+grammar and undefined record keys in map merges in both orders. Nesting deeper
+than Node's stack-dependent limits is outside the parity claim. Implemented
+cases do not complete acceptance or authorize parent selection without compiled
+current-source execution.
+
 ## M5: the ranking model
 
 Port import/model/player/replay/projection and the explicitly deferred state

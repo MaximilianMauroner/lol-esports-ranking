@@ -8,10 +8,10 @@ import { promisify } from 'node:util'
 import test from 'node:test'
 import { crc32, gzipSync } from 'node:zlib'
 import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { acquireBucketLease, assertRawSourceGenerationAuthority, readActiveGenerationPublication, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
+import { acquireBucketLease, assertRawSourceGenerationAuthority, readActiveGenerationPublication, readVerifiedPublicArtifact, releaseBucketLease, renewBucketLease } from '../scripts/railway-bucket.mjs'
 import { assertStateManifestAuthority, parseIncrementalStateManifest, prepareStateObject, stateObjectReferenceFor, syncContentAddressedStateObject, type IncrementalStateManifest } from '../scripts/incremental-state-storage.mjs'
 import { createGenerationPublicationReceipt, type GenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
-import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
+import { canonicalJsonFor, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { oracleGameInventory, prepareNarrowSourceObject, prepareOracleBaseline, prepareOracleMutationChain, prepareRawObject, prepareRawSourceReceipt, rawObjectReferenceFor, type PreparedRawObject, type RawObjectReference } from '../scripts/raw-source-storage.mjs'
 
 const endpoint = process.env.RANKING_STORAGE_TEST_ENDPOINT
@@ -667,6 +667,218 @@ test('native state authority verifier matches Node integrity against MinIO', { s
     const before = (await inventory()).Contents
     await compare(authority)
     assert.deepEqual((await inventory()).Contents, before, 'Successful verification writes no bucket object')
+  } finally {
+    client.destroy()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('native public archive reader matches Node content and fresh transport proofs', { skip: !endpoint || !binary }, async (t) => {
+  const url = new URL(endpoint!)
+  assert.equal(url.protocol, 'http:')
+  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
+  const root = await mkdtemp(join(tmpdir(), 'rust-public-archive-'))
+  const config = { enabled: true as const, endpoint: endpoint!, bucket: `public-archive-${Date.now()}`, region: 'us-east-1',
+    accessKeyId: 'minio-test', secretAccessKey: 'minio-test-password', prefix: 'isolated/public', forcePathStyle: true }
+  const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: true,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
+  type Identity = { sha256: string; bytes: number }
+  const hash = (body: Buffer) => createHash('sha256').update(body).digest('hex')
+  const keyFor = (identity: Identity) => `${config.prefix ? `${config.prefix}/` : ''}objects/sha256/${identity.sha256}`
+  const putBytes = async (semantic: Buffer, compressed: Buffer = gzipSync(semantic)) => {
+    const identity = { sha256: hash(semantic), bytes: semantic.length }
+    await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: keyFor(identity), Body: compressed,
+      ContentType: 'application/json; charset=utf-8', ContentEncoding: 'gzip',
+      Metadata: { sha256: identity.sha256, 'semantic-bytes': String(identity.bytes), encoding: 'gzip' } }))
+    return identity
+  }
+  const putContent = (content: unknown) => putBytes(Buffer.from(canonicalJsonFor({ artifactKind: 'public-semantic-artifact', schemaVersion: 1, content })))
+  const readRust = (identity: Identity) => invokeStorage(root, config, { action: 'verify-public-artifact', ...identity })
+  const compare = async (identity: Identity) => {
+    const references: Identity[] = [identity]
+    const content = await readVerifiedPublicArtifact(client, config, identity, 'isolated public archive', {
+      onReference: (reference) => { references.push(reference) },
+    })
+    const verifiedObjects = []
+    for (const reference of references) {
+      const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: keyFor(reference) }))
+      const compressed = Buffer.from(await object.Body!.transformToByteArray())
+      verifiedObjects.push({ key: keyFor(reference), digest: reference.sha256, compressedBytes: compressed.length, compressedSha256: hash(compressed) })
+    }
+    assert.deepEqual(await readRust(identity), JSON.parse(canonicalJsonFor({ content, verifiedObjects })))
+  }
+  const reject = async (identity: Identity) => {
+    await assert.rejects(readVerifiedPublicArtifact(client, config, identity, 'isolated rejected archive'))
+    await assert.rejects(readRust(identity))
+    await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' }, 'Failure leaves no success descriptor')
+  }
+  const inline = (value: unknown) => ({ kind: 'inline', value })
+  const node = (tree: unknown) => ({ artifactKind: 'public-archive-node', formatVersion: 1, tree })
+  const activeKey = `${config.prefix}/active-generation.json`
+  const activeBytes = Buffer.from('{"generationId":"untouched-public-fixture"}')
+  try {
+    await client.send(new CreateBucketCommand({ Bucket: config.bucket }))
+    await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: activeKey, Body: activeBytes }))
+    await t.test('plain envelopes, exact binary64 and UTF-16 strings/keys', async () => {
+      const identity = await putContent({ artifactKind: 'public-fixture', values: [1e-7, -0, 9007199254740991, '\ud800', '😀'],
+        '\udfff': 'unpaired key', '\uE000': 1, '😀': 2, toJSON: 'ordinary stored property', __proto__: null })
+      await compare(identity)
+      const empty = { ...config, prefix: '' }
+      const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: keyFor(identity) }))
+      await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: `objects/sha256/${identity.sha256}`,
+        Body: Buffer.from(await object.Body!.transformToByteArray()), ContentEncoding: 'gzip', Metadata: object.Metadata }))
+      const nested = await readRust(identity)
+      assert.deepEqual(await invokeStorage(root, empty, { action: 'verify-public-artifact', ...identity }),
+        { ...nested, verifiedObjects: nested.verifiedObjects.map((proof: { key: string }) => ({ ...proof, key: proof.key.slice(config.prefix.length + 1) })) })
+    })
+    await t.test('actual Node archive partitioning and recursive hydration', async () => {
+      const prepared = prepareSemanticArtifact({ artifactKind: 'public-history-fixture', rows: Array.from({ length: 900 }, (_, index) => ({
+        matchId: `match-${index}`, date: index < 450 ? '2025-01-01' : '2026-01-01', team: index % 17 === 0 ? '\ud800' : 'captured-fixture', notes: 'x'.repeat(1500),
+      })) })
+      assert.ok(prepared.children!.length > 2, 'The Node producer must exercise multiple archive levels')
+      for (const object of [...prepared.children!, prepared]) await putBytes(object.canonicalBytes, object.compressed)
+      await compare({ sha256: prepared.digest, bytes: prepared.bytes })
+    })
+    await t.test('noncanonical public JSON, duplicate keys and ordinary special keys', async () => {
+      const text = ' { "schemaVersion": 1.0, "artifactKind": "public-semantic-artifact", "content": { "z": 1, "z": 2e0, "__proto__": { "safe": true }, "\\uD800": "\\uDFFF", "constructor": 3 } } \n'
+      await compare(await putBytes(Buffer.from(text)))
+      const lossy = Buffer.concat([Buffer.from('{"artifactKind":"public-semantic-artifact","schemaVersion":1,"content":{"text":"'),
+        Buffer.from([0xff]), Buffer.from('"}}')])
+      await compare(await putBytes(lossy))
+    })
+    await t.test('raw string controls fail while escaped controls and valid noncontrols retain parity', async () => {
+      const envelope = (content: string) => Buffer.from(`{"artifactKind":"public-semantic-artifact","schemaVersion":1,"content":${content}}`)
+      for (const control of ['\0', '\t', '\n', '\x1f']) {
+        for (const content of [`{"before${control}after":1}`, `{"key":"before${control}after"}`]) {
+          await reject(await putBytes(envelope(content)))
+        }
+      }
+      const escaped = String.raw`\u0000\b\t\n\f\r\u001f`
+      const valid = '\u007f\u2028'
+      await compare(await putBytes(envelope(`{"${escaped}":"${escaped}","${valid}":"${valid}"}`)))
+    })
+    await t.test('JSON.parse nesting beyond 128 levels, numeric overflow and invalid grammar', async () => {
+      const envelope = (content: string) => Buffer.from(`{"artifactKind":"public-semantic-artifact","schemaVersion":1,"content":${content}}`)
+      for (const depth of [140, 500]) {
+        const nested = `${'['.repeat(depth)}0${']'.repeat(depth)}`
+        await compare(await putBytes(envelope(`{"nested":${nested}}`)))
+        const inlineTree = `{"kind":"inline","value":{"nested":${nested}}}`
+        await compare(await putBytes(envelope(`{"artifactKind":"public-archive-node","formatVersion":1,"tree":${inlineTree}}`)))
+      }
+      await compare(await putBytes(envelope('{"positive":1e400,"negative":-1e400,"values":[1e400,-1E+400,1e-400]}')))
+      // Overflow keeps Number semantics during validation: Infinity === Infinity.
+      const tree = (artifactKind: string) => `{"kind":"inline","value":{"artifactKind":${artifactKind}}}`
+      const archive = (artifactKind: string, originalKind: string) => putBytes(envelope(
+        `{"artifactKind":"public-artifact-archive","formatVersion":1,"tree":${tree(artifactKind)},"originalKind":${originalKind}}`))
+      await compare(await archive('1e400', '2e400'))
+      await compare(await archive('-1e400', '-1e999'))
+      await reject(await archive('1e400', '-1e400'))
+      await reject(await archive('1e400', 'null'))
+      const child = await putBytes(envelope('{"artifactKind":"public-archive-node","formatVersion":1,"tree":{"kind":"inline","value":{"a":1e400}}}'))
+      const part = { ...child, encoding: 'gzip', count: 1 }
+      await compare(await putContent(node({ kind: 'map', parts: [part] })))
+      for (const field of ['"count":1e400', '"bytes":1e400', '"year":1e400', '"startUtcDate":1e400,"endUtcDate":"2026-01-01"']) {
+        const reference = `${JSON.stringify(part).slice(0, -1)},${field}}`
+        await reject(await putBytes(envelope(`{"artifactKind":"public-archive-node","formatVersion":1,"tree":{"kind":"map","parts":[${reference}]}}`)))
+      }
+      for (const content of ['{"a":1,}', '{"a":[1,]}', '{"a":01}', '{"a":1.}', '{"a":.5}', '{"a":+1}', '{"a":NaN}', '{"a":Infinity}',
+        '{"a":-}', '{"a":1e}', '{"a":"\\x"}', '{"a" 1}', '{1:2}', `{"a":${'['.repeat(200)}}`, '{"a":1} x']) {
+        await reject(await putBytes(envelope(content)))
+      }
+    })
+    await t.test('validated alternate, long-header and concatenated gzip transport', async () => {
+      const semantic = Buffer.from(canonicalJsonFor({ artifactKind: 'public-semantic-artifact', schemaVersion: 1, content: { fixture: 'transport' } }))
+      const gzip = gzipSync(semantic)
+      const header = Buffer.from(gzip.subarray(0, 10))
+      header[3] = 8 | 2
+      const fields = Buffer.concat([header, Buffer.alloc(65_536, 97), Buffer.from([0])])
+      const checksum = Buffer.alloc(2)
+      checksum.writeUInt16LE(crc32(fields) & 0xffff)
+      for (const transport of [gzipSync(semantic, { level: 1 }), Buffer.concat([fields, checksum, gzip.subarray(10)]),
+        Buffer.concat([gzipSync(semantic.subarray(0, 20)), gzipSync(semantic.subarray(20))]), Buffer.concat([gzip, Buffer.alloc(8), Buffer.from([255])])]) {
+        await compare(await putBytes(semantic, transport))
+      }
+      for (const offset of [gzip.length - 8, gzip.length - 4]) {
+        const corrupt = Buffer.from(gzip)
+        corrupt[offset] ^= 1
+        await reject(await putBytes(semantic, corrupt))
+      }
+      for (const transport of [gzip.subarray(0, -1), Buffer.concat([gzip, Buffer.from([1])])]) {
+        await reject(await putBytes(semantic, transport))
+      }
+    })
+    await t.test('optional archive ranges, numeric years and missing inline properties', async () => {
+      const child = await putContent(node({ kind: 'record', entries: [['a', inline('first')], ['\ud800', inline('last')], ['missing', { kind: 'inline' }]] }))
+      const identity = await putContent(node({ kind: 'map', parts: [{ ...child, encoding: 'gzip', count: 3,
+        path: '/captured', keyStart: 'a', keyEnd: '\ud800', year: 2026, startUtcDate: ['2026-01-01'], endUtcDate: '2026-01-02' }] }))
+      await compare(identity)
+      await compare(await putContent(node({ kind: 'inline' })))
+    })
+    await t.test('missing inline values remain own keys when map children merge', async () => {
+      const part = async (tree: unknown) => ({ ...await putContent(node(tree)), encoding: 'gzip', count: 1 })
+      const missing = await part({ kind: 'record', entries: [['k', { kind: 'inline' }]] })
+      const present = await part(inline({ k: 1 }))
+      const other = await part(inline({ other: 1 }))
+      for (const parts of [[missing, present], [present, missing], [missing, missing]]) {
+        await reject(await putContent(node({ kind: 'map', parts })))
+      }
+      await compare(await putContent(node({ kind: 'map', parts: [missing, other] })))
+    })
+    await t.test('archive schema, count, type, duplicate-key and depth failures', async () => {
+      const child = await putContent(node(inline(['one', 'two'])))
+      const reference = { ...child, encoding: 'gzip', count: 2 }
+      for (const tree of [{ kind: 'list', parts: [{ ...reference, count: 1 }] }, { kind: 'map', parts: [reference] },
+        { kind: 'list', parts: [] }, { kind: 'record', entries: [['same', inline(1)], ['same', inline(2)]] },
+        { kind: 'list', parts: [{ ...reference, keyStart: 'z', keyEnd: 'a' }] },
+        { kind: 'list', parts: [{ ...reference, startUtcDate: '2026-02-01', endUtcDate: '2026-01-01' }] },
+        { kind: 'list', parts: [{ ...reference, path: 42 }] }, { kind: 'list', parts: [{ ...reference, bytes: 512_001 }] }]) {
+        await reject(await putContent(node(tree)))
+      }
+      const mapChild = await putContent(node(inline({ duplicate: true })))
+      await reject(await putContent(node({ kind: 'map', parts: [1, 2].map(() => ({ ...mapChild, encoding: 'gzip', count: 1 })) })))
+      const wrongChild = await putContent({ artifactKind: 'public-artifact-archive', formatVersion: 1, tree: inline(['one']), originalKind: 'wrong' })
+      await reject(await putContent(node({ kind: 'list', parts: [{ ...wrongChild, encoding: 'gzip', count: 1 }] })))
+      await reject(await putContent({ artifactKind: 'public-artifact-archive', formatVersion: 1, tree: inline({ artifactKind: {} }), originalKind: {} }))
+      for (const depth of [24, 25]) {
+        let tree: unknown = inline(1)
+        for (let index = 0; index < depth; index++) tree = { kind: 'record', entries: [['nested', tree]] }
+        const identity = await putContent(node(tree))
+        if (depth === 24) await compare(identity)
+        else await reject(identity)
+      }
+      for (const content of [{ artifactKind: 'public-archive-node', formatVersion: 2, tree: inline(1) },
+        { artifactKind: 'public-archive-node', formatVersion: 1, tree: null }]) await reject(await putContent(content))
+    })
+    await t.test('fresh reads detect child mutation, missing members and metadata corruption', async () => {
+      const childSemantic = Buffer.from(canonicalJsonFor({ artifactKind: 'public-semantic-artifact', schemaVersion: 1, content: node(inline(['one'])) }))
+      const child = await putBytes(childSemantic)
+      const parent = await putContent(node({ kind: 'list', parts: [{ ...child, encoding: 'gzip', count: 1 }] }))
+      await compare(parent)
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: keyFor(child) }))
+      await reject(parent)
+      await putBytes(childSemantic, gzipSync(Buffer.from('changed semantic content')))
+      await reject(parent)
+      await putBytes(childSemantic)
+      await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: keyFor(child), Body: gzipSync(childSemantic), ContentEncoding: 'gzip',
+        Metadata: { sha256: child.sha256, 'semantic-bytes': String(child.bytes), encoding: 'identity' } }))
+      await reject(parent)
+      await putBytes(childSemantic)
+      await compare(parent)
+    })
+    await t.test('bad semantic envelopes and invalid root identities fail closed', async () => {
+      for (const envelope of [{ artifactKind: 'wrong', schemaVersion: 1, content: {} },
+        { artifactKind: 'public-semantic-artifact', schemaVersion: 2, content: {} },
+        { artifactKind: 'public-semantic-artifact', schemaVersion: 1, content: [] }]) {
+        await reject(await putBytes(Buffer.from(canonicalJsonFor(envelope))))
+      }
+      for (const identity of [{ sha256: 'not-a-digest', bytes: 1 }, { sha256: 'a'.repeat(64), bytes: 0 }]) await reject(identity)
+    })
+    const pointer = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
+    assert.deepEqual(Buffer.from(await pointer.Body!.transformToByteArray()), activeBytes)
+    const identity = await putContent({ fixture: 'no-writes' })
+    const before = (await client.send(new ListObjectsV2Command({ Bucket: config.bucket }))).Contents
+    await compare(identity)
+    assert.deepEqual((await client.send(new ListObjectsV2Command({ Bucket: config.bucket }))).Contents, before)
   } finally {
     client.destroy()
     await rm(root, { recursive: true, force: true })

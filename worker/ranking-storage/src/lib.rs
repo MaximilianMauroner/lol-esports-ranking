@@ -1,3 +1,4 @@
+mod public_archive;
 mod publication;
 mod raw_generation;
 mod s3;
@@ -15,6 +16,10 @@ const JSON_TYPE: &str = "application/json; charset=utf-8";
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case", deny_unknown_fields)]
 enum Input {
+    VerifyPublicArtifact {
+        sha256: String,
+        bytes: u64,
+    },
     VerifyPublication,
     VerifyRawGeneration {
         reference: ranking_raw_source::Reference,
@@ -80,6 +85,13 @@ pub fn run(input_path: &str, output_path: &str) -> Result<()> {
         .map_err(|_| "Invalid storage descriptor")?;
     let bucket = s3::Bucket::from_env()?;
     let result = match input {
+        Input::VerifyPublicArtifact { sha256, bytes } => {
+            return fs::write(
+                output_path,
+                public_archive::verify(&bucket, &sha256, bytes)?,
+            )
+            .map_err(|error| error.to_string());
+        }
         Input::VerifyPublication => publication::verify(&bucket)?,
         Input::VerifyRawGeneration { reference } => {
             return fs::write(output_path, raw_generation::verify(&bucket, reference)?)
