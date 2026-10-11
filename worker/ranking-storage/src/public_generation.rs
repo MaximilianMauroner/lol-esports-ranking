@@ -181,15 +181,13 @@ fn validate(manifest: &Json, generation: &Json, schema: Option<&Json>) -> Result
     }
     if let Some(reference) =
         field(manifest, "artifactDirectory").filter(|value| !matches!(value, Json::Undefined))
-    {
-        if version != Some(2)
+        && (version != Some(2)
             || !valid_digest(&js_text(field(reference, "sha256")))
             || !integer(field(reference, "bytes"))
                 .is_some_and(|bytes| (1..=PAGE_BYTES).contains(&bytes))
-            || !string_is(field(reference, "encoding"), "gzip")
-        {
-            return Err("Invalid public artifact directory authority".into());
-        }
+            || !string_is(field(reference, "encoding"), "gzip"))
+    {
+        return Err("Invalid public artifact directory authority".into());
     }
     let Json::Object(entries) = artifacts else {
         unreachable!()
