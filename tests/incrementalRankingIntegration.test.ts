@@ -473,15 +473,18 @@ test('same-horizon replay compares retained checkpoint references with identical
     // The last date and earlier prefixes stay fixed; only the terminal whole
     // date is replayed. This isolates storage shape from real recency drift.
     assert.equal(sameHorizonMatches.at(-1)?.date, baseMatches().at(-1)?.date)
-    const candidate = await run(root, 'representation-candidate', fixtureSource(sameHorizonMatches), {
+    // Gated cleanup adds undefined roster keys to replay rows. Keep separate
+    // inputs so those keys cannot change the shadow's checkpoint encoding.
+    const candidate = await run(root, 'representation-candidate', fixtureSource(structuredClone(sameHorizonMatches)), {
       mode: 'gated', cause: 'pending-match', enabled: true, restored,
     })
     assert.equal(candidate.action, 'publish-incremental', candidate.metrics.fallbackReason)
     if (candidate.action !== 'publish-incremental') throw new Error('incremental representation candidate required')
     assert.deepEqual(candidate.state.checkpoints.map((checkpoint) => checkpoint.boundary.matchId), ['m0', 'm2'])
     assert.ok(candidate.state.checkpoints.every((checkpoint) => checkpoint.storedObjectReference && !checkpoint.ratingCheckpoint))
+    assert.ok(sameHorizonMatches.every((entry) => !Object.hasOwn(entry, 'teamARoster') && !Object.hasOwn(entry, 'teamBRoster')), 'gated cleanup must not add roster keys to the shared fixture')
 
-    const shadow = await run(root, 'representation-shadow', fixtureSource(sameHorizonMatches), {
+    const shadow = await run(root, 'representation-shadow', fixtureSource(structuredClone(sameHorizonMatches)), {
       mode: 'shadow', cause: 'pending-match', enabled: true, restored,
     })
     assert.equal(shadow.action, 'publish-full')
