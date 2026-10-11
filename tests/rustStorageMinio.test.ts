@@ -7,8 +7,8 @@ import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
 import { crc32, gzipSync } from 'node:zlib'
-import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { acquireBucketLease, assertRawSourceGenerationAuthority, expandPublicArtifactDirectory, readActiveGenerationPublication, readVerifiedPublicArtifact, releaseBucketLease, renewBucketLease, uploadContentAddressedPublicArtifactPatch } from '../scripts/railway-bucket.mjs'
+import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { acquireBucketLease, assertRawSourceGenerationAuthority, bucketKey, expandPublicArtifactDirectory, readActiveContentAddressedGeneration, readActiveGenerationPublication, readVerifiedPublicArtifact, releaseBucketLease, renewBucketLease, safeObjectPath, uploadContentAddressedPublicArtifactPatch } from '../scripts/railway-bucket.mjs'
 import { assertStateManifestAuthority, parseIncrementalStateManifest, prepareStateObject, stateObjectReferenceFor, syncContentAddressedStateObject, type IncrementalStateManifest } from '../scripts/incremental-state-storage.mjs'
 import { createGenerationPublicationReceipt, type GenerationPublicationReceipt } from '../scripts/generation-publication.mjs'
 import { canonicalJsonFor, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
@@ -1045,6 +1045,279 @@ test('native supplied public directory expansion matches Node without publicatio
     })
     const active = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
     assert.deepEqual(Buffer.from(await active.Body!.transformToByteArray()), activeBytes, 'Expansion cannot change active authority')
+  } finally {
+    client.destroy()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('native supplied public generation structure preserves Node contracts with an explicit date gate', { skip: !endpoint || !binary }, async (t) => {
+  const url = new URL(endpoint!)
+  assert.equal(url.protocol, 'http:')
+  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
+  const root = await mkdtemp(join(tmpdir(), 'rust-public-generation-'))
+  const config = { enabled: true as const, endpoint: endpoint!, bucket: `public-generation-${Date.now()}`, region: 'us-east-1',
+    accessKeyId: 'minio-test', secretAccessKey: 'minio-test-password', prefix: 'isolated/generation', forcePathStyle: true }
+  const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: true,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } })
+  const generationId = 'structural-fixture'
+  const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+  const rootValue = { artifactKind: 'public-ranking-manifest', generatedAt: '2026-10-11T00:00:00.000Z',
+    model: { version: 'structural-fixture', configHash: 'non-digest-compatible-hash' }, source: 'isolated fixture', dataMode: 'fixture',
+    sources: [{ name: 'synthetic manifest acceptance' }], artifactMeta: { runId: generationId } }
+  type Authority = { key: string; etag: string; bytes: number; digest: string }
+  type Context = { generationId: string; publicManifestSchemaVersion?: unknown }
+  const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+  const context: Context = { generationId }
+  const publicMembers: Array<{ key: string; digest: string; bytes: number; outcome: 'uploaded' }> = []
+  const putManifest = async (value: unknown, supplied = context, bytes = Buffer.from(canonicalJsonFor(value)), patch: Partial<ConstructorParameters<typeof PutObjectCommand>[0]> = {}) => {
+    const authority = { key: bucketKey(config, `generations/${safeObjectPath(supplied.generationId)}/manifest.json`), etag: '', bytes: bytes.length, digest: hash(bytes) }
+    const stored = await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: authority.key, Body: bytes,
+      ContentType: 'application/json; charset=utf-8', Metadata: { sha256: authority.digest, 'semantic-bytes': String(authority.bytes) }, ...patch }))
+    return { ...authority, etag: stored.ETag! }
+  }
+  const readRust = (authority: Authority, supplied = context) => invokeStorage(root, config, {
+    action: 'verify-public-generation-structure', authority, contextJson: JSON.stringify(supplied),
+  })
+  const inventory = async () => (await client.send(new ListObjectsV2Command({ Bucket: config.bucket }))).Contents
+  // The actual Node reader receives a supplied active authority. A fixture
+  // receipt is served locally for v2, so no new receipt/pointer ownership is claimed.
+  const readNode = async (authority: Authority, supplied = context) => {
+    const active = { generationId: supplied.generationId, storageMode: 'content-addressed-gzip-v1',
+      manifestKey: authority.key, manifestEtag: authority.etag, manifestBytes: authority.bytes, manifestDigest: authority.digest,
+      ...('publicManifestSchemaVersion' in supplied ? { publicManifestSchemaVersion: supplied.publicManifestSchemaVersion } : {}) }
+    if (!('publicManifestSchemaVersion' in supplied)) {
+      return readActiveContentAddressedGeneration({ config, client, activeAuthority: { found: true, value: active }, verifyArtifacts: false, verifyPublicationClosure: false })
+    }
+    const raw = { key: `${config.prefix}/raw/objects/sha256/${'a'.repeat(64)}`, digest: 'a'.repeat(64), bytes: 1 }
+    const receipt = createGenerationPublicationReceipt({ generationId: supplied.generationId, prefix: config.prefix,
+      preparedAt: '2026-10-11T00:00:00.000Z', fencingToken: 1, leaseOwner: 'test-host', promotionEtag: '"test-lease"',
+      provenance: { modelVersion: rootValue.model.version, modelConfigHash: rootValue.model.configHash, source: rootValue.source,
+        dataMode: rootValue.dataMode, sourceProviders: rootValue.sources.map(({ name }) => name) },
+      authorities: { publicManifest: { key: authority.key, digest: authority.digest, bytes: authority.bytes }, rawReceipt: raw },
+      objects: [{ key: authority.key, digest: authority.digest, bytes: authority.bytes, outcome: 'uploaded' }, { ...raw, outcome: 'uploaded' }, ...publicMembers],
+    })
+    const body = Buffer.from(canonicalJsonFor(receipt))
+    const receiptKey = `${config.prefix}/generations/${supplied.generationId}/publish.json`
+    const binding = { publicationSchemaVersion: 1, fencingToken: 1, publicationReceiptKey: receiptKey,
+      publicationReceiptDigest: hash(body), publicationReceiptBytes: body.length, publicationReceiptEtag: '"local-fixture-receipt"' }
+    const fixtureClient = { send: async (command: unknown) => {
+      if (command instanceof GetObjectCommand && command.input.Key === receiptKey) {
+        return { Body: body, ETag: binding.publicationReceiptEtag, ContentLength: body.length,
+          ContentType: 'application/json; charset=utf-8', Metadata: { sha256: hash(body), 'semantic-bytes': String(body.length) } }
+      }
+      if (command instanceof GetObjectCommand) return client.send(command)
+      assert.ok(command instanceof HeadObjectCommand, 'Node fixture only reads objects')
+      return client.send(command)
+    } }
+    return readActiveContentAddressedGeneration({ config, client: fixtureClient, activeAuthority: { found: true, value: { ...active, ...binding } },
+      verifyArtifacts: false, verifyPublicationClosure: false })
+  }
+  const compare = async (authority: Authority, supplied = context) => {
+    const before = await inventory()
+    const node = await readNode(authority, supplied)
+    assert.ok(node.found)
+    const raw = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: authority.key }))
+    const storedManifest = JSON.parse(await raw.Body!.transformToString())
+    const references: Array<{ sha256: string; bytes: number }> = []
+    await expandPublicArtifactDirectory(client, config, storedManifest, { onReference: (reference) => { references.push(reference) } })
+    const verifiedObjects = []
+    for (const reference of references) {
+      const key = `${config.prefix}/objects/sha256/${reference.sha256}`
+      const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+      const compressed = Buffer.from(await object.Body!.transformToByteArray())
+      verifiedObjects.push({ key, digest: reference.sha256, compressedBytes: compressed.length, compressedSha256: hash(compressed) })
+    }
+    const native = await readRust(authority, supplied)
+    assert.deepEqual(native, JSON.parse(canonicalJsonFor({ ...authority, manifest: node.manifest, verifiedObjects,
+      needsNodeDateValidation: true, schemaConverted: node.cutover === 'schema-v1-active-manifest-to-v2' })))
+    assert.deepEqual(await inventory(), before, 'Success cannot write or repair objects')
+    return native
+  }
+  const reject = async (authority: Authority, supplied = context, nodeRejects = true) => {
+    const before = await inventory()
+    if (nodeRejects) await assert.rejects(readNode(authority, supplied))
+    await assert.rejects(readRust(authority, supplied))
+    await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' })
+    assert.deepEqual(await inventory(), before, 'Failure cannot change inventory')
+  }
+  const activeKey = `${config.prefix}/active-generation.json`
+  const activeBytes = Buffer.from('{"generationId":"untouched-structural-fixture"}')
+  try {
+    await client.send(new CreateBucketCommand({ Bucket: config.bucket }))
+    await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: activeKey, Body: activeBytes }))
+    const publication = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId,
+      previousManifest: { storageMode: 'content-addressed-gzip-v1', artifacts: {} },
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: rootValue },
+        ...Array.from({ length: 2_000 }, (_, index) => ({ logicalPath: `/data/fixture/${String(index).padStart(4, '0')}.json`, value: { artifactKind: 'generation-fixture', synthetic: true } }))],
+    })
+    for (const member of [...publication.uploaded, ...publication.unchanged]) {
+      if (member.key === publication.manifestAuthority.key) continue
+      assert.equal(typeof member.digest, 'string')
+      publicMembers.push({ key: member.key, digest: String(member.digest), bytes: member.bytes, outcome: 'uploaded' })
+    }
+    assert.ok(isRecord(publication.manifest.artifacts))
+    const artifactMappings = publication.manifest.artifacts
+    assert.ok(isRecord(artifactMappings['/data/ranking-summary.json']))
+    const rootMapping = artifactMappings['/data/ranking-summary.json']
+    assert.ok(typeof rootMapping.sha256 === 'string')
+    const base = { ...publication.manifest, artifacts: artifactMappings, schemaVersion: 1 }
+    const v2: Context = { generationId, publicManifestSchemaVersion: 2 }
+    await t.test('actual Node producer directory expands with scalar transport proofs and no graph fetch', async () => {
+      const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: publication.manifestAuthority.key }))
+      const body = Buffer.from(await stored.Body!.transformToByteArray())
+      const storedManifest: Record<string, unknown> = JSON.parse(body.toString())
+      assert.ok(storedManifest.artifactDirectory)
+      const result = await compare({ ...publication.manifestAuthority, etag: publication.manifestAuthority.etag! }, v2)
+      assert.ok(result.verifiedObjects.length > 2)
+      assert.equal(result.schemaConverted, false)
+      // An unrelated logical target is deliberately not read by this layer.
+      const identity = artifactMappings['/data/fixture/0000.json']
+      assert.ok(isRecord(identity))
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/objects/sha256/${identity.sha256}` }))
+      assert.deepEqual(await readRust({ ...publication.manifestAuthority, etag: publication.manifestAuthority.etag! }, v2), result)
+      for (const artifacts of [{}, 42, false]) {
+        await compare(await putManifest({ ...storedManifest, artifacts }, v2), v2)
+      }
+      for (const artifacts of [null, { '/data/ranking-summary.json': { ...rootMapping, generationId: 'wrong' } }]) {
+        await reject(await putManifest({ ...storedManifest, artifacts }, v2), v2)
+      }
+    })
+    await t.test('legacy schema representation conversion and context pairing preserve absent versus null', async () => {
+      await compare(await putManifest(base))
+      await compare(await putManifest(publication.manifest, v2), v2)
+      for (const supplied of [{ generationId, publicManifestSchemaVersion: null }, { generationId, publicManifestSchemaVersion: '2' },
+        { generationId, publicManifestSchemaVersion: 1 }, { generationId, publicManifestSchemaVersion: 2 }]) {
+        await reject(await putManifest(base, supplied), supplied)
+      }
+      await reject(await putManifest(publication.manifest))
+    })
+    await t.test('all supported Node date strings retain exact text and the deferred validity gate', async () => {
+      for (const generatedAt of ['2026-10-11', '2026-02-30T00:00:00.000Z', 'October 11, 2026', '0', '2026-10-11T00:00:00+02:00']) {
+        const result = await compare(await putManifest({ ...base, generatedAt }))
+        assert.equal(result.manifest.generatedAt, generatedAt)
+        assert.equal(result.needsNodeDateValidation, true)
+      }
+      for (const generatedAt of ['', 'not a date', '\ud800']) {
+        const authority = await putManifest({ ...base, generatedAt })
+        await assert.rejects(readNode(authority))
+        const result = await readRust(authority)
+        assert.equal(result.manifest.generatedAt, generatedAt)
+        assert.equal(result.needsNodeDateValidation, true, 'Structural success remains ineligible for parent use')
+      }
+      await reject(await putManifest({ ...base, generatedAt: null }))
+    })
+    await t.test('noncanonical numbers, duplicate keys and UTF-16 metadata keep JSON.parse semantics', async () => {
+      const value = { ...base, model: { version: '\ud800', configHash: '\udfff' },
+        provenance: { source: '\ud800', dataMode: 'fixture', sourceProviders: ['\udfff', '\udfff'] }, extra: { '\ud800': '\udfff', overflow: null } }
+      const text = ` { "schemaVersion":99, ${canonicalJsonFor(value).slice(1, -1)} } \n`
+        .replace('"schemaVersion":1,', '"schemaVersion":1e0,').replace('"overflow":null', '"overflow":1e400')
+        .replace(`"bytes":${rootMapping.bytes},`, `"bytes":${rootMapping.bytes}e0,`)
+      await compare(await putManifest(value, context, Buffer.from(text)))
+    })
+    await t.test('schema, model, provenance, root ownership and mapping bounds reject fresh malformed manifests', async () => {
+      for (const patch of [{ artifactKind: 'wrong' }, { schemaVersion: 3 }, { storageMode: 'wrong' }, { runId: 'other' }, { generationId: 'other' },
+        { model: [] }, { model: { version: '', configHash: 'x' } }, { model: { version: 'x', configHash: null } },
+        { provenance: [] }, { provenance: { source: '', dataMode: 'fixture', sourceProviders: [] } },
+        { provenance: { source: 'fixture', dataMode: 'fixture', sourceProviders: [''] } },
+        { provenance: { source: 'fixture', dataMode: 'fixture', sourceProviders: [1] } },
+        { rootArtifact: '/data/other.json' }, { artifacts: {} }, { artifacts: [] }, { artifacts: { other: rootMapping } }, { artifactDirectory: null }]) {
+        await reject(await putManifest({ ...base, ...patch }))
+      }
+      for (const patch of [{ logicalPath: '/data/wrong.json' }, { objectUrl: 'wrong' }, { generationId: 'other' }, { sha256: 'bad' },
+        { bytes: 0 }, { bytes: Number.MAX_SAFE_INTEGER + 1 }, { bytes: '1' }, { encoding: 'identity' }, { storageEncoding: 'identity' },
+        { transportEncodings: ['gzip', 'identity'] }, { transportEncodings: ['identity', 'gzip', 'br'] }]) {
+        await reject(await putManifest({ ...base, artifacts: { '/data/ranking-summary.json': { ...rootMapping, ...patch } } }))
+      }
+      for (const identity of [null, [], 'mapping']) {
+        await reject(await putManifest({ ...base, artifacts: { '/data/ranking-summary.json': identity } }))
+      }
+    })
+    await t.test('logical URL aliases, percent decoding and raw UTF-16 paths retain Node mapping rules', async () => {
+      const identity = rootMapping
+      for (const [path, logicalPath] of [['/data/%61lias.json?ignored#fragment', '/data/alias.json'],
+        ['https://fixture.invalid/data/alias.json?q=1', '/data/alias.json'], ['data/alias.json', '/data/alias.json'],
+        ['https://fixture.invalid/data/nested/../alias.json', '/data/alias.json'], ['/data//alias.json', '/data//alias.json'],
+        ['/data/a%3Fb.json', '/data/a?b.json'], ['/data/\ud800.json', '/data/\ud800.json'], ['/data/%F0%9F%98%80.json', '/data/😀.json']]) {
+        await compare(await putManifest({ ...base, artifacts: { ...base.artifacts, [path]: { ...identity, logicalPath } } }))
+      }
+      for (const path of ['/data/../bad.json', '/data/%2e%2e/bad.json', '/data/a%2fb.json', '/data/a%5Cb.json', '/data/%FF.json', '/data/%.json', '/other/a.json', '/data/\\bad.json']) {
+        await reject(await putManifest({ ...base, artifacts: { ...base.artifacts, [path]: { ...identity, logicalPath: path } } }))
+      }
+      // Node's regex/interpolation permit array-coercible SHA fields in stored mappings.
+      await compare(await putManifest({ ...base, artifacts: { ...base.artifacts, '/data/array-digest.json': {
+        ...identity, logicalPath: '/data/array-digest.json', sha256: [[identity.sha256]], bytes: Number.MAX_SAFE_INTEGER,
+      } } }))
+    })
+    await t.test('descriptor bounds and canonical supplied key reject without fetching a pointer', async () => {
+      const authority = await putManifest(base)
+      for (const patch of [{ etag: '' }, { etag: 'stale' }, { bytes: 0 }, { bytes: Number.MAX_SAFE_INTEGER + 1 }, { digest: 'bad' },
+        { key: 'elsewhere/manifest.json' }, { key: authority.key.replace(`${config.prefix}/`, '') }]) {
+        await reject({ ...authority, ...patch }, context, false)
+      }
+      for (const input of [{ authority: [authority.key, authority.etag, authority.bytes, authority.digest], contextJson: JSON.stringify(context) },
+        { authority, contextJson: 'null' }, { authority, contextJson: JSON.stringify({ generationId: '' }) },
+        { authority, contextJson: JSON.stringify({ generationId: 1 }) }, { authority: { ...authority, extra: true }, contextJson: JSON.stringify(context) }]) {
+        await assert.rejects(invokeStorage(root, config, { action: 'verify-public-generation-structure', ...input }))
+        await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' })
+      }
+      const unprefixed = { ...config, prefix: '' }
+      const emptyKey = `generations/${generationId}/manifest.json`
+      const stored = await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: emptyKey, Body: Buffer.from(canonicalJsonFor(base)),
+        ContentType: 'application/json; charset=utf-8', Metadata: { sha256: authority.digest, 'semantic-bytes': String(authority.bytes) } }))
+      const result = await invokeStorage(root, unprefixed, { action: 'verify-public-generation-structure',
+        authority: { ...authority, key: emptyKey, etag: stored.ETag }, contextJson: JSON.stringify(context) })
+      assert.equal(result.key, emptyKey)
+    })
+    await t.test('legacy supplied generation keys use the existing Node path normalization', async () => {
+      for (const generationId of ['nested/../structural-fixture', '..', '../../structural-fixture', 'nested\\generation']) {
+        const supplied = { generationId }
+        const identity = { ...rootMapping, generationId }
+        const value = { ...base, generationId, runId: generationId, artifacts: { '/data/ranking-summary.json': identity } }
+        // safeObjectPath is applied to generationId before bucketKey normalizes
+        // the complete relative manifest path.
+        const authority = await putManifest(value, supplied)
+        await compare(authority, supplied)
+      }
+    })
+    await t.test('fresh manifest and directory transport corruption cannot leave a success descriptor', async () => {
+      const authority = await putManifest(base)
+      await compare(authority)
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: authority.key }))
+      await reject(authority)
+      await putManifest({ ...base, extra: 'changed after proof' })
+      await reject(authority)
+      for (const patch of [{ Body: Buffer.from('corrupt') }, { Metadata: { sha256: authority.digest, 'semantic-bytes': '0' } },
+        { Metadata: { sha256: 'b'.repeat(64), 'semantic-bytes': String(authority.bytes) } }, { ContentType: 'text/plain' }, { ContentEncoding: 'gzip' }]) {
+        await reject(await putManifest(base, context, undefined, patch), context, 'Body' in patch || patch.Metadata?.sha256 === 'b'.repeat(64))
+      }
+      const fresh = await putManifest(base)
+      await reject({ ...fresh, digest: 'b'.repeat(64) })
+      const prepared = prepareSemanticArtifact({ artifactKind: 'public-artifact-directory', formatVersion: 1,
+        artifacts: Object.fromEntries(Object.entries(artifactMappings).map(([path, identity]) => {
+          assert.ok(isRecord(identity))
+          const { generationId: omitted, ...entry } = identity
+          assert.equal(omitted, generationId)
+          return [path, entry]
+        })) })
+      for (const member of [...(prepared.children ?? []), prepared]) {
+        await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/objects/sha256/${member.digest}`, Body: member.compressed,
+          ContentEncoding: 'gzip', Metadata: { sha256: member.digest, 'semantic-bytes': String(member.bytes), encoding: 'gzip' } }))
+        if (!publicMembers.some(({ key }) => key === `${config.prefix}/objects/sha256/${member.digest}`)) {
+          publicMembers.push({ key: `${config.prefix}/objects/sha256/${member.digest}`, digest: member.digest, bytes: member.compressedBytes, outcome: 'uploaded' })
+        }
+      }
+      const withDirectory = { ...publication.manifest, artifacts: { '/data/ranking-summary.json': rootMapping },
+        artifactDirectory: { sha256: prepared.digest, bytes: prepared.bytes, encoding: 'gzip' } }
+      const directoryAuthority = await putManifest(withDirectory, v2)
+      await compare(directoryAuthority, v2)
+      const member = prepared.children?.[0] ?? prepared
+      await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/objects/sha256/${member.digest}`, Body: Buffer.from('corrupt gzip'),
+        ContentEncoding: 'gzip', Metadata: { sha256: member.digest, 'semantic-bytes': String(member.bytes), encoding: 'gzip' } }))
+      await reject(directoryAuthority, v2)
+    })
+    const active = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: activeKey }))
+    assert.deepEqual(Buffer.from(await active.Body!.transformToByteArray()), activeBytes)
   } finally {
     client.destroy()
     await rm(root, { recursive: true, force: true })
