@@ -26,6 +26,7 @@ import {
   prepareStateCheckpoint,
   prepareStateObject,
   stateObjectReferenceFor,
+  stateCheckpointIdentityFor,
   syncContentAddressedStateObject,
   writeIncrementalStateManifest,
   type IncrementalStateManifest,
@@ -1563,8 +1564,8 @@ function compareIncrementalState(expected: IncrementalStateBuild, actual: Increm
   const actualProjection = comparableIncrementalState(actual)
   const expectedDigest = stableJsonSha256(expectedProjection)
   const actualDigest = stableJsonSha256(actualProjection)
-  const expectedCheckpointDigests = expected.checkpoints.map(stableJsonSha256)
-  const actualCheckpointDigests = actual.checkpoints.map(stableJsonSha256)
+  const expectedCheckpointDigests = expectedProjection.checkpoints.map(stableJsonSha256)
+  const actualCheckpointDigests = actualProjection.checkpoints.map(stableJsonSha256)
   return {
     equal: expectedDigest === actualDigest,
     sourceReceiptEqual: expected.sourceReceiptDigest === actual.sourceReceiptDigest,
@@ -1584,7 +1585,7 @@ function comparableIncrementalState(state: IncrementalStateBuild) {
   return {
     ledger: state.ledger,
     compatibility: state.compatibility,
-    checkpoints: state.checkpoints,
+    checkpoints: state.checkpoints.map((checkpoint, index) => stateCheckpointIdentityFor(checkpoint, state.compatibility, index)),
   }
 }
 

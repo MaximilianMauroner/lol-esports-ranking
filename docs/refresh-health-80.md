@@ -35,6 +35,30 @@ checkpoint digests. Exact canonical identity and mismatch reports remain the
 contract. Successful equality does not construct two complete canonical state
 strings or traverse the mismatch tree.
 
+Checkpoint comparison uses the exact persisted bundle's semantic SHA-256 and
+UTF-8 byte count. Inline bodies stream the existing canonical storage format;
+retained references use that same identity. Both share persistence's boundary,
+raw-prefix, body-shape and compatibility validation. Checkpoint count/order,
+ledger and model compatibility still participate in equality. Non-finite ranking
+state remains rejected. A content or reference-size change fails parity.
+Diagnostic paths now identify the differing
+semantic reference, rather than temporary inline/reference fields.
+
+Object keys and compressed byte counts do not change semantic equality. Stored
+readers still require the canonical `state/objects/sha256/<digest>` key and verify
+transport, semantic identity, boundary and compatibility. A legacy compressed
+byte count, when present, must match the fetched gzip bytes. Exhaustive graph
+verification still precedes promotion. The comparator does not certify an
+unfetched body or make a different key readable. No stored object or model
+version changes. This is a permanent semantic comparison rule while retained
+references and inline builds coexist.
+
+Representation equality does not remove real checkpoint drift. Appending a later
+UTC date changes the corpus recency horizon. Full replay recalculates historical
+factor sums against that date, while retained immutable checkpoints keep their
+earlier values. Different content hashes fail parity even when public artifacts
+agree. The diagnosed full fallback remains ineligible for a clean daily audit.
+
 Checkpoint persistence prepares and synchronizes one checkpoint at a time.
 Only semantic references and scalar write results survive between writes.
 The checkpoint encoder, ordered manifest, caller immutability, semantic/gzip
@@ -65,8 +89,10 @@ receipt cannot recover missing historical PID arguments, parent or phase.
 Use an isolated copy of pinned raw input. Preserve every source hash, coverage,
 model/config identity, stored reference and publication integrity check. Record
 which process failed and whether setup, measured worker or verifier completed.
-Use the shared build helper, 3 GiB group cap and zero build swap on coding-vm.
-Respect admission exit 75 and release only owned resources.
+On coding-vm, heavy local checks require the installed shared build helper,
+3 GiB group cap and zero build swap. Respect admission exit 75 and release only
+owned resources. If the installed helper is unavailable, keep heavy local checks
+blocked and use required hosted CI. Do not use a stale helper or bypass admission.
 
 Run affected storage/comparison/integration tests, typecheck and lint. The
 production-shaped benchmark retains its corpus, calibration, three repetitions,
