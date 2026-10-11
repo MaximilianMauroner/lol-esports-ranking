@@ -6,10 +6,10 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-const PAGE_BYTES: u64 = 512_000;
+pub(super) const PAGE_BYTES: u64 = 512_000;
 const MAX_DEPTH: usize = 24;
 
-struct Reader<'a> {
+pub(super) struct Reader<'a> {
     bucket: &'a s3::Bucket,
     proofs: Vec<Value>,
 }
@@ -17,41 +17,16 @@ struct Reader<'a> {
 /// Port of readVerifiedPublicArtifact without projections. Every referenced
 /// member is freshly read; hydrated content is not a model execution result.
 pub(super) fn verify(bucket: &s3::Bucket, digest: &str, bytes: u64) -> Result<String> {
-    let mut reader = Reader {
-        bucket,
-        proofs: vec![],
-    };
-    let mut content = reader.read(digest, bytes)?;
-    if archive(&content) {
-        validate_archive(&content)?;
-        let tree = take(&mut content, "tree").ok_or("Missing public archive tree")?;
-        let hydrated = reader.visit(tree, &BTreeSet::new(), 0)?;
-        if string_is(field(&content, "artifactKind"), "public-artifact-archive")
-            && !strict_equal(
-                field(&hydrated.value, "artifactKind"),
-                field(&content, "originalKind"),
-            )
-        {
-            return Err("Public archive original kind mismatch".into());
-        }
-        content = hydrated.value;
-    }
-    let proofs = canonical_json_value(&json!(reader.proofs));
-    let mut output = String::from("{");
-    if !matches!(content, Json::Undefined) {
-        output.push_str("\"content\":");
-        write_json(&content, &mut output);
-        output.push(',');
-    }
-    output.push_str(&format!("\"verifiedObjects\":{proofs}}}"));
-    Ok(output)
+    let mut reader = Reader::new(bucket);
+    let content = reader.read_artifact(digest, bytes)?;
+    Ok(reader.result("content", &content))
 }
 
 /// A public value as JSON.parse produces it: binary64 numbers, including
 /// overflow to infinity, and the last duplicate key wins. Only hydrated record
 /// values can be Undefined. Parsing, output, coercion and drop use explicit
 /// stacks, so nesting is limited by the stored object's size, not the call stack.
-enum Json {
+pub(super) enum Json {
     Undefined,
     Null,
     Bool(bool),
@@ -71,6 +46,46 @@ impl Drop for Json {
     }
 }
 
+impl Clone for Json {
+    fn clone(&self) -> Self {
+        enum Step<'a> {
+            Value(&'a Json),
+            Array(usize),
+            Object(Vec<Utf16String>),
+        }
+        let mut pending = vec![Step::Value(self)];
+        let mut values = Vec::new();
+        while let Some(step) = pending.pop() {
+            match step {
+                Step::Value(Json::Undefined) => values.push(Json::Undefined),
+                Step::Value(Json::Null) => values.push(Json::Null),
+                Step::Value(Json::Bool(value)) => values.push(Json::Bool(*value)),
+                Step::Value(Json::Number(value)) => values.push(Json::Number(*value)),
+                Step::Value(Json::String(value)) => values.push(Json::String(value.clone())),
+                Step::Value(Json::Array(items)) => {
+                    pending.push(Step::Array(items.len()));
+                    pending.extend(items.iter().rev().map(Step::Value));
+                }
+                Step::Value(Json::Object(entries)) => {
+                    pending.push(Step::Object(
+                        entries.iter().map(|(key, _)| key.clone()).collect(),
+                    ));
+                    pending.extend(entries.iter().rev().map(|(_, value)| Step::Value(value)));
+                }
+                Step::Array(count) => {
+                    let children = values.split_off(values.len() - count);
+                    values.push(Json::Array(children));
+                }
+                Step::Object(keys) => {
+                    let children = values.split_off(values.len() - keys.len());
+                    values.push(Json::Object(keys.into_iter().zip(children).collect()));
+                }
+            }
+        }
+        values.pop().expect("one cloned public JSON root")
+    }
+}
+
 fn take_children(value: &mut Json, pending: &mut Vec<Json>) {
     match value {
         Json::Array(values) => pending.append(values),
@@ -85,6 +100,45 @@ struct Hydrated {
 }
 
 impl Reader<'_> {
+    pub(super) fn new(bucket: &s3::Bucket) -> Reader<'_> {
+        Reader {
+            bucket,
+            proofs: vec![],
+        }
+    }
+
+    pub(super) fn read_artifact(&mut self, digest: &str, bytes: u64) -> Result<Json> {
+        let mut content = self.read(digest, bytes)?;
+        if archive(&content) {
+            validate_archive(&content)?;
+            let tree = take(&mut content, "tree").ok_or("Missing public archive tree")?;
+            let hydrated = self.visit(tree, &BTreeSet::new(), 0)?;
+            if string_is(field(&content, "artifactKind"), "public-artifact-archive")
+                && !strict_equal(
+                    field(&hydrated.value, "artifactKind"),
+                    field(&content, "originalKind"),
+                )
+            {
+                return Err("Public archive original kind mismatch".into());
+            }
+            content = hydrated.value;
+        }
+        Ok(content)
+    }
+
+    pub(super) fn result(&self, name: &str, content: &Json) -> String {
+        let proofs = canonical_json_value(&json!(self.proofs));
+        let mut output = String::from("{");
+        if !matches!(content, Json::Undefined) {
+            Utf16String::from(name).write_json(&mut output);
+            output.push(':');
+            write_json(content, &mut output);
+            output.push(',');
+        }
+        output.push_str(&format!("\"verifiedObjects\":{proofs}}}"));
+        output
+    }
+
     fn read(&mut self, digest: &str, bytes: u64) -> Result<Json> {
         if !valid_digest(digest) || !(1..=MAX_SAFE_INTEGER).contains(&bytes) {
             return Err("Invalid public object identity".into());
@@ -315,7 +369,7 @@ fn validate_archive(value: &Json) -> Result<()> {
     Ok(())
 }
 /// Parsed and hydrated objects have unique keys.
-fn field<'a>(value: &'a Json, key: &str) -> Option<&'a Json> {
+pub(super) fn field<'a>(value: &'a Json, key: &str) -> Option<&'a Json> {
     let Json::Object(entries) = value else {
         return None;
     };
@@ -325,7 +379,7 @@ fn field<'a>(value: &'a Json, key: &str) -> Option<&'a Json> {
         .find(|(entry, _)| entry == &key)
         .map(|(_, value)| value)
 }
-fn take(value: &mut Json, key: &str) -> Option<Json> {
+pub(super) fn take(value: &mut Json, key: &str) -> Option<Json> {
     let Json::Object(entries) = value else {
         return None;
     };
@@ -352,10 +406,10 @@ fn strict_equal(left: Option<&Json>, right: Option<&Json>) -> bool {
 fn required<'a>(value: &'a Json, key: &str) -> Result<&'a Json> {
     field(value, key).ok_or_else(|| format!("Missing public archive {key}"))
 }
-fn string_is(value: Option<&Json>, text: &str) -> bool {
+pub(super) fn string_is(value: Option<&Json>, text: &str) -> bool {
     matches!(value, Some(Json::String(value)) if value == &Utf16String::from(text))
 }
-fn integer(value: Option<&Json>) -> Option<u64> {
+pub(super) fn integer(value: Option<&Json>) -> Option<u64> {
     let Some(Json::Number(number)) = value else {
         return None;
     };
@@ -364,13 +418,13 @@ fn integer(value: Option<&Json>) -> Option<u64> {
         && (0.0..=MAX_SAFE_INTEGER as f64).contains(number))
     .then_some(*number as u64)
 }
-fn valid_digest(value: &str) -> bool {
+pub(super) fn valid_digest(value: &str) -> bool {
     value.len() == 64
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
-fn truthy(value: &Json) -> bool {
+pub(super) fn truthy(value: &Json) -> bool {
     match value {
         Json::Undefined | Json::Null => false,
         Json::Bool(value) => *value,
@@ -438,7 +492,7 @@ fn less_than(left: &Json, right: &Json) -> bool {
 
 /// Canonical JSON.stringify output: sorted UTF-16 keys, Undefined properties
 /// omitted, Undefined array elements and nonfinite numbers written as null.
-fn write_json(value: &Json, output: &mut String) {
+pub(super) fn write_json(value: &Json, output: &mut String) {
     enum Step<'a> {
         Value(&'a Json),
         Key(&'a Utf16String),
@@ -490,7 +544,7 @@ fn write_json(value: &Json, output: &mut String) {
 
 /// JSON.parse grammar with an explicit container stack. The canonical raw and
 /// state parser keeps its own 128-level input bound.
-fn parse_json(bytes: &[u8]) -> Result<Json> {
+pub(super) fn parse_json(bytes: &[u8]) -> Result<Json> {
     enum Open {
         Array(Vec<Json>),
         // The last entry holds the key whose value is being parsed.
@@ -754,10 +808,12 @@ mod tests {
         let depth = 200_000;
         let text = format!("{}0{}", "[".repeat(depth), "]".repeat(depth));
         let value = parse_json(text.as_bytes()).unwrap();
+        let cloned = value.clone();
         let mut written = String::new();
-        write_json(&value, &mut written);
+        write_json(&cloned, &mut written);
         assert_eq!(written, text);
         assert_eq!(js_text(Some(&value)), "0");
+        drop(cloned);
         drop(value);
         let objects = format!("{}1{}", "{\"a\":".repeat(depth), "}".repeat(depth));
         assert!(parse_json(objects.as_bytes()).is_ok());

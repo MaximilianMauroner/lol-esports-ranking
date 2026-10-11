@@ -286,11 +286,35 @@ The differential cases test 500 levels; deeper input is not a Node parity
 claim. Parent selection still requires compiled differential acceptance.
 
 This action writes only its local success descriptor. It grants no generation
-authority, readiness or promotion permission. Full public manifest/directory
+authority, readiness or promotion permission. Full public generation authority
 validation, agreement with raw/state authorities, readiness/audit writes and
 final lease/ETag CAS remain M4 work. Archive format compatibility is permanent
 while stored public archive nodes are referenced. No rewrite or new reader for
 existing objects is required.
+
+`verify-public-directory` accepts a `manifestJson` string containing an already
+supplied public manifest. It returns the expanded `manifest` and ordered scalar
+`verifiedObjects`. It follows Node's `expandPublicArtifactDirectory`: an absent
+or falsy directory reference returns the supplied value with no bucket request.
+Otherwise it checks the reference SHA-256, positive safe semantic byte count,
+gzip encoding and 512,000-byte page budget, then reads the directory and every
+archive descendant freshly through the same public reader.
+
+The hydrated directory must have kind `public-artifact-directory`, format
+version 1 and an artifacts object. Each entry receives the supplied
+`generationId`; all inline root mappings must match the existing canonical JSON
+comparison. JSON.parse, own-property spread, unpaired UTF-16, binary64 overflow
+and ordinary prototype lookup behavior remain Node-compatible. This layer adds
+no entry schema or public artifact path authority. Its local success descriptor
+does not bind the supplied manifest to an active pointer, ETag or publication
+closure, and it does not fetch the logical artifacts listed in the directory.
+
+Node remains the default, with no parent selection or readiness change. Full
+public manifest authority and graph membership, raw/state/public agreement,
+readiness/audit writes and promotion remain separate M4 gates. The additive
+action needs current-source compiled MinIO acceptance before native parent use.
+Existing directory and archive encodings remain supported while stored
+references use them; this layer changes no stored reference or schema.
 
 The real raw-source verifier now records source coverage, filenames, SHA-256 and
 byte counts along with both workers' prepare/restore memory and duration. It

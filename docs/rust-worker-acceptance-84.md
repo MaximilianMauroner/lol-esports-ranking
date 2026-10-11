@@ -102,6 +102,25 @@ than Node's stack-dependent limits is outside the parity claim. Implemented
 cases do not complete acceptance or authorize parent selection without compiled
 current-source execution.
 
+The additive `verify-public-directory` action expands a supplied `manifestJson`
+through the existing public archive reader. Require compiled MinIO differential
+equality with Node's `expandPublicArtifactDirectory`, including an actual Node
+publisher-generated partitioned directory and retained root mappings. Verify
+the absent/falsy no-request path, generation insertion, primitive entry spreads,
+UTF-16 keys and strings, noncanonical input, duplicate keys, binary64 overflow
+and canonical root comparison. Reject invalid directory metadata, page budgets,
+root mismatches and freshly missing/corrupt directory or archive children.
+Success and failure must preserve pointer and object inventory; failure must
+leave no success descriptor. Implemented test source and conditional skips are
+not compiled acceptance. Missing local Fleet admission leaves heavy local
+checks blocked; hosted CI must compile the current source and run all cases.
+
+This supplied-manifest layer establishes no active generation authority or
+publication closure membership. It reads directory objects, not every logical
+artifact target. Full public manifest authority, complete graph validation,
+raw/state/public agreement, readiness/audit writes and promotion remain open.
+Node remains default and existing stored references remain valid.
+
 ## M5: the ranking model
 
 Port import/model/player/replay/projection and the explicitly deferred state
