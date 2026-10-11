@@ -66,7 +66,6 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   const server = await createServer({
     publicDir: referencePublicDir, logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin],
     define: {
-      'import.meta.env.VITE_TOURNAMENT_HUB_ENABLED': JSON.stringify('1'),
       'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1'),
     },
   })

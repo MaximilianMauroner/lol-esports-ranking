@@ -16,7 +16,8 @@ import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type Tou
 type FeedHealth = { checkedAt: string; complete: boolean; warnings: string[] }
 type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed; health: FeedHealth | null; error?: string } | { status: 'error'; message: string }
 const REFRESH_MS = 60_000
-const STALE_MS = 3 * REFRESH_MS
+/** The server rechecks Leaguepedia every five minutes while the hub is viewed. */
+const STALE_MS = 15 * REFRESH_MS
 const FORECASTS_ENABLED = import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED === '1'
 type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; powerPreviews?: ConditionalPowerResultLedger | null; reason?: string; ledgerWarning?: string }
 
@@ -110,7 +111,7 @@ export function TournamentsView() {
           <label htmlFor="tournament-event" className="text-sm font-semibold">Competition</label>
           <Select id="tournament-event" className="max-w-full" value={selected?.id ?? ''} onChange={(event) => selectEvent(event.target.value, setSelectedId)}>
             {events.length === 0 ? <option value="">No supported events</option> : null}
-            {events.map((event) => <option key={event.id} value={event.id}>{event.label} · {event.sourceTournamentId}</option>)}
+            {events.map((event) => <option key={event.id} value={event.id}>{event.label}{events.some((other) => other !== event && other.label === event.label) ? ` · ${event.sourceTournamentId}` : ''}</option>)}
           </Select>
         </div>
         <div className="text-sm text-muted-foreground">Times shown in {timezone} · Feed last changed {formatTournamentTime(state.feed.fetchedAt, timezone)} · Checked {state.health ? formatTournamentTime(state.health.checkedAt, timezone) : 'unknown'} <Button variant="outline" size="sm" className="ml-2" onClick={() => void refresh()}>Refresh</Button></div>
@@ -121,7 +122,7 @@ export function TournamentsView() {
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
         <Alert variant="warning" role="status">Coverage {state.feed.coverage.complete ? 'has warnings' : 'is incomplete'} for {state.feed.coverage.start.slice(0, 10)} to {state.feed.coverage.end.slice(0, 10)}. {state.feed.coverage.warnings.join(' ')}</Alert>
       ) : null}
-      <p className="text-sm text-muted-foreground">Source: LoL Esports public site schedule reference (unsupported API). Series results here are source reported and are separate from scored rankings. {FORECASTS_ENABLED ? 'Match estimates use a separately dated Power snapshot. Worlds advancement requires a coherent, reviewed per-season state companion.' : 'Forecast unavailable: rules not verified.'}</p>
+      <p className="text-sm text-muted-foreground"><SourceNote feed={state.feed} event={selected} /> Series results here are source reported and are separate from scored rankings. {FORECASTS_ENABLED ? 'Match estimates use a separately dated Power snapshot. Worlds advancement requires a coherent, reviewed per-season state companion.' : 'Forecast unavailable: rules not verified.'}</p>
       {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : (
         <>
           <h2 className="text-lg font-semibold">{selected.label}</h2>
@@ -175,6 +176,13 @@ function SeriesCard({ series, timezone, now, forecasts }: { series: TournamentSe
       {series.vodUrls.map((url) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="underline">Watch VOD</a>)}
     </CardContent>
   </Card>
+}
+function SourceNote({ feed, event }: { feed: TournamentFeed; event: TournamentEvent | undefined }) {
+  if (feed.source === 'lolesports-persisted-site-api') return <>Source: LoL Esports public site schedule reference (unsupported API).</>
+  return <>Source: <a href={leaguepediaPageUrl(event?.sourceTournamentId ?? 'League of Legends Esports Wiki')} target="_blank" rel="noopener noreferrer" className="underline">Leaguepedia</a>, licensed under <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer" className="underline">CC BY-SA 3.0</a>. Live status means the scheduled start has passed and no result is entered yet.</>
+}
+function leaguepediaPageUrl(page: string) {
+  return `https://lol.fandom.com/wiki/${page.replaceAll(' ', '_').split('/').map(encodeURIComponent).join('/')}`
 }
 function score(value: number | null | undefined) { return value ?? '–' }
 function percent(value: number) { return `${(value * 100).toFixed(1)}%` }

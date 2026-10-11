@@ -1,5 +1,16 @@
 # Tournament source and forecast acceptance
 
+## Leaguepedia schedule source (2026-10-11)
+
+Max chose Leaguepedia as the production schedule source and asked for the hub
+to be on by default. Leaguepedia content is CC BY-SA 3.0, and the hub links the
+event page and licence. The web server reads the Cargo export only while the hub
+is viewed, at most once per five minutes per replica, with one request for a
+typical 60-day window. The LoL Esports gates below apply to the unsupported LoL
+Esports site API, which is no longer the production source. rft.gg was not
+used: its terms prohibit automated queries without written permission.
+Forecasts stay off by default; their crosswalk uses LoL Esports team IDs.
+
 The merged #57/#60 foundations remain default-off. Isolated publication fencing,
 source audit and public delivery observation do not activate a live collector or
 change ratings. Current source reports, observations and checks belong in

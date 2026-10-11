@@ -149,6 +149,6 @@ export async function createWorldsFixtureServer(port = 0) {
     })
   } }
   const server = await createServer({ publicDir: false, logLevel: 'silent', server: { host: '127.0.0.1', port, strictPort: true }, plugins: [plugin],
-    define: { 'import.meta.env.VITE_TOURNAMENT_HUB_ENABLED': JSON.stringify('1'), 'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1') } })
+    define: { 'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1') } })
   return { server, controls, current, plan, workerGate }
 }

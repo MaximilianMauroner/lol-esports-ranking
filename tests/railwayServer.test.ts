@@ -20,6 +20,47 @@ import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/ma
 import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
 import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
 
+test('Railway server serves the live Leaguepedia tournament feed without configuration', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(dataDir, { recursive: true })
+  const cargoRequests: string[] = []
+  const cargo = createServer((request, response) => {
+    cargoRequests.push(request.url ?? '')
+    response.setHeader('content-type', 'application/json')
+    response.end(JSON.stringify([{
+      MatchId: 'Fixture Cup_Round 1_1', OverviewPage: 'Fixture Cup', Team1: 'Alpha', Team2: 'Beta',
+      Team1Score: 2, Team2Score: 0, Winner: 1, DateTimeUTC: '2026-10-01 12:00:00', HasTime: 1, BestOf: 3,
+      Tab: 'Round 1', IsNullified: 0, TournamentName: 'Fixture Cup 2026', League: 'Fixture League', Region: 'International', Year: 2026,
+    }]))
+  })
+  await new Promise<void>((resolve) => cargo.listen(0, '127.0.0.1', resolve))
+  const server = await startRailwayServer(distDir, dataDir, {
+    TOURNAMENT_PUBLIC_DATA_DIR: join(tempDir, 'missing-tournament-data'),
+    LEAGUEPEDIA_CARGO_EXPORT_URL: `http://127.0.0.1:${(cargo.address() as AddressInfo).port}/export`,
+  })
+  try {
+    const feed = await httpRequest(server.port, '/tournament-data/feed.json')
+    assert.equal(feed.statusCode, 200)
+    assert.equal(feed.headers['cache-control'], 'no-store')
+    const body = JSON.parse(feed.body)
+    assert.equal(body.source, 'leaguepedia-cargo')
+    assert.equal(body.events[0].label, 'Fixture Cup 2026')
+    assert.equal(body.events[0].series[0].status, 'completed')
+    const health = await httpRequest(server.port, '/tournament-data/feed.json.health.json')
+    assert.equal(health.statusCode, 200)
+    assert.equal(JSON.parse(health.body).complete, true)
+    assert.equal(cargoRequests.length, 1, 'Cached feed and health share one source check')
+    assert.equal((await httpRequest(server.port, '/tournament-data/forecasts/team-ids.json')).statusCode, 404)
+  } finally {
+    await server.close()
+    await new Promise((resolve) => cargo.close(resolve))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('Railway server returns app shell only for known app routes', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
   const distDir = join(tempDir, 'dist')

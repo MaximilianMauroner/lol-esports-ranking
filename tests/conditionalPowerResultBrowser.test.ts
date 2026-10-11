@@ -48,7 +48,7 @@ test('offline numeric result component follows legal outcomes, keeps frozen odds
     })
   } }
   const server = await createServer({ publicDir: false, logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [plugin],
-    define: { 'import.meta.env.VITE_TOURNAMENT_HUB_ENABLED': JSON.stringify('1'), 'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1') } })
+    define: { 'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1') } })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
     await server.listen()
