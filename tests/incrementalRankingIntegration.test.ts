@@ -7,6 +7,7 @@ import test from 'node:test'
 import type { MatchRecord, MatchRosterSnapshot, Role, Side, TeamProfile } from '../src/types.ts'
 import { buildRankingIncrementally, mergePartialPlayerDirectoryArtifact, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from '../scripts/incremental-ranking-orchestrator.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { prepareStateCheckpoint, prepareStateObject, stateObjectReferenceFor } from '../scripts/incremental-state-storage.mjs'
 import type { RankingSourceImport } from '../scripts/ranking-source-import.ts'
 import { normalizeRankingRefreshOutcome } from '../scripts/ranking-refresh-outcome-contract.mjs'
 import { buildStaticSnapshot } from '../scripts/build-static-snapshot.ts'
@@ -332,7 +333,7 @@ test('daily audit compares corpus authority across refreshed receipt identities 
     assert.equal(mismatch.metrics.parity, true)
     assert.equal(mismatch.metrics.stateParity, false)
     assert.equal(mismatch.metrics.stateParityReport?.checkpointEqual, false)
-    assert.ok(mismatch.metrics.stateParityReport?.mismatchPaths.some((path) => path.includes('injectedStateMismatch')))
+    assert.ok(mismatch.metrics.stateParityReport?.mismatchPaths.some((path) => path.endsWith('.object.sha256')))
     assert.throws(() => normalizedOutcomeForBuild(mismatch), /semantic, state, and checkpoint parity/)
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
@@ -463,7 +464,53 @@ test('year rollover, legacy page migration, and storage-year corrections publish
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
-test('shadow publishes full authority and missing/context-invalid checkpoints or parity mismatch diagnose and fall back fully', async () => {
+test('same-horizon replay compares retained checkpoint references with identical full inline content', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-checkpoint-representation-'))
+  try {
+    const baseline = await run(root, 'representation-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(baseline)
+    const sameHorizonMatches = [...baseMatches(), match('m4b', '2026-01-04', 'Event B', { datetimeUtc: '2026-01-04T18:00:00.000Z' })]
+    // The last date and earlier prefixes stay fixed; only the terminal whole
+    // date is replayed. This isolates storage shape from real recency drift.
+    assert.equal(sameHorizonMatches.at(-1)?.date, baseMatches().at(-1)?.date)
+    // Gated cleanup adds undefined roster keys to replay rows. Keep separate
+    // inputs so those keys cannot change the shadow's checkpoint encoding.
+    const candidate = await run(root, 'representation-candidate', fixtureSource(structuredClone(sameHorizonMatches)), {
+      mode: 'gated', cause: 'pending-match', enabled: true, restored,
+    })
+    assert.equal(candidate.action, 'publish-incremental', candidate.metrics.fallbackReason)
+    if (candidate.action !== 'publish-incremental') throw new Error('incremental representation candidate required')
+    assert.deepEqual(candidate.state.checkpoints.map((checkpoint) => checkpoint.boundary.matchId), ['m0', 'm2'])
+    assert.ok(candidate.state.checkpoints.every((checkpoint) => checkpoint.storedObjectReference && !checkpoint.ratingCheckpoint))
+    assert.ok(sameHorizonMatches.every((entry) => !Object.hasOwn(entry, 'teamARoster') && !Object.hasOwn(entry, 'teamBRoster')), 'gated cleanup must not add roster keys to the shared fixture')
+
+    const shadow = await run(root, 'representation-shadow', fixtureSource(structuredClone(sameHorizonMatches)), {
+      mode: 'shadow', cause: 'pending-match', enabled: true, restored,
+    })
+    assert.equal(shadow.action, 'publish-full')
+    if (shadow.action !== 'publish-full') throw new Error('full representation comparison required')
+    const report = shadow.metrics.stateParityReport
+    assert.equal(shadow.metrics.semanticParityReport?.equal, true)
+    assert.equal(shadow.metrics.parity, true, JSON.stringify(report))
+    assert.equal(shadow.metrics.stateParity, true, JSON.stringify(report))
+    assert.equal(report?.checkpointEqual, true, JSON.stringify(report))
+    assert.deepEqual(report?.expectedCheckpointDigests, report?.actualCheckpointDigests)
+    assert.equal(shadow.diagnostic, undefined)
+    assert.deepEqual(shadow.state.checkpoints.map((checkpoint) => checkpoint.boundary.matchId), ['m0', 'm2', 'm4b'])
+    assert.ok(shadow.state.checkpoints.every((checkpoint) => checkpoint.ratingCheckpoint && !checkpoint.storedObjectReference))
+    for (const retained of candidate.state.checkpoints) {
+      const inline = shadow.state.checkpoints.find((checkpoint) => checkpoint.boundary.matchId === retained.boundary.matchId)
+      assert.ok(inline)
+      const { candidate: persistedInline } = prepareStateCheckpoint(inline, shadow.state.compatibility)
+      assert.equal(persistedInline.object.sha256, retained.storedObjectReference?.sha256)
+      assert.equal(persistedInline.object.bytes, retained.storedObjectReference?.bytes)
+    }
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('shadow publishes full authority and real checkpoint drift or invalid candidates diagnose and fall back fully', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-fallbacks-'))
   try {
     const baseline = await run(root, 'fallback-base', fixtureSource(baseMatches()), { mode: 'gated', cause: 'daily-audit', enabled: true })
@@ -477,15 +524,36 @@ test('shadow publishes full authority and missing/context-invalid checkpoints or
     }
     const shadow = await run(root, 'shadow', appended, { mode: 'shadow', cause: 'pending-match', enabled: true, restored, buildSnapshot: captureCandidate })
     assert.equal(shadow.action, 'publish-full')
-    assert.equal(shadow.metrics.parity, false)
+    assert.equal(shadow.metrics.parity, false, JSON.stringify(shadow.metrics.stateParityReport))
     assert.equal(shadow.metrics.semanticParityReport?.equal, true)
     assert.equal(shadow.metrics.stateParity, false)
     assert.equal(shadow.metrics.stateParityReport?.checkpointEqual, false)
+    assert.ok(shadow.metrics.stateParityReport?.mismatchPaths.includes('$.checkpoints.0.object.sha256'))
+    assert.notEqual(shadow.metrics.stateParityReport?.expectedCheckpointDigests[0], shadow.metrics.stateParityReport?.actualCheckpointDigests[0])
+    assert.equal(shadow.diagnostic?.kind, 'shadow-parity')
     assert.equal(shadow.diagnostic?.reason, 'checkpoint-state-parity-mismatch')
+    if (shadow.action !== 'publish-full') throw new Error('full checkpoint drift fallback required')
+    // January 5 moves the recency horizon. Retained December 31 bytes were
+    // encoded against January 4, so full replay must produce a different hash.
+    assert.deepEqual(shadow.state.checkpoints[0].boundary, restored.stateManifest.checkpoints[0].boundary)
+    const { candidate: rebasedCheckpoint } = prepareStateCheckpoint(shadow.state.checkpoints[0], shadow.state.compatibility)
+    assert.notEqual(rebasedCheckpoint.object.sha256, restored.stateManifest.checkpoints[0].object.sha256)
     assert.ok(candidateWrites.length > 0)
     assertArtifactByteMetrics(shadow, candidateWrites.map((write) => write.value))
     const shadowFull = await run(root, 'shadow-authority', appended, { mode: 'gated', cause: 'daily-audit', enabled: false })
     assert.deepEqual(shadow.state, shadowFull.action === 'no-change' ? undefined : shadowFull.state)
+
+    const audit = await run(root, 'appended-daily-audit', appended, { mode: 'gated', cause: 'daily-audit', enabled: true, restored })
+    assert.equal(audit.action, 'publish-full')
+    assert.equal(audit.metrics.semanticParityReport?.equal, true)
+    assert.equal(audit.metrics.parity, false, JSON.stringify(audit.metrics.stateParityReport))
+    assert.equal(audit.metrics.stateParity, false)
+    assert.equal(audit.metrics.stateParityReport?.checkpointEqual, false)
+    assert.ok(audit.metrics.stateParityReport?.mismatchPaths.includes('$.checkpoints.0.object.sha256'))
+    assert.equal(audit.diagnostic?.reason, 'checkpoint-state-parity-mismatch')
+    const auditOutcome = normalizedOutcomeForBuild(audit)
+    assert.equal(auditOutcome.outcome, 'parity-failure')
+    assert.equal(auditOutcome.contract.auditEligibility, 'ineligible')
 
     const missing = await run(root, 'missing', appended, {
       mode: 'gated', cause: 'pending-match', enabled: true,
@@ -794,25 +862,17 @@ function restoreFrom(result: IncrementalRankingBuildResult): RestoredIncremental
     return { logicalPath: `/data/${write.relativePath}`, digest: prepared.digest, bytes: prepared.bytes }
   })
   const publicManifest = createGenerationManifest({ generationId: artifactMeta.runId, rootManifest: root, entries })
-  const checkpoints = result.state.checkpoints.map((checkpoint) => ({
-    candidate: {
-      boundary: checkpoint.boundary,
-      rawPrefix: checkpoint.rawPrefix,
-      object: { key: `state/objects/sha256/${'a'.repeat(64)}`, sha256: 'a'.repeat(64), bytes: 1, compressedBytes: 1, storageEncoding: 'gzip' as const },
-    },
-    bundle: {
-      artifactKind: 'incremental-state-checkpoint-bundle', schemaVersion: 1,
-      boundary: checkpoint.boundary, rawPrefix: checkpoint.rawPrefix,
-      compatibility: result.state.compatibility,
-      ratingCheckpoint: checkpoint.ratingCheckpoint, causalSummaries: checkpoint.causalSummaries,
-    },
-  }))
+  const checkpoints = result.state.checkpoints.map((checkpoint) => {
+    const { candidate, prepared } = prepareStateCheckpoint(checkpoint, result.state.compatibility)
+    assert.ok(prepared, 'baseline checkpoints must be inline')
+    return { candidate, bundle: prepared.value }
+  })
   return {
     stateManifest: {
       artifactKind: 'incremental-state-generation-manifest', schemaVersion: 1,
       storageMode: 'content-addressed-state-gzip-v1', generationId: artifactMeta.runId, runId: artifactMeta.runId,
       baseGenerationId: null, baseRunId: null,
-      canonicalLedger: { key: `state/objects/sha256/${'b'.repeat(64)}`, sha256: 'b'.repeat(64), bytes: 1, compressedBytes: 1, storageEncoding: 'gzip' },
+      canonicalLedger: stateObjectReferenceFor(prepareStateObject(result.state.ledger)),
       sourceReceiptDigest: result.state.sourceReceiptDigest, compatibility: result.state.compatibility,
       checkpoints: checkpoints.map((checkpoint) => checkpoint.candidate),
     },
@@ -840,22 +900,19 @@ function restoreIncremental(previous: RestoredIncrementalAuthority, result: Incr
     `${checkpoint.candidate.boundary.date}\u0000${checkpoint.candidate.boundary.matchId}`,
     checkpoint,
   ]))
-  const checkpoints = result.state.checkpoints.map((checkpoint, index) => {
+  const checkpoints = result.state.checkpoints.map((checkpoint) => {
     const key = `${checkpoint.boundary.date}\u0000${checkpoint.boundary.matchId}`
     const prior = priorByBoundary.get(key)
     if (checkpoint.storedObjectReference && prior) return { candidate: { boundary: checkpoint.boundary, rawPrefix: checkpoint.rawPrefix, object: checkpoint.storedObjectReference }, bundle: prior.bundle }
-    const digest = String(index + 1).padStart(64, 'c').slice(-64)
-    const object = checkpoint.storedObjectReference ?? { key: `state/objects/sha256/${digest}`, sha256: digest, bytes: 1, compressedBytes: 1, storageEncoding: 'gzip' as const }
-    return {
-      candidate: { boundary: checkpoint.boundary, rawPrefix: checkpoint.rawPrefix, object },
-      bundle: { artifactKind: 'incremental-state-checkpoint-bundle', schemaVersion: 1, boundary: checkpoint.boundary, rawPrefix: checkpoint.rawPrefix, compatibility: result.state.compatibility, ratingCheckpoint: checkpoint.ratingCheckpoint, causalSummaries: checkpoint.causalSummaries },
-    }
+    const { candidate, prepared } = prepareStateCheckpoint(checkpoint, result.state.compatibility)
+    assert.ok(prepared, 'a retained checkpoint must have a previous bundle')
+    return { candidate, bundle: prepared.value }
   })
   return {
     stateManifest: {
       artifactKind: 'incremental-state-generation-manifest', schemaVersion: 1, storageMode: 'content-addressed-state-gzip-v1',
       generationId: artifactMeta.runId, runId: artifactMeta.runId, baseGenerationId: previous.stateManifest.generationId,
-      baseRunId: previous.stateManifest.runId, canonicalLedger: previous.stateManifest.canonicalLedger,
+      baseRunId: previous.stateManifest.runId, canonicalLedger: stateObjectReferenceFor(prepareStateObject(result.state.ledger)),
       sourceReceiptDigest: result.state.sourceReceiptDigest, compatibility: result.state.compatibility,
       checkpoints: checkpoints.map((checkpoint) => checkpoint.candidate),
     },
