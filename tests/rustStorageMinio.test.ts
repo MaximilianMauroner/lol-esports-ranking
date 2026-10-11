@@ -746,6 +746,17 @@ test('native public archive reader matches Node content and fresh transport proo
         Buffer.from([0xff]), Buffer.from('"}}')])
       await compare(await putBytes(lossy))
     })
+    await t.test('raw string controls fail while escaped controls and valid noncontrols retain parity', async () => {
+      const envelope = (content: string) => Buffer.from(`{"artifactKind":"public-semantic-artifact","schemaVersion":1,"content":${content}}`)
+      for (const control of ['\0', '\t', '\n', '\x1f']) {
+        for (const content of [`{"before${control}after":1}`, `{"key":"before${control}after"}`]) {
+          await reject(await putBytes(envelope(content)))
+        }
+      }
+      const escaped = String.raw`\u0000\b\t\n\f\r\u001f`
+      const valid = '\u007f\u2028'
+      await compare(await putBytes(envelope(`{"${escaped}":"${escaped}","${valid}":"${valid}"}`)))
+    })
     await t.test('JSON.parse nesting beyond 128 levels, numeric overflow and invalid grammar', async () => {
       const envelope = (content: string) => Buffer.from(`{"artifactKind":"public-semantic-artifact","schemaVersion":1,"content":${content}}`)
       for (const depth of [140, 500]) {

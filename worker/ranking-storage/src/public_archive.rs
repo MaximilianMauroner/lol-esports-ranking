@@ -624,7 +624,9 @@ impl Parser<'_> {
         self.offset += 1;
         while let Some(byte) = self.bytes.get(self.offset) {
             self.offset += 1;
-            if *byte == b'\\' {
+            if *byte < 0x20 {
+                return Err("Invalid public JSON string".into());
+            } else if *byte == b'\\' {
                 if self.bytes.get(self.offset).is_none() {
                     break;
                 }
@@ -710,6 +712,40 @@ mod tests {
             "",
         ] {
             assert!(parse_json(invalid.as_bytes()).is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn public_json_rejects_raw_controls_in_string_keys_and_values() {
+        for byte in 0u8..0x20 {
+            let control = char::from(byte);
+            for text in [
+                format!(r#"{{"key":"before{control}after"}}"#),
+                format!(r#"{{"before{control}after":1}}"#),
+            ] {
+                assert!(parse_json(text.as_bytes()).is_err(), "{text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn public_json_preserves_escaped_controls_and_valid_noncontrols() {
+        for byte in 0u8..0x20 {
+            let text = format!(r#"{{"\u{byte:04x}":"\u{byte:04x}"}}"#);
+            let parsed = parse_json(text.as_bytes()).unwrap();
+            let Json::Object(entries) = &parsed else {
+                panic!("expected object")
+            };
+            let expected = Utf16String::from(char::from(byte).to_string().as_str());
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].0, expected);
+            assert!(matches!(&entries[0].1, Json::String(value) if value == &expected));
+        }
+        for text in [
+            r#"{"\b\t\n\f\r":"\b\t\n\f\r"}"#,
+            "{\"\u{7f}\u{2028}\":\"\u{7f}\u{2028}\"}",
+        ] {
+            assert_eq!(output(text), text);
         }
     }
 
