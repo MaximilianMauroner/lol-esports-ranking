@@ -24,8 +24,12 @@ test('Railway server serves the live Leaguepedia tournament feed without configu
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
   const distDir = join(tempDir, 'dist')
   const dataDir = join(tempDir, 'data')
+  const tournamentDir = join(tempDir, 'tournament-data')
   await mkdir(distDir, { recursive: true })
   await mkdir(dataDir, { recursive: true })
+  await mkdir(tournamentDir, { recursive: true })
+  // The LoL Esports collector writes health on every run, also when it publishes no feed.json.
+  await writeFile(join(tournamentDir, 'feed.json.health.json'), '{"checkedAt":"2020-01-01T00:00:00.000Z","complete":false,"warnings":["leftover"]}\n')
   const cargoRequests: string[] = []
   const cargo = createServer((request, response) => {
     cargoRequests.push(request.url ?? '')
@@ -38,7 +42,7 @@ test('Railway server serves the live Leaguepedia tournament feed without configu
   })
   await new Promise<void>((resolve) => cargo.listen(0, '127.0.0.1', resolve))
   const server = await startRailwayServer(distDir, dataDir, {
-    TOURNAMENT_PUBLIC_DATA_DIR: join(tempDir, 'missing-tournament-data'),
+    TOURNAMENT_PUBLIC_DATA_DIR: tournamentDir,
     LEAGUEPEDIA_CARGO_EXPORT_URL: `http://127.0.0.1:${(cargo.address() as AddressInfo).port}/export`,
   })
   try {
@@ -51,7 +55,7 @@ test('Railway server serves the live Leaguepedia tournament feed without configu
     assert.equal(body.events[0].series[0].status, 'completed')
     const health = await httpRequest(server.port, '/tournament-data/feed.json.health.json')
     assert.equal(health.statusCode, 200)
-    assert.equal(JSON.parse(health.body).complete, true)
+    assert.equal(JSON.parse(health.body).complete, true, 'Without a local feed.json, a leftover local health file is ignored')
     assert.equal(cargoRequests.length, 1, 'Cached feed and health share one source check')
     assert.equal((await httpRequest(server.port, '/tournament-data/forecasts/team-ids.json')).statusCode, 404)
   } finally {
@@ -114,6 +118,7 @@ test('Railway server returns app shell only for known app routes', async () => {
     assert.equal(tournamentFeed.statusCode, 200)
     assert.equal(tournamentFeed.headers['cache-control'], 'no-store')
     assert.deepEqual(JSON.parse(tournamentFeed.body), { source: 'synthetic-test' })
+    assert.equal((await httpRequest(server.port, '/tournament-data/feed.json.health.json')).statusCode, 404, 'A local feed.json replaces the live health too')
 
     const llms = await httpRequest(server.port, '/llms.txt')
     assert.equal(llms.statusCode, 200)

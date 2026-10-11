@@ -41,7 +41,8 @@ const presignedDeliveryThresholdBytes = positiveIntegerOrDefault(
   process.env.RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES,
   65_536,
 )
-// A local feed.json (fixture or manual rollback) takes precedence over the live Leaguepedia feed.
+// A local feed.json (fixture or manual rollback) replaces the live Leaguepedia feed and health.
+// Without it, a leftover local health file is ignored.
 const LIVE_TOURNAMENT_PATHS = new Set(['feed.json', 'feed.json.health.json'])
 const tournamentFeedService = createTournamentFeedService({
   collect: () => collectLeaguepediaTournamentFeed({ baseUrl: process.env.LEAGUEPEDIA_CARGO_EXPORT_URL || undefined }),
@@ -81,11 +82,11 @@ const server = createServer(async (request, response) => {
     if (url.pathname.startsWith('/tournament-data/')) {
       const relativePath = url.pathname.slice('/tournament-data/'.length)
       const options = { cacheControl: 'no-store', headOnly: request.method === 'HEAD', requestHeaders: request.headers }
-      if (await tryServeFile(response, tournamentDataDir, relativePath, options)) return
       if (LIVE_TOURNAMENT_PATHS.has(relativePath) && !await fileExists(resolve(tournamentDataDir, 'feed.json'))) {
         await serveLiveTournamentFeed(response, relativePath, options)
         return
       }
+      if (await tryServeFile(response, tournamentDataDir, relativePath, options)) return
       sendJson(response, 404, { ok: false, error: 'Not found' })
       return
     }

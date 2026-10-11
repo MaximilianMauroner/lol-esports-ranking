@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import test from 'node:test'
 import { collectLeaguepediaTournamentFeed, createTournamentFeedService, normalizeLeaguepediaSchedule } from '../scripts/leaguepedia-tournament-feed'
 import { groupTournamentSeries, isTournamentFeed, type TournamentFeed } from '../src/lib/tournamentFeed'
@@ -78,6 +80,13 @@ test('marks conflicting or unidentified rows as incomplete coverage', () => {
   assert.equal(feed.events[0]?.series.length, 1)
 })
 
+test('marks malformed rows and unreadable start times as incomplete coverage', async () => {
+  const collect = (rows: unknown[]) => collectLeaguepediaTournamentFeed({ fetcher: async () => Response.json(rows), now })
+  assert.equal((await collect([null, 'malformed'])).coverage.complete, false)
+  assert.equal((await collect([])).coverage.complete, true, 'An empty schedule is complete')
+  assert.equal(normalizeLeaguepediaSchedule([row('a', { DateTimeUTC: 'broken' })], window).coverage.complete, false)
+})
+
 test('pages through the Cargo export until a short page', async () => {
   const urls: URL[] = []
   const fetcher: typeof fetch = async (input) => {
@@ -149,6 +158,24 @@ test('feed service caches, refreshes when due and keeps the last complete feed',
   await settle()
   assert.equal((await service.read()).feed, corrected)
   assert.equal(calls, 5)
+})
+
+test('feed service ends a check whose response body stalls', { timeout: 10_000 }, async (t) => {
+  const cargo = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.write('[')
+  })
+  await new Promise<void>((resolve) => cargo.listen(0, '127.0.0.1', resolve))
+  t.after(() => {
+    cargo.closeAllConnections()
+    return new Promise<void>((resolve) => cargo.close(() => resolve()))
+  })
+  const baseUrl = `http://127.0.0.1:${(cargo.address() as AddressInfo).port}/export`
+  const service = createTournamentFeedService({ collect: () => collectLeaguepediaTournamentFeed({ baseUrl, now, pageTimeoutMs: 200 }) })
+  const state = await service.read()
+  assert.equal(state.feed, null)
+  assert.equal(state.health?.complete, false)
+  assert.match(state.health?.warnings[0] ?? '', /Leaguepedia check failed/)
 })
 
 test('feed service reports an unavailable feed when the first check fails', async () => {

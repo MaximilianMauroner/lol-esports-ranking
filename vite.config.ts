@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -47,9 +49,12 @@ function liveTournamentFeedPlugin(): Plugin {
     enforce: 'post',
     configureServer(server) {
       const service = createTournamentFeedService()
+      const { publicDir } = server.config
       server.middlewares.use((request, response, next) => {
         const path = new URL(request.url ?? '/', 'http://localhost').pathname
         if (path !== '/tournament-data/feed.json' && path !== '/tournament-data/feed.json.health.json') return next()
+        // A local feed.json replaces the live feed and health; Vite serves public files after this middleware.
+        if (publicDir && existsSync(join(publicDir, 'tournament-data', 'feed.json'))) return next()
         void service.read().then(({ feed, health }) => {
           const body = path === '/tournament-data/feed.json' ? feed : health
           response.statusCode = body ? 200 : 503

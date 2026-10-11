@@ -46,13 +46,18 @@ export async function collectLeaguepediaTournamentFeed(options: {
   fetcher?: typeof fetch
   baseUrl?: string
   now?: Date
+  /** Deadline for one page, including retries and the response body. */
+  pageTimeoutMs?: number
 } = {}): Promise<TournamentFeed> {
   const now = options.now ?? new Date()
+  const fetcher = options.fetcher ?? fetch
+  const pageTimeoutMs = options.pageTimeoutMs ?? 30_000
   const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
   const coverageStart = new Date(dayStart - DAYS_BACK * DAY_MS).toISOString()
   const coverageEnd = new Date(dayStart + (DAYS_AHEAD + 1) * DAY_MS - 1).toISOString()
   const rows: Row[] = []
   const warnings: string[] = []
+  let malformed = 0
   for (let page = 0; ; page += 1) {
     if (page === MAX_PAGES) {
       warnings.push(`Leaguepedia page limit reached after ${rows.length} series.`)
@@ -69,15 +74,21 @@ export async function collectLeaguepediaTournamentFeed(options: {
       offset: String(page * PAGE_SIZE),
       format: 'json',
     })) url.searchParams.set(key, value)
+    // fetchWithRetry stops its own deadline once headers arrive; this signal also bounds the body read.
+    const deadline = AbortSignal.timeout(pageTimeoutMs)
     const response = await fetchWithRetry(url, { headers: { 'user-agent': USER_AGENT } }, {
-      fetcher: options.fetcher, maxAttempts: 3, maxElapsedMs: 30_000,
+      fetcher: (input, init) => fetcher(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline }),
+      maxAttempts: 3, maxElapsedMs: pageTimeoutMs,
     })
     if (!response.ok) throw new Error(`Leaguepedia returned HTTP ${response.status}`)
     const body: unknown = await response.json()
     if (!Array.isArray(body)) throw new Error('Leaguepedia returned an unexpected schedule response')
-    rows.push(...body.filter(isRow))
+    const pageRows = body.filter(isRow)
+    malformed += body.length - pageRows.length
+    rows.push(...pageRows)
     if (body.length < PAGE_SIZE) break
   }
+  if (malformed) warnings.push(`${malformed} malformed Leaguepedia rows were omitted; schedule coverage is unknown.`)
   return normalizeLeaguepediaSchedule(rows, { now, coverageStart, coverageEnd, warnings })
 }
 
@@ -95,6 +106,7 @@ export function normalizeLeaguepediaSchedule(rows: readonly Row[], input: {
   const events = new Map<string, TournamentEvent>()
   const seen = new Map<string, string>()
   let withheld = 0
+  let invalidTimes = 0
   for (const row of rows) {
     const matchId = text(row.MatchId)
     const page = text(row.OverviewPage)
@@ -108,7 +120,9 @@ export function normalizeLeaguepediaSchedule(rows: readonly Row[], input: {
       continue
     }
     seen.set(matchId, serialized)
-    const startTime = Number(row.HasTime) === 1 ? cargoIso(row.DateTimeUTC) : null
+    const timed = Number(row.HasTime) === 1
+    const startTime = timed ? cargoIso(row.DateTimeUTC) : null
+    if (timed && !startTime) invalidTimes += 1
     const bestOf = positiveInteger(row.BestOf)
     const winner = Number(row.Winner)
     const sourceState = seriesState(row, startTime, bestOf, input.now)
@@ -139,6 +153,7 @@ export function normalizeLeaguepediaSchedule(rows: readonly Row[], input: {
     })
   }
   if (withheld) warnings.push(`${withheld} Leaguepedia rows lack a match or tournament page and were withheld.`)
+  if (invalidTimes) warnings.push(`${invalidTimes} timed Leaguepedia rows have an invalid start time and are shown undated; their window coverage is unknown.`)
   for (const event of events.values()) {
     event.series.sort((a, b) => compareCodeUnits(a.startTime ?? '', b.startTime ?? '') || compareCodeUnits(a.id, b.id))
   }
