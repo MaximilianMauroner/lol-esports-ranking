@@ -450,7 +450,7 @@ fn js_number(value: f64) -> String {
 }
 /// JavaScript String(value). Array.prototype.join flattens nested arrays and
 /// prints nested null as empty text.
-fn js_text(value: Option<&Json>) -> String {
+pub(super) fn js_text(value: Option<&Json>) -> String {
     match value {
         None | Some(Json::Undefined) => return "undefined".into(),
         Some(Json::Null) => return "null".into(),

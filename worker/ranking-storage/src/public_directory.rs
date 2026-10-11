@@ -12,12 +12,18 @@ use ranking_contracts::{Result, Utf16String};
 pub(super) fn verify(bucket: &s3::Bucket, manifest_json: &str) -> Result<String> {
     let mut manifest = parse_json(manifest_json.as_bytes())?;
     let mut reader = Reader::new(bucket);
+    expand(&mut reader, &mut manifest)?;
+    Ok(reader.result("manifest", &manifest))
+}
+
+/// Share the parsed tree with generation validation. Directory hydration must
+/// not round-trip Infinity or own Undefined properties through JSON text.
+pub(super) fn expand(reader: &mut Reader<'_>, manifest: &mut Json) -> Result<()> {
     if matches!(manifest, Json::Null) {
         return Err("Invalid public directory manifest".into());
     }
-    let Some(reference) = field(&manifest, "artifactDirectory").filter(|value| truthy(value))
-    else {
-        return Ok(reader.result("manifest", &manifest));
+    let Some(reference) = field(manifest, "artifactDirectory").filter(|value| truthy(value)) else {
+        return Ok(());
     };
     let digest = match field(reference, "sha256") {
         Some(Json::String(value)) => {
@@ -40,7 +46,7 @@ pub(super) fn verify(bucket: &s3::Bucket, manifest_json: &str) -> Result<String>
     {
         return Err("Invalid public artifact directory".into());
     }
-    let generation = field(&manifest, "generationId")
+    let generation = field(manifest, "generationId")
         .cloned()
         .unwrap_or(Json::Undefined);
     let entries =
@@ -53,7 +59,7 @@ pub(super) fn verify(bucket: &s3::Bucket, manifest_json: &str) -> Result<String>
         artifacts.push((path, Json::Object(properties)));
     }
     let root =
-        field(&manifest, "artifacts").ok_or("Invalid public artifact directory root mapping")?;
+        field(manifest, "artifacts").ok_or("Invalid public artifact directory root mapping")?;
     if matches!(root, Json::Undefined | Json::Null) {
         return Err("Invalid public artifact directory root mapping".into());
     }
@@ -83,12 +89,12 @@ pub(super) fn verify(bucket: &s3::Bucket, manifest_json: &str) -> Result<String>
             return Err("Public artifact directory root mapping mismatch".into());
         }
     }
-    let _ = take(&mut manifest, "artifacts");
-    let Json::Object(properties) = &mut manifest else {
+    let _ = take(manifest, "artifacts");
+    let Json::Object(properties) = manifest else {
         return Err("Invalid public directory manifest".into());
     };
     properties.push(("artifacts".into(), Json::Object(artifacts)));
-    Ok(reader.result("manifest", &manifest))
+    Ok(())
 }
 
 /// Own enumerable JSON properties, matching Object.entries and {...value}.

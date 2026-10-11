@@ -115,11 +115,40 @@ leave no success descriptor. Implemented test source and conditional skips are
 not compiled acceptance. Missing local Fleet admission leaves heavy local
 checks blocked; hosted CI must compile the current source and run all cases.
 
-This supplied-manifest layer establishes no active generation authority or
+This supplied-directory layer establishes no active generation authority or
 publication closure membership. It reads directory objects, not every logical
 artifact target. Full public manifest authority, complete graph validation,
 raw/state/public agreement, readiness/audit writes and promotion remain open.
 Node remains default and existing stored references remain valid.
+
+The additive `verify-public-generation-structure` action binds a supplied
+manifest transport authority and generation context, expands its directory
+without a JSON text round trip, and validates schema/model/provenance/path and
+mapping structure. Require hosted current-source compiled MinIO acceptance
+against the actual Node producer and active reader, including partitioned
+directory descendants and prefix-bound scalar proofs. Verify absent versus
+null schema context, v1-to-v2 representation conversion, duplicate keys,
+binary64 numbers, UTF-16 metadata/paths, path aliases and invalid mapping and
+descriptor bounds. Fresh manifest/directory corruption must leave no success
+descriptor and preserve pointer and object inventory.
+
+Every success must contain `needsNodeDateValidation: true`. This scope requires
+a `generatedAt` string and preserves its exact value; it does not port V8's
+unrestricted Date.parse validity. Include supported ISO and legacy Node date
+strings and explicit malformed strings for which Node rejects while the native
+structural result succeeds with that gate. `schemaConverted` describes only
+representation conversion, not active-pointer cutover permission. The result
+is ineligible for native parent selection, readiness or promotion.
+
+Manifest transport checks combine Node's active GET identity and pre-promotion
+metadata rules. Node's active reader alone need not reject malformed content
+type or semantic-size metadata; native corruption cases must still enforce the
+pre-promotion transport contract. The action adds no active-pointer/publication
+read, logical artifact fetch, raw/state/public agreement, audit/readiness write
+or promotion. Full date validity, pointer/cutover certification and publication
+membership remain deferred. Implemented cases and conditional skips establish
+no runtime acceptance. The missing Fleet resource guard blocks heavy local
+checks; hosted CI must compile and execute the current source with zero skips.
 
 ## M5: the ranking model
 

@@ -131,7 +131,8 @@ seam is ready. It is not enabled in production by this PR.
 and state object writes and the existing active-pointer lease protocol.
 Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease`,
 `release-lease`, `verify-publication`, `verify-raw-generation`,
-`verify-state-generation` and `verify-public-artifact`. The process uses the
+`verify-state-generation`, `verify-public-artifact`, `verify-public-directory`
+and `verify-public-generation-structure`. The process uses the
 existing bucket environment names and SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
 and credentials/transport URLs do not appear in failure diagnostics.
 
@@ -315,6 +316,60 @@ readiness/audit writes and promotion remain separate M4 gates. The additive
 action needs current-source compiled MinIO acceptance before native parent use.
 Existing directory and archive encodings remain supported while stored
 references use them; this layer changes no stored reference or schema.
+
+`verify-public-generation-structure` verifies a supplied public manifest
+authority and expands its directory through the same parsed public tree. Its
+descriptor takes `authority: { key, etag, bytes, digest }` and a `contextJson`
+string containing `generationId` and, for schema v2, `publicManifestSchemaVersion:
+2`. The string preserves JSON.parse numeric and UTF-16 semantics, including the
+difference between an absent schema context and an explicitly null value.
+The authority must be an object with only those four scalar fields, a nonempty
+ETag, a lowercase SHA-256 digest and a positive safe integer byte count. The
+generation context must be a nonempty string that can form a valid scalar S3
+key under the existing native key rules. Node's existing path normalization
+determines the canonical full key within the configured prefix.
+
+Each manifest GET checks supplied ETag, exact transport length, semantic bytes
+and digest, SHA-256 and semantic-size metadata, JSON content type and absence
+of Content-Encoding. These combine Node's active manifest GET checks with its
+pre-promotion manifest transport rules. Public manifest text need not be
+canonical: lossy UTF-8 decoding and the existing JSON.parse parser preserve
+duplicate keys, binary64 numbers and unpaired UTF-16 strings. The directory
+expands in memory without serializing and reparsing its tree.
+
+The action validates schema/context pairing, generation and run IDs, model and
+provenance fields, root ownership and every logical artifact mapping. It uses
+the existing logical URL, percent-decoding and path traversal rules, positive
+safe semantic sizes and gzip transport declarations. Extra manifest fields,
+non-digest model config strings and duplicate source-provider strings stay
+readable. The existing mapping rule permits array-coercible digest values;
+this structural layer does not fetch those logical targets or certify them.
+
+The result contains the expanded `manifest`, scalar `key`, `etag`, `bytes` and
+`digest`, ordered directory transport `verifiedObjects`, `schemaConverted`
+and `needsNodeDateValidation: true`. Schema v1 with an absent schema context
+is converted to a v2 representation. This flag describes representation
+conversion only; it certifies no active-pointer cutover.
+
+`generatedAt` must be a string and retains its exact value. Unrestricted V8
+Date.parse validity remains a Node gate. Thus even a malformed date can produce
+a structural result with `needsNodeDateValidation: true`; the result cannot
+select the native parent or authorize readiness or promotion. This action
+reads no active pointer, publication receipt or raw/state authority. Full date
+validity, pointer/cutover certification, publication membership, logical graph
+integrity, cross-authority agreement and promotion remain separate gates.
+Node remains the default parent.
+
+The added synthetic MinIO cases use the actual Node publisher and active
+reader. They cover directory expansion, v1/v2 representation rules, the explicit
+date boundary, UTF-16 metadata and paths, noncanonical numeric text, path aliases,
+mapping bounds, scalar descriptor bounds and fresh corruption. Implemented test
+source is not runtime acceptance. Hosted current-source compilation and MinIO
+execution remain required while heavy local checks are blocked by the missing
+Fleet resource guard. Schema-v1 representation compatibility can be removed
+only when no active stored manifests use it. Directory/archive compatibility
+and manifest integrity checks remain required while their stored references
+are used. No stored objects are rewritten.
 
 The real raw-source verifier now records source coverage, filenames, SHA-256 and
 byte counts along with both workers' prepare/restore memory and duration. It
