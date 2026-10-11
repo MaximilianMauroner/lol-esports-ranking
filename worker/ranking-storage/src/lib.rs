@@ -1,4 +1,5 @@
 mod public_archive;
+mod public_directory;
 mod publication;
 mod raw_generation;
 mod s3;
@@ -16,6 +17,10 @@ const JSON_TYPE: &str = "application/json; charset=utf-8";
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case", deny_unknown_fields)]
 enum Input {
+    VerifyPublicDirectory {
+        #[serde(rename = "manifestJson")]
+        manifest_json: String,
+    },
     VerifyPublicArtifact {
         sha256: String,
         bytes: u64,
@@ -85,6 +90,13 @@ pub fn run(input_path: &str, output_path: &str) -> Result<()> {
         .map_err(|_| "Invalid storage descriptor")?;
     let bucket = s3::Bucket::from_env()?;
     let result = match input {
+        Input::VerifyPublicDirectory { manifest_json } => {
+            return fs::write(
+                output_path,
+                public_directory::verify(&bucket, &manifest_json)?,
+            )
+            .map_err(|error| error.to_string());
+        }
         Input::VerifyPublicArtifact { sha256, bytes } => {
             return fs::write(
                 output_path,
