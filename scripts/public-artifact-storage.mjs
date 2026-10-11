@@ -101,6 +101,53 @@ export function canonicalJsonFor(value) {
     .join(',')}}`
 }
 
+/** Exact stored JSON identity for finite ranking state, without full serialization. */
+export function canonicalJsonIdentity(value) {
+  const hash = createHash('sha256')
+  let pending = ''
+  let bytes = 0
+  const flush = () => {
+    bytes += Buffer.byteLength(pending)
+    hash.update(pending)
+    pending = ''
+  }
+  const write = (text) => {
+    pending += text
+    if (pending.length >= 64 * 1024) flush()
+  }
+  writeCanonicalValue(value, write)
+  flush()
+  return { sha256: hash.digest('hex'), bytes }
+}
+
+function writeCanonicalValue(value, write) {
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      throw new Error('Canonical ranking input cannot contain non-finite numbers')
+    }
+    write(JSON.stringify(value) ?? 'null')
+    return
+  }
+  if (Array.isArray(value)) {
+    write('[')
+    for (let index = 0; index < value.length; index += 1) {
+      if (index) write(',')
+      // Match canonicalJsonFor's map/join behavior, including sparse arrays.
+      if (index in value) writeCanonicalValue(value[index], write)
+    }
+    write(']')
+    return
+  }
+  write('{')
+  const keys = Object.keys(value).filter((key) => value[key] !== undefined).sort()
+  for (const [index, key] of keys.entries()) {
+    if (index) write(',')
+    write(`${JSON.stringify(key)}:`)
+    writeCanonicalValue(value[key], write)
+  }
+  write('}')
+}
+
 export class NonCanonicalJsonError extends Error {}
 
 export function parseCanonicalJson(text) {

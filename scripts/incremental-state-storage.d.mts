@@ -77,6 +77,11 @@ export function prepareStateCheckpoint(
   compatibility: StateCompatibility,
   index?: number,
 ): { candidate: IncrementalStateManifest['checkpoints'][number]; prepared?: PreparedStateObject }
+export function stateCheckpointIdentityFor(
+  checkpoint: Parameters<typeof prepareStateCheckpoint>[0],
+  compatibility: StateCompatibility,
+  index?: number,
+): { boundary: StateBoundary; rawPrefix: StateRawPrefix; object: { sha256: string; bytes: number } }
 export function prepareContentAddressedState(options: {
   generationId: string
   runId?: string

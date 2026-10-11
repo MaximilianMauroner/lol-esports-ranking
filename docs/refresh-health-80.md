@@ -35,6 +35,22 @@ checkpoint digests. Exact canonical identity and mismatch reports remain the
 contract. Successful equality does not construct two complete canonical state
 strings or traverse the mismatch tree.
 
+Checkpoint comparison uses the exact persisted bundle's semantic SHA-256 and
+UTF-8 byte count. Inline bodies stream the existing canonical storage format;
+retained references use that same identity. Both share persistence's boundary,
+raw-prefix, body-shape and compatibility validation. Checkpoint count/order,
+ledger and model compatibility still participate in equality. Non-finite ranking
+state remains rejected. A content or reference-size change fails parity.
+Diagnostic paths now identify the differing
+semantic reference, rather than temporary inline/reference fields.
+
+Safe legacy keys and legacy compressed byte counts remain readable and do not
+change semantic equality. Fresh stored reads still verify transport, semantic
+identity, boundary and compatibility, and exhaustive graph verification precedes
+promotion. The comparator does not certify an unfetched body or replace those
+checks. No stored object or model version changes. This is a permanent semantic
+comparison rule while retained references and inline builds coexist.
+
 Checkpoint persistence prepares and synchronizes one checkpoint at a time.
 Only semantic references and scalar write results survive between writes.
 The checkpoint encoder, ordered manifest, caller immutability, semantic/gzip
@@ -65,8 +81,10 @@ receipt cannot recover missing historical PID arguments, parent or phase.
 Use an isolated copy of pinned raw input. Preserve every source hash, coverage,
 model/config identity, stored reference and publication integrity check. Record
 which process failed and whether setup, measured worker or verifier completed.
-Use the shared build helper, 3 GiB group cap and zero build swap on coding-vm.
-Respect admission exit 75 and release only owned resources.
+On coding-vm, heavy local checks require the installed shared build helper,
+3 GiB group cap and zero build swap. Respect admission exit 75 and release only
+owned resources. If the installed helper is unavailable, keep heavy local checks
+blocked and use required hosted CI. Do not use a stale helper or bypass admission.
 
 Run affected storage/comparison/integration tests, typecheck and lint. The
 production-shaped benchmark retains its corpus, calibration, three repetitions,
