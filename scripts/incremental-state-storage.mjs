@@ -4,7 +4,7 @@ import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip, gunzipSync, gzipSync } from 'node:zlib'
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
-import { canonicalJsonFor, NonCanonicalJsonError, parseCanonicalJson } from './public-artifact-storage.mjs'
+import { canonicalJsonFor, canonicalJsonIdentity, NonCanonicalJsonError, parseCanonicalJson } from './public-artifact-storage.mjs'
 import {
   assertLegacyGenerationCutoverPointer,
   assertLegacyNativeGenerationCutoverPointer,
@@ -72,6 +72,19 @@ export function prepareContentAddressedState({
 }
 
 export function prepareStateCheckpoint(checkpoint, compatibility, index = 0) {
+  const { boundary, rawPrefix, storedObject, content } = checkpointStorageParts(checkpoint, compatibility, index)
+  const prepared = storedObject ? undefined : prepareStateObject(content)
+  return { candidate: { boundary, rawPrefix, object: storedObject ?? stateObjectReference(prepared) }, prepared }
+}
+
+/** Compare the persisted bundle, independent of inline/reference representation. */
+export function stateCheckpointIdentityFor(checkpoint, compatibility, index = 0) {
+  const { boundary, rawPrefix, storedObject, content } = checkpointStorageParts(checkpoint, compatibility, index)
+  const identity = storedObject ?? canonicalJsonIdentity(content)
+  return { boundary, rawPrefix, object: { sha256: identity.sha256, bytes: identity.bytes } }
+}
+
+function checkpointStorageParts(checkpoint, compatibility, index) {
   const parsedCompatibility = parseCompatibility(compatibility, 'compatibility')
   assertRecord(checkpoint, `checkpoints[${index}]`)
   const boundary = parseBoundary(checkpoint.boundary, `checkpoints[${index}].boundary`)
@@ -93,7 +106,7 @@ export function prepareStateCheckpoint(checkpoint, compatibility, index = 0) {
   if (canonicalJsonFor(checkpointCompatibility) !== canonicalJsonFor(parsedCompatibility)) {
     throw new Error(`Invalid incremental state: checkpoints[${index}] compatibility differs from manifest compatibility`)
   }
-  const prepared = storedObject ? undefined : prepareStateObject({
+  const content = storedObject ? undefined : {
     artifactKind: INCREMENTAL_STATE_CHECKPOINT_KIND,
     schemaVersion: 1,
     boundary,
@@ -101,8 +114,8 @@ export function prepareStateCheckpoint(checkpoint, compatibility, index = 0) {
     compatibility: checkpointCompatibility,
     ratingCheckpoint: checkpoint.ratingCheckpoint,
     causalSummaries: checkpoint.causalSummaries,
-  })
-  return { candidate: { boundary, rawPrefix, object: storedObject ?? stateObjectReference(prepared) }, prepared }
+  }
+  return { boundary, rawPrefix, storedObject, content }
 }
 
 export function prepareStateObject(value) {
