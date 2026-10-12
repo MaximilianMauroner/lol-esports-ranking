@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Power Index app icon">
-  <rect width="64" height="64" rx="12" fill="#10191d"/>
-  <path d="M12 16h40l-4 28-16 8-16-8-4-28Z" fill="#172329" stroke="#d7aa48" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M22 41V23h20v6H29v3h11v6H29v3h-7Z" fill="#78d6ea"/>
-  <path d="M39 24l7-4-2 8-5-4Z" fill="#d7aa48"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path d="M4 4H32V11H4Z" fill="#d7aa48"/><path d="M6 13H13V32H6Z" fill="#78d6ea"/><path d="M20 13H27V25A2 2 0 0 0 29 27H32V32H27A7 7 0 0 1 20 25Z" fill="#78d6ea"/></svg>
