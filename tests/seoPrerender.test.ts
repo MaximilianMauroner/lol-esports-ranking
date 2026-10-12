@@ -3,7 +3,7 @@ import { referencePublicDataDir, referencePublicDir } from '../scripts/reference
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
+import { renderFallbackHomepagePrerender, renderHomepagePrerender, renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
 import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
 
@@ -42,6 +42,35 @@ test('Tailwind scans utilities owned only by the prerender source file', async (
   ])
   assert.match(stylesheet, /@source\s+["']\.\.\/scripts\/seo-prerender\.ts["']/)
   assert.match(prerenderSource, /max-w-\[1080px\]/)
+})
+
+test('visible startup stays the same across ranking refreshes and missing data', () => {
+  const first = renderHomepagePrerender({
+    generatedAt: '2026-10-11T12:00:00Z',
+    modelVersion: 'model-one',
+    source: 'first-source',
+    teams: [{ team: 'First leader', rank: 1, rating: 2100 }],
+    regions: [],
+  })
+  const refreshed = renderHomepagePrerender({
+    generatedAt: '2026-10-12T12:00:00Z',
+    modelVersion: 'model-two',
+    source: 'second-source',
+    seededSample: true,
+    teams: [{ team: 'New leader', rank: 1, rating: 2300 }],
+    regions: [],
+  })
+  const visibleStartup = (html: string) => html.split('<noscript>', 1)[0]
+
+  assert.equal(visibleStartup(first), visibleStartup(refreshed))
+  assert.equal(visibleStartup(first), visibleStartup(renderFallbackHomepagePrerender()))
+  assert.match(visibleStartup(first), /Loading rankings/)
+  assert.match(visibleStartup(first), /role="status".*aria-busy="true"/)
+  assert.doesNotMatch(visibleStartup(first), /First leader|2,100|model-one|first-source|2026/)
+  // The data-bound content remains readable when JavaScript is disabled.
+  assert.match(first, /<noscript>.*First leader.*Source: first-source.*<\/noscript>/)
+  assert.match(refreshed, /<noscript>.*Seeded sample data is loaded.*New leader.*<\/noscript>/)
+  assert.match(first, /<noscript><style>\.homepage-startup\{display:none\}<\/style>/)
 })
 
 test('only ranking startup holds the prerender while the manifest loads', () => {
