@@ -6,7 +6,9 @@ description: Verify LoL Power Index ranking and archive journeys using isolated 
 # Verify LoL Esports Power Index
 
 Read `AGENTS.md`, `README.md`, and [the feature index](features/README.md). Use an isolated
-worktree, not a running refresh owner's checkout. Select journeys affected by product work in the requested window.
+worktree, not a running refresh owner's checkout. Select journeys affected by
+product work in the requested window, then read every selected feature guide
+before setup or execution.
 Record revision, manifest
 model/config/schema, source coverage, chosen port and process handle. Never
 present fixture or no-data payloads as official rankings.
