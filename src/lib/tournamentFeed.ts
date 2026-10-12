@@ -20,16 +20,19 @@ export type TournamentSeries = {
 export type TournamentEvent = {
   id: string
   sourceTournamentId: string
-  competition: TournamentCompetition
+  /** Null for events outside the seven tracked competition families. */
+  competition: TournamentCompetition | null
   label: string
   season: string
   series: TournamentSeries[]
 }
 
+export type TournamentFeedSource = 'leaguepedia-cargo' | 'lolesports-persisted-site-api'
+
 export type TournamentFeed = {
   version: 1
-  source: 'lolesports-persisted-site-api'
-  unsupportedApi: true
+  source: TournamentFeedSource
+  unsupportedApi: boolean
   dataMode?: 'synthetic-fixture'
   fetchedAt: string
   sourceUpdatedAt: string | null
@@ -200,13 +203,14 @@ export function reconcileTournamentFeed(previous: TournamentFeed | null, candida
   return candidate
 }
 
+/** Maps LoL Esports and Leaguepedia source states. */
 export function normalizeStatus(source: string): TournamentSeriesStatus {
   switch (source.toLowerCase()) {
-    case 'unstarted': return 'upcoming'
-    case 'inprogress': return 'live'
+    case 'unstarted': case 'scheduled': return 'upcoming'
+    case 'inprogress': case 'started': return 'live'
     case 'completed': case 'complete': return 'completed'
     case 'postponed': case 'delayed': return 'postponed'
-    case 'cancelled': case 'canceled': return 'cancelled'
+    case 'cancelled': case 'canceled': case 'nullified': return 'cancelled'
     default: return 'unknown'
   }
 }
@@ -216,7 +220,7 @@ export function groupTournamentSeries(series: readonly TournamentSeries[]) {
   for (const entry of series) {
     if (entry.status === 'live') result.live.push(entry)
     else if (entry.status === 'completed' || entry.status === 'cancelled') result.results.push(entry)
-    else if (entry.status === 'unknown' && /^(?:complete|completed)$/i.test(entry.sourceState)) result.unresolved.push(entry)
+    else if (entry.status === 'unknown' && /^(?:complete|completed|result-missing)$/i.test(entry.sourceState)) result.unresolved.push(entry)
     else result.upcoming.push(entry)
   }
   return result
@@ -225,8 +229,9 @@ export function groupTournamentSeries(series: readonly TournamentSeries[]) {
 export function isTournamentFeed(value: unknown): value is TournamentFeed {
   const feed = asRecord(value)
   const coverage = asRecord(feed?.coverage)
-  return feed?.version === TOURNAMENT_FEED_VERSION && feed.source === 'lolesports-persisted-site-api'
-    && feed.unsupportedApi === true && Boolean(validDate(feed.fetchedAt))
+  return feed?.version === TOURNAMENT_FEED_VERSION
+    && (feed.source === 'leaguepedia-cargo' || feed.source === 'lolesports-persisted-site-api')
+    && feed.unsupportedApi === (feed.source === 'lolesports-persisted-site-api') && Boolean(validDate(feed.fetchedAt))
     && (feed.dataMode === undefined || feed.dataMode === 'synthetic-fixture')
     && typeof coverage?.start === 'string' && typeof coverage.end === 'string'
     && typeof coverage.complete === 'boolean' && Array.isArray(coverage.warnings)
@@ -234,7 +239,8 @@ export function isTournamentFeed(value: unknown): value is TournamentFeed {
     && Array.isArray(feed.events) && feed.events.every((eventValue) => {
       const event = asRecord(eventValue)
       return Boolean(event && str(event.id) && str(event.sourceTournamentId) && str(event.label)
-        && str(event.season) && competitionForLeague({ slug: event.competition }) && Array.isArray(event.series)
+        && str(event.season) && (event.competition === null || competitionForLeague({ slug: event.competition }))
+        && Array.isArray(event.series)
         && event.series.every((seriesValue) => {
           const series = asRecord(seriesValue)
           return Boolean(series && str(series.id) && series.eventId === event.id

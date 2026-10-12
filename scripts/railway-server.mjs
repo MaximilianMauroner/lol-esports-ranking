@@ -23,6 +23,7 @@ import {
   renderHomepagePrerenderSnapshot,
   renderSitemapFromManifest,
 } from './seo-prerender.ts'
+import { collectLeaguepediaTournamentFeed, createTournamentFeedService } from './leaguepedia-tournament-feed.ts'
 
 const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
@@ -40,6 +41,12 @@ const presignedDeliveryThresholdBytes = positiveIntegerOrDefault(
   process.env.RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES,
   65_536,
 )
+// A local feed.json (fixture or manual rollback) replaces the live Leaguepedia feed and health.
+// Without it, a leftover local health file is ignored.
+const LIVE_TOURNAMENT_PATHS = new Set(['feed.json', 'feed.json.health.json'])
+const tournamentFeedService = createTournamentFeedService({
+  collect: () => collectLeaguepediaTournamentFeed({ baseUrl: process.env.LEAGUEPEDIA_CARGO_EXPORT_URL || undefined }),
+})
 const bucketConfig = bucketConfigFromEnv()
 const bucketClient = createBucketClient(bucketConfig)
 const bucketStorage = { config: bucketConfig, client: bucketClient }
@@ -73,12 +80,14 @@ const server = createServer(async (request, response) => {
     }
 
     if (url.pathname.startsWith('/tournament-data/')) {
-      const served = await tryServeFile(response, tournamentDataDir, url.pathname.slice('/tournament-data/'.length), {
-        cacheControl: 'no-store',
-        headOnly: request.method === 'HEAD',
-        requestHeaders: request.headers,
-      })
-      if (!served) sendJson(response, 404, { ok: false, error: 'Not found' })
+      const relativePath = url.pathname.slice('/tournament-data/'.length)
+      const options = { cacheControl: 'no-store', headOnly: request.method === 'HEAD', requestHeaders: request.headers }
+      if (LIVE_TOURNAMENT_PATHS.has(relativePath) && !await fileExists(resolve(tournamentDataDir, 'feed.json'))) {
+        await serveLiveTournamentFeed(response, relativePath, options)
+        return
+      }
+      if (await tryServeFile(response, tournamentDataDir, relativePath, options)) return
+      sendJson(response, 404, { ok: false, error: 'Not found' })
       return
     }
 
@@ -282,6 +291,24 @@ async function loadCrawlerSnapshot() {
     }
   }
   return loadHomepagePrerenderSnapshotFromDataDir(publicDataDir)
+}
+
+async function serveLiveTournamentFeed(response, relativePath, options) {
+  const { feed, health } = await tournamentFeedService.read()
+  const body = relativePath === 'feed.json' ? feed : health
+  if (!body) {
+    sendJson(response, 503, { ok: false, error: health?.warnings.join(' ') || 'Tournament feed is unavailable' })
+    return
+  }
+  await sendText(response, JSON.stringify(body), { ...options, contentType: 'application/json; charset=utf-8' })
+}
+
+async function fileExists(path) {
+  try {
+    return (await stat(path)).isFile()
+  } catch {
+    return false
+  }
 }
 
 async function sendText(response, text, { cacheControl, contentType, headOnly, requestHeaders }) {

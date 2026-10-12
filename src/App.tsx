@@ -54,7 +54,6 @@ const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 const RegionsView = lazy(() => import('./views/RegionsView').then((module) => ({ default: module.RegionsView })))
 const MatchesView = lazy(() => import('./views/MatchesView').then((module) => ({ default: module.MatchesView })))
 const TournamentsView = lazy(() => import('./views/TournamentsView').then((module) => ({ default: module.TournamentsView })))
-const TOURNAMENT_HUB_ENABLED = import.meta.env.VITE_TOURNAMENT_HUB_ENABLED === '1'
 const RegionCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.RegionCompareDrawer })))
 const RegionCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.RegionCompareAnalysis })))
 const TeamCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.TeamCompareDrawer })))
@@ -64,7 +63,7 @@ const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
   { id: 'rankings', label: 'Rankings', icon: BarChart3 },
   { id: 'regions', label: 'Regions', icon: Globe2 },
   { id: 'matches', label: 'Matches', icon: History },
-  ...(TOURNAMENT_HUB_ENABLED ? [{ id: 'tournaments' as const, label: 'Tournaments', icon: CalendarDays }] : []),
+  { id: 'tournaments', label: 'Tournaments', icon: CalendarDays },
 ]
 
 /**
@@ -87,7 +86,7 @@ const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   },
   tournaments: {
     title: 'Tournaments',
-    intro: 'Upcoming, live and completed series from the LoL Esports site schedule reference. This feed is separate from the published Power Index and does not score matches.',
+    intro: 'Upcoming, live and completed series from the Leaguepedia schedule. This feed is separate from the published Power Index and does not score matches.',
   },
 }
 
@@ -116,11 +115,7 @@ function TournamentRoute() {
     <AppNavigation mode="tournaments" scope={scope} onGoHome={goHome} />
     <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1 pb-6 max-sm:pb-[calc(var(--tabbar-h)+24px+env(safe-area-inset-bottom))]">
       <ModeHeader mode="tournaments" />
-      {TOURNAMENT_HUB_ENABLED ? (
-        <Suspense fallback={<LoadingState presentation="page" label="Loading tournaments" />}><TournamentsView /></Suspense>
-      ) : (
-        <div className="px-[var(--page-x)] py-6"><Alert variant="warning">Tournament feed is not enabled in this environment.</Alert></div>
-      )}
+      <Suspense fallback={<LoadingState presentation="page" label="Loading tournaments" />}><TournamentsView /></Suspense>
     </main>
   </div>
 }

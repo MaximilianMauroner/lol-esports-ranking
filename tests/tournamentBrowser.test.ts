@@ -18,7 +18,7 @@ function series(id: string, eventId: string, teams: ReturnType<typeof team>[], s
 
 function fixtureFeed() {
   return {
-    version: 1, source: 'lolesports-persisted-site-api', unsupportedApi: true, dataMode: 'synthetic-fixture',
+    version: 1, source: 'leaguepedia-cargo', unsupportedApi: false, dataMode: 'synthetic-fixture',
     fetchedAt: at, sourceUpdatedAt: null,
     coverage: { start: '2026-09-13T00:00:00.000Z', end: '2026-11-12T23:59:59.999Z', complete: true, warnings: [] as string[] },
     events: [
@@ -31,7 +31,6 @@ function fixtureFeed() {
 }
 
 test('tournament browser follows deep links, updates, stale state, recovery and a narrow layout without provider calls', { timeout: 60_000 }, async () => {
-  process.env.VITE_TOURNAMENT_HUB_ENABLED = '1'
   const feed = fixtureFeed()
   let health = { checkedAt: at, complete: true, warnings: [] as string[] }
   let feedStatus = 200
@@ -86,6 +85,8 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.match(await page.locator('body').innerText(), /Gamma.*Delta/)
     assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
     assert.match(await page.locator('body').innerText(), /Forecast unavailable: rules not verified/)
+    assert.equal(await page.getByRole('link', { name: 'Leaguepedia' }).getAttribute('href'), 'https://lol.fandom.com/wiki/fixture-worlds')
+    assert.equal(await page.getByRole('link', { name: 'CC BY-SA 3.0' }).getAttribute('href'), 'https://creativecommons.org/licenses/by-sa/3.0/')
     assert.ok(dataRequests.includes(tournamentPath))
     assert.ok(dataRequests.every((path) => path === tournamentPath || path === healthPath), `Unexpected data requests: ${dataRequests}`)
     assert.deepEqual(externalRequests, [])
@@ -191,7 +192,6 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     pendingFeed.splice(0).forEach((respond) => respond())
     await browser?.close()
     await server.close()
-    delete process.env.VITE_TOURNAMENT_HUB_ENABLED
   }
 })
 
