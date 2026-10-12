@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
 import { RIOT_PROJECT_NOTICE } from '../src/lib/legal.ts'
+import { POWER_INDEX_MARK } from '../src/data/brandMark.ts'
 
 export const PUBLIC_SITE_ORIGIN = 'https://lol.lab4code.com'
 export const HOMEPAGE_PRERENDER_MARKER = '<!--homepage-prerender-->'
@@ -107,6 +108,24 @@ export function renderSitemapFromManifest(value: unknown, sitemap: string) {
 }
 
 export function renderHomepagePrerender(data: HomepagePrerenderData) {
+  return `${renderHomepageStartup()}<noscript><style>.homepage-startup{display:none}</style>${renderHomepageSnapshot(data)}</noscript>`
+}
+
+function renderHomepageStartup() {
+  return [
+    '<main class="homepage-startup flex min-h-svh flex-col items-center justify-center px-6 py-8">',
+    `<div class="mb-8 size-32 sm:size-40" aria-hidden="true">${POWER_INDEX_MARK.replace('<svg ', '<svg width="100%" height="100%" ')}</div>`,
+    '<p class="mb-2 text-sm text-muted-foreground">LoL Esports</p>',
+    '<h1 class="text-2xl font-bold text-[var(--text-strong)]">Power Index</h1>',
+    '<p class="mt-3 text-sm text-muted-foreground">Team power. Region strength.</p>',
+    '<p class="mt-10 text-xs text-muted-foreground" role="status" aria-live="polite" aria-busy="true">Loading rankings</p>',
+    '</main>',
+  ].join('')
+}
+
+// Keep the source-bound snapshot available to crawlers and visitors without
+// JavaScript. The visible startup screen stays the same across data refreshes.
+function renderHomepageSnapshot(data: HomepagePrerenderData) {
   const teams = data.teams.slice(0, 5)
   const regions = data.regions.slice(0, 6)
   const generatedLabel = formatDate(data.generatedAt)
