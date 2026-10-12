@@ -81,7 +81,8 @@ export function findSwissEvent(events: readonly TournamentEvent[]) {
 /**
  * Reads the published Swiss draws and results from the schedule. The baseline
  * is available only when the full Round 1 draw is published and every later
- * published draw follows the Swiss rules.
+ * full draw follows the Swiss rules. A partly published round and the rounds
+ * after it are left out.
  */
 export function liveSwissBaseline(event: TournamentEvent | undefined): LiveBaseline {
   if (!event) return { status: 'unavailable', detail: 'The Worlds 2026 Main Event is not in the schedule window.' }
@@ -95,7 +96,8 @@ export function liveSwissBaseline(event: TournamentEvent | undefined): LiveBasel
   if (firstRound.length !== SWISS_ROUND_SIZES[0] || !firstRound.every((series) => seriesPair(series))) {
     return { status: 'unavailable', detail: 'The Round 1 draw is not in the schedule yet.' }
   }
-  const ids = firstRound.flatMap((series) => seriesPair(series)!)
+  // Teams are ordered by name, not by match time: saved scenarios store team indexes, so a schedule change must not move them.
+  const ids = firstRound.flatMap((series) => seriesPair(series)!).sort(compareCodeUnits)
   if (new Set(ids).size !== 16) return { status: 'unavailable', detail: 'Round 1 in the schedule does not list 16 different teams.' }
   const baseline: SwissBaseline = { kind: 'live', teams: ids.map((id) => ({ id, label: id, seed: null, region: null })), rounds: [] }
   let note: string | null = null
@@ -103,7 +105,7 @@ export function liveSwissBaseline(event: TournamentEvent | undefined): LiveBasel
     const list = byRound.get(index + 1) ?? []
     if (list.length > size) return { status: 'unavailable', detail: `Round ${index + 1} in the schedule has more than ${size} matches.` }
     const pairs = list.map(seriesPair)
-    if (!list.length || pairs.some((pair) => !pair)) {
+    if (list.length < size || pairs.some((pair) => !pair)) {
       if (pairs.some(Boolean)) note = `The Round ${index + 1} draw is only partly published, so the preview starts before it.`
       break
     }

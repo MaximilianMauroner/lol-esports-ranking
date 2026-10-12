@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Alert } from './ui/alert'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Panel, PanelBody, PanelFooter, PanelHeader } from './ui/panel'
@@ -9,7 +10,7 @@ import { hashEnum, hashParam, useHashSync } from '../lib/urlState'
 import { formatTournamentTime, type TournamentEvent } from '../lib/tournamentFeed'
 import {
   PLAY_IN_REGIONS, decodeChoices, encodeChoices, fillDraw, findSwissEvent, knockoutEntry, liveSwissBaseline, opponentOptions,
-  resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawContext, type DrawnRound, type PlayInRegion, type ResolvedMatch,
+  resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawContext, type DrawnRound, type ResolvedMatch,
   type ResolvedRound, type ResolvedScenario, type SwissBaseline,
 } from '../lib/swissScenario'
 import type { SwissTeamStanding } from '../lib/worldsObservedRules'
@@ -25,20 +26,39 @@ const STARTS = ['live', 'seeds'] as const
  */
 export function SwissPreview({ events, checkedAt, timezone }: { events: readonly TournamentEvent[]; checkedAt: string; timezone: string }) {
   const live = useMemo(() => liveSwissBaseline(findSwissEvent(events)), [events])
-  const [start, setStart] = useState(() => hashEnum('start', STARTS, live.status === 'ready' ? 'live' : 'seeds'))
-  const [playIn, setPlayIn] = useState<PlayInRegion | null>(() => PLAY_IN_REGIONS.find((region) => region === hashParam('playin')) ?? null)
-  const [slot, setSlot] = useState<Slot>(() => hashEnum('scenario', SLOTS, 'a'))
-  const [texts, setTexts] = useState<Record<Slot, string>>(() => ({ a: hashParam('a') ?? '', b: hashParam('b') ?? '' }))
+  const liveReady = live.status === 'ready'
+  const [address] = useState(() => readAddress(liveReady))
+  const [start, setStart] = useState(address.start)
+  const [playIn, setPlayIn] = useState(address.playIn)
+  const [slot, setSlot] = useState(address.slot)
+  const [texts, setTexts] = useState(address.texts)
   const [notice, setNotice] = useState<string | null>(null)
-  /** Where keyboard focus goes after an action removes the control that had it. */
+  /** Where keyboard focus goes once, after fill or clear removed the control that had it. */
   const [focusRound, setFocusRound] = useState<number | null>(null)
+  const focusDone = useCallback(() => setFocusRound(null), [])
+  // Back, Forward and edited links change the address without a reload. useHashSync writes with
+  // replaceState, which fires no hashchange, so the preview's own writes do not come back here.
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = readAddress(liveReady)
+      setStart(next.start)
+      setPlayIn(next.playIn)
+      setSlot(next.slot)
+      setTexts(next.texts)
+      setNotice(null)
+      setFocusRound(null)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [liveReady])
+  // Saved picks name teams by their index in one starting point. They are never read against another one, so
+  // while live draws are missing the live scenarios stay in the address as written and no scenario is shown.
+  const liveMissing = start === 'live' && live.status === 'unavailable'
   const baseline: SwissBaseline = useMemo(() => start === 'live' && live.status === 'ready' ? live.baseline : seedBaseline(playIn), [start, live, playIn])
-  // Saved picks name teams by their index in one starting point. They are never read against another one.
-  const textsApply = baseline.kind === start
   const scenarios = useMemo(() => ({
-    a: resolveScenario(baseline, decodeChoices(baseline, textsApply ? texts.a : '')),
-    b: resolveScenario(baseline, decodeChoices(baseline, textsApply ? texts.b : '')),
-  }), [baseline, texts, textsApply])
+    a: resolveScenario(baseline, decodeChoices(baseline, liveMissing ? '' : texts.a)),
+    b: resolveScenario(baseline, decodeChoices(baseline, liveMissing ? '' : texts.b)),
+  }), [baseline, texts, liveMissing])
   const current = scenarios[slot]
   const otherSlot: Slot = slot === 'a' ? 'b' : 'a'
   const labels = useMemo(() => new Map(baseline.teams.map((team) => [team.id, team.label])), [baseline])
@@ -46,10 +66,10 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
 
   useHashSync('tournaments', {
     start,
-    playin: baseline.kind === 'seeds' ? playIn ?? undefined : undefined,
+    playin: start === 'seeds' ? playIn ?? undefined : undefined,
     scenario: slot === 'b' ? slot : undefined,
-    a: (textsApply ? encodeChoices(baseline, scenarios.a.choices) : texts.a) || undefined,
-    b: (textsApply ? encodeChoices(baseline, scenarios.b.choices) : texts.b) || undefined,
+    a: (liveMissing ? texts.a : encodeChoices(baseline, scenarios.a.choices)) || undefined,
+    b: (liveMissing ? texts.b : encodeChoices(baseline, scenarios.b.choices)) || undefined,
   })
 
   function update(edit: (choices: DrawnRound[]) => DrawnRound[], focus: number | null = null) {
@@ -71,16 +91,30 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
       current.droppedRounds ? `${current.droppedRounds === 1 ? 'One preview round no longer fits' : `${current.droppedRounds} preview rounds no longer fit`} and ${current.droppedRounds === 1 ? 'was' : 'were'} removed.` : ''].join(' ').trim()
     : null
 
+  const startControl = (
+    <div className="grid gap-1">
+      <label htmlFor="swiss-start" className="text-sm font-semibold">Start from</label>
+      <Select id="swiss-start" className="w-full" value={start} onChange={(event) => changeStart(event.target.value)}>
+        <option value="live" disabled={live.status !== 'ready'}>Live draws and results</option>
+        <option value="seeds">Seed slots before the draw</option>
+      </Select>
+    </div>
+  )
+  if (liveMissing) {
+    return (
+      <div className="grid min-w-0 justify-items-start gap-4">
+        {startControl}
+        <Alert variant="warning" role="status">
+          Live draws are not available: {live.detail} Your live scenarios stay in the page address and come back when live draws return. Choosing seed slots replaces them with two new scenarios.
+        </Alert>
+      </div>
+    )
+  }
+
   return (
     <div className="grid min-w-0 gap-4">
       <div className="flex min-w-0 flex-wrap items-end gap-x-4 gap-y-3">
-        <div className="grid gap-1">
-          <label htmlFor="swiss-start" className="text-sm font-semibold">Start from</label>
-          <Select id="swiss-start" className="w-full" value={baseline.kind} onChange={(event) => changeStart(event.target.value)}>
-            <option value="live" disabled={live.status !== 'ready'}>Live draws and results</option>
-            <option value="seeds">Seed slots before the draw</option>
-          </Select>
-        </div>
+        {startControl}
         {baseline.kind === 'seeds' ? (
           <div className="grid gap-1">
             <label htmlFor="swiss-playin" className="text-sm font-semibold">Play-In winner region</label>
@@ -115,7 +149,7 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
         <p className="text-muted-foreground">
           {baseline.kind === 'live'
             ? <>Starts from the draws and results on Leaguepedia, checked {formatTournamentTime(checkedAt, timezone)}. {live.status === 'ready' && live.note ? live.note : ''}</>
-            : <>Starts from the sixteen Swiss seed slots before the Round 1 draw. Slots stand for the qualified teams, for example LCK 1 is the first LCK seed. {live.status === 'unavailable' ? `Live draws are not available: ${live.detail}` : ''}{textsApply ? '' : ' Your live-results scenarios are kept until live draws are available again.'}</>}
+            : <>Starts from the sixteen Swiss seed slots before the Round 1 draw. Slots stand for the qualified teams, for example LCK 1 is the first LCK seed. {live.status === 'unavailable' ? `Live draws are not available: ${live.detail}` : ''}</>}
         </p>
       </div>
       <div role="status" className="empty:hidden grid gap-1 text-sm">
@@ -126,7 +160,7 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
       <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,1fr)]">
         <div className="grid min-w-0 gap-4">
           {current.rounds.map((round, index) => (
-            <RoundPanel key={round.round} round={round} label={label} focus={focusRound === round.round}
+            <RoundPanel key={round.round} round={round} label={label} focus={focusRound === round.round} onFocused={focusDone}
               onPick={(matchIndex, winner) => update((choices) => choices.map((entry, roundIndex) => roundIndex === index
                 ? { pairs: entry.pairs, winners: entry.winners.map((value, slotIndex) => slotIndex === matchIndex ? winner : value) }
                 : entry))}
@@ -139,7 +173,7 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
               onClear={() => update((choices) => choices.slice(0, index), round.round)} />
           ))}
           {current.next.kind === 'draw'
-            ? <DrawPanel round={current.next.round} context={current.next.context} label={label} focus={focusRound === current.next.round}
+            ? <DrawPanel round={current.next.round} context={current.next.context} label={label} focus={focusRound === current.next.round} onFocused={focusDone}
               onFill={(round, pairs) => update((choices) => [...choices, { pairs, winners: pairs.map(() => null) }], round)} />
             : null}
         </div>
@@ -149,21 +183,32 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
   )
 }
 
+/** The preview's own values in the page address. */
+function readAddress(liveReady: boolean) {
+  return {
+    start: hashEnum('start', STARTS, liveReady ? 'live' : 'seeds'),
+    playIn: PLAY_IN_REGIONS.find((region) => region === hashParam('playin')) ?? null,
+    slot: hashEnum('scenario', SLOTS, 'a'),
+    texts: { a: hashParam('a') ?? '', b: hashParam('b') ?? '' },
+  }
+}
+
 function fullChoices(resolved: ResolvedScenario): DrawnRound[] {
   return resolved.rounds.map((round, index) => resolved.choices[index]
     ?? { pairs: round.matches.map((match) => match.teamIds), winners: round.matches.map(() => null) })
 }
 
-function RoundPanel({ round, label, focus, onPick, onSwap, onClear }: {
+function RoundPanel({ round, label, focus, onFocused, onPick, onSwap, onClear }: {
   round: ResolvedRound
   focus: boolean
+  onFocused: () => void
   label: (id: string) => string
   onPick: (matchIndex: number, winner: string | null) => void
   onSwap: (teamId: string, opponentId: string) => void
   onClear: () => void
 }) {
   const titleId = useId()
-  const heading = useFocusWhen(focus)
+  const heading = useFocusWhen(focus, onFocused)
   const [editing, setEditing] = useState(false)
   const pairs = round.matches.map((match) => match.teamIds)
   const buckets = [...new Set(round.matches.map((match) => match.records[0].join('-')))]
@@ -189,8 +234,9 @@ function RoundPanel({ round, label, focus, onPick, onSwap, onClear }: {
                 <span>{bucketNote(wins, losses)}</span>
               </p>
               <ul className="grid gap-1.5">
+                {/* Keyed by the first team: a swap keeps that team first in its row, so its opponent select keeps focus. */}
                 {round.matches.map((match, matchIndex) => match.records[0].join('-') !== record ? null : (
-                  <MatchRow key={match.teamIds.join('\n')} round={round.round} match={match} label={label}
+                  <MatchRow key={match.teamIds[0]} round={round.round} match={match} label={label}
                     swap={editing && !round.liveDraw ? { pairs, context: round.context, onSwap } : null}
                     onPick={(winner) => onPick(matchIndex, winner)} />
                 ))}
@@ -270,9 +316,16 @@ function SwapControl({ team, label, swap }: { team: string; label: (id: string) 
   )
 }
 
-function DrawPanel({ round, context, label, focus, onFill }: { round: number; context: DrawContext; label: (id: string) => string; focus: boolean; onFill: (round: number, pairs: [string, string][]) => void }) {
+function DrawPanel({ round, context, label, focus, onFocused, onFill }: {
+  round: number
+  context: DrawContext
+  label: (id: string) => string
+  focus: boolean
+  onFocused: () => void
+  onFill: (round: number, pairs: [string, string][]) => void
+}) {
   const titleId = useId()
-  const panel = useFocusWhen(focus)
+  const panel = useFocusWhen(focus, onFocused)
   const pairs = useMemo(() => fillDraw(context), [context])
   const waived = context.buckets.filter((bucket) => context.rematchBuckets.has(bucket.record))
   return (
@@ -368,9 +421,16 @@ function standingOrder(row: SwissTeamStanding) {
   return group * 100 + (3 - row.wins) * 10 + row.losses
 }
 
-/** Focuses the returned element when `when` becomes true, for example after its trigger was removed. */
-function useFocusWhen(when: boolean) {
+/**
+ * Focuses the returned element when `when` is true, for example after its trigger was removed.
+ * `onFocused` ends the request, so a panel that mounts later, for example after a scenario switch, does not take focus.
+ */
+function useFocusWhen(when: boolean, onFocused: () => void) {
   const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => { if (when) ref.current?.focus() }, [when])
+  useEffect(() => {
+    if (!when) return
+    ref.current?.focus()
+    onFocused()
+  }, [when, onFocused])
   return ref
 }

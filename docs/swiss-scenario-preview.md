@@ -20,7 +20,8 @@ the rules that the ruleset defines.
   used only when its full draw is published, the previous round is complete,
   and the draw follows the rules below. If a published draw breaks the rules,
   the live starting point is unavailable and the page says why. A partly
-  published draw is ignored with a note.
+  published draw, or a round with fewer published matches than its size, is
+  ignored with a note. The earlier rounds stay in use.
 - **Seed slots before the draw.** The sixteen Swiss seeds (§4.3.2.1 pools), shown
   as slots such as "LCK 1", not as team names. The user chooses the Play-In
   winner's region (§4.2.1: CBLOL, LCS, LEC or LCP) so that the Round 1 region rule
@@ -30,6 +31,11 @@ Live draws and results are never editable. When a live result arrives for a
 match the user had picked, the live result replaces the pick and the page says
 so. A newly published live draw never changes a scenario built on seed slots:
 saved picks apply only to the starting point they were made for.
+
+If live draws become unavailable while the page starts from them, for example
+because a new feed breaks the draw rules, the page shows only the start choice
+and the reason. The live scenarios stay in the page address unchanged and come
+back when live draws return. Choosing seed slots starts two new scenarios.
 
 ## Rules applied
 
@@ -60,9 +66,12 @@ those records is cleared, and the page says so.
 
 Scenario choices live in component state and in the page address (`start`,
 `playin`, `scenario`, `a`, `b` hash parameters), so a view can be reloaded and
-shared. Each match is stored as three characters: two team indexes and the
-winner. The preview sends no requests of its own and never writes to the feed,
-health file, rankings or any other live data.
+shared. The page reads them again after Back, Forward or an edited link. Each
+match is stored as three characters: two team indexes and the winner. For live
+draws, the team indexes follow the sorted team names, not the match times, so
+a schedule change does not move saved picks to other teams.
+The preview sends no requests of its own and never writes to the feed, health
+file, rankings or any other live data.
 
 ## Code and checks
 
@@ -72,8 +81,10 @@ health file, rankings or any other live data.
 - `tests/swissScenario.test.ts` covers Round 1 pools and regions, a full
   played-out scenario checked against the sourced `replayWorlds2026Swiss`
   validator, the 2/3/3 qualifier split and placings, cleared later draws,
-  opponent swaps, the rematch waiver case, the live starting point and the
-  address format.
+  opponent swaps, the rematch waiver case, the live starting point with partly
+  published rounds and moved match times, and the address format.
 - `tests/swissPreviewBrowser.test.ts` covers the browser journey: seed slots,
-  keyboard picks, pairings, compare, copy, reset, reload, the live starting
-  point with locked results, and layouts from 320 to 1024 px.
+  keyboard picks, pairings, focus after swaps and scenario switches, compare,
+  copy, reset, reload, Back and edited links, the live starting point with
+  locked results, live draws that become unavailable, and layouts from 320 to
+  1024 px.

@@ -191,6 +191,35 @@ test('the live baseline uses published draws and results, and preview picks neve
   assert.match(mismatched.status === 'unavailable' ? mismatched.detail : '', /Round 2 in the schedule does not follow the Swiss draw rules: Team A and Team P: different record/)
 })
 
+test('a round with fewer published matches than its size keeps the earlier live rounds', () => {
+  const roundOne = Array.from({ length: 8 }, (_, slot) => series(1, slot, [names[slot * 2], names[slot * 2 + 1]], 0))
+  const live = liveSwissBaseline(mainEvent([...roundOne, series(2, 0, [names[0], names[2]])]))
+  assert.equal(live.status, 'ready', JSON.stringify(live))
+  if (live.status !== 'ready') return
+  assert.equal(live.baseline.rounds.length, 1)
+  assert.equal(live.note, 'The Round 2 draw is only partly published, so the preview starts before it.')
+  assert.equal(resolveScenario(live.baseline, []).next.kind, 'draw')
+})
+
+test('saved live picks name the same teams after the schedule moves a Round 1 match', () => {
+  const roundOne = Array.from({ length: 8 }, (_, slot) => series(1, slot, [names[slot * 2], names[slot * 2 + 1]]))
+  const moved = roundOne.map((entry, slot) => slot === 0 ? { ...entry, startTime: '2026-10-23T23:00:00.000Z' } : entry)
+  const before = liveSwissBaseline(mainEvent(roundOne))
+  const after = liveSwissBaseline(mainEvent(moved))
+  if (before.status !== 'ready' || after.status !== 'ready') return assert.fail('expected both live baselines')
+  const pairs = before.baseline.rounds[0].pairs
+  const text = encodeChoices(before.baseline, [{ pairs, winners: pairs.map((pair, slot) => pair[slot % 2]) }])
+  const picks = (baseline: SwissBaseline) => {
+    const resolved = resolveScenario(baseline, decodeChoices(baseline, text))
+    assert.equal(resolved.replacedPicks, 0)
+    assert.equal(resolved.droppedRounds, 0)
+    return resolved.rounds[0].matches.map((match) => `${match.teamIds.join(' v ')}: ${match.winnerId}`).sort()
+  }
+  assert.deepEqual(picks(after.baseline), picks(before.baseline))
+  assert.deepEqual(picks(after.baseline), pairs.map((pair, slot) => `${pair.join(' v ')}: ${pair[slot % 2]}`).sort())
+  assert.deepEqual(after.baseline.rounds[0].pairs.at(-1), [names[0], names[1]], 'match order still follows the schedule')
+})
+
 test('choices survive the page address and ignore malformed input', () => {
   const baseline = seedBaseline('LCP')
   const { choices } = playOut(baseline, (pair, round) => pair[round % 2])

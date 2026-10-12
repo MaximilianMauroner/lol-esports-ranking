@@ -41,7 +41,8 @@ export function hashInt(key: string, fallback: number): number {
  * filters.
  */
 export function useHashSync(route: string, params: Record<string, string | undefined>) {
-  const serialized = JSON.stringify(params)
+  // JSON.stringify drops keys that map to undefined, so map them to '' first to keep them for removal.
+  const serialized = JSON.stringify(Object.entries(params).map(([key, value]) => [key, value ?? '']))
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -49,7 +50,7 @@ export function useHashSync(route: string, params: Record<string, string | undef
     if (currentRoute !== route) return
 
     const query = currentHashQuery()
-    for (const [key, value] of Object.entries(JSON.parse(serialized) as Record<string, string | undefined>)) {
+    for (const [key, value] of JSON.parse(serialized) as Array<[string, string]>) {
       if (value) query.set(key, value)
       else query.delete(key)
     }
