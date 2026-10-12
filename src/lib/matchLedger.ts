@@ -6,7 +6,7 @@ export function matchEventLabel(event: string) {
   return formatEventName(event).replace(/\//g, ' · ').replace(/\b(\d{4}) Season\b/g, '$1')
 }
 
-export function compatibleMatchEvents(refs: readonly PublicMatchHistorySeriesRef[], league: string) {
+export function compatibleMatchEvents(refs: readonly Pick<PublicMatchHistorySeriesRef, 'league' | 'event'>[], league: string) {
   return [...new Set(refs.filter((row) => league === 'All' || row.league === league).map((row) => row.event))].sort()
 }
 

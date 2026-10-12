@@ -15,6 +15,7 @@ import { Select } from '../components/ui/select'
 import { LoadingState } from '../components/ui/loading'
 import { hashInt, hashParam, useHashSync } from '../lib/urlState'
 import { compatibleMatchEvents, matchEventLabel } from '../lib/matchLedger'
+import { groupedMatchEvents } from '../lib/matchEventGroups'
 import { SeriesCards, SeriesTable, type MatchSeries } from '../components/matches/SeriesLedger'
 
 const PAGE_SIZES = [25, 50] as const
@@ -35,6 +36,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
   const refs = useMemo(() => catalog?.series ?? [], [catalog])
   const leagues = useMemo(() => unique(refs.map((match) => match.league)), [refs])
   const events = useMemo(() => compatibleMatchEvents(refs, view.league), [refs, view.league])
+  const eventGroups = useMemo(() => groupedMatchEvents(refs, view.league), [refs, view.league])
   const filtered = useMemo(() => refs.filter((entry) => matchesFilters(entry, view)), [refs, view])
   const filteredGameCount = useMemo(
     () => filtered.reduce((total, entry) => total + entry.gameCount, 0),
@@ -144,7 +146,17 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
             <Input ref={searchRef} type="search" aria-keyshortcuts="/" className="w-full pl-9" value={view.search} onChange={(event) => update({ search: event.target.value })} placeholder="Search team" />
           </label>
           <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">League</span><Select className="w-full max-w-none" value={view.league} onChange={(event) => { const league = event.target.value; update({ league, event: compatibleMatchEvents(refs, league).includes(view.event) ? view.event : 'All' }) }}><option>All</option>{leagues.map((league) => <option key={league}>{league}</option>)}</Select></label>
-          <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">Event</span><Select className="w-full max-w-none" value={view.event} onChange={(event) => update({ event: event.target.value })}><option>All</option>{events.map((event) => <option key={event} value={event}>{matchEventLabel(event)}</option>)}</Select></label>
+          <label className="grid min-w-0 gap-1">
+            <span className="text-xs text-muted-foreground">Event</span>
+            <Select className="w-full max-w-none" value={view.event} onChange={(event) => update({ event: event.target.value })}>
+              <option value="All">All</option>
+              {eventGroups.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.events.map((event) => <option key={event} value={event}>{matchEventLabel(event)}</option>)}
+                </optgroup>
+              ))}
+            </Select>
+          </label>
           {filtersActive ? <Button variant="ghost" onClick={clearFilters}>Clear filters</Button> : null}
         </PanelBody>
 
