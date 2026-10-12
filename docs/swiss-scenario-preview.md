@@ -37,6 +37,35 @@ because a new feed breaks the draw rules, the page shows only the start choice
 and the reason. The live scenarios stay in the page address unchanged and come
 back when live draws return. Choosing seed slots starts two new scenarios.
 
+## Board
+
+The preview is a tournament board with one round at a time:
+
+- **Round strip.** Rounds 1 to 5, each with its state: "Played" (all live
+  results), "Picked", "N to pick", "Draw next" or "Upcoming". The board opens on
+  the first round that needs a winner or a draw. Any round can be opened.
+- **Round.** Matches are grouped by record (1–0, 0–1 and so on). Each group says
+  where its winners and losers go. Each match is a small card with its format
+  (Bo1 or Bo3) and two team rows; a row is the winner control. Live results show
+  "Won" and "Lost" and cannot be changed; picks have a dashed outline and "Your
+  pick". The round footer says what the round still needs, or offers the next
+  draw.
+- **Draw.** A round that can be drawn shows its record groups and "Fill a valid
+  draw". Before the Round 1 draw from seed slots, it shows the four pools and
+  which pool each one meets. An upcoming round explains which earlier round
+  needs winners first and links to it.
+- **Standings.** A rail beside the board (below it on narrow screens) with the
+  advanced, out and playing counts and each team's record in scenarios A and B.
+- **Controls.** Start from, Play-In region, scenario A or B, Copy, Reset and
+  Undo. Undo steps back through changes made since the page was opened,
+  including Reset and Copy.
+
+The layout takes its structure from public Swiss simulators: the round tabs and
+pools of worldssimulator26.pro, the match cards and the results switch of
+tournamentsimulator.com, and the open and upcoming stage words of the LoL
+Esports pick'ems. Their dates, rules and teams are not used; the rules come from
+the ruleset below.
+
 ## Rules applied
 
 All references are to the
@@ -59,8 +88,9 @@ a convenience, not the official draw and not a prediction. "Change pairings"
 swaps opponents inside a record group. Options that would break a rule are
 shown disabled with the reason.
 
-Changing a pick in an earlier round changes records, so any later draw built on
-those records is cleared, and the page says so.
+Changing a pick in an earlier round changes records. A later draw stays only
+while its pairs still have the same records; otherwise it and the rounds after
+it are cleared, and the page says so. Removing a pick clears every later round.
 
 ## Data handling
 
@@ -83,8 +113,9 @@ file, rankings or any other live data.
   validator, the 2/3/3 qualifier split and placings, cleared later draws,
   opponent swaps, the rematch waiver case, the live starting point with partly
   published rounds and moved match times, and the address format.
-- `tests/swissPreviewBrowser.test.ts` covers the browser journey: seed slots,
-  keyboard picks, pairings, focus after swaps and scenario switches, compare,
-  copy, reset, reload, Back and edited links, the live starting point with
-  locked results, live draws that become unavailable, and layouts from 320 to
-  1024 px.
+- `tests/swissPreviewBrowser.test.ts` covers the browser journey: seed slots
+  and pools, the round strip states, opening the next round and an upcoming
+  round, keyboard picks, pairings, focus after swaps and scenario switches,
+  compare, copy, reset, undo, reload, Back and edited links, the live starting
+  point with locked results, live draws that become unavailable, and a drawn
+  round from 320 to 1024 px.
