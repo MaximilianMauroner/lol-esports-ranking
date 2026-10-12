@@ -25,6 +25,7 @@
      --win/--loss  match outcome only.
      --heat-*      magnitude only.
      --league-red  destructive only.
+     --preview     hypothetical, user-chosen scenario content only.
      -------------------------------------------------------------------- */
   --accent: oklch(0.79 0.155 205);
   --accent-strong: oklch(0.86 0.145 200);
@@ -33,6 +34,11 @@
   --on-accent: oklch(0.14 0.03 220);
   --league-red: oklch(0.64 0.23 27);
   --rank-gold: oklch(0.84 0.1 86);
+  /* Scenario picks and draws the user made. Always paired with a dashed line
+     and a text label, so a preview never reads as a live result. */
+  --preview: oklch(0.76 0.12 300);
+  --preview-soft: oklch(0.76 0.12 300 / 0.12);
+  --preview-line: oklch(0.76 0.12 300 / 0.62);
   /* Tier hues. S shares rank gold; the rest step away from the accent so a
      tier never reads as a selection. */
   --tier-s: var(--rank-gold);

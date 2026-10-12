@@ -23,6 +23,12 @@ confirms the two-step knockout draw. It does not define the missing Swiss slot
 displacement, look-ahead or waiver distribution. Its real team names have not
 been activated as fixture or forecast inputs.
 
+Rechecked 12 October 2026 for the [Swiss scenario preview](swiss-scenario-preview.md):
+the PDF at the same address still has the SHA-256 above. Sections 4.1.2, 4.2.1,
+4.3.2, 4.3.3, 4.3.4 and 4.3.5 match this table. The library page renders in the
+browser only, so it could not be read directly; a web search found no newer
+ruleset version. The draw-procedure gap below is unchanged.
+
 | Rule | Implementation and regression evidence |
 | --- | --- |
 | §§4.2.1/4.2.2: four Play-In and fifteen direct seeds | `worldsSimulation.ts` requires nineteen distinct entrants and the complete 2026 seed sets, including LCP/CBLOL. Missing entrants block the event. |

@@ -86,7 +86,7 @@ const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   },
   tournaments: {
     title: 'Tournaments',
-    intro: 'Upcoming, live and completed series from the Leaguepedia schedule. This feed is separate from the published Power Index and does not score matches.',
+    intro: 'Upcoming, live and completed series from the Leaguepedia schedule, and a Worlds Swiss preview where you choose winners and draws. Neither changes the published Power Index or scores matches.',
   },
 }
 
