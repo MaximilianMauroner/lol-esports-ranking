@@ -69,3 +69,41 @@ test('parent league names do not promote academy events or override internationa
   assert.deepEqual(groups.find((group) => group.label === 'NACL')?.events, ['LCS Academy 2026 Spring'])
   assert.deepEqual(groups.find((group) => group.label === 'Other events')?.events, ['LPL Development 2026'])
 })
+
+test('qualifying series and qualification names stay below main events without moving play-ins or domestic series', () => {
+  const refs = [
+    { league: 'Worlds', event: '2023 Season World Championship/Worlds Qualifying Series' },
+    { league: 'EWC', event: 'Esports World Cup 2026/Qualification/EMEA' },
+    { league: 'Worlds', event: '2026 Season World Championship/Play-In' },
+    { league: 'LCP', event: 'LCP/2025 Season/Mid Season Qualifying Series' },
+    { league: 'LPL', event: 'LPL/2026 Season/Regional Finals' },
+  ]
+  assert.deepEqual(groupedMatchEvents(refs, 'All'), [
+    { label: 'Worlds', events: ['2026 Season World Championship/Play-In'] },
+    { label: 'LPL', events: ['LPL/2026 Season/Regional Finals'] },
+    { label: 'LCP', events: ['LCP/2025 Season/Mid Season Qualifying Series'] },
+    { label: 'Worlds · Qualifiers', events: ['2023 Season World Championship/Worlds Qualifying Series'] },
+    { label: 'Esports World Cup · Qualifiers', events: ['Esports World Cup 2026/Qualification/EMEA'] },
+  ])
+})
+
+test('generic development names use emerging source families and keep major or ambiguous sources under Other events', () => {
+  const refs = [
+    { league: 'LPL', event: 'Development League 2026' },
+    { league: 'LCS', event: 'Academy 2026 Spring' },
+    { league: 'NACL', event: 'Academy 2026 Summer' },
+    { league: 'LCKC', event: 'Development 2026 Summer' },
+    { league: 'LCS Academy', event: 'Academy 2026 Winter' },
+    { league: 'NACL', event: 'Academy Invitational 2026' },
+    { league: 'LCKC', event: 'Academy Invitational 2026' },
+  ]
+  assert.deepEqual(groupedMatchEvents(refs, 'All'), [
+    { label: 'LCKC', events: ['Development 2026 Summer'] },
+    { label: 'LCS Academy', events: ['Academy 2026 Winter'] },
+    { label: 'NACL', events: ['Academy 2026 Summer'] },
+    { label: 'Other events', events: ['Academy 2026 Spring', 'Academy Invitational 2026', 'Development League 2026'] },
+  ])
+  assert.deepEqual(groupedMatchEvents(refs, 'LPL'), [
+    { label: 'Other events', events: ['Development League 2026'] },
+  ])
+})

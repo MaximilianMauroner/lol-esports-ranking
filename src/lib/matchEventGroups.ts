@@ -60,13 +60,16 @@ function eventFamily(event: string, leagues: ReadonlySet<string>) {
   if (leagues.size !== 1) return 'Unknown'
   const [league] = leagues
   const canonical = inferLeagueFromEvent(league)
-  return canonical === 'Unknown' ? league : canonical
+  const family = canonical === 'Unknown' ? league : canonical
+  if (leagueTierFor(family).tier === 'emerging') return family
+  if (leagueTierFor(league).tier === 'emerging') return league
+  return leagueTierFor(event).tier === 'emerging' ? 'Unknown' : family
 }
 
 function eventGroup(family: string, event: string) {
   const premier = premierFamilies.indexOf(family)
   if (premier >= 0) {
-    const qualifier = /\b(?:qualifiers?|regional finals?|road to)\b/i.test(event)
+    const qualifier = /\b(?:qualifiers?|qualifying|qualifications?|regional finals?|road to)\b/i.test(event)
     return { label: `${familyLabels[family]}${qualifier ? ' · Qualifiers' : ''}`, order: qualifier ? 4 : 0, priority: premier }
   }
   // Invitation cups stay below first-division leagues and international qualifiers.
