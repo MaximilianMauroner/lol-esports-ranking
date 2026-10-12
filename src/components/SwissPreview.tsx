@@ -9,7 +9,7 @@ import { cn } from '../lib/utils'
 import { hashEnum, hashParam, useHashSync } from '../lib/urlState'
 import { formatTournamentTime, type TournamentEvent } from '../lib/tournamentFeed'
 import {
-  PLAY_IN_REGIONS, SWISS_ROUND_SIZES, decodeChoices, encodeChoices, fillDraw, findSwissEvent, knockoutEntry, liveSwissBaseline, opponentOptions,
+  PLAY_IN_REGIONS, SWISS_ROUND_SIZES, decodeChoices, encodeChoices, fillDraw, knockoutEntry, liveSwissBaseline, opponentOptions,
   resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawContext, type DrawnRound, type ResolvedMatch,
   type ResolvedRound, type ResolvedScenario, type SwissBaseline,
 } from '../lib/swissScenario'
@@ -26,8 +26,8 @@ const UNDO_LIMIT = 50
  * of a starting point; every choice lives in component state and the page
  * address only. Live draws and results are shown as given and cannot be edited.
  */
-export function SwissPreview({ events, checkedAt, timezone }: { events: readonly TournamentEvent[]; checkedAt: string; timezone: string }) {
-  const live = useMemo(() => liveSwissBaseline(findSwissEvent(events)), [events])
+export function SwissPreview({ event, checkedAt, timezone }: { event: TournamentEvent; checkedAt: string; timezone: string }) {
+  const live = useMemo(() => liveSwissBaseline(event), [event])
   const liveReady = live.status === 'ready'
   const [address] = useState(() => readAddress(liveReady))
   const [start, setStart] = useState(address.start)
@@ -145,7 +145,7 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
       onClear={() => update(shown.round, (choices) => choices.slice(0, shownIndex), true)} />
   } else if (current.next.kind === 'draw' && current.next.round === shownRound) {
     const pools = shownRound === 1 && baseline.kind === 'seeds'
-      ? WORLDS_2026_SWISS_RULES.pools.map((pool) => pool.map((id) => ({ id, note: id === 'PLAYIN' ? playIn ?? 'Region not chosen' : null })))
+      ? WORLDS_2026_SWISS_RULES.pools.map((pool) => pool.map((id) => ({ id, note: id === 'PLAYIN' ? playIn ?? 'Region not chosen, meets LCK 1 or LPL 1 only' : null })))
       : null
     board = <DrawPanel key={`draw-${shownRound}`} round={shownRound} context={current.next.context} pools={pools} label={label} focus={focusRound === shownRound} onFocused={focusDone}
       onFill={(pairs) => update(shownRound, (choices) => [...choices, { pairs, winners: pairs.map(() => null) }], true)} />

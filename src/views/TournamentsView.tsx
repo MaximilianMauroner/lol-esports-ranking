@@ -10,6 +10,7 @@ import { emptyForecastLedger, forecastTournamentSeries, pinnedForecast, scoreCon
 import { ConditionalPowerPreview } from '../components/ConditionalPowerPreview'
 import { WorldsTournamentPanel } from '../components/WorldsTournamentPanel'
 import { SwissPreview } from '../components/SwissPreview'
+import { findSwissEvent } from '../lib/swissScenario'
 import { worldsFeedEventKey } from '../lib/worldsArtifacts'
 import type { ConditionalPowerResultLedger } from '../lib/conditionalPowerResultReceipts'
 import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
@@ -106,7 +107,7 @@ export function TournamentsView() {
   if (state.status === 'error') return <div className="px-[var(--page-x)] py-6"><Alert variant="warning" role="alert">Tournament schedule unavailable: {state.message} <Button className="ml-2" onClick={() => void refresh()}>Retry</Button></Alert></div>
   const sourceAge = now - Date.parse(state.health?.checkedAt ?? state.feed.fetchedAt)
   const stale = !state.health || !state.health.complete || !Number.isFinite(sourceAge) || sourceAge > STALE_MS || Boolean(state.error)
-  const swissAvailable = selected?.competition === 'worlds' && selected.season === '2026'
+  const swissAvailable = selected !== undefined && selected === findSwissEvent(events)
   const showSwiss = view === 'swiss' && swissAvailable
   return (
     <div className="grid min-w-0 gap-5 px-[var(--page-x)] py-5">
@@ -142,7 +143,7 @@ export function TournamentsView() {
       {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : showSwiss ? (
         <>
           <h2 className="text-lg font-semibold text-[var(--text-strong)]">Worlds 2026 Swiss preview</h2>
-          <SwissPreview events={events} checkedAt={state.health?.checkedAt ?? state.feed.fetchedAt} timezone={timezone} />
+          <SwissPreview event={selected} checkedAt={state.health?.checkedAt ?? state.feed.fetchedAt} timezone={timezone} />
         </>
       ) : (
         <>

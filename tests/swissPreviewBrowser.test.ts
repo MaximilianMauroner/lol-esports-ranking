@@ -6,6 +6,7 @@ import { createServer, type Plugin } from 'vite'
 
 const at = '2026-10-20T12:00:00.000Z'
 const mainId = '2026 Season World Championship/Main Event'
+const playInId = '2026 Season World Championship/Play-In'
 const sizes = [8, 8, 8, 6, 3]
 const names = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliett', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa']
 
@@ -26,6 +27,8 @@ function fixtureFeed() {
     events: [
       { id: mainId, sourceTournamentId: mainId, competition: 'worlds', label: 'Worlds 2026 Main Event', season: '2026',
         series: sizes.flatMap((size, index) => Array.from({ length: size }, (_, slot) => swissSeries(index + 1, slot))) },
+      { id: playInId, sourceTournamentId: playInId, competition: 'worlds', label: 'Worlds 2026 Play-In', season: '2026',
+        series: [{ ...swissSeries(1, 0, [team('Sierra'), team('Tango')]), id: 'worlds-play-in', eventId: playInId, stage: 'Play-In', startTime: '2026-10-14T10:00:00.000Z' }] },
       { id: 'lcs:2027:promotion', sourceTournamentId: 'LCS/2027 Season/Promotion', competition: 'lcs', label: 'LCS 2027 Promotion', season: '2027',
         series: [{ ...swissSeries(1, 0, [team('Rook'), team('Pawn')]), id: 'lcs-promo', eventId: 'lcs:2027:promotion', stage: 'Finals', bestOf: 5 }] },
     ],
@@ -246,6 +249,13 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
       assert.equal(await page.getByRole('region', { name: 'Round 1' }).getByText('Not drawn yet.').count(), 1, `${action} discards a hidden draw`)
     }
 
+    // The Play-In is also a Worlds 2026 event, but the Swiss rounds belong to the Main Event.
+    await page.locator('#tournament-event').selectOption(playInId)
+    await page.getByRole('heading', { name: 'Worlds 2026 Play-In' }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Swiss preview' }).count(), 0, 'the Play-In has no Swiss preview, even with view=swiss')
+    await page.locator('#tournament-event').selectOption(mainId)
+    await page.getByRole('heading', { name: 'Worlds 2026 Swiss preview' }).waitFor()
+
     await page.getByRole('button', { name: 'Schedule' }).click()
     await page.getByRole('heading', { name: 'Worlds 2026 Main Event' }).waitFor()
     assert.doesNotMatch(page.url(), /view=swiss/)
@@ -254,7 +264,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
 
     await page.locator('#tournament-event').selectOption('lcs:2027:promotion')
     await page.getByRole('heading', { name: 'LCS 2027 Promotion' }).waitFor()
-    assert.equal(await page.getByRole('button', { name: 'Swiss preview' }).count(), 0, 'the preview belongs to Worlds 2026 only')
+    assert.equal(await page.getByRole('button', { name: 'Swiss preview' }).count(), 0, 'the preview belongs to the Worlds 2026 Main Event only')
 
     // A drawn preview round, with its header controls and match cards, fits from phone to desktop widths.
     await page.goto(shared)

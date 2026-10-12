@@ -1,6 +1,6 @@
 # Worlds 2026 Swiss scenario preview
 
-The Tournaments hub has a **Swiss preview** view for Worlds 2026 events. It is
+The Tournaments hub has a **Swiss preview** view for the Worlds 2026 Main Event. It is
 available by default and does not need the forecast flag. The user chooses match
 winners and valid draws, then sees records, advancement, elimination placings
 and the quarterfinal draw groups. Two scenarios, A and B, can be compared,
@@ -25,7 +25,9 @@ the rules that the ruleset defines.
 - **Seed slots before the draw.** The sixteen Swiss seeds (§4.3.2.1 pools), shown
   as slots such as "LCK 1", not as team names. The user chooses the Play-In
   winner's region (§4.2.1: CBLOL, LCS, LEC or LCP) so that the Round 1 region rule
-  applies to that slot.
+  applies to that slot. Until a region is chosen, the slot meets only a Pool 1
+  team from outside those regions (LCK 1 or LPL 1), so the draw stays valid for
+  any Play-In winner.
 
 Live draws and results are never editable. When a live result arrives for a
 match the user had picked, the live result replaces the pick and the page says
@@ -79,7 +81,7 @@ rechecked on 12 October 2026.
 | §4.1.2.1: five rounds, three wins advance, three losses eliminate | Records come from `applySwissWinner` in `worlds2026Swiss.ts`. Rounds have 8, 8, 8, 6 and 3 matches. |
 | §4.1.2.1: Bo3 for advancement or elimination matches | `swissBestOf`: Bo3 when a team has two wins or two losses, otherwise Bo1. |
 | §§4.1.2.1.3 to 4.1.2.1.5: elimination placings | Out in Round 3: 15th to 16th. Round 4: 12th to 14th. Round 5: 9th to 11th. |
-| §4.3.2: Round 1 pools and regions | Pool 1 meets Pool 4, Pool 2 meets Pool 3, no two teams from one region. |
+| §4.3.2: Round 1 pools and regions | Pool 1 meets Pool 4, Pool 2 meets Pool 3, no two teams from one region. The Play-In winner without a chosen region is treated as possibly from any Play-In region. |
 | §4.3.3: same record, no repeated match | Pairs must share a record and must not have met. A rematch is allowed only in a record group where no draw avoids one, because officials may then waive the rule. The page says when this happens. |
 | §§4.3.2.3 and 4.3.3.2: "would force this scenario in a future draw" | A draw is valid only as a whole, so every team in the round must have a valid opponent. The text does not say whether officials also look ahead to later rounds, so the preview does not. |
 | §4.3.4: quarterfinal draw | When eight teams have advanced, the page lists the 3–0 teams and the 3–2 teams they can meet on opposite halves. It does not simulate the knockout. |

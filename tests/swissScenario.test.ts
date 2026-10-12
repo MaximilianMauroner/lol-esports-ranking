@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  decodeChoices, drawContext, drawProblem, encodeChoices, fillDraw, knockoutEntry, liveSwissBaseline, opponentOptions,
+  PLAY_IN_REGIONS, decodeChoices, drawContext, drawProblem, encodeChoices, fillDraw, knockoutEntry, liveSwissBaseline, opponentOptions,
   pairReason, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawnRound, type SwissBaseline,
 } from '../src/lib/swissScenario'
 import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/lib/worlds2026Swiss'
@@ -45,7 +45,21 @@ test('round one pairs matched pools across regions, including the chosen Play-In
   assert.equal(pairReason('LCK1', 'LCK4', context.context), 'same region')
   assert.equal(pairReason('LCK1', 'LCK2', context.context), 'pool not matched')
   assert.equal(pairReason('LEC1', 'PLAYIN', context.context), null)
-  assert.equal(pairReason('LCS1', 'PLAYIN', drawContext(1, seedBaseline(null).teams, resolveScenario(seedBaseline(null), []).standings)), null)
+})
+
+test('without a Play-In region, a round one draw stays valid for every possible region', () => {
+  const open = resolveScenario(seedBaseline(null), []).next
+  assert.equal(open.kind, 'draw')
+  if (open.kind !== 'draw') return
+  assert.equal(pairReason('LCS1', 'PLAYIN', open.context), 'Play-In region not chosen')
+  assert.equal(pairReason('PLAYIN', 'LEC1', open.context), 'Play-In region not chosen')
+  assert.equal(pairReason('LCK1', 'PLAYIN', open.context), null)
+  const pairs = fillDraw(open.context)!
+  assert.deepEqual(opponentOptions(pairs, 'PLAYIN', open.context).filter((option) => option.reason === 'Play-In region not chosen').map((option) => option.id).sort(), ['LCS1', 'LEC1'])
+  for (const region of PLAY_IN_REGIONS) {
+    const known = resolveScenario(seedBaseline(region), []).next
+    assert.ok(known.kind === 'draw' && !drawProblem(pairs, known.context), `the draw stays valid for a ${region} Play-In winner`)
+  }
 })
 
 test('a played-out scenario follows the Swiss format and passes the sourced rules validator', () => {

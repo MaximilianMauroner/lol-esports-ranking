@@ -84,8 +84,7 @@ export function findSwissEvent(events: readonly TournamentEvent[]) {
  * full draw follows the Swiss rules. A partly published round and the rounds
  * after it are left out.
  */
-export function liveSwissBaseline(event: TournamentEvent | undefined): LiveBaseline {
-  if (!event) return { status: 'unavailable', detail: 'The Worlds 2026 Main Event is not in the schedule window.' }
+export function liveSwissBaseline(event: TournamentEvent): LiveBaseline {
   const byRound = new Map<number, TournamentSeries[]>()
   for (const series of event.series) {
     const round = Number(/^Round ([1-5])$/.exec(series.stage ?? '')?.[1])
@@ -235,9 +234,15 @@ export function pairReason(a: string, b: string, context: DrawContext, allowWaiv
       if (pools[0] + pools[1] !== 3) return 'pool not matched'
     }
     if (home.region && home.region === away.region) return 'same region'
+    if (mayShareRegion(home, away) || mayShareRegion(away, home)) return 'Play-In region not chosen'
   }
   if (first.opponents.includes(b) && !(allowWaivedRematch && context.rematchBuckets.has(`${first.wins}-${first.losses}`))) return 'already played'
   return null
+}
+
+/** A Play-In winner whose region is not chosen yet could come from the other team's region. */
+function mayShareRegion(team: PreviewTeam, other: PreviewTeam) {
+  return team.seed === 'PLAYIN' && !team.region && PLAY_IN_REGIONS.some((region) => region === other.region)
 }
 
 /** Why a full draw breaks the rules, or null when it is valid. */
