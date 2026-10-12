@@ -493,7 +493,7 @@ function DrawPanel({ round, context, pools, label, focus, onFocused, onFill }: {
   )
 }
 
-/** A round that cannot be drawn yet, because an earlier round still needs winners. */
+/** A round that cannot be drawn yet, because an earlier round still needs its draw or its winners. */
 function UpcomingPanel({ round, openRound, openNeedsDraw, onOpen }: { round: number; openRound: number; openNeedsDraw: boolean; onOpen: () => void }) {
   const titleId = useId()
   return (
