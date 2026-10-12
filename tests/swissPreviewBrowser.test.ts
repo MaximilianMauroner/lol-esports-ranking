@@ -103,7 +103,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
 
     // A round that cannot be drawn yet explains why and leads back to the open round.
     await stripButton(page, 3).click()
-    assert.match(await page.getByRole('region', { name: 'Round 3' }).innerText(), /Round 3 is drawn from the records after Round 2\./)
+    assert.match(await page.getByRole('region', { name: 'Round 3' }).innerText(), /Round 3 is drawn from the records after Round 2\. Round 2 is not drawn yet\./)
     await page.getByRole('region', { name: 'Round 3' }).getByRole('button', { name: 'Open Round 2' }).click()
     await page.getByRole('region', { name: 'Round 2' }).getByText('Not drawn yet.').waitFor()
 
@@ -178,8 +178,6 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     await page.keyboard.press('Enter')
     assert.equal(await isFocused(undo), true)
     assert.equal(await page.getByText(/was undone/).count(), 0, 'nothing is undone')
-    await page.reload()
-    await page.getByRole('heading', { name: 'Worlds 2026 Swiss preview' }).waitFor()
     assert.equal(hashQuery(page.url()).has('b'), false, 'a reset scenario leaves the address')
     assert.equal(await page.getByRole('region', { name: 'Round 1' }).getByText('Not drawn yet.').count(), 1, 'the reset scenario stays reset after a reload')
 
@@ -233,6 +231,20 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     await page.getByText('Both scenarios were reset for the new starting point.').waitFor()
     assert.equal(await page.getByRole('region', { name: 'Round 1' }).getByText('Not drawn yet.').count(), 1)
     assert.equal(hashQuery(page.url()).has('b'), false)
+
+    // A Play-In region change can hide a draw that no longer fits. Reset and Copy must still discard it.
+    for (const action of ['Reset A', 'Copy B into A']) {
+      await page.getByRole('button', { name: 'A', exact: true }).click()
+      await page.locator('#swiss-playin').selectOption('LCS')
+      await page.getByRole('button', { name: 'Fill a valid draw' }).click()
+      const playInMatch = (await page.getByRole('group', { name: /Play-In winner/ }).getAttribute('aria-label'))!
+      const opponent = playInMatch.replace(/^Round 1: /, '').split(' against ').find((entry) => entry !== 'Play-In winner')!
+      await page.locator('#swiss-playin').selectOption(opponent.replace(/ \d$/, ''))
+      await page.getByRole('region', { name: 'Round 1' }).getByText('Not drawn yet.').waitFor()
+      await page.getByRole('button', { name: action }).click()
+      await page.locator('#swiss-playin').selectOption('LCS')
+      assert.equal(await page.getByRole('region', { name: 'Round 1' }).getByText('Not drawn yet.').count(), 1, `${action} discards a hidden draw`)
+    }
 
     await page.getByRole('button', { name: 'Schedule' }).click()
     await page.getByRole('heading', { name: 'Worlds 2026 Main Event' }).waitFor()

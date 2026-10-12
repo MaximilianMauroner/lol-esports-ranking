@@ -52,13 +52,14 @@ The preview is a tournament board with one round at a time:
   draw.
 - **Draw.** A round that can be drawn shows its record groups and "Fill a valid
   draw". Before the Round 1 draw from seed slots, it shows the four pools and
-  which pool each one meets. An upcoming round explains which earlier round
-  needs winners first and links to it.
+  which pool each one meets. An upcoming round says what the open round still
+  needs, a draw or winners, and links to it.
 - **Standings.** A rail beside the board (below it on narrow screens) with the
   advanced, out and playing counts and each team's record in scenarios A and B.
 - **Controls.** Start from, Play-In region, scenario A or B, Copy, Reset and
-  Undo. Undo steps back through changes made since the page was opened,
-  including Reset and Copy.
+  Undo. Undo steps back through picks, draws, Copy and Reset. Back, Forward,
+  an edited link and a new starting point clear its history; a Play-In region
+  change is not an Undo step.
 
 The layout takes its structure from public Swiss simulators: the round tabs and
 pools of worldssimulator26.pro, the match cards and the results switch of

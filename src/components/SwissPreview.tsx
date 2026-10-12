@@ -35,7 +35,7 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
   const [slot, setSlot] = useState(address.slot)
   const [texts, setTexts] = useState(address.texts)
   const [notice, setNotice] = useState<string | null>(null)
-  /** Where keyboard focus goes once, after fill or clear removed the control that had it. */
+  /** Where keyboard focus goes once: the panel of a round that was filled, cleared or opened. */
   const [focusRound, setFocusRound] = useState<number | null>(null)
   const focusDone = useCallback(() => setFocusRound(null), [])
   /** The round the board shows. Null follows the first round that still needs a winner or a draw. */
@@ -80,11 +80,13 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
     b: (liveMissing ? texts.b : encodeChoices(baseline, scenarios.b.choices)) || undefined,
   })
 
-  /** Replaces one scenario and keeps its previous version for Undo. */
+  /**
+   * Replaces one scenario and keeps its previous version for Undo. The stored text is always replaced, even when the
+   * shown scenario does not change: it can hold choices that no longer fit, for example after a Play-In region change.
+   */
   function replace(target: Slot, text: string) {
     const before = encodeChoices(baseline, scenarios[target].choices)
-    if (before === text) return
-    setHistory((previous) => [...previous.slice(1 - UNDO_LIMIT), { slot: target, text: before }])
+    if (before !== text) setHistory((previous) => [...previous.slice(1 - UNDO_LIMIT), { slot: target, text: before }])
     setTexts((previous) => ({ ...previous, [target]: text }))
   }
   /** Applies an edit made in one round; the board stays on that round, and fill or clear moves focus to its new panel. */
@@ -148,7 +150,7 @@ export function SwissPreview({ events, checkedAt, timezone }: { events: readonly
     board = <DrawPanel key={`draw-${shownRound}`} round={shownRound} context={current.next.context} pools={pools} label={label} focus={focusRound === shownRound} onFocused={focusDone}
       onFill={(pairs) => update(shownRound, (choices) => [...choices, { pairs, winners: pairs.map(() => null) }], true)} />
   } else {
-    board = <UpcomingPanel key={`upcoming-${shownRound}`} round={shownRound} openRound={activeRound} onOpen={() => openRound(activeRound)} />
+    board = <UpcomingPanel key={`upcoming-${shownRound}`} round={shownRound} openRound={activeRound} openNeedsDraw={steps[activeRound - 1].state === 'draw'} onOpen={() => openRound(activeRound)} />
   }
 
   const startControl = (
@@ -492,14 +494,15 @@ function DrawPanel({ round, context, pools, label, focus, onFocused, onFill }: {
 }
 
 /** A round that cannot be drawn yet, because an earlier round still needs winners. */
-function UpcomingPanel({ round, openRound, onOpen }: { round: number; openRound: number; onOpen: () => void }) {
+function UpcomingPanel({ round, openRound, openNeedsDraw, onOpen }: { round: number; openRound: number; openNeedsDraw: boolean; onOpen: () => void }) {
   const titleId = useId()
   return (
     <Panel role="region" aria-labelledby={titleId}>
       <PanelHeader titleId={titleId} title={`Round ${round}`} description="Upcoming." />
       <PanelBody className="grid justify-items-start gap-3 text-sm">
         <p className="text-muted-foreground">
-          Round {round} is drawn from the records after Round {round - 1}. Choose a winner for every match up to Round {round - 1} first.
+          Round {round} is drawn from the records after Round {round - 1}.{' '}
+          {openNeedsDraw ? `Round ${openRound} is not drawn yet.` : `Choose a winner for every match up to Round ${round - 1} first.`}
         </p>
         <Button size="sm" onClick={onOpen}>Open Round {openRound}</Button>
       </PanelBody>
