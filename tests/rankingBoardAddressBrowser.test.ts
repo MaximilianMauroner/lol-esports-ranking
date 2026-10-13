@@ -27,6 +27,11 @@ function roundRobin(region: typeof regions[number]): MatchRecord[] {
   }))
 }
 
+// One MSI series gives the board an `international` tournament option with two teams.
+const msi: MatchRecord = { id: 'MSI-Euro 01-Amer 01', sourceProvider: 'oracles-elixir', date: '2026-06-20', datetimeUtc: '2026-06-20T12:00:00.000Z',
+  season: 2026, event: 'MSI 2026', phase: 'Bracket', region: 'International', league: 'MSI', patch: '', bestOf: 1, bestOfBasis: 'provider',
+  tier: 'msi-bracket', teamA: 'Euro 01', teamB: 'Amer 01', winner: 'Euro 01', teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
+
 // Every address shows unranked teams too, so eligibility rules cannot hide a fixture team.
 const board = (params: string) => `#rankings?scope=all&eligibility=all${params ? `&${params}` : ''}`
 
@@ -46,7 +51,7 @@ async function expectBoard(page: Page, count: number, prefix: string, step: stri
 }
 
 test('the Rankings board follows its address after load: typed and linked hashes, Back and Forward', { timeout: 60_000 }, async () => {
-  const data = createStaticRankingData({ matches: regions.flatMap(roundRobin), teams, rosters: {},
+  const data = createStaticRankingData({ matches: [...regions.flatMap(roundRobin), msi], teams, rosters: {},
     generatedAt: '2026-07-01T00:00:00.000Z', dataMode: 'seeded-sample' })
   const bodies = new Map(createPublicArtifactWritePlan(data).writes.map((write) => [`/data/${write.relativePath}`, write.contents]))
   const fixture: Plugin = { name: 'ranking-board-address-fixture', configureServer(server) {
@@ -99,6 +104,28 @@ test('the Rankings board follows its address after load: typed and linked hashes
     await page.getByRole('group', { name: 'Region' }).getByRole('button', { name: 'All regions', exact: true }).click()
     await page.waitForFunction(() => !new URLSearchParams(location.hash.split('?')[1]).has('region'))
     await expectBoard(page, 20, '', 'All regions chip')
+
+    // App owns the tournament filter, and it follows the address like the board's own filters.
+    await setHash(board('tournament=international'))
+    await expectBoard(page, 2, '', 'tournament changed in the hash')
+    await setHash(board('tournament=international&size=15'))
+    await expectBoard(page, 2, '', 'size changed with a tournament')
+
+    // The logo opens the same clean board as the Rankings tab. It is ranked
+    // only, and no fixture team is ranked, so the address and chips show it.
+    const hash = () => page.evaluate(() => location.hash)
+    const home = page.getByTitle('Go to Rankings home')
+    const selectedRegion = page.getByRole('group', { name: 'Region' }).getByRole('button', { pressed: true })
+    await setHash(board('region=LEC&size=15'))
+    await expectBoard(page, 10, 'Euro', 'filters before the logo')
+    await home.click()
+    await page.waitForFunction(() => location.hash === '#rankings?scope=all', undefined, { timeout: 5_000 }).catch(() => undefined)
+    assert.equal(await hash(), '#rankings?scope=all')
+    assert.equal(await selectedRegion.textContent(), 'All regions')
+    // A second click leaves the hash unchanged, so no hashchange fires.
+    await home.click()
+    assert.equal(await hash(), '#rankings?scope=all')
+    assert.equal(await selectedRegion.textContent(), 'All regions')
 
     // A fresh load reads what the board wrote: the page, and a sort whose direction the address omits.
     await page.goto('about:blank')

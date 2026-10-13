@@ -264,10 +264,12 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     }
   }, [])
   const requestRegionHistory = useCallback(() => setLoadRegionHistory(true), [])
+  // The logo opens the same clean board as the Rankings tab, and the
+  // hashchange listener applies it. Keeping the current query would carry
+  // board filters, or another view's page, into the board.
   const goHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
-    setMode('rankings')
-    replaceHashForModeAndScope('rankings', effectiveScope)
+    window.location.hash = hashForModeAndScope('rankings', effectiveScope)
   }, [effectiveScope])
 
   const activePlayerScope = useMemo(
