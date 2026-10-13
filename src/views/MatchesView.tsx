@@ -15,7 +15,7 @@ import { Panel, PanelBody, PanelFooter, PanelHeader } from '../components/ui/pan
 import { Select } from '../components/ui/select'
 import { LoadingState } from '../components/ui/loading'
 import { hashInt, hashParam, useHashSync } from '../lib/urlState'
-import { compatibleMatchEvents, matchEventLabel } from '../lib/matchLedger'
+import { compatibleMatchEvents, matchEventFilterLabels } from '../lib/matchLedger'
 import { groupedMatchEvents } from '../lib/matchEventGroups'
 import { SeriesCards, SeriesTable, type MatchSeries } from '../components/matches/SeriesLedger'
 
@@ -33,7 +33,7 @@ function desktopLedgerLayout() {
 }
 
 type ViewState = {
-  scopeKey: string
+  scopeKey?: string
   search: string
   league: string
   event: string
@@ -50,6 +50,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
   const leagues = useMemo(() => unique(refs.map((match) => match.league)), [refs])
   const events = useMemo(() => compatibleMatchEvents(refs, view.league), [refs, view.league])
   const eventGroups = useMemo(() => groupedMatchEvents(refs, view.league), [refs, view.league])
+  const eventLabels = useMemo(() => matchEventFilterLabels(refs, view.league), [refs, view.league])
   const filtered = useMemo(() => refs.filter((entry) => matchesFilters(entry, view)), [refs, view])
   const filteredGameCount = useMemo(
     () => filtered.reduce((total, entry) => total + entry.gameCount, 0),
@@ -57,7 +58,11 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
   )
   const pageCount = Math.max(1, Math.ceil(filtered.length / view.pageSize))
   const scopeKey = catalog ? `${scopeForFilter(catalog.filter)}:${archiveYear ?? 'All'}` : ''
-  const page = view.scopeKey === scopeKey ? Math.min(view.page, pageCount) : 1
+  const requestedPage = view.scopeKey === undefined || view.scopeKey === scopeKey ? view.page : 1
+  const page = catalog ? Math.min(requestedPage, pageCount) : view.page
+  // Bind an addressed page only once its catalog is available. Later scope or
+  // year changes reset it, and a smaller catalog permanently clamps it.
+  if (catalog && (view.scopeKey !== scopeKey || view.page !== page)) setView({ ...view, scopeKey, page })
   const pageStart = (page - 1) * view.pageSize
   const visibleRefs = filtered.slice(pageStart, pageStart + view.pageSize)
   const neededPages = useMemo(() => [...new Set(visibleRefs.map((entry) => entry.page))], [visibleRefs])
@@ -94,14 +99,14 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
 
   // Same helper, same param names and same "omit the default" rule as the
   // other two views.
-  useHashSync('matches', {
+  useHashSync('matches', catalog ? {
     matchesYear: archiveYear ?? '',
     team: view.search.trim(),
     league: view.league === 'All' ? '' : view.league,
     event: view.event === 'All' ? '' : view.event,
     page: page > 1 ? String(page) : '',
     size: view.pageSize === PAGE_SIZES[0] ? '' : String(view.pageSize),
-  })
+  } : {})
 
   function update(patch: Partial<ViewState>, resetPage = true) {
     setView((current) => ({ ...current, ...patch, scopeKey, ...(resetPage ? { page: 1 } : {}) }))
@@ -179,7 +184,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
               <option value="All">All</option>
               {eventGroups.map((group) => (
                 <optgroup key={group.label} label={group.label}>
-                  {group.events.map((event) => <option key={event} value={event}>{matchEventLabel(event)}</option>)}
+                  {group.events.map((event) => <option key={event} value={event}>{eventLabels.get(event)}</option>)}
                 </optgroup>
               ))}
             </Select>
@@ -244,7 +249,6 @@ function scopeForFilter(filter: { season: string; checkpoint?: string }) { retur
 function readViewState(): ViewState {
   const size = hashInt('size', PAGE_SIZES[0])
   return {
-    scopeKey: hashParam('scope') ?? '',
     search: hashParam('team') ?? '',
     league: hashParam('league') ?? 'All',
     event: hashParam('event') ?? 'All',
