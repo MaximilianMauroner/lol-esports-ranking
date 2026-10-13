@@ -299,6 +299,12 @@ body::before {
   [data-slot="select"] {
     min-height: 44px;
   }
+
+  /* The whole Compare label is the touch target. A 44px checkbox inside it
+     would push the phone caption below the row. */
+  [data-slot="compare-toggle"] input {
+    min-height: 0;
+  }
 }
 /* Static two-tone fill. Placeholders never animate: an endless shimmer or
    fade repaints for as long as data loads, which keeps a high-refresh display

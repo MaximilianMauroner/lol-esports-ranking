@@ -644,7 +644,7 @@ export function TeamsView({
                 action={hasActiveFilters ? <Button type="button" variant="outline" onClick={resetFilters}>Clear filters</Button> : undefined}
               />
             ) : (
-                <Table containerClassName="max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[640px] border-collapse text-sm max-sm:min-w-full">
+                <Table containerClassName="@container/board max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[640px] border-collapse text-sm max-sm:min-w-full">
                   <colgroup>
                     <col className="board-col-rank" />
                     <col className="board-col-team" />
@@ -730,7 +730,7 @@ export function TeamsView({
                           <TableCell className="board-col-action">
                             <span className="flex items-center justify-end gap-2">
                               <CompareToggle picked={pickedKeys.has(key)} onToggle={() => onToggle(team)} label={team.team} />
-                              <ChevronRight className="size-4 shrink-0 text-[var(--faint)] group-hover/board:text-foreground max-sm:hidden" aria-hidden="true" />
+                              <ChevronRight className="board-open-hint size-4 shrink-0 text-[var(--faint)] group-hover/board:text-foreground" aria-hidden="true" />
                             </span>
                           </TableCell>
                         </TableRow>

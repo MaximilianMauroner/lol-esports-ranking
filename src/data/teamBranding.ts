@@ -1,4 +1,5 @@
 import { teamBranding } from './teamBranding.generated'
+import type { LogoTreatment } from '../lib/teamLogo.mjs'
 
 export type TeamBranding = {
   code: string
@@ -6,6 +7,8 @@ export type TeamBranding = {
   sourceName: string
   sourceUrl?: string
   logo?: string
+  /** How the mark shows the logo, decided by the branding sync. Absent means as published. */
+  logoTreatment?: Exclude<LogoTreatment, 'logo'>
   remoteLogoUrl?: string
 }
 
