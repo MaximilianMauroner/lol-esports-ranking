@@ -59,29 +59,47 @@ diagram:
 - **Columns.** Rounds 1 to 5, then the records after Round 5. Each column holds
   its record groups (0–0, then 1–0 and 0–1, and so on) with their match format
   (Bo1 or Bo3). Advanced groups (3–0, 3–1, 3–2) sit at the top of their column
-  and eliminated groups (0–3, 1–3, 2–3, with their placings) at the bottom. In a
-  16-team stage the size of each group does not depend on results
-  (`SWISS_BRACKET`), so the full bracket is visible before any match.
+  and eliminated groups (0–3, 1–3, 2–3, with their placings) at the bottom. A
+  group shows in the column after the round that decides it: 3–0 and 0–3 in the
+  Round 4 column, 3–1 and 1–3 in the Round 5 column, and only 3–2 and 2–3 in the
+  last column. In a 16-team stage the size of each group does not depend on
+  results (`SWISS_BRACKET`), so the full bracket is visible before any match.
 - **Teams.** Each team shows its logo, code and seed slot. The full name is in
   the row title and in the match name, for example "Round 1: Gen.G against
-  CTBC Flying Oyster". Places that no team has reached yet stay empty.
+  CTBC Flying Oyster". Screen readers hear the visible code and slot first and
+  then the full name, for example "GEN LCK 1, Gen.G". Places that no team has
+  reached yet stay empty.
 - **Picks.** A drawn round shows its matches inside each record group. A team row
   is the winner control. A picked winner moves to its next record group at once,
   before the next draw. Live results show the winner in green and cannot be
   changed; picks have a dashed outline.
 - **Column header.** "Live draw" or "Your draw", "N to pick", and for a preview
-  draw "Change pairings" and "Clear draw". The next round to draw shows "Fill a
-  valid draw"; later rounds say which round they are drawn after. Before the
-  Round 1 draw from qualified teams, Round 1 lists the four pools and which pool
-  each one meets.
+  draw "Change pairings" and "Clear draw". A round that gets a new draw starts
+  with "Change pairings" off. The next round to draw shows "Fill a valid draw";
+  later rounds say which round they are drawn after. Before the Round 1 draw
+  from qualified teams, Round 1 lists the four pools and which pool each one
+  meets.
+- **Next draw after a finished round.** When a round is complete and the next
+  round is not drawn yet, the finished column also shows "Fill a valid draw for
+  Round N" below its last group. On a narrow screen this button is next to the
+  last pick, while the next column is out of view.
+- **Focus after a fill or clear.** Both fill buttons and "Clear draw" move focus
+  to that round's column. If the column header is out of view, the page scrolls
+  it to just below the app header. This matters on a phone, where a column is
+  taller than the screen. The bracket also scrolls sideways to show the whole
+  column. While the header is in view, the page does not move.
 - **Next step.** A line above the bracket says what the scenario needs next. When
   a round can be drawn, it gives that round's draw rules and any rematch or
-  no-valid-draw warning.
+  no-valid-draw warning. When every match has a winner, it says that the eight
+  teams in the green Advanced groups (3–0, 3–1 and 3–2) go to the quarterfinals.
 - **Standings.** Advanced, out and playing counts for the shown scenario, and a
   table of the teams whose record differs in the other scenario. It sits below
-  the bracket, or beside it on screens at least 1700 px wide.
-- **Narrow screens.** The bracket keeps its six columns and scrolls sideways in
-  its own region; the page itself does not scroll sideways.
+  the bracket, or beside it on screens at least 1700 px wide. Team names and
+  results wrap, so the table fits its panel from 320 px wide and in the side
+  panel. A record or a placing never breaks at its dash.
+- **Narrow screens.** The bracket keeps its six columns. At 1024 px and
+  narrower it scrolls sideways in its own region; at 1440 px and wider all six
+  columns fit. The page itself does not scroll sideways.
 - **Controls.** Start from, Play-In region, scenario A or B, Copy, Reset and
   Undo. Undo steps back through picks, draws, Copy and Reset. Back, Forward,
   an edited link and a new starting point clear its history; a Play-In region
@@ -139,7 +157,9 @@ file, rankings or any other live data.
 - `tests/swissPreviewBrowser.test.ts` covers the browser journey: confirmed
   teams in the seed slots and pools, the full bracket before the draw, picks
   moving to the next record group, keyboard picks, pairings, focus after swaps
-  and scenario switches, compare, copy, reset, undo, reload, Back and edited
-  links, the live starting point with locked results, live draws that become
-  unavailable, and the page width from 320 to 1440 px with only the bracket
-  scrolling sideways.
+  and scenario switches, the next draw from a finished round, "Change pairings"
+  off after a new draw, team names for screen readers, compare, copy, reset,
+  undo, reload, Back and edited links, the live starting point with locked
+  results, live draws that become unavailable, a played-out scenario, and the
+  page width from 320 to 1920 px with only the bracket scrolling sideways and
+  the standings table inside its panel.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Alert } from './ui/alert'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -261,7 +261,7 @@ function teamInfo(team: PreviewTeam): TeamInfo {
 /** What the scenario needs next. When a round can be drawn, also its draw rules. */
 function NextStep({ scenario, drawPairs, team, playInOpen }: { scenario: ResolvedScenario; drawPairs: [string, string][] | null; team: TeamLookup; playInOpen: boolean }) {
   const next = scenario.next
-  if (next.kind === 'complete') return <p className="text-sm text-muted-foreground">Every Swiss match has a winner. The last column shows who goes to the quarterfinals.</p>
+  if (next.kind === 'complete') return <p className="text-sm text-muted-foreground">Every Swiss match has a winner. The eight teams in the green Advanced groups (3–0, 3–1 and 3–2) go to the quarterfinals.</p>
   if (next.kind === 'results') {
     const missing = scenario.rounds[next.round - 1].matches.filter((match) => !match.winnerId).length
     const needs = missing === 1 ? 'One match needs' : `${missing} matches need`
@@ -306,11 +306,12 @@ function SwissBracket({ scenario, team, pools, drawPairs, focusRound, onFocused,
     <div role="region" aria-label="Swiss bracket" tabIndex={0} className="relative min-w-0 overflow-x-auto rounded-md pb-2 focus-visible:outline-2 focus-visible:outline-[var(--focus)]">
       <div className="grid min-w-[66rem] grid-cols-6 grid-rows-[auto_1fr] gap-x-3 gap-y-2">
         {SWISS_BRACKET.map((boxes, index) => index < SWISS_ROUND_SIZES.length
-          ? <RoundColumn key={index} round={index + 1} boxes={boxes} scenario={scenario} team={team} pools={index === 0 ? pools : null}
+          // A round that gets a new draw mounts again, so it starts with "Change pairings" off.
+          ? <RoundColumn key={`${index}:${scenario.rounds[index] ? 'drawn' : 'open'}`} round={index + 1} boxes={boxes} scenario={scenario} team={team} pools={index === 0 ? pools : null}
             drawPairs={drawPairs} focus={focusRound === index + 1} onFocused={onFocused} edits={edits} />
           : (
             <div key="final" className="row-span-2 grid min-w-0 grid-rows-subgrid">
-              <ColumnHeader title="After Round 5"><span className="text-2xs text-muted-foreground">Eight teams go to the quarterfinals.</span></ColumnHeader>
+              <ColumnHeader title="After Round 5"><span className="text-2xs text-muted-foreground">3–2 teams advance. 2–3 teams are out.</span></ColumnHeader>
               <div className="flex min-w-0 flex-col justify-between gap-3">
                 {boxes.map((box) => <RecordBox key={box.record.join('-')} box={box}><TeamSlots ids={withRecord(scenario.standings, box)} size={box.size} team={team} /></RecordBox>)}
               </div>
@@ -333,10 +334,11 @@ function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, on
   edits: BracketEdits
 }) {
   const titleId = useId()
-  const column = useFocusWhen(focus, onFocused)
+  const { target: column, header } = useFocusWhen(focus, onFocused)
   const [editing, setEditing] = useState(false)
   const resolved = scenario.rounds.at(round - 1)
   const drawNext = scenario.next.kind === 'draw' && scenario.next.round === round
+  const drawAfter = scenario.next.kind === 'draw' && scenario.next.round === round + 1
   const missing = resolved?.matches.filter((match) => !match.winnerId).length ?? 0
   const pairs = resolved?.matches.map((match) => match.teamIds) ?? []
 
@@ -360,7 +362,7 @@ function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, on
   return (
     <div ref={column} tabIndex={-1} role="region" aria-labelledby={titleId}
       className="row-span-2 grid min-w-0 grid-rows-subgrid rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]">
-      <ColumnHeader title={`Round ${round}`} titleId={titleId}
+      <ColumnHeader ref={header} title={`Round ${round}`} titleId={titleId}
         badge={resolved ? resolved.liveDraw ? <Badge>Live draw</Badge> : <Badge variant="preview">Your draw</Badge> : null}>
         {resolved ? resolved.liveDraw ? null : <>
           <Button variant="tab" size="xs" aria-pressed={editing} onClick={() => setEditing((value) => !value)}>Change pairings</Button>
@@ -370,16 +372,25 @@ function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, on
           : <span className="text-2xs text-[var(--faint)]">Drawn after Round {round - 1}</span>}
         {missing ? <span className="text-2xs font-medium text-[var(--preview)]">{missing} to pick</span> : null}
       </ColumnHeader>
-      <div className={cn('flex min-w-0 flex-col gap-3', boxes.length > 1 && 'justify-between')}>
-        {boxes.map((box) => <RecordBox key={box.record.join('-')} box={box}>{content(box)}</RecordBox>)}
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className={cn('flex min-w-0 flex-1 flex-col gap-3', boxes.length > 1 && 'justify-between')}>
+          {boxes.map((box) => <RecordBox key={box.record.join('-')} box={box}>{content(box)}</RecordBox>)}
+        </div>
+        {/* Next to the last pick, because on narrow screens the next column is out of view. */}
+        {drawAfter ? (
+          <Button size="sm" className="h-auto min-h-7 py-1 text-center whitespace-normal" disabled={!drawPairs} onClick={() => drawPairs && edits.fill(round + 1, drawPairs)}>
+            Fill a valid draw for Round {round + 1}
+          </Button>
+        ) : null}
       </div>
     </div>
   )
 }
 
-function ColumnHeader({ title, titleId, badge = null, children }: { title: string; titleId?: string; badge?: ReactNode; children: ReactNode }) {
+function ColumnHeader({ ref, title, titleId, badge = null, children }: { ref?: Ref<HTMLDivElement>; title: string; titleId?: string; badge?: ReactNode; children: ReactNode }) {
+  // The scroll margin keeps a header that is scrolled into view below the sticky app header.
   return (
-    <div className="grid content-start gap-1.5 border-b border-border pb-2">
+    <div ref={ref} className="grid scroll-mt-[calc(var(--app-nav-h)+0.75rem)] content-start gap-1.5 border-b border-border pb-2">
       <div className="flex min-h-5 items-center justify-between gap-2">
         <h3 id={titleId} className="text-sm font-semibold text-[var(--text-strong)]">{title}</h3>
         {badge}
@@ -487,7 +498,10 @@ function TeamRow({ id, info, match, locked, onPick }: { id: string; info: TeamIn
   )
 }
 
-/** Logo, short code and seed slot. The full name is in the row title and in the match group's name. */
+/**
+ * Logo, short code and seed slot. Screen readers then hear the full name, so a pick button's name starts with its
+ * visible text. The row title also shows the full name.
+ */
 function TeamLine({ info, faded = false }: { info: TeamInfo; faded?: boolean }) {
   return (
     <>
@@ -496,6 +510,7 @@ function TeamLine({ info, faded = false }: { info: TeamInfo; faded?: boolean }) 
         : <span aria-hidden="true" className="size-4 shrink-0 rounded-sm border border-[var(--line-strong)]" />}
       <span className="min-w-0 truncate">{info.code}</span>
       {info.slot ? <span className="ml-auto shrink-0 text-2xs font-normal text-[var(--faint)]">{info.slot}</span> : null}
+      {info.name !== info.code ? <span className="sr-only">, {info.name}</span> : null}
     </>
   )
 }
@@ -554,10 +569,13 @@ function StandingsPanel({ scenarios, slot, team }: { scenarios: Record<Slot, Res
               return (
                 <TableRow key={row.id}>
                   <th scope="row" className="p-2 text-left align-middle text-sm font-medium text-[var(--text-strong)]">
+                    {/* The name wraps, and the slot wraps under it, so the table fits a phone-width panel. */}
                     <span className="flex min-w-0 items-center gap-2">
                       {info.mark ? <TeamMark team={info.mark} className="size-5 border-0 bg-transparent" imageClassName="p-0" /> : null}
-                      <span className="min-w-0 truncate">{info.name}</span>
-                      {info.slot ? <span className="shrink-0 text-2xs font-normal text-[var(--faint)]">{info.slot}</span> : null}
+                      <span className="min-w-0">
+                        {info.name}
+                        {info.slot ? <> <span className="text-2xs font-normal whitespace-nowrap text-[var(--faint)]">{info.slot}</span></> : null}
+                      </span>
                     </span>
                   </th>
                   {SLOTS.map((entry) => <StandingCell key={entry} row={rows[entry].get(row.id)!} active={entry === slot} />)}
@@ -582,9 +600,10 @@ function StandingsPanel({ scenarios, slot, team }: { scenarios: Record<Slot, Res
 
 function StandingCell({ row, active }: { row: SwissTeamStanding; active: boolean }) {
   const outcome = teamOutcome(row)
+  // Wraps only at spaces, so a narrow table never splits a record or a placing at its dash.
   return (
-    <TableCell className={cn('whitespace-nowrap', !active && 'border-l border-dashed border-[var(--preview-line)] text-muted-foreground')}>
-      <span className="font-mono tabular-nums">{outcome.wins}–{outcome.losses}</span>{' '}
+    <TableCell className={cn('whitespace-normal', !active && 'border-l border-dashed border-[var(--preview-line)] text-muted-foreground')}>
+      <span className="font-mono whitespace-nowrap tabular-nums">{outcome.wins}–{outcome.losses}</span>{' '}
       <span className={cn(outcome.state === 'advanced' && active && 'text-[var(--win)]', outcome.state === 'eliminated' && active && 'text-[var(--loss)]')}>{outcomeLabel(row)}</span>
     </TableCell>
   )
@@ -593,7 +612,7 @@ function StandingCell({ row, active }: { row: SwissTeamStanding; active: boolean
 function outcomeLabel(row: SwissTeamStanding) {
   const outcome = teamOutcome(row)
   if (outcome.state === 'advanced') return 'Advanced'
-  if (outcome.state === 'eliminated') return `Out, ${outcome.placement}`
+  if (outcome.state === 'eliminated') return <>Out, <span className="whitespace-nowrap">{outcome.placement}</span></>
   return `Plays Bo${outcome.nextBestOf}`
 }
 function outcomeText(row: SwissTeamStanding) {
@@ -605,15 +624,19 @@ function standingOrder(row: SwissTeamStanding) {
 }
 
 /**
- * Focuses the returned element when `when` is true, for example after its trigger was removed.
+ * Focuses `target` when `when` is true, for example after its trigger was removed, and scrolls `header` into view.
+ * Scrolling to the header, not to the whole column, keeps the page still while the header is in view, and on a phone
+ * shows the top of a column that is taller than the screen. It also brings the full column width into the bracket.
  * `onFocused` ends the request, so a column that mounts later, for example after a scenario switch, does not take focus.
  */
 function useFocusWhen(when: boolean, onFocused: () => void) {
-  const ref = useRef<HTMLDivElement>(null)
+  const target = useRef<HTMLDivElement>(null)
+  const header = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!when) return
-    ref.current?.focus()
+    target.current?.focus({ preventScroll: true })
+    header.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     onFocused()
   }, [when, onFocused])
-  return ref
+  return { target, header }
 }

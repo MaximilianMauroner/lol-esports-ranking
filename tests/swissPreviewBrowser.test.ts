@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium, type Locator, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
-import { seedBaseline } from '../src/lib/swissScenario'
+import { encodeChoices, fillDraw, resolveScenario, seedBaseline, type DrawnRound, type SwissBaseline } from '../src/lib/swissScenario'
 
 const at = '2026-10-20T12:00:00.000Z'
 const mainId = '2026 Season World Championship/Main Event'
@@ -82,20 +82,21 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
 
     await page.locator('#swiss-playin').selectOption('LCS')
     // The whole bracket is visible before the draw: Round 1 offers the draw, later rounds wait for it.
-    assert.equal(await page.getByRole('region', { name: 'Round 1' }).getByRole('button', { name: 'Fill a valid draw' }).count(), 1)
+    assert.equal(await fillButton(page, 1).count(), 1)
     for (const round of [2, 3, 4, 5]) assert.match(await page.getByRole('region', { name: `Round ${round}` }).innerText(), new RegExp(`Drawn after Round ${round - 1}`))
     const pools = page.getByRole('list', { name: 'Round 1 pools' })
     assert.match(await pools.innerText(), /Pool 4\s+meets Pool 1/)
     assert.match(await pools.getByTitle('Gen.G', { exact: true }).innerText(), /GEN[\s\S]*LCK 1/, 'a seed slot shows its confirmed team')
     assert.match(await pools.getByTitle('Play-In winner', { exact: true }).innerText(), /Play-In[\s\S]*LCS/)
     assert.match(await page.getByRole('region', { name: 'Standings' }).innerText(), /Advanced\s+0\s+of 8\s+Out\s+0\s+of 8\s+Playing\s+16/)
-    await page.getByRole('button', { name: 'Fill a valid draw' }).click()
+    await fillButton(page, 1).click()
     const roundOne = page.getByRole('region', { name: 'Round 1' })
     await roundOne.waitFor()
     assert.equal(await roundOne.evaluate((element) => element === document.activeElement), true, 'focus moves to the drawn round')
     assert.equal(await roundOne.getByRole('group').count(), 8)
     assert.match(await roundOne.innerText(), /8 to pick/)
     assert.equal(await roundOne.getByRole('group', { name: 'Round 1: Team Liquid against Play-In winner' }).count(), 0, 'no same-region pairing')
+    assert.equal(await roundOne.getByRole('button', { name: /^GEN LCK 1\W+Gen\.G$/ }).count(), 1, 'a pick is named by its visible code and slot, then the full name')
 
     const firstPick = roundOne.getByRole('group').first().getByRole('button').first()
     for (let presses = 0; presses < 6 && !await firstPick.evaluate((element) => element === document.activeElement); presses++) await page.keyboard.press('Tab')
@@ -106,11 +107,14 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.match(await page.getByRole('region', { name: 'Round 2' }).innerText(), /1–0[\s\S]*GEN[\s\S]*0–1/)
     await pickAll(page, 1, 0)
     await page.getByText('Round 2 is not drawn yet.').waitFor()
-    assert.equal(await page.getByRole('region', { name: 'Round 2' }).getByRole('button', { name: 'Fill a valid draw' }).count(), 1)
+    assert.equal(await fillButton(page, 2).count(), 1)
     assert.match(await page.getByRole('region', { name: 'Round 3' }).innerText(), /Drawn after Round 2/)
 
-    await page.getByRole('button', { name: 'Fill a valid draw' }).click()
+    // The finished round also offers the next draw, below its last pick: on a phone the next column is out of view.
+    await roundOne.getByRole('button', { name: 'Fill a valid draw for Round 2' }).click()
     const roundTwo = page.getByRole('region', { name: 'Round 2' })
+    await roundTwo.getByRole('button', { name: 'Clear draw' }).waitFor()
+    assert.equal(await isFocused(roundTwo), true, 'focus moves to the round that was drawn')
     const scenarioA = page.getByRole('button', { name: 'A', exact: true })
     await page.getByRole('button', { name: 'B', exact: true }).click()
     await scenarioA.click()
@@ -126,6 +130,11 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.notEqual(choice, before, 'the arrow key chooses another valid opponent')
     await roundTwo.getByRole('group', { name: `Round 2: Gen.G against ${teamName(choice)}`, exact: true }).waitFor()
     assert.equal(await isFocused(swap), true, 'focus stays on the opponent select after a swap')
+    await roundTwo.getByRole('button', { name: 'Clear draw' }).click()
+    await fillButton(page, 2).waitFor()
+    assert.equal(await isFocused(roundTwo), true, 'focus moves to the cleared round')
+    await fillButton(page, 2).click()
+    assert.equal(await roundTwo.getByRole('button', { name: 'Change pairings' }).getAttribute('aria-pressed'), 'false', 'a new draw starts with Change pairings off')
     await pickAll(page, 2, 0)
     const standings = page.getByRole('region', { name: 'Standings' })
     assert.match(await standings.innerText(), /Scenarios A and B differ for 16 teams\./)
@@ -198,9 +207,9 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.match(await liveRound.innerText(), /Live draw/)
     assert.equal(await liveRound.getByRole('group', { name: 'Round 1: Alpha against Bravo' }).getByRole('button').count(), 0, 'live results cannot be changed')
     const played = liveRound.getByRole('group', { name: 'Round 1: Alpha against Bravo' })
-    assert.deepEqual([await played.getByTitle('Alpha', { exact: true }).textContent(), await played.getByTitle('Bravo', { exact: true }).textContent()], ['ALPH, won', 'BRAV, lost'])
+    assert.deepEqual([await played.getByTitle('Alpha', { exact: true }).textContent(), await played.getByTitle('Bravo', { exact: true }).textContent()], ['ALPH, Alpha, won', 'BRAV, Bravo, lost'])
     assert.match(await liveRound.innerText(), /1 to pick/)
-    await liveRound.getByRole('group', { name: 'Round 1: Oscar against Papa' }).getByTitle('Papa', { exact: true }).click()
+    await liveRound.getByRole('button', { name: /^PAPA\W+Papa$/ }).click()
     await fillButton(page, 2).waitFor()
 
     main.series.find((series) => series.id.endsWith('Round 1_8'))!.teams = [team('Oscar', 1, 'win'), team('Papa', 0, 'loss')]
@@ -208,11 +217,11 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     feed.fetchedAt = '2026-10-23T21:00:00.000Z'
     await page.getByRole('button', { name: 'Refresh' }).click()
     await page.getByText('Live results replaced one of your picks.').waitFor()
-    assert.equal(await liveRound.getByRole('group', { name: 'Round 1: Oscar against Papa' }).getByTitle('Oscar', { exact: true }).textContent(), 'OSCA, won')
+    assert.equal(await liveRound.getByRole('group', { name: 'Round 1: Oscar against Papa' }).getByTitle('Oscar', { exact: true }).textContent(), 'OSCA, Oscar, won')
     assert.doesNotMatch(await liveRound.innerText(), /to pick/, 'Round 1 is fully played')
 
-    // A later feed breaks the live draw. The live scenario stays in the address, unread, until the user chooses seed slots.
-    await page.getByRole('button', { name: 'Fill a valid draw' }).click()
+    // A later feed breaks the live draw. The live scenario stays in the address, unread, until the user chooses qualified teams.
+    await fillButton(page, 2).click()
     await page.getByRole('region', { name: 'Round 2' }).getByRole('group').first().getByRole('button').first().click()
     const keptLive = page.url()
     assert.equal(hashQuery(keptLive).has('b'), true)
@@ -235,7 +244,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     for (const action of ['Reset A', 'Copy B into A']) {
       await page.getByRole('button', { name: 'A', exact: true }).click()
       await page.locator('#swiss-playin').selectOption('LCS')
-      await page.getByRole('button', { name: 'Fill a valid draw' }).click()
+      await fillButton(page, 1).click()
       const playInMatch = (await page.getByRole('group', { name: /Play-In winner/ }).getAttribute('aria-label'))!
       const opponent = playInMatch.replace(/^Round 1: /, '').split(' against ').find((entry) => entry !== 'Play-In winner')!
       await page.locator('#swiss-playin').selectOption(seedBaseline(null).teams.find((entry) => entry.label === opponent)!.region!)
@@ -262,10 +271,18 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     await page.getByRole('heading', { name: 'LCS 2027 Promotion' }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Swiss preview' }).count(), 0, 'the preview belongs to the Worlds 2026 Main Event only')
 
+    // Scenario A plays every match, so the standings table holds its longest rows.
+    const finished = hashQuery(shared)
+    finished.delete('scenario')
+    finished.set('a', playedOut(seedBaseline('LCS')))
+    await page.goto(`${base}/#tournaments?${finished}`)
+    await page.getByText('Every Swiss match has a winner. The eight teams in the green Advanced groups (3–0, 3–1 and 3–2) go to the quarterfinals.').waitFor()
+    assert.match(await page.getByRole('region', { name: 'Standings' }).innerText(), /Scenarios A and B differ for 16 teams\./)
+
     // The page fits from phone to desktop widths. Only the bracket scrolls sideways, inside its own region.
-    await page.goto(shared)
     await page.getByRole('region', { name: 'Round 2' }).getByRole('button', { name: 'Change pairings' }).click()
-    for (const width of [320, 390, 768, 1024, 1440]) {
+    const table = page.getByRole('region', { name: 'Standings' }).getByRole('table')
+    for (const width of [320, 390, 768, 1024, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 })
       const layout = await page.evaluate(() => {
         const bracket = document.querySelector('[role="region"][aria-label="Swiss bracket"]')!
@@ -275,7 +292,9 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
         }
       })
       assert.ok(layout.content <= layout.viewport && layout.clipped === 0, `Horizontal overflow at ${width}px: ${JSON.stringify(layout)}`)
-      assert.equal(layout.bracketScrolls, width < 1280, `The bracket scrolls only where its six columns do not fit: ${width}px`)
+      assert.equal(layout.bracketScrolls, width <= 1024, `The six bracket columns fit at 1440 px and wider and scroll at 1024 px and narrower: ${width}px`)
+      const tableOverflow = await table.evaluate((element) => element.parentElement!.scrollWidth - element.parentElement!.clientWidth)
+      assert.ok(tableOverflow <= 1, `The standings table fits its panel at ${width}px: ${tableOverflow}px too wide`)
     }
 
     assert.deepEqual(errors, [])
@@ -291,7 +310,16 @@ function teamName(seed: string) {
   return seedBaseline(null).teams.find((team) => team.id === seed)!.label
 }
 function fillButton(page: Page, round: number) {
-  return page.getByRole('region', { name: `Round ${round}` }).getByRole('button', { name: 'Fill a valid draw' })
+  return page.getByRole('region', { name: `Round ${round}` }).getByRole('button', { name: 'Fill a valid draw', exact: true })
+}
+/** The address text of a scenario that fills every draw and picks the first team of every match. */
+function playedOut(baseline: SwissBaseline) {
+  const choices: DrawnRound[] = []
+  for (let scenario = resolveScenario(baseline, choices); scenario.next.kind === 'draw'; scenario = resolveScenario(baseline, choices)) {
+    const pairs = fillDraw(scenario.next.context)!
+    choices.push({ pairs, winners: pairs.map(([first]) => first) })
+  }
+  return encodeChoices(baseline, choices)
 }
 async function body(page: Page) {
   return page.locator('body').innerText()
