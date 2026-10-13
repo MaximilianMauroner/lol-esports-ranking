@@ -299,19 +299,40 @@ export function projectTournamentStandings(
 export function tournamentFilterOptionsForStandings(
   standings: readonly Pick<PublicTeamStanding, 'recentMatches' | 'tournamentAppearances'>[],
   tournamentEntries: readonly PublicTournamentMovementIndexEntry[] = [],
+  latestMatchDate?: string,
 ): TournamentFilterOption[] {
   const internationalCount = standings.filter((standing) => tournamentFamiliesForStanding(standing).length > 0).length
 
   return [
     { value: 'All', label: 'All', count: standings.length },
     ...(internationalCount > 0 ? [{ value: 'international' as const, label: 'International', count: internationalCount }] : []),
-    ...tournamentEntries.map((entry) => ({
-      value: `tournament:${entry.id}` as ExactTournamentFilterValue,
-      label: `${entry.label} · ${tournamentStatusLabel(entry.status)}`,
-      count: entry.participantCount,
-      status: entry.status,
-    })),
+    ...tournamentEntries.map((entry) => {
+      const status = effectiveTournamentStatus(entry, latestMatchDate)
+      return {
+        value: `tournament:${entry.id}` as ExactTournamentFilterValue,
+        label: `${entry.label} · ${tournamentStatusLabel(status)}`,
+        count: entry.participantCount,
+        status,
+      }
+    }),
   ]
+}
+
+/**
+ * The build calls an event completed only with schedule evidence. The schedule
+ * fetch reads 4 older pages by default, so events before May 2026 have none
+ * and keep the status unknown. This display fallback only fills absent schedule
+ * evidence. Without a schedule boundary or known data lag, an event without a
+ * rated match for this many days, while matches elsewhere continue, is labeled completed.
+ * International events pause about a week at most, before the Worlds final.
+ * Remove this rule when the build marks older events completed.
+ */
+const TOURNAMENT_ENDED_AFTER_IDLE_DAYS = 14
+
+/** The status that the tournament list and every tournament label show. */
+export function effectiveTournamentStatus(entry: Pick<PublicTournamentMovementIndexEntry, 'status' | 'ratedThroughDate' | 'scheduledEndDate' | 'dataLag'>, latestMatchDate?: string) {
+  if (entry.status !== 'unknown' || entry.dataLag || entry.scheduledEndDate || !latestMatchDate || !isDateString(latestMatchDate)) return entry.status
+  return daysBetween(entry.ratedThroughDate, latestMatchDate) >= TOURNAMENT_ENDED_AFTER_IDLE_DAYS ? 'completed' : 'unknown'
 }
 
 export function tournamentEntriesForScope(
