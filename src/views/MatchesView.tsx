@@ -82,12 +82,14 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
 
   useEffect(() => {
     if (!currentPageReady || !nextPagesKey || !canUseBackgroundPrefetch()) return
-    return scheduleIdleWork(() => onRequestPages(nextPagesKey.split(',').map(Number)))
-  }, [catalog, currentPageReady, nextPagesKey, onRequestPages])
+    const pages = [...neededPagesKey.split(','), ...nextPagesKey.split(',')].map(Number)
+    return scheduleIdleWork(() => onRequestPages([...new Set(pages)]))
+  }, [catalog, currentPageReady, neededPagesKey, nextPagesKey, onRequestPages])
 
   function preparePage(nextPage: number) {
     const offset = (nextPage - 1) * view.pageSize
-    onRequestPages([...new Set(filtered.slice(offset, offset + view.pageSize).map((entry) => entry.page))])
+    const nextPages = filtered.slice(offset, offset + view.pageSize).map((entry) => entry.page)
+    onRequestPages([...new Set([...neededPages, ...nextPages])])
   }
 
   // Same helper, same param names and same "omit the default" rule as the
