@@ -35,6 +35,7 @@ import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } fro
 import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { cn } from './lib/utils'
 import { hashParam } from './lib/urlState'
+import { canUseBackgroundPrefetch, scheduleIdleWork } from './lib/prefetch'
 import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './lib/bootstrap'
 import {
   checkpointFromScope,
@@ -51,13 +52,33 @@ type MovementBaseline = {
 }
 const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
-const RegionsView = lazy(() => import('./views/RegionsView').then((module) => ({ default: module.RegionsView })))
-const MatchesView = lazy(() => import('./views/MatchesView').then((module) => ({ default: module.MatchesView })))
-const TournamentsView = lazy(() => import('./views/TournamentsView').then((module) => ({ default: module.TournamentsView })))
-const RegionCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.RegionCompareDrawer })))
-const RegionCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.RegionCompareAnalysis })))
-const TeamCompareDrawer = lazy(() => import('./components/CompareDrawer').then((module) => ({ default: module.TeamCompareDrawer })))
-const TeamCompareAnalysis = lazy(() => import('./components/CompareAnalysis').then((module) => ({ default: module.TeamCompareAnalysis })))
+const loadRegionsView = () => import('./views/RegionsView').then((module) => ({ default: module.RegionsView }))
+const loadMatchesView = () => import('./views/MatchesView').then((module) => ({ default: module.MatchesView }))
+const loadTournamentsView = () => import('./views/TournamentsView').then((module) => ({ default: module.TournamentsView }))
+const loadCompareDrawer = () => import('./components/CompareDrawer')
+const loadCompareAnalysis = () => import('./components/CompareAnalysis')
+const RegionsView = lazy(loadRegionsView)
+const MatchesView = lazy(loadMatchesView)
+const TournamentsView = lazy(loadTournamentsView)
+const RegionCompareDrawer = lazy(() => loadCompareDrawer().then((module) => ({ default: module.RegionCompareDrawer })))
+const RegionCompareAnalysis = lazy(() => loadCompareAnalysis().then((module) => ({ default: module.RegionCompareAnalysis })))
+const TeamCompareDrawer = lazy(() => loadCompareDrawer().then((module) => ({ default: module.TeamCompareDrawer })))
+const TeamCompareAnalysis = lazy(() => loadCompareAnalysis().then((module) => ({ default: module.TeamCompareAnalysis })))
+const VIEW_LOADERS = {
+  rankings: undefined,
+  regions: loadRegionsView,
+  matches: loadMatchesView,
+  tournaments: loadTournamentsView,
+}
+
+function preloadView(mode: Mode) {
+  const load = VIEW_LOADERS[mode]
+  if (load) void load().catch(() => { /* Navigation can retry a failed preload. */ })
+}
+
+function preloadComparison() {
+  void Promise.all([loadCompareDrawer(), loadCompareAnalysis()]).catch(() => { /* Opening the drawer retries. */ })
+}
 
 const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
   { id: 'rankings', label: 'Rankings', icon: BarChart3 },
@@ -128,6 +149,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   const [historyTeams, setHistoryTeams] = useState<readonly string[]>([])
   const [matchYear, setMatchYear] = useState(() => hashParam('matchesYear'))
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
+  const [loadMatchHistory, setLoadMatchHistory] = useState(() => ['matches', 'regions'].includes(readModeFromHash()))
   // Board filters that App owns are seeded from the hash for the same reason
   // the ones TeamsView owns are: a shared or reloaded board must come back.
   const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>(() => (hashParam('tournament') as TournamentFilterValue | undefined) ?? 'All')
@@ -158,10 +180,10 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     loadPlayers,
     loadTeamHistory,
     teamHistoryTeams: historyTeams,
-    matchHistoryYear: mode === 'matches' ? matchYear : 'All',
+    matchHistoryYear: matchYear,
     loadRegionHistory,
     loadTournamentMovements: mode === 'rankings',
-    loadMatchHistory: mode === 'matches' || mode === 'regions',
+    loadMatchHistory,
     tournamentId,
   })
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
@@ -201,6 +223,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
       setMode(nextMode)
       setMatchYear(hashParam('matchesYear'))
       if (nextMode === 'regions') setLoadRegionHistory(true)
+      if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
       const nextScope = readScopeFromHash()
       if (nextScope) selectScope(nextScope)
     }
@@ -254,6 +277,11 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     }
   }, [])
   const requestRegionHistory = useCallback(() => setLoadRegionHistory(true), [])
+  const prepareMode = useCallback((nextMode: Mode) => {
+    preloadView(nextMode)
+    if (nextMode === 'regions') setLoadRegionHistory(true)
+    if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
+  }, [])
   const goHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
     setMode('rankings')
@@ -275,20 +303,24 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
 
   function toggleRegion(region: RegionStrength) {
+    preloadComparison()
     setRegionPicks((current) => toggleLimitedPick(reconcilePicks(current, regions, regionKey), region, regionKey))
   }
 
   function toggleTeam(team: RankingSummaryStanding) {
+    preloadComparison()
     setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, comparisonStandings, teamKey), team, teamKey))
   }
 
   useEffect(() => {
-    if (preloadScopes.length === 0) return undefined
+    if (snapshotState.status !== 'ready') return undefined
     if (!canUseBackgroundPrefetch()) return undefined
     return scheduleIdleWork(() => {
+      preloadView('regions')
+      preloadView('matches')
       for (const preloadScope of preloadScopes) prefetchScope(preloadScope)
     })
-  }, [prefetchScope, preloadScopes, preloadScopesKey])
+  }, [prefetchScope, preloadScopes, preloadScopesKey, snapshotState.status])
 
   if (manifestState.status === 'loading') {
     return <ManifestRouteShell mode={mode} scope={effectiveScope} onGoHome={goHome} />
@@ -351,7 +383,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   return (
     <div className="flex min-h-full flex-col">
       <a className="fixed top-[-56px] left-3 z-80 rounded-md border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
-      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} search={teamSearch} onSearch={mode === 'matches' ? undefined : searchTeams} searchRef={searchRef} />
+      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} search={teamSearch} onSearch={mode === 'matches' ? undefined : searchTeams} searchRef={searchRef} onIntent={prepareMode} />
 
       {/* Space is reserved for the fixed compare tray on the two views that have
           one, and for the bottom tab bar on phones. */}
@@ -549,10 +581,10 @@ function visiblePreloadScopes(
   effectiveScope: string,
 ) {
   const targets = [
-    ...seasonTabs.map(scopeForSeasonTab),
     ...(activeSeason && activeSeason !== 'All'
       ? [`season:${activeSeason}`, ...checkpoints.map((checkpoint) => checkpointScope(activeSeason, checkpoint.id))]
       : []),
+    ...seasonTabs.map(scopeForSeasonTab),
   ]
   return [...new Set(targets.filter((target) => target !== effectiveScope))].slice(0, 3)
 }
@@ -622,6 +654,7 @@ function AppNavigation({
   search,
   onSearch,
   searchRef,
+  onIntent,
 }: {
   mode: Mode
   scope: string
@@ -629,6 +662,7 @@ function AppNavigation({
   search?: string
   onSearch?: (value: string) => void
   searchRef?: RefObject<HTMLInputElement | null>
+  onIntent?: (mode: Mode) => void
 }) {
   const tabs = MODES.map((entry) => {
     const Icon = entry.icon
@@ -641,6 +675,9 @@ function AppNavigation({
           'min-w-0 shrink-0 gap-2 font-semibold no-underline max-sm:h-full max-sm:flex-1 max-sm:flex-col max-sm:gap-0.5 max-sm:rounded-none max-sm:border-0 max-sm:text-2xs',
         )}
         aria-current={mode === entry.id ? 'page' : undefined}
+        onPointerEnter={() => (onIntent ?? preloadView)(entry.id)}
+        onFocus={() => (onIntent ?? preloadView)(entry.id)}
+        onTouchStart={() => (onIntent ?? preloadView)(entry.id)}
       >
         <Icon size={17} className="sm:max-lg:hidden" aria-hidden="true" />
         {entry.label}
@@ -691,40 +728,6 @@ function AppNavigation({
 
 function scopeForSeasonTab(season: string) {
   return season === 'All' ? 'all' : `season:${season}`
-}
-
-type IdleWindow = Window & {
-  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
-  cancelIdleCallback?: (handle: number) => void
-}
-
-type NavigatorWithConnection = Navigator & {
-  connection?: {
-    saveData?: boolean
-    effectiveType?: string
-    downlink?: number
-  }
-}
-
-function canUseBackgroundPrefetch() {
-  if (typeof navigator === 'undefined') return false
-  const connection = (navigator as NavigatorWithConnection).connection
-  if (!connection) return true
-  if (connection.saveData) return false
-  if (connection.effectiveType && /(^|-)2g$/i.test(connection.effectiveType)) return false
-  if (typeof connection.downlink === 'number' && connection.downlink > 0 && connection.downlink < 1.5) return false
-  return true
-}
-
-function scheduleIdleWork(callback: () => void) {
-  if (typeof window === 'undefined') return () => undefined
-  const idleWindow = window as IdleWindow
-  if (idleWindow.requestIdleCallback) {
-    const handle = idleWindow.requestIdleCallback(callback, { timeout: 2500 })
-    return () => idleWindow.cancelIdleCallback?.(handle)
-  }
-  const handle = window.setTimeout(callback, 900)
-  return () => window.clearTimeout(handle)
 }
 
 function readModeFromHash(): Mode {

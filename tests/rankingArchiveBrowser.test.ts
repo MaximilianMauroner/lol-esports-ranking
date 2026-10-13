@@ -49,8 +49,8 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
       requests.push(path)
       response.setHeader('content-type', 'application/json')
       const body = path === '/data/ranking-summary.json' ? JSON.stringify(manifest) : objects.get(path)
-      response.statusCode = body && !(failObjects && path.startsWith('/data/objects/')) ? 200 : 404
-      if (holdIndex && path === indexPath) { pendingIndex.push(() => response.end(body)); return }
+      response.statusCode = body && !(failObjects && path === indexPath) ? 200 : 404
+      if (holdIndex && nodesByYear.get('2025')?.has(path)) { pendingIndex.push(() => response.end(body)); return }
       response.end(response.statusCode === 200 ? body : '{}')
     })
   } }
@@ -71,6 +71,16 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     const bootstrap = new Set(requests)
     const historyObjects = entries.filter((entry) => /\/history\/|\/matches\//.test(entry.logicalPath) && !entry.logicalPath.endsWith('/tournament-moves/index.json')).map((entry) => `/data/objects/sha256/${entry.digest}`)
     assert.ok(historyObjects.every((path) => !bootstrap.has(path)), JSON.stringify(entries.filter((entry) => bootstrap.has(`/data/objects/sha256/${entry.digest}`)).map((entry) => entry.logicalPath)))
+    assert.equal(requests.filter((path) => path === '/data/ranking-summary.json').length, 1)
+    const pageObjects = new Set(entries.filter((entry) => entry.logicalPath.startsWith('/data/matches/pages/')).map((entry) => `/data/objects/sha256/${entry.digest}`))
+    const warmedPage = page.waitForResponse((response) => pageObjects.has(new URL(response.url()).pathname))
+    const matchesLink = page.getByRole('link', { name: 'Matches', exact: true }).first()
+    await matchesLink.hover()
+    await warmedPage
+    assert.equal(await page.getByRole('heading', { name: 'Team Power Index', exact: true }).count(), 1)
+    await matchesLink.click()
+    await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
+    assert.equal(requests.filter((path) => path === indexPath).length, 1)
     requests.length = 0
     await page.goto(`${base}/#matches?scope=all&matchesYear=2026`)
     await page.getByLabel('Match history year').waitFor()
@@ -80,7 +90,7 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     // Catalog loading for the selected year must not hydrate old-year nodes.
     assert.ok(requests.every((path) => !nodesByYear.get('2025')?.has(path)))
     holdIndex = true
-    const pendingRequest = page.waitForRequest((request) => new URL(request.url()).pathname === indexPath)
+    const pendingRequest = page.waitForRequest((request) => Boolean(nodesByYear.get('2025')?.has(new URL(request.url()).pathname)))
     await page.getByLabel('Match history year').selectOption('2025')
     await pendingRequest
     await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('matchesYear') === '2025')
@@ -91,8 +101,13 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
     await page.setViewportSize({ width: 390, height: 844 })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    const requestsBeforeReturn = requests.length
     failObjects = true
     await page.getByLabel('Match history year').selectOption('2025')
+    await page.getByText('Sample 2025', { exact: true }).filter({ visible: true }).first().waitFor()
+    assert.equal(requests.length, requestsBeforeReturn, 'a cached year remains usable when the network is unavailable')
+    // A fresh document still reports a missing object and permits an explicit retry.
+    await page.reload()
     await page.getByRole('button', { name: 'Retry', exact: true }).first().waitFor()
     failObjects = false
     await page.getByRole('button', { name: 'Retry', exact: true }).first().click()

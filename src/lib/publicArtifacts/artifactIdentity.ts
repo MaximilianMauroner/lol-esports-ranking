@@ -10,6 +10,7 @@ import {
 } from './urlResolver'
 import { hydrateArchive, projectArchiveView, type ArchiveSelection } from './archive.mjs'
 import { withAuditedTeamCodes } from '../../data/teamBranding'
+import { SemanticArtifactCache } from './semanticCache'
 
 export const PUBLIC_GENERATION_MANIFEST_SCHEMA_VERSION = 2 as const
 export const PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION = 1 as const
@@ -64,6 +65,7 @@ type GenerationContext = {
 
 const generationContexts = new WeakMap<object, GenerationContext>()
 const directoryEntries = new WeakMap<object, Map<string, PublicGenerationArtifactEntry>>()
+const semanticCaches = new WeakMap<typeof fetch, SemanticArtifactCache>()
 const volatileArtifactKeys = new Set(['artifactMeta', 'generatedAt', 'modelVersion', 'modelConfigHash', 'schemaVersion'])
 
 export class PublicArtifactRequestError extends Error {
@@ -212,35 +214,52 @@ export async function fetchPublicArtifact<T extends object>(
     cache,
     headers: { Accept: 'application/json' },
   }
-  const response = await fetchArtifactResponse(fetcher, objectUrl, context.manifestUrl, requestInit)
-  if (!response.ok) throw new PublicArtifactRequestError(response.status)
-  assertTransportEncoding(response, entry, logicalPath)
-  const semanticArtifact = parsePublicSemanticArtifact(await parseSemanticResponse(response, logicalPath))
-  const identity = await semanticArtifactIdentity(semanticArtifact)
-  if (identity.sha256 !== entry.sha256 || identity.bytes !== entry.bytes) {
-    throw new Error(`Invalid public artifact: semantic digest mismatch for ${logicalPath}`)
-  }
+  const semanticArtifact = await loadSemanticArtifact(entry, objectUrl, context.manifestUrl, fetcher, requestInit, logicalPath)
 
   const content = await hydrateArchive(semanticArtifact.content,
     (reference) => fetchArchiveNode(reference, context.manifestUrl, fetcher, requestInit), archiveSelection)
   const projected = projectArchiveView(content, archiveSelection)
   assertRecord(projected, 'public archive content')
-  const hydrated = hydrateSemanticArtifact({ ...semanticArtifact, content: projected }, context.manifest)
+  const hydrated = hydrateSemanticArtifact({ ...semanticArtifact, content: structuredClone(projected) }, context.manifest)
   const parsed = withAuditedTeamCodes(parse(hydrated))
   assertArtifactModelIdentity(parsed, context.manifest, logicalPath)
+  signal?.throwIfAborted()
   registerGenerationContext(parsed, context.manifest, context.manifestUrl)
   return parsed
 }
 
 async function fetchArchiveNode(reference: { sha256: string; bytes: number }, manifestUrl: string, fetcher: typeof fetch, requestInit: RequestInit) {
+  if (reference.bytes > 512_000) throw new Error('Public archive node digest or byte budget mismatch')
   const objectUrl = resolvePublicArtifactUrl(`/data/objects/sha256/${reference.sha256}`, manifestUrl)
-  const response = await fetchArtifactResponse(fetcher, objectUrl, manifestUrl, requestInit)
-  if (!response.ok) throw new PublicArtifactRequestError(response.status)
-  assertTransportEncoding(response, { transportEncodings: ['identity', 'gzip'] }, objectUrl)
-  const child = parsePublicSemanticArtifact(await parseSemanticResponse(response, objectUrl))
-  const identity = await semanticArtifactIdentity(child)
-  if (identity.sha256 !== reference.sha256 || identity.bytes !== reference.bytes || identity.bytes > 512_000) throw new Error('Public archive node digest or byte budget mismatch')
+  const child = await loadSemanticArtifact({ ...reference, transportEncodings: ['identity', 'gzip'] }, objectUrl, manifestUrl, fetcher, requestInit, objectUrl)
   return child.content
+}
+
+function loadSemanticArtifact(
+  expected: { sha256: string; bytes: number; transportEncodings: PublicArtifactEncoding[] },
+  objectUrl: string,
+  manifestUrl: string,
+  fetcher: typeof fetch,
+  requestInit: RequestInit,
+  logicalPath: string,
+) {
+  async function load(signal?: AbortSignal) {
+    const response = await fetchArtifactResponse(fetcher, objectUrl, manifestUrl, { ...requestInit, signal })
+    if (!response.ok) throw new PublicArtifactRequestError(response.status)
+    assertTransportEncoding(response, expected, logicalPath)
+    const artifact = parsePublicSemanticArtifact(await parseSemanticResponse(response, logicalPath))
+    const identity = await semanticArtifactIdentity(artifact)
+    if (identity.sha256 !== expected.sha256 || identity.bytes !== expected.bytes) {
+      throw new Error(`Invalid public artifact: semantic digest mismatch for ${logicalPath}`)
+    }
+    return artifact
+  }
+  const signal = requestInit.signal ?? undefined
+  if (requestInit.cache === 'reload' || requestInit.cache === 'no-store') return load(signal)
+  let cache = semanticCaches.get(fetcher)
+  if (!cache) { cache = new SemanticArtifactCache(); semanticCaches.set(fetcher, cache) }
+  const key = JSON.stringify([objectUrl, expected.sha256, expected.bytes, expected.transportEncodings])
+  return cache.load(key, expected.bytes, load, signal)
 }
 
 async function resolveGenerationEntry(context: GenerationContext, logicalPath: string, fetcher: typeof fetch, requestInit: RequestInit) {

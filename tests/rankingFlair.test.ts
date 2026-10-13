@@ -6,9 +6,10 @@ import {
   deriveSpicyTakeConfidence,
   deriveTierLabels,
   deriveTopThreePodium,
+  deriveTournamentMovementPicks,
   deriveUpsetHeadline,
 } from '../src/lib/rankingFlair.ts'
-import type { PublicRecentMatch, PublicTeamStanding } from '../src/lib/publicArtifacts/schema.ts'
+import type { PublicRecentMatch, PublicTeamStanding, PublicTournamentMovementTeam } from '../src/lib/publicArtifacts/schema.ts'
 
 test('derives deterministic S/A/B/C tiers from power-score bands', () => {
   const tiers = deriveTierLabels([
@@ -153,6 +154,21 @@ test('movement picks use Power delta first and exclude inactive teams', () => {
   assert.equal(movement.biggestFaller?.team, 'True Faller')
 })
 
+test('tournament movement picks list each team once and only in its own direction', () => {
+  // Issue #115 F6: LEC + tier B + MSI 2026 left KC alone on the board, and What changed showed it twice.
+  const alone = deriveTournamentMovementPicks([tournamentTeam('Karmine Corp', -4, -59)])
+  assert.equal(alone.biggestRiser, undefined)
+  assert.equal(alone.biggestFaller?.team, 'Karmine Corp')
+
+  const allUp = deriveTournamentMovementPicks([tournamentTeam('Gen.G', 1, 20), tournamentTeam('T1', 3, 12)])
+  assert.equal(allUp.biggestRiser?.team, 'T1')
+  assert.equal(allUp.biggestFaller, undefined)
+
+  const mixed = deriveTournamentMovementPicks([tournamentTeam('Held', 0, 0), tournamentTeam('Small drop', -1, -8), tournamentTeam('Big drop', -2, -30), tournamentTeam('Climber', 0, 15)])
+  assert.equal(mixed.biggestRiser?.team, 'Climber')
+  assert.equal(mixed.biggestFaller?.team, 'Big drop')
+})
+
 test('derives upset headline from lowest pre-series expectation in the rolling window', () => {
   const headline = deriveUpsetHeadline([
     standing({
@@ -216,6 +232,23 @@ test('omitting rolling window keeps evidence independent from 30-day series coun
   const tournamentFlair = deriveRankingFlair([row])
   assert.equal(tournamentFlair.spicyTakeConfidence[0]?.recentMatchCount, 2)
 })
+
+function tournamentTeam(team: string, rankMovement: number, ratingDelta: number): PublicTournamentMovementTeam {
+  return {
+    teamId: team,
+    team,
+    code: team.slice(0, 3).toUpperCase(),
+    eligible: true,
+    eligibilityReasons: [],
+    startRank: 10,
+    endRank: 10 - rankMovement,
+    rankMovement,
+    startRating: 1900,
+    endRating: 1900 + ratingDelta,
+    ratingDelta,
+    points: [],
+  }
+}
 
 function recentMatch(overrides: Partial<PublicRecentMatch> = {}): PublicRecentMatch {
   return {

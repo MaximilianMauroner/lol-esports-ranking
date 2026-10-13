@@ -1,4 +1,4 @@
-import type { PublicRollingUpsetWin, PublicRollingWindow, PublicTeamStanding } from './publicArtifacts/schema'
+import type { PublicRollingUpsetWin, PublicRollingWindow, PublicTeamStanding, PublicTournamentMovementTeam } from './publicArtifacts/schema'
 import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 export type RankingTierLabel = 'S' | 'A' | 'B' | 'C'
@@ -190,6 +190,22 @@ export function deriveMovementPicks(standings: readonly PublicTeamStanding[]): R
   return {
     biggestRiser: biggestRiser ? movementPick(biggestRiser) : null,
     biggestFaller: biggestFaller ? movementPick(biggestFaller) : null,
+  }
+}
+
+/**
+ * The biggest riser and faller over one tournament, ordered by rank places,
+ * then Power. A team moved up when it gained places, or held its place and
+ * gained Power. The riser is the top team that moved up and the faller is the
+ * bottom team that moved down, so no team is both and a board with one team
+ * lists it once.
+ */
+export function deriveTournamentMovementPicks(teams: readonly PublicTournamentMovementTeam[]) {
+  const byRise = teams.toSorted((a, b) => b.rankMovement - a.rankMovement || b.ratingDelta - a.ratingDelta || compareCodeUnits(a.team, b.team))
+  const direction = (team: PublicTournamentMovementTeam) => Math.sign(team.rankMovement) || Math.sign(team.ratingDelta)
+  return {
+    biggestRiser: byRise.find((team) => direction(team) > 0),
+    biggestFaller: byRise.findLast((team) => direction(team) < 0),
   }
 }
 

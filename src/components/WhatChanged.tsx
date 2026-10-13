@@ -1,6 +1,7 @@
 import { Badge } from './ui/badge'
 import { Panel, PanelHeader } from './ui/panel'
 import { formatSigned } from '../lib/display'
+import { matchEventLabel } from '../lib/matchLedger'
 import { cn } from '../lib/utils'
 
 export type MovementSpotlight = {
@@ -16,6 +17,7 @@ export type MovementSpotlight = {
 export type UpsetSpotlight = {
   winner: string
   loser: string
+  /** Source event name, such as "LPL/2026 Season/Regional Finals". */
   event?: string
   /** Winner's pre-match chance, 0 to 1. */
   chance: number
@@ -50,7 +52,7 @@ export function WhatChanged({
             <Badge variant="warning" className="shrink-0">Upset</Badge>
             <span className="min-w-0 text-muted-foreground">
               <b className="font-semibold text-[var(--text-strong)]">{upset.winner}</b> beat {upset.loser} with a {Math.round(upset.chance * 100)}% chance
-              {upset.event ? <span className="block truncate text-xs text-[var(--faint)]">{upset.event}</span> : null}
+              {upset.event ? <span className="block truncate text-xs text-[var(--faint)]">{matchEventLabel(upset.event)}</span> : null}
             </span>
           </li>
         ) : null}
