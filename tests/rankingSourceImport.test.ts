@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { importRankingSourceData } from '../scripts/ranking-source-import'
+import { providerFreshness } from '../src/lib/sourceFreshness'
 
 test('source coverage counts retained tournament games after home-league resolution and deduplication', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-source-import-'))
@@ -160,6 +161,31 @@ test('cached Oracle source coverage serializes without an invented retrieval dat
     assert.equal(source.coverageEnd, '2026-07-26')
     assert.equal(source.retrievedAt, undefined)
     assert.equal(JSON.stringify(data.externalSources).includes('"retrievedAt":'), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('the Data and sources panel finds each provider in importer source names', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ranking-source-freshness-'))
+  try {
+    const manifest = join(root, 'manifest.json')
+    await writeFile(join(root, 'oracle.csv'), oracleCsv([{ id: 'oracle-game', date: '2026-10-10' }]))
+    await writeFile(join(root, 'leaguepedia.json'), JSON.stringify({ matches: [{
+      id: 'leaguepedia-game', date: '2026-10-13', event: 'LCK 2026', teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', bestOf: 1,
+    }] }))
+    await writeFile(manifest, JSON.stringify({
+      schemaVersion: 1, start: '2026-10-06', end: '2026-10-13', generatedAt: '2026-10-13T06:02:36.613Z',
+      files: { oracleCsv: ['oracle.csv'], leaguepediaJson: ['leaguepedia.json'] },
+      sources: { oracle: { status: 'failed', failedCount: 1 }, leaguepedia: { status: 'downloaded', downloadedCount: 1 } },
+    }))
+
+    const data = await importRankingSourceData({ manifestPath: manifest })
+    const breakdown = [{ provider: 'oracles-elixir', matchCount: 1 }, { provider: 'leaguepedia-cargo', matchCount: 1 }]
+    assert.deepEqual(providerFreshness(breakdown, data.externalSources).filter((provider) => provider.matchCount > 0), [
+      { label: "Oracle's Elixir", matchCount: 1, publishedThrough: '2026-10-10', failedUpdate: 'failed' },
+      { label: 'Leaguepedia', matchCount: 1, publishedThrough: '2026-10-13', failedUpdate: undefined },
+    ])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

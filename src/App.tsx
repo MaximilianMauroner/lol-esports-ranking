@@ -514,7 +514,6 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
                     seeded,
                     sourceBreakdown: snapshot?.sourceBreakdown ?? [],
                     rosterCoverage: loadedData.dataQuality?.rosterCoverage,
-                    notes: loadedData.dataQuality?.notes,
                   }}
                   onToggle={toggleTeam}
                   onRequestPlayers={requestPlayers}
