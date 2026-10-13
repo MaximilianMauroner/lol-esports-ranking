@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Alert } from './ui/alert'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
-import { Panel, PanelBody, PanelFooter, PanelHeader } from './ui/panel'
+import { Panel, PanelFooter, PanelHeader } from './ui/panel'
 import { Select } from './ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
+import { TeamMark } from './TeamMark'
+import { teamBrandingFor } from '../data/teamBranding'
+import { canonicalTeamNameFor, teamCodeFor } from '../data/teamIdentity'
 import { cn } from '../lib/utils'
 import { hashEnum, hashParam, useHashSync } from '../lib/urlState'
 import { formatTournamentTime, type TournamentEvent } from '../lib/tournamentFeed'
 import {
-  PLAY_IN_REGIONS, SWISS_ROUND_SIZES, decodeChoices, encodeChoices, fillDraw, knockoutEntry, liveSwissBaseline, opponentOptions,
-  resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawContext, type DrawnRound, type ResolvedMatch,
-  type ResolvedRound, type ResolvedScenario, type SwissBaseline,
+  PLAY_IN_REGIONS, SWISS_BRACKET, SWISS_ROUND_SIZES, SWISS_TEAM_SOURCES, decodeChoices, encodeChoices, fillDraw, knockoutEntry,
+  liveSwissBaseline, opponentOptions, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type BracketBox, type DrawContext,
+  type DrawnRound, type PreviewTeam, type ResolvedMatch, type ResolvedScenario, type SwissBaseline,
 } from '../lib/swissScenario'
 import { WORLDS_2026_SWISS_RULES } from '../lib/worlds2026Swiss'
 import type { SwissTeamStanding } from '../lib/worldsObservedRules'
@@ -21,10 +24,20 @@ const SLOTS = ['a', 'b'] as const
 const STARTS = ['live', 'seeds'] as const
 const UNDO_LIMIT = 50
 
+/** How the bracket shows a team: full name, short code, seed slot, and the name its logo is filed under. */
+type TeamInfo = { name: string; code: string; slot: string | null; mark: string | null }
+type TeamLookup = (id: string) => TeamInfo
+type BracketEdits = {
+  pick: (round: number, matchIndex: number, winner: string | null) => void
+  swap: (round: number, teamId: string, opponentId: string, context: DrawContext) => void
+  clear: (round: number) => void
+  fill: (round: number, pairs: [string, string][]) => void
+}
+
 /**
- * Worlds 2026 Swiss "what if" preview. The user picks winners and draws on top
- * of a starting point; every choice lives in component state and the page
- * address only. Live draws and results are shown as given and cannot be edited.
+ * Worlds 2026 Swiss "what if" preview, shown as the whole Swiss bracket. The user picks winners and draws on top
+ * of a starting point; every choice lives in component state and the page address only. Live draws and results
+ * are shown as given and cannot be edited.
  */
 export function SwissPreview({ event, checkedAt, timezone }: { event: TournamentEvent; checkedAt: string; timezone: string }) {
   const live = useMemo(() => liveSwissBaseline(event), [event])
@@ -35,11 +48,9 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
   const [slot, setSlot] = useState(address.slot)
   const [texts, setTexts] = useState(address.texts)
   const [notice, setNotice] = useState<string | null>(null)
-  /** Where keyboard focus goes once: the panel of a round that was filled, cleared or opened. */
+  /** Where keyboard focus goes once: the column of a round that was filled or cleared. */
   const [focusRound, setFocusRound] = useState<number | null>(null)
   const focusDone = useCallback(() => setFocusRound(null), [])
-  /** The round the board shows. Null follows the first round that still needs a winner or a draw. */
-  const [chosenRound, setChosenRound] = useState<number | null>(null)
   /** Earlier versions of changed scenarios, newest last, for Undo. */
   const [history, setHistory] = useState<Array<{ slot: Slot; text: string }>>([])
   // Back, Forward and edited links change the address without a reload. useHashSync writes with
@@ -53,7 +64,6 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
       setTexts(next.texts)
       setNotice(null)
       setFocusRound(null)
-      setChosenRound(null)
       setHistory([])
     }
     window.addEventListener('hashchange', onHashChange)
@@ -69,8 +79,11 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
   }), [baseline, texts, liveMissing])
   const current = scenarios[slot]
   const otherSlot: Slot = slot === 'a' ? 'b' : 'a'
-  const labels = useMemo(() => new Map(baseline.teams.map((team) => [team.id, team.label])), [baseline])
-  const label = (id: string) => labels.get(id) ?? id
+  const team: TeamLookup = useMemo(() => {
+    const byId = new Map(baseline.teams.map((entry) => [entry.id, teamInfo(entry)]))
+    return (id) => byId.get(id) ?? { name: id, code: id, slot: null, mark: null }
+  }, [baseline])
+  const drawPairs = useMemo(() => current.next.kind === 'draw' ? fillDraw(current.next.context) : null, [current])
 
   useHashSync('tournaments', {
     start,
@@ -89,14 +102,27 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
     if (before !== text) setHistory((previous) => [...previous.slice(1 - UNDO_LIMIT), { slot: target, text: before }])
     setTexts((previous) => ({ ...previous, [target]: text }))
   }
-  /** Applies an edit made in one round; the board stays on that round, and fill or clear moves focus to its new panel. */
+  /** Applies an edit made in one round; fill and clear move focus to that round's column. */
   function update(round: number, edit: (choices: DrawnRound[]) => DrawnRound[], moveFocus = false) {
     const next = resolveScenario(baseline, edit(fullChoices(current)))
-    setChosenRound(round)
     setFocusRound(moveFocus ? round : null)
     setNotice(next.droppedRounds === 1 ? 'The next round was cleared, because it was drawn from records that changed.'
       : next.droppedRounds ? `${next.droppedRounds} later rounds were cleared, because they were drawn from records that changed.` : null)
     replace(slot, encodeChoices(baseline, next.choices))
+  }
+  const edits: BracketEdits = {
+    pick: (round, matchIndex, winner) => update(round, (choices) => choices.map((entry, index) => index === round - 1
+      ? { pairs: entry.pairs, winners: entry.winners.map((value, slotIndex) => slotIndex === matchIndex ? winner : value) }
+      : entry)),
+    swap: (round, teamId, opponentId, context) => update(round, (choices) => {
+      const index = round - 1
+      const pairs = swapOpponent(choices[index].pairs, teamId, opponentId, context)
+      if (!pairs) return choices
+      const kept = new Map(choices[index].pairs.map((pair, slotIndex) => [pair.join('\n'), choices[index].winners[slotIndex]]))
+      return [...choices.slice(0, index), { pairs, winners: pairs.map((pair) => kept.get(pair.join('\n')) ?? null) }, ...choices.slice(index + 1)]
+    }),
+    clear: (round) => update(round, (choices) => choices.slice(0, round - 1), true),
+    fill: (round, pairs) => update(round, (choices) => [...choices, { pairs, winners: pairs.map(() => null) }], true),
   }
   function undo() {
     const last = history.at(-1)
@@ -106,16 +132,11 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
     setSlot(last.slot)
     setNotice(`The last change to scenario ${last.slot.toUpperCase()} was undone.`)
   }
-  function openRound(round: number) {
-    setChosenRound(round)
-    setFocusRound(round)
-  }
   function changeStart(value: string) {
     const nextStart = STARTS.find((entry) => entry === value) ?? 'live'
     setStart(nextStart)
     setTexts({ a: '', b: '' })
     setHistory([])
-    setChosenRound(null)
     setNotice('Both scenarios were reset for the new starting point.')
   }
 
@@ -124,41 +145,12 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
       current.droppedRounds ? `${current.droppedRounds === 1 ? 'One preview round no longer fits' : `${current.droppedRounds} preview rounds no longer fit`} and ${current.droppedRounds === 1 ? 'was' : 'were'} removed.` : ''].join(' ').trim()
     : null
 
-  const steps = roundSteps(current)
-  const activeRound = steps.find((step) => step.state === 'open' || step.state === 'draw')?.round ?? SWISS_ROUND_SIZES.length
-  const shownRound = chosenRound ?? activeRound
-  const shownIndex = shownRound - 1
-  const shown = current.rounds.at(shownIndex)
-  let board: ReactNode
-  if (shown) {
-    board = <RoundPanel key={`round-${shown.round}`} round={shown} label={label} focus={focusRound === shown.round} onFocused={focusDone}
-      footer={roundFooter(current, shown.round)} onOpen={openRound}
-      onPick={(matchIndex, winner) => update(shown.round, (choices) => choices.map((entry, roundIndex) => roundIndex === shownIndex
-        ? { pairs: entry.pairs, winners: entry.winners.map((value, slotIndex) => slotIndex === matchIndex ? winner : value) }
-        : entry))}
-      onSwap={(teamId, opponentId) => update(shown.round, (choices) => {
-        const pairs = swapOpponent(choices[shownIndex].pairs, teamId, opponentId, shown.context)
-        if (!pairs) return choices
-        const kept = new Map(choices[shownIndex].pairs.map((pair, slotIndex) => [pair.join('\n'), choices[shownIndex].winners[slotIndex]]))
-        return [...choices.slice(0, shownIndex), { pairs, winners: pairs.map((pair) => kept.get(pair.join('\n')) ?? null) }, ...choices.slice(shownIndex + 1)]
-      })}
-      onClear={() => update(shown.round, (choices) => choices.slice(0, shownIndex), true)} />
-  } else if (current.next.kind === 'draw' && current.next.round === shownRound) {
-    const pools = shownRound === 1 && baseline.kind === 'seeds'
-      ? WORLDS_2026_SWISS_RULES.pools.map((pool) => pool.map((id) => ({ id, note: id === 'PLAYIN' ? playIn ?? 'Region not chosen, meets LCK 1 or LPL 1 only' : null })))
-      : null
-    board = <DrawPanel key={`draw-${shownRound}`} round={shownRound} context={current.next.context} pools={pools} label={label} focus={focusRound === shownRound} onFocused={focusDone}
-      onFill={(pairs) => update(shownRound, (choices) => [...choices, { pairs, winners: pairs.map(() => null) }], true)} />
-  } else {
-    board = <UpcomingPanel key={`upcoming-${shownRound}`} round={shownRound} openRound={activeRound} openNeedsDraw={steps[activeRound - 1].state === 'draw'} onOpen={() => openRound(activeRound)} />
-  }
-
   const startControl = (
     <div className="grid gap-1">
       <label htmlFor="swiss-start" className="text-sm font-semibold">Start from</label>
       <Select id="swiss-start" className="w-full" value={start} onChange={(event) => changeStart(event.target.value)}>
         <option value="live" disabled={live.status !== 'ready'}>Live draws and results</option>
-        <option value="seeds">Seed slots before the draw</option>
+        <option value="seeds">Qualified teams before the draw</option>
       </Select>
     </div>
   )
@@ -167,7 +159,7 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
       <div className="grid min-w-0 justify-items-start gap-4">
         {startControl}
         <Alert variant="warning" role="status">
-          Live draws are not available: {live.detail} Your live scenarios stay in the page address and come back when live draws return. Choosing seed slots replaces them with two new scenarios.
+          Live draws are not available: {live.detail} Your live scenarios stay in the page address and come back when live draws return. Choosing qualified teams replaces them with two new scenarios.
         </Alert>
       </div>
     )
@@ -200,7 +192,7 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
           <Button variant="outline" size="tab" onClick={() => { replace(slot, encodeChoices(baseline, scenarios[otherSlot].choices)); setNotice(`Scenario ${slot.toUpperCase()} now matches scenario ${otherSlot.toUpperCase()}.`) }}>
             Copy {otherSlot.toUpperCase()} into {slot.toUpperCase()}
           </Button>
-          <Button variant="outline" size="tab" onClick={() => { replace(slot, ''); setChosenRound(null); setNotice(`Scenario ${slot.toUpperCase()} is back at the starting point.`) }}>
+          <Button variant="outline" size="tab" onClick={() => { replace(slot, ''); setNotice(`Scenario ${slot.toUpperCase()} is back at the starting point.`) }}>
             Reset {slot.toUpperCase()}
           </Button>
           {/* Stays focusable, so keyboard focus is not lost after the last undo. */}
@@ -211,11 +203,15 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
       </div>
 
       <div className="grid gap-1.5 rounded-md border border-dashed border-[var(--preview-line)] bg-[var(--preview-soft)] px-3 py-2.5 text-sm leading-[1.5]">
-        <p><strong className="font-semibold text-[var(--preview)]">Preview.</strong> Draws and winners with a dashed outline are your choices. They stay on this page and in its address, and they never change the schedule or results. The preview shows no odds.</p>
+        <p><strong className="font-semibold text-[var(--preview)]">Preview.</strong> Winners with a dashed outline and draws marked “Your draw” are your choices. They stay on this page and in its address, and they never change the schedule or results. If you change an earlier winner, later draws stay only while their pairs still have the same records. The preview shows no odds.</p>
         <p className="text-muted-foreground">
           {baseline.kind === 'live'
             ? <>Starts from the draws and results on Leaguepedia, checked {formatTournamentTime(checkedAt, timezone)}. {live.status === 'ready' && live.note ? live.note : ''}</>
-            : <>Starts from the sixteen Swiss seed slots before the Round 1 draw. Slots stand for the qualified teams, for example LCK 1 is the first LCK seed. {live.status === 'unavailable' ? `Live draws are not available: ${live.detail}` : ''}</>}
+            : <>
+              Starts from the qualified teams before the Round 1 draw. Teams follow <a className="underline" href={SWISS_TEAM_SOURCES.primer} target="_blank" rel="noreferrer">Riot’s Worlds 2026 primer</a> and
+              the <a className="underline" href={SWISS_TEAM_SOURCES.cblolFinal} target="_blank" rel="noreferrer">CBLOL final</a>, checked {SWISS_TEAM_SOURCES.checkedAt}.
+              The Play-In winner is decided from 15 to 18 October. {live.status === 'unavailable' ? `Live draws are not available: ${live.detail}` : ''}
+            </>}
         </p>
       </div>
       <div role="status" className="empty:hidden grid gap-1 text-sm">
@@ -223,12 +219,13 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
         {liveNotice ? <p className="text-[var(--warn)]">{liveNotice}</p> : null}
       </div>
 
-      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)]">
-        <div className="grid min-w-0 gap-3">
-          <RoundStrip steps={steps} shown={shownRound} onSelect={setChosenRound} />
-          {board}
+      <div className="grid min-w-0 items-start gap-4 min-[1700px]:grid-cols-[minmax(0,1fr)_28rem]">
+        <div className="grid min-w-0 gap-2">
+          <NextStep scenario={current} drawPairs={drawPairs} team={team} playInOpen={baseline.kind === 'seeds' && !playIn} />
+          <SwissBracket scenario={current} team={team} pools={baseline.kind === 'seeds' ? WORLDS_2026_SWISS_RULES.pools : null}
+            drawPairs={drawPairs} focusRound={focusRound} onFocused={focusDone} edits={edits} />
         </div>
-        <StandingsPanel scenarios={scenarios} slot={slot} label={label} />
+        <StandingsPanel scenarios={scenarios} slot={slot} team={team} />
       </div>
     </div>
   )
@@ -249,182 +246,285 @@ function fullChoices(resolved: ResolvedScenario): DrawnRound[] {
     ?? { pairs: round.matches.map((match) => match.teamIds), winners: round.matches.map(() => null) })
 }
 
-type RoundStep = { round: number; state: 'done' | 'open' | 'draw' | 'upcoming'; status: string }
-
-/** One entry per Swiss round for the round strip: played or picked, needs winners, can be drawn, or waits for an earlier round. */
-function roundSteps(scenario: ResolvedScenario): RoundStep[] {
-  return SWISS_ROUND_SIZES.map((_, index): RoundStep => {
-    const round = index + 1
-    const resolved = scenario.rounds.at(index)
-    if (resolved) {
-      const missing = resolved.matches.filter((match) => !match.winnerId).length
-      if (missing) return { round, state: 'open', status: `${missing} to pick` }
-      return { round, state: 'done', status: resolved.matches.every((match) => match.result === 'live') ? 'Played' : 'Picked' }
-    }
-    if (scenario.next.kind === 'draw' && scenario.next.round === round) return { round, state: 'draw', status: 'Draw next' }
-    return { round, state: 'upcoming', status: 'Upcoming' }
-  })
+function teamInfo(team: PreviewTeam): TeamInfo {
+  if (team.seed === 'PLAYIN') return { name: team.label, code: 'Play-In', slot: team.region, mark: null }
+  const canonical = canonicalTeamNameFor(team.label)
+  const branding = teamBrandingFor(canonical)
+  return {
+    name: team.label,
+    code: teamCodeFor(team.label),
+    slot: team.seed?.replace(/(\d+)$/, ' $1') ?? null,
+    mark: branding?.logo && branding.logoTreatment !== 'code' ? canonical : null,
+  }
 }
 
-const STEP_TONE: Record<RoundStep['state'], string> = {
-  done: 'text-muted-foreground',
-  open: 'text-[var(--preview)]',
-  draw: 'text-[var(--accent)]',
-  upcoming: 'text-[var(--faint)]',
-}
-
-function RoundStrip({ steps, shown, onSelect }: { steps: RoundStep[]; shown: number; onSelect: (round: number) => void }) {
+/** What the scenario needs next. When a round can be drawn, also its draw rules. */
+function NextStep({ scenario, drawPairs, team, playInOpen }: { scenario: ResolvedScenario; drawPairs: [string, string][] | null; team: TeamLookup; playInOpen: boolean }) {
+  const next = scenario.next
+  if (next.kind === 'complete') return <p className="text-sm text-muted-foreground">Every Swiss match has a winner. The eight teams in the green Advanced groups (3–0, 3–1 and 3–2) go to the quarterfinals.</p>
+  if (next.kind === 'results') {
+    const missing = scenario.rounds[next.round - 1].matches.filter((match) => !match.winnerId).length
+    const needs = missing === 1 ? 'One match needs' : `${missing} matches need`
+    return (
+      <p className="text-sm text-muted-foreground">
+        Round {next.round}: {needs} a winner {next.round === SWISS_ROUND_SIZES.length ? 'to finish the Swiss stage' : `before Round ${next.round + 1} can be drawn`}. Choose a team to make it the winner.
+      </p>
+    )
+  }
+  const waived = next.context.buckets.filter((bucket) => next.context.rematchBuckets.has(bucket.record))
   return (
-    <div role="group" aria-label="Swiss rounds" className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
-      {steps.map((step) => (
-        <Button key={step.round} variant="tab" aria-pressed={step.round === shown} onClick={() => onSelect(step.round)}
-          className="h-auto min-w-0 flex-col items-start justify-center gap-0 px-2.5 py-1.5 text-left whitespace-normal">
-          <span className="text-sm font-semibold">Round {step.round}</span>
-          <span className={cn('text-2xs', STEP_TONE[step.state])}>{step.status}</span>
-        </Button>
-      ))}
+    <div className="grid gap-1 text-sm">
+      <p className="text-muted-foreground">
+        Round {next.round} is not drawn yet.{' '}
+        {next.round === 1
+          ? 'Pool 1 meets Pool 4 and Pool 2 meets Pool 3. Two teams from the same region cannot meet.'
+          : 'Each team meets a team with the same record that it has not played yet.'}
+        {' '}“Fill a valid draw” takes the first valid pairing in team order. It is not the official draw and not a prediction. After the fill, use “Change pairings” to pick other valid opponents.
+      </p>
+      {playInOpen && next.round === 1 ? <p className="text-muted-foreground">The Play-In winner’s region is not chosen, so it meets only {team('LCK1').name} or {team('LPL1').name}.</p> : null}
+      {waived.length ? <p className="text-[var(--warn)]">No draw for {waived.map((bucket) => bucket.record.replace('-', '–')).join(' or ')} avoids a rematch. Officials may then allow one (rule 4.3.3.2), so rematches are allowed there.</p> : null}
+      {!drawPairs ? <p className="text-[var(--warn)]">No valid draw exists for these records.</p> : null}
     </div>
   )
 }
 
-/** What the last open round still needs, and what comes next. Earlier rounds explain how a changed winner affects later draws. */
-function roundFooter(scenario: ResolvedScenario, round: number): { text: string; open: number | null } {
-  const next = scenario.next
-  if (round < scenario.rounds.length) {
-    const played = scenario.rounds[round - 1].matches.every((match) => match.result === 'live')
-    return { text: played
-      ? `These are live results. Round ${round + 1} was drawn from them.`
-      : `Round ${round + 1} was drawn from these results. If you change a winner here, later rounds stay only while their pairs still have the same records.`, open: null }
-  }
-  if (next.kind === 'draw') return { text: `Every match has a winner. Round ${next.round} can be drawn now.`, open: next.round }
-  if (next.kind === 'complete') return { text: 'Every Swiss match has a winner. The standings show who advances.', open: null }
-  const missing = scenario.rounds[round - 1].matches.filter((match) => !match.winnerId).length
-  const needs = missing === 1 ? 'One match needs' : `${missing} matches need`
-  return { text: round === SWISS_ROUND_SIZES.length ? `${needs} a winner to finish the Swiss stage.` : `${needs} a winner before Round ${round + 1} can be drawn.`, open: null }
-}
-
-function RoundPanel({ round, label, focus, onFocused, footer, onOpen, onPick, onSwap, onClear }: {
-  round: ResolvedRound
-  focus: boolean
+/**
+ * The whole Swiss stage as a bracket: one column per round with its record groups, then the records after Round 5.
+ * Advanced groups sit at the top of a column and eliminated groups at the bottom. Narrow screens scroll it sideways.
+ */
+function SwissBracket({ scenario, team, pools, drawPairs, focusRound, onFocused, edits }: {
+  scenario: ResolvedScenario
+  team: TeamLookup
+  /** The four Round 1 pools, shown in Round 1 before a draw from qualified teams. */
+  pools: ReadonlyArray<readonly string[]> | null
+  drawPairs: [string, string][] | null
+  focusRound: number | null
   onFocused: () => void
-  label: (id: string) => string
-  footer: { text: string; open: number | null }
-  onOpen: (round: number) => void
-  onPick: (matchIndex: number, winner: string | null) => void
-  onSwap: (teamId: string, opponentId: string) => void
-  onClear: () => void
+  edits: BracketEdits
 }) {
-  const titleId = useId()
-  const heading = useFocusWhen(focus, onFocused)
-  const [editing, setEditing] = useState(false)
-  const nextRound = footer.open
-  const pairs = round.matches.map((match) => match.teamIds)
-  const buckets = [...new Set(round.matches.map((match) => match.records[0].join('-')))]
-  const bestOf = round.matches.map((match) => match.bestOf)
-  const bo3 = bestOf.filter((value) => value === 3).length
-  const format = bo3 === 0 ? `${bestOf.length} matches, best of one` : bo3 === bestOf.length ? `${bestOf.length} matches, best of three` : `${bo3} best of three, ${bestOf.length - bo3} best of one`
   return (
-    <Panel ref={heading} tabIndex={-1} role="region" aria-labelledby={titleId} className="focus-visible:outline-2 focus-visible:outline-[var(--focus)]">
-      <PanelHeader titleId={titleId} title={`Round ${round.round}`} description={round.liveDraw ? format : `${format}. Choose a winner for each match.`}>
-        {/* Passed as a child, not as actions: these controls wrap on narrow screens instead of overflowing. */}
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {round.liveDraw ? <Badge>Live draw</Badge> : <Badge variant="preview">Your draw</Badge>}
-          {round.liveDraw ? null : <>
-            <Button variant="tab" size="sm" aria-pressed={editing} onClick={() => setEditing((value) => !value)}>Change pairings</Button>
-            <Button variant="ghost" size="sm" onClick={onClear}>Clear draw</Button>
-          </>}
-        </div>
-      </PanelHeader>
-      <PanelBody className="grid gap-4">
-        {buckets.map((record) => {
-          const [wins, losses] = record.split('-').map(Number)
-          return (
-            <div key={record} className="grid gap-1.5">
-              <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-                <span className="font-mono text-sm font-semibold text-[var(--text-strong)] tabular-nums">{wins}–{losses}</span>
-                <span>{bucketNote(wins, losses)}</span>
-              </p>
-              <ul className={cn('grid gap-1.5', editing && !round.liveDraw ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))]')}>
-                {/* Keyed by the first team: a swap keeps that team first in its card, so its opponent select keeps focus. */}
-                {round.matches.map((match, matchIndex) => match.records[0].join('-') !== record ? null : (
-                  <MatchCard key={match.teamIds[0]} round={round.round} match={match} label={label}
-                    swap={editing && !round.liveDraw ? { pairs, context: round.context, onSwap } : null}
-                    onPick={(winner) => onPick(matchIndex, winner)} />
-                ))}
-              </ul>
+    <div role="region" aria-label="Swiss bracket" tabIndex={0} className="relative min-w-0 overflow-x-auto rounded-md pb-2 focus-visible:outline-2 focus-visible:outline-[var(--focus)]">
+      <div className="grid min-w-[66rem] grid-cols-6 grid-rows-[auto_1fr] gap-x-3 gap-y-2">
+        {SWISS_BRACKET.map((boxes, index) => index < SWISS_ROUND_SIZES.length
+          // A round that gets a new draw mounts again, so it starts with "Change pairings" off.
+          ? <RoundColumn key={`${index}:${scenario.rounds[index] ? 'drawn' : 'open'}`} round={index + 1} boxes={boxes} scenario={scenario} team={team} pools={index === 0 ? pools : null}
+            drawPairs={drawPairs} focus={focusRound === index + 1} onFocused={onFocused} edits={edits} />
+          : (
+            <div key="final" className="row-span-2 grid min-w-0 grid-rows-subgrid">
+              <ColumnHeader title="After Round 5"><span className="text-2xs text-muted-foreground">3–2 teams advance. 2–3 teams are out.</span></ColumnHeader>
+              <div className="flex min-w-0 flex-col justify-between gap-3">
+                {boxes.map((box) => <RecordBox key={box.record.join('-')} box={box}><TeamSlots ids={withRecord(scenario.standings, box)} size={box.size} team={team} /></RecordBox>)}
+              </div>
             </div>
-          )
-        })}
-      </PanelBody>
-      <PanelFooter className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm">
-        <p className="text-muted-foreground">{footer.text}</p>
-        {nextRound ? <Button size="sm" onClick={() => onOpen(nextRound)}>Open Round {nextRound}</Button> : null}
-      </PanelFooter>
-    </Panel>
+          ))}
+      </div>
+    </div>
   )
 }
 
-/** The match format for a record group and where its winners and losers go. */
-function bucketNote(wins: number, losses: number) {
-  const record = (w: number, l: number) => `${w}–${l}`
-  if (wins === 2 && losses === 2) return 'Best of three. The winner advances and the loser is out.'
-  if (wins === 2) return `Best of three. Winners advance, losers go to ${record(wins, losses + 1)}.`
-  if (losses === 2) return `Best of three. Winners go to ${record(wins + 1, losses)}, losers are out.`
-  return `Best of one. Winners go to ${record(wins + 1, losses)}, losers to ${record(wins, losses + 1)}.`
+function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, onFocused, edits }: {
+  round: number
+  boxes: BracketBox[]
+  scenario: ResolvedScenario
+  team: TeamLookup
+  pools: ReadonlyArray<readonly string[]> | null
+  drawPairs: [string, string][] | null
+  focus: boolean
+  onFocused: () => void
+  edits: BracketEdits
+}) {
+  const titleId = useId()
+  const { target: column, header } = useFocusWhen(focus, onFocused)
+  const [editing, setEditing] = useState(false)
+  const resolved = scenario.rounds.at(round - 1)
+  const drawNext = scenario.next.kind === 'draw' && scenario.next.round === round
+  const drawAfter = scenario.next.kind === 'draw' && scenario.next.round === round + 1
+  const missing = resolved?.matches.filter((match) => !match.winnerId).length ?? 0
+  const pairs = resolved?.matches.map((match) => match.teamIds) ?? []
+
+  function content(box: BracketBox) {
+    if (box.kind !== 'play' || !resolved) {
+      return pools && box.kind === 'play' ? <PoolList pools={pools} team={team} /> : <TeamSlots ids={withRecord(scenario.standings, box)} size={box.size} team={team} />
+    }
+    const [wins, losses] = box.record
+    return (
+      <ul className="grid gap-1.5">
+        {/* Keyed by the first team: a swap keeps that team first in its card, so its opponent select keeps focus. */}
+        {resolved.matches.map((match, matchIndex) => match.records[0][0] !== wins || match.records[0][1] !== losses ? null : (
+          <MatchCard key={match.teamIds[0]} round={round} match={match} team={team}
+            swap={editing && !resolved.liveDraw ? { pairs, context: resolved.context, onSwap: (teamId, opponentId) => edits.swap(round, teamId, opponentId, resolved.context) } : null}
+            onPick={(winner) => edits.pick(round, matchIndex, winner)} />
+        ))}
+      </ul>
+    )
+  }
+
+  return (
+    <div ref={column} tabIndex={-1} role="region" aria-labelledby={titleId}
+      className="row-span-2 grid min-w-0 grid-rows-subgrid rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]">
+      <ColumnHeader ref={header} title={`Round ${round}`} titleId={titleId}
+        badge={resolved ? resolved.liveDraw ? <Badge>Live draw</Badge> : <Badge variant="preview">Your draw</Badge> : null}>
+        {resolved ? resolved.liveDraw ? null : <>
+          <Button variant="tab" size="xs" aria-pressed={editing} onClick={() => setEditing((value) => !value)}>Change pairings</Button>
+          <Button variant="ghost" size="xs" onClick={() => edits.clear(round)}>Clear draw</Button>
+        </> : drawNext
+          ? <Button size="sm" disabled={!drawPairs} onClick={() => drawPairs && edits.fill(round, drawPairs)}>Fill a valid draw</Button>
+          : <span className="text-2xs text-[var(--faint)]">Drawn after Round {round - 1}</span>}
+        {missing ? <span className="text-2xs font-medium text-[var(--preview)]">{missing} to pick</span> : null}
+      </ColumnHeader>
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className={cn('flex min-w-0 flex-1 flex-col gap-3', boxes.length > 1 && 'justify-between')}>
+          {boxes.map((box) => <RecordBox key={box.record.join('-')} box={box}>{content(box)}</RecordBox>)}
+        </div>
+        {/* Next to the last pick, because on narrow screens the next column is out of view. */}
+        {drawAfter ? (
+          <Button size="sm" className="h-auto min-h-7 py-1 text-center whitespace-normal" disabled={!drawPairs} onClick={() => drawPairs && edits.fill(round + 1, drawPairs)}>
+            Fill a valid draw for Round {round + 1}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
-function MatchCard({ round, match, label, swap, onPick }: {
+function ColumnHeader({ ref, title, titleId, badge = null, children }: { ref?: Ref<HTMLDivElement>; title: string; titleId?: string; badge?: ReactNode; children: ReactNode }) {
+  // The scroll margin keeps a header that is scrolled into view below the sticky app header.
+  return (
+    <div ref={ref} className="grid scroll-mt-[calc(var(--app-nav-h)+0.75rem)] content-start gap-1.5 border-b border-border pb-2">
+      <div className="flex min-h-5 items-center justify-between gap-2">
+        <h3 id={titleId} className="text-sm font-semibold text-[var(--text-strong)]">{title}</h3>
+        {badge}
+      </div>
+      <div className="flex min-h-7 flex-wrap items-center gap-1.5">{children}</div>
+    </div>
+  )
+}
+
+/** One record group: its record, its match format or outcome, and its matches or teams. */
+function RecordBox({ box, children }: { box: BracketBox; children: ReactNode }) {
+  const [wins, losses] = box.record
+  const outcome = teamOutcome({ wins, losses, status: box.kind === 'play' ? 'active' : box.kind })
+  return (
+    <div className={cn('grid min-w-0 gap-1.5 rounded-md border p-1.5',
+      box.kind === 'advanced' ? 'border-[color-mix(in_oklch,var(--win)_45%,var(--line))] bg-[color-mix(in_oklch,var(--win)_6%,var(--surface))]'
+        : box.kind === 'eliminated' ? 'border-[color-mix(in_oklch,var(--loss)_45%,var(--line))] bg-[color-mix(in_oklch,var(--loss)_6%,var(--surface))]'
+          : 'border-border bg-card')}>
+      <p className="flex items-baseline justify-between gap-2 px-0.5">
+        <span className="font-mono text-sm font-semibold text-[var(--text-strong)] tabular-nums">{wins}–{losses}</span>
+        <span className={cn('text-2xs', outcome.state === 'advanced' ? 'text-[var(--win)]' : outcome.state === 'eliminated' ? 'text-[var(--loss)]' : 'text-muted-foreground')}>
+          {outcome.state === 'advanced' ? 'Advanced' : outcome.state === 'eliminated' ? `Out, ${outcome.placement}` : `Bo${outcome.nextBestOf}`}
+        </span>
+      </p>
+      {children}
+    </div>
+  )
+}
+
+const ROW = 'flex h-7 w-full min-w-0 items-center gap-1.5 px-1.5 text-xs font-semibold'
+
+/** Teams known to hold a record, then quiet open places for teams that have not reached it yet. */
+function TeamSlots({ ids, size, team }: { ids: readonly string[]; size: number; team: TeamLookup }) {
+  const open = Math.max(0, size - ids.length)
+  return (
+    <ul className="grid gap-1">
+      {ids.map((id) => <li key={id} title={team(id).name} className={cn(ROW, 'rounded-sm bg-[var(--surface-2)] text-foreground')}><TeamLine info={team(id)} /></li>)}
+      {Array.from({ length: open }, (_, index) => (
+        <li key={`open-${index}`} aria-hidden="true" className="h-7 rounded-sm border border-[color-mix(in_oklch,var(--line)_55%,transparent)]" />
+      ))}
+      {open ? <li className="sr-only">{open === 1 ? 'One place' : `${open} places`} not decided yet</li> : null}
+    </ul>
+  )
+}
+
+function PoolList({ pools, team }: { pools: ReadonlyArray<readonly string[]>; team: TeamLookup }) {
+  return (
+    <ul aria-label="Round 1 pools" className="grid gap-2.5">
+      {pools.map((pool, index) => (
+        <li key={index} className="grid gap-1">
+          <p className="flex items-baseline justify-between gap-2 px-0.5 text-2xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Pool {index + 1}</span>
+            <span>meets Pool {pools.length - index}</span>
+          </p>
+          <TeamSlots ids={pool} size={pool.length} team={team} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function MatchCard({ round, match, team, swap, onPick }: {
   round: number
   match: ResolvedMatch
-  label: (id: string) => string
+  team: TeamLookup
   swap: { pairs: [string, string][]; context: DrawContext; onSwap: (teamId: string, opponentId: string) => void } | null
   onPick: (winner: string | null) => void
 }) {
   const [first, second] = match.teamIds
   const locked = match.result === 'live'
-  const name = `Round ${round}: ${label(first)} against ${label(second)}`
   return (
-    <li className="grid content-start gap-1 rounded-md border border-border bg-[var(--surface-2)] p-1.5">
-      <p className="px-1 text-2xs text-muted-foreground">Bo{match.bestOf}{locked ? ', live result' : ''}</p>
-      <div role="group" aria-label={name} className="grid gap-1">
-        <TeamChoice id={first} label={label(first)} match={match} locked={locked} onPick={onPick} />
-        <TeamChoice id={second} label={label(second)} match={match} locked={locked} onPick={onPick} />
+    <li className="grid min-w-0 gap-1">
+      {/* The gap shows the container colour as a hairline between the two teams. */}
+      <div role="group" aria-label={`Round ${round}: ${team(first).name} against ${team(second).name}`}
+        className="grid gap-px overflow-hidden rounded-sm border border-border bg-border">
+        <TeamRow id={first} info={team(first)} match={match} locked={locked} onPick={onPick} />
+        <TeamRow id={second} info={team(second)} match={match} locked={locked} onPick={onPick} />
       </div>
-      {swap ? <SwapControl team={first} label={label} swap={swap} /> : null}
+      {swap ? <SwapControl teamId={first} team={team} swap={swap} /> : null}
     </li>
   )
 }
 
-function TeamChoice({ id, label, match, locked, onPick }: { id: string; label: string; match: ResolvedMatch; locked: boolean; onPick: (winner: string | null) => void }) {
+function TeamRow({ id, info, match, locked, onPick }: { id: string; info: TeamInfo; match: ResolvedMatch; locked: boolean; onPick: (winner: string | null) => void }) {
   const won = match.winnerId === id
   const lost = Boolean(match.winnerId) && !won
-  const mark = locked ? (won ? 'Won' : lost ? 'Lost' : null) : won ? 'Your pick' : null
-  const content = <>
-    <span className="min-w-0 break-words">{label}</span>
-    {mark ? <span className={cn('shrink-0 text-2xs font-semibold', locked ? (won ? 'text-[var(--win)]' : 'text-[var(--loss)]') : 'text-[var(--preview)]')}>{mark}</span> : null}
-  </>
-  const shape = 'flex h-auto min-h-8 w-full min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 rounded-md border px-2 py-1 text-left text-sm font-medium whitespace-normal'
   if (locked) {
-    return <span className={cn(shape, won ? 'border-[color-mix(in_oklch,var(--win)_44%,var(--line))] bg-[var(--win-soft)] text-[var(--text-strong)]' : 'border-border text-muted-foreground')}>{content}</span>
+    return (
+      <span title={info.name} className={cn(ROW, won
+        ? 'bg-[color-mix(in_oklch,var(--win)_16%,var(--surface-2))] text-[var(--text-strong)] shadow-[inset_2px_0_0_var(--win)]'
+        : 'bg-[var(--surface-2)] text-muted-foreground')}>
+        <TeamLine info={info} faded={lost} />
+        <span className="sr-only">{won ? ', won' : lost ? ', lost' : ''}</span>
+      </span>
+    )
   }
   return (
-    <Button variant="outline" aria-pressed={won} onClick={() => onPick(won ? null : id)}
-      className={cn(shape, won && 'border-dashed border-[var(--preview-line)] bg-[var(--preview-soft)] text-[var(--text-strong)] hover:bg-[var(--preview-soft)]', lost && 'text-muted-foreground')}>
-      {content}
+    <Button variant="ghost" aria-pressed={won} title={info.name} onClick={() => onPick(won ? null : id)}
+      className={cn(ROW, 'justify-start rounded-none border-0 bg-[var(--surface-2)] text-foreground hover:bg-[var(--surface-3)] hover:text-[var(--text-strong)]',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--focus)]',
+        won && 'bg-[color-mix(in_oklch,var(--preview)_16%,var(--surface-2))] text-[var(--text-strong)] outline-1 -outline-offset-1 outline-dashed outline-[var(--preview-line)] hover:bg-[color-mix(in_oklch,var(--preview)_22%,var(--surface-2))]',
+        lost && 'text-muted-foreground')}>
+      <TeamLine info={info} faded={lost} />
     </Button>
   )
 }
 
-function SwapControl({ team, label, swap }: { team: string; label: (id: string) => string; swap: { pairs: [string, string][]; context: DrawContext; onSwap: (teamId: string, opponentId: string) => void } }) {
-  const id = useId()
-  const current = swap.pairs.find((pair) => pair.includes(team))!.find((other) => other !== team)!
+/**
+ * Logo, short code and seed slot. Screen readers then hear the full name, so a pick button's name starts with its
+ * visible text. The row title also shows the full name.
+ */
+function TeamLine({ info, faded = false }: { info: TeamInfo; faded?: boolean }) {
   return (
-    <div className="grid min-w-0 gap-1 px-1 pt-1 text-xs">
-      <label htmlFor={id} className="text-muted-foreground">Opponent for {label(team)}</label>
-      <Select id={id} className="h-8 w-full text-xs" value={current} onChange={(event) => swap.onSwap(team, event.target.value)}>
-        {opponentOptions(swap.pairs, team, swap.context).map((option) => (
+    <>
+      {info.mark
+        ? <TeamMark team={info.mark} className={cn('size-4 border-0 bg-transparent', faded && 'opacity-40')} imageClassName="p-0" />
+        : <span aria-hidden="true" className="size-4 shrink-0 rounded-sm border border-[var(--line-strong)]" />}
+      <span className="min-w-0 truncate">{info.code}</span>
+      {info.slot ? <span className="ml-auto shrink-0 text-2xs font-normal text-[var(--faint)]">{info.slot}</span> : null}
+      {info.name !== info.code ? <span className="sr-only">, {info.name}</span> : null}
+    </>
+  )
+}
+
+function SwapControl({ teamId, team, swap }: { teamId: string; team: TeamLookup; swap: { pairs: [string, string][]; context: DrawContext; onSwap: (teamId: string, opponentId: string) => void } }) {
+  const id = useId()
+  const current = swap.pairs.find((pair) => pair.includes(teamId))!.find((other) => other !== teamId)!
+  return (
+    <div className="grid min-w-0 gap-0.5 text-2xs">
+      <label htmlFor={id} className="text-muted-foreground">Opponent for {team(teamId).code}</label>
+      <Select id={id} className="h-7 w-full text-xs" value={current} onChange={(event) => swap.onSwap(teamId, event.target.value)}>
+        {opponentOptions(swap.pairs, teamId, swap.context).map((option) => (
           <option key={option.id} value={option.id} disabled={Boolean(option.reason)}>
-            {label(option.id)}{option.reason ? ` (${option.reason})` : ''}
+            {team(option.id).name}{option.reason ? ` (${option.reason})` : ''}
           </option>
         ))}
       </Select>
@@ -432,124 +532,64 @@ function SwapControl({ team, label, swap }: { team: string; label: (id: string) 
   )
 }
 
-function DrawPanel({ round, context, pools, label, focus, onFocused, onFill }: {
-  round: number
-  context: DrawContext
-  /** The four Round 1 pools, shown before a draw from seed slots. */
-  pools: Array<Array<{ id: string; note: string | null }>> | null
-  label: (id: string) => string
-  focus: boolean
-  onFocused: () => void
-  onFill: (pairs: [string, string][]) => void
-}) {
-  const titleId = useId()
-  const panel = useFocusWhen(focus, onFocused)
-  const pairs = useMemo(() => fillDraw(context), [context])
-  const waived = context.buckets.filter((bucket) => context.rematchBuckets.has(bucket.record))
-  return (
-    <Panel ref={panel} tabIndex={-1} role="region" aria-labelledby={titleId} className="focus-visible:outline-2 focus-visible:outline-[var(--focus)]">
-      <PanelHeader titleId={titleId} title={`Round ${round}`} description="Not drawn yet. You can draw it now."
-        actions={<Button size="tab" disabled={!pairs} onClick={() => pairs && onFill(pairs)}>Fill a valid draw</Button>} />
-      <PanelBody className="grid gap-3 text-sm">
-        <p className="text-muted-foreground">
-          {round === 1
-            ? 'Pool 1 meets Pool 4 and Pool 2 meets Pool 3. Two teams from the same region cannot meet.'
-            : 'Each team meets a team with the same record that it has not played yet.'}
-          {' '}The fill takes the first valid pairing in team order. It is not the official draw and not a prediction. After the fill, use “Change pairings” to pick other valid opponents.
-        </p>
-        {pools ? (
-          <ul aria-label="Round 1 pools" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {pools.map((pool, index) => (
-              <li key={index} className="grid content-start gap-1 rounded-md border border-border bg-[var(--surface-2)] p-2">
-                <p className="flex items-baseline justify-between gap-2">
-                  <span className="font-semibold text-[var(--text-strong)]">Pool {index + 1}</span>
-                  <span className="text-2xs text-muted-foreground">meets Pool {pools.length - index}</span>
-                </p>
-                <ul className="grid gap-0.5">
-                  {pool.map((team) => (
-                    <li key={team.id} className="flex flex-wrap items-baseline justify-between gap-x-2">
-                      <span>{label(team.id)}</span>
-                      {team.note ? <span className="text-2xs text-muted-foreground">{team.note}</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <dl className="grid gap-1.5">
-            {context.buckets.map((bucket) => (
-              <div key={bucket.record} className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2">
-                <dt className="font-mono font-semibold text-[var(--text-strong)] tabular-nums">{bucket.record.replace('-', '–')}</dt>
-                <dd className="text-muted-foreground">{bucket.teamIds.map(label).join(', ')}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {waived.length ? <p className="text-[var(--warn)]">No draw for {waived.map((bucket) => bucket.record.replace('-', '–')).join(' or ')} avoids a rematch. Officials may then allow one (rule 4.3.3.2), so rematches are allowed there.</p> : null}
-        {!pairs ? <p className="text-[var(--warn)]">No valid draw exists for these records.</p> : null}
-      </PanelBody>
-    </Panel>
-  )
+function withRecord(standings: readonly SwissTeamStanding[], box: BracketBox) {
+  return standings.filter((row) => row.wins === box.record[0] && row.losses === box.record[1]).map((row) => row.id)
 }
 
-/** A round that cannot be drawn yet, because an earlier round still needs its draw or its winners. */
-function UpcomingPanel({ round, openRound, openNeedsDraw, onOpen }: { round: number; openRound: number; openNeedsDraw: boolean; onOpen: () => void }) {
+/** Counts for the shown scenario, and the teams whose record differs in the other one. */
+function StandingsPanel({ scenarios, slot, team }: { scenarios: Record<Slot, ResolvedScenario>; slot: Slot; team: TeamLookup }) {
   const titleId = useId()
-  return (
-    <Panel role="region" aria-labelledby={titleId}>
-      <PanelHeader titleId={titleId} title={`Round ${round}`} description="Upcoming." />
-      <PanelBody className="grid justify-items-start gap-3 text-sm">
-        <p className="text-muted-foreground">
-          Round {round} is drawn from the records after Round {round - 1}.{' '}
-          {openNeedsDraw ? `Round ${openRound} is not drawn yet.` : `Choose a winner for every match up to Round ${round - 1} first.`}
-        </p>
-        <Button size="sm" onClick={onOpen}>Open Round {openRound}</Button>
-      </PanelBody>
-    </Panel>
-  )
-}
-
-function StandingsPanel({ scenarios, slot, label }: { scenarios: Record<Slot, ResolvedScenario>; slot: Slot; label: (id: string) => string }) {
-  const titleId = useId()
-  const byId = (slotKey: Slot) => new Map(scenarios[slotKey].standings.map((row) => [row.id, row]))
+  const other: Slot = slot === 'a' ? 'b' : 'a'
+  const byId = (key: Slot) => new Map(scenarios[key].standings.map((row) => [row.id, row]))
   const rows = { a: byId('a'), b: byId('b') }
-  const ordered = [...scenarios[slot].standings].sort((left, right) => standingOrder(left) - standingOrder(right) || label(left.id).localeCompare(label(right.id)))
-  const differs = (id: string) => outcomeText(rows.a.get(id)!) !== outcomeText(rows.b.get(id)!)
-  const differences = ordered.filter((row) => differs(row.id)).length
+  const changed = scenarios[slot].standings.filter((row) => outcomeText(row) !== outcomeText(rows[other].get(row.id)!))
+    .sort((left, right) => standingOrder(left) - standingOrder(right) || team(left.id).name.localeCompare(team(right.id).name))
   const knockout = knockoutEntry(scenarios[slot].standings)
   const count = (state: SwissTeamStanding['status']) => scenarios[slot].standings.filter((row) => row.status === state).length
+  const names = (ids: string[]) => ids.map((id) => team(id).name)
   return (
-    <Panel role="region" aria-labelledby={titleId} className="lg:sticky lg:top-[calc(var(--app-nav-h)+12px)]">
-      <PanelHeader titleId={titleId} title="Standings" description={`Records in scenario ${slot.toUpperCase()}. Scenario ${slot === 'a' ? 'B' : 'A'} shows only where it differs.`} />
+    <Panel role="region" aria-labelledby={titleId} className="min-w-0 max-w-4xl min-[1700px]:max-w-none">
+      <PanelHeader titleId={titleId} title="Standings" description={`Scenario ${slot.toUpperCase()} is on the bracket. The table lists only teams whose record differs in scenario ${other.toUpperCase()}.`} />
       <p className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-sm">
         <span>Advanced <strong className="font-mono font-semibold text-[var(--win)] tabular-nums">{count('advanced')}</strong> of 8</span>
         <span>Out <strong className="font-mono font-semibold text-[var(--loss)] tabular-nums">{count('eliminated')}</strong> of 8</span>
         <span>Playing <strong className="font-mono font-semibold text-[var(--text-strong)] tabular-nums">{count('active')}</strong></span>
       </p>
-      <Table containerClassName="max-h-none">
-        <TableHeader>
-          <TableRow>
-            <TableHead scope="col">Team</TableHead>
-            {SLOTS.map((entry) => <TableHead key={entry} scope="col" className={cn(entry === slot && 'text-[var(--text-strong)]')}>{entry.toUpperCase()}{entry === slot ? <span className="sr-only"> (editing)</span> : null}</TableHead>)}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {ordered.map((row) => (
-            <TableRow key={row.id}>
-              <th scope="row" className="max-w-[11rem] p-2 text-left align-middle text-sm font-medium text-[var(--text-strong)]">
-                <span className="block min-w-0 truncate" title={label(row.id)}>{label(row.id)}</span>
-              </th>
-              {SLOTS.map((entry) => <StandingCell key={entry} row={rows[entry].get(row.id)!} active={entry === slot} same={entry !== slot && !differs(row.id)} />)}
+      {changed.length ? (
+        <Table containerClassName="max-h-none">
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">Team</TableHead>
+              {SLOTS.map((entry) => <TableHead key={entry} scope="col" className={cn(entry === slot && 'text-[var(--text-strong)]')}>{entry.toUpperCase()}{entry === slot ? <span className="sr-only"> (on the bracket)</span> : null}</TableHead>)}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {changed.map((row) => {
+              const info = team(row.id)
+              return (
+                <TableRow key={row.id}>
+                  <th scope="row" className="p-2 text-left align-middle text-sm font-medium text-[var(--text-strong)]">
+                    {/* The name wraps, and the slot wraps under it, so the table fits a phone-width panel. */}
+                    <span className="flex min-w-0 items-center gap-2">
+                      {info.mark ? <TeamMark team={info.mark} className="size-5 border-0 bg-transparent" imageClassName="p-0" /> : null}
+                      <span className="min-w-0">
+                        {info.name}
+                        {info.slot ? <> <span className="text-2xs font-normal whitespace-nowrap text-[var(--faint)]">{info.slot}</span></> : null}
+                      </span>
+                    </span>
+                  </th>
+                  {SLOTS.map((entry) => <StandingCell key={entry} row={rows[entry].get(row.id)!} active={entry === slot} />)}
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      ) : null}
       <PanelFooter className="grid gap-1.5 text-xs text-muted-foreground">
-        <p>{differences ? `Scenarios A and B differ for ${differences === 1 ? 'one team' : `${differences} teams`}.` : 'Scenarios A and B have the same records.'}</p>
+        <p>{changed.length ? `Scenarios A and B differ for ${changed.length === 1 ? 'one team' : `${changed.length} teams`}.` : 'Scenarios A and B have the same records.'}</p>
         {knockout ? (
           <p>
-            Quarterfinal draw for scenario {slot.toUpperCase()}: {knockout.undefeated.map(label).join(' and ')} each meet one of {knockout.twoLosses.map(label).join(', ')}, on opposite halves of the bracket.
+            Quarterfinal draw for scenario {slot.toUpperCase()}: {names(knockout.undefeated).join(' and ')} each meet one of {names(knockout.twoLosses).join(', ')}, on opposite halves of the bracket.
             {' '}The other four teams are then paired by draw (rule 4.3.4).
           </p>
         ) : null}
@@ -558,12 +598,12 @@ function StandingsPanel({ scenarios, slot, label }: { scenarios: Record<Slot, Re
   )
 }
 
-function StandingCell({ row, active, same }: { row: SwissTeamStanding; active: boolean; same: boolean }) {
+function StandingCell({ row, active }: { row: SwissTeamStanding; active: boolean }) {
   const outcome = teamOutcome(row)
-  if (same) return <TableCell className="text-[var(--faint)]">Same</TableCell>
+  // Wraps only at spaces, so a narrow table never splits a record or a placing at its dash.
   return (
-    <TableCell className={cn('whitespace-normal', !active && 'border-l border-dashed border-[var(--preview-line)] text-[var(--text-strong)]')}>
-      <span className="font-mono tabular-nums">{outcome.wins}–{outcome.losses}</span>{' '}
+    <TableCell className={cn('whitespace-normal', !active && 'border-l border-dashed border-[var(--preview-line)] text-muted-foreground')}>
+      <span className="font-mono whitespace-nowrap tabular-nums">{outcome.wins}–{outcome.losses}</span>{' '}
       <span className={cn(outcome.state === 'advanced' && active && 'text-[var(--win)]', outcome.state === 'eliminated' && active && 'text-[var(--loss)]')}>{outcomeLabel(row)}</span>
     </TableCell>
   )
@@ -572,7 +612,7 @@ function StandingCell({ row, active, same }: { row: SwissTeamStanding; active: b
 function outcomeLabel(row: SwissTeamStanding) {
   const outcome = teamOutcome(row)
   if (outcome.state === 'advanced') return 'Advanced'
-  if (outcome.state === 'eliminated') return `Out, ${outcome.placement}`
+  if (outcome.state === 'eliminated') return <>Out, <span className="whitespace-nowrap">{outcome.placement}</span></>
   return `Plays Bo${outcome.nextBestOf}`
 }
 function outcomeText(row: SwissTeamStanding) {
@@ -584,15 +624,19 @@ function standingOrder(row: SwissTeamStanding) {
 }
 
 /**
- * Focuses the returned element when `when` is true, for example after its trigger was removed.
- * `onFocused` ends the request, so a panel that mounts later, for example after a scenario switch, does not take focus.
+ * Focuses `target` when `when` is true, for example after its trigger was removed, and scrolls `header` into view.
+ * Scrolling to the header, not to the whole column, keeps the page still while the header is in view, and on a phone
+ * shows the top of a column that is taller than the screen. It also brings the full column width into the bracket.
+ * `onFocused` ends the request, so a column that mounts later, for example after a scenario switch, does not take focus.
  */
 function useFocusWhen(when: boolean, onFocused: () => void) {
-  const ref = useRef<HTMLDivElement>(null)
+  const target = useRef<HTMLDivElement>(null)
+  const header = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!when) return
-    ref.current?.focus()
+    target.current?.focus({ preventScroll: true })
+    header.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     onFocused()
   }, [when, onFocused])
-  return ref
+  return { target, header }
 }
