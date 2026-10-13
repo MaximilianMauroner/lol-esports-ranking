@@ -9,6 +9,7 @@ import {
   tournamentEntriesForScope,
   tournamentFilterOptionsForStandings,
   tournamentInstanceForEvent,
+  tournamentBoundaryLabel,
 } from '../src/lib/internationalTournaments.ts'
 import type { PublicTeamStanding, PublicTournamentMovementIndexEntry } from '../src/lib/publicArtifacts/schema.ts'
 
@@ -65,11 +66,42 @@ test('labels a past event without schedule evidence as completed, not as latest 
 })
 
 test('an event without schedule evidence ends after 14 days without a rated match', () => {
-  const lastMatchOct1 = { status: 'unknown' as const, ratedThroughDate: '2026-10-01' }
+  const lastMatchOct1 = { status: 'unknown' as const, ratedThroughDate: '2026-10-01', dataLag: false }
 
   assert.equal(effectiveTournamentStatus(lastMatchOct1, '2026-10-14'), 'unknown')
   assert.equal(effectiveTournamentStatus(lastMatchOct1, '2026-10-15'), 'completed')
-  assert.equal(effectiveTournamentStatus({ status: 'ongoing', ratedThroughDate: '2026-09-01' }, '2026-10-15'), 'ongoing')
+})
+
+test('preserves explicit lifecycle statuses when rated results lag', () => {
+  const laggedResults = { ratedThroughDate: '2026-09-01', dataLag: true }
+
+  assert.equal(effectiveTournamentStatus({ ...laggedResults, status: 'ongoing' }, '2026-10-15'), 'ongoing')
+  assert.equal(effectiveTournamentStatus({ ...laggedResults, status: 'completed' }, '2026-10-15'), 'completed')
+})
+
+test('keeps lagged tournament results labeled as latest data after matches elsewhere continue', () => {
+  const [instance] = deriveTournamentInstances({
+    generatedAt: '2026-08-01T00:00:00.000Z',
+    matches: [{ ...ratedGame('msi-opening', 1, 'Alpha'), date: '2026-07-01' }],
+    scheduleReferences: [
+      { matchId: 'msi-opening', leagueName: 'MSI', date: '2026-07-01', state: 'completed', coverageStart: '2026-06-28', coverageEnd: '2026-07-12' },
+      { matchId: 'msi-final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-06-28', coverageEnd: '2026-07-12' },
+    ],
+  })
+  assert.ok(instance)
+  assert.equal(instance.status, 'unknown')
+  assert.equal(instance.dataLag, true)
+  assert.equal(instance.ratedThroughDate, '2026-07-01')
+  assert.equal(instance.boundaryDate, '2026-07-01')
+  assert.equal(instance.resultCoverageComplete, false)
+
+  const entry = { ...movementEntry('msi:2026', 2), ...instance }
+  const option = tournamentFilterOptionsForStandings([], [entry], '2026-08-01').at(-1)
+  const boardStatus = effectiveTournamentStatus(instance, '2026-08-01')
+
+  assert.equal(option?.label, 'MSI 2026 · Latest data')
+  assert.equal(option?.status, boardStatus)
+  assert.equal(tournamentBoundaryLabel(boardStatus), 'Latest data')
 })
 
 test('derives a live Worlds entry from its first rated Play-In match, not from schedule rows alone', () => {
