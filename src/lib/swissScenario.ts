@@ -20,6 +20,55 @@ export const SWISS_ROUND_SIZES = [8, 8, 8, 6, 3] as const
 export const PLAY_IN_REGIONS = ['CBLOL', 'LCS', 'LEC', 'LCP'] as const
 export type PlayInRegion = typeof PLAY_IN_REGIONS[number]
 
+/** Where the confirmed 2026 field comes from. It is event data, not a Power ranking. */
+export const SWISS_TEAM_SOURCES = {
+  checkedAt: '2026-10-13',
+  primer: 'https://lolesports.com/en-SG/news/worlds-2026-primer',
+  cblolFinal: 'https://www.techtudo.com.br/noticias/2026/10/final-do-cblol-2026-los-bate-furia-em-revanche-do-primeiro-split-e-e-campea-edjogos.ghtml',
+} as const
+
+/**
+ * The team in each direct Swiss seed slot. Riot's primer names the Round 1 draw tiers, which are the seed pools in
+ * `WORLDS_2026_SWISS_RULES`. LØS took CBLOL 1 in the October 10 final. The Play-In winner is decided October 15 to 18.
+ * Names match the team branding data (`teamBranding.generated.ts`), so the usual codes and logos apply.
+ */
+const QUALIFIED_TEAMS: Record<Exclude<SwissSeed, 'PLAYIN'>, string> = {
+  LCK1: 'Gen.G', LPL1: "Anyone's Legend", LCS1: 'Team Liquid', LEC1: 'G2 Esports',
+  LCP1: 'Team Secret Whales', CBLOL1: 'LØS', LCK2: 'Hanwha Life Esports', LPL2: 'Bilibili Gaming',
+  LCS2: 'LYON', LEC2: 'Movistar KOI', LCK3: 'T1', LPL3: 'Top Esports',
+  LCP2: 'CTBC Flying Oyster', LPL4: 'Invictus Gaming', LCK4: 'Dplus KIA',
+}
+
+/** A record group in one bracket column: teams that play with this record, or that finished with it. */
+export type BracketBox = { record: [number, number]; kind: 'play' | 'advanced' | 'eliminated'; size: number }
+
+/**
+ * The Swiss bracket as columns: Rounds 1 to 5, then the records after Round 5. In a 16-team stage the size of every
+ * record group is fixed, whatever the results, so the whole bracket can be drawn before any match is played.
+ */
+export const SWISS_BRACKET: BracketBox[][] = (() => {
+  const columns: BracketBox[][] = []
+  let playing: BracketBox[] = [{ record: [0, 0], kind: 'play', size: 16 }]
+  let finished: BracketBox[] = []
+  for (let round = 0; round <= SWISS_ROUND_SIZES.length; round++) {
+    columns.push([...finished.filter((box) => box.kind === 'advanced'), ...playing, ...finished.filter((box) => box.kind === 'eliminated')])
+    const next = new Map<string, BracketBox>()
+    for (const { record: [wins, losses], size } of playing) {
+      // Half of each group wins its match and half loses it.
+      for (const [nextWins, nextLosses] of [[wins + 1, losses], [wins, losses + 1]]) {
+        const key = `${nextWins}-${nextLosses}`
+        const box: BracketBox = next.get(key)
+          ?? { record: [nextWins, nextLosses], kind: nextWins === 3 ? 'advanced' : nextLosses === 3 ? 'eliminated' : 'play', size: 0 }
+        box.size += size / 2
+        next.set(key, box)
+      }
+    }
+    playing = [...next.values()].filter((box) => box.kind === 'play')
+    finished = [...next.values()].filter((box) => box.kind !== 'play')
+  }
+  return columns
+})()
+
 export type PreviewTeam = { id: string; label: string; seed: SwissSeed | null; region: string | null }
 /** One drawn round. `winners[i]` belongs to `pairs[i]`; null means not decided. */
 export type DrawnRound = { pairs: [string, string][]; winners: Array<string | null> }
@@ -69,7 +118,7 @@ export type TeamOutcome =
 export function seedBaseline(playInRegion: PlayInRegion | null): SwissBaseline {
   const teams = WORLDS_2026_SWISS_RULES.pools.flat().map((seed): PreviewTeam => seed === 'PLAYIN'
     ? { id: seed, label: 'Play-In winner', seed, region: playInRegion }
-    : { id: seed, label: seed.replace(/(\d+)$/, ' $1'), seed, region: seed.replace(/\d+$/, '') })
+    : { id: seed, label: QUALIFIED_TEAMS[seed], seed, region: seed.replace(/\d+$/, '') })
   return { kind: 'seeds', teams, rounds: [] }
 }
 
