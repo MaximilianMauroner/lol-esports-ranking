@@ -678,7 +678,7 @@ function AppNavigation({
         onFocus={() => (onIntent ?? preloadView)(entry.id)}
         onTouchStart={() => (onIntent ?? preloadView)(entry.id)}
       >
-        <Icon size={17} aria-hidden="true" />
+        <Icon size={17} className="sm:max-lg:hidden" aria-hidden="true" />
         {entry.label}
       </a>
     )
@@ -689,11 +689,13 @@ function AppNavigation({
       <header className="sticky top-0 z-50 flex min-h-[var(--app-nav-h)] items-center gap-x-4 border-b border-border bg-[var(--rail)]/98 px-[var(--page-x)] py-2.5 max-[900px]:px-3">
         <a className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-md py-1 pr-2 text-left text-inherit no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)]" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
           <img className="block size-9 shrink-0 rounded-md" src="/logo.svg" alt="" aria-hidden="true" width={36} height={36} />
-          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)] max-[420px]:sr-only">Power Index</b>
+          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)] max-[420px]:sr-only sm:max-lg:sr-only">Power Index</b>
         </a>
         {/* The active tab uses the shared selected treatment. Gold stays
-            reserved for rank quality. */}
-        <nav className="flex min-w-0 items-center gap-1.5 max-sm:hidden" aria-label="Primary">{tabs}</nav>
+            reserved for rank quality. The tabs never shrink: the search gives
+            way instead, and between the phone tab bar and desktop the
+            wordmark, tab icons and shortcut hint make room for it. */}
+        <nav className="flex shrink-0 items-center gap-1.5 max-sm:hidden" aria-label="Primary">{tabs}</nav>
         {onSearch ? (
           <label className="relative ml-auto w-[min(280px,100%)] min-w-0 max-sm:flex-1">
             <span className="sr-only">Find a team</span>
@@ -701,13 +703,13 @@ function AppNavigation({
             <Input
               ref={searchRef}
               type="search"
-              className="pr-9 pl-9"
+              className="pl-9 lg:pr-9"
               value={search ?? ''}
               placeholder="Find a team"
               aria-keyshortcuts="/"
               onChange={(event) => onSearch(event.target.value)}
             />
-            <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded-sm border border-[var(--line-strong)] px-1.5 font-mono text-2xs text-[var(--faint)] max-sm:hidden" aria-hidden="true">/</kbd>
+            <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded-sm border border-[var(--line-strong)] px-1.5 font-mono text-2xs text-[var(--faint)] max-lg:hidden" aria-hidden="true">/</kbd>
           </label>
         ) : null}
       </header>
