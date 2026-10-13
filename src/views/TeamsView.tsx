@@ -112,14 +112,12 @@ type TeamDataSummary = {
 
 const TEAM_PAGE_SIZES = [15, 25, 50, 80] as const
 const DEFAULT_TEAM_PAGE_SIZE = 25
-const RECENT_MATCH_PAGE_SIZE = 5
+const RECENT_MATCH_PAGE_SIZE = 10
 /** The ladder stays readable in a 320px rail up to about this many rows. */
 const LADDER_TEAM_LIMIT = 16
 const DEFAULT_FOCUS_TEAMS = 5
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
-const LARGE_POWER_RESUME_RANK_GAP = 7
-const LARGE_POWER_RESUME_SCORE_GAP = 100
 
 /**
  * The board filters this view keeps in the hash, read on mount and on every
@@ -910,11 +908,11 @@ export function TeamsView({
           <PanelBody className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2.5 pt-1 pb-4">
             {insights.map(({ team, color, insight }) => (
               <article className="grid gap-2 rounded-md border border-border bg-[var(--surface-2)] px-3.5 py-3" key={teamKey(team)}>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="size-2.5 shrink-0 rounded-sm" style={{ background: color }} aria-hidden="true" />
                   <b className="mr-auto text-md font-semibold text-[var(--text-strong)]">{team.code ?? team.team}</b>
                   <span className={cn('font-mono text-xs tabular-nums', insight.netChange > 0 ? 'text-[var(--up)]' : insight.netChange < 0 ? 'text-[var(--down)]' : 'text-[var(--faint)]')}>
-                    {formatSigned(insight.netChange)}
+                    Net change {formatSigned(insight.netChange)}
                   </span>
                 </div>
                 <p className="text-sm leading-[1.5] text-muted-foreground">{insight.summary}</p>
@@ -1172,12 +1170,10 @@ function teamScoreTitle(team: RankingSummaryStanding) {
 }
 
 type PowerResumeGapSummary = {
-  shortLabel: string
   label: string
   detail: string
+  rankDetail: string
   title: string
-  tone: 'overpowered' | 'underpowered' | 'aligned'
-  isLarge: boolean
 }
 
 function powerResumeGapSummary(team: RankingSummaryStanding): PowerResumeGapSummary | undefined {
@@ -1186,22 +1182,18 @@ function powerResumeGapSummary(team: RankingSummaryStanding): PowerResumeGapSumm
   const rankGap = dss.rankDeltaFromPower
   const scoreGap = dss.scoreDeltaFromPower
   const absRankGap = Math.abs(rankGap)
-  const absScoreGap = Math.abs(scoreGap)
-  const isLarge = absRankGap >= LARGE_POWER_RESUME_RANK_GAP || absScoreGap >= LARGE_POWER_RESUME_SCORE_GAP
-  const tone = rankGap > 0 ? 'underpowered' : rankGap < 0 ? 'overpowered' : 'aligned'
+  const places = `${formatNumber(absRankGap)} ${absRankGap === 1 ? 'place' : 'places'}`
   const rankPhrase = rankGap > 0
-    ? `resume is ${formatNumber(absRankGap)} ranks ahead`
+    ? `Results rank is ${places} ahead`
     : rankGap < 0
-      ? `Power is ${formatNumber(absRankGap)} ranks ahead`
-      : 'Power and resume ranks align'
-  const scorePhrase = scoreGap === 0 ? 'no score gap' : `${formatSigned(scoreGap)} resume score gap`
+      ? `Power rank is ${places} ahead`
+      : 'Power and results ranks align'
+  const scorePhrase = scoreGap === 0 ? 'no score gap' : `${formatSigned(scoreGap)} results score gap`
   return {
-    shortLabel: tone === 'underpowered' ? `Resume #${formatNumber(dss.rank)}` : tone === 'overpowered' ? `Power +${formatNumber(absRankGap)}` : 'Aligned',
-    label: tone === 'underpowered' ? 'Resume ahead' : tone === 'overpowered' ? 'Power ahead' : 'Aligned',
+    label: rankGap > 0 ? 'Results ahead' : rankGap < 0 ? 'Power ahead' : 'Aligned',
     detail: `${rankPhrase}; ${scorePhrase}`,
-    title: `Power rank #${formatNumber(team.rank)} vs deserved rank #${formatNumber(dss.rank)}. ${rankPhrase}; ${scorePhrase}.`,
-    tone,
-    isLarge,
+    rankDetail: rankGap === 0 ? 'Same as its Power rank' : `${places} ${rankGap > 0 ? 'ahead of' : 'behind'} its Power rank`,
+    title: `Power rank #${formatNumber(team.rank)} vs results rank #${formatNumber(dss.rank)}. ${rankPhrase}; ${scorePhrase}.`,
   }
 }
 
@@ -1317,7 +1309,7 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
     <Panel aria-label="Region power scores">
       <PanelHeader
         title="Region power"
-        actions={href ? <a className="shrink-0 text-xs font-semibold text-[var(--accent-strong)] no-underline hover:underline hover:underline-offset-[3px]" href={href}>Details</a> : undefined}
+        actions={href ? <a className="inline-flex min-h-6 min-w-6 shrink-0 items-center text-xs font-semibold text-[var(--accent-strong)] no-underline hover:underline hover:underline-offset-[3px]" href={href}>Details</a> : undefined}
       />
       <div className="grid grid-cols-1 gap-px bg-border">
         {ranked.map((region) => (
@@ -1545,6 +1537,7 @@ function TeamDetailDrawer({
         side="right"
         showCloseButton={false}
         aria-label={`${team.team} details`}
+        aria-modal="true"
         className="team-detail-sheet h-dvh max-h-dvh gap-0 overflow-hidden border-l border-[var(--line-strong)] bg-[var(--detail-surface)] p-0 text-foreground shadow-[var(--shadow-pop)] [--detail-surface-2:var(--surface-2)] [--detail-surface-3:var(--surface-3)] [--detail-surface:var(--surface)] data-[side=right]:w-[min(820px,100vw)] data-[side=right]:max-w-none data-[side=right]:sm:w-[min(820px,94vw)] data-[side=right]:sm:max-w-none"
       >
         {drawerLoading ? <p className="sr-only" role="status" aria-live="polite">Loading {drawerLoading} for {team.team}.</p> : null}
@@ -1588,7 +1581,7 @@ function TeamDetailDrawer({
                 <div title={rankEvidence?.title}><small>Rank from evidence band</small><b>{rankEvidence?.label ?? 'Unavailable'}</b><small>model evidence band</small></div>
                 <div title={rollingMovementTitle(team, 'last 30 days')}><small>Last 30 days</small><b className={cn(movement && (movement.rankMovement ?? 0) > 0 && 'text-[var(--up)]!', movement && (movement.rankMovement ?? 0) < 0 && 'text-[var(--down)]!')}>{movement ? formatRankMovementLabel(movement.rankMovement) : 'No series'}</b><small>{movement ? `${formatRatingMovement(movement.ratingDelta ?? 0)} Power` : 'no scored matches'}</small></div>
                 <div><small>Record</small><b>{formatRecord(team.wins, team.losses)}</b><small>{formatRatio(totalGames > 0 ? team.wins / totalGames : undefined)} · {recordBasisLabel(team.recordBasis)}</small></div>
-                <div title={powerResumeGap?.title}><small>Rank on results alone</small><b>{team.deservedStanding?.rank ? `#${team.deservedStanding.rank}` : 'Unavailable'}</b><small>{powerResumeGap?.isLarge ? 'far from its Power rank' : 'close to its Power rank'}</small></div>
+                <div title={powerResumeGap?.title}><small>Rank on results alone</small><b>{team.deservedStanding?.rank ? `#${team.deservedStanding.rank}` : 'Unavailable'}</b><small>{powerResumeGap?.rankDetail ?? 'results rank unavailable'}</small></div>
               </>
             )}
           </section>
@@ -1799,7 +1792,7 @@ function RecentMatches({
 
   return (
     <section className="mt-3.5 overflow-hidden rounded-sm border border-[var(--line-strong)] bg-[var(--detail-surface,var(--surface))]" aria-label="Recent form matches">
-      <div className="grid grid-cols-[42px_minmax(0,1fr)_minmax(86px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-2xs font-bold tracking-label text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
+      <div className="grid grid-cols-[64px_minmax(0,1fr)_minmax(92px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-2xs font-bold tracking-label text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
         <span>Result</span>
         <span>Opponent</span>
         <span>Rating after</span>
@@ -1812,7 +1805,7 @@ function RecentMatches({
             const tierChip = matchTierChip(match)
             return (
               <div
-                className={cn('grid min-h-16 grid-cols-[28px_minmax(0,1fr)_minmax(92px,auto)] items-start gap-2.5 border-t border-dotted border-border px-3.5 py-3 first:border-t-0 max-sm:grid-cols-[26px_minmax(0,1fr)]', outcomeSignal?.tone === 'upset' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--warn)_72%,transparent)]', outcomeSignal?.tone === 'miss' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--down)_72%,transparent)]')}
+                className={cn('grid min-h-16 grid-cols-[64px_minmax(0,1fr)_minmax(92px,auto)] items-start gap-2.5 border-t border-dotted border-border px-3.5 py-3 first:border-t-0 max-sm:grid-cols-[26px_minmax(0,1fr)]', outcomeSignal?.tone === 'upset' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--warn)_72%,transparent)]', outcomeSignal?.tone === 'miss' && 'shadow-[inset_3px_0_0_color-mix(in_oklch,var(--down)_72%,transparent)]')}
                 key={`${match.date}-${match.event}-${match.opponent}-${index}`}
               >
                 <span className={cn('grid size-[22px] place-items-center rounded-full text-2xs font-extrabold', match.result === 'W' ? 'bg-[var(--win-soft)] text-[var(--win)]' : match.result === 'L' ? 'bg-[var(--loss-soft)] text-[var(--loss)]' : 'bg-[var(--surface-3)] text-muted-foreground')}>{match.result}</span>
@@ -2196,7 +2189,7 @@ function PlayerRankingCard({
           </TableHeader>
           <TableBody>
             {players.map((player) => (
-              <TableRow key={player.id}>
+              <TableRow key={player.id} className="hover:bg-transparent">
                 <TableCell className={cn('font-mono font-semibold text-muted-foreground tabular-nums', player.rank <= 3 && 'text-[var(--rank-gold)]')}>#{player.rank}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-px [&_b]:font-semibold [&_b]:text-[var(--text-strong)] [&_small]:text-xs [&_small]:text-[var(--faint)]">

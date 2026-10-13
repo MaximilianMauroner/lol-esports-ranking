@@ -113,6 +113,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.clock.fastForward(60_000)
     await page.getByText(/Schedule may be stale/).waitFor()
     assert.match(await page.locator('body').innerText(), /Synthetic provider outage/)
+    assert.match(await page.getByText(/Schedule may be stale/).innerText(), /Feed last changed: 1 minute ago.*Last collector check: less than a minute ago/)
     assert.match(await page.locator('body').innerText(), /Alpha 3–1 Beta/)
 
     health = { checkedAt: '2026-09-27T12:03:00.000Z', complete: true, warnings: [] }
@@ -124,9 +125,12 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.match(await page.locator('body').innerText(), /Alpha 3–1 Beta/)
 
     feedStatus = 200
-    health = { checkedAt: '2026-09-27T12:05:00.000Z', complete: true, warnings: [] }
-    await page.clock.fastForward(60_000)
+    health = { checkedAt: '2026-09-27T12:04:00.000Z', complete: true, warnings: [] }
+    const requestsBeforeRetry = dataRequests.length
+    await page.getByRole('button', { name: 'Retry schedule', exact: true }).click()
     await page.getByText(/Schedule may be stale/).waitFor({ state: 'hidden' })
+    assert.ok(dataRequests.slice(requestsBeforeRetry).includes(tournamentPath))
+    await page.clock.fastForward(60_000)
     const originalEvents = feed.events
     feed.events = []
     feed.fetchedAt = '2026-09-27T12:06:00.000Z'

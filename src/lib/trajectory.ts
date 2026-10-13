@@ -92,9 +92,9 @@ export function deriveTrajectoryInsight(
   const fellFromPeak = peak.value - current
   const parts: string[] = []
   if (peakTime >= troughTime && fellFromPeak >= 12) {
-    parts.push(`Down ${Math.round(fellFromPeak)} from a ${fmtDate(peak.date)} peak of ${Math.round(peak.value)}`)
+    parts.push(`Down ${Math.round(fellFromPeak)} from the peak of ${Math.round(peak.value)} on ${fmtDate(peak.date)}`)
   } else if (climbedFromTrough >= 12) {
-    parts.push(`Up ${Math.round(climbedFromTrough)} from a ${fmtDate(trough.date)} low of ${Math.round(trough.value)}`)
+    parts.push(`Up ${Math.round(climbedFromTrough)} from the low of ${Math.round(trough.value)} on ${fmtDate(trough.date)}`)
   } else {
     parts.push(`Holding near ${Math.round(current)} since ${fmtDate(points[0][0])}`)
   }

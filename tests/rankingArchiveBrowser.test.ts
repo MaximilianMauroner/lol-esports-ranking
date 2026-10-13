@@ -7,7 +7,8 @@ import { createStaticRankingData } from '../src/lib/snapshot.ts'
 import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { archiveReferences } from '../src/lib/publicArtifacts/archive.mjs'
-import type { MatchRecord } from '../src/types.ts'
+import { parsePublicMatchHistoryPage, parsePublicRegionHistory, type PublicMatchHistoryImpact } from '../src/lib/publicArtifacts/schema.ts'
+import type { MatchRecord, TeamProfile } from '../src/types.ts'
 
 test('ranking browser bootstraps without archive history, selects a year, pages, and reports missing archive objects', { timeout: 60_000 }, async () => {
   const matches: MatchRecord[] = Array.from({ length: 120 }, (_, index) => {
@@ -132,7 +133,106 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     const detail = page.locator('.team-detail-sheet')
     await detail.waitFor()
     assert.equal(await detail.getAttribute('aria-label'), 'Alpha details')
+    assert.equal(await detail.getAttribute('aria-modal'), 'true')
+    assert.equal(await page.evaluate(() => document.querySelector('.team-detail-sheet')?.contains(document.activeElement)), true)
     await detail.locator('.recharts-line-curve').first().waitFor()
-    await detail.getByRole('button', { name: 'Close', exact: true }).click()
+    await detail.locator('svg.recharts-surface').first().focus()
+    const pointDetails = detail.getByText('Match and model details', { exact: true })
+    await pointDetails.waitFor()
+    await page.keyboard.press('Tab')
+    await page.waitForFunction(() => document.activeElement?.textContent === 'Match and model details', undefined, { timeout: 2_000 })
+    assert.equal(await pointDetails.evaluate((summary) => summary === document.activeElement), true)
+    for (let index = 0; index < 20; index++) {
+      await page.keyboard.press(index < 10 ? 'Tab' : 'Shift+Tab')
+      await page.waitForFunction(() => document.querySelector('.team-detail-sheet')?.contains(document.activeElement), undefined, { timeout: 2_000 })
+    }
+    await page.keyboard.press('Escape')
+    await detail.waitFor({ state: 'hidden' })
+  } finally { await browser?.close(); await server.close() }
+})
+
+test('Regions drawer distinguishes unavailable series contributions from zero and complete signed impacts', { timeout: 60_000 }, async () => {
+  const cases: Array<{ event: string; teamA: string; teamB: string; impact: PublicMatchHistoryImpact; expected: string }> = [
+    { event: 'Missing regional A', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied', teamB: 12 }, expected: 'Series contribution unavailable' },
+    { event: 'Missing regional B', teamA: 'Aardvark', teamB: 'Alpha', impact: { unit: 'series-applied', teamA: 12 }, expected: 'Series contribution unavailable' },
+    { event: 'Partial regional clash', teamA: 'Alpha', teamB: 'Beta', impact: { unit: 'series-applied', teamA: 12 }, expected: 'Series contribution unavailable' },
+    { event: 'Known zero', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied', teamA: 0 }, expected: 'No score change from this series' },
+    { event: 'Complete regional clash', teamA: 'Alpha', teamB: 'Beta', impact: { unit: 'series-applied', teamA: 12, teamB: -3 }, expected: '≈ +3 pts from this series' },
+    { event: 'Complete negative', teamA: 'Gamma', teamB: 'Omega', impact: { unit: 'series-applied', teamA: -12 }, expected: '≈ -4 pts from this series' },
+    { event: 'Outside contributors', teamA: 'Delta', teamB: 'Omega', impact: { unit: 'series-applied', teamA: 12, teamB: -12 }, expected: 'Outside the top three' },
+    { event: 'No impact', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied' }, expected: 'Series contribution unavailable' },
+    { event: 'Held impact', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'held', teamA: 12 }, expected: 'Series contribution unavailable' },
+  ]
+  const matches: MatchRecord[] = cases.map((entry, index) => {
+    const date = `2026-01-${String(index + 1).padStart(2, '0')}`
+    return { id: `contribution-game-${index}`, officialMatchId: `contribution-series-${index}`, sourceProvider: 'oracles-elixir',
+      date, datetimeUtc: `${date}T12:00:00.000Z`, season: 2026, event: entry.event, phase: 'Regular season', region: 'LCK', league: 'LCK',
+      teamAKills: 10, teamBKills: 5, teamAGold: 60_000, teamBGold: 55_000, patch: '', bestOf: 1, bestOfBasis: 'provider', tier: 'regional-regular',
+      teamA: entry.teamA, teamB: entry.teamB, winner: entry.teamA }
+  })
+  const teams = Object.fromEntries(['Alpha', 'Beta', 'Gamma', 'Delta', 'Omega', 'Aardvark'].map((name): [string, TeamProfile] => [name, {
+    name, code: name.slice(0, 3).toUpperCase(), league: ['Omega', 'Aardvark'].includes(name) ? 'LEC' : 'LCK', region: ['Omega', 'Aardvark'].includes(name) ? 'LEC' : 'LCK',
+  }]))
+  const data = createStaticRankingData({ matches, teams, rosters: {}, generatedAt: '2026-10-02T00:00:00.000Z', dataMode: 'seeded-sample' })
+  const plan = createPublicArtifactWritePlan(data)
+  const entries: Array<{ logicalPath: string; digest: string; bytes: number }> = []
+  const objects = new Map<string, string>()
+  for (const write of plan.writes) {
+    // Edit semantic fixture payloads before hashing so every served object keeps its receipt.
+    if (write.relativePath.startsWith('matches/pages/')) {
+      const payload = parsePublicMatchHistoryPage(write.value)
+      for (const match of payload.matches) {
+        const entry = cases.find((entry) => entry.event === match.event)
+        assert.ok(entry)
+        assert.equal(match.teamA.name, entry.teamA, entry.event)
+        assert.equal(match.teamB.name, entry.teamB, entry.event)
+        match.impact = entry.impact
+      }
+    }
+    if (write.relativePath === 'history/region-series.json') {
+      const payload = parsePublicRegionHistory(write.value)
+      for (const scope of Object.values(payload.scopes)) {
+        const series = scope.regionPowerSeries.LCK
+        if (!series) continue
+        scope.pointCount += matches.length - series.points.length
+        series.points = matches.map((match) => [match.date, 1800, 1, { contributingTeams: ['Alpha', 'Beta', 'Gamma'] }])
+      }
+    }
+    const prepared = prepareSemanticArtifact(write.value)
+    entries.push({ logicalPath: `/data/${write.relativePath}`, digest: prepared.digest, bytes: prepared.bytes })
+    for (const object of [...(prepared.children ?? []), prepared]) objects.set(`/data/objects/sha256/${object.digest}`, object.canonicalJson)
+  }
+  const meta = plan.manifest.artifactMeta
+  assert.ok(meta)
+  const manifest = createGenerationManifest({ generationId: meta.runId, rootManifest: plan.manifest, entries })
+  const fixture: Plugin = { name: 'region-contribution-browser-fixture', configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
+      if (!path.startsWith('/data/')) return next()
+      const body = path === '/data/ranking-summary.json' ? JSON.stringify(manifest) : objects.get(path)
+      response.setHeader('content-type', 'application/json')
+      response.statusCode = body ? 200 : 404
+      response.end(body ?? '{}')
+    })
+  } }
+  const server = await createServer({ logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixture] })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    await server.listen()
+    const address = server.httpServer!.address()
+    assert.ok(address && typeof address !== 'string')
+    const executablePath = chromium.executablePath()
+    browser = await chromium.launch({ headless: true, ...(existsSync(executablePath) ? {} : { channel: 'chrome' }) })
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+    await page.goto(`http://127.0.0.1:${address.port}/#regions?scope=all`)
+    await page.getByTitle('Open LCK region detail', { exact: true }).click()
+    const history = page.getByRole('region', { name: 'LCK match and score history', exact: true })
+    for (const entry of cases) {
+      const row = history.locator('article').filter({ has: page.getByText(entry.event, { exact: true }) })
+      await row.getByText(entry.expected, { exact: true }).waitFor({ timeout: 5_000 })
+      const unavailable = entry.expected === 'Series contribution unavailable'
+      assert.equal(await row.getByText('Series contribution unavailable', { exact: true }).count(), unavailable ? 1 : 0, entry.event)
+      assert.equal(await row.getByText('No score change from this series', { exact: true }).count(), entry.expected === 'No score change from this series' ? 1 : 0, entry.event)
+    }
   } finally { await browser?.close(); await server.close() }
 })
