@@ -51,6 +51,57 @@ test('manifest loader retries after a shared request rejects', async () => {
   assert.equal(manifest.artifactKind, 'public-ranking-manifest')
 })
 
+test('concurrent and returning views download and verify an immutable shard once', async () => {
+  const fixture = await generationFixture()
+  const requests: string[] = []
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input)
+    requests.push(url)
+    if (url === '/data/generation.json') return jsonResponse(fixture.generation)
+    if (url === fixture.rootEntry.objectUrl) return jsonResponse(fixture.rootSemantic)
+    if (url === fixture.shardEntry.objectUrl) return jsonResponse(fixture.shardSemantic)
+    return new Response(null, { status: 404 })
+  }
+  const manifest = await createPublicRankingManifestLoader('/data/generation.json', fetcher)()
+  const key = '2026__All__All'
+  const load = () => fetchPublicSnapshotShard(manifest.snapshotIndex[key].url, key, manifest.snapshotIndex[key], manifest, { fetcher })
+  const snapshots = await Promise.all([load(), load()])
+  snapshots.push(await load())
+  assert.ok(snapshots.every((snapshot) => snapshot.matchCount === fixture.legacyShard.matchCount))
+  snapshots[0].standings[0].rating = -1
+  assert.equal((await load()).standings[0].rating, fixture.legacyShard.standings[0].rating)
+  assert.equal(requests.filter((url) => url === fixture.shardEntry.objectUrl).length, 1)
+  for (const cache of ['reload', 'no-store'] as const) {
+    await fetchPublicArtifact(manifest, manifest.snapshotIndex[key].url, '/data/generation.json', parsePublicRankingShard, { fetcher, cache })
+  }
+  assert.equal(requests.filter((url) => url === fixture.shardEntry.objectUrl).length, 3)
+})
+
+test('reused immutable content is hydrated with each active generation identity', async () => {
+  const fixture = await generationFixture()
+  const nextGeneration: PublicArtifactGenerationManifest = {
+    ...fixture.generation,
+    generationId: 'next-generation',
+    runId: 'next-run',
+    generatedAt: '2026-10-13T00:00:00.000Z',
+    artifacts: Object.fromEntries(Object.entries(fixture.generation.artifacts).map(([key, entry]) => [key, { ...entry, generationId: 'next-generation' }])),
+  }
+  let rootRequests = 0
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input)
+    if (url === '/data/first-generation.json') return jsonResponse(fixture.generation)
+    if (url === '/data/next-generation.json') return jsonResponse(nextGeneration)
+    if (url === fixture.rootEntry.objectUrl) { rootRequests += 1; return jsonResponse(fixture.rootSemantic) }
+    return new Response(null, { status: 404 })
+  }
+  const first = await createPublicRankingManifestLoader('/data/first-generation.json', fetcher)()
+  const next = await createPublicRankingManifestLoader('/data/next-generation.json', fetcher)()
+  assert.equal(first.artifactMeta?.runId, fixture.generation.runId)
+  assert.equal(next.artifactMeta?.runId, nextGeneration.runId)
+  assert.equal(next.generatedAt, nextGeneration.generatedAt)
+  assert.equal(rootRequests, 1)
+})
+
 test('snapshot loading repairs a cached shard from an older publish', async () => {
   const manifest = parsePublicRankingManifest(JSON.parse(await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')))
   const key = '2026__All__All'
@@ -94,7 +145,7 @@ test('generation-backed snapshot loading does not outer-retry abort, HTTP, or in
           fixture.manifest,
           { fetcher: fixture.fetcher, signal: controller.signal },
         ),
-        scenario === 'abort' ? /Aborted/ : scenario === 'http' ? /403/ : /semantic digest mismatch/,
+        scenario === 'abort' ? { name: 'AbortError' } : scenario === 'http' ? /403/ : /semantic digest mismatch/,
       )
       assert.equal(targetRequests, 1)
     })
