@@ -56,7 +56,7 @@ test('builds exact tournament options from movement index entries', () => {
 
 test('labels a past event without schedule evidence as completed, not as latest data', () => {
   // Issue #115 F7: the schedule source starts in May 2026, so First Stand 2026 keeps the build status unknown.
-  const firstStand = { ...movementEntry('msi:2026', 8), id: 'first-stand:2026' as const, family: 'first-stand' as const, label: 'First Stand 2026', status: 'unknown' as const, startDate: '2026-03-16', boundaryDate: '2026-03-22', ratedThroughDate: '2026-03-22' }
+  const firstStand = { ...movementEntry('msi:2026', 8), id: 'first-stand:2026' as const, family: 'first-stand' as const, label: 'First Stand 2026', status: 'unknown' as const, startDate: '2026-03-16', boundaryDate: '2026-03-22', ratedThroughDate: '2026-03-22', scheduledEndDate: undefined }
   const msi = { ...movementEntry('msi:2026', 11), status: 'completed' as const }
   const recent = { ...firstStand, id: 'worlds:2026' as const, family: 'worlds' as const, label: 'Worlds 2026', startDate: '2026-09-28', boundaryDate: '2026-10-01', ratedThroughDate: '2026-10-01' }
 
@@ -93,6 +93,30 @@ test('keeps lagged tournament results labeled as latest data after matches elsew
   assert.equal(instance.dataLag, true)
   assert.equal(instance.ratedThroughDate, '2026-07-01')
   assert.equal(instance.boundaryDate, '2026-07-01')
+  assert.equal(instance.resultCoverageComplete, false)
+
+  const entry = { ...movementEntry('msi:2026', 2), ...instance }
+  const option = tournamentFilterOptionsForStandings([], [entry], '2026-08-01').at(-1)
+  const boardStatus = effectiveTournamentStatus(instance, '2026-08-01')
+
+  assert.equal(option?.label, 'MSI 2026 · Latest data')
+  assert.equal(option?.status, boardStatus)
+  assert.equal(tournamentBoundaryLabel(boardStatus), 'Latest data')
+})
+
+test('keeps incomplete same-day tournament results labeled as latest data', () => {
+  const [instance] = deriveTournamentInstances({
+    generatedAt: '2026-08-01T00:00:00.000Z',
+    matches: [ratedGame('msi-third-place', 1, 'Alpha')],
+    scheduleReferences: [
+      { matchId: 'msi-third-place', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01' },
+      { matchId: 'msi-final', leagueName: 'MSI', date: '2026-07-12', state: 'completed', coverageStart: '2026-07-12', coverageEnd: '2026-08-01' },
+    ],
+  })
+  assert.ok(instance)
+  assert.equal(instance.status, 'unknown')
+  assert.equal(instance.scheduledEndDate, '2026-07-12')
+  assert.equal(instance.dataLag, false)
   assert.equal(instance.resultCoverageComplete, false)
 
   const entry = { ...movementEntry('msi:2026', 2), ...instance }
