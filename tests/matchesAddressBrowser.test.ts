@@ -11,13 +11,14 @@ import type { MatchRecord } from '../src/types.ts'
 test('Matches event choices and addressed pages survive catalog loading and real document reloads', { timeout: 90_000 }, async (t) => {
   const matches: MatchRecord[] = Array.from({ length: 66 }, (_, index) => {
     const year = index < 31 ? 2025 : 2026
-    const event = index < 27 ? 'DCup 2025' : index === 27 ? 'Demacia Cup 2025' : index < 31 ? 'Unknown Invitational 2025' : 'LCK 2026 Spring'
-    const league = index < 28 ? 'LPL' : index < 31 ? 'LEC' : 'LCK'
+    const event = index < 27 ? 'DCup 2025' : index === 27 ? 'Demacia Cup 2025' : index < 31 ? 'Unknown Invitational 2025' : index === 65 ? 'First Stand 2026' : 'LCK 2026 Spring'
+    const league = index < 28 ? 'LPL' : index < 31 ? 'LEC' : index === 65 ? 'FST' : 'LCK'
+    const region = index < 28 ? 'LPL' : index < 31 ? 'LEC' : index === 65 ? 'International' : 'LCK'
     const datetimeUtc = new Date(Date.UTC(year, 0, 1) + index * 60_000).toISOString()
     return {
       id: `matches-address-game-${index}`, officialMatchId: `matches-address-series-${index}`,
       sourceProvider: index === 27 ? 'leaguepedia-cargo' : 'oracles-elixir',
-      date: datetimeUtc.slice(0, 10), datetimeUtc, season: year, event, league, region: league,
+      date: datetimeUtc.slice(0, 10), datetimeUtc, season: year, event, league, region,
       phase: 'Regular season', patch: '', bestOf: 1, bestOfBasis: 'provider', tier: 'regional-regular',
       teamAKills: 10, teamBKills: 5, teamAGold: 60_000, teamBGold: 55_000,
       teamA: 'Alpha', teamB: 'Beta', winner: index % 2 ? 'Alpha' : 'Beta',
@@ -43,8 +44,18 @@ test('Matches event choices and addressed pages survive catalog loading and real
   const catalogEntry = entries.find((entry) => entry.logicalPath === `/data/${publicMatchHistoryShardPath('All__All__All')}`)
   assert.ok(catalogEntry)
   const catalogPath = `/data/objects/sha256/${catalogEntry.digest}`
+  const snapshotUrl = new URL(plan.manifest.snapshotIndex['2026__All__All'].url, 'http://fixture.invalid')
+  const snapshotEntry = entries.find((entry) => entry.logicalPath === snapshotUrl.pathname)
+  assert.ok(snapshotEntry)
+  const snapshotPath = `/data/objects/sha256/${snapshotEntry.digest}`
+  const checkpointUrl = new URL(plan.manifest.snapshotIndex['2026__All__All__split-1'].url, 'http://fixture.invalid')
+  const checkpointEntry = entries.find((entry) => entry.logicalPath === checkpointUrl.pathname)
+  assert.ok(checkpointEntry)
+  const checkpointPath = `/data/objects/sha256/${checkpointEntry.digest}`
   let holdCatalog = false
   const pendingCatalog: Array<() => void> = []
+  let holdSnapshot = false
+  const pendingSnapshot: Array<() => void> = []
   const fixture: Plugin = { name: 'matches-address-fixture', configureServer(server) {
     server.middlewares.use((request, response, next) => {
       const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
@@ -53,6 +64,7 @@ test('Matches event choices and addressed pages survive catalog loading and real
       response.setHeader('content-type', 'application/json')
       response.statusCode = body ? 200 : 404
       if (holdCatalog && path === catalogPath) { pendingCatalog.push(() => response.end(body)); return }
+      if (holdSnapshot && (path === snapshotPath || path === checkpointPath)) { pendingSnapshot.push(() => response.end(body)); return }
       response.end(body ?? '{}')
     })
   } }
@@ -187,10 +199,83 @@ test('Matches event choices and addressed pages survive catalog loading and real
       await pager.getByText('Page 1 of 2', { exact: true }).waitFor()
       await page.waitForFunction(() => !new URLSearchParams(location.hash.split('?')[1]).has('page'))
     })
+
+    await t.test('user scope changes reset pages across cold snapshot remounts without changing addressed navigation', async () => {
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } })
+      })
+      holdSnapshot = true
+      await navigate('#matches?scope=all')
+      await rows.nth(24).waitFor()
+      await page.getByRole('button', { name: 'Next page', exact: true }).click()
+      await pager.getByText('Page 2 of 3', { exact: true }).waitFor()
+      await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('page') === '2')
+      const requestedSnapshot = page.waitForRequest((request) => new URL(request.url()).pathname === snapshotPath)
+      await page.getByLabel('Season', { exact: true }).selectOption('2026')
+      await requestedSnapshot
+      await page.getByText('Fetching the exact public shard for this scope.', { exact: true }).waitFor()
+      await page.waitForFunction(() => !document.querySelector('[aria-label="Match history results"]'))
+      assert.ok(pendingSnapshot.length > 0, 'the selected scope must require an uncached snapshot')
+      holdSnapshot = false
+      pendingSnapshot.splice(0).forEach((respond) => respond())
+      await pager.getByText(/Page [12] of 2/).waitFor()
+      await rows.nth(9).waitFor()
+      console.log('Cold scope control receipt:', JSON.stringify({ hash: new URL(page.url()).hash, pager: await pager.innerText(), rows: await rows.count(), errors }))
+      await pager.getByText('Page 1 of 2', { exact: true }).waitFor()
+      await pager.getByText('1–25 of 35', { exact: true }).waitFor()
+      assert.equal(await rows.count(), 25)
+      await page.waitForFunction(() => !new URLSearchParams(location.hash.split('?')[1]).has('page'))
+
+      await page.getByRole('button', { name: 'Next page', exact: true }).click()
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await page.getByLabel('Season', { exact: true }).selectOption('2026')
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('page'), '2', 'selecting the current scope is a no-op')
+
+      holdSnapshot = true
+      const requestedCheckpoint = page.waitForRequest((request) => new URL(request.url()).pathname === checkpointPath)
+      await page.getByRole('button', { name: 'Split 1', exact: true }).click()
+      await requestedCheckpoint
+      await page.waitForFunction(() => !document.querySelector('[aria-label="Match history results"]'))
+      assert.ok(pendingSnapshot.length > 0, 'the checkpoint must also require an uncached snapshot')
+      holdSnapshot = false
+      pendingSnapshot.splice(0).forEach((respond) => respond())
+      await pager.getByText('Page 1 of 2', { exact: true }).waitFor()
+      await rows.nth(24).waitFor()
+      await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026:checkpoint:split-1' && !new URLSearchParams(location.hash.split('?')[1]).has('page'))
+      await page.getByRole('button', { name: 'Next page', exact: true }).click()
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Split 1', exact: true }).click()
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Full year', exact: true }).click()
+      await pager.getByText('Page 1 of 2', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Next page', exact: true }).click()
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Split 1', exact: true }).click()
+      await pager.getByText('Page 1 of 2', { exact: true }).waitFor()
+
+      await page.getByLabel('Season', { exact: true }).selectOption('All')
+      await pager.getByText('Page 1 of 3', { exact: true }).waitFor()
+      await rows.nth(24).waitFor()
+      await page.getByRole('button', { name: 'Next page', exact: true }).click()
+      await pager.getByText('Page 2 of 3', { exact: true }).waitFor()
+      await page.getByLabel('Season', { exact: true }).selectOption('2026')
+      await pager.getByText('Page 1 of 2', { exact: true }).waitFor()
+
+      await navigate('#matches?scope=all')
+      await pager.getByText('Page 1 of 3', { exact: true }).waitFor()
+      await page.evaluate(() => { location.hash = '#matches?scope=season:2026&page=2' })
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await rows.nth(9).waitFor()
+      assert.equal(await rows.count(), 10)
+      assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('page'), '2', 'address restoration must keep its explicitly requested page')
+    })
     assert.deepEqual(errors, [])
   } finally {
     holdCatalog = false
     pendingCatalog.splice(0).forEach((respond) => respond())
+    holdSnapshot = false
+    pendingSnapshot.splice(0).forEach((respond) => respond())
     await browser?.close()
     await server.close()
   }

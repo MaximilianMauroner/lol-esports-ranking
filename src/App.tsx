@@ -198,6 +198,17 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     setScope(nextScope)
   }, [])
 
+  function selectScopeFromControl(nextScope: string) {
+    if (mode === 'matches' && nextScope !== effectiveScope) {
+      // A cold scope unmounts Matches before it can reset its page. Clear the
+      // old page before loading, while address restoration keeps its own page.
+      const query = currentHashQuery()
+      query.delete('page')
+      window.history.replaceState(null, '', `#matches?${query.toString()}`)
+    }
+    selectScope(nextScope)
+  }
+
   const searchRef = useRef<HTMLInputElement | null>(null)
   const searchTeams = useCallback((value: string) => {
     setTeamSearch(value)
@@ -420,9 +431,9 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
           throughDate={loadedData.coverage?.latestMatchDate}
           scopeThroughDate={snapshot?.rollingWindow?.endDate}
           publishedAt={loadedData.generatedAt}
-          onSelectSeason={(season) => selectScope(scopeForSeasonTab(season))}
+          onSelectSeason={(season) => selectScopeFromControl(scopeForSeasonTab(season))}
           onSelectCheckpoint={(checkpointId) =>
-            selectScope(checkpointId && activeSeason ? checkpointScope(activeSeason, checkpointId) : `season:${activeSeason}`)
+            selectScopeFromControl(checkpointId && activeSeason ? checkpointScope(activeSeason, checkpointId) : `season:${activeSeason}`)
           }
           onIntent={(checkpointId) => {
             if (!activeSeason) return
