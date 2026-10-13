@@ -10,6 +10,7 @@ import type {
   PublicTournamentMovementTeam,
 } from '../lib/publicArtifacts/schema'
 import { displayRegionPowerScore, type RegionStrength } from '../lib/regionStrength'
+import { providerFreshness, type ProviderFreshness } from '../lib/sourceFreshness'
 import type { EventTier } from '../types'
 import { extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
@@ -100,7 +101,6 @@ type TeamDataSummary = {
     unresolvedPlayerRows?: number
     postgameObservedRosterSides?: number
   }
-  notes?: string[]
   regionFilter?: string
   tournamentFilter?: string
   tableTeamCount?: number
@@ -1266,20 +1266,17 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
   )
 }
 
-function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'version' | 'configHash'>; data?: TeamDataSummary }) {
-  const providers = [...(data?.sourceBreakdown ?? [])].sort((a, b) => b.matchCount - a.matchCount).slice(0, 3)
-  const activeSources = (data?.sources ?? []).filter((source) => source.status === 'active')
-  const sourceFreshness = activeSources.filter((source) => source.retrievedAt || source.coverageEnd || source.rowCount).slice(0, 4)
-  const warnings = uniqueSourceWarnings(activeSources.flatMap((source) => source.warnings ?? [])).slice(0, 3)
-  const notes = (data?.notes ?? []).filter(Boolean).slice(0, 2)
+/** Visitor-facing data freshness. Operator details stay in the manifest and refresh logs. */
+export function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'version'>; data?: TeamDataSummary }) {
+  const providers = providerFreshness(data?.sourceBreakdown ?? [], data?.sources ?? [])
 
   return (
     <details className="group w-full overflow-hidden rounded-lg border border-border bg-card">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[var(--text-strong)] after:ml-auto after:text-base after:leading-none after:text-muted-foreground after:content-['+'] group-open:border-b group-open:border-border group-open:after:content-['-'] [&::-webkit-details-marker]:hidden">
         <span className="text-base font-semibold">Data and sources</span>
-        <small className="text-xs text-[var(--faint)]">Coverage, config, providers</small>
+        <small className="text-xs text-[var(--faint)]">Freshness, coverage, providers</small>
       </summary>
-      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
+      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border last:mb-3 [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
         <span>
           <small>Model</small>
           <b>{formatModelVersion(model?.version)}</b>
@@ -1297,8 +1294,8 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
           <b>{formatNumber(data?.tableTeamCount)} / {formatNumber(data?.scopeTeamCount)}</b>
         </span>
         <span>
-          <small>Config</small>
-          <b>{model?.configHash ?? 'unknown'}</b>
+          <small>Latest match</small>
+          <b>{formatDate(data?.latestMatchDate)}</b>
         </span>
         <span>
           <small>Hidden from ranked board</small>
@@ -1314,69 +1311,39 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
         </span>
       </div>
       {providers.length > 0 ? (
-        <div className="mx-3 mt-3 grid gap-px bg-border">
-          {providers.map((provider) => (
-            <div className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={provider.provider}>
-              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{provider.provider}</span>
+        <div className="mx-3 mt-3 grid gap-px bg-border last:mb-3" aria-label="Match providers">
+          {providers.slice(0, 3).map((provider) => (
+            <div className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={provider.label}>
+              <span className="grid min-w-0 gap-0.5">
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap text-foreground">{provider.label}</span>
+                {provider.through ? <span>Data through {formatDate(provider.through)}</span> : null}
+              </span>
               <b className="shrink-0 text-foreground tabular-nums">{formatNumber(provider.matchCount)}</b>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {sourceFreshness.length > 0 ? (
-        <div className="mx-3 mt-3 grid gap-px bg-border" aria-label="Source freshness">
-          {sourceFreshness.map((source) => (
-            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={source.name}>
-              <span className="max-w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={source.description}>{compactSourceName(source.name)}</span>
-              <b className="shrink-0 whitespace-normal text-foreground tabular-nums">{sourceFreshnessLabel(source)}</b>
             </div>
           ))}
         </div>
       ) : null}
       {data?.seeded ? (
         <p className="mx-3 mt-3 text-xs text-[var(--down)] last:mb-3 [overflow-wrap:anywhere]">Seeded sample data is active. Do not treat these rows as official rankings.</p>
-      ) : warnings.length > 0 ? (
-        <>
-          {warnings.map((warning) => (
-            <p className={cn('mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]', (warning.severity === 'error' || warning.severity === 'warning') && 'text-[var(--down)]')} key={`${warning.kind}-${warning.severity}-${warning.message}`}>
-              {warning.message}
-            </p>
-          ))}
-        </>
-      ) : notes.length > 0 ? (
-        <>
-          {notes.map((note) => <p className="mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]" key={note}>{note}</p>)}
-        </>
-      ) : (
-        <p className="mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]">Latest match: {formatDate(data?.latestMatchDate)}</p>
-      )}
+      ) : providers.filter((provider) => provider.failedUpdate).map((provider) => (
+        <p className="mx-3 mt-3 text-xs text-muted-foreground last:mb-3 [overflow-wrap:anywhere]" key={provider.label}>
+          {failedUpdateNotice(provider, providers)}
+        </p>
+      ))}
     </details>
   )
 }
 
-function compactSourceName(name: string) {
-  if (name.includes("Oracle's Elixir")) return name.replace("Oracle's Elixir CSV: ", 'Oracle ')
-  if (name.includes('Leaguepedia Cargo')) return name.replace('Leaguepedia Cargo: ', 'Leaguepedia ')
-  return name
-}
-
-function sourceFreshnessLabel(source: DataSourceInfo) {
-  const parts = [
-    source.retrievedAt ? `retrieved ${formatDate(source.retrievedAt)}` : undefined,
-    source.coverageEnd ? `through ${formatDate(source.coverageEnd)}` : undefined,
-    typeof source.rowCount === 'number' ? `${formatNumber(source.rowCount)} rows` : undefined,
-  ]
-  return parts.filter(Boolean).join(' · ') || 'source metadata'
-}
-
-function uniqueSourceWarnings(warnings: NonNullable<DataSourceInfo['warnings']>) {
-  const seen = new Set<string>()
-  return warnings.filter((warning) => {
-    const key = `${warning.kind}\u0000${warning.message}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+/** Says only what the published coverage shows: where this provider's data ends and which providers have later matches. */
+function failedUpdateNotice(provider: ProviderFreshness, providers: ProviderFreshness[]) {
+  const sentences = [`${provider.label} ${provider.failedUpdate === 'partial' ? 'was only partly updated' : 'could not be updated'} in the latest refresh.`]
+  const through = provider.through
+  if (through) {
+    sentences.push(`Its data ends on ${formatDate(through)}.`)
+    const later = providers.filter((other) => other.through && other.through > through).map((other) => other.label)
+    if (later.length > 0) sentences.push(`Later matches come from ${later.join(' and ')}.`)
+  }
+  return sentences.join(' ')
 }
 
 type RankEvidenceSummary = {
