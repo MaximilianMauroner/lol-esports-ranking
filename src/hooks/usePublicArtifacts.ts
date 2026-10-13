@@ -302,6 +302,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
           cache: 'no-cache',
           archiveSelection: { records: { '/scopeIndex': [snapshotKey(filter)] }, ...(matchHistoryYear && matchHistoryYear !== 'All' ? { years: [matchHistoryYear] } : {}) },
         })
+        if (controller.signal.aborted) return
         validateMatchHistoryRun(index, manifest)
         Object.values(index.scopeIndex).forEach((entry) => assertGenerationMapping(index, entry.url))
         setMatchHistoryIndexState({ status: 'ready', data: index })
@@ -339,8 +340,11 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     async function load() {
       try {
         const catalog = await fetchPublicArtifact(index, expected.url, DATA_URL, parsePublicMatchHistoryCatalog, { signal: controller.signal, ...(selectedMatchYear ? { archiveSelection: { years: [selectedMatchYear] } } : {}) })
+        if (controller.signal.aborted) return
         validateMatchHistoryCatalog(key, expected, catalog, index, Boolean(selectedMatchYear))
         catalog.pages.forEach((entry) => assertGenerationMapping(catalog, entry.url))
+        matchHistoryPagesRef.current = {}
+        setMatchHistoryPages({})
         matchHistoryCatalogRef.current = catalog
         setMatchHistoryCatalogState({ status: 'ready', data: catalog })
       } catch (error) {
@@ -351,10 +355,6 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     void load()
     return () => controller.abort()
   }, [effectiveScope, filter, loadMatchHistory, matchHistoryIndexState, selectedMatchYear, matchHistoryAttempt])
-
-  useEffect(() => {
-    matchHistoryPagesRef.current = matchHistoryPages
-  }, [matchHistoryPages])
 
   const requestMatchHistoryPages = useCallback((pageNumbers: number[]) => {
     const catalog = matchHistoryCatalogRef.current
@@ -376,6 +376,14 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
       })
     }
   }, [])
+
+  useEffect(() => {
+    if (matchHistoryCatalogState.status !== 'ready') return
+    if (matchHistoryCatalogRef.current !== matchHistoryCatalogState.data) return
+    // The default ledger page has 25 series, which can span multiple stored pages.
+    const initialPages = [...new Set(matchHistoryCatalogState.data.series.slice(0, 25).map((series) => series.page))]
+    if (initialPages.length) requestMatchHistoryPages(initialPages)
+  }, [matchHistoryCatalogState, requestMatchHistoryPages])
 
   useEffect(() => {
     snapshotCacheRef.current = snapshotCache
@@ -441,6 +449,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     const manifest = data
     const prefetchFilter = scopeToFilter(normalizeScopeForData(nextScope, manifest))
     const snapshotCacheKey = snapshotKey(prefetchFilter)
+    if (manifest.snapshots?.[snapshotCacheKey]) return
     const snapshotEntry = snapshotCacheRef.current[snapshotCacheKey]
     if (!snapshotEntry || (snapshotEntry.status !== 'ready' && snapshotEntry.status !== 'loading')) {
       const expected = manifest.snapshotIndex?.[snapshotCacheKey]
@@ -499,8 +508,9 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     if (!data) return
     const manifest = data
     const key = snapshotKey(filter)
+    if (manifest.snapshots?.[key]) return
     const cacheEntry = snapshotCacheRef.current[key]
-    if (cacheEntry?.status === 'ready') return
+    if (cacheEntry?.status === 'ready' || cacheEntry?.status === 'loading') return
     const expected = manifest.snapshotIndex?.[key]
     if (!expected) {
       setSnapshotCache((current) => ({
@@ -509,24 +519,8 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
       }))
       return
     }
-    const url = resolvePublicArtifactUrl(expected.url, DATA_URL)
-    const controller = new AbortController()
-    setSnapshotCache((current) => ({ ...current, [key]: { status: 'loading' } }))
-    async function load() {
-      try {
-        const next = await fetchPublicSnapshotShard(url, key, expected, manifest, { signal: controller.signal })
-        setSnapshotCache((current) => ({ ...current, [key]: { status: 'ready', snapshot: next } }))
-      } catch (error) {
-        if (isAbortError(error)) return
-        setSnapshotCache((current) => ({
-          ...current,
-          [key]: { status: 'error', message: error instanceof Error ? error.message : 'Unable to load filtered snapshot' },
-        }))
-      }
-    }
-    void load()
-    return () => controller.abort()
-  }, [data, effectiveScope, filter])
+    prefetchScope(effectiveScope)
+  }, [data, effectiveScope, filter, prefetchScope])
 
   useEffect(() => {
     if (!loadTeamHistory || teamHistoryRootState.status !== 'ready' || teamHistoryRootState.data.artifactKind !== 'team-history-index') return

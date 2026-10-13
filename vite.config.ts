@@ -14,7 +14,7 @@ import { createTournamentFeedService } from './scripts/leaguepedia-tournament-fe
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [homepagePrerenderPlugin(), liveTournamentFeedPlugin(), react(), tailwindcss()],
+  plugins: [rankingManifestPreloadPlugin(), homepagePrerenderPlugin(), liveTournamentFeedPlugin(), react(), tailwindcss()],
   server: {
     allowedHosts: ['coding.tailbc92d.ts.net'],
   },
@@ -24,6 +24,30 @@ export default defineConfig({
     },
   },
 })
+
+function rankingManifestPreloadPlugin(): Plugin {
+  let dataUrl = '/data/ranking-summary.json'
+  return {
+    name: 'ranking-manifest-preload',
+    configResolved(config) {
+      dataUrl = config.env.VITE_RANKING_DATA_URL || dataUrl
+    },
+    transformIndexHtml() {
+      return [{
+        tag: 'script',
+        injectTo: 'head-prepend',
+        children: `if (location.pathname === '/' && !/^#tournaments(?:\\?|$)/.test(location.hash)) {
+          const preload = document.createElement('link');
+          preload.rel = 'preload';
+          preload.as = 'fetch';
+          preload.href = ${JSON.stringify(dataUrl).replaceAll('<', '\\u003c')};
+          preload.crossOrigin = 'anonymous';
+          document.head.append(preload);
+        }`,
+      }]
+    },
+  }
+}
 
 function homepagePrerenderPlugin(): Plugin {
   return {
