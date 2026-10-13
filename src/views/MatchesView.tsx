@@ -20,7 +20,7 @@ import { groupedMatchEvents } from '../lib/matchEventGroups'
 import { SeriesCards, SeriesTable, type MatchSeries } from '../components/matches/SeriesLedger'
 
 const PAGE_SIZES = [25, 50] as const
-const DESKTOP_LEDGER_QUERY = '(min-width: 768px)'
+const DESKTOP_LEDGER_QUERY = '(min-width: 48rem)'
 
 function subscribeToLedgerLayout(onChange: () => void) {
   const media = window.matchMedia(DESKTOP_LEDGER_QUERY)

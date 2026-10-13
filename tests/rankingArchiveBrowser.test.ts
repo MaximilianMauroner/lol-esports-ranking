@@ -62,7 +62,11 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     assert.ok(address && typeof address !== 'string')
     const base = `http://127.0.0.1:${address.port}`
     const executablePath = chromium.executablePath()
-    browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
+    browser = await chromium.launch({
+      headless: true,
+      ...(existsSync(executablePath) ? {} : { channel: 'chrome' }),
+      args: ['--blink-settings=defaultFontSize=20'],
+    })
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
     // Hold the off-screen chart observer so this assertion measures bootstrap.
     await page.addInitScript(() => { window.IntersectionObserver = class implements IntersectionObserver { readonly root = null; readonly rootMargin = '0px'; readonly scrollMargin = '0px'; readonly thresholds = []; observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } } })
@@ -99,6 +103,14 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     await page.locator('table').getByText('Sample 2025', { exact: true }).first().waitFor()
     await page.getByLabel('Match history year').selectOption('All')
     await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
+    // Media-query rem uses the browser's initial font, not a CSS font-size override.
+    await page.setViewportSize({ width: 800, height: 844 })
+    assert.deepEqual(await page.evaluate(() => ({
+      pixels: window.matchMedia('(min-width: 768px)').matches,
+      rems: window.matchMedia('(min-width: 48rem)').matches,
+    })), { pixels: true, rems: false }, 'The browser font preference must separate the ledger breakpoints')
+    await page.getByText('Sample 2026', { exact: true }).filter({ visible: true }).first().waitFor({ timeout: 5_000 })
+    assert.equal(await page.locator('table').count(), 0, 'Loaded match cards remain visible below the rem breakpoint')
     await page.setViewportSize({ width: 390, height: 844 })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     const requestsBeforeReturn = requests.length
