@@ -307,7 +307,7 @@ export function tournamentFilterOptionsForStandings(
     { value: 'All', label: 'All', count: standings.length },
     ...(internationalCount > 0 ? [{ value: 'international' as const, label: 'International', count: internationalCount }] : []),
     ...tournamentEntries.map((entry) => {
-      const status = listedTournamentStatus(entry, latestMatchDate)
+      const status = effectiveTournamentStatus(entry, latestMatchDate)
       return {
         value: `tournament:${entry.id}` as ExactTournamentFilterValue,
         label: `${entry.label} · ${tournamentStatusLabel(status)}`,
@@ -319,14 +319,17 @@ export function tournamentFilterOptionsForStandings(
 }
 
 /**
- * The build calls an event completed only with schedule evidence, and the
- * schedule source does not reach back to older events. An event without a
- * rated match for this many days, while matches elsewhere continue, has ended.
- * International events pause about a week at most, before the Worlds final.
+ * The build calls an event completed only with schedule evidence. The schedule
+ * fetch reads 4 older pages by default, so events before May 2026 have none
+ * and keep the status unknown. An event without a rated match for this many
+ * days, while matches elsewhere continue, has ended. International events
+ * pause about a week at most, before the Worlds final.
+ * Remove this rule when the build marks older events completed.
  */
 const TOURNAMENT_ENDED_AFTER_IDLE_DAYS = 14
 
-function listedTournamentStatus(entry: Pick<PublicTournamentMovementIndexEntry, 'status' | 'ratedThroughDate'>, latestMatchDate?: string) {
+/** The status that the tournament list and every tournament label show. */
+export function effectiveTournamentStatus(entry: Pick<PublicTournamentMovementIndexEntry, 'status' | 'ratedThroughDate'>, latestMatchDate?: string) {
   if (entry.status !== 'unknown' || !latestMatchDate || !isDateString(latestMatchDate)) return entry.status
   return daysBetween(entry.ratedThroughDate, latestMatchDate) >= TOURNAMENT_ENDED_AFTER_IDLE_DAYS ? 'completed' : 'unknown'
 }

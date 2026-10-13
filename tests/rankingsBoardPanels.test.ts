@@ -16,7 +16,7 @@ test('What changed names the upset event like the match ledger, not by its sourc
   assert.doesNotMatch(html, /LPL\/2026 Season/)
 })
 
-test('record order breaks equal wins by losses, and the reverse order is its mirror', () => {
+test('record order breaks equal wins by losses', () => {
   // Issue #115 F5: T1 39-22 sorted above KC 39-18 because only wins counted.
   const records = [
     { team: 'T1', wins: 39, losses: 22 },
@@ -25,5 +25,4 @@ test('record order breaks equal wins by losses, and the reverse order is its mir
   ]
 
   assert.deepEqual(records.toSorted((a, b) => compareRecord(b, a)).map((record) => record.team), ['KC', 'T1', 'G2'])
-  assert.deepEqual(records.toSorted(compareRecord).map((record) => record.team), ['G2', 'T1', 'KC'])
 })

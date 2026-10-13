@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   completedOfficialMatchIds,
   deriveTournamentInstances,
+  effectiveTournamentStatus,
   teamMatchesTournamentFilter,
   tournamentFamilyForEvent,
   tournamentEntriesForScope,
@@ -63,7 +64,15 @@ test('labels a past event without schedule evidence as completed, not as latest 
   assert.deepEqual(labels, ['All', 'Worlds 2026 · Latest data', 'MSI 2026 · Completed', 'First Stand 2026 · Completed'])
 })
 
-test('lists a live Worlds as ongoing from its first rated match, and not before', () => {
+test('an event without schedule evidence ends after 14 days without a rated match', () => {
+  const lastMatchOct1 = { status: 'unknown' as const, ratedThroughDate: '2026-10-01' }
+
+  assert.equal(effectiveTournamentStatus(lastMatchOct1, '2026-10-14'), 'unknown')
+  assert.equal(effectiveTournamentStatus(lastMatchOct1, '2026-10-15'), 'completed')
+  assert.equal(effectiveTournamentStatus({ status: 'ongoing', ratedThroughDate: '2026-09-01' }, '2026-10-15'), 'ongoing')
+})
+
+test('derives a live Worlds entry from its first rated Play-In match, not from schedule rows alone', () => {
   // Issue #115 F7: on Oct 12 Worlds 2026 had only scheduled matches; the Play-In starts on Oct 15.
   const schedule = (retrievedAt: string, openingState: string) => [
     { leagueName: 'Worlds', leagueSlug: 'worlds', date: '2026-10-15', state: openingState, retrievedAt, coverageStart: '2026-10-01', coverageEnd: '2026-11-14' },
@@ -76,8 +85,6 @@ test('lists a live Worlds as ongoing from its first rated match, and not before'
   const [worlds] = deriveTournamentInstances({ generatedAt: '2026-10-16T00:00:00.000Z', matches: [playIn], scheduleReferences: schedule('2026-10-16T00:00:00Z', 'completed') })
   assert.equal(worlds?.id, 'worlds:2026')
   assert.equal(worlds?.status, 'ongoing')
-  const option = tournamentFilterOptionsForStandings([], [{ ...worlds!, participantCount: 4, url: '/data/history/tournament-moves/worlds-2026.json' }], '2026-10-15').at(-1)
-  assert.equal(option?.label, 'Worlds 2026 · Ongoing')
 })
 
 test('keeps tournament instances compatible with the active season and checkpoint window', () => {

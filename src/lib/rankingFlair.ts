@@ -194,9 +194,11 @@ export function deriveMovementPicks(standings: readonly PublicTeamStanding[]): R
 }
 
 /**
- * The biggest riser and faller over one tournament: rank places first, then
- * Power. Like the rolling picks, a riser must have moved up and a faller down,
- * so a board with one team does not list it twice.
+ * The biggest riser and faller over one tournament, ordered by rank places,
+ * then Power. A team moved up when it gained places, or held its place and
+ * gained Power. The riser is the top team that moved up and the faller is the
+ * bottom team that moved down, so no team is both and a board with one team
+ * lists it once.
  */
 export function deriveTournamentMovementPicks(teams: readonly PublicTournamentMovementTeam[]) {
   const byRise = teams.toSorted((a, b) => b.rankMovement - a.rankMovement || b.ratingDelta - a.ratingDelta || compareCodeUnits(a.team, b.team))

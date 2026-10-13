@@ -56,6 +56,7 @@ import { assignColorSlots, sameColorSlots } from '../lib/colorSlots'
 import { UPSET_CHANCE } from '../lib/upset'
 import { POWER_COMPONENT_LABELS } from '../lib/ratingComponentLabels'
 import {
+  effectiveTournamentStatus,
   teamMatchesTournamentFilter,
   projectTournamentStandings,
   tournamentBoundaryLabel,
@@ -205,9 +206,14 @@ export function TeamsView({
     [tournamentOptions, tournamentFilter],
   )
   const exactTournamentId = tournamentIdFromFilter(activeTournamentFilter)
-  const activeTournament = tournamentMovementState.status === 'ready' && tournamentMovementState.data.id === exactTournamentId
+  const loadedTournament = tournamentMovementState.status === 'ready' && tournamentMovementState.data.id === exactTournamentId
     ? tournamentMovementState.data
     : undefined
+  // The board labels show the same status as the tournament list.
+  const activeTournament = useMemo(
+    () => loadedTournament && { ...loadedTournament, status: effectiveTournamentStatus(loadedTournament, dataSummary?.latestMatchDate) },
+    [dataSummary?.latestMatchDate, loadedTournament],
+  )
   const displayStandings = useMemo(
     () => activeTournament ? projectTournamentStandings(standings, activeTournament) : standings,
     [activeTournament, standings],
@@ -270,6 +276,9 @@ export function TeamsView({
     const byEligibility = eligibilityFilter === 'ranked' && !exactTournamentId ? eligibleInScope : scopeFiltered
     return tierFilter === 'All' ? byEligibility : byEligibility.filter((team) => tierFor(team) === tierFilter)
   }, [eligibilityFilter, eligibleInScope, exactTournamentId, scopeFiltered, tierFilter, tierFor])
+  // Counted on the board itself: a tier filter removes unranked teams, because only ranked teams have a tier.
+  const unrankedOnTournamentBoard = exactTournamentId ? filtered.filter((team) => !team.eligibility?.eligible).length : 0
+  const showsWholeTournamentField = search.trim() === '' && region === 'All' && tierFilter === 'All'
   const tierCounts = useMemo(
     () => (['S', 'A', 'B', 'C'] as const).map((tier) => ({ tier, count: eligibleInScope.filter((team) => tierFor(team) === tier).length })),
     [eligibleInScope, tierFor],
@@ -313,7 +322,8 @@ export function TeamsView({
   const visible = sorted.slice(pageStart, pageStart + pageSize)
   const pageEnd = sorted.length === 0 ? 0 : pageStart + visible.length
   const resultSummary = `${formatNumber(sorted.length === 0 ? 0 : pageStart + 1)}-${formatNumber(pageEnd)} of ${formatNumber(filtered.length)}`
-  const activeFilterCount = [search.trim() !== '', region !== 'All', tierFilter !== 'All', activeTournamentFilter !== 'All', eligibilityFilter !== 'ranked'].filter(Boolean).length
+  // A tournament board ignores the unranked setting, so it does not count there.
+  const activeFilterCount = [search.trim() !== '', region !== 'All', tierFilter !== 'All', activeTournamentFilter !== 'All', eligibilityFilter !== 'ranked' && !exactTournamentId].filter(Boolean).length
   const hasActiveFilters = activeFilterCount > 0
   const [ratingMin, ratingMax] = useMemo(
     () => extent(filtered.map((team) => teamScoreFor(team) ?? Number.NaN)),
@@ -501,7 +511,7 @@ export function TeamsView({
           <Panel>
             <PanelHeader
               title={activeTournament ? `${activeTournament.label} standings` : 'Power ranking'}
-              description={activeTournament ? `Ranks and scores at the event endpoint, ${formatDate(activeTournament.boundaryDate)}. Includes every participant.` : undefined}
+              description={activeTournament ? `Ranks and scores at the event endpoint, ${formatDate(activeTournament.boundaryDate)}.${showsWholeTournamentField ? ' Includes every participant.' : ''}` : undefined}
               actions={<span className="whitespace-nowrap text-xs text-[var(--faint)] tabular-nums">{resultSummary}</span>}
             />
             {/* One row of filters above the table they scope. The controls
@@ -549,9 +559,9 @@ export function TeamsView({
                 {tournamentMovementIndexState.status === 'loading' ? (
                   <LoadingState presentation="inline" label="Loading tournaments" className="text-xs" />
                 ) : null}
-                {hiddenFromRankedCount > 0 && exactTournamentId ? (
+                {unrankedOnTournamentBoard > 0 ? (
                   <span className="inline-flex h-[var(--control-h)] items-center text-sm text-muted-foreground" title="A tournament board lists every participant. Unranked teams miss an eligibility check at the event endpoint.">
-                    Includes {formatNumber(hiddenFromRankedCount)} unranked
+                    Includes {formatNumber(unrankedOnTournamentBoard)} unranked
                   </span>
                 ) : null}
                 {hiddenFromRankedCount > 0 && !exactTournamentId ? (
