@@ -1268,7 +1268,9 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
 
 /** Visitor-facing data freshness. Operator details stay in the manifest and refresh logs. */
 export function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'version'>; data?: TeamDataSummary }) {
+  // Rows describe the selected view. Refresh notices describe all published data.
   const providers = providerFreshness(data?.sourceBreakdown ?? [], data?.sources ?? [])
+  const viewProviders = providers.filter((provider) => provider.matchCount > 0).slice(0, 3)
 
   return (
     <details className="group w-full overflow-hidden rounded-lg border border-border bg-card">
@@ -1310,15 +1312,14 @@ export function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo,
           <b>{formatNumber((data?.rosterCoverage?.missingRosterSides ?? 0) + (data?.rosterCoverage?.partialRosterSides ?? 0))}</b>
         </span>
       </div>
-      {providers.length > 0 ? (
+      {viewProviders.length > 0 ? (
         <div className="mx-3 mt-3 grid gap-px bg-border last:mb-3" aria-label="Match providers">
-          {providers.slice(0, 3).map((provider) => (
-            <div className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={provider.label}>
-              <span className="grid min-w-0 gap-0.5">
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap text-foreground">{provider.label}</span>
-                {provider.through ? <span>Data through {formatDate(provider.through)}</span> : null}
-              </span>
-              <b className="shrink-0 text-foreground tabular-nums">{formatNumber(provider.matchCount)}</b>
+          {viewProviders.map((provider) => (
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 bg-background px-3 py-2 text-xs text-muted-foreground" key={provider.label}>
+              {/* Narrow phones stack every row the same way instead of wrapping only the longer counts. */}
+              <span className="text-foreground max-[360px]:basis-full">{provider.label}</span>
+              <span><b className="text-foreground tabular-nums">{formatNumber(provider.matchCount)}</b> games in this view</span>
+              {provider.publishedThrough ? <span className="basis-full">Published data through {formatDate(provider.publishedThrough)}</span> : null}
             </div>
           ))}
         </div>
@@ -1337,11 +1338,11 @@ export function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo,
 /** Says only what the published coverage shows: where this provider's data ends and which providers have later matches. */
 function failedUpdateNotice(provider: ProviderFreshness, providers: ProviderFreshness[]) {
   const sentences = [`${provider.label} ${provider.failedUpdate === 'partial' ? 'was only partly updated' : 'could not be updated'} in the latest refresh.`]
-  const through = provider.through
+  const through = provider.publishedThrough
   if (through) {
-    sentences.push(`Its data ends on ${formatDate(through)}.`)
-    const later = providers.filter((other) => other.through && other.through > through).map((other) => other.label)
-    if (later.length > 0) sentences.push(`Later matches come from ${later.join(' and ')}.`)
+    sentences.push(`Its published data ends on ${formatDate(through)}.`)
+    const later = providers.filter((other) => other.publishedThrough && other.publishedThrough > through).map((other) => other.label)
+    if (later.length > 0) sentences.push(`Later published matches come from ${later.join(' and ')}.`)
   }
   return sentences.join(' ')
 }

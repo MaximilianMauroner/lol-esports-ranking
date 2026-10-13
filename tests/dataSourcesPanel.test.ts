@@ -39,12 +39,14 @@ function productionSources({ oracle = 'failed', leaguepedia = 'downloaded' }: { 
 // The caller passes the full manifest model, including its config hash.
 const model = { name: 'Transparent Power Index', version: 'transparent-power-index-v0.2.0', configHash: 'fnv1a-5eebb6ce' }
 
-function renderPanel(sources: DataSourceInfo[], latestMatchDate = '2026-10-13') {
+const season2026View = [{ provider: 'oracles-elixir', matchCount: 2779 }, { provider: 'leaguepedia-cargo', matchCount: 2682 }]
+
+function renderPanel(sources: DataSourceInfo[], sourceBreakdown = season2026View) {
   const html = renderToStaticMarkup(createElement(DataSourcesDisclosure, {
     model,
     data: {
-      sources, matchCount: 5461, coverageStart: '2025-01-12', coverageEnd: latestMatchDate, latestMatchDate,
-      sourceBreakdown: [{ provider: 'oracles-elixir', matchCount: 2779 }, { provider: 'leaguepedia-cargo', matchCount: 2682 }],
+      sources, sourceBreakdown, matchCount: sourceBreakdown.reduce((total, entry) => total + entry.matchCount, 0),
+      coverageStart: '2025-01-12', coverageEnd: '2026-10-13', latestMatchDate: '2026-10-13',
     },
   }))
   const text = html.replace(/<[^>]+>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ')
@@ -60,22 +62,31 @@ test('the Oracle quota failure reaches visitors as plain freshness, without oper
   assert.doesNotMatch(html, /var\(--down\)/, 'a provider failure is not an error for visitors')
 
   assert.match(text, /Latest match Oct 13, 2026/)
-  assert.match(text, /Oracle's Elixir Data through Oct 10, 2026 2,779/)
-  assert.match(text, /Leaguepedia Data through Oct 13, 2026 2,682/)
-  assert.match(text, /Oracle's Elixir could not be updated in the latest refresh\. Its data ends on Oct 10, 2026\. Later matches come from Leaguepedia\./)
+  assert.match(text, /Oracle's Elixir 2,779 games in this view Published data through Oct 10, 2026/)
+  assert.match(text, /Leaguepedia 2,682 games in this view Published data through Oct 13, 2026/)
+  assert.match(text, /Oracle's Elixir could not be updated in the latest refresh\. Its published data ends on Oct 10, 2026\. Later published matches come from Leaguepedia\./)
 })
 
 test('a complete refresh shows source dates without a failure notice', () => {
   const { text } = renderPanel(productionSources({ oracle: 'downloaded' }))
 
-  assert.match(text, /Oracle's Elixir Data through Oct 10, 2026/)
-  assert.doesNotMatch(text, /latest refresh|Later matches/)
+  assert.match(text, /Oracle's Elixir 2,779 games in this view Published data through Oct 10, 2026/)
+  assert.doesNotMatch(text, /latest refresh|Later published matches/)
 })
 
 test('a failed newest provider does not claim that another provider covers later matches', () => {
   const { text } = renderPanel(productionSources({ oracle: 'downloaded', leaguepedia: 'partial' }))
 
-  assert.match(text, /Leaguepedia was only partly updated in the latest refresh\. Its data ends on Oct 13, 2026\./)
-  assert.doesNotMatch(text, /Later matches/)
+  assert.match(text, /Leaguepedia was only partly updated in the latest refresh\. Its published data ends on Oct 13, 2026\./)
+  assert.doesNotMatch(text, /Later published matches/)
   assert.doesNotMatch(text, /Oracle's Elixir (?:could not|was only)/)
+})
+
+test('a past-season view labels its counts as the view and keeps the refresh notice about published data', () => {
+  // Season 2025 with production sources: every game in the view is from 2025, and Leaguepedia has none.
+  const { text } = renderPanel(productionSources(), [{ provider: 'oracles-elixir', matchCount: 2282 }])
+
+  assert.match(text, /Oracle's Elixir 2,282 games in this view Published data through Oct 10, 2026/)
+  assert.doesNotMatch(text, /Leaguepedia \d/, 'a provider without games in the view has no row')
+  assert.match(text, /Oracle's Elixir could not be updated in the latest refresh\. Its published data ends on Oct 10, 2026\. Later published matches come from Leaguepedia\./)
 })
