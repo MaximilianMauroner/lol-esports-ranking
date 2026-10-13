@@ -39,8 +39,8 @@ export function providerFreshness(
     .map((provider): ProviderFreshness => {
       const known = PROVIDERS[provider]
       const prefix = known?.sourcePrefix
-      const feeds = prefix ? sources.filter((source) => source.status === 'active' && source.name.startsWith(prefix)) : []
-      const publishedThrough = feeds.map((source) => source.coverageEnd).filter((date): date is string => Boolean(date)).sort().at(-1)
+      const feeds = prefix ? sources.filter((source) => source.name.startsWith(prefix)) : []
+      const publishedThrough = feeds.filter((source) => source.status === 'active').map((source) => source.coverageEnd).filter((date): date is string => Boolean(date)).sort().at(-1)
       const receipts = feeds.map((source) => source.refreshReceipt?.status)
       const failedUpdate = receipts.includes('failed') ? 'failed' : receipts.includes('partial') ? 'partial' : undefined
       return { label: known?.label ?? provider, matchCount: viewCounts.get(provider) ?? 0, publishedThrough, failedUpdate }
