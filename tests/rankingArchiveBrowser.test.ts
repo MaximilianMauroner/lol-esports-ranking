@@ -49,8 +49,8 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
       requests.push(path)
       response.setHeader('content-type', 'application/json')
       const body = path === '/data/ranking-summary.json' ? JSON.stringify(manifest) : objects.get(path)
-      response.statusCode = body && !(failObjects && path.startsWith('/data/objects/')) ? 200 : 404
-      if (holdIndex && path === indexPath) { pendingIndex.push(() => response.end(body)); return }
+      response.statusCode = body && !(failObjects && path === indexPath) ? 200 : 404
+      if (holdIndex && nodesByYear.get('2025')?.has(path)) { pendingIndex.push(() => response.end(body)); return }
       response.end(response.statusCode === 200 ? body : '{}')
     })
   } }
@@ -62,7 +62,11 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     assert.ok(address && typeof address !== 'string')
     const base = `http://127.0.0.1:${address.port}`
     const executablePath = chromium.executablePath()
-    browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
+    browser = await chromium.launch({
+      headless: true,
+      ...(existsSync(executablePath) ? {} : { channel: 'chrome' }),
+      args: ['--blink-settings=defaultFontSize=20'],
+    })
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
     // Hold the off-screen chart observer so this assertion measures bootstrap.
     await page.addInitScript(() => { window.IntersectionObserver = class implements IntersectionObserver { readonly root = null; readonly rootMargin = '0px'; readonly scrollMargin = '0px'; readonly thresholds = []; observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } } })
@@ -71,6 +75,16 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     const bootstrap = new Set(requests)
     const historyObjects = entries.filter((entry) => /\/history\/|\/matches\//.test(entry.logicalPath) && !entry.logicalPath.endsWith('/tournament-moves/index.json')).map((entry) => `/data/objects/sha256/${entry.digest}`)
     assert.ok(historyObjects.every((path) => !bootstrap.has(path)), JSON.stringify(entries.filter((entry) => bootstrap.has(`/data/objects/sha256/${entry.digest}`)).map((entry) => entry.logicalPath)))
+    assert.equal(requests.filter((path) => path === '/data/ranking-summary.json').length, 1)
+    const pageObjects = new Set(entries.filter((entry) => entry.logicalPath.startsWith('/data/matches/pages/')).map((entry) => `/data/objects/sha256/${entry.digest}`))
+    const warmedPage = page.waitForResponse((response) => pageObjects.has(new URL(response.url()).pathname))
+    const matchesLink = page.getByRole('link', { name: 'Matches', exact: true }).first()
+    await matchesLink.hover()
+    await warmedPage
+    assert.equal(await page.getByRole('heading', { name: 'Team Power Index', exact: true }).count(), 1)
+    await matchesLink.click()
+    await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
+    assert.equal(requests.filter((path) => path === indexPath).length, 1)
     requests.length = 0
     await page.goto(`${base}/#matches?scope=all&matchesYear=2026`)
     await page.getByLabel('Match history year').waitFor()
@@ -80,7 +94,7 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     // Catalog loading for the selected year must not hydrate old-year nodes.
     assert.ok(requests.every((path) => !nodesByYear.get('2025')?.has(path)))
     holdIndex = true
-    const pendingRequest = page.waitForRequest((request) => new URL(request.url()).pathname === indexPath)
+    const pendingRequest = page.waitForRequest((request) => Boolean(nodesByYear.get('2025')?.has(new URL(request.url()).pathname)))
     await page.getByLabel('Match history year').selectOption('2025')
     await pendingRequest
     await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('matchesYear') === '2025')
@@ -89,10 +103,23 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     await page.locator('table').getByText('Sample 2025', { exact: true }).first().waitFor()
     await page.getByLabel('Match history year').selectOption('All')
     await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
+    // Media-query rem uses the browser's initial font, not a CSS font-size override.
+    await page.setViewportSize({ width: 800, height: 844 })
+    assert.deepEqual(await page.evaluate(() => ({
+      pixels: window.matchMedia('(min-width: 768px)').matches,
+      rems: window.matchMedia('(min-width: 48rem)').matches,
+    })), { pixels: true, rems: false }, 'The browser font preference must separate the ledger breakpoints')
+    await page.getByText('Sample 2026', { exact: true }).filter({ visible: true }).first().waitFor({ timeout: 5_000 })
+    assert.equal(await page.locator('table').count(), 0, 'Loaded match cards remain visible below the rem breakpoint')
     await page.setViewportSize({ width: 390, height: 844 })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    const requestsBeforeReturn = requests.length
     failObjects = true
     await page.getByLabel('Match history year').selectOption('2025')
+    await page.getByText('Sample 2025', { exact: true }).filter({ visible: true }).first().waitFor()
+    assert.equal(requests.length, requestsBeforeReturn, 'a cached year remains usable when the network is unavailable')
+    // A fresh document still reports a missing object and permits an explicit retry.
+    await page.reload()
     await page.getByRole('button', { name: 'Retry', exact: true }).first().waitFor()
     failObjects = false
     await page.getByRole('button', { name: 'Retry', exact: true }).first().click()

@@ -51,6 +51,7 @@ export const teamBranding = {
     "sourceName": "BoostGate Esports",
     "sourceUrl": "https://lol.fandom.com/wiki/BoostGate_Esports",
     "logo": "/team-logos/boostgate-esports.webp",
+    "logoTreatment": "invert",
     "remoteLogoUrl": "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/9/90/BoostGate_Esportslogo_square.png/revision/latest?cb=20250707005708"
   },
   "CBK -MA": {
@@ -199,6 +200,7 @@ export const teamBranding = {
     "sourceName": "Fnatic",
     "sourceUrl": "https://lol.fandom.com/wiki/Fnatic",
     "logo": "/team-logos/fnatic.webp",
+    "logoTreatment": "code",
     "remoteLogoUrl": "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/6/61/Fnaticlogo_profile.png/revision/latest?cb=20260112184526"
   },
   "Fuego": {
@@ -436,6 +438,7 @@ export const teamBranding = {
     "sourceName": "Los Ratones",
     "sourceUrl": "https://lol.fandom.com/wiki/Los_Ratones",
     "logo": "/team-logos/los-ratones.webp",
+    "logoTreatment": "invert",
     "remoteLogoUrl": "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/f/fd/Los_Ratoneslogo_square.png/revision/latest?cb=20251224022057"
   },
   "LOUD": {
@@ -643,6 +646,7 @@ export const teamBranding = {
     "sourceName": "SK Gaming",
     "sourceUrl": "https://lol.fandom.com/wiki/SK_Gaming",
     "logo": "/team-logos/sk-gaming.webp",
+    "logoTreatment": "code",
     "remoteLogoUrl": "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/2/2f/SK_Gaminglogo_profile.png/revision/latest?cb=20221120001426"
   },
   "T1": {

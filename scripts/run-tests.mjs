@@ -7,6 +7,8 @@ await ensureReferencePublicData()
 const browserJourneys = [
   'tests/rankingArchiveBrowser.test.ts',
   'tests/rankingBoardAddressBrowser.test.ts',
+  'tests/matchPagePrefetchBrowser.test.ts',
+  'tests/rankingTournamentBoardBrowser.test.ts',
   'tests/tournamentBrowser.test.ts',
   'tests/tournamentForecastBrowser.test.ts',
   'tests/worldsSimulationBrowser.test.ts',
