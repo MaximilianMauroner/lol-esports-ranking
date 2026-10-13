@@ -20,7 +20,7 @@ function series(startTime: string, bestOf = 5): TournamentSeries {
     teams: [team('fixture-t1', 'T1'), team('fixture-gen', 'Gen.G')], vodUrls: [] }
 }
 
-test('synthetic tournament card keeps published pre-match odds through live and finished states', { timeout: 60_000 }, async () => {
+test('synthetic tournament card keeps published pre-match odds through live and finished states', { timeout: 60_000 }, async (context) => {
   const manifestJson = await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')
   const manifest = parsePublicRankingManifest(JSON.parse(manifestJson))
   const shardUrl = manifest.snapshotIndex[manifest.defaultSnapshotKey]?.url
@@ -69,102 +69,104 @@ test('synthetic tournament card keeps published pre-match odds through live and 
       'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify('1'),
     },
   })
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
-  try {
-    await server.listen()
-    const address = server.httpServer?.address()
-    assert.ok(address && typeof address !== 'string')
-    const base = `http://127.0.0.1:${address.port}`
-    const executablePath = chromium.executablePath()
-    browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
-    const external: string[] = []
-    page.on('request', (request) => { if (!request.url().startsWith(base)) external.push(request.url()) })
-    await page.clock.install({ time: new Date(at) })
-    await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
-    await page.getByText(/Forecast unavailable: No reviewed source-to-ranking team ID map is published/).first().waitFor()
-    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
-    await page.getByText('Conditional Power preview', { exact: true }).first().click()
-    await page.getByText(/Power delta unavailable: No reviewed source-to-ranking/).waitFor()
-    identityStatus = 200
-    await page.clock.fastForward(65_000)
-    await page.getByText('Current model estimate · not archived').waitFor()
-    assert.match(await page.locator('body').innerText(), /Game win: T1 .* Gen\.G/)
-    assert.match(await page.locator('body').innerText(), /Series win \(Bo5\): T1 .* Gen\.G/)
-    assert.match(await page.locator('body').innerText(), /Only decisive Bo1, Bo3 and Bo5 are supported/)
-    assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
-    assert.match(await page.locator('body').innerText(), new RegExp(`Power data through ${ratingDate}`))
-    // A new model basis resets the hypothetical selection instead of keeping a stale preview.
-    await page.getByText('Conditional Power preview', { exact: true }).first().click()
-    await page.getByText(/Current Power \(snapshot\): T1/).waitFor()
-    const preview = page.locator('details').filter({ has: page.getByText('Conditional Power preview', { exact: true }) }).first()
-    const originalStores = JSON.stringify({ forecastBasis, ledger, feed })
-    for (const width of [320, 390, 768, 1280]) {
-      await page.setViewportSize({ width, height: 800 })
-      await preview.getByLabel('Winner', { exact: true }).selectOption('away')
-      await preview.getByLabel('Series score (winner first)').selectOption('2')
-      await preview.getByRole('status').filter({ hasText: 'Gen.G wins 3–2.' }).waitFor()
-      await preview.getByLabel('Winner', { exact: true }).focus()
-      await page.keyboard.press('Home')
-      await page.keyboard.press('Tab')
-      await page.keyboard.press('Home')
-      await preview.getByRole('status').filter({ hasText: 'T1 wins 3–0.' }).waitFor()
-      assert.match(await preview.innerText(), /internal pre-series state or verified event weighting/)
-      assert.match(await preview.innerText(), /Future lineups, patch, game order and performance inputs are also unavailable/)
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Preview overflow at ${width}px`)
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined = undefined
+  context.after(async () => {
+    try {
+      await browser?.close()
+    } finally {
+      await server.close()
     }
-    assert.equal(JSON.stringify({ forecastBasis, ledger, feed }), originalStores)
+  })
+  await server.listen()
+  const address = server.httpServer?.address()
+  assert.ok(address && typeof address !== 'string')
+  const base = `http://127.0.0.1:${address.port}`
+  const executablePath = chromium.executablePath()
+  browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  const external: string[] = []
+  page.on('request', (request) => { if (!request.url().startsWith(base)) external.push(request.url()) })
+  await page.clock.install({ time: new Date(at) })
+  await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
+  await page.getByText(/Forecast unavailable: No reviewed source-to-ranking team ID map is published/).first().waitFor()
+  await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
+  await page.getByText('Conditional Power preview', { exact: true }).first().click()
+  await page.getByText(/Power delta unavailable: No reviewed source-to-ranking/).waitFor()
+  identityStatus = 200
+  await page.clock.fastForward(65_000)
+  await page.getByText('Current model estimate · not archived').waitFor()
+  assert.match(await page.locator('body').innerText(), /Game win: T1 .* Gen\.G/)
+  assert.match(await page.locator('body').innerText(), /Series win \(Bo5\): T1 .* Gen\.G/)
+  assert.match(await page.locator('body').innerText(), /Only decisive Bo1, Bo3 and Bo5 are supported/)
+  assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
+  assert.match(await page.locator('body').innerText(), new RegExp(`Power data through ${ratingDate}`))
+  // A new model basis resets the hypothetical selection instead of keeping a stale preview.
+  await page.getByText('Conditional Power preview', { exact: true }).first().click()
+  await page.getByText(/Current Power \(snapshot\): T1/).waitFor()
+  const preview = page.locator('details').filter({ has: page.getByText('Conditional Power preview', { exact: true }) }).first()
+  const originalStores = JSON.stringify({ forecastBasis, ledger, feed })
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 800 })
     await preview.getByLabel('Winner', { exact: true }).selectOption('away')
-    const firstProvenance = await page.getByText(/Power data through/).first().innerText()
-    servedManifestJson = JSON.stringify({ ...manifest, generatedAt: afterMinutes(10) })
-    await page.clock.fastForward(10 * 60_000 + 5_000)
-    await page.waitForFunction((previous) => [...document.querySelectorAll('span')].some((element) =>
-      element.textContent?.startsWith('Power data through') && element.textContent !== previous), firstProvenance)
-    await page.getByText('Conditional Power preview', { exact: true }).first().click()
-    assert.equal(await page.getByLabel('Winner', { exact: true }).inputValue(), 'home')
-
-    ledgerStatus = 200
-    const created = createPreMatchReceipt({ series: upcoming, basis: forecastBasis, forecastRevision: 'fixture-rev-1',
-      generatedAt: at, publishedAt: new Date(Date.parse(at) + 1000).toISOString(), observedAt: at })
-    assert.equal(created.status, 'ready')
-    if (created.status !== 'ready') return
-    ledger = appendForecastReceipt(ledger, created)
-    const live = { ...upcoming, status: 'live' as const, sourceState: 'inProgress', teams: [team('fixture-t1', 'T1', 1), team('fixture-gen', 'Gen.G', 0)] }
-    ledger = pinPreMatchReceipt(ledger, live, afterMinutes(20))
-    feed = { ...feed, fetchedAt: afterMinutes(20), events: [{ ...feed.events[0]!, series: [live, series(start, 2)] }] }
-    await page.clock.fastForward(9 * 60_000)
-    await page.getByText('Published pre-match forecast').waitFor()
-    assert.match(await page.locator('body').innerText(), /Score-conditioned series odds:/)
-    assert.match(await page.locator('body').innerText(), /frozen pre-series model, not in-game telemetry/)
-    const liveSection = page.locator('section[aria-label="live"]')
-    await liveSection.getByText('Conditional Power preview', { exact: true }).click()
-    assert.match(await liveSection.innerText(), /Pre-series Power previews close when the source reports play/)
-    assert.match(await liveSection.innerText(), /Pre-match Power \(snapshot\): T1/)
-    assert.doesNotMatch(await liveSection.innerText(), /Current Power \(snapshot\):/)
-    assert.equal(await liveSection.getByLabel('Winner', { exact: true }).count(), 0)
-    ledgerStatus = 503
-    feed = { ...feed, fetchedAt: afterMinutes(21) }
-    await page.clock.fastForward(60_000)
-    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
-    assert.match(await page.locator('section[aria-label="live"]').innerText(), /Published pre-match forecast/)
-    ledgerStatus = 200
-    const completed = { ...live, status: 'completed' as const, sourceState: 'completed', teams: [team('fixture-t1', 'T1', 3), team('fixture-gen', 'Gen.G', 1)] }
-    feed = { ...feed, fetchedAt: afterMinutes(22), events: [{ ...feed.events[0]!, series: [completed, series(start, 2)] }] }
-    await page.clock.fastForward(60_000)
-    await page.getByText('T1 3–1 Gen.G').waitFor()
-    await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor({ state: 'hidden' })
-    assert.match(await page.locator('section[aria-label="results"]').innerText(), /Published pre-match forecast/)
-    await page.locator('section[aria-label="results"]').getByText('Conditional Power preview', { exact: true }).click()
-    assert.match(await page.locator('section[aria-label="results"]').innerText(), /Actual rating impact belongs to the rating evidence ledger/)
-    assert.match(await page.locator('section[aria-label="results"]').innerText(), /Pre-match Power \(snapshot\): T1/)
-    assert.doesNotMatch(await page.locator('section[aria-label="results"]').innerText(), /Current Power \(snapshot\):/)
-    for (const width of [320, 390, 768, 1280]) {
-      await page.setViewportSize({ width, height: 800 })
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
-    }
-    assert.deepEqual(external, [])
-  } finally {
-    await browser?.close()
-    await server.close()
+    await preview.getByLabel('Series score (winner first)').selectOption('2')
+    await preview.getByRole('status').filter({ hasText: 'Gen.G wins 3–2.' }).waitFor()
+    await preview.getByLabel('Winner', { exact: true }).focus()
+    await page.keyboard.press('Home')
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Home')
+    await preview.getByRole('status').filter({ hasText: 'T1 wins 3–0.' }).waitFor()
+    assert.match(await preview.innerText(), /internal pre-series state or verified event weighting/)
+    assert.match(await preview.innerText(), /Future lineups, patch, game order and performance inputs are also unavailable/)
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Preview overflow at ${width}px`)
   }
+  assert.equal(JSON.stringify({ forecastBasis, ledger, feed }), originalStores)
+  await preview.getByLabel('Winner', { exact: true }).selectOption('away')
+  const firstProvenance = await page.getByText(/Power data through/).first().innerText()
+  servedManifestJson = JSON.stringify({ ...manifest, generatedAt: afterMinutes(10) })
+  await page.clock.fastForward(10 * 60_000 + 5_000)
+  await page.waitForFunction((previous) => [...document.querySelectorAll('span')].some((element) =>
+    element.textContent?.startsWith('Power data through') && element.textContent !== previous), firstProvenance, { timeout: 15_000 })
+  await page.getByText('Conditional Power preview', { exact: true }).first().click()
+  assert.equal(await page.getByLabel('Winner', { exact: true }).inputValue(), 'home')
+
+  ledgerStatus = 200
+  const created = createPreMatchReceipt({ series: upcoming, basis: forecastBasis, forecastRevision: 'fixture-rev-1',
+    generatedAt: at, publishedAt: new Date(Date.parse(at) + 1000).toISOString(), observedAt: at })
+  assert.equal(created.status, 'ready')
+  if (created.status !== 'ready') return
+  ledger = appendForecastReceipt(ledger, created)
+  const live = { ...upcoming, status: 'live' as const, sourceState: 'inProgress', teams: [team('fixture-t1', 'T1', 1), team('fixture-gen', 'Gen.G', 0)] }
+  ledger = pinPreMatchReceipt(ledger, live, afterMinutes(20))
+  feed = { ...feed, fetchedAt: afterMinutes(20), events: [{ ...feed.events[0]!, series: [live, series(start, 2)] }] }
+  await page.clock.fastForward(9 * 60_000)
+  await page.getByText('Published pre-match forecast').waitFor()
+  assert.match(await page.locator('body').innerText(), /Score-conditioned series odds:/)
+  assert.match(await page.locator('body').innerText(), /frozen pre-series model, not in-game telemetry/)
+  const liveSection = page.locator('section[aria-label="live"]')
+  await liveSection.getByText('Conditional Power preview', { exact: true }).click()
+  assert.match(await liveSection.innerText(), /Pre-series Power previews close when the source reports play/)
+  assert.match(await liveSection.innerText(), /Pre-match Power \(snapshot\): T1/)
+  assert.doesNotMatch(await liveSection.innerText(), /Current Power \(snapshot\):/)
+  assert.equal(await liveSection.getByLabel('Winner', { exact: true }).count(), 0)
+  ledgerStatus = 503
+  feed = { ...feed, fetchedAt: afterMinutes(21) }
+  await page.clock.fastForward(60_000)
+  await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
+  assert.match(await page.locator('section[aria-label="live"]').innerText(), /Published pre-match forecast/)
+  ledgerStatus = 200
+  const completed = { ...live, status: 'completed' as const, sourceState: 'completed', teams: [team('fixture-t1', 'T1', 3), team('fixture-gen', 'Gen.G', 1)] }
+  feed = { ...feed, fetchedAt: afterMinutes(22), events: [{ ...feed.events[0]!, series: [completed, series(start, 2)] }] }
+  await page.clock.fastForward(60_000)
+  await page.getByText('T1 3–1 Gen.G').waitFor()
+  await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor({ state: 'hidden' })
+  assert.match(await page.locator('section[aria-label="results"]').innerText(), /Published pre-match forecast/)
+  await page.locator('section[aria-label="results"]').getByText('Conditional Power preview', { exact: true }).click()
+  assert.match(await page.locator('section[aria-label="results"]').innerText(), /Actual rating impact belongs to the rating evidence ledger/)
+  assert.match(await page.locator('section[aria-label="results"]').innerText(), /Pre-match Power \(snapshot\): T1/)
+  assert.doesNotMatch(await page.locator('section[aria-label="results"]').innerText(), /Current Power \(snapshot\):/)
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 800 })
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
+  }
+  assert.deepEqual(external, [])
 })
