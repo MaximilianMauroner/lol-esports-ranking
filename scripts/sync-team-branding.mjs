@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { extname, resolve } from 'node:path'
+import { basename, extname, resolve } from 'node:path'
 import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { logoFileTreatment, requireFfmpeg } from './team-logo-treatment.mjs'
 
 const args = parseArgs(process.argv.slice(2))
 const root = process.cwd()
@@ -64,6 +65,7 @@ const sourceAliases = {
   'Weibo Gaming': ['WeiboGaming'],
 }
 
+await requireFfmpeg()
 const teamDirectory = JSON.parse(await readFile(teamDirectoryPath, 'utf8'))
 const teams = [...teamDirectory.teams].sort((left, right) => compareCodeUnits(left.name, right.name))
 const officialTeams = await loadOfficialTeams(manifestPath)
@@ -75,6 +77,8 @@ await mkdir(logoDirectory, { recursive: true })
 const brandedTeams = await mapConcurrent(candidates, 6, async (candidate) => {
   const remoteLogoUrl = candidate.remoteLogoUrl ?? leaguepediaImages.get(candidate.leaguepediaImage ?? '')
   const logo = remoteLogoUrl ? await downloadLogo(candidate.name, remoteLogoUrl) : await existingLogo(candidate.name)
+  // Decided here, once per file, so the site never reads logo pixels.
+  const logoTreatment = logo ? await logoFileTreatment(resolve(logoDirectory, basename(logo))) : 'logo'
   return {
     name: candidate.name,
     code: candidate.code,
@@ -82,6 +86,7 @@ const brandedTeams = await mapConcurrent(candidates, 6, async (candidate) => {
     sourceName: candidate.sourceName,
     sourceUrl: candidate.sourceUrl,
     ...(logo ? { logo } : {}),
+    ...(logoTreatment !== 'logo' ? { logoTreatment } : {}),
     ...(remoteLogoUrl ? { remoteLogoUrl } : {}),
   }
 })
@@ -308,6 +313,7 @@ function withoutName(team) {
     sourceName: team.sourceName,
     ...(team.sourceUrl ? { sourceUrl: team.sourceUrl } : {}),
     ...(team.logo ? { logo: team.logo } : {}),
+    ...(team.logoTreatment ? { logoTreatment: team.logoTreatment } : {}),
     ...(team.remoteLogoUrl ? { remoteLogoUrl: team.remoteLogoUrl } : {}),
   }
 }

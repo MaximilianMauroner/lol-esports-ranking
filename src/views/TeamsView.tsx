@@ -10,8 +10,9 @@ import type {
   PublicTournamentMovementTeam,
 } from '../lib/publicArtifacts/schema'
 import { displayRegionPowerScore, type RegionStrength } from '../lib/regionStrength'
+import { providerFreshness, type ProviderFreshness } from '../lib/sourceFreshness'
 import type { EventTier } from '../types'
-import { extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
+import { compareRecord, extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { eventTierConfig } from '../data/rankingConfig'
@@ -34,6 +35,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import {
   deriveRankingFlair,
   deriveTierLabels,
+  deriveTournamentMovementPicks,
   type RankingFlair,
   type RankingMovementPick,
   type RankingTierLabel,
@@ -47,7 +49,7 @@ import type {
   TournamentMovementState,
 } from '../hooks/usePublicArtifacts'
 import { useHistoryDetail } from '../hooks/useHistoryDetail'
-import { hashEnum, hashInt, hashParam, useHashSync } from '../lib/urlState'
+import { currentHashQuery, hashEnum, hashInt, hashParam, useHashSync } from '../lib/urlState'
 import { estimatePublicMatchup, gameWinChanceForGap, type PublicMatchupModel } from '../lib/publicMatchup'
 import { NEAR_TIE_WIN_PROBABILITY, nearTieGroups, nearTiePositions, type NearTiePosition } from '../lib/nearTies'
 import { boardHeadline } from '../lib/boardHeadline'
@@ -55,6 +57,7 @@ import { assignColorSlots, sameColorSlots } from '../lib/colorSlots'
 import { UPSET_CHANCE } from '../lib/upset'
 import { POWER_COMPONENT_LABELS } from '../lib/ratingComponentLabels'
 import {
+  effectiveTournamentStatus,
   teamMatchesTournamentFilter,
   projectTournamentStandings,
   tournamentBoundaryLabel,
@@ -100,7 +103,6 @@ type TeamDataSummary = {
     unresolvedPlayerRows?: number
     postgameObservedRosterSides?: number
   }
-  notes?: string[]
   regionFilter?: string
   tournamentFilter?: string
   tableTeamCount?: number
@@ -116,7 +118,34 @@ const LADDER_TEAM_LIMIT = 16
 const DEFAULT_FOCUS_TEAMS = 5
 const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
-const LazyTeamHistoryLineChart = lazy(() => import('../components/TeamHistoryLineChart').then((module) => ({ default: module.TeamHistoryLineChart })))
+
+/**
+ * The board filters this view keeps in the hash, read on mount and on every
+ * hash change. Search and tournament are App state, and App reads them from
+ * the same query.
+ */
+function readBoardAddress(query: URLSearchParams) {
+  const sortKey = hashEnum('sort', SORT_KEYS, 'rank', query)
+  const pageSize = hashInt('size', DEFAULT_TEAM_PAGE_SIZE, query)
+  return {
+    region: hashParam('region', query) ?? 'All',
+    tierFilter: hashEnum('tier', TIER_FILTERS, 'All', query),
+    eligibilityFilter: hashEnum('eligibility', ELIGIBILITY_FILTERS, 'ranked', query),
+    sortKey,
+    // The address omits the direction when it is the sort's default.
+    sortDirection: hashEnum('dir', SORT_DIRECTIONS, defaultSortDirection(sortKey), query),
+    pageSize: TEAM_PAGE_SIZES.includes(pageSize as typeof TEAM_PAGE_SIZES[number]) ? pageSize : DEFAULT_TEAM_PAGE_SIZE,
+    page: hashInt('page', 1, query),
+  }
+}
+
+/** Rank reads best first; Power and wins read highest first. */
+function defaultSortDirection(key: SortKey): SortDirection {
+  return key === 'rank' ? 'ascending' : 'descending'
+}
+
+const loadTeamHistoryLineChart = () => import('../components/TeamHistoryLineChart').then((module) => ({ default: module.TeamHistoryLineChart }))
+const LazyTeamHistoryLineChart = lazy(loadTeamHistoryLineChart)
 export function TeamsView({
   standings,
   regions,
@@ -135,6 +164,7 @@ export function TeamsView({
   tournamentMovementState,
   regionsHref,
   dataSummary,
+  hashQuery,
   onToggle,
   onRequestPlayers,
   onRequestTeamHistory,
@@ -159,6 +189,8 @@ export function TeamsView({
   tournamentMovementState: TournamentMovementState
   regionsHref?: string
   dataSummary?: TeamDataSummary
+  /** The hash query App read on the last hash change. A new object means a new address. */
+  hashQuery: URLSearchParams
   onToggle: (team: RankingSummaryStanding) => void
   onRequestPlayers?: () => void
   onRequestTeamHistory?: (teams?: readonly string[]) => void
@@ -167,16 +199,31 @@ export function TeamsView({
   onRetryTournamentMovements?: () => void
 }) {
   // Seeded from the hash so a shared or reloaded board comes back as it was.
-  const [region, setRegion] = useState(() => hashParam('region') ?? 'All')
-  const [tierFilter, setTierFilter] = useState<RankingTierLabel | 'All'>(() => hashEnum('tier', TIER_FILTERS, 'All'))
-  const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>(() => hashEnum('eligibility', ELIGIBILITY_FILTERS, 'ranked'))
-  const [sortKey, setSortKey] = useState<SortKey>(() => hashEnum('sort', SORT_KEYS, 'rank'))
-  const [sortDirection, setSortDirection] = useState<SortDirection>(() => hashEnum('dir', SORT_DIRECTIONS, 'ascending'))
-  const [pageSize, setPageSize] = useState<number>(() => {
-    const size = hashInt('size', DEFAULT_TEAM_PAGE_SIZE)
-    return TEAM_PAGE_SIZES.includes(size as typeof TEAM_PAGE_SIZES[number]) ? size : DEFAULT_TEAM_PAGE_SIZE
-  })
-  const [pageState, setPageState] = useState(() => ({ scopeKey: '', page: hashInt('page', 1) }))
+  const [address] = useState(() => readBoardAddress(currentHashQuery()))
+  const [region, setRegion] = useState(address.region)
+  const [tierFilter, setTierFilter] = useState<RankingTierLabel | 'All'>(address.tierFilter)
+  const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>(address.eligibilityFilter)
+  const [sortKey, setSortKey] = useState<SortKey>(address.sortKey)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(address.sortDirection)
+  const [pageSize, setPageSize] = useState<number>(address.pageSize)
+  // A page read from the address has no filter key yet. It belongs to the
+  // filters read with it, so the first render binds it to their key.
+  const [pageState, setPageState] = useState<{ scopeKey?: string; page: number }>({ page: address.page })
+  // A typed or linked address, Back or Forward changes the hash without a
+  // reload. App then passes a new query, and the board shows what a reload
+  // of that address would show.
+  const [appliedQuery, setAppliedQuery] = useState(hashQuery)
+  if (hashQuery !== appliedQuery) {
+    const next = readBoardAddress(hashQuery)
+    setAppliedQuery(hashQuery)
+    setRegion(next.region)
+    setTierFilter(next.tierFilter)
+    setEligibilityFilter(next.eligibilityFilter)
+    setSortKey(next.sortKey)
+    setSortDirection(next.sortDirection)
+    setPageSize(next.pageSize)
+    setPageState({ page: next.page })
+  }
   const { value: detailKey, open: openDetail, close: closeDetail } = useHistoryDetail('teamDetail')
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
   // Phones fold the filters behind one button so the first screen shows teams.
@@ -194,17 +241,22 @@ export function TeamsView({
     return ['All', ...present.sort((left, right) => (powerByRegion.get(right) ?? -Infinity) - (powerByRegion.get(left) ?? -Infinity) || left.localeCompare(right))]
   }, [regions, standings])
   const tournamentOptions = useMemo(
-    () => tournamentFilterOptionsForStandings(standings, tournamentMovementEntries),
-    [standings, tournamentMovementEntries],
+    () => tournamentFilterOptionsForStandings(standings, tournamentMovementEntries, dataSummary?.latestMatchDate),
+    [dataSummary?.latestMatchDate, standings, tournamentMovementEntries],
   )
   const activeTournamentFilter = useMemo<TournamentFilterValue>(
     () => tournamentOptions.some((option) => option.value === tournamentFilter) ? tournamentFilter : 'All',
     [tournamentOptions, tournamentFilter],
   )
   const exactTournamentId = tournamentIdFromFilter(activeTournamentFilter)
-  const activeTournament = tournamentMovementState.status === 'ready' && tournamentMovementState.data.id === exactTournamentId
+  const loadedTournament = tournamentMovementState.status === 'ready' && tournamentMovementState.data.id === exactTournamentId
     ? tournamentMovementState.data
     : undefined
+  // The board labels show the same status as the tournament list.
+  const activeTournament = useMemo(
+    () => loadedTournament && { ...loadedTournament, status: effectiveTournamentStatus(loadedTournament, dataSummary?.latestMatchDate) },
+    [dataSummary?.latestMatchDate, loadedTournament],
+  )
   const displayStandings = useMemo(
     () => activeTournament ? projectTournamentStandings(standings, activeTournament) : standings,
     [activeTournament, standings],
@@ -263,9 +315,13 @@ export function TeamsView({
   const eligibleInScope = useMemo(() => scopeFiltered.filter((team) => team.eligibility?.eligible), [scopeFiltered])
   const hiddenFromRankedCount = scopeFiltered.length - eligibleInScope.length
   const filtered = useMemo(() => {
-    const byEligibility = eligibilityFilter === 'ranked' ? eligibleInScope : scopeFiltered
+    // A tournament board lists every participant, so it ignores the ranked-only filter.
+    const byEligibility = eligibilityFilter === 'ranked' && !exactTournamentId ? eligibleInScope : scopeFiltered
     return tierFilter === 'All' ? byEligibility : byEligibility.filter((team) => tierFor(team) === tierFilter)
-  }, [eligibilityFilter, eligibleInScope, scopeFiltered, tierFilter, tierFor])
+  }, [eligibilityFilter, eligibleInScope, exactTournamentId, scopeFiltered, tierFilter, tierFor])
+  // Counted on the board itself: a tier filter removes unranked teams, because only ranked teams have a tier.
+  const unrankedOnTournamentBoard = exactTournamentId ? filtered.filter((team) => !team.eligibility?.eligible).length : 0
+  const showsWholeTournamentField = search.trim() === '' && region === 'All' && tierFilter === 'All'
   const tierCounts = useMemo(
     () => (['S', 'A', 'B', 'C'] as const).map((tier) => ({ tier, count: eligibleInScope.filter((team) => tierFor(team) === tier).length })),
     [eligibleInScope, tierFor],
@@ -302,14 +358,18 @@ export function TeamsView({
   const rawScoreRankByTeam = useMemo(() => rawScoreRanks(scopeFiltered), [scopeFiltered])
   const sorted = useMemo(() => sortStandings(filtered, sortKey, sortDirection), [filtered, sortDirection, sortKey])
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageScopeKey = `${region}\u0000${tierFilter}\u0000${activeTournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${sortDirection}\u0000${pageSize}`
-  const requestedPage = pageState.scopeKey === pageScopeKey ? pageState.page : 1
+  // The requested tournament, not the active one: its option arrives with the
+  // tournament index after the first render and must not reset the page.
+  const pageScopeKey = `${region}\u0000${tierFilter}\u0000${tournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${sortDirection}\u0000${pageSize}`
+  if (pageState.scopeKey === undefined) setPageState({ scopeKey: pageScopeKey, page: pageState.page })
+  const requestedPage = pageState.scopeKey === undefined || pageState.scopeKey === pageScopeKey ? pageState.page : 1
   const currentPage = Math.min(requestedPage, totalPages)
   const pageStart = (currentPage - 1) * pageSize
   const visible = sorted.slice(pageStart, pageStart + pageSize)
   const pageEnd = sorted.length === 0 ? 0 : pageStart + visible.length
   const resultSummary = `${formatNumber(sorted.length === 0 ? 0 : pageStart + 1)}-${formatNumber(pageEnd)} of ${formatNumber(filtered.length)}`
-  const activeFilterCount = [search.trim() !== '', region !== 'All', tierFilter !== 'All', activeTournamentFilter !== 'All', eligibilityFilter !== 'ranked'].filter(Boolean).length
+  // A tournament board ignores the unranked setting, so it does not count there.
+  const activeFilterCount = [search.trim() !== '', region !== 'All', tierFilter !== 'All', activeTournamentFilter !== 'All', eligibilityFilter !== 'ranked' && !exactTournamentId].filter(Boolean).length
   const hasActiveFilters = activeFilterCount > 0
   const [ratingMin, ratingMax] = useMemo(
     () => extent(filtered.map((team) => teamScoreFor(team) ?? Number.NaN)),
@@ -442,7 +502,7 @@ export function TeamsView({
       return
     }
     setSortKey(nextKey)
-    setSortDirection(nextKey === 'rank' ? 'ascending' : 'descending')
+    setSortDirection(defaultSortDirection(nextKey))
   }
 
   function updatePage(nextPage: number) {
@@ -451,10 +511,7 @@ export function TeamsView({
 
   function updateTournamentFilter(value: TournamentFilterValue) {
     const id = tournamentIdFromFilter(value)
-    if (id) {
-      setEligibilityFilter('all')
-      onPrefetchTournament?.(id)
-    }
+    if (id) onPrefetchTournament?.(id)
     onTournamentFilterChange(value)
     setPageState({ scopeKey: pageScopeKey, page: 1 })
   }
@@ -465,6 +522,11 @@ export function TeamsView({
     openDetail(teamKey(team))
   }
 
+  function prepareTeamDetails() {
+    onRequestPlayers?.()
+    void loadTeamHistoryLineChart().catch(() => { /* Opening a detail can retry. */ })
+  }
+
   // Same param names and same "omit the default" rule as the other views.
   useHashSync('rankings', {
     team: search.trim(),
@@ -473,7 +535,7 @@ export function TeamsView({
     tournament: activeTournamentFilter === 'All' ? '' : activeTournamentFilter,
     eligibility: eligibilityFilter === 'ranked' ? '' : eligibilityFilter,
     sort: sortKey === 'rank' ? '' : sortKey,
-    dir: sortDirection === (sortKey === 'rank' ? 'ascending' : 'descending') ? '' : sortDirection,
+    dir: sortDirection === defaultSortDirection(sortKey) ? '' : sortDirection,
     size: pageSize === DEFAULT_TEAM_PAGE_SIZE ? '' : String(pageSize),
     page: currentPage > 1 ? String(currentPage) : '',
   })
@@ -500,7 +562,7 @@ export function TeamsView({
           <Panel>
             <PanelHeader
               title={activeTournament ? `${activeTournament.label} standings` : 'Power ranking'}
-              description={activeTournament ? `Ranks and scores at the event endpoint, ${formatDate(activeTournament.boundaryDate)}. Includes every participant.` : undefined}
+              description={activeTournament ? `Ranks and scores at the event endpoint, ${formatDate(activeTournament.boundaryDate)}.${showsWholeTournamentField ? ' Includes every participant.' : ''}` : undefined}
               actions={<span className="whitespace-nowrap text-xs text-[var(--faint)] tabular-nums">{resultSummary}</span>}
             />
             {/* One row of filters above the table they scope. The controls
@@ -548,7 +610,12 @@ export function TeamsView({
                 {tournamentMovementIndexState.status === 'loading' ? (
                   <LoadingState presentation="inline" label="Loading tournaments" className="text-xs" />
                 ) : null}
-                {hiddenFromRankedCount > 0 ? (
+                {unrankedOnTournamentBoard > 0 ? (
+                  <span className="inline-flex h-[var(--control-h)] items-center text-sm text-muted-foreground" title="A tournament board lists every participant. Unranked teams miss an eligibility check at the event endpoint.">
+                    Includes {formatNumber(unrankedOnTournamentBoard)} unranked
+                  </span>
+                ) : null}
+                {hiddenFromRankedCount > 0 && !exactTournamentId ? (
                   <label className="inline-flex h-[var(--control-h)] cursor-pointer items-center gap-2 text-sm text-muted-foreground" title="Unranked teams miss an eligibility check, such as too few recent matches or an incomplete roster.">
                     <input
                       type="checkbox"
@@ -628,7 +695,7 @@ export function TeamsView({
                 action={hasActiveFilters ? <Button type="button" variant="outline" onClick={resetFilters}>Clear filters</Button> : undefined}
               />
             ) : (
-                <Table containerClassName="max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[640px] border-collapse text-sm max-sm:min-w-full">
+                <Table containerClassName="@container/board max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[640px] border-collapse text-sm max-sm:min-w-full">
                   <colgroup>
                     <col className="board-col-rank" />
                     <col className="board-col-team" />
@@ -666,6 +733,8 @@ export function TeamsView({
                             excludedFromRankedBoard && 'is-excluded bg-[color-mix(in_oklch,var(--surface-2)_58%,transparent)] text-[color-mix(in_oklch,var(--text)_76%,var(--muted))] hover:bg-[color-mix(in_oklch,var(--surface-3)_70%,transparent)]',
                           )}
                           title={excludedFromRankedBoard ? eligibilityReasonsTitle(team) : undefined}
+                          onPointerEnter={prepareTeamDetails}
+                          onTouchStart={prepareTeamDetails}
                           onClick={(event) => {
                             if (shouldIgnoreTeamRowClick(event)) return
                             openTeam(team)
@@ -684,7 +753,7 @@ export function TeamsView({
                               variant="ghost"
                               className="team-cell team-cell__button h-auto min-h-9 w-full cursor-pointer justify-start gap-3 whitespace-normal rounded-sm border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] hover:bg-transparent hover:text-[inherit] focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]"
                               onClick={() => openTeam(team)}
-                              onFocus={onRequestPlayers}
+                              onFocus={prepareTeamDetails}
                               title={`Open ${team.team}`}
                             >
                               <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10" />
@@ -714,7 +783,7 @@ export function TeamsView({
                           <TableCell className="board-col-action">
                             <span className="flex items-center justify-end gap-2">
                               <CompareToggle picked={pickedKeys.has(key)} onToggle={() => onToggle(team)} label={team.team} />
-                              <ChevronRight className="size-4 shrink-0 text-[var(--faint)] group-hover/board:text-foreground max-sm:hidden" aria-hidden="true" />
+                              <ChevronRight className="board-open-hint size-4 shrink-0 text-[var(--faint)] group-hover/board:text-foreground" aria-hidden="true" />
                             </span>
                           </TableCell>
                         </TableRow>
@@ -1258,20 +1327,19 @@ function RegionalStrengthTeaser({ regions, href }: { regions: RegionStrength[]; 
   )
 }
 
-function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'version' | 'configHash'>; data?: TeamDataSummary }) {
-  const providers = [...(data?.sourceBreakdown ?? [])].sort((a, b) => b.matchCount - a.matchCount).slice(0, 3)
-  const activeSources = (data?.sources ?? []).filter((source) => source.status === 'active')
-  const sourceFreshness = activeSources.filter((source) => source.retrievedAt || source.coverageEnd || source.rowCount).slice(0, 4)
-  const warnings = uniqueSourceWarnings(activeSources.flatMap((source) => source.warnings ?? [])).slice(0, 3)
-  const notes = (data?.notes ?? []).filter(Boolean).slice(0, 2)
+/** Visitor-facing data freshness. Operator details stay in the manifest and refresh logs. */
+export function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'version'>; data?: TeamDataSummary }) {
+  // Rows describe the selected view. Refresh notices describe all published data.
+  const providers = providerFreshness(data?.sourceBreakdown ?? [], data?.sources ?? [])
+  const viewProviders = providers.filter((provider) => provider.matchCount > 0).slice(0, 3)
 
   return (
     <details className="group w-full overflow-hidden rounded-lg border border-border bg-card">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[var(--text-strong)] after:ml-auto after:text-base after:leading-none after:text-muted-foreground after:content-['+'] group-open:border-b group-open:border-border group-open:after:content-['-'] [&::-webkit-details-marker]:hidden">
         <span className="text-base font-semibold">Data and sources</span>
-        <small className="text-xs text-[var(--faint)]">Coverage, config, providers</small>
+        <small className="text-xs text-[var(--faint)]">Freshness, coverage, providers</small>
       </summary>
-      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
+      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border last:mb-3 [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
         <span>
           <small>Model</small>
           <b>{formatModelVersion(model?.version)}</b>
@@ -1289,8 +1357,8 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
           <b>{formatNumber(data?.tableTeamCount)} / {formatNumber(data?.scopeTeamCount)}</b>
         </span>
         <span>
-          <small>Config</small>
-          <b>{model?.configHash ?? 'unknown'}</b>
+          <small>Latest match</small>
+          <b>{formatDate(data?.latestMatchDate)}</b>
         </span>
         <span>
           <small>Hidden from ranked board</small>
@@ -1305,70 +1373,39 @@ function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo, 'versi
           <b>{formatNumber((data?.rosterCoverage?.missingRosterSides ?? 0) + (data?.rosterCoverage?.partialRosterSides ?? 0))}</b>
         </span>
       </div>
-      {providers.length > 0 ? (
-        <div className="mx-3 mt-3 grid gap-px bg-border">
-          {providers.map((provider) => (
-            <div className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={provider.provider}>
-              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{provider.provider}</span>
-              <b className="shrink-0 text-foreground tabular-nums">{formatNumber(provider.matchCount)}</b>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {sourceFreshness.length > 0 ? (
-        <div className="mx-3 mt-3 grid gap-px bg-border" aria-label="Source freshness">
-          {sourceFreshness.map((source) => (
-            <div className="flex min-w-0 flex-col items-start justify-between gap-2 bg-background px-3 py-2 text-xs text-muted-foreground" key={source.name}>
-              <span className="max-w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={source.description}>{compactSourceName(source.name)}</span>
-              <b className="shrink-0 whitespace-normal text-foreground tabular-nums">{sourceFreshnessLabel(source)}</b>
+      {viewProviders.length > 0 ? (
+        <div className="mx-3 mt-3 grid gap-px bg-border last:mb-3" aria-label="Match providers">
+          {viewProviders.map((provider) => (
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 bg-background px-3 py-2 text-xs text-muted-foreground" key={provider.label}>
+              {/* Narrow phones stack every row the same way instead of wrapping only the longer counts. */}
+              <span className="text-foreground max-[360px]:basis-full">{provider.label}</span>
+              <span><b className="text-foreground tabular-nums">{formatNumber(provider.matchCount)}</b> games in this view</span>
+              {provider.publishedThrough ? <span className="basis-full">Published data through {formatDate(provider.publishedThrough)}</span> : null}
             </div>
           ))}
         </div>
       ) : null}
       {data?.seeded ? (
         <p className="mx-3 mt-3 text-xs text-[var(--down)] last:mb-3 [overflow-wrap:anywhere]">Seeded sample data is active. Do not treat these rows as official rankings.</p>
-      ) : warnings.length > 0 ? (
-        <>
-          {warnings.map((warning) => (
-            <p className={cn('mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]', (warning.severity === 'error' || warning.severity === 'warning') && 'text-[var(--down)]')} key={`${warning.kind}-${warning.severity}-${warning.message}`}>
-              {warning.message}
-            </p>
-          ))}
-        </>
-      ) : notes.length > 0 ? (
-        <>
-          {notes.map((note) => <p className="mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]" key={note}>{note}</p>)}
-        </>
-      ) : (
-        <p className="mx-3 mt-3 text-xs text-[var(--faint)] last:mb-3 [overflow-wrap:anywhere]">Latest match: {formatDate(data?.latestMatchDate)}</p>
-      )}
+      ) : providers.filter((provider) => provider.failedUpdate).map((provider) => (
+        <p className="mx-3 mt-3 text-xs text-muted-foreground last:mb-3 [overflow-wrap:anywhere]" key={provider.label}>
+          {failedUpdateNotice(provider, providers)}
+        </p>
+      ))}
     </details>
   )
 }
 
-function compactSourceName(name: string) {
-  if (name.includes("Oracle's Elixir")) return name.replace("Oracle's Elixir CSV: ", 'Oracle ')
-  if (name.includes('Leaguepedia Cargo')) return name.replace('Leaguepedia Cargo: ', 'Leaguepedia ')
-  return name
-}
-
-function sourceFreshnessLabel(source: DataSourceInfo) {
-  const parts = [
-    source.retrievedAt ? `retrieved ${formatDate(source.retrievedAt)}` : undefined,
-    source.coverageEnd ? `through ${formatDate(source.coverageEnd)}` : undefined,
-    typeof source.rowCount === 'number' ? `${formatNumber(source.rowCount)} rows` : undefined,
-  ]
-  return parts.filter(Boolean).join(' · ') || 'source metadata'
-}
-
-function uniqueSourceWarnings(warnings: NonNullable<DataSourceInfo['warnings']>) {
-  const seen = new Set<string>()
-  return warnings.filter((warning) => {
-    const key = `${warning.kind}\u0000${warning.message}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+/** Says only what the published coverage shows: where this provider's data ends and which providers have later matches. */
+function failedUpdateNotice(provider: ProviderFreshness, providers: ProviderFreshness[]) {
+  const sentences = [`${provider.label} ${provider.failedUpdate === 'partial' ? 'was only partly updated' : 'could not be updated'} in the latest refresh.`]
+  const through = provider.publishedThrough
+  if (through) {
+    sentences.push(`Its published data ends on ${formatDate(through)}.`)
+    const later = providers.filter((other) => other.publishedThrough && other.publishedThrough > through).map((other) => other.label)
+    if (later.length > 0) sentences.push(`Later published matches come from ${later.join(' and ')}.`)
+  }
+  return sentences.join(' ')
 }
 
 type RankEvidenceSummary = {
@@ -2277,7 +2314,7 @@ function movementSpotlight(pick: RankingMovementPick | null): MovementSpotlight 
 }
 
 function tournamentChanges(tournament: PublicTournamentMovementShard): BoardChanges {
-  const byRise = [...tournament.teams].sort((left, right) => right.rankMovement - left.rankMovement || right.ratingDelta - left.ratingDelta || left.team.localeCompare(right.team))
+  const { biggestRiser, biggestFaller } = deriveTournamentMovementPicks(tournament.teams)
   const spotlight = (team?: PublicTournamentMovementTeam): MovementSpotlight | undefined => team ? {
     team: team.team,
     code: team.code,
@@ -2285,7 +2322,7 @@ function tournamentChanges(tournament: PublicTournamentMovementShard): BoardChan
     ratingDelta: team.ratingDelta,
     detail: `${team.team}: ${formatRankValue(team.startRank)} to ${formatRankValue(team.endRank)} through ${tournamentBoundaryLabel(tournament.status).toLowerCase()}, ${formatRatingMovement(team.ratingDelta)} Power.`,
   } : undefined
-  return { riser: spotlight(byRise[0]), faller: spotlight(byRise.at(-1)) }
+  return { riser: spotlight(biggestRiser), faller: spotlight(biggestFaller) }
 }
 
 function rawScoreRanks(rows: RankingSummaryStanding[]) {
@@ -2322,7 +2359,7 @@ function sortStandings(rows: RankingSummaryStanding[], key: SortKey, direction: 
     case 'rating':
       return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareTeamScore(a, b) || compareTeamRank(a, b))
     case 'wins':
-      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * ((a.wins ?? 0) - (b.wins ?? 0)) || compareTeamRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareRecord(a, b) || compareTeamRank(a, b))
     default:
       return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareTeamRank(a, b))
   }

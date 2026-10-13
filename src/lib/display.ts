@@ -88,6 +88,11 @@ export function formatRecord(wins?: number, losses?: number) {
   return `${wins}–${losses}`
 }
 
+/** Orders records from worst to best: fewer wins first, then more losses first. */
+export function compareRecord(a: { wins?: number; losses?: number }, b: { wins?: number; losses?: number }) {
+  return (a.wins ?? 0) - (b.wins ?? 0) || (b.losses ?? 0) - (a.losses ?? 0)
+}
+
 export function formatDate(value?: string) {
   if (!value) return 'Unknown'
   const date = new Date(value)

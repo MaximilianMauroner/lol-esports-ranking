@@ -20,6 +20,7 @@ export function Pager({
   page,
   pageCount,
   onPage,
+  onIntent,
   pageSize,
   pageSizes,
   onPageSize,
@@ -31,6 +32,7 @@ export function Pager({
   page: number
   pageCount: number
   onPage: (page: number) => void
+  onIntent?: (page: number) => void
   pageSize?: number
   pageSizes?: readonly number[]
   onPageSize?: (size: number) => void
@@ -73,16 +75,16 @@ export function Pager({
           Page {page} of {pageCount}
         </span>
         <div className="inline-flex items-center gap-1.5 [&_[data-slot=button]]:size-[var(--pager-h)]">
-          <Button type="button" variant="outline" size="icon" className="max-[720px]:hidden" onClick={() => onPage(1)} disabled={atStart} aria-label="First page">
+          <Button type="button" variant="outline" size="icon" className="max-[720px]:hidden" onClick={() => onPage(1)} onPointerEnter={() => onIntent?.(1)} onFocus={() => onIntent?.(1)} onTouchStart={() => onIntent?.(1)} disabled={atStart} aria-label="First page">
             <ChevronsLeft aria-hidden="true" />
           </Button>
-          <Button type="button" variant="outline" size="icon" onClick={() => onPage(page - 1)} disabled={atStart} aria-label="Previous page">
+          <Button type="button" variant="outline" size="icon" onClick={() => onPage(page - 1)} onPointerEnter={() => onIntent?.(page - 1)} onFocus={() => onIntent?.(page - 1)} onTouchStart={() => onIntent?.(page - 1)} disabled={atStart} aria-label="Previous page">
             <ChevronLeft aria-hidden="true" />
           </Button>
-          <Button type="button" variant="outline" size="icon" onClick={() => onPage(page + 1)} disabled={atEnd} aria-label="Next page">
+          <Button type="button" variant="outline" size="icon" onClick={() => onPage(page + 1)} onPointerEnter={() => onIntent?.(page + 1)} onFocus={() => onIntent?.(page + 1)} onTouchStart={() => onIntent?.(page + 1)} disabled={atEnd} aria-label="Next page">
             <ChevronRight aria-hidden="true" />
           </Button>
-          <Button type="button" variant="outline" size="icon" className="max-[720px]:hidden" onClick={() => onPage(pageCount)} disabled={atEnd} aria-label="Last page">
+          <Button type="button" variant="outline" size="icon" className="max-[720px]:hidden" onClick={() => onPage(pageCount)} onPointerEnter={() => onIntent?.(pageCount)} onFocus={() => onIntent?.(pageCount)} onTouchStart={() => onIntent?.(pageCount)} disabled={atEnd} aria-label="Last page">
             <ChevronsRight aria-hidden="true" />
           </Button>
         </div>

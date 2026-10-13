@@ -8,6 +8,7 @@ import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
 import { filterPublishedRatingUniverseInput } from '../src/lib/ratingUniverse'
 import { deriveTeamProfilesFromMatches, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/lib/teamProfiles'
 import type { DataSourceInfo, DataSourceWarning } from '../src/lib/snapshot'
+import { LEAGUEPEDIA_SOURCE_PREFIX, ORACLE_SOURCE_PREFIX } from '../src/lib/sourceFreshness'
 import type { MatchRecord, TeamProfile } from '../src/types'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
 
@@ -99,7 +100,7 @@ export async function importRankingSourceData({
     ...oracleImports.map((result, sourceIndex): DataSourceInfo => {
       const ratedMatches = matches.filter((match) => match.sourceProvider === 'oracles-elixir' && oracleSourceOwners.get(match.id) === sourceIndex)
       return {
-        name: result.source.fileName ? `Oracle's Elixir CSV: ${result.source.fileName}` : "Oracle's Elixir CSV",
+        name: result.source.fileName ? `${ORACLE_SOURCE_PREFIX}: ${result.source.fileName}` : ORACLE_SOURCE_PREFIX,
         kind: 'game-stats', url: result.source.url, retrievedAt: result.source.retrievedAt,
         coverageStart: dateRange(ratedMatches).start, coverageEnd: dateRange(ratedMatches).end, rowCount: ratedMatches.length,
         description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after source reconciliation and the published team-universe filter. ${result.source.attribution}`,
@@ -111,7 +112,7 @@ export async function importRankingSourceData({
     ...leaguepediaImports.map((result, sourceIndex): DataSourceInfo => {
       const ratedMatches = matches.filter((match) => match.sourceProvider === 'leaguepedia-cargo' && leaguepediaSourceOwners.get(match.id) === sourceIndex)
       return {
-        name: result.source.fileName ? `Leaguepedia Cargo: ${result.source.fileName}` : 'Leaguepedia Cargo',
+        name: result.source.fileName ? `${LEAGUEPEDIA_SOURCE_PREFIX}: ${result.source.fileName}` : LEAGUEPEDIA_SOURCE_PREFIX,
         kind: 'match-data', url: result.source.url, retrievedAt: result.source.retrievedAt,
         coverageStart: dateRange(ratedMatches).start, coverageEnd: dateRange(ratedMatches).end, rowCount: ratedMatches.length,
         description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after source reconciliation and the published team-universe filter. ${result.source.attribution}`,
@@ -121,6 +122,19 @@ export async function importRankingSourceData({
       }
     }),
   ]
+  // A refresh can fail before any file exists. Keep its receipt without claiming rated coverage.
+  for (const [provider, imports, name, kind] of [
+    ['oracle', oracleImports, ORACLE_SOURCE_PREFIX, 'game-stats'],
+    ['leaguepedia', leaguepediaImports, LEAGUEPEDIA_SOURCE_PREFIX, 'match-data'],
+  ] as const) {
+    const refreshReceipt = sourceRefreshReceipt(provider, manifest)
+    if (imports.length === 0 && refreshReceipt) {
+      externalSources.push({
+        name, kind, status: 'reference-only', rowCount: 0,
+        description: 'Refresh receipt only. No source files were imported.', refreshReceipt,
+      })
+    }
+  }
   const tournamentScheduleReferences = lolEsportsImports.flatMap((result) => {
     const coverage = dateRange(result.events)
     return result.events.map((event) => ({

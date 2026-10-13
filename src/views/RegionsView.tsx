@@ -133,7 +133,7 @@ export function RegionsView({
                   onPointerEnter={onRequestRegionHistory}
                 >
                   <span className="text-center text-lg font-bold text-[var(--text-strong)] max-sm:row-span-2 max-sm:text-left">{region.rank}</span>
-                  <span className="flex min-w-0 items-center gap-3 [&>span]:min-w-0 [&_b]:text-base [&_b]:font-semibold [&_b]:tracking-normal [&_b]:text-[var(--text-strong)] [&_small]:mt-px [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground max-sm:gap-2 max-sm:[&_b]:overflow-hidden max-sm:[&_b]:text-ellipsis max-sm:[&_b]:whitespace-nowrap max-sm:[&_small]:overflow-hidden max-sm:[&_small]:text-ellipsis max-sm:[&_small]:whitespace-nowrap">
+                  <span className="flex min-w-0 items-center gap-3 [&>span]:min-w-0 [&_b]:text-base [&_b]:font-semibold [&_b]:tracking-normal [&_b]:text-[var(--text-strong)] [&_small]:mt-px [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground max-sm:gap-2 max-sm:[&_b]:overflow-hidden max-sm:[&_b]:text-ellipsis max-sm:[&_b]:whitespace-nowrap">
                     <RegionBadge region={region.region} />
                     <span>
                       <b>{region.region}</b>
@@ -170,7 +170,7 @@ export function RegionsView({
                 </Button>
                 <div className="flex items-center gap-2 py-4 pr-3 pl-0 max-sm:gap-1 max-sm:pr-2">
                   <CompareToggle picked={picked} onToggle={() => onToggle(region)} label={region.region} className="relative z-10" />
-                  <ChevronRight className="size-4 text-[var(--faint)] transition-colors group-hover/row:text-[var(--text-strong)]" aria-hidden="true" />
+                  <ChevronRight className="size-4 text-[var(--faint)] transition-colors group-hover/row:text-[var(--text-strong)] max-sm:hidden" aria-hidden="true" />
                 </div>
               </div>
             )

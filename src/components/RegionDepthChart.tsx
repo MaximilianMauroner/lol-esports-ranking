@@ -11,12 +11,16 @@ const STACKED_BELOW = 520
 const DEFAULT_WIDTH = 760
 const LARGEST_TICK_STEP = 1000
 const TICK_STEPS = [25, 50, 100, 200, 250, 500, LARGEST_TICK_STEP]
-const MIN_TICK_SPACING = 70
+/** A tick label is about 31px wide, so this leaves a clear gap between labels. */
+const MIN_TICK_SPACING = 56
 const MAX_TICKS = 6
 /** Share of the rating range added on each side of the axis. */
 const DOMAIN_PADDING = 0.04
 /** Teams at these positions in `topTeams` make up the region score. */
 const SCORED_TEAM_COUNT = 3
+/** Covers the transparent pointer target and the focus ring. */
+const DOT_TARGET_RADIUS = 9
+const DOT_LANE_STEP = DOT_TARGET_RADIUS * 2
 
 /**
  * Every ranked team of each region on one shared Power axis. The three teams
@@ -47,9 +51,11 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
             {layout.gridBands.map((band) => (
               <line key={band.y1} x1={tick.x} x2={tick.x} y1={band.y1} y2={band.y2} stroke="var(--line)" strokeWidth={1} />
             ))}
-            <text x={tick.x} y={layout.axisLabelY} textAnchor="middle" fill="var(--faint)" className="text-2xs tabular-nums">
-              {formatRating(tick.value)}
-            </text>
+            {layout.axisLabelYs.map((y) => (
+              <text key={y} x={tick.x} y={y} textAnchor="middle" fill="var(--faint)" className="text-2xs tabular-nums">
+                {formatRating(tick.value)}
+              </text>
+            ))}
           </g>
         ))}
 
@@ -83,16 +89,16 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
                       aria-label={`${dot.team}, Power ${formatRating(dot.rating)}, number ${dot.regionalRank} in ${row.region}. ${contribution}.`}
                       className="group cursor-help outline-none"
                     >
-                      <circle cx={dot.x} cy={row.dotY} r={9} fill="transparent" />
+                      <circle cx={dot.x} cy={row.dotY + dot.dy} r={DOT_TARGET_RADIUS} fill="transparent" />
                       <circle
                         cx={dot.x}
-                        cy={row.dotY}
-                        r={dot.counts ? 5 : 3.5}
+                        cy={row.dotY + dot.dy}
+                        r={dotRadius(dot.counts)}
                         fill={dot.counts ? 'var(--series-1)' : 'var(--muted)'}
                         stroke="var(--surface)"
                         strokeWidth={1.5}
                       />
-                      <circle cx={dot.x} cy={row.dotY} r={8} fill="none" stroke="var(--focus)" strokeWidth={1.5} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
+                      <circle cx={dot.x} cy={row.dotY + dot.dy} r={8} fill="none" stroke="var(--focus)" strokeWidth={1.5} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
                     </g>
                   )} />
                   <HoverCardContent side="top">
@@ -162,6 +168,8 @@ type RegionDepthDot = {
   regionalRank: number
   rating: number
   x: number
+  /** Offset from the row's line, so a dot never covers a neighbour. */
+  dy: number
   counts: boolean
 }
 
@@ -173,30 +181,35 @@ type RegionDepthRow = {
   labelY: number
   detailY: number
   dotY: number
+  bottom: number
   scoreX: number
   span?: { x1: number; x2: number }
   dots: RegionDepthDot[]
   lead?: { code: string; x: number; y: number }
 }
 
-function regionDepthLayout(regions: RegionDepthInput[], availableWidth: number) {
+// Export the pure layout so narrow and wide geometry can be verified without a browser.
+// eslint-disable-next-line react-refresh/only-export-components
+export function regionDepthLayout(regions: RegionDepthInput[], availableWidth: number) {
   const width = Math.max(280, availableWidth)
   const stacked = width < STACKED_BELOW
   const plotLeft = stacked ? 18 : 150
   const plotRight = width - (stacked ? 18 : 24)
   const rowHeight = stacked ? 54 : 38
-  const top = 4
+  // Stacked rows make a tall chart, so the tick labels also sit above the
+  // first row, where the reader starts.
+  const top = stacked ? 18 : 4
 
   const ratings = regions.flatMap((region) => region.topTeams.map((team) => team.rating)).filter(Number.isFinite)
   const { min, max, ticks: tickValues } = axisDomain(ratings, plotRight - plotLeft)
   const x = (value: number) => plotLeft + ((value - min) / (max - min)) * (plotRight - plotLeft)
 
-  const rows = regions.map((region, index): RegionDepthRow => {
-    const rowTop = top + index * rowHeight
+  let rowTop = top
+  const rows = regions.map((region): RegionDepthRow => {
     const dotY = stacked ? rowTop + 38 : rowTop + rowHeight / 2
     const score = displayRegionPowerScore(region)
     const teams = region.topTeams.filter((team) => Number.isFinite(team.rating))
-    const dots = teams.map((team, teamIndex) => ({
+    const dots = withLanes(teams.map((team, teamIndex) => ({
       team: team.team,
       code: team.code,
       rank: team.rank,
@@ -204,13 +217,14 @@ function regionDepthLayout(regions: RegionDepthInput[], availableWidth: number) 
       rating: team.rating,
       x: x(team.rating),
       counts: teamIndex < SCORED_TEAM_COUNT,
-    }))
+    })))
     // Draw the scoring teams last so other dots never cover them.
     dots.sort((left, right) => Number(left.counts) - Number(right.counts))
     const dotXs = dots.map((dot) => dot.x)
     const leadTeam = teams[0]
+    const bottom = Math.max(rowTop + rowHeight, dotY + Math.max(0, ...dots.map((dot) => dot.dy)) + 16)
 
-    return {
+    const row: RegionDepthRow = {
       region: region.region,
       rank: region.rank,
       score,
@@ -218,16 +232,19 @@ function regionDepthLayout(regions: RegionDepthInput[], availableWidth: number) 
       labelY: stacked ? rowTop + 13 : dotY - 2,
       detailY: dotY + 12,
       dotY,
+      bottom,
       scoreX: x(score),
       span: dotXs.length > 0 ? { x1: Math.min(...dotXs), x2: Math.max(...dotXs) } : undefined,
       dots,
       lead: leadTeam ? leadLabel(leadTeam.code ?? leadTeam.team.slice(0, 3).toUpperCase(), x(leadTeam.rating), dotY, width) : undefined,
     }
+    rowTop = bottom
+    return row
   })
 
-  const plotBottom = top + regions.length * rowHeight
+  const plotBottom = rowTop
   const gridBands = stacked
-    ? rows.map((row) => ({ y1: row.dotY - 14, y2: row.dotY + 14 }))
+    ? rows.map((row) => ({ y1: row.dotY - 16, y2: row.bottom }))
     : [{ y1: top, y2: plotBottom }]
   const ticks = tickValues.map((value) => ({ value, x: x(value) }))
 
@@ -241,7 +258,7 @@ function regionDepthLayout(regions: RegionDepthInput[], availableWidth: number) 
     height: plotBottom + 24,
     stacked,
     plotLeft,
-    axisLabelY: plotBottom + 16,
+    axisLabelYs: stacked ? [12, plotBottom + 16] : [plotBottom + 16],
     gridBands,
     ticks,
     rows,
@@ -267,6 +284,27 @@ function axisDomain(ratings: number[], plotWidth: number) {
   }
   const ticks = TICK_STEPS.map(ticksFor).find((values) => values.length <= maxTicks) ?? ticksFor(LARGEST_TICK_STEP)
   return { min, max, ticks }
+}
+
+function dotRadius(counts: boolean) {
+  return counts ? 5 : 3.5
+}
+
+/**
+ * Places strongest scoring dots first, in the first downward lane that clears
+ * every existing pointer target. New lanes keep dense rows reachable without
+ * moving dots into the lead label above the line.
+ */
+function withLanes<T extends { x: number; counts: boolean }>(dots: T[]): Array<T & { dy: number }> {
+  const placed: Array<T & { dy: number }> = []
+  for (const dot of dots.toSorted((left, right) => Number(right.counts) - Number(left.counts) || right.x - left.x)) {
+    let dy = 0
+    while (placed.some((other) => Math.hypot(other.x - dot.x, other.dy - dy) < DOT_LANE_STEP)) {
+      dy += DOT_LANE_STEP
+    }
+    placed.push({ ...dot, dy })
+  }
+  return placed
 }
 
 /** Centres the code over the dot and keeps an estimated 10px mono text width inside the chart. */
