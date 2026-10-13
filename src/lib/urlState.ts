@@ -16,19 +16,20 @@ export function currentHashQuery(): URLSearchParams {
   return new URLSearchParams(window.location.hash.slice(1).split('?', 2)[1] ?? '')
 }
 
-export function hashParam(key: string): string | undefined {
-  return currentHashQuery().get(key) ?? undefined
+/** Read a hash param from `query`, by default the current hash query. */
+export function hashParam(key: string, query = currentHashQuery()): string | undefined {
+  return query.get(key) ?? undefined
 }
 
 /** Read a hash param, falling back when it is absent or not one of `allowed`. */
-export function hashEnum<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
-  const value = hashParam(key)
+export function hashEnum<T extends string>(key: string, allowed: readonly T[], fallback: T, query = currentHashQuery()): T {
+  const value = hashParam(key, query)
   return allowed.includes(value as T) ? (value as T) : fallback
 }
 
 /** Read a positive integer hash param, falling back when absent or invalid. */
-export function hashInt(key: string, fallback: number): number {
-  const value = Number(hashParam(key))
+export function hashInt(key: string, fallback: number, query = currentHashQuery()): number {
+  const value = Number(hashParam(key, query))
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 

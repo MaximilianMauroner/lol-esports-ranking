@@ -34,7 +34,7 @@ import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
 import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { cn } from './lib/utils'
-import { hashParam } from './lib/urlState'
+import { currentHashQuery, hashParam } from './lib/urlState'
 import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './lib/bootstrap'
 import {
   checkpointFromScope,
@@ -130,7 +130,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
   // Board filters that App owns are seeded from the hash for the same reason
   // the ones TeamsView owns are: a shared or reloaded board must come back.
-  const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>(() => (hashParam('tournament') as TournamentFilterValue | undefined) ?? 'All')
+  const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>(() => readTournamentFilterFromHash())
   const tournamentId = tournamentIdFromFilter(tournamentFilter)
   const {
     manifestState,
@@ -167,6 +167,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [teamSearch, setTeamSearch] = useState(() => hashParam('team') ?? '')
+  const [boardHashQuery, setBoardHashQuery] = useState(currentHashQuery)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
@@ -203,6 +204,15 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
       if (nextMode === 'regions') setLoadRegionHistory(true)
       const nextScope = readScopeFromHash()
       if (nextScope) selectScope(nextScope)
+      // Every board filter is read in this one listener. React renders after
+      // each hashchange listener, and that render would write the old board
+      // filters back to the hash before a second listener could read them.
+      if (nextMode === 'rankings') {
+        const query = currentHashQuery()
+        setTournamentFilter(readTournamentFilterFromHash(query))
+        setTeamSearch(hashParam('team', query) ?? '')
+        setBoardHashQuery(query)
+      }
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
@@ -469,6 +479,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
                   tournamentMovementState={tournamentMovementState}
                   onRetryTournamentMovements={retryTournamentMovements}
                   regionsHref={hashForModeAndScope('regions', effectiveScope)}
+                  hashQuery={boardHashQuery}
                   dataSummary={{
                     source: loadedData.source,
                     sources: loadedData.sources,
@@ -737,6 +748,10 @@ function readScopeFromHash() {
   if (!query) return undefined
   const scope = new URLSearchParams(query).get('scope')
   return isKnownScope(scope) ? scope : undefined
+}
+
+function readTournamentFilterFromHash(query = currentHashQuery()) {
+  return (hashParam('tournament', query) as TournamentFilterValue | undefined) ?? 'All'
 }
 
 function replaceHashForModeAndScope(mode: Mode, scope: string) {

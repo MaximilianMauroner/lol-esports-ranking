@@ -47,7 +47,7 @@ import type {
   TournamentMovementState,
 } from '../hooks/usePublicArtifacts'
 import { useHistoryDetail } from '../hooks/useHistoryDetail'
-import { hashEnum, hashInt, hashParam, useHashSync } from '../lib/urlState'
+import { currentHashQuery, hashEnum, hashInt, hashParam, useHashSync } from '../lib/urlState'
 import { estimatePublicMatchup, gameWinChanceForGap, type PublicMatchupModel } from '../lib/publicMatchup'
 import { NEAR_TIE_WIN_PROBABILITY, nearTieGroups, nearTiePositions, type NearTiePosition } from '../lib/nearTies'
 import { boardHeadline } from '../lib/boardHeadline'
@@ -118,6 +118,32 @@ const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
 const LARGE_POWER_RESUME_RANK_GAP = 7
 const LARGE_POWER_RESUME_SCORE_GAP = 100
+
+/**
+ * The board filters this view keeps in the hash, read on mount and on every
+ * hash change. Search and tournament are App state, and App reads them from
+ * the same query.
+ */
+function readBoardAddress(query: URLSearchParams) {
+  const sortKey = hashEnum('sort', SORT_KEYS, 'rank', query)
+  const pageSize = hashInt('size', DEFAULT_TEAM_PAGE_SIZE, query)
+  return {
+    region: hashParam('region', query) ?? 'All',
+    tierFilter: hashEnum('tier', TIER_FILTERS, 'All', query),
+    eligibilityFilter: hashEnum('eligibility', ELIGIBILITY_FILTERS, 'ranked', query),
+    sortKey,
+    // The address omits the direction when it is the sort's default.
+    sortDirection: hashEnum('dir', SORT_DIRECTIONS, defaultSortDirection(sortKey), query),
+    pageSize: TEAM_PAGE_SIZES.includes(pageSize as typeof TEAM_PAGE_SIZES[number]) ? pageSize : DEFAULT_TEAM_PAGE_SIZE,
+    page: hashInt('page', 1, query),
+  }
+}
+
+/** Rank reads best first; Power and wins read highest first. */
+function defaultSortDirection(key: SortKey): SortDirection {
+  return key === 'rank' ? 'ascending' : 'descending'
+}
+
 const LazyTeamHistoryLineChart = lazy(() => import('../components/TeamHistoryLineChart').then((module) => ({ default: module.TeamHistoryLineChart })))
 export function TeamsView({
   standings,
@@ -137,6 +163,7 @@ export function TeamsView({
   tournamentMovementState,
   regionsHref,
   dataSummary,
+  hashQuery,
   onToggle,
   onRequestPlayers,
   onRequestTeamHistory,
@@ -161,6 +188,8 @@ export function TeamsView({
   tournamentMovementState: TournamentMovementState
   regionsHref?: string
   dataSummary?: TeamDataSummary
+  /** The hash query App read on the last hash change. A new object means a new address. */
+  hashQuery: URLSearchParams
   onToggle: (team: RankingSummaryStanding) => void
   onRequestPlayers?: () => void
   onRequestTeamHistory?: (teams?: readonly string[]) => void
@@ -169,16 +198,31 @@ export function TeamsView({
   onRetryTournamentMovements?: () => void
 }) {
   // Seeded from the hash so a shared or reloaded board comes back as it was.
-  const [region, setRegion] = useState(() => hashParam('region') ?? 'All')
-  const [tierFilter, setTierFilter] = useState<RankingTierLabel | 'All'>(() => hashEnum('tier', TIER_FILTERS, 'All'))
-  const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>(() => hashEnum('eligibility', ELIGIBILITY_FILTERS, 'ranked'))
-  const [sortKey, setSortKey] = useState<SortKey>(() => hashEnum('sort', SORT_KEYS, 'rank'))
-  const [sortDirection, setSortDirection] = useState<SortDirection>(() => hashEnum('dir', SORT_DIRECTIONS, 'ascending'))
-  const [pageSize, setPageSize] = useState<number>(() => {
-    const size = hashInt('size', DEFAULT_TEAM_PAGE_SIZE)
-    return TEAM_PAGE_SIZES.includes(size as typeof TEAM_PAGE_SIZES[number]) ? size : DEFAULT_TEAM_PAGE_SIZE
-  })
-  const [pageState, setPageState] = useState(() => ({ scopeKey: '', page: hashInt('page', 1) }))
+  const [address] = useState(() => readBoardAddress(currentHashQuery()))
+  const [region, setRegion] = useState(address.region)
+  const [tierFilter, setTierFilter] = useState<RankingTierLabel | 'All'>(address.tierFilter)
+  const [eligibilityFilter, setEligibilityFilter] = useState<EligibilityFilter>(address.eligibilityFilter)
+  const [sortKey, setSortKey] = useState<SortKey>(address.sortKey)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(address.sortDirection)
+  const [pageSize, setPageSize] = useState<number>(address.pageSize)
+  // A page read from the address has no filter key yet. It belongs to the
+  // filters read with it, so the first render binds it to their key.
+  const [pageState, setPageState] = useState<{ scopeKey?: string; page: number }>({ page: address.page })
+  // A typed or linked address, Back or Forward changes the hash without a
+  // reload. App then passes a new query, and the board shows what a reload
+  // of that address would show.
+  const [appliedQuery, setAppliedQuery] = useState(hashQuery)
+  if (hashQuery !== appliedQuery) {
+    const next = readBoardAddress(hashQuery)
+    setAppliedQuery(hashQuery)
+    setRegion(next.region)
+    setTierFilter(next.tierFilter)
+    setEligibilityFilter(next.eligibilityFilter)
+    setSortKey(next.sortKey)
+    setSortDirection(next.sortDirection)
+    setPageSize(next.pageSize)
+    setPageState({ page: next.page })
+  }
   const { value: detailKey, open: openDetail, close: closeDetail } = useHistoryDetail('teamDetail')
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
   // Phones fold the filters behind one button so the first screen shows teams.
@@ -304,8 +348,11 @@ export function TeamsView({
   const rawScoreRankByTeam = useMemo(() => rawScoreRanks(scopeFiltered), [scopeFiltered])
   const sorted = useMemo(() => sortStandings(filtered, sortKey, sortDirection), [filtered, sortDirection, sortKey])
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageScopeKey = `${region}\u0000${tierFilter}\u0000${activeTournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${sortDirection}\u0000${pageSize}`
-  const requestedPage = pageState.scopeKey === pageScopeKey ? pageState.page : 1
+  // The requested tournament, not the active one: its option arrives with the
+  // tournament index after the first render and must not reset the page.
+  const pageScopeKey = `${region}\u0000${tierFilter}\u0000${tournamentFilter}\u0000${eligibilityFilter}\u0000${search}\u0000${sortKey}\u0000${sortDirection}\u0000${pageSize}`
+  if (pageState.scopeKey === undefined) setPageState({ scopeKey: pageScopeKey, page: pageState.page })
+  const requestedPage = pageState.scopeKey === undefined || pageState.scopeKey === pageScopeKey ? pageState.page : 1
   const currentPage = Math.min(requestedPage, totalPages)
   const pageStart = (currentPage - 1) * pageSize
   const visible = sorted.slice(pageStart, pageStart + pageSize)
@@ -444,7 +491,7 @@ export function TeamsView({
       return
     }
     setSortKey(nextKey)
-    setSortDirection(nextKey === 'rank' ? 'ascending' : 'descending')
+    setSortDirection(defaultSortDirection(nextKey))
   }
 
   function updatePage(nextPage: number) {
@@ -475,7 +522,7 @@ export function TeamsView({
     tournament: activeTournamentFilter === 'All' ? '' : activeTournamentFilter,
     eligibility: eligibilityFilter === 'ranked' ? '' : eligibilityFilter,
     sort: sortKey === 'rank' ? '' : sortKey,
-    dir: sortDirection === (sortKey === 'rank' ? 'ascending' : 'descending') ? '' : sortDirection,
+    dir: sortDirection === defaultSortDirection(sortKey) ? '' : sortDirection,
     size: pageSize === DEFAULT_TEAM_PAGE_SIZE ? '' : String(pageSize),
     page: currentPage > 1 ? String(currentPage) : '',
   })
