@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type RefObject } from 'react'
 import { History, Search } from 'lucide-react'
 import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../lib/publicArtifacts/schema'
 import type { MatchHistoryState } from '../hooks/usePublicArtifacts'
@@ -10,6 +10,7 @@ import { DataState } from '../components/ui'
 import { Input } from '../components/ui/input'
 import { PageShell, StatCell, StatRibbon } from '../components/ui/page-shell'
 import { Pager } from '../components/ui/pager'
+import { canUseBackgroundPrefetch, scheduleIdleWork } from '../lib/prefetch'
 import { Panel, PanelBody, PanelFooter, PanelHeader } from '../components/ui/panel'
 import { Select } from '../components/ui/select'
 import { LoadingState } from '../components/ui/loading'
@@ -19,6 +20,17 @@ import { groupedMatchEvents } from '../lib/matchEventGroups'
 import { SeriesCards, SeriesTable, type MatchSeries } from '../components/matches/SeriesLedger'
 
 const PAGE_SIZES = [25, 50] as const
+const DESKTOP_LEDGER_QUERY = '(min-width: 768px)'
+
+function subscribeToLedgerLayout(onChange: () => void) {
+  const media = window.matchMedia(DESKTOP_LEDGER_QUERY)
+  media.addEventListener('change', onChange)
+  return () => media.removeEventListener('change', onChange)
+}
+
+function desktopLedgerLayout() {
+  return window.matchMedia(DESKTOP_LEDGER_QUERY).matches
+}
 
 type ViewState = {
   scopeKey: string
@@ -32,6 +44,7 @@ type ViewState = {
 export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, archiveYears = [], archiveYear, onYearChange }: { archiveYears?: string[]; archiveYear?: string; onYearChange?: (year: string) => void; searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; scopeLabel: string; onRequestPages: (pages: number[]) => void }) {
   const [view, setView] = useState<ViewState>(readViewState)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const desktop = useSyncExternalStore(subscribeToLedgerLayout, desktopLedgerLayout, () => true)
   const catalog = state.status === 'ready' ? state.data.catalog : undefined
   const refs = useMemo(() => catalog?.series ?? [], [catalog])
   const leagues = useMemo(() => unique(refs.map((match) => match.league)), [refs])
@@ -60,10 +73,22 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
     const pageState = state.data.pages[pageNumber]
     return !pageState || pageState.status === 'idle' || pageState.status === 'loading'
   })
+  const nextPagesKey = [...new Set(filtered.slice(pageStart + view.pageSize, pageStart + view.pageSize * 2).map((entry) => entry.page))].join(',')
+  const currentPageReady = state.status === 'ready' && !pageLoading && !pageFailure
 
   useEffect(() => {
     if (neededPagesKey) onRequestPages(neededPagesKey.split(',').map(Number))
-  }, [neededPagesKey, onRequestPages])
+  }, [catalog, neededPagesKey, onRequestPages])
+
+  useEffect(() => {
+    if (!currentPageReady || !nextPagesKey || !canUseBackgroundPrefetch()) return
+    return scheduleIdleWork(() => onRequestPages(nextPagesKey.split(',').map(Number)))
+  }, [catalog, currentPageReady, nextPagesKey, onRequestPages])
+
+  function preparePage(nextPage: number) {
+    const offset = (nextPage - 1) * view.pageSize
+    onRequestPages([...new Set(filtered.slice(offset, offset + view.pageSize).map((entry) => entry.page))])
+  }
 
   // Same helper, same param names and same "omit the default" rule as the
   // other two views.
@@ -171,10 +196,9 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
         ) : (
           <>
             {visible.length > 0 ? (
-              <>
-                <SeriesTable series={visible} expanded={expanded} onToggle={toggleSeries} publication={publication} />
-                <SeriesCards series={visible} expanded={expanded} onToggle={toggleSeries} publication={publication} />
-              </>
+              desktop
+                ? <SeriesTable series={visible} expanded={expanded} onToggle={toggleSeries} publication={publication} />
+                : <SeriesCards series={visible} expanded={expanded} onToggle={toggleSeries} publication={publication} />
             ) : null}
             {pageLoading ? <LoadingState presentation="rows" className="m-4" label="Loading matches" description="Fetching the missing rows for this page." /> : null}
             {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
@@ -189,6 +213,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
             page={page}
             pageCount={pageCount}
             onPage={(next) => update({ page: Math.min(Math.max(1, next), pageCount) }, false)}
+            onIntent={preparePage}
             pageSize={view.pageSize}
             pageSizes={PAGE_SIZES}
             onPageSize={(size) => update({ pageSize: size })}

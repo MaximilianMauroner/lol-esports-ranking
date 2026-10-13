@@ -120,7 +120,8 @@ const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 
 const ROLE_ORDER = new Map(['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role, index) => [role, index]))
 const LARGE_POWER_RESUME_RANK_GAP = 7
 const LARGE_POWER_RESUME_SCORE_GAP = 100
-const LazyTeamHistoryLineChart = lazy(() => import('../components/TeamHistoryLineChart').then((module) => ({ default: module.TeamHistoryLineChart })))
+const loadTeamHistoryLineChart = () => import('../components/TeamHistoryLineChart').then((module) => ({ default: module.TeamHistoryLineChart }))
+const LazyTeamHistoryLineChart = lazy(loadTeamHistoryLineChart)
 export function TeamsView({
   standings,
   regions,
@@ -476,6 +477,11 @@ export function TeamsView({
     openDetail(teamKey(team))
   }
 
+  function prepareTeamDetails() {
+    onRequestPlayers?.()
+    void loadTeamHistoryLineChart().catch(() => { /* Opening a detail can retry. */ })
+  }
+
   // Same param names and same "omit the default" rule as the other views.
   useHashSync('rankings', {
     team: search.trim(),
@@ -682,6 +688,8 @@ export function TeamsView({
                             excludedFromRankedBoard && 'is-excluded bg-[color-mix(in_oklch,var(--surface-2)_58%,transparent)] text-[color-mix(in_oklch,var(--text)_76%,var(--muted))] hover:bg-[color-mix(in_oklch,var(--surface-3)_70%,transparent)]',
                           )}
                           title={excludedFromRankedBoard ? eligibilityReasonsTitle(team) : undefined}
+                          onPointerEnter={prepareTeamDetails}
+                          onTouchStart={prepareTeamDetails}
                           onClick={(event) => {
                             if (shouldIgnoreTeamRowClick(event)) return
                             openTeam(team)
@@ -700,7 +708,7 @@ export function TeamsView({
                               variant="ghost"
                               className="team-cell team-cell__button h-auto min-h-9 w-full cursor-pointer justify-start gap-3 whitespace-normal rounded-sm border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] hover:bg-transparent hover:text-[inherit] focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]"
                               onClick={() => openTeam(team)}
-                              onFocus={onRequestPlayers}
+                              onFocus={prepareTeamDetails}
                               title={`Open ${team.team}`}
                             >
                               <TeamMark team={team.team} code={team.code} className="team-mark sm h-8 w-10" />
