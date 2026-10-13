@@ -8,6 +8,7 @@ const browserJourneys = [
   'tests/rankingArchiveBrowser.test.ts',
   'tests/rankingBoardAddressBrowser.test.ts',
   'tests/matchPagePrefetchBrowser.test.ts',
+  'tests/matchesAddressBrowser.test.ts',
   'tests/rankingTournamentBoardBrowser.test.ts',
   'tests/tournamentBrowser.test.ts',
   'tests/tournamentForecastBrowser.test.ts',
