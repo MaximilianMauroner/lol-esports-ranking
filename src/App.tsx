@@ -499,7 +499,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
             ) : null}
           </>
         )}
-        <footer className="mx-[var(--page-x)] mt-7 flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-4 text-xs leading-[1.55] text-[var(--faint)]" aria-label="Project disclaimer">
+        <footer aria-label="Project disclaimer" className="mx-[var(--page-x)] mt-7 flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-4 text-xs leading-[1.55] text-[var(--faint)] [&>a]:inline-flex [&>a]:min-h-6 [&>a]:min-w-6 [&>a]:items-center">
           <span>{RIOT_PROJECT_NOTICE}</span>
           <a className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" href={PROJECT_REPOSITORY_URL}>Source code</a>
           <a className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" href={PROJECT_FEEDBACK_URL}>Report feedback</a>

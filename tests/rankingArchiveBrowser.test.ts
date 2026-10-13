@@ -105,7 +105,20 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     const detail = page.locator('.team-detail-sheet')
     await detail.waitFor()
     assert.equal(await detail.getAttribute('aria-label'), 'Alpha details')
+    assert.equal(await detail.getAttribute('aria-modal'), 'true')
+    assert.equal(await page.evaluate(() => document.querySelector('.team-detail-sheet')?.contains(document.activeElement)), true)
     await detail.locator('.recharts-line-curve').first().waitFor()
-    await detail.getByRole('button', { name: 'Close', exact: true }).click()
+    await detail.locator('svg.recharts-surface').first().focus()
+    const pointDetails = detail.getByText('Match and model details', { exact: true })
+    await pointDetails.waitFor()
+    await page.keyboard.press('Tab')
+    await page.waitForFunction(() => document.activeElement?.textContent === 'Match and model details', undefined, { timeout: 2_000 })
+    assert.equal(await pointDetails.evaluate((summary) => summary === document.activeElement), true)
+    for (let index = 0; index < 20; index++) {
+      await page.keyboard.press(index < 10 ? 'Tab' : 'Shift+Tab')
+      await page.waitForFunction(() => document.querySelector('.team-detail-sheet')?.contains(document.activeElement), undefined, { timeout: 2_000 })
+    }
+    await page.keyboard.press('Escape')
+    await detail.waitFor({ state: 'hidden' })
   } finally { await browser?.close(); await server.close() }
 })

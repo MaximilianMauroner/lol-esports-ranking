@@ -86,7 +86,7 @@ export function RegionsView({
       ribbon={
         <StatRibbon label="Region summary">
           <StatCell icon={<Trophy aria-hidden="true" />} label="Strongest region" value={strongest?.region ?? '—'} detail={`Region power ${formatRating(strongest ? displayRegionPowerScore(strongest) : undefined)}`} />
-          <StatCell icon={<Globe2 aria-hidden="true" />} label="Regions tracked" value={String(regions.length)} detail="Excludes international events" />
+          <StatCell icon={<Globe2 aria-hidden="true" />} label="Regions" value={String(regions.length)} detail="Grouped by home league" />
           <StatCell
             icon={<Swords aria-hidden="true" />}
             label="Best international record"
@@ -571,18 +571,16 @@ function RegionMatchRow({
           {regionalClash ? 'Regional matchup' : regionWon ? 'Region win' : 'Region loss'}
         </span>
         <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
-          {impactParts.length > 0 ? `Team power ${impactParts.join(' · ')}` : 'Team power held'}
+          {impactParts.length > 0 ? `Team Power ${impactParts.join(' · ')}` : 'Team Power change unavailable'}
         </p>
       </div>
       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-border pl-4 max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:pt-2.5 max-[820px]:pl-0">
         <ArrowRight className="size-4 text-[var(--faint)]" aria-hidden="true" />
         <div>
           <strong className={cn('block text-sm tabular-nums', typeof directRegionEffect === 'number' && directRegionEffect > 0 ? 'text-[var(--up)]' : typeof directRegionEffect === 'number' && directRegionEffect < 0 ? 'text-[var(--down)]' : 'text-foreground')}>
-            {typeof directRegionEffect === 'number' && directRegionEffect !== 0
-              ? `≈ ${formatSignedDecimal(directRegionEffect)} direct region effect`
-              : contributingTeam
-                ? 'Region effect held'
-                : 'Outside the top three'}
+            {typeof directRegionEffect === 'number'
+              ? directRegionEffect === 0 ? 'No score change from this series' : `≈ ${formatSignedDecimal(directRegionEffect)} pts from this series`
+              : contributingTeam ? 'Series contribution unavailable' : 'Outside the top three'}
           </strong>
           <small className="mt-0.5 block text-2xs text-[var(--faint)]">
             {movement

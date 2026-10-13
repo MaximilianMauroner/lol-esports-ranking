@@ -7,7 +7,7 @@ import { FormDots } from './ui'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card'
 
 const WIDTH = 320
-const ROW_HEIGHT = 20
+const ROW_HEIGHT = 32
 const TOP = 8
 const BOTTOM = 26
 const LEFT = 88
@@ -67,7 +67,7 @@ export function PowerLadder({
       <p className="mb-2 text-xs text-muted-foreground">100 pts ≈ {gapExample}% game win</p>
       <p className="mb-2 text-2xs text-muted-foreground">Dot: Power · line: uncertainty · bracket: near tie</p>
       <svg
-        className="block h-auto w-full"
+        className="block h-auto w-full min-w-[240px]"
         viewBox={`0 0 ${WIDTH} ${height}`}
         role="group"
         aria-label={`Power ladder: ${teams.length} ranked teams on one Power axis. Brackets join near ties. Select a team to open it.`}

@@ -134,7 +134,11 @@ export function TournamentsView() {
           <Button variant="outline" size="sm" onClick={() => void refresh()}>Refresh</Button>
         </div>
       </div>
-      {stale ? <Alert variant="warning" role="status">Schedule may be stale. Last successful feed change: {formatTournamentTime(state.feed.fetchedAt, timezone)}.{state.error ? ` Latest browser check failed: ${state.error}` : ''}{state.health?.warnings.length ? ` Collector: ${state.health.warnings.join(' ')}` : ''}</Alert> : null}
+      {stale ? <Alert variant="warning" role="status">
+        Schedule may be stale. Feed last changed: {formatFeedAge(state.feed.fetchedAt, now)} ({formatTournamentTime(state.feed.fetchedAt, timezone)}). Last collector check: {state.health ? formatFeedAge(state.health.checkedAt, now) : 'unavailable'}.
+        {state.error ? ` Latest browser check failed: ${state.error}` : ''}{state.health?.warnings.length ? ` Collector: ${state.health.warnings.join(' ')}` : ''}
+        <Button variant="outline" size="sm" className="ml-2" onClick={() => void refresh()}>Retry schedule</Button>
+      </Alert> : null}
       {state.feed.dataMode === 'synthetic-fixture' ? <Alert variant="warning" role="status">Local synthetic fixture. These are not official LoL Esports fixtures or results.</Alert> : null}
       {FORECASTS_ENABLED && forecastArtifacts.ledgerWarning ? <Alert variant="warning" role="status">{forecastArtifacts.ledgerWarning}</Alert> : null}
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
@@ -156,7 +160,7 @@ export function TournamentsView() {
             <h3 className="flex items-baseline gap-2 text-base font-semibold">{SECTION_TITLES[group]}{' '}<span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{grouped[group].length}</span></h3>
             {grouped[group].length
               ? <SeriesList series={grouped[group]} timezone={timezone} now={now} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />
-              : <p className="text-sm text-muted-foreground">No {group} series in this schedule window.</p>}
+              : <p className="text-sm text-muted-foreground">{EMPTY_SECTION_MESSAGES[group]}</p>}
           </section>)}
         </>
       )}
@@ -166,6 +170,25 @@ export function TournamentsView() {
 }
 
 const SECTION_TITLES = { live: 'Live', upcoming: 'Upcoming', results: 'Results', unresolved: 'Unresolved results' } as const
+const EMPTY_SECTION_MESSAGES = {
+  live: 'No live series in this schedule window.',
+  upcoming: 'No upcoming series in this schedule window.',
+  results: 'No completed series in this schedule window.',
+  unresolved: 'No series with unresolved results in this schedule window.',
+} as const
+
+function formatFeedAge(timestamp: string, now: number) {
+  const age = now - Date.parse(timestamp)
+  if (!Number.isFinite(age)) return 'age unknown'
+  if (age < 0) return 'timestamp is in the future'
+  const minutes = Math.floor(age / REFRESH_MS)
+  if (minutes < 1) return 'less than a minute ago'
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
+  const days = Math.floor(hours / 24)
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`
+}
 
 /** Series grouped under one heading per local day, in feed order. */
 function SeriesList({ series, timezone, now, forecasts }: { series: TournamentSeries[]; timezone: string; now: number; forecasts: ForecastArtifacts | null }) {

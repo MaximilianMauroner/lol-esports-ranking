@@ -96,7 +96,7 @@ function TeamHistoryTooltip({
         ))}
       </div>
       {rows.some((row) => row.detail) ? (
-        <details key={selectedDate} className="mt-1 text-xs text-muted-foreground">
+        <details className="mt-1 text-xs text-muted-foreground">
           <summary className="w-fit cursor-pointer rounded-sm py-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]">Match and model details</summary>
           <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
             {rows.filter((row) => row.detail).map((row) => {
