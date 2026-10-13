@@ -22,12 +22,24 @@ the rules that the ruleset defines.
   the live starting point is unavailable and the page says why. A partly
   published draw, or a round with fewer published matches than its size, is
   ignored with a note. The earlier rounds stay in use.
-- **Seed slots before the draw.** The sixteen Swiss seeds (§4.3.2.1 pools), shown
-  as slots such as "LCK 1", not as team names. The user chooses the Play-In
-  winner's region (§4.2.1: CBLOL, LCS, LEC or LCP) so that the Round 1 region rule
-  applies to that slot. Until a region is chosen, the slot meets only a Pool 1
-  team from outside those regions (LCK 1 or LPL 1), so the draw stays valid for
+- **Qualified teams before the draw.** The sixteen Swiss seeds (§4.3.2.1 pools),
+  each shown with its confirmed team, for example Gen.G in LCK 1 and G2 Esports
+  in LEC 1. The teams come from the Round 1 draw tiers in
+  [Riot's Worlds 2026 primer](https://lolesports.com/en-SG/news/worlds-2026-primer),
+  which match the seed pools, and from the
+  [CBLOL final](https://www.techtudo.com.br/noticias/2026/10/final-do-cblol-2026-los-bate-furia-em-revanche-do-primeiro-split-e-e-campea-edjogos.ghtml)
+  on 10 October, which put LØS in CBLOL 1. They were checked on 13 October 2026
+  and are listed in `QUALIFIED_TEAMS` in `swissScenario.ts`. The names match the
+  team branding data, so the bracket shows each team's code and logo. The
+  sixteenth place stays "Play-In winner" until the Play-In ends (15 to 18
+  October) and the live draw names it. The user chooses the Play-In winner's
+  region (§4.2.1: CBLOL, LCS, LEC or LCP) so that the Round 1 region rule applies
+  to that slot. Until a region is chosen, the slot meets only a Pool 1 team from
+  outside those regions (Gen.G or Anyone's Legend), so the draw stays valid for
   any Play-In winner.
+
+  Saved scenarios and the draw rules use the seed slot IDs, not the team names,
+  so the names do not change shared links.
 
 Live draws and results are never editable. When a live result arrives for a
 match the user had picked, the live result replaces the pick and the page says
@@ -37,37 +49,43 @@ saved picks apply only to the starting point they were made for.
 If live draws become unavailable while the page starts from them, for example
 because a new feed breaks the draw rules, the page shows only the start choice
 and the reason. The live scenarios stay in the page address unchanged and come
-back when live draws return. Choosing seed slots starts two new scenarios.
+back when live draws return. Choosing qualified teams starts two new scenarios.
 
-## Board
+## Bracket
 
-The preview is a tournament board with one round at a time:
+The preview shows the whole Swiss stage as one bracket, the usual Swiss stage
+diagram:
 
-- **Round strip.** Rounds 1 to 5, each with its state: "Played" (all live
-  results), "Picked", "N to pick", "Draw next" or "Upcoming". The board opens on
-  the first round that needs a winner or a draw. Any round can be opened.
-- **Round.** Matches are grouped by record (1–0, 0–1 and so on). Each group says
-  where its winners and losers go. Each match is a small card with its format
-  (Bo1 or Bo3) and two team rows; a row is the winner control. Live results show
-  "Won" and "Lost" and cannot be changed; picks have a dashed outline and "Your
-  pick". The round footer says what the round still needs, or offers the next
-  draw.
-- **Draw.** A round that can be drawn shows its record groups and "Fill a valid
-  draw". Before the Round 1 draw from seed slots, it shows the four pools and
-  which pool each one meets. An upcoming round says what the open round still
-  needs, a draw or winners, and links to it.
-- **Standings.** A rail beside the board (below it on narrow screens) with the
-  advanced, out and playing counts and each team's record in scenarios A and B.
+- **Columns.** Rounds 1 to 5, then the records after Round 5. Each column holds
+  its record groups (0–0, then 1–0 and 0–1, and so on) with their match format
+  (Bo1 or Bo3). Advanced groups (3–0, 3–1, 3–2) sit at the top of their column
+  and eliminated groups (0–3, 1–3, 2–3, with their placings) at the bottom. In a
+  16-team stage the size of each group does not depend on results
+  (`SWISS_BRACKET`), so the full bracket is visible before any match.
+- **Teams.** Each team shows its logo, code and seed slot. The full name is in
+  the row title and in the match name, for example "Round 1: Gen.G against
+  CTBC Flying Oyster". Places that no team has reached yet stay empty.
+- **Picks.** A drawn round shows its matches inside each record group. A team row
+  is the winner control. A picked winner moves to its next record group at once,
+  before the next draw. Live results show the winner in green and cannot be
+  changed; picks have a dashed outline.
+- **Column header.** "Live draw" or "Your draw", "N to pick", and for a preview
+  draw "Change pairings" and "Clear draw". The next round to draw shows "Fill a
+  valid draw"; later rounds say which round they are drawn after. Before the
+  Round 1 draw from qualified teams, Round 1 lists the four pools and which pool
+  each one meets.
+- **Next step.** A line above the bracket says what the scenario needs next. When
+  a round can be drawn, it gives that round's draw rules and any rematch or
+  no-valid-draw warning.
+- **Standings.** Advanced, out and playing counts for the shown scenario, and a
+  table of the teams whose record differs in the other scenario. It sits below
+  the bracket, or beside it on screens at least 1700 px wide.
+- **Narrow screens.** The bracket keeps its six columns and scrolls sideways in
+  its own region; the page itself does not scroll sideways.
 - **Controls.** Start from, Play-In region, scenario A or B, Copy, Reset and
   Undo. Undo steps back through picks, draws, Copy and Reset. Back, Forward,
   an edited link and a new starting point clear its history; a Play-In region
   change is not an Undo step.
-
-The layout takes its structure from public Swiss simulators: the round tabs and
-pools of worldssimulator26.pro, the match cards and the results switch of
-tournamentsimulator.com, and the open and upcoming stage words of the LoL
-Esports pick'ems. Their dates, rules and teams are not used; the rules come from
-the ruleset below.
 
 ## Rules applied
 
@@ -111,14 +129,17 @@ file, rankings or any other live data.
 - Engine: `src/lib/swissScenario.ts`. It reuses `WORLDS_2026_SWISS_RULES`,
   `swissBestOf` and `applySwissWinner` from `src/lib/worlds2026Swiss.ts`.
 - View: `src/components/SwissPreview.tsx`, opened from `src/views/TournamentsView.tsx`.
-- `tests/swissScenario.test.ts` covers Round 1 pools and regions, a full
+- `tests/swissScenario.test.ts` covers the confirmed team in each seed slot
+  and its logo, the bracket group sizes against a played-out scenario, Round 1
+  pools and regions, a full
   played-out scenario checked against the sourced `replayWorlds2026Swiss`
   validator, the 2/3/3 qualifier split and placings, cleared later draws,
   opponent swaps, the rematch waiver case, the live starting point with partly
   published rounds and moved match times, and the address format.
-- `tests/swissPreviewBrowser.test.ts` covers the browser journey: seed slots
-  and pools, the round strip states, opening the next round and an upcoming
-  round, keyboard picks, pairings, focus after swaps and scenario switches,
-  compare, copy, reset, undo, reload, Back and edited links, the live starting
-  point with locked results, live draws that become unavailable, and a drawn
-  round from 320 to 1024 px.
+- `tests/swissPreviewBrowser.test.ts` covers the browser journey: confirmed
+  teams in the seed slots and pools, the full bracket before the draw, picks
+  moving to the next record group, keyboard picks, pairings, focus after swaps
+  and scenario switches, compare, copy, reset, undo, reload, Back and edited
+  links, the live starting point with locked results, live draws that become
+  unavailable, and the page width from 320 to 1440 px with only the bracket
+  scrolling sideways.

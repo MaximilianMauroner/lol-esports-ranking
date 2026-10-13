@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  PLAY_IN_REGIONS, decodeChoices, drawContext, drawProblem, encodeChoices, fillDraw, knockoutEntry, liveSwissBaseline, opponentOptions,
-  pairReason, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawnRound, type SwissBaseline,
+  PLAY_IN_REGIONS, SWISS_BRACKET, SWISS_ROUND_SIZES, decodeChoices, drawContext, drawProblem, encodeChoices, fillDraw, knockoutEntry,
+  liveSwissBaseline, opponentOptions, pairReason, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawnRound, type SwissBaseline,
 } from '../src/lib/swissScenario'
+import { teamBrandingFor } from '../src/data/teamBranding'
+import { canonicalTeamNameFor } from '../src/data/teamIdentity'
 import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/lib/worlds2026Swiss'
 import type { TournamentEvent, TournamentSeries } from '../src/lib/tournamentFeed'
 
@@ -59,6 +61,32 @@ test('without a Play-In region, a round one draw stays valid for every possible 
   for (const region of PLAY_IN_REGIONS) {
     const known = resolveScenario(seedBaseline(region), []).next
     assert.ok(known.kind === 'draw' && !drawProblem(pairs, known.context), `the draw stays valid for a ${region} Play-In winner`)
+  }
+})
+
+test('seed slots name the confirmed teams, while saved scenarios keep naming the slots', () => {
+  const baseline = seedBaseline(null)
+  assert.deepEqual(baseline.teams.map((team) => team.id), WORLDS_2026_SWISS_RULES.pools.flat())
+  const label = (seed: SwissSeed) => baseline.teams.find((team) => team.id === seed)?.label
+  assert.deepEqual([label('LCK1'), label('LEC1'), label('CBLOL1'), label('PLAYIN')], ['Gen.G', 'G2 Esports', 'LØS', 'Play-In winner'])
+  assert.equal(new Set(baseline.teams.map((team) => team.label)).size, 16)
+  // Each name must match the branding data exactly, so the bracket shows its code and logo.
+  for (const team of baseline.teams.filter((entry) => entry.seed !== 'PLAYIN')) {
+    assert.ok(teamBrandingFor(canonicalTeamNameFor(team.label))?.logo, `${team.label} in ${team.id} has a logo`)
+  }
+})
+
+test('the bracket groups match every round of a played-out scenario', () => {
+  const { resolved } = playOut(seedBaseline('LCP'), (pair, round) => pair[round % 2])
+  assert.equal(SWISS_BRACKET.length, SWISS_ROUND_SIZES.length + 1)
+  for (const [index, column] of SWISS_BRACKET.entries()) {
+    for (const box of column) {
+      const [wins, losses] = box.record
+      const holders = box.kind === 'play'
+        ? resolved.rounds[index].matches.flatMap((match) => match.records).filter(([w, l]) => w === wins && l === losses).length
+        : resolved.standings.filter((row) => row.wins === wins && row.losses === losses).length
+      assert.equal(holders, box.size, `column ${index + 1}, ${wins}-${losses}`)
+    }
   }
 })
 
