@@ -121,6 +121,8 @@ test('the Rankings board follows its address after load: typed and linked hashes
     await home.click()
     await page.waitForFunction(() => location.hash === '#rankings?scope=all', undefined, { timeout: 5_000 }).catch(() => undefined)
     assert.equal(await hash(), '#rankings?scope=all')
+    // The hash changes before React commits the region selection.
+    await selectedRegion.filter({ hasText: /^All regions$/ }).waitFor({ state: 'visible', timeout: 5_000 })
     assert.equal(await selectedRegion.textContent(), 'All regions')
     // A second click leaves the hash unchanged, so no hashchange fires.
     await home.click()
