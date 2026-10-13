@@ -83,7 +83,7 @@ test('a failed newest provider does not claim that another provider covers later
 })
 
 test('a past-season view labels its counts as the view and keeps the refresh notice about published data', () => {
-  // Season 2025 with production sources: every game in the view is from 2025, and Leaguepedia has none.
+  // A past view where only Oracle's Elixir has games, rendered with the production sources.
   const { text } = renderPanel(productionSources(), [{ provider: 'oracles-elixir', matchCount: 2282 }])
 
   assert.match(text, /Oracle's Elixir 2,282 games in this view Published data through Oct 10, 2026/)
