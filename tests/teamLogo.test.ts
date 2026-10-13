@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { logoTreatment } from '../src/lib/teamLogo.ts'
+import { logoTreatment } from '../src/lib/teamLogo.mjs'
 
 function pixels(count: number, rgba: [number, number, number, number]) {
   return Array.from({ length: count }, () => rgba).flat()

@@ -91,11 +91,12 @@ table.ranking-table.board-grid tbody td {
   }
 }
 
-/* From 1004px the team column would pass 300px and leave names far from
+/* From 1064px the team column would pass 360px and leave names far from
    their Power. It stops there, and the Power column, whose bar stretches,
-   takes the rest. */
-@container board (width >= 1004px) {
-  table.ranking-table.board-grid col.board-col-team { width: 300px; }
+   takes the rest. 360px leaves 284px for the name beside the mark: the
+   longest measured name, Yang Dae Pal Korean BBQ Restaurant, needs 276px. */
+@container board (width >= 1064px) {
+  table.ranking-table.board-grid col.board-col-team { width: 360px; }
   table.ranking-table.board-grid col.board-col-score { width: auto; }
 }
 

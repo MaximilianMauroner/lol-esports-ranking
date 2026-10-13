@@ -1,25 +1,16 @@
-/**
- * How a team logo can sit on the dark mark tile.
- *
- * - `logo`: show it as published.
- * - `invert`: a near-black monochrome logo drawn for light pages. Inverted, it
- *   reads like the white logos around it.
- * - `code`: a wordmark, which shrinks to a sliver in a near-square tile, or an
- *   image with nothing visible. The team code is clearer than either.
- */
-export type LogoTreatment = 'logo' | 'invert' | 'code'
-
 /** Wider than this, a logo is a wordmark rather than a mark. */
 const MAX_MARK_ASPECT = 2
 /** Share of visible pixels that must be dark grey before a logo is inverted. */
 const DARK_NEUTRAL_SHARE = 0.9
 
 /**
- * Decides from the image's natural size and a downscaled RGBA sample. Only a
- * logo that is almost entirely dark grey is inverted: inverting black text
- * beside a coloured symbol would also change the symbol's colour.
+ * Decides how a team logo sits on the dark mark tile, from the image's natural
+ * size and a downscaled RGBA sample. `scripts/sync-team-branding.mjs` runs it
+ * once per logo file and stores the result in the generated branding data.
+ * Only a logo that is almost entirely dark grey is inverted: inverting black
+ * text beside a coloured symbol would also change the symbol's colour.
  */
-export function logoTreatment(width: number, height: number, rgba: ArrayLike<number>): LogoTreatment {
+export function logoTreatment(width, height, rgba) {
   if (width > 0 && height > 0 && width / height > MAX_MARK_ASPECT) return 'code'
 
   let visible = 0

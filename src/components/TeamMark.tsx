@@ -1,10 +1,6 @@
-import { useReducer } from 'react'
+import { useState } from 'react'
 import { teamBrandingFor } from '../data/teamBranding'
-import { logoTreatment, type LogoTreatment } from '../lib/teamLogo'
 import { cn } from '../lib/utils'
-
-/** One measurement per logo file. Marks mount often and share files. */
-const treatmentByLogo = new Map<string, LogoTreatment>()
 
 export function TeamMark({
   team,
@@ -20,13 +16,8 @@ export function TeamMark({
   const branding = teamBrandingFor(team)
   const label = branding?.code ?? code ?? team.slice(0, 4).toUpperCase()
   const logo = branding?.logo
-  const treatment = logo ? treatmentByLogo.get(logo) : undefined
-  const [, refresh] = useReducer((count: number) => count + 1, 0)
-
-  const remember = (src: string, value: LogoTreatment) => {
-    treatmentByLogo.set(src, value)
-    refresh()
-  }
+  const treatment = branding?.logoTreatment
+  const [failedLogo, setFailedLogo] = useState<string>()
 
   return (
     <span
@@ -37,7 +28,7 @@ export function TeamMark({
       title={`${team} (${label})`}
       aria-hidden="true"
     >
-      {logo && treatment !== 'code' ? (
+      {logo && treatment !== 'code' && failedLogo !== logo ? (
         <img
           className={cn('size-full min-h-0 min-w-0 object-contain p-1', treatment === 'invert' && 'invert', imageClassName)}
           src={logo}
@@ -45,21 +36,9 @@ export function TeamMark({
           width={40}
           height={40}
           loading="lazy"
-          onLoad={treatment ? undefined : (event) => remember(logo, measureLogo(event.currentTarget))}
-          onError={() => remember(logo, 'code')}
+          onError={() => setFailedLogo(logo)}
         />
       ) : label}
     </span>
   )
-}
-
-function measureLogo(image: HTMLImageElement) {
-  const size = 24
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  if (!context) return 'logo'
-  context.drawImage(image, 0, 0, size, size)
-  return logoTreatment(image.naturalWidth, image.naturalHeight, context.getImageData(0, 0, size, size).data)
 }

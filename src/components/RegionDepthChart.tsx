@@ -288,12 +288,13 @@ function dotRadius(counts: boolean) {
 /**
  * Gives each dot the first lane where it clears every dot placed so far, or
  * the lane with the most room when none is clear. Scoring dots are placed
- * first, so they have the first claim on the line.
+ * first, strongest first, so they have the first claim on the line and the
+ * lead team's dot stays under its label.
  */
 function withLanes<T extends { x: number; counts: boolean }>(dots: T[]): Array<T & { dy: number }> {
   const placed: Array<{ x: number; dy: number; r: number }> = []
   const laneByDot = new Map<T, number>()
-  for (const dot of dots.toSorted((left, right) => Number(right.counts) - Number(left.counts) || left.x - right.x)) {
+  for (const dot of dots.toSorted((left, right) => Number(right.counts) - Number(left.counts) || right.x - left.x)) {
     const r = dotRadius(dot.counts)
     const room = (dy: number) => Math.min(...placed.map((other) => Math.hypot(other.x - dot.x, other.dy - dy) - other.r - r))
     const dy = DOT_LANES.find((lane) => room(lane) >= 0) ?? DOT_LANES.reduce((best, lane) => (room(lane) > room(best) ? lane : best))
