@@ -47,7 +47,7 @@ export function CompareDock({
 
   return (
     <div
-      className={cn('mx-auto flex min-h-11 max-w-[1400px] items-center gap-x-3 gap-y-1.5 max-sm:flex-wrap', className)}
+      className={cn('flex min-h-11 items-center gap-x-3 gap-y-1.5 max-sm:flex-wrap', className)}
       role="region"
       aria-label={`Compare ${subject}: ${entities.length} selected`}
     >
