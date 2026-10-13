@@ -122,6 +122,19 @@ export async function importRankingSourceData({
       }
     }),
   ]
+  // A refresh can fail before any file exists. Keep its receipt without claiming rated coverage.
+  for (const [provider, imports, name, kind] of [
+    ['oracle', oracleImports, ORACLE_SOURCE_PREFIX, 'game-stats'],
+    ['leaguepedia', leaguepediaImports, LEAGUEPEDIA_SOURCE_PREFIX, 'match-data'],
+  ] as const) {
+    const refreshReceipt = sourceRefreshReceipt(provider, manifest)
+    if (imports.length === 0 && refreshReceipt) {
+      externalSources.push({
+        name, kind, status: 'reference-only', rowCount: 0,
+        description: 'Refresh receipt only. No source files were imported.', refreshReceipt,
+      })
+    }
+  }
   const tournamentScheduleReferences = lolEsportsImports.flatMap((result) => {
     const coverage = dateRange(result.events)
     return result.events.map((event) => ({

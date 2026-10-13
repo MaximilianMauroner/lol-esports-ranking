@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { importRankingSourceData } from '../scripts/ranking-source-import'
+import { providerFreshness } from '../src/lib/sourceFreshness'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { DataSourceInfo } from '../src/lib/snapshot.ts'
@@ -90,3 +95,46 @@ test('a past-season view labels its counts as the view and keeps the refresh not
   assert.doesNotMatch(text, /Leaguepedia \d/, 'a provider without games in the view has no row')
   assert.match(text, /Oracle's Elixir could not be updated in the latest refresh\. Its published data ends on Oct 10, 2026\. Later published matches come from Leaguepedia\./)
 })
+
+for (const missing of ['oracle', 'leaguepedia'] as const) {
+  test(`a failed ${missing} refresh with no cached files reaches the rendered panel`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'no-cache-freshness-'))
+    try {
+      await writeFile(join(root, 'scored.json'), JSON.stringify({ matches: [{
+        id: 'game', date: '2026-10-13', event: 'LCK 2026', teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', bestOf: 1,
+      }] }))
+      await writeFile(join(root, 'scored.csv'), [
+        'gameid,date,year,league,split,playoffs,position,side,teamname,result,kills,totalgold',
+        'game,2026-10-13,2026,LCK,,0,team,blue,Alpha,1,18,62000',
+        'game,2026-10-13,2026,LCK,,0,team,red,Beta,0,12,59000',
+      ].join('\n'))
+      const manifestPath = join(root, 'manifest.json')
+      await writeFile(manifestPath, JSON.stringify({
+        start: '2026-10-06', end: '2026-10-13', generatedAt: '2026-10-13T06:02:36.613Z',
+        files: { oracleCsv: missing === 'oracle' ? [] : ['scored.csv'], leaguepediaJson: missing === 'leaguepedia' ? [] : ['scored.json'] },
+        sources: { oracle: { status: missing === 'oracle' ? 'failed' : 'downloaded', failedCount: missing === 'oracle' ? 1 : 0 },
+          leaguepedia: { status: missing === 'leaguepedia' ? 'failed' : 'downloaded', failedCount: missing === 'leaguepedia' ? 1 : 0 } },
+        warnings: [`${missing} failed: private-file.csv Google Drive Quota exceeded`],
+      }))
+      const data = await importRankingSourceData({ manifestPath })
+      const label = missing === 'oracle' ? "Oracle's Elixir" : 'Leaguepedia'
+      const source = data.externalSources.find((entry) => entry.refreshReceipt?.status === 'failed')
+      assert.ok(source, 'keep the failed refresh receipt even without cached files')
+      assert.equal(source.status, 'reference-only')
+      assert.equal(source.rowCount, 0)
+      assert.equal(source.coverageStart, undefined)
+      assert.equal(source.coverageEnd, undefined)
+      assert.equal(source.retrievedAt, undefined)
+      const breakdown = [{ provider: missing === 'oracle' ? 'leaguepedia-cargo' : 'oracles-elixir', matchCount: data.matches.length }]
+      assert.equal(data.matches.length, 1)
+      const freshness = providerFreshness(breakdown, data.externalSources).find((entry) => entry.label === label)
+      assert.deepEqual(freshness, { label, matchCount: 0, publishedThrough: undefined, failedUpdate: 'failed' })
+      const { text } = renderPanel(data.externalSources, breakdown)
+      assert.ok(text.includes(`${label} could not be updated in the latest refresh.`))
+      assert.doesNotMatch(text, /private-file|Quota exceeded|Google Drive|\.csv\b|\.json\b/)
+      assert.doesNotMatch(text, /Its published data ends|Later published matches/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+}
