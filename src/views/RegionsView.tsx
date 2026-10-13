@@ -542,11 +542,13 @@ function RegionMatchRow({
   ].filter((part): part is string => Boolean(part))
   const contributors = movement?.context?.contributingTeams ?? []
   const contributingTeam = [summary.teamA.name, summary.teamB.name].find((team) => teamNames.has(team) && contributors.includes(team))
-  const directRegionEffect = summary.impact.unit === 'series-applied' && contributors.length > 0
-    ? [
-        teamAIsRegional && contributors.includes(summary.teamA.name) ? summary.impact.teamA : undefined,
-        teamBIsRegional && contributors.includes(summary.teamB.name) ? summary.impact.teamB : undefined,
-      ].reduce<number>((total, impact) => total + (typeof impact === 'number' ? impact : 0), 0) / contributors.length
+  const contributorImpacts = [
+    ...(teamAIsRegional && contributors.includes(summary.teamA.name) ? [summary.impact.teamA] : []),
+    ...(teamBIsRegional && contributors.includes(summary.teamB.name) ? [summary.impact.teamB] : []),
+  ]
+  const directRegionEffect = summary.impact.unit === 'series-applied' && contributorImpacts.length > 0
+    && contributorImpacts.every((impact): impact is number => typeof impact === 'number' && Number.isFinite(impact))
+    ? contributorImpacts.reduce((total, impact) => total + impact, 0) / contributors.length
     : undefined
 
   return (
