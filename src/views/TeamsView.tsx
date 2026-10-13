@@ -11,7 +11,7 @@ import type {
 } from '../lib/publicArtifacts/schema'
 import { displayRegionPowerScore, type RegionStrength } from '../lib/regionStrength'
 import type { EventTier } from '../types'
-import { extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
+import { compareRecord, extent, formatDate, formatDateRange, formatDecimal, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../lib/display'
 import { deriveTrajectoryInsight, type TrajectoryInsight } from '../lib/trajectory'
 import { formatCompetitionRegionLabel } from '../data/regionTaxonomy'
 import { eventTierConfig } from '../data/rankingConfig'
@@ -34,6 +34,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import {
   deriveRankingFlair,
   deriveTierLabels,
+  deriveTournamentMovementPicks,
   type RankingFlair,
   type RankingMovementPick,
   type RankingTierLabel,
@@ -196,8 +197,8 @@ export function TeamsView({
     return ['All', ...present.sort((left, right) => (powerByRegion.get(right) ?? -Infinity) - (powerByRegion.get(left) ?? -Infinity) || left.localeCompare(right))]
   }, [regions, standings])
   const tournamentOptions = useMemo(
-    () => tournamentFilterOptionsForStandings(standings, tournamentMovementEntries),
-    [standings, tournamentMovementEntries],
+    () => tournamentFilterOptionsForStandings(standings, tournamentMovementEntries, dataSummary?.latestMatchDate),
+    [dataSummary?.latestMatchDate, standings, tournamentMovementEntries],
   )
   const activeTournamentFilter = useMemo<TournamentFilterValue>(
     () => tournamentOptions.some((option) => option.value === tournamentFilter) ? tournamentFilter : 'All',
@@ -265,9 +266,10 @@ export function TeamsView({
   const eligibleInScope = useMemo(() => scopeFiltered.filter((team) => team.eligibility?.eligible), [scopeFiltered])
   const hiddenFromRankedCount = scopeFiltered.length - eligibleInScope.length
   const filtered = useMemo(() => {
-    const byEligibility = eligibilityFilter === 'ranked' ? eligibleInScope : scopeFiltered
+    // A tournament board lists every participant, so it ignores the ranked-only filter.
+    const byEligibility = eligibilityFilter === 'ranked' && !exactTournamentId ? eligibleInScope : scopeFiltered
     return tierFilter === 'All' ? byEligibility : byEligibility.filter((team) => tierFor(team) === tierFilter)
-  }, [eligibilityFilter, eligibleInScope, scopeFiltered, tierFilter, tierFor])
+  }, [eligibilityFilter, eligibleInScope, exactTournamentId, scopeFiltered, tierFilter, tierFor])
   const tierCounts = useMemo(
     () => (['S', 'A', 'B', 'C'] as const).map((tier) => ({ tier, count: eligibleInScope.filter((team) => tierFor(team) === tier).length })),
     [eligibleInScope, tierFor],
@@ -453,10 +455,7 @@ export function TeamsView({
 
   function updateTournamentFilter(value: TournamentFilterValue) {
     const id = tournamentIdFromFilter(value)
-    if (id) {
-      setEligibilityFilter('all')
-      onPrefetchTournament?.(id)
-    }
+    if (id) onPrefetchTournament?.(id)
     onTournamentFilterChange(value)
     setPageState({ scopeKey: pageScopeKey, page: 1 })
   }
@@ -550,7 +549,12 @@ export function TeamsView({
                 {tournamentMovementIndexState.status === 'loading' ? (
                   <LoadingState presentation="inline" label="Loading tournaments" className="text-xs" />
                 ) : null}
-                {hiddenFromRankedCount > 0 ? (
+                {hiddenFromRankedCount > 0 && exactTournamentId ? (
+                  <span className="inline-flex h-[var(--control-h)] items-center text-sm text-muted-foreground" title="A tournament board lists every participant. Unranked teams miss an eligibility check at the event endpoint.">
+                    Includes {formatNumber(hiddenFromRankedCount)} unranked
+                  </span>
+                ) : null}
+                {hiddenFromRankedCount > 0 && !exactTournamentId ? (
                   <label className="inline-flex h-[var(--control-h)] cursor-pointer items-center gap-2 text-sm text-muted-foreground" title="Unranked teams miss an eligibility check, such as too few recent matches or an incomplete roster.">
                     <input
                       type="checkbox"
@@ -2284,7 +2288,7 @@ function movementSpotlight(pick: RankingMovementPick | null): MovementSpotlight 
 }
 
 function tournamentChanges(tournament: PublicTournamentMovementShard): BoardChanges {
-  const byRise = [...tournament.teams].sort((left, right) => right.rankMovement - left.rankMovement || right.ratingDelta - left.ratingDelta || left.team.localeCompare(right.team))
+  const { biggestRiser, biggestFaller } = deriveTournamentMovementPicks(tournament.teams)
   const spotlight = (team?: PublicTournamentMovementTeam): MovementSpotlight | undefined => team ? {
     team: team.team,
     code: team.code,
@@ -2292,7 +2296,7 @@ function tournamentChanges(tournament: PublicTournamentMovementShard): BoardChan
     ratingDelta: team.ratingDelta,
     detail: `${team.team}: ${formatRankValue(team.startRank)} to ${formatRankValue(team.endRank)} through ${tournamentBoundaryLabel(tournament.status).toLowerCase()}, ${formatRatingMovement(team.ratingDelta)} Power.`,
   } : undefined
-  return { riser: spotlight(byRise[0]), faller: spotlight(byRise.at(-1)) }
+  return { riser: spotlight(biggestRiser), faller: spotlight(biggestFaller) }
 }
 
 function rawScoreRanks(rows: RankingSummaryStanding[]) {
@@ -2329,7 +2333,7 @@ function sortStandings(rows: RankingSummaryStanding[], key: SortKey, direction: 
     case 'rating':
       return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareTeamScore(a, b) || compareTeamRank(a, b))
     case 'wins':
-      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * ((a.wins ?? 0) - (b.wins ?? 0)) || compareTeamRank(a, b))
+      return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareRecord(a, b) || compareTeamRank(a, b))
     default:
       return copy.sort((a, b) => compareRankedBoardEligibility(a, b) || directionFactor * compareTeamRank(a, b))
   }

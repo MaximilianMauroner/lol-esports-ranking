@@ -52,6 +52,34 @@ test('builds exact tournament options from movement index entries', () => {
   assert.match(options.at(-1)?.label ?? '', /MSI 2026 · Ongoing/)
 })
 
+test('labels a past event without schedule evidence as completed, not as latest data', () => {
+  // Issue #115 F7: the schedule source starts in May 2026, so First Stand 2026 keeps the build status unknown.
+  const firstStand = { ...movementEntry('msi:2026', 8), id: 'first-stand:2026' as const, family: 'first-stand' as const, label: 'First Stand 2026', status: 'unknown' as const, startDate: '2026-03-16', boundaryDate: '2026-03-22', ratedThroughDate: '2026-03-22' }
+  const msi = { ...movementEntry('msi:2026', 11), status: 'completed' as const }
+  const recent = { ...firstStand, id: 'worlds:2026' as const, family: 'worlds' as const, label: 'Worlds 2026', startDate: '2026-09-28', boundaryDate: '2026-10-01', ratedThroughDate: '2026-10-01' }
+
+  const labels = tournamentFilterOptionsForStandings([], [recent, msi, firstStand], '2026-10-06').map((option) => option.label)
+
+  assert.deepEqual(labels, ['All', 'Worlds 2026 · Latest data', 'MSI 2026 · Completed', 'First Stand 2026 · Completed'])
+})
+
+test('lists a live Worlds as ongoing from its first rated match, and not before', () => {
+  // Issue #115 F7: on Oct 12 Worlds 2026 had only scheduled matches; the Play-In starts on Oct 15.
+  const schedule = (retrievedAt: string, openingState: string) => [
+    { leagueName: 'Worlds', leagueSlug: 'worlds', date: '2026-10-15', state: openingState, retrievedAt, coverageStart: '2026-10-01', coverageEnd: '2026-11-14' },
+    { leagueName: 'Worlds', leagueSlug: 'worlds', date: '2026-11-14', state: 'unstarted', retrievedAt, coverageStart: '2026-10-01', coverageEnd: '2026-11-14' },
+  ]
+  const playIn = { event: '2026 Season World Championship/Play-In', season: 2026, date: '2026-10-15', tier: 'worlds-main' as const }
+
+  assert.deepEqual(deriveTournamentInstances({ generatedAt: '2026-10-12T00:00:00.000Z', matches: [], scheduleReferences: schedule('2026-10-12T00:00:00Z', 'unstarted') }), [])
+
+  const [worlds] = deriveTournamentInstances({ generatedAt: '2026-10-16T00:00:00.000Z', matches: [playIn], scheduleReferences: schedule('2026-10-16T00:00:00Z', 'completed') })
+  assert.equal(worlds?.id, 'worlds:2026')
+  assert.equal(worlds?.status, 'ongoing')
+  const option = tournamentFilterOptionsForStandings([], [{ ...worlds!, participantCount: 4, url: '/data/history/tournament-moves/worlds-2026.json' }], '2026-10-15').at(-1)
+  assert.equal(option?.label, 'Worlds 2026 · Ongoing')
+})
+
 test('keeps tournament instances compatible with the active season and checkpoint window', () => {
   const entries = [movementEntry('msi:2026', 11), {
     ...movementEntry('msi:2026', 9),
