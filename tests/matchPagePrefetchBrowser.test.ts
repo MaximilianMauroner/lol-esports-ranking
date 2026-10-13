@@ -56,18 +56,37 @@ test('prefetching an older match page retains the loaded page on screen', { time
     const executablePath = chromium.executablePath()
     browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    const connection = { saveData: false, effectiveType: '4g', downlink: 10 }
+    await page.addInitScript((settings) => {
+      Object.defineProperty(navigator, 'connection', { configurable: true, value: settings })
+    }, connection)
+    await page.bringToFront()
     const errors: string[] = []
+    const requests: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname
+      if (path.startsWith('/data/')) requests.push(path)
+    })
     const next = page.getByRole('button', { name: 'Next page', exact: true })
     const rows = page.locator('table tbody tr')
     await page.goto(`http://127.0.0.1:${address.port}/#matches?scope=all`)
+    assert.equal(await page.evaluate(() => document.visibilityState), 'visible')
+    assert.deepEqual(await page.evaluate(() => Object.getOwnPropertyDescriptor(navigator, 'connection')?.value), connection)
     await rows.nth(24).waitFor()
     for (let currentPage = 2; currentPage <= 16; currentPage++) {
       await next.click()
       await page.getByText(`Page ${currentPage} of 18`, { exact: true }).waitFor()
       await rows.nth(24).waitFor()
     }
-    const prefetched = page.waitForResponse((response) => new URL(response.url()).pathname === oldestPath)
+    const prefetched = page.waitForResponse((response) => new URL(response.url()).pathname === oldestPath).catch(async (error: unknown) => {
+      const eligibility = await page.evaluate(() => ({
+        visibility: document.visibilityState,
+        connection: Object.getOwnPropertyDescriptor(navigator, 'connection')?.value,
+      }))
+      console.error('Match page prefetch diagnostics:', JSON.stringify({ oldestPath, requests, eligibility, rows: await rows.count(), errors }))
+      throw error
+    })
     await next.click()
     await page.getByText('Page 17 of 18', { exact: true }).waitFor()
     assert.equal((await prefetched).status(), 200)
