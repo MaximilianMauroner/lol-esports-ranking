@@ -8,7 +8,7 @@ import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writeP
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { archiveReferences } from '../src/lib/publicArtifacts/archive.mjs'
 import { parsePublicMatchHistoryPage, parsePublicRegionHistory, type PublicMatchHistoryImpact } from '../src/lib/publicArtifacts/schema.ts'
-import type { MatchRecord } from '../src/types.ts'
+import type { MatchRecord, TeamProfile } from '../src/types.ts'
 
 test('ranking browser bootstraps without archive history, selects a year, pages, and reports missing archive objects', { timeout: 60_000 }, async () => {
   const matches: MatchRecord[] = Array.from({ length: 120 }, (_, index) => {
@@ -170,7 +170,7 @@ test('Regions drawer distinguishes unavailable series contributions from zero an
       teamAKills: 10, teamBKills: 5, teamAGold: 60_000, teamBGold: 55_000, patch: '', bestOf: 1, bestOfBasis: 'provider', tier: 'regional-regular',
       teamA: entry.teamA, teamB: entry.teamB, winner: entry.teamA }
   })
-  const teams = Object.fromEntries(['Alpha', 'Beta', 'Gamma', 'Delta', 'Omega', 'Aardvark'].map((name) => [name, {
+  const teams = Object.fromEntries(['Alpha', 'Beta', 'Gamma', 'Delta', 'Omega', 'Aardvark'].map((name): [string, TeamProfile] => [name, {
     name, code: name.slice(0, 3).toUpperCase(), league: ['Omega', 'Aardvark'].includes(name) ? 'LEC' : 'LCK', region: ['Omega', 'Aardvark'].includes(name) ? 'LEC' : 'LCK',
   }]))
   const data = createStaticRankingData({ matches, teams, rosters: {}, generatedAt: '2026-10-02T00:00:00.000Z', dataMode: 'seeded-sample' })
