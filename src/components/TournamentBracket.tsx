@@ -29,7 +29,8 @@ export function TournamentBracket({ series, timezone }: { series: TournamentSeri
   const [hovered, setHovered] = useState<string | null>(null)
   useEffect(() => {
     if (!pinned) return
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setPinned(null) }
+    // Also drop the focus trace, or a still-focused team keeps the bracket dimmed.
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setPinned(null); setHovered(null) } }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [pinned])
@@ -91,8 +92,10 @@ function layoutElimination(section: EliminationSection) {
     const y = centers.length ? centers.reduce((sum, value) => sum + value, 0) / centers.length - CARD_H / 2 : HEADER_H
     placed.set(match.series.id, { match, x: match.column * COLUMN_W, y })
   }
+  // Only a real final crowns a winner; a lone series in a partial bracket may be a quarterfinal.
   const lastColumn = section.matches.filter((entry) => entry.column === section.columns.length - 1)
-  const decider = lastColumn.length === 1 && (section.hasLower ? lastColumn[0]!.side === 'final' : true) ? placed.get(lastColumn[0]!.series.id) ?? null : null
+  const isFinal = section.hasLower ? lastColumn[0]?.side === 'final' : /\bfinals?\b/i.test(section.columns.at(-1) ?? '')
+  const decider = lastColumn.length === 1 && isFinal ? placed.get(lastColumn[0]!.series.id) ?? null : null
   const winner = decider ? seriesWinner(decider.match.series) : null
   return {
     placed: [...placed.values()],
@@ -182,15 +185,18 @@ function SeriesCard({ series, trace, timezone, compact = false }: { series: Tour
   const traced = trace.active !== null && series.teams.some((team) => teamKey(team) === trace.active)
   const dimmed = trace.active !== null && !traced
   const teams = series.teams.length ? series.teams : [undefined, undefined]
+  const status = <span className="flex min-w-0 items-center gap-1.5 truncate">{live ? <Badge variant="live" className="px-1.5 py-0">Live</Badge> : null}{statusText(series, timezone)}</span>
+  // Compact Swiss cards skip dates to stay dense, but still say when a series is live, postponed or cancelled.
+  const flagged = live || series.status === 'postponed' || series.status === 'cancelled'
   return <article aria-label={seriesLabel(series)}
     className={cn('grid rounded-lg border bg-card shadow-[var(--shadow-1)] motion-safe:transition-[opacity,border-color]',
       live ? 'border-[color-mix(in_oklch,var(--live)_55%,var(--line))]' : 'border-border',
       traced && 'border-[var(--accent-line)]', dimmed && 'opacity-40', compact ? 'py-1' : 'pb-1')}
     style={compact ? undefined : { height: rem(CARD_H) }}>
-    {compact ? null : <div className="flex h-5 items-center justify-between gap-2 px-2.5 pt-0.5 text-2xs text-muted-foreground tabular-nums">
-      <span className="flex min-w-0 items-center gap-1.5 truncate">{live ? <Badge variant="live" className="px-1.5 py-0">Live</Badge> : null}{statusText(series, timezone)}</span>
+    {!compact ? <div className="flex h-5 items-center justify-between gap-2 px-2.5 pt-0.5 text-2xs text-muted-foreground tabular-nums">
+      {status}
       {series.bestOf ? <span className="shrink-0">Bo{series.bestOf}</span> : null}
-    </div>}
+    </div> : flagged ? <div className="flex h-5 items-center px-2.5 text-2xs text-muted-foreground">{status}</div> : null}
     {teams.slice(0, 2).map((team, index) => <TeamLine key={index} team={team} won={winner === null ? null : winner === index} trace={trace} />)}
   </article>
 }
@@ -284,7 +290,7 @@ function StandingRow({ standing, trace, name }: { standing: Standing; trace: Tra
 function GroupsView({ section, trace, names }: { section: GroupSection; trace: Trace; names: Map<string | null, string | null> }) {
   return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
     {section.groups.map((group, index) => <div key={index} className="grid content-start gap-0.5 rounded-lg border border-border bg-card py-1.5">
-      <p className="flex items-baseline justify-between px-2.5 pb-1 text-xs"><span className="font-semibold text-[var(--text-strong)]">{section.groups.length > 1 ? `Group ${index + 1}` : 'Standings'}</span>
+      <p className="flex items-baseline justify-between px-2.5 pb-1 text-xs"><span className="font-semibold text-[var(--text-strong)]">{group.label ?? (section.groups.length > 1 ? `Group ${index + 1}` : 'Standings')}</span>
         <span className="text-2xs text-muted-foreground">{group.series.length} series</span></p>
       {group.standings.length ? group.standings.map((standing) => <StandingRow key={standing.team} standing={standing} trace={trace} name={names.get(standing.team)} />)
         : <p className="px-2.5 text-xs text-muted-foreground">Teams appear here once the source publishes them.</p>}

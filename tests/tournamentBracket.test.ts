@@ -3,8 +3,8 @@ import test from 'node:test'
 import { tournamentSections, type EliminationSection, type GroupSection, type SwissSection } from '../src/lib/tournamentBracket'
 import type { TournamentSeries } from '../src/lib/tournamentFeed'
 
-/** [Leaguepedia tab_N, start day, team 1, team 2, winner (1, 2 or 0 for unplayed)] */
-type Row = [string, string, string | null, string | null, 0 | 1 | 2]
+/** [Leaguepedia tab_N, start day (null when not supplied), team 1, team 2, winner (1, 2 or 0 for unplayed)] */
+type Row = [string, string | null, string | null, string | null, 0 | 1 | 2]
 
 function event(rows: Row[]): TournamentSeries[] {
   return rows.map(([tabMatch, day, first, second, winner]) => {
@@ -15,7 +15,7 @@ function event(rows: Row[]): TournamentSeries[] {
       outcome: winner ? (winner === slot ? 'win' : 'loss') : null,
     })
     return {
-      id: `Event_${tabMatch}`, eventId: 'Event', startTime: `2026-${day}:00.000Z`, stage,
+      id: `Event_${tabMatch}`, eventId: 'Event', startTime: day ? `2026-${day}:00.000Z` : null, stage,
       status: winner ? 'completed' : 'upcoming', sourceState: winner ? 'completed' : 'scheduled', bestOf: 5,
       teams: [team(first, 1), team(second, 2)], vodUrls: [],
     }
@@ -94,6 +94,44 @@ test('a knockout without losers rounds is single elimination with paired feeders
   assert.deepEqual(feeders(bracket, 'Finals_1'), ['Semifinals_1', 'Semifinals_2'])
 })
 
+test('later knockout tabs without start times keep play order', () => {
+  const [section] = tournamentSections(event([
+    ['Quarterfinals_1', '11-03T22:00', 'Gen.G', 'T1', 0],
+    ['Quarterfinals_2', '11-04T22:00', 'BLG', 'G2', 0],
+    ['Semifinals_1', null, null, null, 0],
+    ['Finals_1', null, null, null, 0],
+  ]))
+  const bracket = section as EliminationSection
+  assert.deepEqual(bracket.columns, ['Quarterfinals', 'Semifinals', 'Finals'])
+  assert.deepEqual(feeders(bracket, 'Semifinals_1'), ['Quarterfinals_1', 'Quarterfinals_2'])
+  assert.deepEqual(feeders(bracket, 'Finals_1'), ['Semifinals_1'])
+})
+
+test('decided series fill TBD slots unless already linked to this round', () => {
+  const [section] = tournamentSections(event([
+    ['Quarterfinals_1', '11-03T22:00', 'Gen.G', 'T1', 1],
+    ['Quarterfinals_2', '11-04T22:00', 'BLG', 'G2', 2],
+    ['Quarterfinals_3', '11-05T22:00', 'HLE', 'TES', 1],
+    ['Quarterfinals_4', '11-06T22:00', 'KT', 'FLY', 0],
+    ['Semifinals_1', '11-07T22:00', null, null, 0],
+    ['Semifinals_2', '11-08T22:00', 'HLE', null, 0],
+    ['Finals_1', '11-14T19:00', null, null, 0],
+  ]))
+  const bracket = section as EliminationSection
+  assert.deepEqual(feeders(bracket, 'Semifinals_1'), ['Quarterfinals_1', 'Quarterfinals_2'], 'Two decided quarterfinals feed an undrawn semifinal')
+  assert.deepEqual(feeders(bracket, 'Semifinals_2'), ['Quarterfinals_3', 'Quarterfinals_4'])
+
+  const [moved] = tournamentSections(event([
+    ['Quarterfinals_1', '11-03T22:00', 'Gen.G', 'T1', 1],
+    ['Quarterfinals_2', '11-04T22:00', 'BLG', 'G2', 2],
+    ['Quarterfinals_3', '11-05T22:00', 'HLE', 'TES', 0],
+    ['Quarterfinals_4', '11-06T22:00', 'KT', 'FLY', 0],
+    ['Semifinals_1', '11-07T22:00', null, null, 0],
+    ['Semifinals_2', '11-08T22:00', 'Gen.G', null, 0],
+  ]))
+  assert.deepEqual(feeders(moved as EliminationSection, 'Semifinals_1'), ['Quarterfinals_2'], 'A quarterfinal already linked to Semifinals_2 does not fill a TBD slot')
+})
+
 test('an undrawn 16-team Swiss stage gets its record pools from the round sizes', () => {
   const rounds: Array<[string, number]> = [['Round 1', 8], ['Round 2', 8], ['Round 3', 8], ['Round 4', 6], ['Round 5', 3]]
   const rows = rounds.flatMap(([tab, count], index) => Array.from({ length: count }, (_, n): Row => [`${tab}_${n + 1}`, `10-${23 + index}T${String(10 + n).padStart(2, '0')}:00`, null, null, 0]))
@@ -138,4 +176,29 @@ test('round-robin days become groups of teams that only play each other', () => 
     ['EDGY 2-0', 'T1A 1-1', 'Fuego 0-2'],
     ['Solary 2-0', 'Galions 1-1', 'ZSK 0-2'],
   ])
+})
+
+test('named group tabs stay separate groups even when teams meet across them', () => {
+  const [section] = tournamentSections(event([
+    ['Group A_1', '09-20T06:00', 'A', 'B', 1],
+    ['Group B_1', '09-20T07:00', 'C', 'D', 1],
+    ['Group C_1', '09-21T06:00', 'A', 'C', 2],
+  ]))
+  const groups = (section as GroupSection).groups
+  assert.deepEqual(groups.map((group) => `${group.label}: ${group.standings.map((standing) => `${standing.team} ${standing.wins}-${standing.losses}`).join(', ')}`), [
+    'Group A: A 1-0, B 0-1', 'Group B: C 1-0, D 0-1', 'Group C: C 1-0, A 0-1',
+  ])
+})
+
+test('"Group Stage" tabs are not group names, so their pods come from who plays whom', () => {
+  const pods = (rows: Row[]) => (tournamentSections(event(rows))[0] as GroupSection).groups
+    .map((group) => `${group.label}: ${group.standings.map((standing) => standing.team).sort().join(',')}`)
+  assert.deepEqual(pods([
+    ['Group Stage_1', '09-20T06:00', 'A', 'B', 1], ['Group Stage_2', '09-20T07:00', 'D', 'E', 1],
+    ['Group Stage_3', '09-21T06:00', 'B', 'C', 1], ['Group Stage_4', '09-21T07:00', 'E', 'F', 1],
+  ]), ['null: A,B,C', 'null: D,E,F'])
+  assert.deepEqual(pods([
+    ['Group Stage Day 1_1', '09-20T06:00', 'A', 'B', 1], ['Group Stage Day 1_2', '09-20T07:00', 'D', 'E', 1],
+    ['Group Stage Day 2_1', '09-21T06:00', 'B', 'C', 1], ['Group Stage Day 2_2', '09-21T07:00', 'E', 'F', 1],
+  ]), ['null: A,B,C', 'null: D,E,F'])
 })

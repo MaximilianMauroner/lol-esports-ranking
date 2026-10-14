@@ -22,7 +22,7 @@ export type SwissRound = { title: string; series: TournamentSeries[]; pools: Swi
 export type Standing = WinLoss & { team: string; status: 'advanced' | 'eliminated' | null }
 export type SwissSection = { kind: 'swiss'; rounds: SwissRound[]; standings: Standing[]; winsToAdvance: number | null }
 
-export type GroupSection = { kind: 'groups'; groups: Array<{ standings: Standing[]; series: TournamentSeries[] }> }
+export type GroupSection = { kind: 'groups'; groups: Array<{ label: string | null; standings: Standing[]; series: TournamentSeries[] }> }
 export type TournamentSection = EliminationSection | SwissSection | GroupSection
 
 type Tab = { title: string; kind: 'round' | 'group' | 'knockout'; series: TournamentSeries[] }
@@ -72,7 +72,15 @@ function orderedTabs(series: readonly TournamentSeries[]): Tab[] {
     byTitle.set(title, [...(byTitle.get(title) ?? []), entry])
   }
   return [...byTitle].map(([title, entries]) => ({ title, kind: tabKind(title), series: entries.sort(compareInTab) }))
-    .sort((a, b) => compareCodeUnits(earliest(a), earliest(b)) || compareCodeUnits(a.title, b.title))
+    .sort((a, b) => compareCodeUnits(earliest(a), earliest(b)) || stageRank(a.title) - stageRank(b.title) || compareCodeUnits(a.title, b.title))
+}
+
+/** Orders tabs without start times: numbered rounds, then knockout stages in play order, then other names. */
+function stageRank(title: string) {
+  const round = /^round (\d+)$/i.exec(title)
+  if (round) return Number(round[1])
+  const knockout = [/quarter/i, /semi/i, /third|3rd/i, /\bfinals?\b/i].findIndex((pattern) => pattern.test(title))
+  return knockout === -1 ? Number.MAX_SAFE_INTEGER : 1000 + knockout
 }
 
 function tabKind(title: string): Tab['kind'] {
@@ -187,9 +195,9 @@ function linkFeeders(matches: BracketMatch[]) {
           if (feeder) match.feeders.push(feeder.series.id)
         }
       }
-      // A decided earlier series whose winner is not here went elsewhere, so it cannot fill a TBD slot.
+      // An earlier series already linked to a series in this column cannot fill a TBD slot.
       const claimed = new Set(current.flatMap((match) => match.feeders))
-      const open = (candidate: BracketMatch) => !claimed.has(candidate.series.id) && seriesWinner(candidate.series) === null
+      const open = (candidate: BracketMatch) => !claimed.has(candidate.series.id)
       const perMatch = previous.length === current.length ? 1 : previous.length === 2 * current.length ? 2 : 0
       current.forEach((match, position) => {
         const tbdSlots = match.series.teams.filter((team) => !teamKey(team)).length
@@ -273,7 +281,8 @@ function swissSection(tabs: Tab[], laterSeries: TournamentSeries[]): SwissSectio
 
 /** The win target whose pool arithmetic reproduces every round's size, if any. */
 function standardSwissTarget(roundSizes: number[]) {
-  for (let target = 2; target <= 5; target += 1) {
+  // Two wins is never Swiss here: swissSpan needs a full-size third round or a team playing on two losses.
+  for (let target = 3; target <= 5; target += 1) {
     const pools = expectedSwissPools(2 * roundSizes[0]!, target, roundSizes.length)
     if (pools.every((round, index) => [...round.values()].reduce((sum, count) => sum + count, 0) === roundSizes[index])
       && roundSizes.length === 2 * target - 1) return target
@@ -309,9 +318,25 @@ function compareStandings(a: Standing, b: Standing) {
   return rank(a) - rank(b) || (b.wins - b.losses) - (a.wins - a.losses) || b.wins - a.wins || compareCodeUnits(a.team, b.team)
 }
 
-/** Teams that only play each other form a group; the source does not name groups. */
+/** A tab that names one group, such as "Group A", is that group; elsewhere, teams that only play each other form a group. */
 function groupSection(tabs: Tab[]): GroupSection {
-  const series = tabs.flatMap((tab) => tab.series).sort(compareChronological)
+  const named = tabs.filter((tab) => /^group (?!stage\b)\S+$/i.test(tab.title))
+  const pools = [
+    ...named.map((tab) => ({ label: tab.title, series: [...tab.series].sort(compareChronological) })),
+    ...connectedGroups(tabs.filter((tab) => !named.includes(tab)).flatMap((tab) => tab.series)).map((series) => ({ label: null, series })),
+  ]
+  return {
+    kind: 'groups',
+    groups: pools.map(({ label, series }) => {
+      const { records } = recordsBeforeSeries(series)
+      const teams = new Set(series.flatMap((entry) => entry.teams.map(teamKey)).filter((key): key is string => key !== null))
+      const standings = [...teams].map((team): Standing => ({ team, ...records.get(team) ?? { wins: 0, losses: 0 }, status: null }))
+      return { label, standings: standings.sort(compareStandings), series }
+    }),
+  }
+}
+function connectedGroups(unsorted: TournamentSeries[]) {
+  const series = [...unsorted].sort(compareChronological)
   const parent = new Map<string, string>()
   const find = (key: string): string => {
     const root = parent.get(key) ?? key
@@ -332,13 +357,5 @@ function groupSection(tabs: Tab[]): GroupSection {
     const root = key ? find(key) : ''
     groups.set(root, [...(groups.get(root) ?? []), entry])
   }
-  return {
-    kind: 'groups',
-    groups: [...groups.values()].map((entries) => {
-      const { records } = recordsBeforeSeries(entries)
-      const teams = new Set(entries.flatMap((entry) => entry.teams.map(teamKey)).filter((key): key is string => key !== null))
-      const standings = [...teams].map((team): Standing => ({ team, ...records.get(team) ?? { wins: 0, losses: 0 }, status: null }))
-      return { standings: standings.sort(compareStandings), series: entries }
-    }),
-  }
+  return [...groups.values()]
 }
