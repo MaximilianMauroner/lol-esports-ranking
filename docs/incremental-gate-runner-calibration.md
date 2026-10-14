@@ -90,6 +90,22 @@ similar speed. It would fail on coding-vm and would likely pass on CI.
 
 ## Limits and maintenance
 
+- PR updates always run verify and bundle. The full production-shaped gate and
+  Rust/image acceptance run on non-draft PRs unless the cumulative diff contains
+  only known presentation files or Markdown. Shared code, data, model settings,
+  dependencies, tests, CI, and unknown paths require full validation. Missing
+  diff refs also require full validation. The gate still uses the full corpus,
+  three isolated repeats, and the thresholds above.
+- `ready_for_review` starts deferred checks. `converted_to_draft` starts cheap
+  feedback and cancels the previous PR run. A new push also cancels the older
+  run. Manual Checks runs always run both full gates; `release:check` is unchanged.
+  A skipped draft or presentation-only gate is not evidence that it passed.
+- Rust caches keep dependency products and prune workspace/incremental products.
+  MinIO/Go keys include the OS, architecture, Go version, and pinned MinIO commit.
+  Docker keeps one rolling BuildKit scope per ref and toolchain, including build
+  stages; layer content determines reuse. GitHub isolates PR cache writes from
+  base-branch caches and evicts idle entries after seven days under its repository
+  cache quota. Cache failures do not replace any acceptance check.
 - Two GitHub CI samples of main's ranking code (PR #83 runs) measured
   `normalizedCompute` below coding-vm's 4.64:
   - [Run 37631526444](https://github.com/MaximilianMauroner/lol-esports-ranking/actions/runs/37631526444)
