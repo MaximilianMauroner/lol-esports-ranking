@@ -5,6 +5,20 @@ diagnosis. `RANKING_BENCHMARK_DIAGNOSTICS` enables recording only in the benchma
 process and its benchmark children. An unset variable leaves recording disabled.
 Diagnostic timings include instrumentation overhead and are not gate receipts.
 
+For a smaller local diagnosis, set `RANKING_BENCHMARK_MATCH_COUNT` explicitly.
+`--smoke` selects one repetition but keeps the full corpus unless that variable
+is set. `RANKING_BENCHMARK_REPEATS` overrides the repetition count. Both variables
+must be positive safe integers when set. Invalid values fail before reference
+data preflight or fixture construction; they never select the default workload.
+An unset match count selects the full reference corpus, and an unset repetition
+count selects three runs, or one with `--smoke`.
+
+A reduced-corpus result is diagnostic evidence only. It cannot establish the
+production gate, production peak memory or recurring savings. The gate still
+requires its corpus minimums, three isolated repetitions and all existing
+compute, memory, upload, parity and integrity checks. Keep setup, calibration,
+measured refresh and verifier peaks separate when reporting a bounded run.
+
 The guarded launcher is `scripts/benchmark-diagnostics.mjs --capture-run DIR`.
 It requires a fresh directory containing only a pinned `manifest.json`, the
 build helper's 3 GiB cgroup with zero swap and group OOM handling, and ends after

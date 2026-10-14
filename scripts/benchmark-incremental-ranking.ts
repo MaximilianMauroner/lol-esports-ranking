@@ -23,11 +23,15 @@ import {
   INCREMENTAL_NORMALIZED_COMPUTE_LIMIT,
   INCREMENTAL_SAFETY_PEAK_RSS_BYTES,
   oracleBaselineRewriteEvidence,
+  parseBenchmarkPositiveInteger,
   passesIncrementalSafetyPeak,
 } from './incremental-benchmark-assertions.ts'
 import { runCalibrationWorkload } from './benchmark-calibration.ts'
 import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 import { verifyRustRawSource } from './verify-rust-raw-source.ts'
+
+const requestedMatchCount = parseBenchmarkPositiveInteger('RANKING_BENCHMARK_MATCH_COUNT', process.env.RANKING_BENCHMARK_MATCH_COUNT)
+const requestedRepeats = parseBenchmarkPositiveInteger('RANKING_BENCHMARK_REPEATS', process.env.RANKING_BENCHMARK_REPEATS)
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
 const refreshModulePath: string = './refresh-data-if-changed.mjs'
@@ -314,8 +318,7 @@ async function runBenchmarkParent() {
   const corpusSpan = diagnosticBegin('parent.corpus-load')
   const parentRoot = root
   const currentShape = await currentCorpusShape()
-  const benchmarkMatchCount = positiveInteger(process.env.RANKING_BENCHMARK_MATCH_COUNT) ?? currentShape.matchCount
-  const requestedRepeats = positiveInteger(process.env.RANKING_BENCHMARK_REPEATS)
+  const benchmarkMatchCount = requestedMatchCount ?? currentShape.matchCount
   const repeats = requestedRepeats ?? (process.argv.includes('--smoke') ? 1 : 3)
   if (process.argv.includes('--enforce-targets')) {
     assertGateScale('matches', benchmarkMatchCount, corpusMinimums.matches)
@@ -1325,12 +1328,6 @@ function benchmarkPlayerRole(role: 'top' | 'jng' | 'mid' | 'bot' | 'sup'): Bench
 
 function isBenchmarkPlayerRole(value: string | undefined): value is BenchmarkPlayerRole {
   return value === 'Top' || value === 'Jungle' || value === 'Mid' || value === 'Bot' || value === 'Support'
-}
-
-function positiveInteger(value: string | undefined) {
-  if (value === undefined) return undefined
-  const parsed = Number(value)
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 function recursiveProcessTreeRssBytes(rootPid: number) {

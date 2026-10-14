@@ -1,13 +1,59 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   aggregateBenchmarkMetrics,
   evaluateIncrementalCompute,
   INCREMENTAL_NORMALIZED_COMPUTE_LIMIT,
   INCREMENTAL_SAFETY_PEAK_RSS_BYTES,
   oracleBaselineRewriteEvidence,
+  parseBenchmarkPositiveInteger,
   passesIncrementalSafetyPeak,
 } from '../scripts/incremental-benchmark-assertions.ts'
+
+test('explicit benchmark limits reject invalid values instead of selecting the full workload', () => {
+  for (const name of ['RANKING_BENCHMARK_MATCH_COUNT', 'RANKING_BENCHMARK_REPEATS'] as const) {
+    assert.equal(parseBenchmarkPositiveInteger(name, undefined), undefined)
+    assert.equal(parseBenchmarkPositiveInteger(name, '128'), 128)
+    assert.equal(parseBenchmarkPositiveInteger(name, '1'), 1)
+    for (const value of ['', ' ', '0', '-1', '128-matches', '1.5', 'NaN', 'Infinity', '9007199254740992']) {
+      assert.throws(() => parseBenchmarkPositiveInteger(name, value), new RegExp(`${name} must be a positive safe integer`))
+    }
+  }
+})
+
+test('invalid benchmark limits fail before reference data preflight or fixture setup', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ranking-invalid-benchmark-limit-'))
+  const script = fileURLToPath(new URL('../scripts/benchmark-incremental-ranking.ts', import.meta.url))
+  try {
+    for (const name of ['RANKING_BENCHMARK_MATCH_COUNT', 'RANKING_BENCHMARK_REPEATS'] as const) {
+      const result = spawnSync(process.execPath, ['--max-old-space-size=256', '--import', 'tsx', script, '--smoke'], {
+        timeout: 15_000,
+        maxBuffer: 64 * 1024,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          RANKING_BENCHMARK_DIAGNOSTICS: '',
+          RANKING_TEST_PUBLIC_DIR: join(directory, 'missing-public'),
+          RANKING_BENCHMARK_MATCH_COUNT: '128',
+          RANKING_BENCHMARK_REPEATS: '1',
+          [name]: '0',
+        },
+      })
+      assert.equal(result.error, undefined)
+      assert.equal(result.status, 1)
+      assert.match(result.stderr, new RegExp(`${name} must be a positive safe integer`))
+      assert.doesNotMatch(result.stderr, /Release candidate artifact|ENOENT/)
+      assert.equal(result.stdout, '')
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
 
 test('incremental safety peak is strict at 700 MiB', () => {
   assert.equal(passesIncrementalSafetyPeak(INCREMENTAL_SAFETY_PEAK_RSS_BYTES - 1), true)
