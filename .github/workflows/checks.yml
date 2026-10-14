@@ -163,6 +163,9 @@ jobs:
           pnpm exec tsx --tsconfig tsconfig.app.json --test tests/rustStorageMinio.test.ts
       - name: Set up Docker builder
         uses: docker/setup-buildx-action@v4
+        with:
+          # Override the action's insecure entitlement defaults while keeping GC enabled.
+          buildkitd-flags: --oci-worker-gc=true
       - name: Prepare worker image context
         # Exclude host Cargo products, which would invalidate COPY layers on every run.
         run: |
