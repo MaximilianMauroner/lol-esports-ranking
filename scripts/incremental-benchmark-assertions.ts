@@ -1,5 +1,18 @@
 export const INCREMENTAL_SAFETY_PEAK_RSS_BYTES = 700 * 1024 * 1024
 
+/** Only an unset limit may select the default workload. */
+export function parseBenchmarkPositiveInteger(
+  name: 'RANKING_BENCHMARK_MATCH_COUNT' | 'RANKING_BENCHMARK_REPEATS',
+  value: string | undefined,
+) {
+  if (value === undefined) return undefined
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive safe integer when set`)
+  }
+  return parsed
+}
+
 /**
  * Incremental refresh time in runner-calibration units: computeMs divided by the
  * median calibration workload duration on the same runner. A wall-clock limit
