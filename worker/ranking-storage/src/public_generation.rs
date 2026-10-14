@@ -1,8 +1,8 @@
 use super::{
     JSON_TYPE,
     public_archive::{
-        Json, PAGE_BYTES, Reader, field, integer, js_text, parse_json, string_is, take,
-        valid_digest,
+        Json, PAGE_BYTES, Reader, field, integer, js_text, parse_json, string_is, take, truthy,
+        valid_digest, write_json,
     },
     public_directory, s3,
 };
@@ -13,7 +13,10 @@ use serde::{
     de::{MapAccess, Visitor, value::MapAccessDeserializer},
 };
 use serde_json::json;
-use std::{collections::BTreeMap, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const ROOT: &str = "/data/ranking-summary.json";
@@ -23,6 +26,11 @@ pub(super) struct Authority {
     etag: String,
     bytes: u64,
     digest: String,
+}
+
+pub(super) enum Scope {
+    Structure,
+    Artifacts,
 }
 
 impl<'de> Deserialize<'de> for Authority {
@@ -68,6 +76,7 @@ pub(super) fn verify(
     bucket: &s3::Bucket,
     authority: Authority,
     context_json: &str,
+    scope: Scope,
 ) -> Result<String> {
     let context = parse_json(context_json.as_bytes())?;
     if !matches!(context, Json::Object(_)) || !nonempty_string(field(&context, "generationId")) {
@@ -133,18 +142,74 @@ pub(super) fn verify(
         };
         entries.push(("schemaVersion".into(), Json::Number(2.0)));
     }
+    let artifacts = match scope {
+        Scope::Structure => None,
+        Scope::Artifacts => Some(read_artifacts(&mut reader, &manifest)?),
+    };
     // Combine scalar transport evidence with the lossless tree's final output.
     let scalars = canonical_json_value(&json!({
         "key": authority.key, "etag": remote.etag, "bytes": authority.bytes,
         "digest": authority.digest, "needsNodeDateValidation": true,
         "schemaConverted": converted,
     }));
-    let parsed = reader.result("manifest", &manifest);
+    let mut parsed = reader.result("manifest", &manifest);
+    if let Some(artifacts) = artifacts {
+        parsed.pop();
+        parsed.push_str(",\"artifacts\":");
+        write_json(&artifacts, &mut parsed);
+        parsed.push_str(",\"rootArtifact\":");
+        write_json(
+            field(&artifacts, ROOT).expect("validated root artifact"),
+            &mut parsed,
+        );
+        parsed.push('}');
+    }
     Ok(format!(
         "{},{}",
         &scalars[..scalars.len() - 1],
         &parsed[1..]
     ))
+}
+
+/// Match the active Node reader's canonical identity selection, including its
+/// second path normalization and last mapping for aliases of the same path.
+fn read_artifacts(reader: &mut Reader<'_>, manifest: &Json) -> Result<Json> {
+    let Some(Json::Object(entries)) = field(manifest, "artifacts") else {
+        return Err("Invalid public generation artifact mappings".into());
+    };
+    let mut identities = BTreeMap::new();
+    let mut paths = Vec::new();
+    for (path, identity) in entries {
+        let canonical = logical_path(path)?;
+        if identities.insert(canonical.clone(), identity).is_none() {
+            paths.push(canonical);
+        }
+    }
+    let mut selected = BTreeSet::new();
+    let mut artifacts = Vec::new();
+    for path in paths {
+        let canonical = logical_path(&path)?;
+        if !selected.insert(canonical.clone()) {
+            continue;
+        }
+        let Some(identity) = identities.get(&canonical) else {
+            continue;
+        };
+        // The structural validator accepts Node's coercible digest spelling.
+        // The artifact GET additionally requires the stored scalar metadata to
+        // equal the digest field, so a non-string digest cannot pass that read.
+        if !matches!(field(identity, "sha256"), Some(Json::String(_))) {
+            return Err("Invalid public generation artifact digest".into());
+        }
+        let digest = js_text(field(identity, "sha256"));
+        let bytes = integer(field(identity, "bytes")).expect("validated artifact bytes");
+        artifacts.push((canonical, reader.read_artifact(&digest, bytes)?));
+    }
+    let artifacts = Json::Object(artifacts);
+    if !field(&artifacts, ROOT).is_some_and(truthy) {
+        return Err("Public generation has no valid root artifact".into());
+    }
+    Ok(artifacts)
 }
 
 fn validate(manifest: &Json, generation: &Json, schema: Option<&Json>) -> Result<bool> {

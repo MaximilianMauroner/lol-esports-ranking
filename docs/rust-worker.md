@@ -132,7 +132,8 @@ and state object writes and the existing active-pointer lease protocol.
 Descriptor actions are `sync-object`, `acquire-lease`, `renew-lease`,
 `release-lease`, `verify-publication`, `verify-raw-generation`,
 `verify-state-generation`, `verify-public-artifact`, `verify-public-directory`
-and `verify-public-generation-structure`. The process uses the
+and `verify-public-generation-structure`, `verify-public-generation-artifacts`.
+The process uses the
 existing bucket environment names and SigV4. Redirects are refused, relative keys cannot escape the selected prefix,
 and credentials/transport URLs do not appear in failure diagnostics.
 
@@ -370,6 +371,29 @@ Fleet resource guard. Schema-v1 representation compatibility can be removed
 only when no active stored manifests use it. Directory/archive compatibility
 and manifest integrity checks remain required while their stored references
 are used. No stored objects are rewritten.
+
+`verify-public-generation-artifacts` takes the same supplied authority and
+context. It adds fresh reads of the logical artifact targets selected by Node's
+complete active-generation reader, including their archive descendants. It
+returns the structural result plus hydrated `artifacts` and `rootArtifact`.
+Its `verifiedObjects` includes directory and artifact transport proofs. Reads
+are serial to avoid holding multiple compressed artifact bodies at once; the
+returned content still needs separate real-input memory acceptance.
+
+Selection preserves Node's last mapping for canonical path aliases and its
+second path normalization during loading. Thus this is Node artifact-selection
+parity, not exhaustive membership certification. Non-string coercible digests
+that pass the structural validator cannot pass the artifact metadata equality
+check. The hydrated root must be truthy under Node's existing rule; undefined
+non-root content retains JSON output semantics.
+
+The action retains `needsNodeDateValidation: true`. It reads no active pointer,
+publication receipt or raw/state authority and writes no bucket object. It adds
+no parent selector, publication closure certification, readiness/audit write or
+promotion. Existing stored encodings and schema-v1 conversion use the same
+compatibility conditions as the structural action. Compiled current-source
+MinIO differential execution with zero skips is required before claiming this
+layer's acceptance. Provider, model, resource and shadow gates remain separate.
 
 The real raw-source verifier now records source coverage, filenames, SHA-256 and
 byte counts along with both workers' prepare/restore memory and duration. It

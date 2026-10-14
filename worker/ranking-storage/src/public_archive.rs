@@ -23,9 +23,10 @@ pub(super) fn verify(bucket: &s3::Bucket, digest: &str, bytes: u64) -> Result<St
 }
 
 /// A public value as JSON.parse produces it: binary64 numbers, including
-/// overflow to infinity, and the last duplicate key wins. Only hydrated record
-/// values can be Undefined. Parsing, output, coercion and drop use explicit
-/// stacks, so nesting is limited by the stored object's size, not the call stack.
+/// overflow to infinity, and duplicate keys keep their first position with the
+/// last value. Only hydrated record values can be Undefined. Parsing, output,
+/// coercion and drop use explicit stacks, so nesting is limited by the stored
+/// object's size, not the call stack.
 pub(super) enum Json {
     Undefined,
     Null,
@@ -250,7 +251,8 @@ impl Reader<'_> {
         // Node validates every reference before starting the first child request.
         let references = parts.iter().map(reference).collect::<Result<Vec<_>>>()?;
         let mut values = vec![];
-        let mut entries = BTreeMap::new();
+        let mut entries = vec![];
+        let mut keys = BTreeSet::new();
         let mut count = 0;
         for (digest, bytes, expected_count) in references {
             if ancestors.contains(&digest) {
@@ -278,11 +280,13 @@ impl Reader<'_> {
                 let Json::Object(child_entries) = &mut hydrated.value else {
                     return Err("Public archive map child must be an object".into());
                 };
+                // Keep part/property order for downstream alias selection.
                 // Undefined record properties are own keys in Node's hasOwn check.
                 for (key, value) in child_entries.drain(..) {
-                    if entries.insert(key, value).is_some() {
+                    if !keys.insert(key.clone()) {
                         return Err("Public archive duplicate record key".into());
                     }
+                    entries.push((key, value));
                 }
             }
         }
@@ -291,7 +295,7 @@ impl Reader<'_> {
             value: if list {
                 Json::Array(values)
             } else {
-                Json::Object(entries.into_iter().collect())
+                Json::Object(entries)
             },
         })
     }
@@ -597,12 +601,20 @@ pub(super) fn parse_json(bytes: &[u8]) -> Result<Json> {
                         break;
                     }
                     parser.expect(b'}')?;
-                    // JSON.parse keeps the last value for a repeated key.
-                    let mut unique = BTreeMap::new();
+                    // JSON.parse replaces duplicate values without moving the
+                    // first property. Alias selection depends on this order;
+                    // canonical output sorts keys separately in write_json.
+                    let mut positions = BTreeMap::<Utf16String, usize>::new();
+                    let mut unique: Vec<(Utf16String, Json)> = Vec::with_capacity(entries.len());
                     for (key, entry) in std::mem::take(entries) {
-                        unique.insert(key, entry);
+                        if let Some(index) = positions.get(&key) {
+                            unique[*index].1 = entry;
+                        } else {
+                            positions.insert(key.clone(), unique.len());
+                            unique.push((key, entry));
+                        }
                     }
-                    value = Json::Object(unique.into_iter().collect());
+                    value = Json::Object(unique);
                 }
             }
             open.pop();

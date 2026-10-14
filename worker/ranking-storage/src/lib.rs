@@ -18,6 +18,11 @@ const JSON_TYPE: &str = "application/json; charset=utf-8";
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case", deny_unknown_fields)]
 enum Input {
+    VerifyPublicGenerationArtifacts {
+        authority: public_generation::Authority,
+        #[serde(rename = "contextJson")]
+        context_json: String,
+    },
     VerifyPublicGenerationStructure {
         authority: public_generation::Authority,
         #[serde(rename = "contextJson")]
@@ -96,13 +101,33 @@ pub fn run(input_path: &str, output_path: &str) -> Result<()> {
         .map_err(|_| "Invalid storage descriptor")?;
     let bucket = s3::Bucket::from_env()?;
     let result = match input {
+        Input::VerifyPublicGenerationArtifacts {
+            authority,
+            context_json,
+        } => {
+            return fs::write(
+                output_path,
+                public_generation::verify(
+                    &bucket,
+                    authority,
+                    &context_json,
+                    public_generation::Scope::Artifacts,
+                )?,
+            )
+            .map_err(|error| error.to_string());
+        }
         Input::VerifyPublicGenerationStructure {
             authority,
             context_json,
         } => {
             return fs::write(
                 output_path,
-                public_generation::verify(&bucket, authority, &context_json)?,
+                public_generation::verify(
+                    &bucket,
+                    authority,
+                    &context_json,
+                    public_generation::Scope::Structure,
+                )?,
             )
             .map_err(|error| error.to_string());
         }

@@ -150,6 +150,20 @@ membership remain deferred. Implemented cases and conditional skips establish
 no runtime acceptance. The missing Fleet resource guard blocks heavy local
 checks; hosted CI must compile and execute the current source with zero skips.
 
+The additive `verify-public-generation-artifacts` action extends the supplied
+structural authority with Node's complete logical artifact selection and archive
+hydration. Require compiled current-source MinIO equality for hydrated content
+and all fresh transport proofs, including an actual partitioned Node directory,
+archived targets, canonical aliases, repeated path normalization, UTF-16 keys,
+coercible digest rejection, root truthiness and undefined non-root values.
+Missing/corrupt mapped objects or archive children must leave no success
+descriptor and preserve bucket inventory and the active pointer. Alternative
+valid gzip transport remains readable. Success still requires Node date
+validation and grants no pointer, publication-closure or promotion authority.
+This closes only the artifact-selection slice; complete graph membership,
+raw/state/public agreement, readiness/audit writes and CAS remain M4 gates.
+Implemented test cases alone do not establish compiled acceptance.
+
 ## M5: the ranking model
 
 Port import/model/player/replay/projection and the explicitly deferred state
