@@ -71,8 +71,22 @@ function orderedTabs(series: readonly TournamentSeries[]): Tab[] {
     const title = entry.stage ?? 'Matches'
     byTitle.set(title, [...(byTitle.get(title) ?? []), entry])
   }
-  return [...byTitle].map(([title, entries]) => ({ title, kind: tabKind(title), series: entries.sort(compareInTab) }))
+  const tabs = [...byTitle].map(([title, entries]) => ({ title, kind: tabKind(title), series: entries.sort(compareInTab) }))
     .sort((a, b) => compareCodeUnits(earliest(a), earliest(b)) || stageRank(a.title) - stageRank(b.title) || compareCodeUnits(a.title, b.title))
+  // An upper round often plays before a lower round with a smaller number, so numbered
+  // rounds with the same prefix keep the slots time gave them but go in number order.
+  const rounds = new Map<string, Array<{ slot: number; tab: Tab; number: number }>>()
+  tabs.forEach((tab, slot) => {
+    const match = /^(.*round )(\d+)$/i.exec(tab.title)
+    if (!match) return
+    const prefix = match[1]!.toLowerCase()
+    rounds.set(prefix, [...(rounds.get(prefix) ?? []), { slot, tab, number: Number(match[2]) }])
+  })
+  for (const group of rounds.values()) {
+    const byNumber = [...group].sort((a, b) => a.number - b.number)
+    group.forEach(({ slot }, index) => { tabs[slot] = byNumber[index]!.tab })
+  }
+  return tabs
 }
 
 /** Orders tabs without start times: numbered rounds, then knockout stages in play order, then other names. */
@@ -84,7 +98,7 @@ function stageRank(title: string) {
 }
 
 function tabKind(title: string): Tab['kind'] {
-  if (/^round \d+$/i.test(title)) return 'round'
+  if (/^(?:swiss )?round \d+$/i.test(title)) return 'round'
   if (/\b(?:day|week|group|round robin)\b/i.test(title)) return 'group'
   return 'knockout'
 }
@@ -126,26 +140,31 @@ function recordsBeforeSeries(series: readonly TournamentSeries[]) {
 
 function eliminationSection(tabs: Tab[]): EliminationSection {
   const all = tabs.flatMap((tab) => tab.series)
-  const { before } = recordsBeforeSeries(all)
+  // Play-In results do not decide which lane a playoff series belongs to.
+  const playIn = (entry: TournamentSeries) => /^play-in\b/i.test(entry.stage ?? '')
+  const before = new Map([...recordsBeforeSeries(all.filter(playIn)).before, ...recordsBeforeSeries(all.filter((entry) => !playIn(entry))).before])
   const knownTeams = new Set(tabs[0]?.series.flatMap((entry) => entry.teams.map(teamKey)).filter(Boolean))
   // Teams waiting for their next series in each lane; only used when teams are still TBD.
   let upperWaiting = knownTeams.size || 2 * (tabs[0]?.series.length ?? 0)
   let lowerWaiting = 0
   const matches: BracketMatch[] = []
   tabs.forEach((tab, column) => {
-    const lastColumn = column === tabs.length - 1
-    const known = tab.series.map((entry) => sideFromRecords(before.get(entry.id) ?? [], lastColumn && tab.series.length === 1))
+    const deciding = column === tabs.length - 1 && tab.series.length === 1
+    // Numbered rounds hold both lanes, so a mixed series there is lower even in the first column.
+    const known = tab.series.map((entry) => sideFromRecords(before.get(entry.id) ?? [], deciding, column > 0 || tab.kind === 'round'))
     let upperNext = 0
     let lowerNext = 0
     tab.series.forEach((entry, index) => {
       let side = known[index]
+      // After lower-bracket play the lone last series is the grand final, even between two teams without a loss here.
+      if (side === 'upper' && deciding && matches.some((match) => match.side === 'lower')) side = 'final'
       if (!side) {
         if (known.slice(index + 1).includes('upper')) side = 'upper'
         else if (known.slice(0, index).includes('lower')) side = 'lower'
         else if (upperWaiting >= 2) side = 'upper'
         // Only numbered rounds mix lanes; a named round such as "Quarterfinals" is one stage.
         else if (tab.kind === 'round' && lowerWaiting >= 2) side = 'lower'
-        else side = lastColumn && tab.series.length === 1 && matches.some((match) => match.side === 'lower') ? 'final' : 'upper'
+        else side = deciding && matches.some((match) => match.side === 'lower') ? 'final' : 'upper'
       }
       if (side === 'upper') {
         upperWaiting = Math.max(0, upperWaiting - 2); upperNext += 1; lowerWaiting += 1
@@ -163,13 +182,18 @@ function eliminationSection(tabs: Tab[]): EliminationSection {
   return { kind: 'elimination', columns: tabs.map((tab) => tab.title), matches, hasLower }
 }
 
-/** Unbeaten teams play in the upper bracket; a lone unbeaten-versus-once-beaten series at the end is the grand final. */
-function sideFromRecords(records: Array<WinLoss | null>, canBeFinal: boolean): BracketSide | null {
+/**
+ * Unbeaten teams play in the upper bracket and beaten teams in the lower. A series
+ * between both is the grand final when it is the lone last series, a lower series
+ * against a team entering the lower bracket fresh when `canBeLower`, and otherwise
+ * upper, as in a short round robin read as a knockout.
+ */
+function sideFromRecords(records: Array<WinLoss | null>, canBeFinal: boolean, canBeLower: boolean): BracketSide | null {
   const losses = records.filter((record): record is WinLoss => record !== null).map((record) => record.losses)
   if (!losses.length) return null
   const unbeaten = losses.some((value) => value === 0)
   const beaten = losses.some((value) => value > 0)
-  if (unbeaten && beaten) return canBeFinal ? 'final' : 'upper'
+  if (unbeaten && beaten) return canBeFinal ? 'final' : canBeLower ? 'lower' : 'upper'
   return beaten ? 'lower' : 'upper'
 }
 

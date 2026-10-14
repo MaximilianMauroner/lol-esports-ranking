@@ -57,6 +57,84 @@ test('a double-elimination playoff gets upper and lower brackets, byes and a gra
   assert.deepEqual(feeders(bracket, 'Finals_1').sort(), ['Round 4_1', 'Round 4_2'])
 })
 
+test('a beaten team meeting a fresh lower-bracket seed plays in the lower bracket', () => {
+  // LEC 2026 Spring Playoffs: Natus Vincere and GIANTX enter the lower bracket in the "Round 1" tab.
+  const [section] = tournamentSections(event([
+    ['Round 1_1', '05-23T15:00', 'Karmine Corp', 'G2 Esports', 2],
+    ['Round 1_2', '05-24T15:00', 'Team Vitality', 'Movistar KOI', 2],
+    ['Round 3_1', '05-25T15:00', 'Movistar KOI', 'G2 Esports', 2],
+    ['Round 1_3', '05-30T15:00', 'Karmine Corp', 'Natus Vincere', 1],
+    ['Round 1_4', '05-31T15:00', 'Team Vitality', 'GIANTX', 2],
+    ['Round 2_1', '06-01T15:00', 'Karmine Corp', 'GIANTX', 1],
+    ['Round 3_2', '06-06T15:00', 'Movistar KOI', 'Karmine Corp', 2],
+    ['Finals_1', '06-07T15:00', 'G2 Esports', 'Karmine Corp', 1],
+  ]))
+  const bracket = section as EliminationSection
+  assert.deepEqual(sides(bracket), {
+    'Round 1_1': 'upper', 'Round 1_2': 'upper', 'Round 3_1': 'upper',
+    'Round 1_3': 'lower', 'Round 1_4': 'lower', 'Round 2_1': 'lower', 'Round 3_2': 'lower', 'Finals_1': 'final',
+  })
+  assert.deepEqual(bracket.columns, ['Round 1', 'Round 2', 'Round 3', 'Finals'], 'Round 3_1 plays before Round 2_1, but rounds stay in number order')
+  assert.deepEqual(feeders(bracket, 'Round 2_1'), ['Round 1_3', 'Round 1_4'])
+  assert.deepEqual(feeders(bracket, 'Finals_1'), ['Round 3_1', 'Round 3_2'])
+})
+
+test('a named round robin opening a knockout stays in the upper bracket', () => {
+  // Asia Masters 2025 Finals: three teams play each other once in the Last Chance Qualifier.
+  const [section] = tournamentSections(event([
+    ['Last Chance Qualifier_1', '10-09T06:00', 'KT', 'DRX', 2],
+    ['Last Chance Qualifier_2', '10-09T08:00', 'KT', 'DK', 1],
+    ['Last Chance Qualifier_3', '10-09T10:00', 'DK', 'DRX', 2],
+    ['Round 1_1', '10-10T06:00', 'DRX', 'DNF', 1], ['Round 1_2', '10-10T09:00', 'BFX', 'T1', 2],
+    ['Round 2_1', '10-11T06:00', 'DRX', 'T1', 2], ['Round 1_3', '10-11T09:00', 'DNF', 'BFX', 1],
+    ['Round 2_2', '10-12T09:00', 'DRX', 'DNF', 1], ['Finals_1', '10-13T09:00', 'T1', 'DRX', 1],
+  ]))
+  const bracket = sides(section as EliminationSection)
+  assert.deepEqual(['_1', '_2', '_3'].map((n) => bracket[`Last Chance Qualifier${n}`]), ['upper', 'upper', 'upper'])
+  assert.deepEqual([bracket['Round 1_3'], bracket['Round 2_2'], bracket['Finals_1']], ['lower', 'lower', 'final'])
+})
+
+test('Play-In losses do not move playoff series into the lower bracket', () => {
+  // LPL 2026 Split 1 Playoffs, trimmed: Team WE and Invictus Gaming lost in the Play-In, then open the playoffs.
+  const [section] = tournamentSections(event([
+    ['Play-In Round 1_1', '02-09T06:00', 'Top Esports', 'Team WE', 1],
+    ['Play-In Round 1_2', '02-09T09:00', 'Invictus Gaming', 'Ninjas in Pyjamas.CN', 2],
+    ['Play-In Round 2_1', '02-10T06:00', 'ThunderTalk Gaming', 'LNG Esports', 2],
+    ['Play-In Round 2_2', '02-10T09:00', 'EDward Gaming', 'Oh My God', 2],
+    ['Play-In Round 3_1', '02-11T06:00', 'Invictus Gaming', 'Oh My God', 1],
+    ['Play-In Round 3_2', '02-11T09:00', 'Team WE', 'LNG Esports', 1],
+    ['Round 1_1', '02-24T06:00', 'JD Gaming', 'Top Esports', 1],
+    ['Round 1_2', '02-24T09:00', "Anyone's Legend", 'Team WE', 1],
+    ['Round 1_3', '02-25T06:00', 'Weibo Gaming', 'Invictus Gaming', 1],
+    ['Round 1_4', '02-25T09:00', 'Bilibili Gaming', 'Ninjas in Pyjamas.CN', 1],
+  ]))
+  const bracket = sides(section as EliminationSection)
+  assert.deepEqual([bracket['Play-In Round 3_1'], bracket['Play-In Round 3_2']], ['lower', 'lower'])
+  assert.deepEqual([bracket['Round 1_1'], bracket['Round 1_2'], bracket['Round 1_3'], bracket['Round 1_4']], ['upper', 'upper', 'upper', 'upper'])
+})
+
+test('Swiss rounds before a double-elimination playoff with an unbeaten-versus-unbeaten final', () => {
+  // LCS 2026 Lock-In: LYON drops to the lower bracket without a playoff loss and wins the Finals.
+  const sections = tournamentSections(event([
+    ['Swiss Round 1_1', '01-24T21:00', 'C9', 'TL', 1], ['Swiss Round 1_2', '01-25T00:00', 'SR', 'DSG', 2],
+    ['Swiss Round 1_3', '01-25T21:00', 'FLY', 'SHO', 1], ['Swiss Round 1_4', '01-26T00:00', 'LYON', 'DIG', 1],
+    ['Swiss Round 2_1', '01-31T21:00', 'C9', 'LYON', 1], ['Swiss Round 2_2', '02-01T00:00', 'SR', 'DIG', 1],
+    ['Swiss Round 2_3', '02-01T21:00', 'FLY', 'DSG', 1], ['Swiss Round 2_4', '02-02T00:00', 'SHO', 'TL', 2],
+    ['Swiss Round 3_1', '02-07T21:00', 'TL', 'SR', 2], ['Swiss Round 3_2', '02-08T00:00', 'DSG', 'LYON', 1],
+    ['Swiss Round 3_3', '02-08T21:00', 'DIG', 'SHO', 1], ['Swiss Round 3_4', '02-09T00:00', 'C9', 'FLY', 1],
+    ['Last Chance_1', '02-09T03:00', 'TL', 'DIG', 1],
+    ['Playoffs Round 1_1', '02-14T21:00', 'SR', 'DSG', 1], ['Playoffs Round 1_2', '02-15T21:00', 'C9', 'FLY', 1],
+    ['Playoffs Round 1_3', '02-20T21:00', 'DSG', 'TL', 2], ['Playoffs Round 1_4', '02-21T21:00', 'FLY', 'LYON', 2],
+    ['Playoffs Round 2_1', '02-22T21:00', 'C9', 'SR', 1], ['Playoffs Round 2_2', '02-27T21:00', 'LYON', 'TL', 1],
+    ['Playoffs Round 3_1', '02-28T21:00', 'SR', 'LYON', 2],
+    ['Finals_1', '03-01T21:00', 'C9', 'LYON', 2],
+  ]))
+  assert.deepEqual(sections.map((section) => section.kind), ['swiss', 'elimination'])
+  const bracket = sections[1] as EliminationSection
+  assert.equal(bracket.hasLower, true)
+  assert.equal(sides(bracket)['Finals_1'], 'final')
+})
+
 test('an undrawn double-elimination bracket places TBD series by tab order and team counts', () => {
   // Worlds 2026 Play-In before its first series: only the opening pairs are known.
   const [section] = tournamentSections(event([
