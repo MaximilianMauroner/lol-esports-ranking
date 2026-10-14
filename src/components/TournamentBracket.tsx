@@ -211,8 +211,8 @@ function TeamLine({ team, won, trace }: { team: TournamentSeries['teams'][number
   const key = teamKey(team)
   const score = team?.gameWins
   const body = <>
-    {team?.name ? <TeamMark team={team.name} className="size-[1.125rem] rounded-[3px] text-2xs" imageClassName="p-0" fallback="initial" />
-      : <span className="size-[1.125rem] shrink-0 rounded-[3px] border border-dashed border-border" aria-hidden="true" />}
+    {team?.name ? <TeamMark team={team.name} className="size-5 rounded-[3px] text-2xs" imageClassName="p-0.5" fallback="initial" />
+      : <span className="size-5 shrink-0 rounded-[3px] border border-dashed border-border" aria-hidden="true" />}
     <span className={cn('min-w-0 flex-1 truncate text-left', !team?.name && 'text-[var(--faint)]', won === true && 'font-semibold text-[var(--text-strong)]', won === false && 'text-muted-foreground')}>
       {displayName(team?.name ?? null)}
     </span>
@@ -287,7 +287,7 @@ function StandingRow({ standing, trace, name }: { standing: Standing; trace: Tra
     onMouseEnter={() => trace.hover(standing.team)} onMouseLeave={() => trace.hover(null)}
     onFocus={() => trace.hover(standing.team)} onBlur={() => trace.hover(null)}
     onClick={() => trace.toggle(standing.team)}>
-    <TeamMark team={label} className="size-[1.125rem] rounded-[3px] text-2xs" imageClassName="p-0" fallback="initial" />
+    <TeamMark team={label} className="size-5 rounded-[3px] text-2xs" imageClassName="p-0.5" fallback="initial" />
     <span className="min-w-0 flex-1 truncate text-left">{displayName(label)}</span>
     <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">{standing.wins}–{standing.losses}</span>
   </button>
