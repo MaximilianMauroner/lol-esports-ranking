@@ -28,7 +28,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          # Include both merge parents for the cumulative PR diff. Missing refs fail open.
+          # Compare the synthetic PR merge to its first parent. Missing parents fail open.
           fetch-depth: 2
 
       - name: Set up pnpm
@@ -48,10 +48,7 @@ jobs:
 
       - name: Classify affected paths
         id: changes
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/ci-affected-paths.mjs "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+        run: node scripts/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
 
       - name: Verify
         run: pnpm run verify

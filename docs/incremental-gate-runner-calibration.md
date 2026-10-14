@@ -94,8 +94,10 @@ similar speed. It would fail on coding-vm and would likely pass on CI.
   Rust/image acceptance run on non-draft PRs unless the cumulative diff contains
   only known presentation files or Markdown. Shared code, data, model settings,
   dependencies, tests, CI, and unknown paths require full validation. Missing
-  diff refs also require full validation. The gate still uses the full corpus,
-  three isolated repeats, and the thresholds above.
+  or unexpected merge checkouts also require full validation. The cumulative
+  diff compares the synthetic PR merge with its first parent, so main-only edits
+  do not trigger unrelated gates on stale presentation branches. The gate still
+  uses the full corpus, three isolated repeats, and the thresholds above.
 - `ready_for_review` starts deferred checks. `converted_to_draft` starts cheap
   feedback and cancels the previous PR run. A new push also cancels the older
   run. Manual Checks runs always run both full gates; `release:check` is unchanged.
