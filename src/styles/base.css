@@ -26,6 +26,7 @@
      --heat-*      magnitude only.
      --league-red  destructive only.
      --preview     hypothetical, user-chosen scenario content only.
+     --live        a series in progress only, always with a "Live" label.
      -------------------------------------------------------------------- */
   --accent: oklch(0.79 0.155 205);
   --accent-strong: oklch(0.86 0.145 200);
@@ -70,6 +71,8 @@
   --down: oklch(0.7 0.16 28);
   --warn: oklch(0.8 0.13 80);
   --warn-soft: oklch(0.8 0.13 80 / 0.14);
+  --live: oklch(0.7 0.2 5);
+  --live-soft: oklch(0.7 0.2 5 / 0.14);
 
   /* Categorical series palette for multi-line charts. Validated against the
      chart surface (#0e1012): every slot sits in the dark lightness band
@@ -291,6 +294,13 @@ body::before {
   .team-cell__button {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  /* Bracket team rows are full card width and 24px tall, the WCAG 2.5.8
+     minimum. The bracket places cards at fixed heights, so rows cannot grow. */
+  [data-slot="bracket-team"] {
+    min-width: 0;
+    min-height: 0;
   }
 
   input,

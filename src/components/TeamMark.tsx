@@ -7,14 +7,18 @@ export function TeamMark({
   code,
   className,
   imageClassName,
+  fallback = 'code',
 }: {
   team: string
   code?: string
   className?: string
   imageClassName?: string
+  /** Marks too small for a code show its first letter when no logo loads. */
+  fallback?: 'code' | 'initial'
 }) {
   const branding = teamBrandingFor(team)
-  const label = branding?.code ?? code ?? team.slice(0, 4).toUpperCase()
+  const label = branding?.code ?? code ?? team.replace(/\s+/g, '').slice(0, 4).toUpperCase()
+  const text = fallback === 'initial' ? label.slice(0, 1) : label
   const logo = branding?.logo
   const treatment = branding?.logoTreatment
   const [failedLogo, setFailedLogo] = useState<string>()
@@ -22,7 +26,7 @@ export function TeamMark({
   return (
     <span
       className={cn(
-        'inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-[var(--surface-2)] font-mono text-xs font-extrabold text-foreground',
+        'inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-[var(--surface-2)] font-mono text-xs leading-none font-extrabold whitespace-nowrap text-foreground [container-type:inline-size]',
         className,
       )}
       title={`${team} (${label})`}
@@ -38,7 +42,10 @@ export function TeamMark({
           loading="lazy"
           onError={() => setFailedLogo(logo)}
         />
-      ) : label}
+      ) : (
+        // A mono glyph is 0.6em wide, so the code shrinks until it fills at most 80% of the mark.
+        <span style={{ fontSize: `min(1em, ${Math.floor(80 / (0.6 * text.length))}cqi)` }}>{text}</span>
+      )}
     </span>
   )
 }

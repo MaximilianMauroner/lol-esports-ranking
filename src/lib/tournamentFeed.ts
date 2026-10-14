@@ -215,12 +215,17 @@ export function normalizeStatus(source: string): TournamentSeriesStatus {
   }
 }
 
+/** The source ended the series without a confirmed result. */
+export function hasUnresolvedResult(series: TournamentSeries) {
+  return series.status === 'unknown' && /^(?:complete|completed|result-missing)$/i.test(series.sourceState)
+}
+
 export function groupTournamentSeries(series: readonly TournamentSeries[]) {
   const result: Record<'live' | 'upcoming' | 'results' | 'unresolved', TournamentSeries[]> = { live: [], upcoming: [], results: [], unresolved: [] }
   for (const entry of series) {
     if (entry.status === 'live') result.live.push(entry)
     else if (entry.status === 'completed' || entry.status === 'cancelled') result.results.push(entry)
-    else if (entry.status === 'unknown' && /^(?:complete|completed|result-missing)$/i.test(entry.sourceState)) result.unresolved.push(entry)
+    else if (hasUnresolvedResult(entry)) result.unresolved.push(entry)
     else result.upcoming.push(entry)
   }
   return result

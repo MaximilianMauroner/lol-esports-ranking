@@ -22,7 +22,7 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
       await page.getByRole('button', { name: 'Cancel simulation', exact: true }).waitFor()
     }
     const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message))
-    await page.goto(`${base}/#tournaments`)
+    await page.goto(`${base}/#tournaments?view=schedule`)
     await page.getByText('Current stage: Swiss · round 5', { exact: true }).waitFor()
     await page.getByText('Computation complete.', { exact: true }).waitFor()
     assert.equal(await page.locator('table').first().locator('tbody tr').count(), 19)
@@ -161,7 +161,7 @@ test('Worlds fixture journey computes off-thread, cancels, navigates and invalid
     assert.equal(workerGate.held.length, 0)
     workerGate.release()
     controls.corrupt = true
-    await page.goto(`${base}/#tournaments`)
+    await page.goto(`${base}/#tournaments?view=schedule`)
     await page.getByText(/Worlds state does not match this schedule revision/).waitFor()
     assert.equal(await page.getByRole('region', { name: 'Worlds cumulative probabilities' }).count(), 0)
     controls.corrupt = false; controls.stage = 'play-in'

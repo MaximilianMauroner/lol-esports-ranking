@@ -68,7 +68,7 @@ export async function collectLeaguepediaTournamentFeed(options: {
       tables: 'MatchSchedule=MS,Tournaments=T',
       join_on: 'MS.OverviewPage=T.OverviewPage',
       fields: FIELDS.join(','),
-      where: `MS.DateTime_UTC >= "${cargoTime(coverageStart)}" AND MS.DateTime_UTC <= "${cargoTime(coverageEnd)}" AND ${EVENT_FILTER}`,
+      where: `${scheduleWindow(coverageStart, coverageEnd)} AND ${EVENT_FILTER}`,
       order_by: 'MS.DateTime_UTC ASC, MS.MatchId ASC',
       limit: String(PAGE_SIZE),
       offset: String(page * PAGE_SIZE),
@@ -224,6 +224,15 @@ function isRow(value: unknown): value is Row { return Boolean(value) && typeof v
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function positiveInteger(value: unknown) { return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null }
 function nonnegativeInteger(value: unknown) { return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null }
+/**
+ * Series inside the window, plus every series of an event that overlaps it, so
+ * a running event keeps the early rounds its bracket and standings need.
+ */
+function scheduleWindow(start: string, end: string) {
+  const inWindow = `MS.DateTime_UTC >= "${cargoTime(start)}" AND MS.DateTime_UTC <= "${cargoTime(end)}"`
+  const eventOverlaps = `T.DateStart <= "${end.slice(0, 10)}" AND T.Date >= "${start.slice(0, 10)}"`
+  return `((${inWindow}) OR (${eventOverlaps}))`
+}
 /** Cargo stores UTC as "YYYY-MM-DD HH:MM:SS". */
 function cargoTime(iso: string) { return iso.slice(0, 19).replace('T', ' ') }
 function cargoIso(value: unknown) {

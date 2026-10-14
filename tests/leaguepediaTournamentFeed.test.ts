@@ -101,7 +101,7 @@ test('pages through the Cargo export until a short page', async () => {
   assert.equal(feed.events[0]?.series.length, 501)
   assert.equal(urls[0]?.searchParams.get('format'), 'json')
   assert.equal(urls[0]?.searchParams.get('join_on'), 'MS.OverviewPage=T.OverviewPage')
-  assert.match(urls[0]?.searchParams.get('where') ?? '', /^MS\.DateTime_UTC >= "2026-10-01 00:00:00" AND MS\.DateTime_UTC <= "2026-11-29 23:59:59" AND /)
+  assert.match(urls[0]?.searchParams.get('where') ?? '', /^\(\(MS\.DateTime_UTC >= "2026-10-01 00:00:00" AND MS\.DateTime_UTC <= "2026-11-29 23:59:59"\) OR \(T\.DateStart <= "2026-11-29" AND T\.Date >= "2026-10-01"\)\) AND /)
   await assert.rejects(collectLeaguepediaTournamentFeed({ fetcher: async () => Response.json({ error: 'ratelimited' }), now }), /unexpected schedule response/)
   await assert.rejects(collectLeaguepediaTournamentFeed({ fetcher: async () => new Response('missing', { status: 404 }), now }), /HTTP 404/)
 })

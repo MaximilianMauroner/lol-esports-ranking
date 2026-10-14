@@ -87,7 +87,7 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   const external: string[] = []
   page.on('request', (request) => { if (!request.url().startsWith(base)) external.push(request.url()) })
   await page.clock.install({ time: new Date(at) })
-  await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
+  await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
   await page.getByText(/Forecast unavailable: No reviewed source-to-ranking team ID map is published/).first().waitFor()
   await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
   await page.getByText('Conditional Power preview', { exact: true }).first().click()
