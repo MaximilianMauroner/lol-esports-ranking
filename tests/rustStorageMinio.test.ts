@@ -1229,14 +1229,16 @@ test('native supplied public generation structure preserves Node contracts with 
         assert.ok(result.verifiedObjects.length > 2_001, 'Directory archive descendants are included')
       })
       await t.test('legacy conversion, UTF-16 paths, aliases and last canonical mapping match Node', async () => {
-        const alternate = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId,
+        const aliasGenerationId = `${generationId}-alias-producer`
+        const alternate = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId: aliasGenerationId,
           previousManifest: { storageMode: 'content-addressed-gzip-v1', artifacts: {} },
-          changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: rootValue },
+          changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: { ...rootValue, artifactMeta: { runId: aliasGenerationId } } },
             { logicalPath: '/data/alias.json', value: { artifactKind: 'generation-fixture', value: '\ud800', synthetic: true } }],
         })
         assert.ok(isRecord(alternate.manifest.artifacts))
-        const identity = alternate.manifest.artifacts['/data/alias.json']
-        assert.ok(isRecord(identity))
+        const producedIdentity = alternate.manifest.artifacts['/data/alias.json']
+        assert.ok(isRecord(producedIdentity))
+        const identity = { ...producedIdentity, generationId }
         await compareArtifacts(await putManifest({ ...small, artifacts: { ...small.artifacts,
           '/data/%61lias.json': { ...rootMapping, logicalPath: '/data/alias.json' },
           '/data/alias.json': identity, '/data/\ud800.json': { ...identity, logicalPath: '/data/\ud800.json' },
@@ -1299,18 +1301,20 @@ test('native supplied public generation structure preserves Node contracts with 
         await rejectSelectedObject(authority, selected, v2)
       })
       await t.test('archived logical targets and their descendant transport proofs match Node', async () => {
+        const archivedContext: Context = { generationId: `${generationId}-archive-producer` }
         const large = { artifactKind: 'generation-fixture', synthetic: true,
           rows: Array.from({ length: 1_500 }, (_, index) => ({ index, text: 'owned synthetic archive'.repeat(20) })) }
-        const archived = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId,
+        const archived = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId: archivedContext.generationId,
           previousManifest: { storageMode: 'content-addressed-gzip-v1', artifacts: {} },
-          changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: rootValue }, { logicalPath: '/data/archive.json', value: large }],
+          changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: { ...rootValue, artifactMeta: { runId: archivedContext.generationId } } },
+            { logicalPath: '/data/archive.json', value: large }],
         })
         assert.ok(isRecord(archived.manifest.artifacts))
         const archiveIdentity = archived.manifest.artifacts['/data/archive.json']
         assert.ok(isRecord(archiveIdentity))
         const value = { ...archived.manifest, schemaVersion: 1 }
-        const authority = await putManifest(value)
-        const result = await compareArtifacts(authority)
+        const authority = await putManifest(value, archivedContext)
+        const result = await compareArtifacts(authority, archivedContext)
         assert.deepEqual(result.artifacts['/data/archive.json'], large)
         assert.ok(result.verifiedObjects.length > 2)
         const child = result.verifiedObjects.find(({ key }: { key: string }) => key !== `${config.prefix}/objects/sha256/${rootMapping.sha256}`
@@ -1319,7 +1323,7 @@ test('native supplied public generation structure preserves Node contracts with 
         const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: child.key }))
         const bytes = Buffer.from(await stored.Body!.transformToByteArray())
         await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: child.key }))
-        await rejectArtifacts(authority)
+        await rejectArtifacts(authority, archivedContext)
         await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: child.key, Body: bytes, ContentEncoding: stored.ContentEncoding,
           ContentType: stored.ContentType, Metadata: stored.Metadata }))
       })
