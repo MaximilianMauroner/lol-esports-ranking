@@ -51,3 +51,6 @@ data/reference/
 
 # Rust build products
 /worker/target/
+
+# Local T3 Code project configuration
+t3.json
