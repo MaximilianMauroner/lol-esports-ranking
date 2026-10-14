@@ -172,6 +172,33 @@ test('a knockout without losers rounds is single elimination with paired feeders
   assert.deepEqual(feeders(bracket, 'Finals_1'), ['Semifinals_1', 'Semifinals_2'])
 })
 
+test('a third-place match sits under the final instead of forming a lower bracket', () => {
+  // Esports World Cup 2025 playoffs.
+  const [section] = tournamentSections(event([
+    ['Quarterfinals_1', '07-17T11:00', 'AG.AL', 'Hanwha Life Esports', 1],
+    ['Quarterfinals_2', '07-17T14:00', 'Bilibili Gaming', 'G2 Esports', 2],
+    ['Quarterfinals_3', '07-18T09:00', 'T1', 'Movistar KOI', 1],
+    ['Quarterfinals_4', '07-18T12:00', 'Gen.G', 'FlyQuest', 1],
+    ['Semifinals_1', '07-19T09:00', 'AG.AL', 'T1', 1],
+    ['Semifinals_2', '07-19T12:00', 'Gen.G', 'G2 Esports', 1],
+    ['Third-Place Match_1', '07-20T08:00', 'G2 Esports', 'T1', 2],
+    ['Finals_1', '07-20T11:00', 'Gen.G', 'AG.AL', 1],
+  ]))
+  const bracket = section as EliminationSection
+  assert.equal(bracket.hasLower, false)
+  assert.deepEqual(bracket.columns, ['Quarterfinals', 'Semifinals', 'Finals'])
+  const third = bracket.matches.find((match) => match.series.id === 'Event_Third-Place Match_1')
+  assert.deepEqual([third?.side, third?.column, third?.feeders], ['third', 2, []])
+  assert.equal(sides(bracket)['Finals_1'], 'upper')
+  assert.deepEqual(feeders(bracket, 'Finals_1').sort(), ['Semifinals_1', 'Semifinals_2'])
+
+  const [rounds] = tournamentSections(event([
+    ['Second Round_1', '07-17T11:00', 'A', 'B', 1], ['Second Round_2', '07-17T14:00', 'C', 'D', 1],
+    ['Third Round_1', '07-18T11:00', 'A', 'C', 1],
+  ]))
+  assert.deepEqual((rounds as EliminationSection).columns, ['Second Round', 'Third Round'], 'A "Third Round" is a round, not a third-place match')
+})
+
 test('later knockout tabs without start times keep play order', () => {
   const [section] = tournamentSections(event([
     ['Quarterfinals_1', '11-03T22:00', 'Gen.G', 'T1', 0],

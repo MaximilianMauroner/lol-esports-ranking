@@ -92,14 +92,19 @@ function layoutElimination(section: EliminationSection) {
     const y = centers.length ? centers.reduce((sum, value) => sum + value, 0) / centers.length - CARD_H / 2 : HEADER_H
     placed.set(match.series.id, { match, x: match.column * COLUMN_W, y })
   }
+  // Third place sits under everything else in its column.
+  const third = section.matches.filter((entry) => entry.side === 'third')
+  const thirdTop = Math.max(lowerBottom, ...[...placed.values()].map((entry) => entry.y + CARD_H)) + LANE_LABEL_H + ROW_GAP
+  third.forEach((match, index) => placed.set(match.series.id, { match, x: match.column * COLUMN_W, y: thirdTop + index * (CARD_H + ROW_GAP) }))
   // Only a real final crowns a winner; a lone series in a partial bracket may be a quarterfinal.
-  const lastColumn = section.matches.filter((entry) => entry.column === section.columns.length - 1)
+  const lastColumn = section.matches.filter((entry) => entry.column === section.columns.length - 1 && entry.side !== 'third')
   const isFinal = section.hasLower ? lastColumn[0]?.side === 'final' : /\bfinals?\b/i.test(section.columns.at(-1) ?? '')
   const decider = lastColumn.length === 1 && isFinal ? placed.get(lastColumn[0]!.series.id) ?? null : null
   const winner = decider ? seriesWinner(decider.match.series) : null
   return {
     placed: [...placed.values()],
     lowerTop: section.hasLower ? lowerTop : null,
+    thirdLabel: third[0] ? { x: third[0].column * COLUMN_W, top: thirdTop } : null,
     champion: decider && winner !== null ? { from: decider, team: decider.match.series.teams[winner]! } : null,
     width: (section.columns.length + (decider && winner !== null ? 1 : 0)) * COLUMN_W - COL_GAP,
     height: Math.max(lowerBottom, ...[...placed.values()].map((entry) => entry.y + CARD_H)) + 0.25,
@@ -116,6 +121,7 @@ function EliminationView({ section, trace, timezone }: { section: EliminationSec
         series={section.matches.filter((match) => match.column === column).map((match) => match.series)} timezone={timezone} />)}
       {layout.champion ? <ColumnHeader x={section.columns.length * COLUMN_W} title="Winner" series={[]} timezone={timezone} /> : null}
       {layout.lowerTop !== null ? <p className="absolute left-0 text-xs font-semibold text-muted-foreground" style={{ top: rem(layout.lowerTop - LANE_LABEL_H + 0.375) }}>Lower bracket</p> : null}
+      {layout.thirdLabel ? <p className="absolute text-xs font-semibold text-muted-foreground" style={{ left: rem(layout.thirdLabel.x), top: rem(layout.thirdLabel.top - LANE_LABEL_H + 0.375) }}>Third place</p> : null}
       <svg className="pointer-events-none absolute inset-0 overflow-visible" style={{ width: rem(layout.width), height: rem(layout.height) }}
         viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden="true">
         {layout.placed.flatMap((target) => target.match.feeders.map((id) => {

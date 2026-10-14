@@ -4,9 +4,10 @@ import type { TournamentSeries } from './tournamentFeed'
 /**
  * Infers how an event is played from its schedule alone. Leaguepedia names
  * stages ("Round 2", "Finals") but never says upper or lower bracket, so the
- * side of each series comes from its teams' records inside the stage.
+ * side of each series comes from its teams' records inside the stage. A
+ * third-place match sits under the final, outside the lanes.
  */
-export type BracketSide = 'upper' | 'lower' | 'final'
+export type BracketSide = 'upper' | 'lower' | 'final' | 'third'
 export type BracketMatch = {
   series: TournamentSeries
   column: number
@@ -89,11 +90,13 @@ function orderedTabs(series: readonly TournamentSeries[]): Tab[] {
   return tabs
 }
 
+const THIRD_PLACE = /(?:third|3rd)[\s-]*place/i
+
 /** Orders tabs without start times: numbered rounds, then knockout stages in play order, then other names. */
 function stageRank(title: string) {
   const round = /^round (\d+)$/i.exec(title)
   if (round) return Number(round[1])
-  const knockout = [/quarter/i, /semi/i, /third|3rd/i, /\bfinals?\b/i].findIndex((pattern) => pattern.test(title))
+  const knockout = [/quarter/i, /semi/i, THIRD_PLACE, /\bfinals?\b/i].findIndex((pattern) => pattern.test(title))
   return knockout === -1 ? Number.MAX_SAFE_INTEGER : 1000 + knockout
 }
 
@@ -138,7 +141,12 @@ function recordsBeforeSeries(series: readonly TournamentSeries[]) {
   return { records, before }
 }
 
-function eliminationSection(tabs: Tab[]): EliminationSection {
+function eliminationSection(sectionTabs: Tab[]): EliminationSection {
+  // A third-place match leaves the column chain: it feeds nothing and is no lower bracket.
+  const isThirdPlace = (tab: Tab) => THIRD_PLACE.test(tab.title)
+  const chain = sectionTabs.filter((tab) => !isThirdPlace(tab))
+  const tabs = chain.length ? chain : sectionTabs
+  const thirdPlace = chain.length ? sectionTabs.filter(isThirdPlace).flatMap((tab) => tab.series) : []
   const all = tabs.flatMap((tab) => tab.series)
   // Play-In results do not decide which lane a playoff series belongs to.
   const playIn = (entry: TournamentSeries) => /^play-in\b/i.test(entry.stage ?? '')
@@ -179,6 +187,7 @@ function eliminationSection(tabs: Tab[]): EliminationSection {
   const hasLower = matches.some((match) => match.side === 'lower')
   if (!hasLower) for (const match of matches) match.side = 'upper'
   linkFeeders(matches)
+  for (const series of thirdPlace) matches.push({ series, column: tabs.length - 1, side: 'third', feeders: [] })
   return { kind: 'elimination', columns: tabs.map((tab) => tab.title), matches, hasLower }
 }
 
