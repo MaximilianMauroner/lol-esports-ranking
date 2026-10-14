@@ -7,11 +7,14 @@ export function TeamMark({
   code,
   className,
   imageClassName,
+  fallback = 'code',
 }: {
   team: string
   code?: string
   className?: string
   imageClassName?: string
+  /** Marks too small for a code show its first letter when no logo loads. */
+  fallback?: 'code' | 'initial'
 }) {
   const branding = teamBrandingFor(team)
   const label = branding?.code ?? code ?? team.slice(0, 4).toUpperCase()
@@ -38,7 +41,7 @@ export function TeamMark({
           loading="lazy"
           onError={() => setFailedLogo(logo)}
         />
-      ) : label}
+      ) : fallback === 'initial' ? label.slice(0, 1) : label}
     </span>
   )
 }

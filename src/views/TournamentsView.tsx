@@ -10,6 +10,7 @@ import { emptyForecastLedger, forecastTournamentSeries, pinnedForecast, scoreCon
 import { ConditionalPowerPreview } from '../components/ConditionalPowerPreview'
 import { WorldsTournamentPanel } from '../components/WorldsTournamentPanel'
 import { SwissPreview } from '../components/SwissPreview'
+import { TournamentBracket } from '../components/TournamentBracket'
 import { findSwissEvent } from '../lib/swissScenario'
 import { worldsFeedEventKey } from '../lib/worldsArtifacts'
 import type { ConditionalPowerResultLedger } from '../lib/conditionalPowerResultReceipts'
@@ -108,7 +109,7 @@ export function TournamentsView() {
   const sourceAge = now - Date.parse(state.health?.checkedAt ?? state.feed.fetchedAt)
   const stale = !state.health || !state.health.complete || !Number.isFinite(sourceAge) || sourceAge > STALE_MS || Boolean(state.error)
   const swissAvailable = selected !== undefined && selected === findSwissEvent(events)
-  const showSwiss = view === 'swiss' && swissAvailable
+  const shown: TournamentPanel = view === 'swiss' && swissAvailable ? 'swiss' : view === 'schedule' ? 'schedule' : 'bracket'
   return (
     <div className="grid min-w-0 gap-5 px-[var(--page-x)] py-5">
       <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-border pb-4">
@@ -120,10 +121,11 @@ export function TournamentsView() {
               {events.map((event) => <option key={event.id} value={event.id}>{event.label}{events.some((other) => other !== event && other.label === event.label) ? ` · ${event.sourceTournamentId}` : ''}</option>)}
             </Select>
           </div>
-          {swissAvailable ? (
-            <div role="group" aria-label="View" className="flex gap-1.5">
-              <Button variant="tab" size="tab" aria-pressed={!showSwiss} onClick={() => selectView('schedule', setView)}>Schedule</Button>
-              <Button variant="tab" size="tab" aria-pressed={showSwiss} onClick={() => selectView('swiss', setView)}>Swiss preview</Button>
+          {selected ? (
+            <div role="group" aria-label="View" className="flex flex-wrap gap-1.5">
+              <Button variant="tab" size="tab" aria-pressed={shown === 'bracket'} onClick={() => selectView('bracket', setView)}>Bracket</Button>
+              <Button variant="tab" size="tab" aria-pressed={shown === 'schedule'} onClick={() => selectView('schedule', setView)}>Schedule</Button>
+              {swissAvailable ? <Button variant="tab" size="tab" aria-pressed={shown === 'swiss'} onClick={() => selectView('swiss', setView)}>Swiss preview</Button> : null}
             </div>
           ) : null}
         </div>
@@ -144,7 +146,12 @@ export function TournamentsView() {
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
         <Alert variant="warning" role="status">Coverage {state.feed.coverage.complete ? 'has warnings' : 'is incomplete'} for {state.feed.coverage.start.slice(0, 10)} to {state.feed.coverage.end.slice(0, 10)}. {state.feed.coverage.warnings.join(' ')}</Alert>
       ) : null}
-      {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : showSwiss ? (
+      {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : shown === 'bracket' ? (
+        <>
+          <h2 className="text-lg font-semibold text-[var(--text-strong)]">{selected.label}</h2>
+          <TournamentBracket key={selected.id} series={selected.series} timezone={timezone} />
+        </>
+      ) : shown === 'swiss' ? (
         <>
           <h2 className="text-lg font-semibold text-[var(--text-strong)]">Worlds 2026 Swiss preview</h2>
           <SwissPreview event={selected} checkedAt={state.health?.checkedAt ?? state.feed.fetchedAt} timezone={timezone} />
@@ -273,7 +280,12 @@ function leaguepediaPageUrl(page: string) {
 }
 function score(value: number | null | undefined) { return value ?? '–' }
 function percent(value: number) { return `${(value * 100).toFixed(1)}%` }
+/** Live first, then the next to start; tracked competitions before other events. */
 function nextEvent(events: TournamentEvent[], now: number) {
+  const tracked = events.filter((event) => event.competition !== null)
+  return liveOrNext(tracked, now) ?? liveOrNext(events, now) ?? events.at(-1)
+}
+function liveOrNext(events: TournamentEvent[], now: number) {
   const live = events.find((event) => event.series.some((series) => series.status === 'live'))
   if (live) return live
   let nearest: { event: TournamentEvent; startsAt: number } | null = null
@@ -285,7 +297,7 @@ function nextEvent(events: TournamentEvent[], now: number) {
       if (!nearest || startsAt < nearest.startsAt) nearest = { event, startsAt }
     }
   }
-  return nearest?.event ?? events.at(-1)
+  return nearest?.event
 }
 function selectEvent(id: string, update: (value: string) => void) {
   update(id)
@@ -294,8 +306,9 @@ function selectEvent(id: string, update: (value: string) => void) {
   else query.delete('event')
   window.location.hash = `tournaments${query.size ? `?${query}` : ''}`
 }
-function selectView(view: 'schedule' | 'swiss', update: (value: string | undefined) => void) {
-  const value = view === 'swiss' ? view : undefined
+type TournamentPanel = 'bracket' | 'schedule' | 'swiss'
+function selectView(view: TournamentPanel, update: (value: string | undefined) => void) {
+  const value = view === 'bracket' ? undefined : view
   update(value)
   const query = currentHashQuery()
   if (value) query.set('view', value)

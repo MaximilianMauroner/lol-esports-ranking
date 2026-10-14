@@ -61,7 +61,7 @@ test('offline numeric result component follows legal outcomes, keeps frozen odds
     const external: string[] = []
     page.on('request', (request) => { if (!request.url().startsWith(base)) external.push(request.url()) })
     await page.clock.install({ time: new Date(fixture.now) })
-    await page.goto(`${base}/#tournaments?event=${encodeURIComponent(fixture.series.eventId)}`)
+    await page.goto(`${base}/#tournaments?event=${encodeURIComponent(fixture.series.eventId)}&view=schedule`)
     await page.getByText('Conditional Power preview', { exact: true }).click()
     await page.getByRole('status').filter({ hasText: 'Power delta unavailable' }).waitFor()
     publishComponent = true

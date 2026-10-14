@@ -22,6 +22,8 @@ const badgeVariants = cva(
         /* Match outcome. */
         win: 'border-[color-mix(in_oklch,var(--win)_44%,var(--line))] bg-[var(--win-soft)] text-[var(--win)]',
         loss: 'border-[color-mix(in_oklch,var(--loss)_44%,var(--line))] bg-[var(--loss-soft)] text-[var(--loss)]',
+        /* A series in progress. */
+        live: 'border-[color-mix(in_oklch,var(--live)_44%,var(--line))] bg-[var(--live-soft)] text-[var(--live)]',
         /* Hypothetical scenario content, never a live result. */
         preview: 'border-dashed border-[var(--preview-line)] bg-[var(--preview-soft)] text-[var(--preview)]',
       },

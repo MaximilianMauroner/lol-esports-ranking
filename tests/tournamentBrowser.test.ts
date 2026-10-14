@@ -76,7 +76,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     page.on('request', (request) => { if (!request.url().startsWith(base)) externalRequests.push(request.url()) })
     await page.clock.install({ time: new Date(at) })
 
-    await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
+    await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     holdHealth = false
     pendingHealth.splice(0).forEach((respond) => respond())
@@ -149,8 +149,18 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.goto(`${base}/#tournaments`)
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), 'worlds:2026')
+    assert.equal(await page.getByRole('button', { name: 'Bracket', exact: true }).getAttribute('aria-pressed'), 'true', 'The bracket is the default view')
+    const gamma = page.getByRole('button', { name: 'Gamma' })
+    await gamma.click()
+    assert.equal(await gamma.getAttribute('aria-pressed'), 'true')
+    await page.getByText('Tracing Gamma').waitFor()
+    await page.keyboard.press('Escape')
+    await page.getByText('Tracing Gamma').waitFor({ state: 'hidden' })
+    await page.getByRole('button', { name: 'Schedule', exact: true }).click()
+    assert.match(page.url(), /view=schedule/)
+    await page.locator('section[aria-label="upcoming"]').waitFor()
 
-    await page.goto(`${base}/#tournaments?event=worlds%3A2026`)
+    await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     holdNextFeed = true
     await page.getByRole('button', { name: 'Refresh' }).click()
@@ -169,6 +179,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.goto(`${base}/tournaments`)
     await page.getByRole('heading', { name: 'Tournaments', exact: true }).waitFor()
     await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
+    await page.getByRole('button', { name: 'Schedule', exact: true }).click()
 
     await page.locator('a[href="#main-content"]').focus()
     await page.keyboard.press('Enter')
