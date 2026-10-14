@@ -1076,18 +1076,30 @@ test('native supplied public generation structure preserves Node contracts with 
       ContentType: 'application/json; charset=utf-8', Metadata: { sha256: authority.digest, 'semantic-bytes': String(authority.bytes) }, ...patch }))
     return { ...authority, etag: stored.ETag! }
   }
-  const readRust = (authority: Authority, supplied = context) => invokeStorage(root, config, {
-    action: 'verify-public-generation-structure', authority, contextJson: JSON.stringify(supplied),
+  const readRust = (authority: Authority, supplied = context, verifyArtifacts = false) => invokeStorage(root, config, {
+    action: verifyArtifacts ? 'verify-public-generation-artifacts' : 'verify-public-generation-structure', authority, contextJson: JSON.stringify(supplied),
   })
   const inventory = async () => (await client.send(new ListObjectsV2Command({ Bucket: config.bucket }))).Contents
   // The actual Node reader receives a supplied active authority. A fixture
   // receipt is served locally for v2, so no new receipt/pointer ownership is claimed.
-  const readNode = async (authority: Authority, supplied = context) => {
+  const readNode = async (authority: Authority, supplied = context, verifyArtifacts = false) => {
+    const verifiedObjects: Array<{ key: string; digest: string; compressedBytes: number; compressedSha256: string }> = []
+    const readObject = async (command: unknown) => {
+      if (command instanceof HeadObjectCommand) return client.send(command)
+      assert.ok(command instanceof GetObjectCommand, 'Node fixture only reads objects')
+      const remote = await client.send(command)
+      if (!verifyArtifacts || !command.input.Key?.startsWith(`${config.prefix}/objects/sha256/`)) return remote
+      const body = Buffer.from(await remote.Body!.transformToByteArray())
+      verifiedObjects.push({ key: command.input.Key, digest: remote.Metadata!.sha256,
+        compressedBytes: body.length, compressedSha256: hash(body) })
+      return { ...remote, Body: body }
+    }
     const active = { generationId: supplied.generationId, storageMode: 'content-addressed-gzip-v1',
       manifestKey: authority.key, manifestEtag: authority.etag, manifestBytes: authority.bytes, manifestDigest: authority.digest,
       ...('publicManifestSchemaVersion' in supplied ? { publicManifestSchemaVersion: supplied.publicManifestSchemaVersion } : {}) }
     if (!('publicManifestSchemaVersion' in supplied)) {
-      return readActiveContentAddressedGeneration({ config, client, activeAuthority: { found: true, value: active }, verifyArtifacts: false, verifyPublicationClosure: false })
+      const result = await readActiveContentAddressedGeneration({ config, client: { send: readObject }, activeAuthority: { found: true, value: active }, verifyArtifacts, verifyPublicationClosure: false })
+      return { ...result, verifiedObjects }
     }
     const raw = { key: `${config.prefix}/raw/objects/sha256/${'a'.repeat(64)}`, digest: 'a'.repeat(64), bytes: 1 }
     const receipt = createGenerationPublicationReceipt({ generationId: supplied.generationId, prefix: config.prefix,
@@ -1106,12 +1118,11 @@ test('native supplied public generation structure preserves Node contracts with 
         return { Body: body, ETag: binding.publicationReceiptEtag, ContentLength: body.length,
           ContentType: 'application/json; charset=utf-8', Metadata: { sha256: hash(body), 'semantic-bytes': String(body.length) } }
       }
-      if (command instanceof GetObjectCommand) return client.send(command)
-      assert.ok(command instanceof HeadObjectCommand, 'Node fixture only reads objects')
-      return client.send(command)
+      return readObject(command)
     } }
-    return readActiveContentAddressedGeneration({ config, client: fixtureClient, activeAuthority: { found: true, value: { ...active, ...binding } },
-      verifyArtifacts: false, verifyPublicationClosure: false })
+    const result = await readActiveContentAddressedGeneration({ config, client: fixtureClient, activeAuthority: { found: true, value: { ...active, ...binding } },
+      verifyArtifacts, verifyPublicationClosure: false })
+    return { ...result, verifiedObjects }
   }
   const compare = async (authority: Authority, supplied = context) => {
     const before = await inventory()
@@ -1163,6 +1174,135 @@ test('native supplied public generation structure preserves Node contracts with 
     assert.ok(typeof rootMapping.sha256 === 'string')
     const base = { ...publication.manifest, artifacts: artifactMappings, schemaVersion: 1 }
     const v2: Context = { generationId, publicManifestSchemaVersion: 2 }
+    await t.test('native generation artifact selection matches the complete Node read', async (t) => {
+      const originalManifest = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: publication.manifestAuthority.key }))
+      const originalManifestBytes = Buffer.from(await originalManifest.Body!.transformToByteArray())
+      const compareArtifacts = async (authority: Authority, supplied = context) => {
+        const before = await inventory()
+        const node = await readNode(authority, supplied, true)
+        assert.ok(node.found)
+        const native = await readRust(authority, supplied, true)
+        const proofs = (values: typeof node.verifiedObjects) => values.map(canonicalJsonFor).sort()
+        assert.deepEqual(proofs(native.verifiedObjects), proofs(node.verifiedObjects), 'Every fresh Node object read has an equal native transport proof')
+        assert.deepEqual({ ...native, verifiedObjects: [] }, JSON.parse(canonicalJsonFor({ ...authority, manifest: node.manifest,
+          artifacts: node.artifacts, rootArtifact: node.rootArtifact, verifiedObjects: [], needsNodeDateValidation: true,
+          schemaConverted: node.cutover === 'schema-v1-active-manifest-to-v2' })))
+        assert.deepEqual(await inventory(), before, 'Artifact verification cannot write or repair objects')
+        return native
+      }
+      const rejectArtifacts = async (authority: Authority, supplied = context) => {
+        const before = await inventory()
+        await assert.rejects(readNode(authority, supplied, true))
+        await assert.rejects(readRust(authority, supplied, true))
+        await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' })
+        assert.deepEqual(await inventory(), before, 'Failed artifact verification leaves inventory unchanged')
+      }
+      const small = { ...base, artifacts: { '/data/ranking-summary.json': rootMapping } }
+      await t.test('partitioned Node directory and all mapped targets are freshly verified', async () => {
+        const result = await compareArtifacts({ ...publication.manifestAuthority, etag: publication.manifestAuthority.etag! }, v2)
+        assert.equal(Object.keys(result.artifacts).length, 2_001)
+        assert.ok(result.verifiedObjects.length > 2_001, 'Directory archive descendants are included')
+      })
+      await t.test('legacy conversion, UTF-16 paths, aliases and last canonical mapping match Node', async () => {
+        const alternate = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId,
+          previousManifest: { storageMode: 'content-addressed-gzip-v1', artifacts: {} },
+          changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: rootValue },
+            { logicalPath: '/data/alias.json', value: { artifactKind: 'generation-fixture', value: '\ud800', synthetic: true } }],
+        })
+        assert.ok(isRecord(alternate.manifest.artifacts))
+        const identity = alternate.manifest.artifacts['/data/alias.json']
+        assert.ok(isRecord(identity))
+        await compareArtifacts(await putManifest({ ...small, artifacts: { ...small.artifacts,
+          '/data/%61lias.json': { ...rootMapping, logicalPath: '/data/alias.json' },
+          '/data/alias.json': identity, '/data/\ud800.json': { ...identity, logicalPath: '/data/\ud800.json' },
+          '/data/a%3Fb.json': { ...identity, logicalPath: '/data/a?b.json' },
+        } }))
+        await rejectArtifacts(await putManifest({ ...small, artifacts: { ...small.artifacts,
+          '/data/%25.json': { ...rootMapping, logicalPath: '/data/%.json' },
+        } }))
+        await rejectArtifacts(await putManifest({ ...small, artifacts: { '/data/ranking-summary.json': {
+          ...rootMapping, sha256: [[rootMapping.sha256]],
+        } } }))
+      })
+      await t.test('archived logical targets and their descendant transport proofs match Node', async () => {
+        const large = { artifactKind: 'generation-fixture', synthetic: true,
+          rows: Array.from({ length: 1_500 }, (_, index) => ({ index, text: 'owned synthetic archive'.repeat(20) })) }
+        const archived = await uploadContentAddressedPublicArtifactPatch(client, config, { generationId,
+          previousManifest: { storageMode: 'content-addressed-gzip-v1', artifacts: {} },
+          changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: rootValue }, { logicalPath: '/data/archive.json', value: large }],
+        })
+        assert.ok(isRecord(archived.manifest.artifacts))
+        const archiveIdentity = archived.manifest.artifacts['/data/archive.json']
+        assert.ok(isRecord(archiveIdentity))
+        const value = { ...archived.manifest, schemaVersion: 1 }
+        const authority = await putManifest(value)
+        const result = await compareArtifacts(authority)
+        assert.deepEqual(result.artifacts['/data/archive.json'], large)
+        assert.ok(result.verifiedObjects.length > 2)
+        const child = result.verifiedObjects.find(({ key }: { key: string }) => key !== `${config.prefix}/objects/sha256/${rootMapping.sha256}`
+          && key !== `${config.prefix}/objects/sha256/${archiveIdentity.sha256}`)
+        assert.ok(child)
+        const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: child.key }))
+        const bytes = Buffer.from(await stored.Body!.transformToByteArray())
+        await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: child.key }))
+        await rejectArtifacts(authority)
+        await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: child.key, Body: bytes, ContentEncoding: stored.ContentEncoding,
+          ContentType: stored.ContentType, Metadata: stored.Metadata }))
+      })
+      await t.test('missing, changed and corrupt mapped objects cannot leave a success descriptor', async () => {
+        const identity = artifactMappings['/data/fixture/0000.json']
+        assert.ok(isRecord(identity) && typeof identity.sha256 === 'string')
+        const key = `${config.prefix}/objects/sha256/${identity.sha256}`
+        const authority = await putManifest({ ...small, artifacts: { ...small.artifacts, '/data/fixture/0000.json': identity } })
+        const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+        const body = Buffer.from(await stored.Body!.transformToByteArray())
+        await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }))
+        await rejectArtifacts(authority)
+        for (const patch of [{ Body: Buffer.from('corrupt gzip') }, { Body: gzipSync(Buffer.from('wrong semantic bytes')) },
+          { Metadata: { ...stored.Metadata, sha256: 'b'.repeat(64) } }, { ContentEncoding: 'identity' }]) {
+          await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body, ContentEncoding: stored.ContentEncoding,
+            ContentType: stored.ContentType, Metadata: stored.Metadata, ...patch }))
+          await rejectArtifacts(authority)
+        }
+        await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body, ContentEncoding: stored.ContentEncoding,
+          ContentType: stored.ContentType, Metadata: stored.Metadata }))
+        await compareArtifacts(authority)
+      })
+      await t.test('fresh reads accept alternate valid gzip transport and preserve the date gate', async () => {
+        const key = `${config.prefix}/objects/sha256/${rootMapping.sha256}`
+        const prepared = prepareSemanticArtifact(rootValue)
+        const body = gzipSync(prepared.canonicalBytes, { level: 1 })
+        await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body,
+          ContentEncoding: 'gzip', Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' } }))
+        const result = await compareArtifacts(await putManifest({ ...small, generatedAt: 'October 11, 2026' }))
+        assert.equal(result.verifiedObjects[0].compressedSha256, hash(body))
+        const invalidDate = await putManifest({ ...small, generatedAt: 'not a date' })
+        await assert.rejects(readNode(invalidDate, context, true))
+        const structural = await readRust(invalidDate, context, true)
+        assert.equal(structural.needsNodeDateValidation, true)
+        assert.deepEqual(structural.rootArtifact, result.rootArtifact)
+      })
+      await t.test('hydrated root truthiness and undefined non-root content match Node', async () => {
+        const mappingFor = async (value: unknown) => {
+          const prepared = prepareSemanticArtifact({ artifactKind: 'public-archive-node', formatVersion: 1, tree: { kind: 'inline', value } })
+          await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: `${config.prefix}/objects/sha256/${prepared.digest}`,
+            Body: prepared.compressed, ContentEncoding: 'gzip',
+            Metadata: { sha256: prepared.digest, 'semantic-bytes': String(prepared.bytes), encoding: 'gzip' } }))
+          return { ...rootMapping, sha256: prepared.digest, bytes: prepared.bytes, objectUrl: `/data/objects/sha256/${prepared.digest}` }
+        }
+        for (const value of [false, null, 0, '', undefined]) {
+          await rejectArtifacts(await putManifest({ ...small, artifacts: { '/data/ranking-summary.json': await mappingFor(value) } }))
+        }
+        for (const value of [true, [], {}]) {
+          await compareArtifacts(await putManifest({ ...small, artifacts: { '/data/ranking-summary.json': await mappingFor(value) } }))
+        }
+        await compareArtifacts(await putManifest({ ...small, artifacts: { ...small.artifacts,
+          '/data/undefined.json': { ...await mappingFor(undefined), logicalPath: '/data/undefined.json' },
+        } }))
+      })
+      await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: publication.manifestAuthority.key, Body: originalManifestBytes,
+        ContentType: originalManifest.ContentType, Metadata: originalManifest.Metadata }))
+    })
     await t.test('actual Node producer directory expands with scalar transport proofs and no graph fetch', async () => {
       const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: publication.manifestAuthority.key }))
       const body = Buffer.from(await stored.Body!.transformToByteArray())
