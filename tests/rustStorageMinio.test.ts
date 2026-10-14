@@ -1197,6 +1197,31 @@ test('native supplied public generation structure preserves Node contracts with 
         await assert.rejects(readFile(join(root, 'output.json')), { code: 'ENOENT' })
         assert.deepEqual(await inventory(), before, 'Failed artifact verification leaves inventory unchanged')
       }
+      const putFixtureContent = async (content: unknown) => {
+        const prepared = prepareSemanticArtifact(content)
+        for (const member of [...(prepared.children ?? []), prepared]) {
+          const key = `${config.prefix}/objects/sha256/${member.digest}`
+          await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: member.compressed,
+            ContentEncoding: 'gzip', Metadata: { sha256: member.digest, 'semantic-bytes': String(member.bytes), encoding: 'gzip' } }))
+          if (!publicMembers.some((member) => member.key === key)) {
+            publicMembers.push({ key, digest: member.digest, bytes: member.compressedBytes, outcome: 'uploaded' })
+          }
+        }
+        return { ...rootMapping, sha256: prepared.digest, bytes: prepared.bytes, objectUrl: `/data/objects/sha256/${prepared.digest}` }
+      }
+      const rejectSelectedObject = async (authority: Authority, identity: { sha256: string }, supplied = context) => {
+        const key = `${config.prefix}/objects/sha256/${identity.sha256}`
+        const stored = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
+        const body = Buffer.from(await stored.Body!.transformToByteArray())
+        await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }))
+        await rejectArtifacts(authority, supplied)
+        await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: Buffer.from('corrupt selected alias'),
+          ContentEncoding: stored.ContentEncoding, ContentType: stored.ContentType, Metadata: stored.Metadata }))
+        await rejectArtifacts(authority, supplied)
+        await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body,
+          ContentEncoding: stored.ContentEncoding, ContentType: stored.ContentType, Metadata: stored.Metadata }))
+        await compareArtifacts(authority, supplied)
+      }
       const small = { ...base, artifacts: { '/data/ranking-summary.json': rootMapping } }
       await t.test('partitioned Node directory and all mapped targets are freshly verified', async () => {
         const result = await compareArtifacts({ ...publication.manifestAuthority, etag: publication.manifestAuthority.etag! }, v2)
@@ -1223,6 +1248,55 @@ test('native supplied public generation structure preserves Node contracts with 
         await rejectArtifacts(await putManifest({ ...small, artifacts: { '/data/ranking-summary.json': {
           ...rootMapping, sha256: [[rootMapping.sha256]],
         } } }))
+      })
+      await t.test('raw manifest aliases preserve stored order and the first position of duplicate properties', async () => {
+        const rootPath = '/data/ranking-summary.json'
+        const alias = '/data/%72anking-summary.json'
+        const selectedValue = { ...rootValue, aliasSelection: 'raw manifest order' }
+        const selected = await putFixtureContent(selectedValue)
+        const prefix = JSON.stringify({ ...small, artifacts: undefined }).slice(0, -1)
+        const rawManifest = (mappings: Array<[string, unknown]>) => {
+          const entries = mappings.map(([path, identity]) => `${JSON.stringify(path)}:${JSON.stringify(identity)}`).join(',')
+          return Buffer.from(`${prefix},"artifacts":{${entries}}}`)
+        }
+        const authority = await putManifest(small, context, rawManifest([[rootPath, rootMapping], [alias, selected]]))
+        const result = await compareArtifacts(authority)
+        assert.equal(result.rootArtifact.aliasSelection, selectedValue.aliasSelection, 'The last stored alias wins even when its key sorts first')
+        // JSON.parse replaces the invalid first value but keeps its position
+        // before the percent alias, so that alias must still select the root.
+        const duplicateAuthority = await putManifest(small, context, rawManifest([
+          [rootPath, { ...rootMapping, bytes: 0 }], [alias, selected], [rootPath, rootMapping],
+        ]))
+        assert.equal((await compareArtifacts(duplicateAuthority)).rootArtifact.aliasSelection, selectedValue.aliasSelection)
+        await rejectSelectedObject(duplicateAuthority, selected)
+      })
+      await t.test('directory archive map parts preserve alias order when selecting and verifying the root', async () => {
+        const rootPath = '/data/ranking-summary.json'
+        const alias = '/data/%72anking-summary.json'
+        const selectedValue = { ...rootValue, aliasSelection: 'directory part order' }
+        const selected = await putFixtureContent(selectedValue)
+        const partFor = async (path: string, identity: Record<string, unknown>) => {
+          const child = await putFixtureContent({ artifactKind: 'public-archive-node', formatVersion: 1,
+            tree: { kind: 'inline', value: { [path]: identity } } })
+          return { sha256: child.sha256, bytes: child.bytes, encoding: 'gzip', count: 1 }
+        }
+        // Part order deliberately opposes key order. The literal root is
+        // inserted first and the percent alias selects the different root last.
+        const first = await partFor(rootPath, rootMapping)
+        const last = await partFor(alias, selected)
+        const directory = await putFixtureContent({ artifactKind: 'public-artifact-archive', formatVersion: 1,
+          originalKind: 'public-artifact-directory', tree: { kind: 'record', entries: [
+            ['artifactKind', { kind: 'inline', value: 'public-artifact-directory' }],
+            ['formatVersion', { kind: 'inline', value: 1 }],
+            ['artifacts', { kind: 'map', parts: [first, last] }],
+          ] } })
+        const authority = await putManifest({ ...small, schemaVersion: 2,
+          artifactDirectory: { sha256: directory.sha256, bytes: directory.bytes, encoding: 'gzip' } }, v2)
+        const result = await compareArtifacts(authority, v2)
+        assert.equal(result.rootArtifact.aliasSelection, selectedValue.aliasSelection)
+        assert.ok(result.verifiedObjects.some(({ key }: { key: string }) => key === `${config.prefix}/objects/sha256/${selected.sha256}`))
+        assert.ok(!result.verifiedObjects.some(({ key }: { key: string }) => key === `${config.prefix}/objects/sha256/${rootMapping.sha256}`))
+        await rejectSelectedObject(authority, selected, v2)
       })
       await t.test('archived logical targets and their descendant transport proofs match Node', async () => {
         const large = { artifactKind: 'generation-fixture', synthetic: true,
