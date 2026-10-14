@@ -40,3 +40,24 @@ test('a third-place match renders under the final of a single-elimination bracke
   assert.ok(cardTop(html, 'Third-Place Match') > cardTop(html, 'Finals'), 'The third-place card sits below the final')
   assert.equal(/Event winner<\/span><span[^>]*>([^<]+)</.exec(html)?.[1], 'Gen.G')
 })
+
+/** A Finals series the source left as 'unknown' with the given source state. */
+function unknownFinal(sourceState: string) {
+  return renderToStaticMarkup(createElement(TournamentBracket, { timezone: 'UTC', series: [{
+    id: 'Event_Finals_1', eventId: 'Event', startTime: '2026-10-15T13:00:00.000Z', stage: 'Finals',
+    status: 'unknown', sourceState, bestOf: 5, vodUrls: [],
+    teams: [{ id: 'T1', name: 'T1', code: null, gameWins: null, outcome: null }, { id: 'Gen.G', name: 'Gen.G', code: null, gameWins: null, outcome: null }],
+  }] }))
+}
+
+test('a series the source ended without a confirmed result says so instead of showing a start time', () => {
+  const html = unknownFinal('result-missing')
+  const text = html.replace(/<[^>]+>/g, ' ')
+  assert.match(text, /Oct 15, result missing/)
+  assert.doesNotMatch(text, /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b|\d:\d\d/, 'No weekday or start time')
+  assert.match(html, /aria-label="Finals: [^"]*result missing"/)
+})
+
+test('an unknown series without a terminal source state keeps its scheduled time', () => {
+  assert.doesNotMatch(unknownFinal('weird'), /result missing/i)
+})

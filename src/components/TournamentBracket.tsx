@@ -3,7 +3,7 @@ import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { TeamMark } from './TeamMark'
 import { cn } from '../lib/utils'
-import type { TournamentSeries } from '../lib/tournamentFeed'
+import { hasUnresolvedResult, type TournamentSeries } from '../lib/tournamentFeed'
 import {
   seriesWinner, teamKey, tournamentSections,
   type BracketMatch, type EliminationSection, type GroupSection, type Standing, type SwissSection, type TournamentSection,
@@ -191,9 +191,10 @@ function SeriesCard({ series, trace, timezone, compact = false }: { series: Tour
   const traced = trace.active !== null && series.teams.some((team) => teamKey(team) === trace.active)
   const dimmed = trace.active !== null && !traced
   const teams = series.teams.length ? series.teams : [undefined, undefined]
-  const status = <span className="flex min-w-0 items-center gap-1.5 truncate">{live ? <Badge variant="live" className="px-1.5 py-0">Live</Badge> : null}{statusText(series, timezone)}</span>
-  // Compact Swiss cards skip dates to stay dense, but still say when a series is live, postponed or cancelled.
-  const flagged = live || series.status === 'postponed' || series.status === 'cancelled'
+  const unresolved = hasUnresolvedResult(series)
+  const status = <span className={cn('flex min-w-0 items-center gap-1.5 truncate', unresolved && 'text-[var(--warn)]')}>{live ? <Badge variant="live" className="px-1.5 py-0">Live</Badge> : null}{statusText(series, timezone)}</span>
+  // Compact Swiss cards skip dates to stay dense, but still say when a series is live, postponed, cancelled or missing its result.
+  const flagged = live || unresolved || series.status === 'postponed' || series.status === 'cancelled'
   return <article aria-label={seriesLabel(series)}
     className={cn('grid rounded-lg border bg-card shadow-[var(--shadow-1)] motion-safe:transition-[opacity,border-color]',
       live ? 'border-[color-mix(in_oklch,var(--live)_55%,var(--line))]' : 'border-border',
@@ -314,12 +315,13 @@ function statusText(series: TournamentSeries, timezone: string) {
   if (series.status === 'live') return ''
   if (series.status === 'cancelled') return 'Cancelled'
   if (series.status === 'postponed') return 'Postponed'
-  if (!series.startTime) return 'Time not supplied'
-  const date = new Date(series.startTime)
-  const options: Intl.DateTimeFormatOptions = series.status === 'completed'
+  const unresolved = hasUnresolvedResult(series)
+  if (!series.startTime) return unresolved ? 'Result missing' : 'Time not supplied'
+  const options: Intl.DateTimeFormatOptions = series.status === 'completed' || unresolved
     ? { month: 'short', day: 'numeric', timeZone: timezone }
     : { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: timezone }
-  return new Intl.DateTimeFormat('en-US', options).format(date)
+  const date = new Intl.DateTimeFormat('en-US', options).format(new Date(series.startTime))
+  return unresolved ? `${date}, result missing` : date
 }
 
 function dateRange(series: TournamentSeries[], timezone: string) {
@@ -333,7 +335,7 @@ function dateRange(series: TournamentSeries[], timezone: string) {
 function seriesLabel(series: TournamentSeries) {
   const [first, second] = series.teams
   const side = (team: typeof first) => `${team?.name ?? 'TBD'}${team?.gameWins != null ? ` ${team.gameWins}` : ''}`
-  const state = series.status === 'live' ? 'live' : series.status === 'completed' ? 'final' : series.status
+  const state = series.status === 'completed' ? 'final' : hasUnresolvedResult(series) ? 'result missing' : series.status
   return `${series.stage ?? 'Series'}: ${side(first)}, ${side(second)}, ${state}`
 }
 
