@@ -1,6 +1,6 @@
 import { referencePublicDataDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { teamBranding } from '../src/data/teamBranding.generated.ts'
@@ -27,6 +27,17 @@ test('source-provided shorthand replaces generated acronyms', () => {
   assert.equal(teamCodeFor('DN Freecs'), 'DNS')
   assert.equal(teamCodeFor('ThunderTalk Gaming'), 'TT')
   assert.equal(teamCodeFor('DetonatioN FocusMe'), 'DFM')
+})
+
+test('published team marks stay within the icon image budget', async () => {
+  const logos = new Set(Object.values(teamBranding).flatMap((branding) => 'logo' in branding ? [branding.logo] : []))
+  let bytes = 0
+  for (const logo of logos) {
+    const file = await stat(resolve('public', logo.replace(/^\//, '')))
+    assert.ok(file.size <= 32 * 1024, `${logo} is ${file.size} bytes; use an icon-sized derivative`)
+    bytes += file.size
+  }
+  assert.ok(bytes <= 1024 * 1024, `Team marks total ${bytes} bytes; budget is 1 MiB`)
 })
 
 test('public artifacts receive audited shorthand at the read boundary', () => {

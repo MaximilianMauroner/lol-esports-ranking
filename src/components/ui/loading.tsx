@@ -35,7 +35,7 @@ export function LoadingState({
     <Card
       className={cn(
         'rounded-md border border-border bg-card p-4',
-        presentation === 'page' && 'mx-auto w-full max-w-[880px] p-6',
+        presentation === 'page' && 'mx-auto min-h-[calc(100svh-200px)] w-full max-w-[880px] p-6',
         presentation === 'chart' && 'min-h-[260px] p-5',
         className,
       )}

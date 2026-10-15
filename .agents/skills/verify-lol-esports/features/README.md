@@ -18,6 +18,7 @@ revision, setup, outcomes and cleanup in private audit evidence.
 | [L11](l11.md) | Conditional Power preview | Partial: live evidence required |
 | [L12](l12.md) | Worlds simulation | Partial: live evidence required |
 | [L13](l13.md) | Swiss scenarios | Partial: live evidence required |
+| [L14](l14.md) | Loading, navigation and delivery performance | Partial: live evidence required |
 
 ## Existing setup and coverage notes
 

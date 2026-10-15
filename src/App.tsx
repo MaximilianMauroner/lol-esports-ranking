@@ -1,7 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from 'react'
+import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from 'react'
 import { AlertTriangle, BarChart3, CalendarDays, Globe2, History, RefreshCw, Search } from 'lucide-react'
 import type {
-  PublicRankingManifest,
   SnapshotCheckpointOption,
   PublicTeamStanding as RankingSummaryStanding,
 } from './lib/publicArtifacts/schema'
@@ -29,6 +28,8 @@ import { Input } from './components/ui/input'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
 import { LoadingState } from './components/ui/loading'
+import { TooltipProvider } from './components/ui/tooltip'
+import { RegionCompareDrawer, TeamCompareDrawer } from './components/CompareDrawer'
 import { currentSeasonScope } from './lib/defaultScope'
 import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
@@ -55,14 +56,11 @@ const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 const loadRegionsView = () => import('./views/RegionsView').then((module) => ({ default: module.RegionsView }))
 const loadMatchesView = () => import('./views/MatchesView').then((module) => ({ default: module.MatchesView }))
 const loadTournamentsView = () => import('./views/TournamentsView').then((module) => ({ default: module.TournamentsView }))
-const loadCompareDrawer = () => import('./components/CompareDrawer')
 const loadCompareAnalysis = () => import('./components/CompareAnalysis')
 const RegionsView = lazy(loadRegionsView)
 const MatchesView = lazy(loadMatchesView)
 const TournamentsView = lazy(loadTournamentsView)
-const RegionCompareDrawer = lazy(() => loadCompareDrawer().then((module) => ({ default: module.RegionCompareDrawer })))
 const RegionCompareAnalysis = lazy(() => loadCompareAnalysis().then((module) => ({ default: module.RegionCompareAnalysis })))
-const TeamCompareDrawer = lazy(() => loadCompareDrawer().then((module) => ({ default: module.TeamCompareDrawer })))
 const TeamCompareAnalysis = lazy(() => loadCompareAnalysis().then((module) => ({ default: module.TeamCompareAnalysis })))
 const VIEW_LOADERS = {
   rankings: undefined,
@@ -77,7 +75,7 @@ function preloadView(mode: Mode) {
 }
 
 function preloadComparison() {
-  void Promise.all([loadCompareDrawer(), loadCompareAnalysis()]).catch(() => { /* Opening the drawer retries. */ })
+  void loadCompareAnalysis().catch(() => { /* Opening the drawer retries. */ })
 }
 
 const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
@@ -112,16 +110,18 @@ const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
 }
 
 
-type AppProps = { initialManifest?: PublicRankingManifest; initialManifestError?: string }
-
-function App(props: AppProps) {
+function App() {
   const [route, setRoute] = useState<Mode>(readModeFromHash)
   useEffect(() => {
-    const onHashChange = () => setRoute(readModeFromHash())
+    const onHashChange = () => startTransition(() => setRoute(readModeFromHash()))
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
-  return route === 'tournaments' ? <TournamentRoute /> : <RankingApp {...props} />
+  return <TooltipProvider>
+    <Suspense fallback={<ManifestRouteShell mode={route} scope={readScopeFromHash() ?? currentSeasonScope()} />}>
+      {route === 'tournaments' ? <TournamentRoute /> : <RankingApp />}
+    </Suspense>
+  </TooltipProvider>
 }
 
 function TournamentRoute() {
@@ -136,17 +136,19 @@ function TournamentRoute() {
     <AppNavigation mode="tournaments" scope={scope} onGoHome={goHome} />
     <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1 pb-6 max-sm:pb-[calc(var(--tabbar-h)+24px+env(safe-area-inset-bottom))]">
       <ModeHeader mode="tournaments" />
-      <Suspense fallback={<LoadingState presentation="page" label="Loading tournaments" />}><TournamentsView /></Suspense>
+      <TournamentsView />
     </main>
   </div>
 }
 
-function RankingApp({ initialManifest, initialManifestError }: AppProps) {
+function RankingApp() {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
   const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
   const [loadPlayers, setLoadPlayers] = useState(false)
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [historyTeams, setHistoryTeams] = useState<readonly string[]>([])
+  const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [matchYear, setMatchYear] = useState(() => hashParam('matchesYear'))
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
   const [loadMatchHistory, setLoadMatchHistory] = useState(() => ['matches', 'regions'].includes(readModeFromHash()))
@@ -175,11 +177,9 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     prefetchScope,
     prefetchTournament,
   } = usePublicArtifacts(scope, {
-    initialManifest,
-    initialManifestError,
     loadPlayers,
     loadTeamHistory,
-    teamHistoryTeams: historyTeams,
+    teamHistoryTeams: drawerOpen && mode === 'rankings' ? teamPicks.map(teamKey) : historyTeams,
     matchHistoryYear: matchYear,
     loadRegionHistory,
     loadTournamentMovements: mode === 'rankings',
@@ -187,10 +187,8 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
     tournamentId,
   })
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
-  const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [teamSearch, setTeamSearch] = useState(() => hashParam('team') ?? '')
   const [boardHashQuery, setBoardHashQuery] = useState(currentHashQuery)
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
   const selectScope = useCallback((nextScope: string) => {
@@ -248,8 +246,9 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
         setBoardHashQuery(query)
       }
     }
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
+    const transition = () => startTransition(onHashChange)
+    window.addEventListener('hashchange', transition)
+    return () => window.removeEventListener('hashchange', transition)
   }, [selectScope])
 
   useEffect(() => {
@@ -469,7 +468,7 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
                   requestRegionHistory()
                   requestTeamHistory()
                 } else {
-                  requestTeamHistory()
+                  requestTeamHistory(activeTeamPicks.map(teamKey))
                 }
                 setDrawerOpen(true)
               }}
@@ -489,20 +488,18 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
         {snapshotState.status !== 'ready' ? (
           <ScopedSnapshotState state={snapshotState} scope={scopeLabel(effectiveScope)} />
         ) : (
-          <>
+          <Suspense fallback={<LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} />}>
             {mode === 'regions' ? (
-              <Suspense fallback={<LoadingState presentation="page" label="Loading region view" />}>
-                <RegionsView
-                  regions={regions}
-                  standings={standings}
-                  regionHistory={activeRegionHistory}
-                  matchHistoryState={matchHistoryState}
-                  onRequestMatchHistoryPages={requestMatchHistoryPages}
-                  pickedIds={regionPickIds}
-                  onToggle={toggleRegion}
-                  onRequestRegionHistory={requestRegionHistory}
-                />
-              </Suspense>
+              <RegionsView
+                regions={regions}
+                standings={standings}
+                regionHistory={activeRegionHistory}
+                matchHistoryState={matchHistoryState}
+                onRequestMatchHistoryPages={requestMatchHistoryPages}
+                pickedIds={regionPickIds}
+                onToggle={toggleRegion}
+                onRequestRegionHistory={requestRegionHistory}
+              />
             ) : null}
             {mode === 'rankings' ? (
               <>
@@ -541,18 +538,16 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
                   }}
                   onToggle={toggleTeam}
                   onRequestPlayers={requestPlayers}
-                  onRequestTeamHistory={requestTeamHistory}
+                  onRequestTeamHistory={drawerOpen ? undefined : requestTeamHistory}
                   onTournamentFilterChange={setTournamentFilter}
                   onPrefetchTournament={prefetchTournament}
                 />
               </>
             ) : null}
             {mode === 'matches' ? (
-              <Suspense fallback={<LoadingState presentation="page" label="Loading match history" />}>
-                <MatchesView archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
-              </Suspense>
+              <MatchesView archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
             ) : null}
-          </>
+          </Suspense>
         )}
         <footer aria-label="Project disclaimer" className="mx-[var(--page-x)] mt-7 flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-4 text-xs leading-[1.55] text-[var(--faint)] [&>a]:inline-flex [&>a]:min-h-6 [&>a]:min-w-6 [&>a]:items-center">
           <span>{RIOT_PROJECT_NOTICE}</span>
@@ -565,33 +560,29 @@ function RankingApp({ initialManifest, initialManifestError }: AppProps) {
       </main>
 
       {drawerOpen && mode === 'regions' ? (
-        <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6"><LoadingState label="Opening region comparison" /></div>}>
-          <RegionCompareDrawer
-            open
-            title="Region comparison"
-            entities={activeRegionPicks}
-            columns={regionColumns}
-            rows={REGION_COMPARE_ROWS}
-            after={regionCompareAfter}
-            onClose={() => setDrawerOpen(false)}
-            onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
-          />
-        </Suspense>
+        <RegionCompareDrawer
+          open
+          title="Region comparison"
+          entities={activeRegionPicks}
+          columns={regionColumns}
+          rows={REGION_COMPARE_ROWS}
+          after={regionCompareAfter}
+          onClose={() => setDrawerOpen(false)}
+          onRemove={(id) => setRegionPicks((current) => current.filter((region) => regionKey(region) !== id))}
+        />
       ) : null}
       {drawerOpen && mode === 'rankings' ? (
-        <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6"><LoadingState label="Opening team comparison" /></div>}>
-          <TeamCompareDrawer
-            open
-            title="Team comparison"
-            entities={activeTeamPicks}
-            columns={teamColumns}
-            rows={TEAM_COMPARE_ROWS}
-            before={compareMatchup ? <HeadToHead home={compareMatchup.home} away={compareMatchup.away} model={compareMatchup.model} /> : undefined}
-            after={teamCompareAfter}
-            onClose={() => setDrawerOpen(false)}
-            onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
-          />
-        </Suspense>
+        <TeamCompareDrawer
+          open
+          title="Team comparison"
+          entities={activeTeamPicks}
+          columns={teamColumns}
+          rows={TEAM_COMPARE_ROWS}
+          before={compareMatchup ? <HeadToHead home={compareMatchup.home} away={compareMatchup.away} model={compareMatchup.model} /> : undefined}
+          after={teamCompareAfter}
+          onClose={() => setDrawerOpen(false)}
+          onRemove={(id) => setTeamPicks((current) => current.filter((team) => teamKey(team) !== id))}
+        />
       ) : null}
     </div>
   )
@@ -620,7 +611,7 @@ function ManifestRouteShell({
 }: {
   mode: Mode
   scope: string
-  onGoHome: (event: MouseEvent<HTMLAnchorElement>) => void
+  onGoHome?: (event: MouseEvent<HTMLAnchorElement>) => void
   error?: string
 }) {
   return (
@@ -629,9 +620,9 @@ function ManifestRouteShell({
       <AppNavigation mode={mode} scope={scope} onGoHome={onGoHome} />
       <main id="main-content" className="flex min-w-0 flex-col" tabIndex={-1}>
         <ModeHeader mode={mode} />
-        <div className="flex min-h-[55px] items-center border-b border-border bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-sm text-muted-foreground">
+        {mode !== 'tournaments' ? <div className="flex min-h-[57px] items-center border-b border-border bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-sm text-muted-foreground max-sm:min-h-[141px]">
           Requested scope: <b className="ml-2 text-foreground">{scopeLabel(scope)}</b>
-        </div>
+        </div> : null}
         {error ? (
           <section className="px-[var(--page-x)] pt-6">
             <Card role="alert">
@@ -681,7 +672,7 @@ function AppNavigation({
 }: {
   mode: Mode
   scope: string
-  onGoHome: (event: MouseEvent<HTMLAnchorElement>) => void
+  onGoHome?: (event: MouseEvent<HTMLAnchorElement>) => void
   search?: string
   onSearch?: (value: string) => void
   searchRef?: RefObject<HTMLInputElement | null>

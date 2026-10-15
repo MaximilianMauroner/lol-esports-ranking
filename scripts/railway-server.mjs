@@ -50,6 +50,7 @@ const tournamentFeedService = createTournamentFeedService({
 const bucketConfig = bucketConfigFromEnv()
 const bucketClient = createBucketClient(bucketConfig)
 const bucketStorage = { config: bucketConfig, client: bucketClient }
+let crawlerSnapshotCache
 
 const server = createServer(async (request, response) => {
   try {
@@ -175,7 +176,7 @@ async function serveAppFile(response, pathname, headOnly, requestHeaders) {
     return
   }
   if (isKnownAppRoute(pathname)) {
-    await serveAppShell(response, headOnly, requestHeaders)
+    await serveAppShell(response, pathname, headOnly, requestHeaders)
     return
   }
 
@@ -190,7 +191,7 @@ async function serveAppFile(response, pathname, headOnly, requestHeaders) {
   sendNotFound(response, { headOnly, requestHeaders })
 }
 
-async function serveAppShell(response, headOnly, requestHeaders) {
+async function serveAppShell(response, pathname, headOnly, requestHeaders) {
   const indexPath = resolveSafePath(distDir, 'index.html')
   if (!indexPath) {
     sendJson(response, 404, { ok: false, error: 'Not found' })
@@ -205,11 +206,16 @@ async function serveAppShell(response, headOnly, requestHeaders) {
     return
   }
 
-  try {
-    const prerendered = renderHomepagePrerenderSnapshot(await loadCrawlerSnapshot())
-    html = injectHomepagePrerender(html, prerendered)
-  } catch (error) {
-    console.warn(`Live homepage prerender fallback used: ${error instanceof Error ? error.message : String(error)}`)
+  const rankingRoute = ['/', '/rankings', '/teams', '/regions', '/matches'].includes(pathname === '/' ? pathname : pathname.replace(/\/$/, ''))
+  if (rankingRoute) {
+    try {
+      const prerendered = renderHomepagePrerenderSnapshot(await loadCrawlerSnapshot())
+      html = injectHomepagePrerender(html, prerendered)
+    } catch (error) {
+      console.warn(`Live homepage prerender fallback used: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  } else {
+    html = injectHomepagePrerender(html, '')
   }
 
   await sendHtml(response, html, { headOnly, requestHeaders })
@@ -252,8 +258,16 @@ async function serveLiveSitemap(response, headOnly, requestHeaders) {
 async function loadCrawlerSnapshot() {
   if (bucketConfig.enabled) {
     try {
+      const activeAuthority = await readBucketJson('active-generation.json', bucketStorage)
+      // Only receipt/digest-bound immutable generations can reuse verified data.
+      // Re-read the pointer for each request so promotions and failures stay visible.
+      const cacheKey = activeAuthority.found && activeAuthority.etag && typeof activeAuthority.value?.manifestDigest === 'string'
+        ? canonicalJsonFor({ etag: activeAuthority.etag, authority: activeAuthority.value })
+        : undefined
+      if (cacheKey && crawlerSnapshotCache?.key === cacheKey) return crawlerSnapshotCache.snapshot
       const authority = await readActiveContentAddressedGeneration({
         ...bucketStorage, verifyArtifacts: false, resolveDirectory: true, verifyPublicationClosure: false,
+        activeAuthority,
       })
       let snapshot
       if (authority.found) {
@@ -285,8 +299,10 @@ async function loadCrawlerSnapshot() {
         })
       }
       if (!snapshot.manifest || !snapshot.shard || !snapshot.snapshotKey) throw new Error('Crawler bucket snapshot is incomplete')
+      if (cacheKey) crawlerSnapshotCache = { key: cacheKey, snapshot }
       return snapshot
     } catch (error) {
+      crawlerSnapshotCache = undefined
       console.warn(`Crawler bucket fallback used: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
@@ -649,6 +665,7 @@ function isKnownAppRoute(pathname) {
     || normalizedPathname === '/rankings'
     || normalizedPathname === '/teams'
     || normalizedPathname === '/regions'
+    || normalizedPathname === '/matches'
     || normalizedPathname === '/tournaments'
     || normalizedPathname === '/legal'
     || normalizedPathname === '/privacy'

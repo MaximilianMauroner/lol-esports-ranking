@@ -6,10 +6,6 @@ export function initialModeFromLocation(hash: string, pathname: string): AppMode
     ?? 'rankings'
 }
 
-export function shouldHoldPrerenderForManifest(hash: string, pathname: string, legalPage: boolean) {
-  return !legalPage && initialModeFromLocation(hash, pathname) === 'rankings'
-}
-
 export function showsManifestErrorInAppShell(mode: AppMode) {
   return mode !== 'rankings'
 }

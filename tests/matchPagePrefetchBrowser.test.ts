@@ -78,6 +78,12 @@ test('prefetching an older match page retains the loaded page on screen', { time
       await next.click()
       await page.getByText(`Page ${currentPage} of 18`, { exact: true }).waitFor()
       await rows.nth(24).waitFor()
+      const heading = page.getByRole('heading', { name: 'Series ledger' })
+      assert.ok(await heading.evaluate((node) => {
+        const top = node.getBoundingClientRect().top
+        const headerBottom = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
+        return top >= headerBottom && top < innerHeight / 2
+      }), 'Explicit pagination returns to the results heading below the sticky navigation')
     }
     const prefetched = page.waitForResponse((response) => new URL(response.url()).pathname === oldestPath).catch(async (error: unknown) => {
       const eligibility = await page.evaluate(() => ({

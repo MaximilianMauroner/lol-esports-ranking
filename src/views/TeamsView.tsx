@@ -30,7 +30,7 @@ import { Panel, PanelBody, PanelFooter, PanelHeader } from '../components/ui/pan
 import { MovementChip, WhatChanged, type MovementSpotlight, type UpsetSpotlight } from '../components/WhatChanged'
 import { PowerLadder } from '../components/PowerLadder'
 import { TeamMark } from '../components/TeamMark'
-import { type ChartSeries } from '../components/LineChart'
+import type { ChartSeries } from '../components/LineChart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import {
   deriveRankingFlair,
@@ -230,6 +230,7 @@ export function TeamsView({
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [colorSlots, setColorSlots] = useState<ReadonlyMap<string, number>>(() => new Map())
   const trajectoryPanelRef = useRef<HTMLDivElement | null>(null)
+  const [trajectoryRequested, setTrajectoryRequested] = useState(false)
   const history = historyState.status === 'ready' ? historyState.data.series : undefined
 
   const pickedKeys = useMemo(() => new Set(pickedTeams.map(teamKey)), [pickedTeams])
@@ -403,33 +404,26 @@ export function TeamsView({
   )
   const detailLineup = detailTeam ? currentLineups?.[detailTeam.teamId] : undefined
 
-  // A team opened from a shared link needs its players and history too.
   useEffect(() => {
-    if (!detailKey) return
-    onRequestPlayers?.()
-    onRequestTeamHistory?.()
-  }, [detailKey, onRequestPlayers, onRequestTeamHistory])
-
-  useEffect(() => {
-    if (!onRequestTeamHistory || exactTournamentId) return undefined
+    if (!onRequestTeamHistory || exactTournamentId || detailKey) return undefined
     const panel = trajectoryPanelRef.current
     if (!panel) return undefined
 
     const IntersectionObserverCtor = Reflect.get(window, 'IntersectionObserver') as typeof IntersectionObserver | undefined
     if (!IntersectionObserverCtor) {
-      const handle = window.setTimeout(onRequestTeamHistory, 1200)
+      const handle = window.setTimeout(() => setTrajectoryRequested(true), 1200)
       return () => window.clearTimeout(handle)
     }
 
     const observer = new IntersectionObserverCtor((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return
-      onRequestTeamHistory()
+      setTrajectoryRequested(true)
       observer.disconnect()
     }, { rootMargin: '420px 0px' })
 
     observer.observe(panel)
     return () => observer.disconnect()
-  }, [exactTournamentId, onRequestTeamHistory])
+  }, [detailKey, exactTournamentId, onRequestTeamHistory])
 
   const pickedFocusTeams = useMemo(
     () => {
@@ -447,10 +441,10 @@ export function TeamsView({
   )
   // Colours follow teams, not positions. Derived during render and stored only
   // when the assignment changes, so an unchanged assignment keeps its identity.
-  const requestedHistoryTeams = [...new Set([...focusTeams.map(teamKey), ...(detailTeam ? [teamKey(detailTeam)] : [])])].sort().join('\u0000')
+  const requestedHistoryTeams = (detailTeam ? [teamKey(detailTeam)] : focusTeams.map(teamKey)).sort().join('\u0000')
   useEffect(() => {
-    if (historyState.status !== 'idle' && !exactTournamentId) onRequestTeamHistory?.(requestedHistoryTeams.split('\u0000').filter(Boolean))
-  }, [historyState.status, exactTournamentId, onRequestTeamHistory, requestedHistoryTeams])
+    if ((detailTeam || !detailKey && trajectoryRequested) && !exactTournamentId) onRequestTeamHistory?.(requestedHistoryTeams.split('\u0000').filter(Boolean))
+  }, [detailTeam, detailKey, trajectoryRequested, exactTournamentId, onRequestTeamHistory, requestedHistoryTeams])
 
   const assignedSlots = assignColorSlots(colorSlots, focusTeams.map(teamKey), SERIES_COLORS.length)
   const slots = sameColorSlots(assignedSlots, colorSlots) ? colorSlots : assignedSlots
@@ -517,13 +511,11 @@ export function TeamsView({
   }
 
   function openTeam(team: RankingSummaryStanding) {
-    onRequestPlayers?.()
     onRequestTeamHistory?.([teamKey(team)])
     openDetail(teamKey(team))
   }
 
   function prepareTeamDetails() {
-    onRequestPlayers?.()
     void loadTeamHistoryLineChart().catch(() => { /* Opening a detail can retry. */ })
   }
 
@@ -829,8 +821,8 @@ export function TeamsView({
 
       <Panel
         ref={trajectoryPanelRef}
-        onFocusCapture={() => onRequestTeamHistory?.(focusTeams.map(teamKey))}
-        onPointerEnter={() => onRequestTeamHistory?.(focusTeams.map(teamKey))}
+        onFocusCapture={() => setTrajectoryRequested(true)}
+        onPointerEnter={() => setTrajectoryRequested(true)}
       >
         <PanelHeader
           title={activeTournament ? `${activeTournament.label} movement` : metric === 'rank' ? 'Rank over time' : 'Power over time'}
@@ -853,7 +845,7 @@ export function TeamsView({
             />
           }
         />
-        {exactTournamentId && tournamentMovementState.status === 'loading' ? (
+        {detailTeam ? <div className="min-h-[300px]" aria-hidden="true" /> : exactTournamentId && tournamentMovementState.status === 'loading' ? (
           <LoadingState presentation="chart" className="m-5" label="Loading tournament movement" />
         ) : exactTournamentId && tournamentMovementState.status === 'idle' ? (
           <p className="text-muted-foreground p-5">Tournament movement has not been requested.</p>
@@ -945,6 +937,7 @@ export function TeamsView({
           currentLineup={detailLineup}
           playerLoadState={playerLoadState}
           playerScopeLabel={playerScopeLabel}
+          onRequestPlayers={onRequestPlayers}
           seeded={Boolean(panelData?.seeded)}
           onClose={closeDetail}
         />
@@ -1486,6 +1479,7 @@ function TeamDetailDrawer({
   currentLineup,
   playerLoadState,
   playerScopeLabel,
+  onRequestPlayers,
   seeded,
   onClose,
 }: {
@@ -1501,6 +1495,7 @@ function TeamDetailDrawer({
   currentLineup?: PublicCurrentLineup
   playerLoadState: PlayerLoadState
   playerScopeLabel?: string
+  onRequestPlayers?: () => void
   seeded: boolean
   onClose: () => void
 }) {
@@ -1699,7 +1694,9 @@ function TeamDetailDrawer({
               <p className={tournamentDataNoteClassName}>Component breakdowns are hidden here because the tournament data publishes endpoint rank, score, eligibility and match evidence only.</p>
             ) : <div className="mt-3"><ComponentBreakdown team={team} /></div>}
           </details>
-          <details className="rounded-md border border-border p-3">
+          <details className="rounded-md border border-border p-3" onToggle={(event) => {
+            if (event.currentTarget.open) onRequestPlayers?.()
+          }}>
             <summary className="cursor-pointer text-sm font-semibold">Players</summary>
             <PlayerRankingCard team={team} players={players} currentLineup={currentLineup} loadState={playerLoadState} playerScopeLabel={playerScopeLabel} />
           </details>

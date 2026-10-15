@@ -108,6 +108,10 @@ test('Railway server returns app shell only for known app routes', async () => {
     assert.equal(regions.statusCode, 200)
     assert.match(regions.body, /app shell/)
 
+    const matches = await httpRequest(server.port, '/matches')
+    assert.equal(matches.statusCode, 200)
+    assert.match(matches.body, /app shell/)
+
     const tournaments = await httpRequest(server.port, '/tournaments')
     assert.equal(tournaments.statusCode, 200)
     assert.match(tournaments.body, /app shell/)
@@ -853,13 +857,14 @@ test('crawler HTML and sitemap follow one verified bucket generation and fall ba
   let active = g2
   let promoteAfterRoot = false
   const assets = new Map([...g2.assets, ...g3.assets])
+  let authorityRevision = 0
   const reads: string[] = []
   const bucket = createServer((request, response) => {
     const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
     reads.push(path)
     response.setHeader('Content-Type', 'application/json; charset=utf-8')
     if (path === '/test-bucket/rankings/active-generation.json') {
-      response.writeHead(200, { ETag: `"active-${active.generationId}"` }).end(active.activeBody)
+      response.writeHead(200, { ETag: `"active-${active.generationId}-${authorityRevision}"` }).end(active.activeBody)
       return
     }
     const asset = assets.get(path)
@@ -890,6 +895,14 @@ test('crawler HTML and sitemap follow one verified bucket generation and fall ba
   try {
     const first = await httpRequest(server.port, '/')
     assertCrawlerGeneration(first.body, 'Bucket Team Two', 'G2', 'Jul 11, 2026')
+    const immutableReads = reads.filter((path) => path !== '/test-bucket/rankings/active-generation.json').length
+    assertCrawlerGeneration((await httpRequest(server.port, '/')).body, 'Bucket Team Two', 'G2', 'Jul 11, 2026')
+    assert.equal(reads.filter((path) => path !== '/test-bucket/rankings/active-generation.json').length, immutableReads, 'Unchanged authority reuses its verified snapshot')
+    const readsBeforeLegal = reads.length
+    for (const route of ['/legal', '/privacy', '/licenses', '/tournaments']) {
+      assert.equal((await httpRequest(server.port, route)).statusCode, 200)
+    }
+    assert.equal(reads.length, readsBeforeLegal, 'Non-ranking HTML does not read ranking storage')
     assert.match((await httpRequest(server.port, '/sitemap.xml')).body, /<lastmod>2026-07-11<\/lastmod>/)
     active = g3
     assertCrawlerGeneration((await httpRequest(server.port, '/')).body, 'Bucket Team Three', 'G3', 'Jul 12, 2026')
@@ -902,6 +915,9 @@ test('crawler HTML and sitemap follow one verified bucket generation and fall ba
     assertCrawlerGeneration((await httpRequest(server.port, '/')).body, 'Bucket Team Three', 'G3', 'Jul 12, 2026')
 
     for (const failure of ['missing shard', 'corrupt shard', 'digest mismatch', 'missing root']) {
+      // A verified immutable copy remains valid. A changed authority must
+      // validate again and reject each unavailable or corrupt promotion.
+      authorityRevision++
       const path = failure === 'missing root' ? g3.rootPath : g3.shardPath
       const original = assets.get(path)!
       if (failure === 'corrupt shard') assets.set(path, { ...original, body: Buffer.from('not gzip') })

@@ -66,8 +66,6 @@ export type MatchHistoryState = PublicArtifactState<{
 
 type TeamHistoryRoot = PublicTeamHistoryIndex
 type PublicArtifactLoadOptions = {
-  initialManifest?: PublicRankingManifest
-  initialManifestError?: string
   loadPlayers?: boolean
   loadTeamHistory?: boolean
   loadRegionHistory?: boolean
@@ -97,12 +95,10 @@ const REGION_HISTORY_URL = import.meta.env.VITE_REGION_HISTORY_URL || '/data/his
 const TOURNAMENT_MOVEMENT_INDEX_URL = import.meta.env.VITE_TOURNAMENT_MOVEMENT_INDEX_URL || '/data/history/tournament-moves/index.json'
 const MATCH_HISTORY_INDEX_URL = import.meta.env.VITE_MATCH_HISTORY_INDEX_URL || '/data/matches/index.json'
 
-export const loadPublicRankingManifest = createPublicRankingManifestLoader(DATA_URL)
+const loadPublicRankingManifest = createPublicRankingManifestLoader(DATA_URL)
 
 export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOptions = {}) {
   const {
-    initialManifest,
-    initialManifestError,
     loadPlayers = false,
     loadTeamHistory = false,
     loadRegionHistory = false,
@@ -112,13 +108,10 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     teamHistoryTeams,
     tournamentId,
   } = options
-  const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>(
-    initialManifest
-      ? { status: 'ready', data: initialManifest }
-      : initialManifestError
-        ? { status: 'error', message: initialManifestError }
-        : { status: 'loading' },
-  )
+  const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>(() => {
+    const cached = loadPublicRankingManifest.getCached()
+    return cached ? { status: 'ready', data: cached } : { status: 'loading' }
+  })
   const [playersState, setPlayersState] = useState<PlayerDirectoryState>({ status: 'idle' })
   const [teamHistoryRootState, setTeamHistoryRootState] = useState<PublicArtifactState<TeamHistoryRoot>>({ status: 'idle' })
   const [teamHistoryCache, setTeamHistoryCache] = useState<Record<string, TeamHistoryCacheEntry>>({})
@@ -174,7 +167,6 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   ), [loadMatchHistory, matchHistoryCatalogState, matchHistoryPages])
 
   useEffect(() => {
-    if (initialManifest || initialManifestError) return
     let active = true
     async function load() {
       try {
@@ -188,7 +180,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     }
     void load()
     return () => { active = false }
-  }, [initialManifest, initialManifestError])
+  }, [])
 
   useEffect(() => {
     if (!data || !loadPlayers) return
@@ -539,12 +531,12 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     }
     const url = resolvePublicArtifactUrl(expected.url, DATA_URL)
     const controller = new AbortController()
-    setTeamHistoryCache((current) => ({ ...current, [cacheKey]: { status: 'loading' } }))
+    setTeamHistoryCache((current) => rememberTeamHistory(current, cacheKey, { status: 'loading' }))
     async function load() {
       try {
         const next = await fetchPublicArtifact(index, url, DATA_URL, parsePublicTeamHistoryShard, { signal: controller.signal, archiveSelection: { records: { '/series': selectedTeamsKey ? selectedTeamsKey.split('\u0000') : [] } } })
         validatePublicTeamHistoryShard(key, expected, next, index, selectedTeamsKey ? selectedTeamsKey.split('\u0000') : [])
-        if (!controller.signal.aborted) setTeamHistoryCache({ [cacheKey]: { status: 'ready', shard: next } })
+        if (!controller.signal.aborted) setTeamHistoryCache((current) => rememberTeamHistory(current, cacheKey, { status: 'ready', shard: next }))
       } catch (error) {
         if (isAbortError(error)) return
         setTeamHistoryCache((current) => ({
@@ -777,5 +769,13 @@ function isAbortError(error: unknown) {
 function omitCacheEntry<T>(cache: Record<string, T>, key: string) {
   const next = { ...cache }
   delete next[key]
+  return next
+}
+
+function rememberTeamHistory(cache: Record<string, TeamHistoryCacheEntry>, key: string, entry: TeamHistoryCacheEntry) {
+  const next = { ...cache }
+  delete next[key]
+  next[key] = entry
+  for (const oldest of Object.keys(next).slice(0, -4)) delete next[oldest]
   return next
 }
