@@ -33,7 +33,8 @@ import { RegionCompareDrawer, TeamCompareDrawer } from './components/CompareDraw
 import { currentSeasonScope } from './lib/defaultScope'
 import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
-import { projectTournamentStandings, tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
+import { tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
+import { deriveRankingUniverse } from './lib/rankingBoard'
 import { cn } from './lib/utils'
 import { currentHashQuery, hashParam } from './lib/urlState'
 import { canUseBackgroundPrefetch, scheduleIdleWork } from './lib/prefetch'
@@ -265,15 +266,23 @@ function RankingApp() {
   }, [mode])
 
   const standings = useMemo(() => snapshot?.standings ?? [], [snapshot])
-  const comparisonStandings = useMemo(
-    () => tournamentMovementState.status === 'ready' && tournamentMovementState.data.id === tournamentId
-      ? projectTournamentStandings(standings, tournamentMovementState.data)
-      : standings,
-    [standings, tournamentId, tournamentMovementState],
-  )
   const regions = useMemo(() => snapshot?.regions ?? [], [snapshot])
   const activeRegionHistory = regionHistoryState.status === 'ready' ? regionHistoryState.data : undefined
   const readyData = manifestState.status === 'ready' ? manifestState.data : undefined
+  const latestMatchDate = readyData?.coverage?.latestMatchDate
+  const tournamentShard = tournamentMovementState.status === 'ready' ? tournamentMovementState.data : undefined
+  const universe = useMemo(
+    () => deriveRankingUniverse({
+      standings,
+      regions,
+      requestedTournamentFilter: tournamentFilter,
+      tournamentEntries: tournamentMovementEntries,
+      tournamentShard,
+      latestMatchDate,
+      rollingWindow: snapshot?.rollingWindow,
+    }),
+    [latestMatchDate, regions, snapshot?.rollingWindow, standings, tournamentFilter, tournamentMovementEntries, tournamentShard],
+  )
   const seasonTabs = useMemo(() => readyData ? [...seasonYears.slice(0, 4), 'All'] : [], [readyData, seasonYears])
   const activeSeason = seasonFromScope(effectiveScope)
   const activeCheckpoint = checkpointFromScope(effectiveScope)
@@ -321,7 +330,7 @@ function RankingApp() {
     return { status: playersState.status, message: playersState.message }
   }, [playersState])
   const activeRegionPicks = useMemo(() => reconcilePicks(regionPicks, regions, regionKey), [regionPicks, regions])
-  const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, comparisonStandings, teamKey), [comparisonStandings, teamPicks])
+  const activeTeamPicks = useMemo(() => reconcilePicks(teamPicks, universe.standings, teamKey), [teamPicks, universe.standings])
   const regionPickIds = useMemo(() => new Set(activeRegionPicks.map(regionKey)), [activeRegionPicks])
 
   function toggleRegion(region: RegionStrength) {
@@ -331,7 +340,7 @@ function RankingApp() {
 
   function toggleTeam(team: RankingSummaryStanding) {
     preloadComparison()
-    setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, comparisonStandings, teamKey), team, teamKey))
+    setTeamPicks((current) => toggleLimitedPick(reconcilePicks(current, universe.standings, teamKey), team, teamKey))
   }
 
   useEffect(() => {
@@ -504,7 +513,7 @@ function RankingApp() {
             {mode === 'rankings' ? (
               <>
                 <TeamsView
-                  standings={standings}
+                  universe={universe}
                   regions={regions}
                   model={loadedData.model}
                   players={activePlayers}
@@ -515,8 +524,7 @@ function RankingApp() {
                   onSearchChange={setTeamSearch}
                   pickedTeams={activeTeamPicks}
                   historyState={teamHistoryState}
-                  tournamentFilter={tournamentFilter}
-                  tournamentMovementEntries={tournamentMovementEntries}
+                  requestedTournamentFilter={tournamentFilter}
                   tournamentMovementIndexState={tournamentMovementIndexState}
                   tournamentMovementState={tournamentMovementState}
                   onRetryTournamentMovements={retryTournamentMovements}
@@ -812,7 +820,7 @@ function movementBaselineFor(activeCheckpoint: string | undefined, checkpoints: 
   return { label: `the pre-${checkpoint.label} baseline before ${formatDate(checkpoint.startDate)}` }
 }
 
-function reconcilePicks<T>(current: T[], available: T[], keyFor: (item: T) => string) {
+function reconcilePicks<T>(current: T[], available: readonly T[], keyFor: (item: T) => string) {
   if (current.length === 0) return current
   const availableByKey = new Map(available.map((item) => [keyFor(item), item]))
   const next = current

@@ -56,6 +56,9 @@ jobs:
       - name: Public artifact reference contracts
         run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/publicArtifactIdentity.test.ts tests/publicArtifactSchema.test.ts tests/checkpointSemanticIdentity.test.ts
 
+      - name: Ranking board contracts
+        run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/rankingFlair.test.ts tests/rankingsBoardPanels.test.ts tests/internationalTournaments.test.ts tests/publicArtifactLoading.test.ts
+
       - name: Bundle
         run: pnpm run bundle
 
