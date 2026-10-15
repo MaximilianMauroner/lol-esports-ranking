@@ -54,13 +54,21 @@ test('the Rankings board follows its address after load: typed and linked hashes
   const data = createStaticRankingData({ matches: [...regions.flatMap(roundRobin), msi], teams, rosters: {},
     generatedAt: '2026-07-01T00:00:00.000Z', dataMode: 'seeded-sample' })
   const bodies = new Map(createPublicArtifactWritePlan(data).writes.map((write) => [`/data/${write.relativePath}`, write.contents]))
+  const dataRequests: string[] = []
+  let holdManifest = false
+  const pendingManifest: Array<() => void> = []
   const fixture: Plugin = { name: 'ranking-board-address-fixture', configureServer(server) {
     server.middlewares.use((request, response, next) => {
       const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
       if (!path.startsWith('/data/')) return next()
+      dataRequests.push(path)
       const body = bodies.get(path)
       response.statusCode = body ? 200 : 404
       response.setHeader('content-type', 'application/json')
+      if (holdManifest && path === '/data/ranking-summary.json') {
+        pendingManifest.push(() => response.end(body ?? '{}'))
+        return
+      }
       response.end(body ?? '{}')
     })
   } }
@@ -138,5 +146,32 @@ test('the Rankings board follows its address after load: typed and linked hashes
     await expectBoard(page, 20, '', 'sort on first load')
     assert.equal(await page.locator('.board-sort select').inputValue(), 'rating:descending')
     assert.equal(new URLSearchParams((await page.evaluate(() => location.hash)).split('?')[1]).get('dir'), null)
-  } finally { await browser?.close(); await server.close() }
+    // Startup presents the app shell before a delayed manifest completes.
+    holdManifest = true
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
+    assert.equal(await page.locator('table tbody tr').count(), 0)
+    holdManifest = false
+    pendingManifest.splice(0).forEach((respond) => respond())
+    await expectBoard(page, 20, '', 'board after the delayed manifest')
+
+    // The closed Players panel must not compete with the selected team's chart.
+    await page.locator('table tbody tr').first().getByRole('button').first().click()
+    const detail = page.getByRole('dialog')
+    await detail.locator('.recharts-surface').first().waitFor()
+    assert.equal(dataRequests.includes('/data/entities/players.json'), false)
+    const playerResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/data/entities/players.json')
+    await detail.locator('summary').filter({ hasText: /^Players$/ }).click()
+    assert.equal((await playerResponse).status(), 200)
+    await detail.getByRole('button', { name: 'Close', exact: true }).click()
+    const compare = page.locator('table tbody tr input[type="checkbox"]')
+    await compare.nth(0).check()
+    await compare.nth(1).check()
+    await page.getByRole('button', { name: 'Open comparison', exact: true }).click()
+    assert.equal(await page.getByRole('dialog').count(), 1, 'Comparison opens its shell without a full-screen module loader')
+  } finally {
+    pendingManifest.splice(0).forEach((respond) => respond())
+    await browser?.close()
+    await server.close()
+  }
 })

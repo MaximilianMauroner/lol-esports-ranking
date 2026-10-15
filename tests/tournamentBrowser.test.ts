@@ -78,10 +78,20 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
 
     await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
+    assert.doesNotMatch(await page.locator('body').innerText(), /Schedule may be stale/, 'Pending health is not a stale result')
     holdHealth = false
     pendingHealth.splice(0).forEach((respond) => respond())
     await page.getByRole('button', { name: 'Refresh' }).click()
     await page.getByText(/Schedule may be stale/).waitFor({ state: 'hidden' })
+    const headingTop = await page.getByRole('heading', { name: 'Worlds 2026' }).evaluate((node) => node.getBoundingClientRect().top)
+    holdHealth = true
+    await page.getByRole('button', { name: 'Refresh' }).click()
+    await page.waitForFunction(() => document.body.innerText.includes('Gamma'))
+    await waitForPendingFeed(pendingHealth)
+    assert.doesNotMatch(await page.locator('body').innerText(), /Schedule may be stale/, 'A healthy refresh keeps its last checked status')
+    assert.equal(await page.getByRole('heading', { name: 'Worlds 2026' }).evaluate((node) => node.getBoundingClientRect().top), headingTop)
+    holdHealth = false
+    pendingHealth.splice(0).forEach((respond) => respond())
     assert.match(await page.locator('body').innerText(), /Gamma.*Delta/)
     assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
     assert.match(await page.locator('body').innerText(), /Forecast unavailable: rules not verified/)
@@ -217,6 +227,24 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
         `Final tournament content overlaps mobile navigation at ${width}px: ${JSON.stringify(clearance)}`)
       }
     }
+    await Promise.all([
+      page.waitForResponse((response) => response.url().endsWith(healthPath)),
+      page.getByRole('button', { name: 'Refresh' }).click(),
+    ])
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    const requestsWhileHidden = dataRequests.length
+    await page.clock.fastForward(180_000)
+    assert.equal(dataRequests.length, requestsWhileHidden, 'Hidden tournament pages do not poll')
+    const resumed = page.waitForResponse((response) => response.url().endsWith(tournamentPath))
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await resumed
+    assert.ok(dataRequests.length > requestsWhileHidden, 'Returning to the tournament page refreshes immediately')
     assert.deepEqual(externalRequests, [])
   } finally {
     pendingHealth.splice(0).forEach((respond) => respond())

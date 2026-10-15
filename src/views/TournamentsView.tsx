@@ -17,7 +17,7 @@ import type { ConditionalPowerResultLedger } from '../lib/conditionalPowerResult
 import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
 
 type FeedHealth = { checkedAt: string; complete: boolean; warnings: string[] }
-type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed; health: FeedHealth | null; error?: string } | { status: 'error'; message: string }
+type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed; health: FeedHealth | null; healthPending: boolean; error?: string } | { status: 'error'; message: string }
 const REFRESH_MS = 60_000
 /** The server rechecks Leaguepedia every five minutes while the hub is viewed. */
 const STALE_MS = 15 * REFRESH_MS
@@ -31,6 +31,7 @@ export function TournamentsView() {
   const [now, setNow] = useState(() => Date.now())
   const [forecastArtifacts, setForecastArtifacts] = useState<ForecastArtifacts>({ basis: null, ledger: emptyForecastLedger, reason: 'Forecast inputs are loading.' })
   const refreshSequence = useRef(0)
+  const refreshController = useRef<AbortController | null>(null)
   const basisLoading = useRef(false)
   const basisNextRefreshAt = useRef(0)
   const basisGeneration = useRef(0)
@@ -57,19 +58,24 @@ export function TournamentsView() {
 
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current
+    // Requests in this visible lifetime share cancellation; sequence guards
+    // still prevent an older manual refresh from replacing a newer result.
+    const controller = refreshController.current?.signal.aborted === false ? refreshController.current : new AbortController()
+    refreshController.current = controller
+    setNow(Date.now())
     refreshBasisIfDue()
     try {
-      const response = await fetch('/tournament-data/feed.json', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
+      const response = await fetch('/tournament-data/feed.json', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]) })
       if (!response.ok) throw new Error(`Tournament feed returned HTTP ${response.status}`)
       const body: unknown = await response.json()
       if (!isTournamentFeed(body)) throw new Error('Tournament feed schema is unsupported or incomplete')
       if (sequence !== refreshSequence.current) return
-      setState({ status: 'ready', feed: body, health: null })
-      const healthResponse = await fetch('/tournament-data/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.timeout(5_000) }).catch(() => null)
+      setState((previous) => ({ status: 'ready', feed: body, health: previous.status === 'ready' ? previous.health : null, healthPending: true }))
+      const healthResponse = await fetch('/tournament-data/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]) }).catch(() => null)
       const healthBody: unknown = healthResponse?.ok ? await healthResponse.json().catch(() => null) : null
       const health = isHealth(healthBody) ? healthBody : null
       if (sequence !== refreshSequence.current) return
-      setState((previous) => previous.status === 'ready' && previous.feed === body ? { ...previous, health } : previous)
+      setState((previous) => previous.status === 'ready' && previous.feed === body ? { ...previous, health, healthPending: false } : previous)
       if (FORECASTS_ENABLED) {
         try {
           const ledger = await loadTournamentForecastLedger()
@@ -83,15 +89,32 @@ export function TournamentsView() {
     } catch (error) {
       if (sequence !== refreshSequence.current) return
       const message = error instanceof Error ? error.message : String(error)
-      setState((previous) => previous.status === 'ready' ? { ...previous, error: message } : { status: 'error', message })
+      setState((previous) => previous.status === 'ready' ? { ...previous, healthPending: false, error: message } : { status: 'error', message })
     }
   }, [refreshBasisIfDue])
   useEffect(() => {
     const sequenceRef = refreshSequence
-    const initialTimer = window.setTimeout(() => { void refresh() }, 0)
-    const refreshTimer = window.setInterval(() => { void refresh() }, REFRESH_MS)
-    const clockTimer = window.setInterval(() => setNow(Date.now()), 10_000)
-    return () => { ++sequenceRef.current; window.clearTimeout(initialTimer); window.clearInterval(refreshTimer); window.clearInterval(clockTimer) }
+    const controllerRef = refreshController
+    let refreshTimer: number | undefined
+    function updateVisibility() {
+      window.clearInterval(refreshTimer)
+      if (document.visibilityState === 'hidden') {
+        ++sequenceRef.current
+        controllerRef.current?.abort()
+        return
+      }
+      void refresh()
+      refreshTimer = window.setInterval(() => { void refresh() }, REFRESH_MS)
+    }
+    const initialTimer = window.setTimeout(updateVisibility, 0)
+    document.addEventListener('visibilitychange', updateVisibility)
+    return () => {
+      ++sequenceRef.current
+      controllerRef.current?.abort()
+      window.clearTimeout(initialTimer)
+      window.clearInterval(refreshTimer)
+      document.removeEventListener('visibilitychange', updateVisibility)
+    }
   }, [refresh])
   useEffect(() => {
     const onHashChange = () => { setSelectedId(hashParam('event') ?? ''); setView(hashParam('view')) }
@@ -107,7 +130,9 @@ export function TournamentsView() {
   if (state.status === 'loading') return <LoadingState presentation="page" label="Loading tournament schedule" />
   if (state.status === 'error') return <div className="px-[var(--page-x)] py-6"><Alert variant="warning" role="alert">Tournament schedule unavailable: {state.message} <Button className="ml-2" onClick={() => void refresh()}>Retry</Button></Alert></div>
   const sourceAge = now - Date.parse(state.health?.checkedAt ?? state.feed.fetchedAt)
-  const stale = !state.health || !state.health.complete || !Number.isFinite(sourceAge) || sourceAge > STALE_MS || Boolean(state.error)
+  const stale = Boolean(state.error) || (state.health
+    ? !state.health.complete || !Number.isFinite(sourceAge) || sourceAge > STALE_MS
+    : !state.healthPending)
   const swissAvailable = selected !== undefined && selected === findSwissEvent(events)
   const shown: TournamentPanel = view === 'swiss' && swissAvailable ? 'swiss' : view === 'schedule' ? 'schedule' : 'bracket'
   return (
@@ -129,10 +154,10 @@ export function TournamentsView() {
             </div>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>Times in {timezone}</span>
           <span>Feed changed {formatTournamentTime(state.feed.fetchedAt, timezone)}</span>
-          <span>Checked {state.health ? formatTournamentTime(state.health.checkedAt, timezone) : 'unknown'}</span>
+          <span className="min-w-[30ch]">Checked {state.health ? formatTournamentTime(state.health.checkedAt, timezone) : state.healthPending ? 'checking…' : 'unknown'}</span>
           <Button variant="outline" size="sm" onClick={() => void refresh()}>Refresh</Button>
         </div>
       </div>

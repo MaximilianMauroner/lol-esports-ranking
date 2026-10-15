@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore, type RefObject } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import { History, Search } from 'lucide-react'
 import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../lib/publicArtifacts/schema'
 import type { MatchHistoryState } from '../hooks/usePublicArtifacts'
@@ -44,6 +44,9 @@ type ViewState = {
 export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, archiveYears = [], archiveYear, onYearChange }: { archiveYears?: string[]; archiveYear?: string; onYearChange?: (year: string) => void; searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; scopeLabel: string; onRequestPages: (pages: number[]) => void }) {
   const [view, setView] = useState<ViewState>(readViewState)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [resultsHeight, setResultsHeight] = useState(0)
+  const resultsRef = useRef<HTMLDivElement | null>(null)
+  const headingId = useId()
   const desktop = useSyncExternalStore(subscribeToLedgerLayout, desktopLedgerLayout, () => true)
   const catalog = state.status === 'ready' ? state.data.catalog : undefined
   const refs = useMemo(() => catalog?.series ?? [], [catalog])
@@ -82,6 +85,14 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
   const currentPageReady = state.status === 'ready' && !pageLoading && !pageFailure
 
   useEffect(() => {
+    const results = resultsRef.current
+    if (!currentPageReady || !results) return
+    const observer = new ResizeObserver(() => setResultsHeight(Math.ceil(results.getBoundingClientRect().height)))
+    observer.observe(results)
+    return () => observer.disconnect()
+  }, [currentPageReady])
+
+  useEffect(() => {
     if (neededPagesKey) onRequestPages(neededPagesKey.split(',').map(Number))
   }, [catalog, neededPagesKey, onRequestPages])
 
@@ -95,6 +106,14 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
     const offset = (nextPage - 1) * view.pageSize
     const nextPages = filtered.slice(offset, offset + view.pageSize).map((entry) => entry.page)
     onRequestPages([...new Set([...neededPages, ...nextPages])])
+  }
+
+  function selectPage(nextPage: number) {
+    update({ page: Math.min(Math.max(1, nextPage), pageCount) }, false)
+    const heading = document.getElementById(headingId)
+    heading?.setAttribute('tabindex', '-1')
+    heading?.focus({ preventScroll: true })
+    heading?.scrollIntoView({ block: 'start', behavior: 'instant' })
   }
 
   // Same helper, same param names and same "omit the default" rule as the
@@ -166,9 +185,10 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
         </StatRibbon>
       }
     >
-      <Panel>
+      <Panel className="[&_h2]:scroll-mt-[calc(var(--app-nav-h)+12px)]">
         <PanelHeader
           title="Series ledger"
+          titleId={headingId}
           description="Filter by team, league or event. Expand a series to see its games."
         />
         <PanelBody className="grid gap-2 items-end sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_180px_220px_auto]">
@@ -192,6 +212,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
           {filtersActive ? <Button variant="ghost" onClick={clearFilters}>Clear filters</Button> : null}
         </PanelBody>
 
+        <div ref={resultsRef} style={pageLoading && resultsHeight ? { minHeight: resultsHeight } : undefined}>
         {visibleRefs.length === 0 ? (
           filtersActive ? (
             <DataState icon={<History size={26} aria-hidden="true" />} title="No series match these filters" action={<Button type="button" variant="outline" onClick={clearFilters}>Clear filters</Button>}>
@@ -214,12 +235,13 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
           </>
         )}
 
+        </div>
         <PanelFooter>
           <Pager
             label="Match history pagination"
             page={page}
             pageCount={pageCount}
-            onPage={(next) => update({ page: Math.min(Math.max(1, next), pageCount) }, false)}
+            onPage={selectPage}
             onIntent={preparePage}
             pageSize={view.pageSize}
             pageSizes={PAGE_SIZES}
