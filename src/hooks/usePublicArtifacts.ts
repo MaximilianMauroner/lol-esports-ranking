@@ -108,9 +108,10 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     teamHistoryTeams,
     tournamentId,
   } = options
-  const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>(
-    { status: 'loading' },
-  )
+  const [manifestState, setManifestState] = useState<PublicArtifactState<PublicRankingManifest>>(() => {
+    const cached = loadPublicRankingManifest.getCached()
+    return cached ? { status: 'ready', data: cached } : { status: 'loading' }
+  })
   const [playersState, setPlayersState] = useState<PlayerDirectoryState>({ status: 'idle' })
   const [teamHistoryRootState, setTeamHistoryRootState] = useState<PublicArtifactState<TeamHistoryRoot>>({ status: 'idle' })
   const [teamHistoryCache, setTeamHistoryCache] = useState<Record<string, TeamHistoryCacheEntry>>({})

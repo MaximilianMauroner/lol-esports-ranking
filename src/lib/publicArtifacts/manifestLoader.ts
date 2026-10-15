@@ -9,8 +9,9 @@ import { withAuditedTeamCodes } from '../../data/teamBranding'
 
 export function createPublicRankingManifestLoader(url: string, fetcher: typeof fetch = fetch) {
   let request: Promise<PublicRankingManifest> | undefined
+  let cached: PublicRankingManifest | undefined
 
-  return function loadPublicRankingManifest() {
+  function loadPublicRankingManifest() {
     request ??= fetcher(url, {
       cache: 'no-cache',
       headers: { Accept: 'application/json' },
@@ -32,12 +33,18 @@ export function createPublicRankingManifestLoader(url: string, fetcher: typeof f
         validateGenerationRankingManifest(rankingManifest, generationManifest)
         return rankingManifest
       })
+      .then((manifest) => {
+        cached = manifest
+        return manifest
+      })
       .catch((error: unknown) => {
         request = undefined
         throw error
       })
     return request
   }
+
+  return Object.assign(loadPublicRankingManifest, { getCached: () => cached })
 }
 
 function isGenerationManifest(value: unknown): value is { artifactKind: 'public-artifact-generation-manifest' } {

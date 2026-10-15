@@ -60,6 +60,12 @@ test('the Rankings board follows its address after load: typed and linked hashes
   const fixture: Plugin = { name: 'ranking-board-address-fixture', configureServer(server) {
     server.middlewares.use((request, response, next) => {
       const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
+      if (path.startsWith('/tournament-data/')) {
+        response.statusCode = 503
+        response.setHeader('content-type', 'application/json')
+        response.end('{}')
+        return
+      }
       if (!path.startsWith('/data/')) return next()
       dataRequests.push(path)
       const body = bodies.get(path)
@@ -84,8 +90,38 @@ test('the Rankings board follows its address after load: typed and linked hashes
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
     const setHash = (hash: string) => page.evaluate((next) => { location.hash = next }, hash)
 
+    await page.goto(`${base}#tournaments?scope=all`)
+    await page.getByRole('heading', { name: 'Tournaments', exact: true }).waitFor()
+    await page.getByRole('alert').filter({ hasText: 'Tournament schedule unavailable:' }).waitFor()
+    assert.equal(dataRequests.length, 0, 'Cold Tournaments must not request ranking data')
     await page.goto(`${base}${board('region=LEC')}`)
     await expectBoard(page, 10, 'Euro', 'first load')
+
+    // Returning to Rankings must not insert the manifest shell, even for one commit.
+    await page.getByRole('navigation', { name: 'Primary', exact: true }).getByRole('link', { name: 'Tournaments', exact: true }).click()
+    await page.getByRole('heading', { name: 'Tournaments', exact: true }).waitFor()
+    await page.getByRole('alert').filter({ hasText: 'Tournament schedule unavailable:' }).waitFor()
+    const manifestRequestsBeforeReturn = dataRequests.filter((path) => path === '/data/ranking-summary.json').length
+    const manifestShells = await page.evaluateHandle(() => {
+      const insertions: string[] = []
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (node.textContent?.includes('Fetching the published ranking manifest.')) insertions.push(node.textContent)
+          }
+        }
+      })
+      observer.observe(document.body, { childList: true, subtree: true })
+      return { observer, insertions }
+    })
+    await setHash(board('region=LEC'))
+    await expectBoard(page, 10, 'Euro', 'warm return from Tournaments')
+    assert.deepEqual(await manifestShells.evaluate(({ observer, insertions }) => {
+      observer.disconnect()
+      return insertions
+    }), [], 'A warm ranking route must use its already validated manifest on the first render')
+    await manifestShells.dispose()
+    assert.equal(dataRequests.filter((path) => path === '/data/ranking-summary.json').length, manifestRequestsBeforeReturn)
 
     // A typed address and an in-app link change the hash in the open tab.
     await setHash(board('region=LCS'))
