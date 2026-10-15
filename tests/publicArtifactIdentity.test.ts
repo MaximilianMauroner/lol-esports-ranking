@@ -1,3 +1,5 @@
+import { artifactReferences } from '../src/lib/publicArtifacts/logicalReferences.mjs'
+import { prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schema.ts'
 import { referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
@@ -98,6 +100,8 @@ test('known logical URL fields have run identity normalized for every index fami
     const first = await identityFor(createFamily('run_one'))
     const second = await identityFor(createFamily('run_two'))
     const changedTarget = await identityFor(createFamily('run_two', 'changed-target.json'))
+    const prepared = prepareSemanticArtifact(createFamily('run_one'))
+    assert.deepEqual({ sha256: prepared.digest, bytes: prepared.bytes }, first, 'Node and browser semantic identity must agree')
     assert.deepEqual(second, first, `${createFamily('run_one').artifactKind} retained volatile run identity`)
     assert.notDeepEqual(changedTarget, first, `${createFamily('run_one').artifactKind} ignored a semantic target change`)
   }
@@ -109,6 +113,91 @@ test('known logical URL fields have run identity normalized for every index fami
   const externalSourceA = await identityFor(matchPageWithSource('run_one', 'https://source.example/game?v=one'))
   const externalSourceB = await identityFor(matchPageWithSource('run_two', 'https://source.example/game?v=two'))
   assert.notDeepEqual(externalSourceB, externalSourceA, 'non-logical source URLs must not be broadly rewritten')
+})
+
+test('normalization, hydration and dependencies share the finite artifact references', async () => {
+  const url = (name: string) => `/data/${name}.json?z=2&v=old&a=1`
+  const normalized = (name: string) => `/data/${name}.json?a=1&z=2`
+  const sourceCitation = 'https://source.example/data/citation.json?v=citation'
+  const externalAudit = 'https://audit.example/snapshot.json'
+  const fixtures = [
+    {
+      artifactKind: 'public-ranking-manifest',
+      fields: {
+        fullSnapshotUrl: url('full'), playerDirectoryUrl: url('players'), teamDirectoryUrl: url('teams'),
+        teamHistoryIndexUrl: url('team-index'), regionHistoryUrl: url('regions'),
+        tournamentMovementIndexUrl: url('moves'), matchHistoryIndexUrl: url('match-index'),
+        snapshotIndex: { selected: { url: url('scope') }, older: { url: url('older-scope') } },
+      },
+      expected: {
+        fullSnapshotUrl: normalized('full'), playerDirectoryUrl: normalized('players'), teamDirectoryUrl: normalized('teams'),
+        teamHistoryIndexUrl: normalized('team-index'), regionHistoryUrl: normalized('regions'),
+        tournamentMovementIndexUrl: normalized('moves'), matchHistoryIndexUrl: normalized('match-index'),
+        snapshotIndex: { selected: { url: normalized('scope') }, older: { url: normalized('older-scope') } },
+      },
+      paths: ['full', 'players', 'teams', 'team-index', 'regions', 'moves', 'match-index', 'scope', 'older-scope'],
+    },
+    {
+      artifactKind: 'team-history-index',
+      fields: { scopeIndex: { selected: { url: url('history') } } },
+      expected: { scopeIndex: { selected: { url: normalized('history') } } },
+      paths: ['history'],
+    },
+    {
+      artifactKind: 'match-history-index',
+      fields: { scopeIndex: { selected: { url: url('catalog'), pages: [{ url: url('page'), pages: [{ url: url('nested-page') }] }] } } },
+      expected: { scopeIndex: { selected: { url: normalized('catalog'), pages: [{ url: normalized('page'), pages: [{ url: normalized('nested-page') }] }] } } },
+      paths: ['catalog', 'page', 'nested-page'],
+    },
+    {
+      artifactKind: 'tournament-movement-index',
+      fields: { tournaments: [{ url: url('movement') }] },
+      expected: { tournaments: [{ url: normalized('movement') }] },
+      paths: ['movement'],
+    },
+    {
+      artifactKind: 'match-history-catalog',
+      fields: { pages: [{ url: url('page') }, { url: url('page') }] },
+      expected: { pages: [{ url: normalized('page') }, { url: normalized('page') }] },
+      paths: ['page'],
+    },
+    {
+      artifactKind: 'public-ranking-manifest',
+      fields: { fullSnapshotUrl: externalAudit, snapshotIndex: {} },
+      expected: { fullSnapshotUrl: externalAudit, snapshotIndex: {} },
+      paths: [],
+    },
+    {
+      artifactKind: 'match-history-page',
+      fields: { matches: [{ sourceUrl: sourceCitation }], url: url('not-a-reference') },
+      expected: { matches: [{ sourceUrl: sourceCitation }], url: url('not-a-reference') },
+      paths: [],
+    },
+  ]
+  for (const fixture of fixtures) {
+    const source = { artifactKind: fixture.artifactKind, ...fixture.fields, sources: [{ url: sourceCitation }] }
+    const before = structuredClone(source)
+    const expected = { artifactKind: fixture.artifactKind, ...fixture.expected, sources: [{ url: sourceCitation }] }
+    const semantic = createPublicSemanticArtifact(source)
+    assert.deepEqual(semantic.content, expected)
+    assert.deepEqual(prepareSemanticArtifact(source).semantic, semantic)
+    const paths = fixture.paths.map((name) => `/data/${name}.json`)
+    assert.deepEqual(artifactReferences(source), paths)
+    assert.deepEqual(artifactReferences(semantic.content), paths)
+    assert.deepEqual(source, before, 'reference operations must preserve the input')
+
+    const identity = await semanticArtifactIdentity(semantic)
+    const generation = generationFor('/data/fixture.json', identity, 'identity', `/objects/${identity.sha256}.json`)
+    registerGenerationContext(generation, generation, '/data/generation.json')
+    const hydrated = await fetchPublicArtifact(generation, '/data/fixture.json', '/data/generation.json', parseObject, {
+      fetcher: async () => jsonResponse(semantic),
+    })
+    for (const [key, value] of Object.entries(expected)) {
+      const hydratedValue = JSON.parse(JSON.stringify(value).replaceAll('?a=1&z=2', `?a=1&v=${generation.runId}&z=2`))
+      assert.deepEqual(hydrated[key], hydratedValue, `${fixture.artifactKind} ${key} hydration`)
+    }
+    assert.deepEqual(artifactReferences(hydrated), paths)
+  }
 })
 
 test('gzip transport is decoded by fetch and verified against canonical uncompressed semantic JSON', async (t) => {
