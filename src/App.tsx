@@ -147,6 +147,8 @@ function RankingApp() {
   const [loadPlayers, setLoadPlayers] = useState(false)
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [historyTeams, setHistoryTeams] = useState<readonly string[]>([])
+  const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [matchYear, setMatchYear] = useState(() => hashParam('matchesYear'))
   const [loadRegionHistory, setLoadRegionHistory] = useState(() => readModeFromHash() === 'regions')
   const [loadMatchHistory, setLoadMatchHistory] = useState(() => ['matches', 'regions'].includes(readModeFromHash()))
@@ -177,7 +179,7 @@ function RankingApp() {
   } = usePublicArtifacts(scope, {
     loadPlayers,
     loadTeamHistory,
-    teamHistoryTeams: historyTeams,
+    teamHistoryTeams: drawerOpen && mode === 'rankings' ? teamPicks.map(teamKey) : historyTeams,
     matchHistoryYear: matchYear,
     loadRegionHistory,
     loadTournamentMovements: mode === 'rankings',
@@ -185,10 +187,8 @@ function RankingApp() {
     tournamentId,
   })
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
-  const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
   const [teamSearch, setTeamSearch] = useState(() => hashParam('team') ?? '')
   const [boardHashQuery, setBoardHashQuery] = useState(currentHashQuery)
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
   const selectScope = useCallback((nextScope: string) => {
@@ -468,7 +468,7 @@ function RankingApp() {
                   requestRegionHistory()
                   requestTeamHistory()
                 } else {
-                  requestTeamHistory()
+                  requestTeamHistory(activeTeamPicks.map(teamKey))
                 }
                 setDrawerOpen(true)
               }}
@@ -538,7 +538,7 @@ function RankingApp() {
                   }}
                   onToggle={toggleTeam}
                   onRequestPlayers={requestPlayers}
-                  onRequestTeamHistory={requestTeamHistory}
+                  onRequestTeamHistory={drawerOpen ? undefined : requestTeamHistory}
                   onTournamentFilterChange={setTournamentFilter}
                   onPrefetchTournament={prefetchTournament}
                 />

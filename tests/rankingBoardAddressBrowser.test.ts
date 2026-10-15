@@ -147,6 +147,13 @@ test('the Rankings board follows its address after load: typed and linked hashes
     assert.equal(await page.locator('.board-sort select').inputValue(), 'rating:descending')
     assert.equal(new URLSearchParams((await page.evaluate(() => location.hash)).split('?')[1]).get('dir'), null)
     // Startup presents the app shell before a delayed manifest completes.
+    // Keep the off-screen trajectory unobserved so comparison must request its own teams.
+    await page.addInitScript(() => {
+      window.IntersectionObserver = class extends window.IntersectionObserver {
+        observe() {}
+      }
+    })
+    dataRequests.length = 0
     holdManifest = true
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
@@ -155,8 +162,26 @@ test('the Rankings board follows its address after load: typed and linked hashes
     pendingManifest.splice(0).forEach((respond) => respond())
     await expectBoard(page, 20, '', 'board after the delayed manifest')
 
+    const rows = page.locator('table tbody tr')
+    const compare = rows.locator('input[type="checkbox"]')
+    const comparisonNames = await rows.locator('td:nth-child(2) b').allTextContents()
+    const comparisonCodes = comparisonNames.map((name) => teams[name].code ?? name)
+    assert.equal(dataRequests.some((path) => path.startsWith('/data/history/team-series/')), false)
+    await compare.nth(5).check()
+    await compare.nth(6).check()
+    await compare.nth(7).check()
+    await page.getByRole('button', { name: 'Open comparison', exact: true }).click()
+    const comparison = page.getByRole('dialog', { name: 'Team comparison', exact: true })
+    assert.equal(await comparison.count(), 1, 'Comparison opens its shell without a full-screen module loader')
+    const trend = comparison.getByRole('region', { name: 'Compared team power score trend', exact: true })
+    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(5, 8).join(', ')}`, exact: true }).waitFor()
+    await comparison.getByRole('button', { name: `Remove ${comparisonNames[5]} from comparison`, exact: true }).click()
+    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(6, 8).join(', ')}`, exact: true }).waitFor()
+    await comparison.getByRole('button', { name: 'Close', exact: true }).click()
+    await page.getByRole('region', { name: 'Compare teams: 2 selected', exact: true }).getByRole('button', { name: 'Clear', exact: true }).click()
+
     // The closed Players panel must not compete with the selected team's chart.
-    await page.locator('table tbody tr').first().getByRole('button').first().click()
+    await rows.first().getByRole('button').first().click()
     const detail = page.getByRole('dialog')
     await detail.locator('.recharts-surface').first().waitFor()
     assert.equal(dataRequests.includes('/data/entities/players.json'), false)
@@ -164,11 +189,12 @@ test('the Rankings board follows its address after load: typed and linked hashes
     await detail.locator('summary').filter({ hasText: /^Players$/ }).click()
     assert.equal((await playerResponse).status(), 200)
     await detail.getByRole('button', { name: 'Close', exact: true }).click()
-    const compare = page.locator('table tbody tr input[type="checkbox"]')
-    await compare.nth(0).check()
-    await compare.nth(1).check()
+
+    // A prior single-team history selection must not leak into another comparison.
+    await compare.nth(8).check()
+    await compare.nth(9).check()
     await page.getByRole('button', { name: 'Open comparison', exact: true }).click()
-    assert.equal(await page.getByRole('dialog').count(), 1, 'Comparison opens its shell without a full-screen module loader')
+    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(8, 10).join(', ')}`, exact: true }).waitFor()
   } finally {
     pendingManifest.splice(0).forEach((respond) => respond())
     await browser?.close()
