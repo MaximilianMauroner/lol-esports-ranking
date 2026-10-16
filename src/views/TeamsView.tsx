@@ -543,12 +543,7 @@ export function TeamsView({
 
   return (
     <PageShell>
-      {headline ? (
-        <section className="grid gap-1" aria-label="Summary">
-          <p className="max-w-[72ch] text-lg leading-[1.3] font-semibold text-[var(--text-strong)]">{headline.headline}</p>
-          {headline.details.length > 0 ? <p className="max-w-[90ch] text-sm text-muted-foreground">{headline.details.join(' ')}</p> : null}
-        </section>
-      ) : null}
+      {headline ? <p className="max-w-[72ch] text-lg leading-[1.3] font-semibold text-[var(--text-strong)]">{headline}</p> : null}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_320px] items-start gap-6 max-[1280px]:grid-cols-1">
         <div className="min-w-0">
           <Panel>
@@ -667,7 +662,7 @@ export function TeamsView({
             ) : null}
 
             {exactTournamentId && tournamentMovementState.status === 'loading' ? (
-              <LoadingState className="m-4" label="Loading tournament movement" description="Loading the shared start and endpoint ranks for this exact tournament." />
+              <LoadingState className="m-4" label="Loading tournament movement" />
             ) : exactTournamentId && tournamentMovementState.status === 'idle' ? (
               <DataState icon={<Users size={26} aria-hidden="true" />} title="Tournament movement not requested">
                 Choose an exact tournament to load its shared start and endpoint ranks.
@@ -829,9 +824,7 @@ export function TeamsView({
           description={
             activeTournament
               ? `${tournamentBoundaryLabel(activeTournament.status)} boundary ${formatDate(activeTournament.boundaryDate)}, rated through ${formatDate(activeTournament.ratedThroughDate)}.`
-              : metric === 'rank'
-                ? 'Published ranks at recorded dates. Select a team to highlight its path.'
-                : `${pickedFocusTeams.length > 0 ? 'Your compared teams' : `Top ${DEFAULT_FOCUS_TEAMS} on the board. Tick Compare to choose teams`}. Daily close from match history; dashed lines connect long breaks between recorded points.`
+              : pickedFocusTeams.length > 0 ? 'Compared teams' : `Top ${DEFAULT_FOCUS_TEAMS} teams`
           }
           actions={
             <Segmented
@@ -1330,7 +1323,6 @@ export function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo,
     <details className="group w-full overflow-hidden rounded-lg border border-border bg-card">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[var(--text-strong)] after:ml-auto after:text-base after:leading-none after:text-muted-foreground after:content-['+'] group-open:border-b group-open:border-border group-open:after:content-['-'] [&::-webkit-details-marker]:hidden">
         <span className="text-base font-semibold">Data and sources</span>
-        <small className="text-xs text-[var(--faint)]">Freshness, coverage, providers</small>
       </summary>
       <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border last:mb-3 [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
         <span>
@@ -1583,7 +1575,7 @@ function TeamDetailDrawer({
 
           <section className="overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))]" aria-label="Power over time">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-5 pt-4 pb-3">
-              <h3 className="text-base font-bold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
+              <h3 className="text-base font-semibold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
               {trendSummary ? (
                 <p className="text-xs text-muted-foreground tabular-nums">
                   From {formatRating(trendSummary.opening)} on {formatDate(trendSummary.startDate)} · net <b className={cn('font-semibold', trendSummary.netChange >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]')}>{formatRatingMovement(trendSummary.netChange)}</b> · peak {formatRating(trendSummary.peak.value)}{typeof trendSummary.bestRank === 'number' ? ` · best #${trendSummary.bestRank}` : ''}
@@ -1616,7 +1608,7 @@ function TeamDetailDrawer({
           {opponents.length > 0 ? (
             <section className="rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] px-5 py-4" aria-label={`${team.code ?? team.team} against the top teams`}>
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-base font-bold text-[var(--text-strong)]">Chance to beat the top teams</h3>
+                <h3 className="text-base font-semibold text-[var(--text-strong)]">Chance to beat the top teams</h3>
                 <span className="text-xs text-[var(--faint)]">best of three, neutral side · model {formatModelVersion(model?.version)}</span>
               </div>
               <ul className="grid gap-2">
@@ -1631,16 +1623,12 @@ function TeamDetailDrawer({
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-xs text-[var(--faint)]">The line marks 50%. Tick Compare on two teams for any matchup.</p>
             </section>
           ) : null}
 
           <section className="overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-5 max-[900px]:p-4" aria-label="Match results">
             <div className="flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 max-sm:flex-col">
-              <div>
-                <h3 className="text-base font-bold text-[var(--text-strong)]">Match results</h3>
-                <p className="mt-1 max-w-[58ch] text-sm leading-[1.4] text-[var(--faint)]">{tournament ? `Scored matches in ${tournament.label}.` : 'Scored matches in this period.'} Each row shows the rating after the match and how much the event counted.</p>
-              </div>
+              <h3 className="text-base font-semibold text-[var(--text-strong)]">Match results</h3>
               <FormDots form={team.form} />
             </div>
             <RecentMatches
@@ -1654,7 +1642,7 @@ function TeamDetailDrawer({
 
           <details className="rounded-md border border-border bg-[var(--detail-surface-2)] p-3">
             <summary className="cursor-pointer text-sm font-semibold">How the score is built</summary>
-            <p className="mt-3 text-sm text-muted-foreground">Power starts from the league's strength and adds this team's own results, its roster and its recent form. The model evidence band is {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}. Close ranks can swap as new evidence arrives. "Rank on results alone" ranks teams only by the results they earned, without the league starting point.</p>
+            <p className="mt-3 text-sm text-muted-foreground">League strength plus this team's results, roster and form. Evidence band {formatUncertaintyBand(team.ratingComponents?.uncertainty ?? team.uncertainty)}.</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground [&_b]:block [&_em]:block [&_em]:text-xs [&_em]:not-italic [&_em]:text-muted-foreground">
               {!tournament ? (
                 <span title={powerResumeGap?.title}>
@@ -1690,9 +1678,7 @@ function TeamDetailDrawer({
                 </span>
               ) : null}
             </div>
-            {tournament ? (
-              <p className={tournamentDataNoteClassName}>Component breakdowns are hidden here because the tournament data publishes endpoint rank, score, eligibility and match evidence only.</p>
-            ) : <div className="mt-3"><ComponentBreakdown team={team} /></div>}
+            {tournament ? null : <div className="mt-3"><ComponentBreakdown team={team} /></div>}
           </details>
           <details className="rounded-md border border-border p-3" onToggle={(event) => {
             if (event.currentTarget.open) onRequestPlayers?.()
@@ -1843,7 +1829,7 @@ function RecentMatches({
         <p className="px-3.5 py-4 text-xs text-muted-foreground">
           {historyState.status === 'missing' || historyState.status === 'error'
             ? historyState.message
-            : 'No match-level recent form is available in this snapshot.'}
+            : 'No matches in this scope.'}
         </p>
       ) : null}
       {(historyState.status === 'missing' || historyState.status === 'error') && recentMatches.length > 0 ? (
@@ -2073,7 +2059,7 @@ function summarizeTeamTrend(series?: TeamHistorySeries): TeamTrendSummary | null
   }
 }
 
-const detailCardClassName = 'min-w-0 overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-4 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[var(--text-strong)]'
+const detailCardClassName = 'min-w-0 overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-4 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[var(--text-strong)]'
 const emptyPlayerRankCardClassName = cn(detailCardClassName, 'grid gap-3 px-5 py-4 [&_h3]:text-md [&>div:first-child]:border-0 [&>div:first-child]:pb-0')
 const playerRankCardHeadClassName = 'flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 [&_h3]:flex [&_h3]:flex-wrap [&_h3]:items-center [&_h3]:gap-2 [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] max-sm:flex-col'
 const componentLedgerRowClassName = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-2 bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 [&>b]:whitespace-nowrap [&>b]:text-md [&>b]:font-bold [&>b]:text-[var(--text-strong)] [&>b]:tabular-nums [&>b.down]:text-[var(--down)] [&>b.up]:text-[var(--up)] [&>span:first-child]:text-sm [&>span:first-child]:text-muted-foreground'
@@ -2104,7 +2090,7 @@ function PlayerRankingCard({
                 Player Rankings
                 <CountBadge>Loading</CountBadge>
               </h3>
-              <p>Loading player-level sources for {team.code ?? team.team} in {playerScopeLabel}.</p>
+              <p>Loading players.</p>
             </div>
           </div>
           <PlayerRankingSkeleton />
@@ -2116,7 +2102,7 @@ function PlayerRankingCard({
       return (
         <aside className={emptyPlayerRankCardClassName} aria-label={`${team.team} player rankings`}>
           <div className={playerRankCardHeadClassName}>
-            <div><h3>Player Rankings</h3><p>Player sources load when this team detail is opened.</p></div>
+            <h3>Player Rankings</h3>
           </div>
         </aside>
       )
@@ -2134,9 +2120,6 @@ function PlayerRankingCard({
               <p>{loadState.message}</p>
             </div>
           </div>
-          <p className="rounded-sm border border-border bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-xs leading-[1.45] text-muted-foreground">
-            Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
-          </p>
         </aside>
       )
     }
@@ -2149,12 +2132,9 @@ function PlayerRankingCard({
               Player Rankings
               <CountBadge>Source gap</CountBadge>
             </h3>
-            <p>No player-level sources for {team.code ?? team.team} in {playerScopeLabel}.</p>
+            <p>No player data in {playerScopeLabel}.</p>
           </div>
         </div>
-        <p className="rounded-sm border border-border bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 text-xs leading-[1.45] text-muted-foreground">
-          Team rating still uses scored matches, opponent context, and roster-continuity coverage; player rankings require sourced player rows.
-        </p>
       </aside>
     )
   }
@@ -2166,8 +2146,8 @@ function PlayerRankingCard({
           <h3>Player Rankings</h3>
           <p>
             {currentLineup
-              ? `Last observed sourced lineup from ${formatDate(currentLineup.observedAt)}${currentLineup.observedEvent ? ` at ${currentLineup.observedEvent}` : ''}${currentLineup.freshnessDays !== undefined ? `, ${formatNumber(currentLineup.freshnessDays)} days before this build` : ''}. This does not confirm the next starting lineup.`
-              : `Career player rows for ${team.code ?? team.team} in ${playerScopeLabel}; no complete current-lineup projection is available.`}
+              ? `Last lineup ${formatDate(currentLineup.observedAt)}${currentLineup.observedEvent ? ` at ${currentLineup.observedEvent}` : ''}`
+              : `Career rows in ${playerScopeLabel}`}
           </p>
           {currentLineup?.missingRoles.length ? <small>Missing roles: {currentLineup.missingRoles.join(', ')}</small> : null}
         </div>
@@ -2250,11 +2230,8 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
 
   return (
     <div className={cn(detailCardClassName, 'px-5 py-4')} aria-label={`${team.team} rating components`}>
-      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-sm [&>span]:font-bold [&>span]:text-muted-foreground [&>span]:tabular-nums">
-        <div>
-          <h3>Power Score Breakdown</h3>
-          <p>How the model builds this team's Power score from the league anchor and team adjustments.</p>
-        </div>
+      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-sm [&>span]:font-bold [&>span]:text-muted-foreground [&>span]:tabular-nums">
+        <h3>Power Score Breakdown</h3>
         <span>{formatRating(team.rating)} {formatUncertaintyBand(components.uncertainty)}</span>
       </div>
       <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border">

@@ -7,7 +7,6 @@ type LoadingPresentation = 'page' | 'panel' | 'rows' | 'chart' | 'inline'
 
 type LoadingStateProps = {
   label: string
-  description?: string
   presentation?: LoadingPresentation
   className?: string
   rowCount?: number
@@ -16,7 +15,6 @@ type LoadingStateProps = {
 
 export function LoadingState({
   label,
-  description,
   presentation = 'panel',
   className,
   rowCount = 3,
@@ -45,10 +43,7 @@ export function LoadingState({
     >
       <div className="flex items-center gap-3">
         <BarChart3 className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <h2 className="text-sm font-bold text-[var(--text-strong)]">{label}</h2>
-          {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
-        </div>
+        <p className="text-sm font-bold text-[var(--text-strong)]">{label}</p>
       </div>
       {presentation === 'rows' ? (
         <div className="mt-4 grid gap-px overflow-hidden rounded-md border border-border bg-border" aria-hidden="true">

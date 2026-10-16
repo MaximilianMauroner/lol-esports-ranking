@@ -67,9 +67,7 @@ export function CompareDrawer<E>({
         </SheetHeader>
         <div className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain p-0">
           {entities.length === 0 ? (
-            <DataState icon={<Plus size={26} aria-hidden="true" />} title="Nothing selected yet">
-              Add rows from the ranking view to compare them here.
-            </DataState>
+            <DataState icon={<Plus size={26} aria-hidden="true" />} title="Nothing selected yet" />
           ) : (
             <>
                 {before}

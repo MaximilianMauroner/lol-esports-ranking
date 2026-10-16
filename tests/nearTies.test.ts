@@ -27,34 +27,17 @@ test('near-tie groups hold teams within reach of the group leader, not a chain o
 
 test('headline calls a coin-flip lead close to level', () => {
   const headline = boardHeadline([standing('Hanwha Life Esports', 2304), standing('Bilibili Gaming', 2275)], model)
-  assert.match(headline?.headline ?? '', /^Hanwha Life Esports lead, but Bilibili Gaming are close to level: 5\d% per game\.$/)
+  assert.match(headline ?? '', /^Hanwha Life Esports lead, but Bilibili Gaming are close to level: 5\d% per game\.$/)
 })
 
 test('headline states a clear lead as a points gap and game edge', () => {
   const headline = boardHeadline([standing('Alpha', 2400), standing('Beta', 2200)], model)
-  assert.match(headline?.headline ?? '', /^Alpha lead Beta by 200 points, a \d\d% game edge\.$/)
-})
-
-test('headline details name exact ties and long near-tie runs', () => {
-  const ranked = [
-    standing('Leader', 2500),
-    standing('Gen.G', 2300),
-    standing('T1', 2300),
-    standing('LYON', 2100),
-    standing('AL', 2090),
-    standing('KT', 2080),
-    standing('TSW', 2070),
-    standing('Last', 1800),
-  ]
-  assert.deepEqual(boardHeadline(ranked, model)?.details, [
-    'Gen.G and T1 are tied at 2,300.',
-    '4 teams from LYON to TSW sit within 30 points, so one series can reorder them.',
-  ])
+  assert.match(headline ?? '', /^Alpha lead Beta by 200 points, a \d\d% game edge\.$/)
 })
 
 test('headline handles scopes with one or no ranked team', () => {
   assert.equal(boardHeadline([], model), undefined)
-  assert.deepEqual(boardHeadline([standing('Solo', 2000)], model), { headline: 'Solo lead the ranking.', details: [] })
+  assert.equal(boardHeadline([standing('Solo', 2000)], model), 'Solo lead the ranking.')
 })
 
 function standing(team: string, rating: number): RankingSummaryStanding {

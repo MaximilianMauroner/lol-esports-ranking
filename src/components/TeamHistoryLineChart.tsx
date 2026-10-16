@@ -169,7 +169,7 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
 }
 
 function dailyCloseNote(detail?: ChartPointDetail) {
-  if (detail?.visibleDeltaUnit === 'rank') return 'Match annotations and components are Power points; they do not add up to rank positions.'
+  if (detail?.visibleDeltaUnit === 'rank') return undefined
   const visibleDelta = finiteNumber(detail?.visibleDelta)
   if (typeof visibleDelta !== 'number' || visibleDelta === 0) return undefined
 
@@ -179,8 +179,8 @@ function dailyCloseNote(detail?: ChartPointDetail) {
   }
 
   const driver = strongestComponentDriver(detail)
-  const driverText = driver ? ` Largest component change: ${driver.label} ${formatPreciseSignedDelta(driver.value)}.` : ''
-  return `Match result effect: ${formatPreciseSignedDelta(matchDelta)}. Overall change from previous recorded point: ${formatPreciseSignedDelta(visibleDelta)}.${driverText}`
+  const driverText = driver ? ` · ${driver.label} ${formatPreciseSignedDelta(driver.value)}` : ''
+  return `Match ${formatPreciseSignedDelta(matchDelta)} · total ${formatPreciseSignedDelta(visibleDelta)}${driverText}`
 }
 
 function matchLedgerDelta(detail?: ChartPointDetail) {

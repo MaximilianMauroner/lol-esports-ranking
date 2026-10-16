@@ -23,7 +23,7 @@ test('region comparison is ready for every supported selection count above one',
 
 test('profile bars disclose narrow selected ranges and lower-is-better direction', () => {
   const html = renderToStaticMarkup(createElement(CompareProfileChart<{ score: number; uncertainty: number }>, {
-    title: 'Profile', eyebrow: 'Current scope',
+    title: 'Profile',
     entities: [{ score: 2000, uncertainty: 40 }, { score: 2005, uncertainty: 50 }],
     columns: [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }],
     metrics: [
@@ -31,8 +31,7 @@ test('profile bars disclose narrow selected ranges and lower-is-better direction
       { key: 'uncertainty', label: 'Uncertainty', value: (entity) => entity.uncertainty, format: String, better: 'low' },
     ],
   }))
-  assert.match(html, /not a zero baseline/)
-  assert.match(html, /Selected range: 2000 – 2005\. Higher is better/)
-  assert.match(html, /Selected range: 40 – 50\. Lower is better/)
-  assert.match(html, /6% visibility mark/)
+  assert.match(html, /Bars span the selected range\. Longer is better\./)
+  assert.match(html, />2000 – 2005</)
+  assert.match(html, />40 – 50 · lower is better</)
 })

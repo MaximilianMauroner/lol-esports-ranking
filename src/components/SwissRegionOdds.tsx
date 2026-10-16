@@ -41,7 +41,7 @@ export function SwissRegionOdds({ teams, scenario, label }: { teams: readonly Pr
   else if (field?.missing.length) {
     const playIn = field.missing.find((team) => team.seed === 'PLAYIN' && team.label === 'Play-In winner')
     body = <p className="px-4 py-3 text-sm text-muted-foreground">
-      {!playIn ? `Odds are unavailable. These teams have no Power rating: ${field.missing.map((team) => team.label).join(', ')}.`
+      {!playIn ? `No Power rating for ${field.missing.map((team) => team.label).join(', ')}.`
         : playIn.region ? `The ${playIn.region} Play-In team is not in the schedule yet, so the odds are unavailable.` : 'Choose the Play-In winner to see the odds.'}
     </p>
   } else if (!odds) body = <p className="px-4 py-3 text-sm text-muted-foreground">Simulating the Swiss stage.</p>
@@ -78,19 +78,12 @@ export function SwissRegionOdds({ teams, scenario, label }: { teams: readonly Pr
   return (
     <Panel role="region" aria-labelledby={titleId} className="min-w-0 max-w-4xl">
       <PanelHeader titleId={titleId} title="Region odds"
-        description={`Chance that a region gets at least one team out of the Swiss stage, from scenario ${label}. Your picks and live results count as played.`} />
+        description={`Chance a region gets at least one team out of the Swiss stage in scenario ${label}.`} />
       {body}
       <PanelFooter className="grid gap-1 text-xs text-muted-foreground">
         <p>
-          {TRIALS.toLocaleString()} simulated Swiss stages. Each open match is won by chance from the Power ratings
-          {ratings.status === 'ready' ? ` through ${ratings.ratings.manifest.coverage.latestMatchDate ?? 'the latest snapshot'}` : ''}, by the same model as team comparisons: a stronger team wins more often, not always.
-          Each later round is drawn as <a className="underline" href={WORLDS_2026_SWISS_RULES.source} target="_blank" rel="noreferrer">Riot’s rules 4.3.2 and 4.3.3</a> describe:
-          teams come out of the pot at random, and a team that would meet a team from its own region in Round 1, or a team it has already played, moves to the next open slot.
-          These are estimates, not official odds.
-        </p>
-        <p>
-          Where the rules leave a choice open, the preview draws Pool 1 before Pool 4 and Pool 2 before Pool 3, checks ahead only inside the same draw,
-          and waives the repeat rule only for a record group that has no other draw.
+          {TRIALS.toLocaleString()} simulations from Power{ratings.status === 'ready' ? ` through ${ratings.ratings.manifest.coverage.latestMatchDate ?? 'the latest snapshot'}` : ''}, with
+          draws per <a className="underline" href={WORLDS_2026_SWISS_RULES.source} target="_blank" rel="noreferrer">Riot’s rules 4.3.2 and 4.3.3</a>. Estimates, not official odds.
         </p>
         {ratings.status === 'ready' && ratings.ratings.manifest.dataMode !== 'scheduled-public-data' ? <p className="text-[var(--warn)]">The ratings are sample data, not the published Power Index.</p> : null}
       </PanelFooter>

@@ -25,7 +25,6 @@ export const REGION_COMPARE_ROWS: CompareRow<RegionStrength>[] = [
   { key: 'tier', label: 'League tier', cell: (r) => formatTier(r.tier) },
   { key: 'teams', label: 'Flagship teams', cell: (r) => formatNumber(r.teamCount), score: (r) => r.teamCount, better: 'high' },
   { key: 'topteam', label: 'Top team power', cell: (r) => formatRating(r.topTeamRating), score: (r) => r.topTeamRating, better: 'high' },
-  { key: 'topthree', label: 'Top-three average', cell: (r) => formatRating(displayRegionPowerScore(r)), score: displayRegionPowerScore, better: 'high' },
   { key: 'totalregion', label: 'Flagship-team average', cell: (r) => formatRating(displayRegionTotalTeamRating(r)), score: displayRegionTotalTeamRating, better: 'high' },
   { key: 'record', label: 'International record', cell: (r) => formatRecord(r.internationalWins, r.internationalLosses) },
   {
@@ -97,7 +96,6 @@ export type CompareProfileMetric<E> = {
 export const REGION_PROFILE_METRICS: CompareProfileMetric<RegionStrength>[] = [
   { key: 'score', label: 'Region power', value: displayRegionPowerScore, format: formatRating },
   { key: 'topteam', label: 'Top team power', value: (r) => r.topTeamRating, format: formatRating },
-  { key: 'topthree', label: 'Top-three avg', value: displayRegionPowerScore, format: formatRating },
   { key: 'totalregion', label: 'Flagship avg', value: displayRegionTotalTeamRating, format: formatRating },
   { key: 'adjusted', label: 'Vs opponent strength', value: (r) => r.opponentAdjustedWinRate, format: formatRatio },
   { key: 'expected', label: 'Vs expected', value: (r) => r.winsOverExpected, format: formatSignedDecimal },
