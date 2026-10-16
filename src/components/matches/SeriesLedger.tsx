@@ -27,7 +27,7 @@ type SeriesListProps = {
 type TeamResult = 'won' | 'lost' | 'level'
 
 const DELTA_BAR_WIDTH = 36
-const MISSING_NOTE = 'The recorded Power changes do not reconcile for this series. Other results are unaffected.'
+const MISSING_NOTE = 'Power changes for this series do not reconcile.'
 
 /** Series ledger for tablet and desktop widths. The Source column drops below 1100px. */
 export function SeriesTable({ series, expanded, onToggle, publication }: SeriesListProps) {
@@ -122,7 +122,7 @@ function GameTableRow({ game }: { game: PublicMatchHistoryEntry }) {
           <TeamName team={game.teamB} result={teamResult(gameWinner, 'B')} align="start" className="pl-9" />
         </div>
       </TableCell>
-      <TableCell className="text-xs text-[var(--faint)]">Counted in series total</TableCell>
+      <TableCell />
       <TableCell className="hidden min-[1100px]:table-cell">
         <Badge variant="secondary" className="max-w-full text-[var(--faint)]">{providerLabel(game.source.provider)}</Badge>
       </TableCell>

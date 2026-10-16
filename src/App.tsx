@@ -541,7 +541,7 @@ function RankingApp() {
               </>
             ) : null}
             {mode === 'matches' ? (
-              <MatchesView archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} scopeLabel={scopeLabel(effectiveScope)} onRequestPages={requestMatchHistoryPages} />
+              <MatchesView archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} onRequestPages={requestMatchHistoryPages} />
             ) : null}
           </Suspense>
         )}

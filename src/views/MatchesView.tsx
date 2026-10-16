@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type
 import { History, Search } from 'lucide-react'
 import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../lib/publicArtifacts/schema'
 import type { MatchHistoryState } from '../hooks/usePublicArtifacts'
-import { formatDate, formatNumber } from '../lib/display'
+import { formatNumber } from '../lib/display'
 import { Alert } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
@@ -41,7 +41,7 @@ type ViewState = {
   page: number
 }
 
-export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, archiveYears = [], archiveYear, onYearChange }: { archiveYears?: string[]; archiveYear?: string; onYearChange?: (year: string) => void; searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; scopeLabel: string; onRequestPages: (pages: number[]) => void }) {
+export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [], archiveYear, onYearChange }: { archiveYears?: string[]; archiveYear?: string; onYearChange?: (year: string) => void; searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; onRequestPages: (pages: number[]) => void }) {
   const [view, setView] = useState<ViewState>(readViewState)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [resultsHeight, setResultsHeight] = useState(0)
@@ -180,8 +180,8 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
       ribbon={
         <StatRibbon label="Match ledger summary">
           <StatCell icon={<History aria-hidden="true" />} label="Series" value={formatNumber(filtered.length)} detail={`${formatNumber(filteredGameCount)} games`} />
-          <StatCell label="Scope" value={scopeLabel} detail="Newest first" />
-          <StatCell label="Generated" value={formatDate(readyCatalog.generatedAt)} detail={`${formatNumber(leagues.length)} leagues, ${formatNumber(events.length)} events`} />
+          <StatCell label="Leagues" value={formatNumber(leagues.length)} />
+          <StatCell label="Events" value={formatNumber(events.length)} />
         </StatRibbon>
       }
     >
@@ -189,13 +189,12 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
         <PanelHeader
           title="Series ledger"
           titleId={headingId}
-          description="Filter by team, league or event. Expand a series to see its games."
         />
         <PanelBody className="grid gap-2 items-end sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_180px_220px_auto]">
           {archiveYears.length > 1 && onYearChange ? <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">Year</span><Select aria-label="Match history year" value={archiveYear ?? 'All'} onChange={(event) => onYearChange(event.target.value)}><option value="All">All years</option>{archiveYears.map((year) => <option key={year} value={year}>{year}</option>)}</Select></label> : null}
           <label className="relative min-w-0">
-            <span className="sr-only">Search teams</span><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
-            <Input ref={searchRef} type="search" aria-keyshortcuts="/" className="w-full pl-9" value={view.search} onChange={(event) => update({ search: event.target.value })} placeholder="Search team" />
+            <span className="sr-only">Find a team</span><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
+            <Input ref={searchRef} type="search" aria-keyshortcuts="/" className="w-full pl-9" value={view.search} onChange={(event) => update({ search: event.target.value })} placeholder="Find a team" />
           </label>
           <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">League</span><Select className="w-full max-w-none" value={view.league} onChange={(event) => { const league = event.target.value; update({ league, event: compatibleMatchEvents(refs, league).includes(view.event) ? view.event : 'All' }) }}><option>All</option>{leagues.map((league) => <option key={league}>{league}</option>)}</Select></label>
           <label className="grid min-w-0 gap-1">
@@ -215,9 +214,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
         <div ref={resultsRef} style={pageLoading && resultsHeight ? { minHeight: resultsHeight } : undefined}>
         {visibleRefs.length === 0 ? (
           filtersActive ? (
-            <DataState icon={<History size={26} aria-hidden="true" />} title="No series match these filters" action={<Button type="button" variant="outline" onClick={clearFilters}>Clear filters</Button>}>
-              Try another team, league, or event.
-            </DataState>
+            <DataState icon={<History size={26} aria-hidden="true" />} title="No series match these filters" action={<Button type="button" variant="outline" onClick={clearFilters}>Clear filters</Button>} />
           ) : (
             <DataState icon={<History size={26} aria-hidden="true" />} title="No series recorded for this scope" />
           )
