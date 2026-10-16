@@ -244,6 +244,13 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     })
     await resumed
     assert.ok(dataRequests.length > requestsWhileHidden, 'Returning to the tournament page refreshes immediately')
+
+    holdNextFeed = true
+    await page.reload()
+    await page.locator('#tournament-event').waitFor()
+    await waitForPendingFeed(pendingFeed)
+    assert.equal(await page.getByText('Loading tournament schedule', { exact: true }).count(), 0, 'A return visit shows the last schedule while the feed request is held')
+    pendingFeed.splice(0).forEach((respond) => respond())
     assert.deepEqual(externalRequests, [])
   } finally {
     pendingHealth.splice(0).forEach((respond) => respond())

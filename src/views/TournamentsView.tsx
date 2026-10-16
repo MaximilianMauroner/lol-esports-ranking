@@ -14,7 +14,7 @@ import { TournamentBracket } from '../components/TournamentBracket'
 import { findSwissEvent } from '../lib/swissScenario'
 import { worldsFeedEventKey } from '../lib/worldsArtifacts'
 import type { ConditionalPowerResultLedger } from '../lib/conditionalPowerResultReceipts'
-import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
+import { cacheTournamentFeed, formatTournamentTime, groupTournamentSeries, isTournamentFeed, readCachedTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
 
 type FeedHealth = { checkedAt: string; complete: boolean; warnings: string[] }
 type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed; health: FeedHealth | null; healthPending: boolean; error?: string } | { status: 'error'; message: string }
@@ -25,7 +25,10 @@ const FORECASTS_ENABLED = import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED === 
 type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; powerPreviews?: ConditionalPowerResultLedger | null; reason?: string; ledgerWarning?: string }
 
 export function TournamentsView() {
-  const [state, setState] = useState<FeedState>({ status: 'loading' })
+  const [state, setState] = useState<FeedState>(() => {
+    const cached = readCachedTournamentFeed()
+    return cached ? { status: 'ready', feed: cached, health: null, healthPending: true } : { status: 'loading' }
+  })
   const [selectedId, setSelectedId] = useState(() => hashParam('event') ?? '')
   const [view, setView] = useState(() => hashParam('view'))
   const [now, setNow] = useState(() => Date.now())
@@ -70,6 +73,7 @@ export function TournamentsView() {
       const body: unknown = await response.json()
       if (!isTournamentFeed(body)) throw new Error('Tournament feed schema is unsupported or incomplete')
       if (sequence !== refreshSequence.current) return
+      cacheTournamentFeed(body)
       setState((previous) => ({ status: 'ready', feed: body, health: previous.status === 'ready' ? previous.health : null, healthPending: true }))
       const healthResponse = await fetch('/tournament-data/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]) }).catch(() => null)
       const healthBody: unknown = healthResponse?.ok ? await healthResponse.json().catch(() => null) : null
