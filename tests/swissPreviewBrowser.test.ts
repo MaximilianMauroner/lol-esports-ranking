@@ -3,7 +3,10 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium, type Locator, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
+import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan'
+import { createStaticRankingData } from '../src/lib/snapshot'
 import { encodeChoices, fillDraw, resolveScenario, seedBaseline, type DrawnRound, type SwissBaseline } from '../src/lib/swissScenario'
+import type { MatchRecord, TeamProfile } from '../src/types'
 
 const at = '2026-10-20T12:00:00.000Z'
 const mainId = '2026 Season World Championship/Main Event'
@@ -21,6 +24,22 @@ function swissSeries(round: number, slot: number, teams: FixtureTeam[] = [team(n
     stage: `Round ${round}`, status, sourceState: status === 'completed' ? 'completed' : 'scheduled', bestOf: round > 3 ? 3 : 1, teams, vodUrls: [],
   }
 }
+/** Power ratings for the seeded field and Fnatic. Each team beats every team after it, so ratings fall down the list. */
+function rankingArtifacts() {
+  const field: Array<[string, TeamProfile['region']]> = [['Gen.G', 'LCK'], ['Hanwha Life Esports', 'LCK'], ['T1', 'LCK'], ['Dplus KIA', 'LCK'], ["Anyone's Legend", 'LPL'],
+    ['Bilibili Gaming', 'LPL'], ['Top Esports', 'LPL'], ['Invictus Gaming', 'LPL'], ['G2 Esports', 'LEC'], ['Movistar KOI', 'LEC'], ['Fnatic', 'LEC'],
+    ['Team Liquid', 'LCS'], ['LYON', 'LCS'], ['Team Secret Whales', 'LCP'], ['CTBC Flying Oyster', 'LCP'], ['LØS', 'CBLOL']]
+  const teams: Record<string, TeamProfile> = Object.fromEntries(field.map(([name, region]) => [name, { name, code: name.slice(0, 3), league: region, region }]))
+  const matches = field.flatMap(([teamA], a) => field.slice(a + 1).map(([teamB], offset): MatchRecord => {
+    const date = `2026-0${1 + (a % 8)}-${String(offset + 1).padStart(2, '0')}`
+    return { id: `${teamA}-${teamB}`, sourceProvider: 'oracles-elixir', date, datetimeUtc: `${date}T12:00:00.000Z`, season: 2026, event: 'MSI 2026',
+      phase: 'Bracket', region: 'International', league: 'MSI', patch: '', bestOf: 1, bestOfBasis: 'provider', tier: 'msi-bracket', teamA, teamB,
+      winner: teamA, teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
+  }))
+  const data = createStaticRankingData({ matches, teams, rosters: {}, generatedAt: '2026-10-01T00:00:00.000Z', dataMode: 'seeded-sample' })
+  return new Map(createPublicArtifactWritePlan(data).writes.map((write) => [`/data/${write.relativePath}`, write.contents]))
+}
+
 function fixtureFeed() {
   return {
     version: 1, source: 'leaguepedia-cargo', unsupportedApi: false, dataMode: 'synthetic-fixture', fetchedAt: at, sourceUpdatedAt: null,
@@ -38,6 +57,7 @@ function fixtureFeed() {
 
 test('Swiss preview builds, compares, shares and resets scenarios without changing live data', { timeout: 90_000 }, async () => {
   const feed = fixtureFeed()
+  const ratings = rankingArtifacts()
   const requests: string[] = []
   const fixturePlugin: Plugin = {
     name: 'swiss-preview-fixture',
@@ -49,6 +69,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
         response.setHeader('content-type', 'application/json')
         if (path === '/tournament-data/feed.json') return response.end(JSON.stringify(feed))
         if (path === '/tournament-data/feed.json.health.json') return response.end(JSON.stringify({ checkedAt: feed.fetchedAt, complete: true, warnings: [] }))
+        if (ratings.has(path)) return response.end(ratings.get(path))
         response.statusCode = 503
         response.end(JSON.stringify({ error: 'ranking artifacts unavailable' }))
       })
@@ -78,10 +99,24 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.match(await body(page), /Live draws are not available: The Round 1 draw is not in the schedule yet\./)
     assert.equal(await page.locator('#swiss-start').inputValue(), 'seeds')
     assert.equal(await page.locator('#swiss-start option[value="live"]').isDisabled(), true)
-    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'the preview shows no odds')
+    const odds = page.getByRole('region', { name: 'Region odds' })
+    await odds.getByText('Choose the Play-In winner to see the odds.').waitFor()
+    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'no odds without the full field')
 
     await page.locator('#swiss-playin').selectOption('LEC')
     assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
+    await odds.getByRole('table').waitFor()
+    const regionOdds = new Map((await odds.getByRole('row').allInnerTexts()).slice(1).map((row) => {
+      const [region, any, average] = row.split('\t')
+      return [region, { any: parseFloat(any), average: parseFloat(average) }]
+    }))
+    assert.deepEqual([...regionOdds.keys()].sort(), ['CBLOL', 'LCK', 'LCP', 'LCS', 'LEC', 'LPL', 'West (LEC + LCS)'])
+    const regionTotal = [...regionOdds].filter(([region]) => !region.startsWith('West')).reduce((sum, [, row]) => sum + row.average, 0)
+    assert.ok(Math.abs(regionTotal - 8) < 0.35, `eight teams get out on average, got ${regionTotal}`)
+    const west = regionOdds.get('West (LEC + LCS)')!
+    assert.ok(west.any >= Math.max(regionOdds.get('LEC')!.any, regionOdds.get('LCS')!.any), 'the West gets a team out at least as often as each of its regions')
+    assert.ok(regionOdds.get('LCK')!.any > regionOdds.get('CBLOL')!.any, 'the higher-rated region gets out more often')
+    assert.match(await odds.innerText(), /FNC \d+%/, 'the Play-In team has its own share')
     const playInPool = page.getByRole('list', { name: 'Round 1 pools' })
     assert.match(await playInPool.getByTitle('Fnatic', { exact: true }).innerText(), /FNC[\s\S]*LEC/)
     await page.reload()
@@ -89,6 +124,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
     assert.equal(await playInPool.getByTitle('Fnatic', { exact: true }).count(), 1)
     await page.locator('#swiss-playin').selectOption('LCS')
+    await odds.getByText('The LCS Play-In team is not in the schedule yet, so the odds are unavailable.').waitFor()
     // The whole bracket is visible before the draw: Round 1 offers the draw, later rounds wait for it.
     assert.equal(await fillButton(page, 1).count(), 1)
     for (const round of [2, 3, 4, 5]) assert.match(await page.getByRole('region', { name: `Round ${round}` }).innerText(), new RegExp(`Drawn after Round ${round - 1}`))

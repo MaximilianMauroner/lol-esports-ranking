@@ -5,6 +5,7 @@ import { Button } from './ui/button'
 import { Panel, PanelFooter, PanelHeader } from './ui/panel'
 import { Select } from './ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
+import { SwissRegionOdds } from './SwissRegionOdds'
 import { TeamMark } from './TeamMark'
 import { teamBrandingFor } from '../data/teamBranding'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../data/teamIdentity'
@@ -217,7 +218,7 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
       </div>
 
       <div className="grid gap-1.5 rounded-md border border-dashed border-[var(--preview-line)] bg-[var(--preview-soft)] px-3 py-2.5 text-sm leading-[1.5]">
-        <p><strong className="font-semibold text-[var(--preview)]">Preview.</strong> Winners with a dashed outline and draws marked “Your draw” are your choices. They stay on this page and in its address, and they never change the schedule or results. If you change an earlier winner, later draws stay only while their pairs still have the same records. The preview shows no odds.</p>
+        <p><strong className="font-semibold text-[var(--preview)]">Preview.</strong> Winners with a dashed outline and draws marked “Your draw” are your choices. They stay on this page and in its address, and they never change the schedule or results. If you change an earlier winner, later draws stay only while their pairs still have the same records. Region odds come from the Power ratings and treat your picks as played.</p>
         <p className="text-muted-foreground">
           {baseline.kind === 'live'
             ? <>Starts from the draws and results on Leaguepedia, checked {formatTournamentTime(checkedAt, timezone)}. {live.status === 'ready' && live.note ? live.note : ''}</>
@@ -232,6 +233,8 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
         {notice ? <p>{notice}</p> : null}
         {liveNotice ? <p className="text-[var(--warn)]">{liveNotice}</p> : null}
       </div>
+
+      <SwissRegionOdds teams={baseline.teams} scenario={current} label={slot.toUpperCase()} />
 
       <div className="grid min-w-0 items-start gap-4 min-[1700px]:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="grid min-w-0 gap-2">
