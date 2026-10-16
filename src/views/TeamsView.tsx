@@ -1829,7 +1829,7 @@ function RecentMatches({
         <p className="px-3.5 py-4 text-xs text-muted-foreground">
           {historyState.status === 'missing' || historyState.status === 'error'
             ? historyState.message
-            : 'No match-level recent form is available in this snapshot.'}
+            : 'No matches in this scope.'}
         </p>
       ) : null}
       {(historyState.status === 'missing' || historyState.status === 'error') && recentMatches.length > 0 ? (

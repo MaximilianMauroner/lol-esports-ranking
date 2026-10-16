@@ -78,7 +78,6 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
             )}
 
             {row.dots.map((dot) => {
-              const difference = dot.rating - row.score
               const contribution = dot.counts ? `Counts toward ${row.region} score` : `Outside ${row.region}'s top three`
               return (
                 <HoverCard key={dot.team}>
@@ -117,10 +116,8 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
                       <div><dt className="text-muted-foreground">Rank in {row.region}</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{dot.regionalRank} of {row.dots.length}</dd></div>
                       <div><dt className="text-muted-foreground">{row.region} region score</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{formatRating(row.score)}</dd></div>
                     </dl>
-                    <p className="mt-2 text-xs text-muted-foreground">{difference === 0 ? 'Level with the region score.' : `${formatRating(Math.abs(difference))} Power ${difference > 0 ? 'above' : 'below'} the region score.`}</p>
                     <div className="mt-3 border-t border-border pt-3 text-xs">
                       <p className={dot.counts ? 'font-semibold text-[var(--series-1)]' : 'font-semibold text-foreground'}>{contribution}</p>
-                      <p className="mt-1 text-muted-foreground">{dot.counts ? `The region score averages the Power of its top ${Math.min(SCORED_TEAM_COUNT, row.dots.length)} ranked ${row.dots.length === 1 ? 'team' : 'teams'}.` : 'This dot shows regional depth. Only the three strongest ranked teams enter the region score.'}</p>
                     </div>
                   </HoverCardContent>
                 </HoverCard>
@@ -129,7 +126,7 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
 
             {row.dots.length > 0 ? (
               <line x1={row.scoreX} x2={row.scoreX} y1={row.dotY - 9} y2={row.dotY + 9} stroke="var(--text-strong)" strokeWidth={2}>
-                <title>{`${row.region} region score ${formatRating(row.score)} · average of the top three teams`}</title>
+                <title>{`${row.region} region score ${formatRating(row.score)}`}</title>
               </line>
             ) : null}
 
@@ -250,7 +247,7 @@ export function regionDepthLayout(regions: RegionDepthInput[], availableWidth: n
 
   const strongest = rows[0]
   const summary = strongest
-    ? `${rows.length} regions. ${strongest.region} ranks first with a region score of ${formatRating(strongest.score)}. The region score is the average Power of its three strongest ranked teams. The regional standings list below has the same data.`
+    ? `${rows.length} regions. ${strongest.region} ranks first with a region score of ${formatRating(strongest.score)}. `
     : 'No regions in this scope.'
 
   return {
