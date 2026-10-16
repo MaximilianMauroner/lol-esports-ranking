@@ -2,15 +2,15 @@ import { canonicalPublicLogicalPath } from './logicalPath.mjs'
 
 const referenceFields = new Map([
   ['public-ranking-manifest', {
-    urls: [
-      'fullSnapshotUrl',
-      'playerDirectoryUrl',
-      'teamDirectoryUrl',
-      'teamHistoryIndexUrl',
-      'regionHistoryUrl',
-      'tournamentMovementIndexUrl',
-      'matchHistoryIndexUrl',
-    ],
+    urls: {
+      fullSnapshotUrl: 'audit',
+      playerDirectoryUrl: 'required',
+      teamDirectoryUrl: 'required',
+      teamHistoryIndexUrl: 'required',
+      regionHistoryUrl: 'required',
+      tournamentMovementIndexUrl: 'required',
+      matchHistoryIndexUrl: 'required',
+    },
     records: ['snapshotIndex'],
   }],
   ['team-history-index', { records: ['scopeIndex'] }],
@@ -23,8 +23,8 @@ export function mapArtifactReferences(content, transform) {
   const fields = referenceFields.get(content.artifactKind)
   if (!fields) return content
   const mapped = { ...content }
-  for (const key of fields.urls ?? []) {
-    if (typeof mapped[key] === 'string') mapped[key] = transform(mapped[key])
+  for (const [key, role] of Object.entries(fields.urls ?? {})) {
+    if (typeof mapped[key] === 'string') mapped[key] = transform(mapped[key], role)
   }
   for (const key of fields.records ?? []) {
     const entries = mapped[key]
@@ -46,16 +46,16 @@ function mapEntry(value, transform) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value
   return {
     ...value,
-    ...(typeof value.url === 'string' ? { url: transform(value.url) } : {}),
+    ...(typeof value.url === 'string' ? { url: transform(value.url, 'required') } : {}),
     ...(Array.isArray(value.pages) ? { pages: mapEntries(value.pages, transform) } : {}),
   }
 }
 
 export function artifactReferences(content) {
   const paths = new Set()
-  mapArtifactReferences(content, (value) => {
-    const url = new URL(value, 'https://public-artifacts.invalid')
-    if (url.pathname.startsWith('/data/')) paths.add(canonicalPublicLogicalPath(value))
+  mapArtifactReferences(content, (value, role) => {
+    if (role === 'audit' && !new URL(value, 'https://public-artifacts.invalid').pathname.startsWith('/data/')) return value
+    paths.add(canonicalPublicLogicalPath(value))
     return value
   })
   return [...paths]

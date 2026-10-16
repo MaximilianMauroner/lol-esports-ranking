@@ -300,6 +300,56 @@ test('generation context loads every lazy public artifact family through product
   assert.equal(matchPage.artifactKind, 'match-history-page')
 })
 
+test('generation manifest load rejects external required references before lazy reads', async (t) => {
+  const fixture = await completeGenerationFixture()
+  const root = parsePublicRankingManifest(await readPublicArtifact('/data/ranking-summary.json'))
+  const external = 'https://cdn.example.org/mirror/artifact.json'
+  const requiredFields = [
+    'playerDirectoryUrl', 'teamDirectoryUrl', 'teamHistoryIndexUrl', 'regionHistoryUrl',
+    'tournamentMovementIndexUrl', 'matchHistoryIndexUrl',
+  ] as const
+  const cases: Array<[string, (manifest: PublicRankingManifest) => void]> = requiredFields.map((field) => [
+    field, (manifest) => { manifest[field] = external },
+  ])
+  for (const key of Object.keys(root.snapshotIndex)) {
+    cases.push([`snapshotIndex ${key}`, (manifest) => { manifest.snapshotIndex[key].url = external }])
+  }
+  cases.push(['external audit and source citations', (manifest) => {
+    manifest.fullSnapshotUrl = external
+    manifest.sources[0].url = 'https://source.example/data/citation.json?v=citation'
+  }])
+
+  for (const [label, mutate] of cases) {
+    await t.test(label, async () => {
+      const ranking = structuredClone(root)
+      mutate(ranking)
+      const semantic = createPublicSemanticArtifact(ranking)
+      const identity = await semanticArtifactIdentity(semantic)
+      const generation = structuredClone(fixture.generation)
+      const entry = artifactEntry(generation.rootArtifact, generation.generationId, identity)
+      generation.artifacts[generation.rootArtifact] = entry
+      const requests: string[] = []
+      const fetcher: typeof fetch = async (input) => {
+        const url = String(input)
+        requests.push(url)
+        if (url === '/data/generation.json') return jsonResponse(generation)
+        return url === entry.objectUrl ? jsonResponse(semantic) : new Response(null, { status: 404 })
+      }
+      const load = createPublicRankingManifestLoader('/data/generation.json', fetcher)
+      if (label === 'external audit and source citations') {
+        const manifest = await load()
+        assert.equal(manifest.fullSnapshotUrl, external)
+        assert.deepEqual(manifest.sources, ranking.sources)
+        assert.equal(load.getCached(), manifest)
+      } else {
+        await assert.rejects(load(), /artifact logical path must be a safe \/data\/ path/)
+        assert.equal(load.getCached(), undefined)
+      }
+      assert.deepEqual(requests, ['/data/generation.json', entry.objectUrl])
+    })
+  }
+})
+
 async function completeGenerationFixture() {
   const root = parsePublicRankingManifest(await readPublicArtifact('/data/ranking-summary.json'))
   const key = root.defaultSnapshotKey
