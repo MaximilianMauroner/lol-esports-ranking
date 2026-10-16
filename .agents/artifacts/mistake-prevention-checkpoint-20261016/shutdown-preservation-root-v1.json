@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-16T23:32:06.592801+00:00",
+  "deleted": [
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/design-directions.html",
+      "absent": true
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/design-language-review.html",
+      "absent": true
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/live-vs-dev.html",
+      "absent": true
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/plans/rust-refresh-worker/log.md",
+      "absent": true
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/ranking-calculation-repair-microplan.html",
+      "absent": true
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/roster-reliability-accuracy-microplan.html",
+      "absent": true
+    }
+  ],
+  "privateMetadata": [
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/mistake-prevention/sessions/claude-oct14-findings.json",
+      "bytes": 40901,
+      "mode": "0o600",
+      "contentsRead": false
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/mistake-prevention/sessions/codex-oct15.jsonl",
+      "bytes": 12281898,
+      "mode": "0o600",
+      "contentsRead": false
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/mistake-prevention/sessions/claude-oct14.jsonl",
+      "bytes": 13552754,
+      "mode": "0o600",
+      "contentsRead": false
+    },
+    {
+      "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/mistake-prevention/sessions/codex-oct15-findings.json",
+      "bytes": 24300,
+      "mode": "0o600",
+      "contentsRead": false
+    }
+  ],
+  "privateContentsRead": false,
+  "uploaded": false
+}

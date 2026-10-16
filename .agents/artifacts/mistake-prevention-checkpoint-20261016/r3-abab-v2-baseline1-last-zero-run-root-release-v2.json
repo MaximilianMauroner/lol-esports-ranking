@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-16T23:34:39.145332+00:00",
+  "allocationId": "r3-abab-actual-v2-baseline1-v2",
+  "ownerExplicitFINALRELEASE": true,
+  "rootActualListedMetadataHashExit": 0,
+  "listedEntries": 3,
+  "rootObservedMetadataHashes": {
+    "handoff.json": "0c9d17f9fe2c55cae01ea9a69a8c848e10e4aade7ae1ff209210680c27fb5669",
+    "metadata-sha256.txt": "8363ee9e67713c2b7683e514582868784f818cdb138b05c652cbf878df158f8e",
+    "report.md": "6fb77ca7a5cb88e3fba0515d446f193b597e4727c140593ca1a6371aace71cad",
+    "trail.json": "f8a4694ee327698f2b6a8497913ac8aad3785619de995d0aee95701368fc6a1d"
+  },
+  "workloadExecutions": 0,
+  "launchAttempts": 0,
+  "nativeInspectorExecutions": 0,
+  "outputAbsent": true,
+  "globalLocksFreeClaim": false,
+  "globalQuietClaim": false,
+  "rootSchedulingFinding": "Issued only49seconds for mandatory fresh-owner setup and admission; insufficient. Owner correctly stopped at fixedcutoff. No retry/extension.",
+  "runtimeCounts": null,
+  "productFailure": false,
+  "shutdownState": "All new heavy HELD for current shutdownwindow; approved R3 work remains for resume",
+  "futureRequirement": "New operator runwindow/agreedserialboundary, fresh owner preparation BEFORE assigning launchwindow, fresh unchangedcanonicalnativeproof",
+  "mergeAuthorized": false
+}

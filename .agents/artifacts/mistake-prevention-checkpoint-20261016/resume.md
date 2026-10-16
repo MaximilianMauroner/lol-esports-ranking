@@ -2,7 +2,7 @@
 
 R3 is incomplete. No merge or ready transition is authorized.
 
-This snapshot was updated at 2026-10-16T23:30Z. Read the canonical state again before any action.
+This snapshot was updated at 2026-10-16T23:36:36.612737+00:00. Read the canonical state again before any action.
 Finished work must be pushed before 2026-10-16T23:50Z. T3 stops at 2026-10-17T00:00Z.
 
 ## State and source
@@ -73,8 +73,18 @@ Earlier native failures from T3 browser CPU activity remain in the record.
 A new R3 ABAB baseline allocation then passed root preflight but failed its own native admission before launch.
 It explicitly FINALRELEASED with zero workload executions. No observer, host, browser, or runtime output was created.
 The native check observed foreign Fleet heavy-check PID 1213619 and T3 browser activity.
-Root found the Fleet owner by metadata and requested an explicit quiet boundary. Process absence is not release.
+Root found the Fleet owner by metadata and received its explicit FINALRELEASE and hold on new work.
+Root then recorded a passing fresh canonical native check at 23:32:05Z.
+A fresh final owner received a 23:33:30Z launch cutoff. Mandatory reads and admission were incomplete at that cutoff.
+That owner correctly stopped and explicitly FINALRELEASED with zero launches and zero inspector calls.
+Root left only 49 seconds for setup. That scheduling error must not be repeated.
+Prepare the fresh owner before assigning its launch window. No deadline or gate was extended.
+There is no current heavy allocation. All new heavy work is held for the shutdown window.
+A future unit needs a new operator run window, an agreed host boundary, and fresh actual admission proof.
 All four new ABAB runtime units remain UNRUN. No automatic retry is approved.
+The final audit covers 130 task IDs. All 129 parent-scoped tasks are terminal with no pending child runs or questions.
+The external Reports task cannot be read with this root task_status scope. Its explicit zero-run release and actual effects remain recorded.
+Zero active agents does not complete the approved program.
 Memory, disk, and both locks passed. A resource wait is not a stuck agent.
 No outside process was touched. No duplicate or automatic retry is authorized.
 All other heavy units remain held.
@@ -111,7 +121,8 @@ Keep failed and blocked evidence unchanged.
 
 The one hourly schedule stays enabled because approved future work remains.
 Delete it only after through-R3 verification and R4 handoff are complete and no approved delegated or future work remains.
-Unwatch the program PRs before the actual final handback.
+Program PRs 137, 138, and 141 remain linked and are explicitly unwatched.
+No relevant program PR is missing from this thread. External coordination PRs are excluded.
 The six original root artifact deletions and private session files remain protected.
 Never read or upload private session contents.
 

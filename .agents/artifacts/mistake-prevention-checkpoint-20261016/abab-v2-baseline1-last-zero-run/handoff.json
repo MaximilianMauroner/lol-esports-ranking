@@ -1,0 +1,63 @@
+{
+  "allocationId": "r3-abab-actual-v2-baseline1-v2",
+  "recordedAt": "2026-10-16T23:33:40.585479+00:00",
+  "verdict": "BLOCKED0executions",
+  "release": "FINALRELEASE",
+  "terminal": true,
+  "reason": "Mandatory full source reads and fresh admission gates were incomplete. Owner stopped rather than launch without those gates before latestLaunch.",
+  "latestLaunch": "2026-10-16T23:33:30Z",
+  "deadlineExtended": false,
+  "launchAttempts": 0,
+  "workloadExecutions": 0,
+  "nativeInspectorExecutions": 0,
+  "ownedWorkloadPids": [],
+  "ownedBackgroundProcessesStarted": 0,
+  "ownedListenersStarted": 0,
+  "ownedLocksAcquired": [],
+  "output": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-actual-v2/requests-1-baseline",
+  "outputExists": false,
+  "admission": {
+    "externalPin": "NOT RUN",
+    "fourIntegrityCommands": "NOT RUN",
+    "selectedWorkspaceEnvironment": "NOT RUN",
+    "sevenDependencyPinsBothSides": "NOT RUN",
+    "sourceIdentities": "NOT RUN",
+    "nativeBefore": "NOT RUN",
+    "nativeAfter": "NOT RUN"
+  },
+  "actualRuntimeOutcomes": {
+    "caller": null,
+    "outer": null,
+    "hostClose": null,
+    "hostLedger": null,
+    "inner": null,
+    "sourceAfter": null,
+    "reason": "No workload was launched. No runtime exit is inferred or reconstructed."
+  },
+  "runtimeEvidence": {
+    "windowsIntegerNanoseconds": null,
+    "attemptCounts": null,
+    "control": null,
+    "errors": null,
+    "runtimeCap": null,
+    "reason": "UNRUN"
+  },
+  "cleanup": {
+    "status": "No workload cleanup required. No workload, browser, server, inspector or detached process was started. All prior terminal tool calls completed.",
+    "globalLocksFree": "NOT CLAIMED",
+    "foreignActivity": "NOT ASSESSED",
+    "rootFreshProofRequired": true
+  },
+  "ABABCredit": false,
+  "comparatorRun": false,
+  "sourceReview": "Existing source-only approval read. No new runtime credit.",
+  "CI": "UNRUN",
+  "merge": "NOT PERFORMED",
+  "maxAcceptance": "PENDING",
+  "preservation": "Only this new metadata directory was written. Runtime output remains absent. Product, dependencies, config, old packages, receipts, canonical program, original deletions and private sessions were not changed.",
+  "nextOwners": {
+    "Root": "Inspect this terminal zero-run handoff and obtain fresh proof before any other heavy allocation. This allocation cannot be resumed or retried.",
+    "Max": "R4 media review and explicit merge go."
+  },
+  "standingRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run."
+}
